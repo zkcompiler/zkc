@@ -38,7 +38,8 @@ private def body (instructions : List Json := []) (terminal : Json :=
 
 private def rootFields : List Json := [
   .str "function", .str "main", .str "protocol", .str "public",
-  arr [fieldTy, groupTy, serviceTy], arr [boolTy, boolTy], ports, empty, empty,
+  arr [fieldTy, groupTy, serviceTy], arr [boolTy, boolTy], ports, empty,
+  arr [.str "main", empty],
   body [
     instruction (strings ["group.identity", groupDomain]) [] [groupTy],
     instruction (strings ["group.add", groupDomain]) [0, 2] [groupTy],
@@ -65,7 +66,8 @@ private def mathFields : List Json := [
 
 private def otherRoot : Json := arr [
   .str "function", .str "other", .str "protocol", .str "private", empty, empty,
-  arr [.str "protocol", strings ["Bob", "Alice"], empty, empty], empty, empty, body]
+  arr [.str "protocol", strings ["Bob", "Alice"], empty, empty], empty,
+  arr [.str "other", empty], body]
 
 private def domainFields : List Json := [
   .str "domain", .str "items", arr [strings ["vector", scalarDomain]],
@@ -165,7 +167,7 @@ private def run : IO Unit := do
       check "independent-unused-roster" (other.interface == some ⟨["Bob", "Alice"], [], []⟩)
       check "helper-interfaces" (localFn.interface == none && mathFn.interface == none)
       check "origin-order-and-values" (localFn.origin == some
-        ("authored::origin", [("z", "identity/007"), ("a", "identity/000")]))
+        (.local "authored::origin" [("z", "identity/007"), ("a", "identity/000")]))
       check "precondition-retained" (mathFn.preconditions == [⟨0, 1, 0⟩])
       check "finite-retained" (finite.name == "folded" && finite.domain == "items" &&
         finite.step == "work" && finite.predicate == "")
@@ -358,11 +360,11 @@ private def run : IO Unit := do
   let nested := body [instruction (strings ["if"]) [] [] [arr [empty, empty, body]]]
   check "nested-region-depth" (hasError (Format.block 1 nested) "structured-region-depth")
   check "nested-region-accepted" (succeeds (Format.block 2 nested))
-  check "origin-shape" (hasError (Format.origin (arr [.str "origin"])) "structured-origin")
+  check "origin-shape" (hasError (Format.origin .local (arr [.str "origin"])) "structured-origin")
   check "origin-binding-shape" (hasError
-    (Format.origin (arr [.str "origin", arr [strings ["key"]]])) "structured-origin-binding")
+    (Format.origin .local (arr [.str "origin", arr [strings ["key"]]])) "structured-origin-binding")
   check "origin-binding-capacity" (hasError
-    (Format.origin (arr [.str "origin", arr (List.replicate 129 (strings ["key", "value"]))])) "structured-list-limit")
+    (Format.origin .local (arr [.str "origin", arr (List.replicate 129 (strings ["key", "value"]))])) "structured-origin-list-limit")
   check "domain-constructor" (hasError
     (Format.domain (arr (domainFields.set 3 (strings ["unknown"])))) "structured-domain-constructor")
   check "domain-axis" (hasError (Format.domain (arr (domainFields.set 3
@@ -419,8 +421,9 @@ private def run : IO Unit := do
     (Format.definition (arr (mathFields.set 6 ports))))
   check "relation-signature-deferred" (succeeds
     (Format.relation (arr (relationFields.set 7 (arr [fieldTy])))))
-  check "duplicate-origin-retained" (succeeds
-    (Format.origin (arr [.str "origin", arr [strings ["k", "a"], strings ["k", "b"]]])))
+  check "duplicate-origin-refused" (hasError
+    (Format.origin .local (arr [.str "origin", arr [strings ["k", "a"], strings ["k", "b"]]]))
+      "structured-origin")
   let errors ← failures.get
   unless errors.isEmpty do
     for error in errors.reverse do IO.eprintln s!"structured wire failed: {error}"

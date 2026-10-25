@@ -101,3 +101,12 @@ authority controls and external byte vectors where promised. Update consuming
 manifests, examples and docs in the same change. See the
 [test guide](../common/tests/README.md#selecting-checks) for affected checks and
 the compact family smoke lane.
+
+The Sumcheck library exports `TableShape<F, Max>`, a total relation requiring
+`length(values) = 2^rounds` and `rounds <= Max`. `Sumcheck` retains this input
+clause on the verifier's copy; the composed `TwoSums` example retains it for
+both tables. Agreement between public input role copies and index/length
+representability are ABI admission conditions. The clauses do not prove those
+conditions or establish protocol security. Total Math operations include vector
+length and index comparison intrinsics, and the index `power_of_two` helper.
+The existing Local `length` and `less` helpers retain their executable checks.

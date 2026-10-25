@@ -3,8 +3,12 @@ module
 meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
+public import ZkcSecurity.Claims.CanonicalAuthorityKeys
+public import ZkcSecurity.Claims.Premise
 public import ZkcSecurity.Claims.Knowledge
 public import ZkcSecurity.Claims.StageLinks
+public import ZkcSecurity.Claims.Parameters
+public import ZkcSecurity.Claims.PrimitiveDependencies
 
 @[expose] public section
 
@@ -32,9 +36,10 @@ def checkArguments (allowed : List String) (arguments : List (Option String × W
     | none => .error (.schema "unexpected positional argument")
   if names.Nodup then pure () else throw (.schema "duplicate argument")
 
-def modelSchema (F : Type) [Fintype F] (snapshot : Snapshot) (context : ModelContext) (endpoint : Semantics)
+def modelSchemaWith (cardinality : String → Except Incomplete Nat) (context : ModelContext) (endpoint : Semantics)
     (application : Wire.Application) : Except ResolutionError (Except Incomplete Model) := do
-  checkArguments ["level", "statement", "oracle", "challenges", "queries", "application", "validator_cost", "budget_symbol"] application.arguments
+  checkArguments ["level", "statement", "oracle", "challenges", "queries", "application", "validator_cost", "budget_symbol", "assumptions"] application.arguments
+  let _ ← premiseKeys application
   let level ← reference (named application.arguments "level" |>.getD (.reference "levels.ideal"))
   if level != (match endpoint with | .idealMeaning => "levels.ideal" | .executableBytes => "levels.bytes") then
     throw .stageMismatch
@@ -61,12 +66,15 @@ def modelSchema (F : Type) [Fintype F] (snapshot : Snapshot) (context : ModelCon
   let queries := named application.arguments "queries" |>.getD (.reference budgetSymbol)
   let limit := match queries with
     | .reference name => if name = budgetSymbol then .ok (.symbolic name) else
-        QueryLimit.fixed <$> Numeric.natural F snapshot queries
-    | _ => QueryLimit.fixed <$> Numeric.natural F snapshot queries
-  let validatorCost := Bound.elaborate F snapshot budgetSymbol
+        QueryLimit.fixed <$> Numeric.naturalWith cardinality queries
+    | _ => QueryLimit.fixed <$> Numeric.naturalWith cardinality queries
+  let validatorCost := Bound.elaborateWith cardinality budgetSymbol
     (named application.arguments "validator_cost" |>.getD (.natural 0))
   return do
     return ⟨form, ← limit, budgetSymbol, binding.map (·.value) |>.getD "", ← validatorCost, binding⟩
+
+def modelSchema (F : Type) [Fintype F] (snapshot : Snapshot) :=
+  modelSchemaWith (Numeric.cardinality F snapshot)
 
 def models (context : ModelContext) (endpoint : Semantics) : ModelRegistry :=
   ⟨[⟨exactUniform, "zkc.model.fiat-shamir/0",
@@ -117,8 +125,19 @@ def soundnessArguments (registry : ModelRegistry)
     Except ResolutionError (Except Incomplete (SoundnessRequest subject)) := do
   subject.check request
   checkCapabilities request
-  if request.parameters.isSome then throw (.schema "soundness has no additional parameters")
+  let parameters ← (soundnessParameters (Numeric.cardinality F art.original)).decode request.parameters
+  match subject.target with
+  | .retained target =>
+      checkDefaultRelation subject.compiled.imported.program.payload.definitions
+        target.formula.definition.helper
+  | .importedLanguage _ => pure ()
   let model ← resolveModel registry F art.original endpoint request.model
+  match parameters with
+  | .error missing => return .error missing
+  | .ok parameters =>
+    match requireExactSoundness subject.targetReference parameters with
+    | .error missing => return .error missing
+    | .ok () => pure ()
   match model with
   | .error missing => return .error missing
   | .ok model =>
@@ -136,7 +155,7 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
     Except ResolutionError (Except Incomplete (KnowledgeRequest subject)) := do
   subject.check request
   checkCapabilities request
-  if request.parameters.isSome then throw (.schema "knowledge has no additional parameters")
+  let _ ← knowledgeParameters.decode request.parameters
   if !request.capabilities.isEmpty then return .error ⟨["knowledge capability interpretation"]⟩
   if (named request.model.arguments "validator_cost").isSome then
     throw (.schema "knowledge model has no validator cost")
@@ -146,13 +165,7 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
     | .guarantee form => pure form
     | _ => throw (.schema "knowledge requires a guarantee")
   if guarantee.identifier != forking then throw (.unknownIdentifier guarantee.identifier)
-  checkArguments ["challenges", "cost", "extractor"] guarantee.arguments
-  let extractor := named guarantee.arguments "extractor" |>.getD
-    (.application responseDifference.name (some responseDifference.version) [])
-  match extractor with
-  | .application name (some version) [] =>
-      if ⟨name, version⟩ != responseDifference then throw (.unknownIdentifier ⟨name, version⟩)
-  | _ => throw (.schema "expected a versioned registered extractor without arguments")
+  checkArguments ["challenges", "cost"] guarantee.arguments
   let expectedCost := named guarantee.arguments "cost" |>.getD
     (.application "prover_runs" none [(none, .natural 2)])
   match expectedCost with
@@ -210,14 +223,17 @@ noncomputable def knowledgeProperty (registry : ModelRegistry) :
   meaning _ arguments := arguments.map KnowledgeRequest.meaning
   requiredLinks subject _ := subject.stageLinks
 
-/-- Built-ins are ordinary typed exports. A user property extends this list by
-`Registry.register`, supplying a typed elaborator and a Lean meaning function. -/
+/-- Complete canonical exports are also the source of the default registry. -/
+noncomputable def canonicalPropertyEntry (registry : ModelRegistry) (key : PropertyKey) :
+    Export (PropertyExport (Subject F G art endpoint)) :=
+  ⟨key.identifier, key.schema, match key with
+    | .soundness => some (soundnessProperty registry)
+    | .knowledge => some (knowledgeProperty registry)
+    | .completeness | .specialSoundness => none⟩
+
 noncomputable def properties (registry : ModelRegistry) :
-    Registry (PropertyExport (Subject F G art endpoint)) := ⟨[
-  ⟨⟨"soundness", 0⟩, "zkc.property.soundness/0", some (soundnessProperty registry)⟩,
-  ⟨⟨"knowledge", 0⟩, "zkc.property.knowledge/0", some (knowledgeProperty registry)⟩,
-  ⟨⟨"completeness", 0⟩, "zkc.property.completeness/0", none⟩,
-  ⟨⟨"special_soundness", 0⟩, "zkc.property.special-soundness/0", none⟩]⟩
+    Registry (PropertyExport (Subject F G art endpoint)) :=
+  ⟨PropertyKey.all.map (canonicalPropertyEntry registry)⟩
 
 /-- Common structural/model admission also runs for a registered property whose
 interpretation is absent. Unknown model versions do not become Incomplete. -/

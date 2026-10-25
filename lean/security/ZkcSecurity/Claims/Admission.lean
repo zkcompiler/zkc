@@ -8,11 +8,11 @@ public import ZkcSecurity.Claims.Subject
 
 @[expose] public section
 
-/-! Numeric admission for the endpoint's existing uniform domain interpretation.
-Only nominal identities in this admitted unit are available. A field identity
-denotes `assignment F G (.field identity)`, definitionally `F`; catalogue moduli
-are characteristic facts, not substitutes for its cardinality. Static numeric
-parameters need a future checked binding export and are currently unsupported.
+/-! Numeric admission over the selected domain interpretation.
+Only nominal identities in the admitted unit are available. Cardinality is read
+from its actual carrier; catalogue moduli are characteristic facts. Uniform
+endpoints use a specialization of the same normalizer. Static numeric parameters
+need a checked binding export and are currently unsupported.
 -/
 
 set_option autoImplicit false
@@ -28,28 +28,67 @@ def cardinality (F : Type) [Fintype F] (snapshot : Snapshot) (identity : String)
   | some _ => .error ⟨["unsupported cardinality carrier: " ++ identity]⟩
   | none => .error ⟨["unadmitted nominal domain: " ++ identity]⟩
 
-/-- There is one builtin shape, in every numeric position. Versioned and
-qualified applications are extension requests, not aliases for this builtin. -/
-def normalize (F : Type) [Fintype F] (snapshot : Snapshot) : Wire.Expr → Except Incomplete Wire.Expr
+/-- Cardinality is taken from the carrier of each admitted nominal field.
+The catalogue modulus is not the cardinality of an extension field. -/
+def cardinalityOn (carriers : Carriers) (finite : ∀ d, Fintype (carriers.Field d))
+    (snapshot : Snapshot) (identity : String) : Except Incomplete Nat :=
+  match snapshot.catalogue.identitySort identity with
+  | some .field => .ok (@Fintype.card (carriers.Field identity) (finite identity))
+  | some _ => .error ⟨["unsupported cardinality carrier: " ++ identity]⟩
+  | none => .error ⟨["unadmitted nominal domain: " ++ identity]⟩
+
+/-- One arithmetic normalizer serves all carrier interpretations. The supplied
+cardinality function belongs to the selected model, never to proof evidence. -/
+def normalizeWith (cardinality : String → Except Incomplete Nat) :
+    Wire.Expr → Except Incomplete Wire.Expr
   | .natural value => .ok (.natural value)
   | .reference name => .error ⟨["unbound numeric parameter: " ++ name]⟩
   | .application "cardinality" none [(none, .reference identity)] =>
-      Wire.Expr.natural <$> cardinality F snapshot identity
+      Wire.Expr.natural <$> cardinality identity
   | .application name _ _ => .error ⟨["numeric application: " ++ name]⟩
   | .binary operator left right => do
-      return .binary operator (← normalize F snapshot left) (← normalize F snapshot right)
-  | .neg operand => do return .neg (← normalize F snapshot operand)
+      return .binary operator (← normalizeWith cardinality left) (← normalizeWith cardinality right)
+  | .neg operand => do return .neg (← normalizeWith cardinality operand)
   | .list _ => .error ⟨["scalar expression"]⟩
 
-def natural (F : Type) [Fintype F] (snapshot : Snapshot) : Wire.Expr → Except Incomplete Nat
+def naturalWith (cardinality : String → Except Incomplete Nat) : Wire.Expr → Except Incomplete Nat
   | .natural value => .ok value
-  | .application "cardinality" none [(none, .reference identity)] => cardinality F snapshot identity
-  | expression => do evaluateNatural (fun _ => none) (← normalize F snapshot expression)
+  | .application "cardinality" none [(none, .reference identity)] => cardinality identity
+  | expression => do evaluateNatural (fun _ => none) (← normalizeWith cardinality expression)
 
-def nonnegative (F : Type) [Fintype F] (snapshot : Snapshot) (expression : Wire.Expr) :
+def nonnegativeWith (cardinality : String → Except Incomplete Nat) (expression : Wire.Expr) :
     Except Incomplete ℚ≥0 := do
-  let value ← evaluateNonnegative (fun _ => none) (← normalize F snapshot expression)
+  let value ← evaluateNonnegative (fun _ => none) (← normalizeWith cardinality expression)
   return ⟨value.val, value.property⟩
+
+/-- Uniform-model specialization of the shared arithmetic normalizer. -/
+def normalize (F : Type) [Fintype F] (snapshot : Snapshot) :=
+  normalizeWith (cardinality F snapshot)
+
+def natural (F : Type) [Fintype F] (snapshot : Snapshot) :=
+  naturalWith (cardinality F snapshot)
+
+def nonnegative (F : Type) [Fintype F] (snapshot : Snapshot) :=
+  nonnegativeWith (cardinality F snapshot)
+
+@[simp] theorem cardinalityOn_field (carriers : Carriers)
+    (finite : ∀ d, Fintype (carriers.Field d)) (snapshot : Snapshot) (identity : String)
+    (admitted : snapshot.catalogue.identitySort identity = some .field) :
+    cardinalityOn carriers finite snapshot identity =
+      .ok (@Fintype.card (carriers.Field identity) (finite identity)) := by
+  simp [cardinalityOn, admitted]
+
+@[simp] theorem nonnegativeWith_natural (cardinality : String → Except Incomplete Nat)
+    (value : Nat) : nonnegativeWith cardinality (.natural value) = .ok (value : ℚ≥0) := by
+  simp [nonnegativeWith, normalizeWith, evaluateNonnegative, evaluate]
+  rfl
+
+@[simp] theorem nonnegativeWith_cardinality (cardinality : String → Except Incomplete Nat)
+    (identity : String) (count : Nat) (selected : cardinality identity = .ok count) :
+    nonnegativeWith cardinality (.application "cardinality" none [(none, .reference identity)]) =
+      .ok (count : ℚ≥0) := by
+  simp [nonnegativeWith, normalizeWith, selected, evaluateNonnegative, evaluate]
+  rfl
 
 @[simp] theorem cardinality_field (F : Type) [Fintype F] (snapshot : Snapshot) (identity : String)
     (admitted : snapshot.catalogue.identitySort identity = some .field) :
@@ -59,19 +98,17 @@ def nonnegative (F : Type) [Fintype F] (snapshot : Snapshot) (expression : Wire.
 @[simp] theorem normalize_cardinality (F : Type) [Fintype F] (snapshot : Snapshot) (identity : String)
     (admitted : snapshot.catalogue.identitySort identity = some .field) :
     normalize F snapshot (.application "cardinality" none [(none, .reference identity)]) =
-      .ok (.natural (Fintype.card F)) := by simp [normalize, admitted]
+      .ok (.natural (Fintype.card F)) := by simp [normalize, normalizeWith, admitted]
 
 @[simp] theorem nonnegative_natural (F : Type) [Fintype F] (snapshot : Snapshot) (value : Nat) :
     nonnegative F snapshot (.natural value) = .ok (value : ℚ≥0) := by
-  simp [nonnegative, normalize, evaluateNonnegative, evaluate]
-  rfl
+  exact nonnegativeWith_natural _ _
 
 @[simp] theorem nonnegative_cardinality (F : Type) [Fintype F] (snapshot : Snapshot) (identity : String)
     (admitted : snapshot.catalogue.identitySort identity = some .field) :
     nonnegative F snapshot (.application "cardinality" none [(none, .reference identity)]) =
       .ok (Fintype.card F : ℚ≥0) := by
-  simp [nonnegative, admitted, evaluateNonnegative, evaluate]
-  rfl
+  exact nonnegativeWith_cardinality _ _ _ (cardinality_field F snapshot identity admitted)
 
 end Numeric
 
@@ -110,3 +147,4 @@ end ZkcSecurity.Claims
 -- private proof helpers, leaving its stored provider ambiguous to an audit.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.Claims.Numeric.natural
+  discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.Claims.Numeric.naturalWith

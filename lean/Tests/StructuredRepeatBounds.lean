@@ -82,7 +82,7 @@ private def wireRequest (role : String) (inputs : List Json) (replies : List Jso
 private def source (maximum : Nat) : Snapshot :=
   (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.index, .boolean, .boolean], [.boolean],
-      some ⟨["P", "Q"], [["P"], ["P"], ["P"]], [["P"]]⟩, [], none,
+      some ⟨["P", "Q"], [["P"], ["P"], ["P"]], [["P"]]⟩, [], some (.protocol ⟨"Main", []⟩),
       .block [.instruction (.protocolRepeat 1 maximum ["P"] [["P"]])
         [0, 1, 2] [.boolean]
         [.region [.index, .boolean, .boolean] [.boolean]
@@ -105,7 +105,7 @@ private def receivedVector (size : Nat) : ScriptReply :=
 private def serviceSource : Snapshot :=
   (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.index, .service scalarServiceContract], [],
-      some ⟨["P", "Q"], [["P"], ["P"]], []⟩, [], none,
+      some ⟨["P", "Q"], [["P"], ["P"]], []⟩, [], some (.protocol ⟨"Main", []⟩),
       .block [
         .instruction (.draw "P" scalarDomain) [1] [fieldType] [] "prelude",
         .instruction (.protocolRepeat 0 3 ["P"] []) [1, 2] []

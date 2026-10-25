@@ -75,7 +75,7 @@ def protocol(name, body='', roles=('P', 'Q'), inputs=(('go', 'i1', ('P', 'Q')),)
     return f'''"protocol.func"() ({{ {arguments}
       {body}
       "protocol.return"({','.join(returns)}) : ({outs})->()
-    }}) {{sym_name="{name}",function_type=({ins})->({outs}),roles={json.dumps(roles)},
+    }}) {{sym_name="{name}",origin=["{name}",[]],function_type=({ins})->({outs}),roles={json.dumps(roles)},
       input_roles={json.dumps([scope for _, _, scope in inputs])},
       output_roles={json.dumps([scope for _, scope in outputs])}}} : ()->()'''
 
@@ -271,7 +271,7 @@ for indirect in (False, True):
               func.return %r#0,%r#1 : !F,!F
             }}'''
             source = source.replace(' "protocol.func"() ({', helper + '\n "protocol.func"() ({', 1)
-        source = source.replace('sym_name="main"', 'sym_name="child"').replace('["P"]', '["A"]')
+        source = source.replace('sym_name="main",origin=["main",[]]', 'sym_name="child",origin=["child",[]]').replace('["P"]', '["A"]')
         source = source.replace('}) {profile=', finite_wrapper + '\n}) {profile=', 1)
         label = 'single-role-math-' + ('helper' if indirect else 'direct')
         (commands.directory / (label + '.mlir')).write_text(source)

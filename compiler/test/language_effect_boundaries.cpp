@@ -1,3 +1,4 @@
+#include "../lib/Language/BindingWitness.h"
 #include "../lib/Language/Effects.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
@@ -21,6 +22,33 @@ const Declaration &named(ArrayRef<Declaration> declarations, StringRef name) {
     if (decl.name == name && decl.body)
       return decl;
   throw std::runtime_error("missing declaration: " + name.str());
+}
+const std::string overlappingPrimitives = R"(
+type Vector<F:Field>=builtin("vector",F);
+fn localLength<F:Field>(xs:Vector<F>)->index=primitive("vector.length");
+math fn mathLength<F:Field>(xs:Vector<F>)->index=primitive("vector.length");
+fn localLess(a:index,b:index)->bool=primitive("index.less");
+math fn mathLess(a:index,b:index)->bool=primitive("index.less");
+fn localCalls(xs:Vector<Fr>,a:index,b:index)->(index,index,bool,bool){
+ return (localLength(xs),mathLength(xs),localLess(a,b),mathLess(a,b));
+}
+math fn pureLength(xs:Vector<Fr>)->index{return mathLength(xs);}
+math fn pureLess(a:index,b:index)->bool{return mathLess(a,b);}
+protocol Demo roles(P)(xs:Vector<Fr>@P,a:index@P,b:index@P)
+ ->(n:index@P,total:index@P,p:bool@P,q:bool@P){
+ let n @P=localLength(xs);let total @P=mathLength(xs);
+ let p @P=localLess(a,b);let q @P=mathLess(a,b);
+ return(n,total,p,q);
+}
+entry fn Run(inputs:Demo::Inputs){return Demo::run(inputs);}
+)";
+const Operation &boundCall(ArrayRef<Declaration> declarations, StringRef caller,
+                           StringRef callee) {
+  for (const auto &op : named(declarations, caller).body->operations)
+    if (op.binding &&
+        declarations[op.binding->target.declaration.index].name == callee)
+      return op;
+  throw std::runtime_error("missing bound call: " + callee.str());
 }
 void succeeds(Error error) {
   if (error)
@@ -385,6 +413,147 @@ entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }
                                   : "source.scoped-witness");
             });
     }
+  cases.run("declaration mode selects overlapping primitive signatures", [] {
+    auto project = take(check(overlappingPrimitives));
+    auto declarations = project.declarations();
+    for (StringRef name : {"localLength", "localLess"}) {
+      const auto &decl = named(declarations, name);
+      require(decl.primitive &&
+                  std::holds_alternative<LocalPrimitive>(
+                      decl.body->operations.front().action) &&
+                  decl.body->effects == EffectSummary{Effects{true, false}},
+              "local primitive lost its executable contract or effects");
+    }
+    for (StringRef name : {"mathLength", "mathLess"}) {
+      const auto &decl = named(declarations, name);
+      require(decl.primitive &&
+                  std::holds_alternative<MathValue>(
+                      decl.body->operations.front().action) &&
+                  decl.body->effects == EffectSummary{},
+              "mathematical primitive lost totality");
+    }
+    const auto &length = std::get<LocalPrimitive>(
+        boundCall(declarations, "localCalls", "localLength").action);
+    require(length.bindingArguments && length.bindingArguments->size() == 1 &&
+                length.bindingArguments->front().domain == "koala-bear",
+            "local length lost its substituted executable field root");
+    const auto &less = std::get<LocalPrimitive>(
+        boundCall(declarations, "localCalls", "localLess").action);
+    require(less.bindingArguments && less.bindingArguments->empty(),
+            "local comparison lost its empty executable root witness");
+    require(std::holds_alternative<HelperCall>(
+                boundCall(declarations, "localCalls", "mathLength").action),
+            "formal Math realization lost its helper boundary");
+    require(!std::get<LocalPrimitive>(
+                 boundCall(declarations, "localCalls", "mathLess").action)
+                 .bindingArguments,
+            "scalar Math realization acquired executable roots");
+    for (StringRef name : {"localLength", "localLess"})
+      require(std::holds_alternative<HelperCall>(
+                  boundCall(declarations, "Demo", name).action),
+              "protocol lost its ordered primitive call boundary");
+    for (StringRef name : {"mathLength", "mathLess"})
+      require(std::holds_alternative<MathValue>(
+                  boundCall(declarations, "Demo", name).action),
+              "protocol Math primitive did not inline");
+    require(
+        named(declarations, "pureLength").body->effects == EffectSummary{} &&
+            named(declarations, "pureLess").body->effects == EffectSummary{},
+        "Math calls acquired effects");
+    succeeds(checkScopedElaboration(project));
+    auto closed = take(closeProtocolDeployment(project, "m::Run"));
+    succeeds(checkScopedSpecialization(closed));
+  });
+  cases.run("inline primitive depth follows the selected declaration mode", [] {
+    Limits limits;
+    limits.callDepth = 1;
+    auto project = take(check(R"(
+type Vector<F:Field>=builtin("vector",F);
+fn useLength(xs:Vector<Fr>)->index{return length(xs);}
+fn useLess(a:index,b:index)->bool{return less(a,b);}
+fn length<F:Field>(xs:Vector<F>)->index=primitive("vector.length");
+fn less(a:index,b:index)->bool=primitive("index.less");
+math fn total(a:index,b:index)->bool=primitive("index.less");
+fn scalar(a:index,b:index)->bool effects(){return total(a,b);}
+math fn pure(a:index,b:index)->bool{return total(a,b);}
+)",
+                              limits));
+    succeeds(checkScopedElaboration(project, limits));
+    require(named(project.declarations(), "scalar").body->effects ==
+                EffectSummary{},
+            "scalar Math inline call acquired effects");
+    refuses(check(R"(
+type Vector<F:Field>=builtin("vector",F);
+math fn length<F:Field>(xs:Vector<F>)->index=primitive("vector.length");
+fn useLength(xs:Vector<Fr>)->index{return length(xs);}
+)",
+                  limits),
+            "source.limit");
+    refuses(check(R"(
+fn less(a:index,b:index)->bool=primitive("index.less");
+protocol Demo roles(P)(a:index@P,b:index@P)->(r:bool@P){return less(a,b);}
+)",
+                  limits),
+            "source.limit");
+  });
+  for (StringRef source :
+       {"math fn bad(a:index,b:index)->bool=primitive(\"unknown\");",
+        "fn bad(a:index,b:index)->bool=primitive(\"unknown\");",
+        "math fn bad(a:index,b:index)->index=primitive(\"index.add\");",
+        "fn bad(a:index,b:index)->bool=primitive(\"index.power_of_two\");"})
+    cases.run("uninstalled primitive mode refuses: " + source,
+              [&] { refuses(check(source), "source.primitive"); });
+  for (StringRef source :
+       {"type Vector<F:Field>=builtin(\"vector\",F);"
+        "fn bad(xs:Vector<Fr>)->index effects()=primitive(\"vector.length\");",
+        "fn bad(a:index,b:index)->bool effects()=primitive(\"index.less\");"})
+    cases.run("local primitive effects cannot be erased: " + source,
+              [&] { refuses(check(source), "source.effect"); });
+  for (StringRef source :
+       {"type Vector<F:Field>=builtin(\"vector\",F);"
+        "fn length(xs:Vector<Fr>)->index=primitive(\"vector.length\");"
+        "math fn bad(xs:Vector<Fr>)->index{return length(xs);}",
+        "fn less(a:index,b:index)->bool=primitive(\"index.less\");"
+        "math fn bad(a:index,b:index)->bool{return less(a,b);}"})
+    cases.run("Math cannot call a local primitive: " + source,
+              [&] { refuses(check(source), "source.mode"); });
+  for (StringRef callee : {"localLength", "localLess", "mathLess"})
+    cases.run("primitive binding retains selected mode: " + callee, [&] {
+      auto project = take(check(overlappingPrimitives));
+      std::vector<Declaration> declarations(project.declarations().begin(),
+                                            project.declarations().end());
+      Limits limits;
+      Work work{limits};
+      Semantics types(declarations, {}, work);
+      const auto &body = *named(declarations, "localCalls").body;
+      auto operation = boundCall(declarations, "localCalls", callee);
+      require(checkCallAction(types, declarations, body, operation),
+              "valid primitive binding refused");
+      auto &action = std::get<LocalPrimitive>(operation.action);
+      if (action.bindingArguments)
+        action.bindingArguments.reset();
+      else
+        action.bindingArguments = std::vector<Type>{};
+      require(!checkCallAction(types, declarations, body, operation) &&
+                  types.diagnostic &&
+                  types.diagnostic->code == "source.binding-witness",
+              "altered primitive mode escaped binding validation");
+    });
+  cases.run("Math binding cannot reuse a local primitive helper call", [] {
+    auto project = take(check(overlappingPrimitives));
+    std::vector<Declaration> declarations(project.declarations().begin(),
+                                          project.declarations().end());
+    Limits limits;
+    Work work{limits};
+    Semantics types(declarations, {}, work);
+    auto body = *named(declarations, "Demo").body;
+    auto operation = boundCall(declarations, "Demo", "localLess");
+    body.mode = Body::Mode::Math;
+    require(!checkCallAction(types, declarations, body, operation) &&
+                types.diagnostic &&
+                types.diagnostic->code == "source.binding-witness",
+            "local call escaped the Math binding boundary");
+  });
   cases.run("registered primitives infer effects and enforce their ceiling",
             [] {
               auto project = take(check(R"(

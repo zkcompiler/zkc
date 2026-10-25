@@ -100,6 +100,10 @@ def Data_LessOp : DataExpression<"index_less", [DeclareOpInterfaceMethods<Mathem
   let arguments = (ins UI64:$lhs, UI64:$rhs);
   let results = (outs I1:$output);
 }
+def Data_PowerOfTwoOp : DataExpression<"index_power_of_two", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins UI64:$value, UI64:$exponent);
+  let results = (outs I1:$output);
+}
 def Data_MakeOp : DataExpression<"make"> {
   let arguments = (ins Variadic<AnyType>:$payload, StrAttr:$alternative);
   let results = (outs Variant:$output);
@@ -112,7 +116,7 @@ def Data_IsOp : DataExpression<"is"> {
   let arguments = (ins Variant:$input, StrAttr:$alternative);
   let results = (outs I1:$output);
 }
-def Data_DimOp : DataExpression<"dim"> {
+def Data_DimOp : DataExpression<"dim", [DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
   let arguments = (ins AnyTypeOf<[FieldVector, GroupVector, Indices, Bytes,
                                  FieldMatrix, FieldArray]>:$input,
                        I64Attr:$axis);

@@ -7,11 +7,11 @@ set_option smartUnfolding false
 
 private def leaf : Function :=
   ⟨"leaf", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], some (.protocol ⟨"leaf", []⟩),
     .block [.instruction .booleanEqual [0, 1] [.boolean] [] ""] (.ret [0])⟩
 private def caller : Function :=
   ⟨"main", .protocol, .publicDef, [.index, .boolean], [],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], []⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], []⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.protocolRepeat 0 2 ["P", "V"] []) [0, 1] []
       [.region [.index, .boolean] [] (.block [
         .instruction (.protocolApply "leaf" ["V", "P"]) [1, 1] [.boolean] [] "call"] (.yield []))]

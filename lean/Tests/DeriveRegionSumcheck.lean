@@ -13,7 +13,7 @@ namespace Tests.DeriveRegionSources
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 
 /-- Direct projection and its association need no second digest-named body. -/
-def sumAdd := SumcheckSourceViews.program.payload.definitions[0]'(by decide)
+def sumAdd := SumcheckSourceViews.program.payload.definitions[1]'(by decide)
 
 theorem sum_add_is_actual : sumAdd = SumcheckSourceViews.sumAddDefinition := rfl
 

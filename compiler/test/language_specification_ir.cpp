@@ -252,6 +252,77 @@ int main() {
         }
       });
   cases.run(
+      "consistent clause leaf swap remains a different checked source", [&] {
+        auto original = take(prepareOriginal(entry));
+        auto candidate = parse(original.bytes());
+        candidate->walk([&](zkc::protocol_ir::MathematicalOp op) {
+          auto clause = mlir::cast<mlir::ArrayAttr>(op.getContractsAttr()[0]);
+          auto application = mlir::cast<mlir::ArrayAttr>(clause[2]);
+          auto selectors = mlir::cast<mlir::ArrayAttr>(application[1]);
+          auto swapped =
+              mlir::ArrayAttr::get(&context, {selectors[1], selectors[0]});
+          llvm::SmallVector<mlir::Attribute> components(clause.begin(),
+                                                        clause.end());
+          components[2] =
+              mlir::ArrayAttr::get(&context, {application[0], swapped});
+          op->setAttr(
+              "contracts",
+              mlir::ArrayAttr::get(
+                  &context, {mlir::ArrayAttr::get(&context, components)}));
+        });
+        require(succeeded(mlir::verify(*candidate)),
+                "consistent swap is not well formed");
+        std::string changed;
+        raw_string_ostream stream(changed);
+        candidate->print(stream, zkc::canonicalPrintingFlags());
+        auto encoded = take(json::parse(original.interfaceJson()));
+        auto &operands = *encoded.getAsObject()
+                              ->getArray("protocols")
+                              ->front()
+                              .getAsObject()
+                              ->getArray("clauses")
+                              ->front()
+                              .getAsObject()
+                              ->getObject("subject")
+                              ->getArray("operands");
+        std::swap(operands[0], operands[1]);
+        (*encoded.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(changed)), true);
+        // Even if target and interface agree on the changed ordered projection,
+        // comparison against the checked declaration must still refuse it.
+        take(readInterface(changed, zkc::printJson(encoded)));
+        refuses(compareOriginal(entry, *candidate), "source.correspondence");
+        auto admitted = admitOriginal(entry, changed, zkc::printJson(encoded));
+        refuses(std::move(admitted), "source.correspondence");
+      });
+  cases.run(
+      "consistent interface hash cannot authorize a changed producer", [&] {
+        auto original = take(prepareOriginal(entry));
+        auto candidate = parse(original.bytes());
+        bool changedProducer = false;
+        candidate->walk([&](mlir::Operation *op) {
+          if (op->getName().getStringRef() == "arith.constant" &&
+              op->getNumResults() == 1 &&
+              op->getResult(0).getType().isInteger(1)) {
+            op->setAttr("value",
+                        mlir::IntegerAttr::get(op->getResult(0).getType(), 0));
+            changedProducer = true;
+          }
+        });
+        require(changedProducer && succeeded(mlir::verify(*candidate)),
+                "changed producer is not well formed");
+        std::string changed;
+        raw_string_ostream stream(changed);
+        candidate->print(stream, zkc::canonicalPrintingFlags());
+        auto encoded = take(json::parse(original.interfaceJson()));
+        (*encoded.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(changed)), true);
+        take(readInterface(changed, zkc::printJson(encoded)));
+        refuses(compareOriginal(entry, *candidate), "source.correspondence");
+        refuses(admitOriginal(entry, changed, zkc::printJson(encoded)),
+                "source.correspondence");
+      });
+  cases.run(
       "predicate definitions cannot be referenced by executable helpers", [&] {
         auto original = take(prepareOriginal(entry));
         auto candidate = parse(original.bytes());

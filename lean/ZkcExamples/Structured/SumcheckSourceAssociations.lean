@@ -46,7 +46,7 @@ theorem protocols_exact :
       reduceDefinition.raw = SumcheckSourceBodies.reduceBody.erase) :=
   ⟨⟨run_member, run_signature, run_raw⟩, ⟨reduce_member, reduce_signature, reduce_raw⟩⟩
 
-theorem helper_inventory_length : unit.definitions.length = 27 := rfl
+theorem helper_inventory_length : unit.definitions.length = 28 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :

@@ -213,6 +213,7 @@ def Form.finishes {out : List Ty} (spec : Values (fun _ => Carried) out) : {Δ :
   | _, .guard _ _ _ next => next.finishes spec
   | _, .strict _ _ next => next.finishes spec
   | _, .compute _ _ _ next => next.finishes spec
+  | _, .math _ _ next => next.finishes spec
   | _, .byLaw _ _ next => next.finishes spec
   | _, .owned _ _ _ next => next.finishes spec
   | _, .repeat _ _ _ _ _ _ next => next.finishes spec
@@ -264,7 +265,8 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
   | _, .strict helper args next, finishes, binders => by
     simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
-  | _, .compute op allowed args next, finishes, binders => by
+  | _, .compute op allowed args next, finishes, binders
+  | _, .math _ _ next, finishes, binders => by
     simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
     exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .byLaw _ _ next, finishes, binders => denote_finish spec next finishes binders
@@ -315,7 +317,8 @@ theorem denoteWith_runs {out : List Ty} {A : Type}
     simp only [Form.denoteWith]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
-  | _, .compute _ _ _ next, binders => by
+  | _, .compute _ _ _ next, binders
+  | _, .math _ _ next, binders => by
     simp only [Form.denoteWith]
     exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))

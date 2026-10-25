@@ -215,6 +215,14 @@ private def dependencyPolicyJson : String := r##"{
       "adapters"
     ],
     [
+      "ZkcSecurity.Generation",
+      "tools"
+    ],
+    [
+      "ZkcSecurity.Realizations",
+      "security-subjects"
+    ],
+    [
       "ZkcSecurity.Examples",
       "security-subjects"
     ],

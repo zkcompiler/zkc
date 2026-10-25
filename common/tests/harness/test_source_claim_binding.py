@@ -15,12 +15,13 @@ def claims():
 
 def fixture(claims, stage="compiled-ideal"):
     source=b"original protocol"
-    interface="native interface"
+    interface=json.dumps({"format":"zkc.language-interface/0", "entry":"test::Proof",
+                          "protocol":"protocol", "original":claims.digest(source).split(":")[1]})
     original=json.dumps(["zkc.structured-source/0", "original", claims.digest(source), "protocol", []])
     export={"format":"zkc.source-claims/0", "entry":"test::Proof", "registry_resolution":"deferred-to-lean",
             "admission":{"format":"zkc.structured-source/0", "original_sha256":claims.digest(source),
-                         "original_identity":claims.digest(source).split(":")[1],
-                         "interface_sha256":claims.digest(interface.encode()), "protocol_symbol":"protocol"},
+                         "interface_sha256":claims.digest(interface.encode()), "protocol_symbol":"protocol",
+                         "capture":"source-capture", "installation":"library-installation"},
             "claims":[{"request":{"subject":{"entry":"test::Proof", "stage":stage},
                                   "target":{"protocol":"protocol","clause":0,"name":"valid"},
                                   "quantity":{"kind":"scalar","expression":{"kind":"natural","value":"0"}},
@@ -30,6 +31,46 @@ def fixture(claims, stage="compiled-ideal"):
     arguments=dict(entry="test::Proof",source=source,interface_text=interface,original_text=original,
                    participant_text="compiled participant", program=b"verifier bytes")
     return export, arguments
+
+
+def test_source_alias_resolves_to_exact_admitted_protocol(claims):
+    export, args = fixture(claims)
+    bound = claims.bind_export(export, **args)
+    claim = bound["claims"][0]
+    assert bound["entry"] == claim["source_entry"] == "test::Proof"
+    assert claim["request"]["subject"]["entry"] == "protocol"
+    assert claim["entry_association"] == {
+        "source_entry": "test::Proof", "protocol": "protocol",
+        "interface_digest": export["admission"]["interface_sha256"],
+        "attribution": "trusted-frontend-checked-interface"}
+
+
+@pytest.mark.parametrize("field", ["capture", "installation"])
+@pytest.mark.parametrize("value", [None, 42, {}, []])
+def test_provenance_requires_schema_strings(claims, field, value):
+    export, args = fixture(claims)
+    export["admission"][field] = value
+    with pytest.raises(claims.Refused, match="must be a string"):
+        claims.bind_export(export, **args)
+
+
+def test_duplicate_original_identity_is_not_a_second_authority(claims):
+    export, args = fixture(claims)
+    export["admission"]["original_identity"] = claims.digest(args["source"]).split(":")[1]
+    with pytest.raises(claims.Refused):
+        claims.bind_export(export, **args)
+
+
+@pytest.mark.parametrize("field,value", [("entry", "test::Other"), ("protocol", "other"),
+                                       ("original", "other"), ("format", "other")])
+def test_even_rehashed_interface_cannot_cross_entry_association(claims, field, value):
+    export, args = fixture(claims)
+    interface = json.loads(args["interface_text"])
+    interface[field] = value
+    args["interface_text"] = json.dumps(interface)
+    export["admission"]["interface_sha256"] = claims.digest(args["interface_text"].encode())
+    with pytest.raises(claims.Refused):
+        claims.bind_export(export, **args)
 
 
 def test_labels_and_methods_do_not_choose_request(claims):
@@ -150,7 +191,8 @@ def test_subject_export_preserves_raw_interface_and_rejects_reserialization(clai
     bridge = load("explicit_native_subject", "lean/bridges/common/native_entry.py")
     export, arguments = fixture(claims, "interactive")
     interface = {"format": "zkc.language-interface/0", "entry": "test::Proof",
-                 "job": {"kind": "run"}, "original": claims.digest(arguments["source"]).split(":")[1]}
+                 "protocol": "protocol", "job": {"kind": "run"},
+                 "original": claims.digest(arguments["source"]).split(":")[1]}
     raw = json.dumps(interface, indent=3) + "\n"
     export["admission"]["interface_sha256"] = claims.digest(raw.removesuffix("\n").encode())
     emitted = {"language-emit": arguments["source"].decode(), "language-interface": raw}

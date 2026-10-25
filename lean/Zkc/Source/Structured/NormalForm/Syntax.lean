@@ -20,7 +20,8 @@ decided where an operation first needs them are components.
   is a separate node that binds its results after the stop has been decided.
 * A helper call is presented through a law of the signature (a returned
   result or a stop) or kept as the helper's own invocation on present
-  arguments. A law names its helper; the soundness theorem asks for one
+  arguments. Math calls can instead retain their exact invocation on optional
+  components, without a helper law. A law names its helper; the soundness theorem asks for one
   premise per law, so every presented call is tied to the admitted helper it
   is about. The form records the called helper wherever a law presents a call
   (`byLaw`), and the soundness theorem asks that it be the law's own helper:
@@ -39,8 +40,9 @@ group arithmetic, comparisons, Boolean connectives and selection. Primitive
 executions, bounded reads, helper calls, folds and maps can stop or depend on
 helper bodies and are excluded. -/
 def Op.total : Op → Bool
-  | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
-  | .fieldMultiply .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+    .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
+  | .fieldMultiply .. | .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
   | .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor
   | .booleanEqual | .booleanNotEqual | .select .. => true
   | _ => false
@@ -222,6 +224,7 @@ inductive Equality : Ty → Type where
   | field (domain : String) : Equality (.field domain)
   | group (domain : String) : Equality (.group domain)
   | index : Equality .index
+  | boolean : Equality .boolean
   deriving Repr
 
 mutual
@@ -293,6 +296,10 @@ inductive Form (laws : List LawKey) (callees : List CalleeKey) : Scope → List 
   | compute {Δ : Scope} {out : List Ty} (op : Op) (allowed : op.isCalculation = true)
       (args : Terms laws Δ op.arguments)
       (next : Form laws callees (.results op.results :: Δ) out) : Form laws callees Δ out
+  /-- An exact Math helper invocation on optional inputs. The returned tuple
+  retains optional results; the invocation retains every effect and stop. -/
+  | math {Δ : Scope} {out : List Ty} (helper : Helper) (args : Values (Comp laws Δ) helper.inputs)
+      (next : Form laws callees (.tuple helper.outputs :: Δ) out) : Form laws callees Δ out
   /-- A call of `helper` presented by the law `entry`: its results, if any,
   are the law's terms in `next`, and a stopping law's stop is `next`. -/
   | byLaw {Δ : Scope} {out : List Ty} (entry : Fin laws.length) (helper : Helper)

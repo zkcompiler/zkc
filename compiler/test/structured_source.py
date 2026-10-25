@@ -49,7 +49,7 @@ def simple(declarations='', body='', result='%flag'):
 "protocol.func"() ({ ^entry(%flag:i1):
 ''' + body + '''
 "protocol.return"(''' + result + ''') : (i1)->()
-}) {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {sym_name="main",origin=["main",[]],function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }'''
 
 
@@ -215,7 +215,6 @@ for name, source, code in [
     ('math-operation-attribute', simple(body='%x = arith.xori %flag,%flag {unexpected=true} : i1'), 'structured-source-original'),
     ('extra-domain-constructor', total.replace('%d = "data.domain_indices"', '%extra = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>\n%d = "data.domain_indices"'), 'structured-source-domain'),
     ('unsupported-type', simple('func.func private @dead(%x:!data.bytes) -> !data.bytes { return %x : !data.bytes }'), 'structured-source-type'),
-    ('unsupported-index-less', simple('func.func private @dead(%a:ui64,%b:ui64) -> i1 { %x = "data.index_less"(%a,%b) : (ui64,ui64)->i1\n return %x : i1 }'), 'structured-source-operation'),
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
     ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
@@ -297,6 +296,23 @@ with case('binary-and-extension-identities-export-their-rows'):
     assert extension[3:] == [[['BaseField', 'koala-bear']],
                                ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo', 'ExtensionField'],
                                '2130706433']
+
+with case('field-embedding-retains-nominal-binding-and-ports'):
+    base, extension = 'koala-bear', 'koala-bear.ext4-binomial3'
+    base_type, extension_type = f'!algebra.field<"{base}">', f'!algebra.field<"{extension}">'
+    declarations = f'''
+"local.binding"() {{sym_name="embed",contract="field.embed",arguments=["{extension}"],implementation=""}} : ()->()
+local.func @embed_helper(%x:{base_type}) -> {extension_type}
+    attributes {{logical_origin=["embed_helper",[]]}} {{
+  %y = "algebra.exec.field_embed"(%x) {{binding=@embed,parameters=[],site="embedding"}} : ({base_type})->{extension_type}
+  local.return %y : {extension_type}
+}}
+'''
+    data = export(simple(declarations))
+    assert data[6] == [['binding', 'embed', 'field.embed', [extension], '']]
+    assert table(data)['embed_helper'][4:6] == [[['field', base]], [['field', extension]]]
+    assert instructions(table(data)['embed_helper']) == [
+        [['exec', 'algebra.exec.field_embed', 'embed', []], [0], [['field', extension]], [], 'embedding']]
 
 with case('unsupported-service-contract'):
     source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.other/0">)').replace(
@@ -437,6 +453,30 @@ for name in ('forwarded-bounds', 'aliased-indices'):
         data = export((fixtures / 'structured-source' / (name + '.mlir')).read_text())
         assert data[3] == 'main'
         assert len({definition[1] for definition in data[7]}) == len(data[7])
+
+with case('protocol-origin-is-a-typed-tree-and-has-a-separate-path-cap'):
+    origin = ['library::Run', [['F', ['field', 'bls12-381.fr']],
+                ['T', ['formal', 'polynomial', [['field', 'bls12-381.fr'], ['nat', '1']]]],
+                ['Max', ['nat', '4']]]]
+    source = simple().replace('origin=["main",[]]', 'origin=' + json.dumps(origin))
+    assert table(export(source))['main'][8] == origin
+    long_path = 'p' * 2048
+    assert table(export(simple().replace('origin=["main",[]]',
+        'origin=' + json.dumps([long_path, []]))))['main'][8] == [long_path, []]
+    export(simple().replace(',origin=["main",[]]', ''), 'source.protocol-origin')
+
+for label, origin in [
+    ('empty', []), ('old-string-binding', ['main', [['F', 'bls12-381.fr']]]),
+    ('unbound-parameter', ['main', [['T', ['parameter', 'T']]]]),
+    ('duplicate-name', ['main', [['T', ['bool']], ['T', ['index']]]]),
+    ('bad-decimal', ['main', [['Max', ['nat', '04']]]]),
+    ('unknown-kind', ['main', [['T', ['nominal', 'unknown', 'x', []]]]]),
+    ('non-NFC', ['cafe\u0301::Run', []]), ('path-limit', ['p' * 2049, []]),
+    ('string-limit', ['main', [['F', ['field', 'f' * 513]]]]),
+]:
+    with case('malformed-protocol-origin-' + label):
+        changed = simple().replace('origin=["main",[]]', 'origin=' + json.dumps(origin, ensure_ascii=False))
+        export(changed, 'mathematical-formation')
 
 commands.save()
 print(f"structured-source: {counted()} cases")

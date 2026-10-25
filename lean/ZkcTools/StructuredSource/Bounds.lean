@@ -449,7 +449,7 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
           operation definitions (.invoke spec.stepHelper) (← prepend current callbackArgs) .nil)
           n.upper 0 initial
         return some result
-    | .fieldConstant .., _, .nil | .fieldAdd .., _, .nil
+    | .fieldEmbed .., _, .nil | .fieldConstant .., _, .nil | .fieldAdd .., _, .nil
     | .fieldSubtract .., _, .nil | .fieldMultiply .., _, .nil
     | .groupIdentity .., _, .nil | .groupAdd .., _, .nil | .groupScale .., _, .nil =>
         return some [.atom]

@@ -47,6 +47,11 @@ def provenance : Provenance :=
 
 def clean : Receipt evaluated := Receipt.ofTheorem discharge provenance
 
+/-- A generic wrapper changes attribution, not the registered meaning. -/
+def invoke {α : Sort _} (proof : α) : α := proof
+
+def genericDirect : Receipt evaluated := Receipt.ofTheorem (invoke discharge) provenance
+
 def explicitFalse (_hypothesis : False) : Receipt evaluated := clean
 
 def implicitFalse {_hypothesis : False} : Receipt evaluated := clean

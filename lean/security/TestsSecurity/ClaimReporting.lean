@@ -1,4 +1,4 @@
-import ZkcSecurity.Claims.ReceiptAdmission
+import ZkcSecurity.Claims.Canonical
 import ZkcSecurity.Claims.Endpoint
 import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract
@@ -94,7 +94,7 @@ noncomputable def resolved (endpoint : Semantics) : Resolved (registry (F := F) 
   elaborated := by
     cases endpoint <;>
       simp [knowledgeProperty, knowledgeArguments, wire, subject, artifacts, modelRegistry, resolveModel,
-        models, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+        models, modelSchema, modelSchemaWith, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.naturalWith, Numeric.cardinality,
         Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
         Wire.TargetRef.matches, model, knowledge, checkCapabilities,
         show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl] <;> rfl
@@ -330,8 +330,10 @@ noncomputable def adaptiveResolved (binding : ApplicationBinding) (symbol : bind
   elaborated := by
     simp [soundnessProperty, soundnessArguments, adaptiveWire, idealData, wire, Subject.check,
       subject, Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkCapabilities,
-      resolveModel, models, Registry.lookup, modelSchema, named, checkArguments, reference,
-      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel]
+      resolveModel, models, Registry.lookup, modelSchema, modelSchemaWith, named, checkArguments, reference,
+      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel,
+      soundnessParameters, decodeSoundnessParameters, requireExactSoundness]
+    rfl
 noncomputable def adaptiveMeaning (binding : ApplicationBinding) (symbol : binding.symbol = "application") :
     Evaluated (adaptiveResolved (F := F) (G := G) binding symbol) := ⟨(adaptiveRequest binding).meaning, rfl⟩
 theorem adaptiveBound (binding : ApplicationBinding) : (adaptiveRequest (F := F) (G := G) binding).meaning := by
@@ -392,7 +394,7 @@ noncomputable def replacedModelResolved : Resolved (replacedModelRegistry (F := 
   arguments := .ok (knowledge .idealMeaning)
   elaborated := by
     simp [knowledgeProperty, knowledgeArguments, idealData, wire, subject, artifacts, resolveModel,
-      replacedModels, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+      replacedModels, modelSchema, modelSchemaWith, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.naturalWith, Numeric.cardinality,
       Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
       Wire.TargetRef.matches, model, knowledge, checkCapabilities,
       show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl]
@@ -712,4 +714,133 @@ noncomputable def positiveReceipt : AdmittedReceipt (modelRegistry .idealMeaning
 
 end ProjectedCarrier
 
+namespace Canonical
+open ZkcSecurity.Tools.ClaimConstruction
+
+/-- Switching to a generic subject cannot give a reserved security name the
+meaning True. Core receipts remain available independently of admission. -/
+def genericReservedData : Wire.Request where
+  subject := ⟨"test-unit", "test::Entry", .interactive, []⟩
+  property := ⟨"knowledge", 0⟩
+  model := ⟨exactUniform, []⟩
+  target := .retained "test" 0 "control"
+  accept := ⟨true, 0, 0, []⟩
+  quantity := .scalar (.natural 0)
+def genericProperty : PropertyExport Unit where
+  Arguments _ := Unit
+  elaborate _ _ := .ok ()
+  meaning _ _ := .ok True
+def genericRegistry : Registry (PropertyExport Unit) :=
+  ⟨[⟨⟨"knowledge", 0⟩, "zkc.property.knowledge/0", some genericProperty⟩]⟩
+def genericResolved : Resolved genericRegistry (fun _ => genericReservedData.subject) () genericReservedData :=
+  ⟨rfl, _, rfl, genericProperty, rfl, (), rfl⟩
+def genericMeaning : Evaluated genericResolved := ⟨True, rfl⟩
+def genericReservedReceipt : Receipt genericMeaning :=
+  Receipt.ofTheorem True.intro ⟨.theorem, "True.intro", ⟨"methods.reporting_control", 0⟩, [], []⟩
+
+/-- Explicit checked associations on the existing generic receipt. -/
+noncomputable def checkedReceipt : CanonicalReceipt (.uniform (F := F) (G := G) artifacts .idealMeaning) (modelRegistry .idealMeaning) .empty .knowledge
+    (meaning (F := F) (G := G) .idealMeaning) where
+  receipt := idealReceipt
+  modelAdmission := ⟨rfl, model, rfl⟩
+  association := ⟨rfl, rfl⟩
+
+/-- The undefined completeness name is still reserved to canonical meanings. -/
+def reservedData : Wire.Request :=
+  { manualData (F := F) (G := G) with property := ⟨"completeness", 0⟩ }
+noncomputable def reservedRegistry : Registry (PropertyExport (Subject F G artifacts .idealMeaning)) :=
+  ⟨[⟨⟨"completeness", 0⟩, "zkc.property.manual/0", some manualProperty⟩]⟩
+noncomputable def reservedResolved : Resolved (reservedRegistry (F := F) (G := G)) Subject.reference
+    (subject .idealMeaning) (reservedData (F := F) (G := G)) :=
+  ⟨rfl, _, rfl, manualProperty, rfl, (), rfl⟩
+noncomputable def reservedMeaning : Evaluated (reservedResolved (F := F) (G := G)) := ⟨True, rfl⟩
+noncomputable def reservedReceipt : AdmittedReceipt (modelRegistry .idealMeaning)
+    (reservedMeaning (F := F) (G := G)) :=
+  ⟨Receipt.ofTheorem trivialProof trivialProvenance (subject .idealMeaning).stageLinkProofs,
+    rfl, model, rfl⟩
+
+example : ¬ AuthorExtensionAdmission (.uniform (F := F) (G := G) artifacts .idealMeaning) (reservedResolved (F := F) (G := G)) := by
+  intro admission
+  have impossible : reservedIdentifier (reservedData (F := F) (G := G)).property = true := rfl
+  rw [admission.unreserved] at impossible
+  contradiction
+
+example : ¬ CanonicalAdmission (.uniform (F := F) (G := G) artifacts .idealMeaning) (modelRegistry .idealMeaning) .completeness
+    (reservedResolved (F := F) (G := G)) := by
+  intro admission
+  have impossible := congrArg Export.definition admission.selected
+  cases impossible
+
+/-- A semantic counterexample refutes the complete forged property export;
+this is stronger than refusing one proposed reflexivity proof. -/
+example : ¬ CanonicalAdmission (.uniform (F := F) (G := G) artifacts .idealMeaning) (modelRegistry .idealMeaning) .knowledge
+    (replacedResolved (F := F) (G := G)) := by
+  intro admission
+  have definition := congrArg Export.definition admission.selected
+  have same := Option.some.inj definition
+  have always : ∀ admitted arguments,
+      (replacedProperty (F := F) (G := G)).meaning admitted arguments = .ok True := fun _ _ => rfl
+  rw [same] at always
+  have impossible := always (subject .idealMeaning) (.error ⟨[]⟩)
+  cases impossible
+
+/-- A closed authorization chooses a fixed schema. The limit is selected by
+model elaboration, so a theorem with a different limit remains unresolved. -/
+def authorizedData : Wire.Request :=
+  { idealData (F := F) (G := G) with model := ⟨exactUniform,
+    [(some "queries", .natural 0), (some "budget_symbol", .reference "Q"),
+      (some "assumptions", .list [.application "assumptions.dlog_search" (some 0) []])]⟩ }
+noncomputable def authorizedResolved : Resolved (registry (F := F) (G := G) .idealMeaning)
+    Subject.reference (subject .idealMeaning) (authorizedData (F := F) (G := G)) := by
+  claim_resolve (modelRegistry .idealMeaning) normalizing
+    [registry, modelRegistry, authorizedData, idealData, wire, subject, artifacts,
+      premiseKeys]
+noncomputable def authorizedMeaning : Evaluated (authorizedResolved (F := F) (G := G)) := by
+  claim_evaluate
+
+noncomputable def conditionalCore : Receipt (authorizedMeaning (F := F) (G := G)) :=
+  Receipt.ofTheorem
+    (knowledgeEndpoint ⟨rfl, { model with queries := .fixed 0 }, rfl⟩ (replay .idealMeaning))
+    provenance (subject .idealMeaning).stageLinkProofs
+
+/-- Conditional kernel theorem for the exact canonical meaning. This limited
+search-game condition does not strengthen the extraction guarantee. -/
+noncomputable def authorizedReceipt (_hardness : DLogSearchHard (F := F) (G := G) 0) :
+    CanonicalReceipt (.uniform (F := F) (G := G) artifacts .idealMeaning) (modelRegistry .idealMeaning) .empty .knowledge
+      (authorizedMeaning (F := F) (G := G)) where
+  receipt := conditionalCore
+  modelAdmission := ⟨rfl, { model with queries := .fixed 0 }, rfl⟩
+  association := ⟨rfl, rfl⟩
+
+noncomputable def substitutedArguments (_hardness : DLogSearchHard (F := F) (G := G) 1) :
+    Receipt (authorizedMeaning (F := F) (G := G)) := conditionalCore
+noncomputable def unauthorizedReceipt (_hardness : DLogSearchHard (F := F) (G := G) 0) :
+    Receipt (meaning (F := F) (G := G) .idealMeaning) := idealReceipt
+noncomputable def unauthorizedModel (_law : FaithfulScalarAction F G) :
+    Receipt (meaning (F := F) (G := G) .idealMeaning) := idealReceipt
+
+/-- Extra carrier dependencies cannot smuggle a proof-producing instance into
+an otherwise accepted telescope, including dependencies on an earlier premise. -/
+noncomputable def dependentInstance {P : Prop} [Inhabited (PLift P)] :
+    Receipt (meaning (F := F) (G := G) .idealMeaning) := idealReceipt
+
+/-- A direct opaque proof establishes exactly the same fixed meaning. -/
+opaque retainProof {P : Prop} (proof : P) : P := proof
+noncomputable def opaqueReceipt : Receipt (meaning (F := F) (G := G) .idealMeaning) :=
+  Receipt.ofTheorem (retainProof (knowledgeEndpoint (knowledge .idealMeaning) (replay .idealMeaning)))
+    trivialProvenance (subject .idealMeaning).stageLinkProofs
+
+/-- Compare a complete selected model export, not entire registry containers. -/
+example : ¬ CanonicalModelAdmission (.uniform (F := F) (G := G) artifacts .idealMeaning) replacedModels .empty (subject (F := F) (G := G) .idealMeaning)
+    (idealData (F := F) (G := G)).model := by
+  intro admission
+  have same : replacedModels.exports.head (by simp [replacedModels]) =
+      canonicalModelEntry .empty .idealMeaning := Except.ok.inj admission.selected
+  have observation := congrArg (fun entry => (entry.definition.map fun elaborate =>
+    (elaborate Unit inferInstance artifacts.original .executableBytes
+      ⟨exactUniform, [(some "level", .reference "levels.bytes")]⟩).toBool).getD false) same
+  change true = false at observation
+  cases observation
+
+end Canonical
 end TestsSecurity.ClaimReporting

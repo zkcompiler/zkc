@@ -174,12 +174,14 @@ private theorem sourceElaborated (application : String) (charged : Bool) :
       (sourceWire (F := F) (G := G) charged) (subject (F := F) (G := G)) =
       .ok (.ok (sourceRequest application charged)) := by
   cases charged <;>
-    simp [soundnessArguments, sourceWire, subject, resolveModel, models, modelSchema, named,
+    simp [soundnessArguments, sourceWire, subject, resolveModel, models, modelSchema,
+      modelSchemaWith, named,
       checkArguments, reference, Subject.check, Subject.targetReference, Subject.acceptance,
       Wire.TargetRef.matches, sourceCardinality, sourceRequest, sourceModel, checkCapabilities,
       show artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl,
       Registry.lookup, ModelContext.parameter, ModelContext.resolveApplication, sourceSchedule,
-      ZkcSecurity.Claims.schedule, site, Contract.importedLanguage]; rfl
+      ZkcSecurity.Claims.schedule, site, Contract.importedLanguage,
+      soundnessParameters, decodeSoundnessParameters, requireExactSoundness]; rfl
 
 private noncomputable def sourceRegistry (application : String) :=
   properties (F := F) (G := G) (art := artifacts) (endpoint := .idealMeaning)

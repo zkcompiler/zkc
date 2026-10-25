@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/StringExtras.h"
@@ -42,7 +43,7 @@ bool primitiveContract(StringRef contract) {
                           "index.mul", "index.div", "index.mod", "index.equal",
                           "index.less", "vector.empty", "vector.length",
                           "vector.sum", "vector.split", "vector.append",
-                          "vector.equal", "field.equal"},
+                          "vector.equal", "field.equal", "field.embed"},
       contract);
 }
 
@@ -73,6 +74,14 @@ Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
   for (NamedAttribute attr : op.getAttrs()) {
     if (!llvm::is_contained(allowed, attr.getName().getValue()))
       return error("structured-source-attribute", attr.getName().getValue());
+    // Protocol origin has a separate bounded tree validator; only its
+    // template path can exceed the ordinary string limit.
+    if (attr.getName() == "origin" && isa<protocol_ir::MathematicalOp>(op)) {
+      auto origin = protocol_ir::readProtocolOrigin(attr.getValue());
+      if (!origin)
+        return origin.takeError();
+      continue;
+    }
     bool valid = true, bounded = true;
     attr.getValue().walk([&](StringAttr string) {
       valid &= json::isUTF8(string.getValue());
@@ -212,6 +221,32 @@ bool boundedWire(const json::Value &value, unsigned depth = 0) {
     return llvm::all_of(*array, [&](const json::Value &child) {
       return boundedWire(child, depth);
     });
+  }
+  return true;
+}
+
+// The protocol origin slot has its own typed tree budget and a longer template
+// path. Keep every other slot under the ordinary lexical wire bounds.
+bool boundedSourceWire(const json::Value &source) {
+  const auto &slots = *source.getAsArray();
+  for (unsigned slot = 0; slot < slots.size(); ++slot) {
+    if (slot != 7) {
+      if (!boundedWire(slots[slot], 1))
+        return false;
+      continue;
+    }
+    for (const auto &definition : *slots[slot].getAsArray()) {
+      const auto &row = *definition.getAsArray();
+      if (row.size() != 10 || row[0].getAsString() != "function" ||
+          row[2].getAsString() != "protocol") {
+        if (!boundedWire(definition, 2))
+          return false;
+        continue;
+      }
+      for (unsigned field = 0; field < row.size(); ++field)
+        if (field != 8 && !boundedWire(row[field], 3))
+          return false;
+    }
   }
   return true;
 }
@@ -373,7 +408,8 @@ class Exporter {
       return json::Array{"protocol_apply", application.getCallee(),
                          names(application.getRoles())};
     }
-    if (isa<data::IndexOp, data::EqualOp>(op)) {
+    if (isa<data::IndexOp, data::EqualOp, data::LessOp, data::PowerOfTwoOp>(
+            op)) {
       bool constant = isa<data::IndexOp>(op);
       if (owner != "protocol" && owner != "math")
         return error("structured-source-operation");
@@ -383,7 +419,20 @@ class Exporter {
       if (constant)
         return json::Array{"index.constant",
                            cast<data::IndexOp>(op).getValue()};
-      return json::Array{"index.equal"};
+      return json::Array{isa<data::EqualOp>(op)  ? "index.equal"
+                         : isa<data::LessOp>(op) ? "index.less"
+                                                 : "index.power_of_two"};
+    }
+    if (auto dim = dyn_cast<data::DimOp>(op)) {
+      if ((owner != "protocol" && owner != "math") || dim.getAxis() != 0 ||
+          !isa<algebra::FieldVectorType>(dim.getInput().getType()))
+        return error("structured-source-operation");
+      if (auto e = attributes(op, {"axis"}))
+        return std::move(e);
+      auto domain =
+          cast<algebra::FieldVectorType>(dim.getInput().getType()).getDomain();
+      used.domains.insert(domain);
+      return json::Array{"vector.length", domain};
     }
     StringRef operation = op.getName().getStringRef();
     if (operation.starts_with("algebra.exec.")) {
@@ -947,6 +996,7 @@ class Exporter {
               isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
                   algebra::GroupAddOp, algebra::GroupScaleOp,
                   algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
+                  data::LessOp, data::PowerOfTwoOp, data::DimOp,
                   arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
                   arith::CmpIOp, arith::SelectOp>(instruction);
         if (!allowed || instruction.getNumRegions())
@@ -992,9 +1042,9 @@ class Exporter {
     else if (owner == "local")
       allowed.push_back("logical_origin");
     else if (owner == "protocol")
-      llvm::append_range(allowed,
-                         ArrayRef<StringRef>{"roles", "input_roles",
-                                             "output_roles", "contracts"});
+      llvm::append_range(allowed, ArrayRef<StringRef>{"roles", "input_roles",
+                                                      "output_roles",
+                                                      "contracts", "origin"});
     else if (owner == "finite")
       llvm::append_range(allowed,
                          ArrayRef<StringRef>{"domain", "step", "predicate"});
@@ -1060,6 +1110,12 @@ class Exporter {
       }
     }
     json::Array origin;
+    if (owner == "protocol") {
+      auto value = protocol_ir::readProtocolOrigin(op.getAttr("origin"));
+      if (!value)
+        return value.takeError();
+      origin = std::move(*value->getAsArray());
+    }
     if (owner == "local") {
       auto attr = op.getAttrOfType<ArrayAttr>("logical_origin");
       if (!attr || attr.size() != 2 || !isa<StringAttr>(attr[0]) ||
@@ -1344,7 +1400,7 @@ Expected<std::string> exportStructuredSource(StringRef bytes, StringRef name,
   auto exported = Exporter(unit, selected).run(bytes);
   if (!exported)
     return exported.takeError();
-  if (!boundedWire(*exported))
+  if (!boundedSourceWire(*exported))
     return error("structured-source-limit");
   // Own framing and its byte budget together: callers emit these exact bytes.
   auto serialized = printJson(*exported) + '\n';

@@ -12,7 +12,7 @@ namespace ZkcExamples.Construction.DeferredRoundsParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:d10211ddcac6af993f4b1b596adc438905d96756035ede1169ac345ecbe2203d"
+  source := "sha256:82600bde6a020cade986703063b92038eea6bc63938ce0a54793ffac327ee7e6"
   candidate := "sha256:b8e61c8cca045acb16bb45ca3851739c377ab6dfce1579726f959aa3e709a4af"
   policy := ⟨"zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [2], [0], [("label_6330", "label_6430_0"), ("label_6331", "label_6431_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

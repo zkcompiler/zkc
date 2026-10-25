@@ -8,7 +8,7 @@ public import Zkc.Source.Structured.ProtocolContext
 
 @[expose] public section
 
-/-! Role-local validator programs after native transcript construction.
+/-! Role-local participant programs after native transcript construction.
 
 The bridge decodes the compiler's `zkc.constructed-participant/0` export into
 this carrier. Every exported operation keeps its operand references and result
@@ -39,7 +39,7 @@ structure Request where
 
 namespace Request
 
-/-- The draw adapter: a field challenge, with no operands. -/
+/-- A field draw with no data operands, used by local and replaced services. -/
 def draw (field : String) : Request := ⟨"draw", [], .field field⟩
 
 end Request
@@ -127,6 +127,7 @@ inductive Calculation where
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
   | fieldMultiply (domain : String)
+  | fieldEmbed (extension base : String)
   | fieldEqual (domain : String)
   | groupIdentity (domain : String)
   | groupAdd (domain : String)
@@ -148,6 +149,7 @@ def op : Calculation → Structured.Op
   | .fieldAdd domain => .fieldAdd domain
   | .fieldSubtract domain => .fieldSubtract domain
   | .fieldMultiply domain => .fieldMultiply domain
+  | .fieldEmbed extension base => .fieldEmbed extension base
   | .fieldEqual domain => .fieldEqual domain
   | .groupIdentity domain => .groupIdentity domain
   | .groupAdd domain => .groupAdd domain
@@ -170,6 +172,7 @@ def ofOp? : Structured.Op → Option Calculation
   | .fieldAdd domain => some (.fieldAdd domain)
   | .fieldSubtract domain => some (.fieldSubtract domain)
   | .fieldMultiply domain => some (.fieldMultiply domain)
+  | .fieldEmbed extension base => some (.fieldEmbed extension base)
   | .fieldEqual domain => some (.fieldEqual domain)
   | .groupIdentity domain => some (.groupIdentity domain)
   | .groupAdd domain => some (.groupAdd domain)
@@ -204,6 +207,17 @@ inductive ValueSort where
   | indices
   deriving DecidableEq, Repr
 
+/-- A retained native service port, separate from ordinary SSA inputs. `root`
+is its original entry input; `input` is its position in the role's complete
+native interface. Aliases of one root share state, regardless of query site. -/
+structure ServicePort where
+  name : String
+  owner : String
+  root : Nat
+  input : Nat
+  contract : String
+  deriving DecidableEq, Repr
+
 /-- Exported operations, as decoded from operation names, operation bindings and
 attributes. Anything outside this vocabulary is retained as `unsupported`. -/
 inductive Operation where
@@ -213,6 +227,10 @@ inductive Operation where
   | indicesAppend
   | observe (suite : String) (template : Template)
   | challenge (suite field : String) (template : Template)
+  /-- An owner-local request. Coordinates are references to enclosing induction
+  values, not request operands or transcript state. Only field draw is admitted. -/
+  | localService (port : ServicePort) (request : Request)
+      (template : Template) (coordinates : List Nat)
   | calculate (calculation : Calculation)
   | call (helper : String)
   | guard (site : String)
@@ -279,6 +297,7 @@ structure Participant where
   outputs : List ValueSort
   instructions : List Instruction
   returned : List Nat
+  servicePorts : List ServicePort := []
   deriving DecidableEq, Repr
 
 mutual

@@ -115,6 +115,7 @@ def evaluate : (calculation : Calculation) → Values (Structured.assignment F G
   | .fieldAdd _, .cons a (.cons b .nil) => .returned (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil) => .returned (.cons (a - b) .nil)
   | .fieldMultiply _, .cons a (.cons b .nil) => .returned (.cons (a * b) .nil)
+  | .fieldEmbed _ _, .cons value .nil => .returned (.cons value .nil)
   | .fieldEqual _, .cons a (.cons b .nil) => .returned (.cons (decide (a = b)) .nil)
   | .groupIdentity _, .nil => .returned (.cons 0 .nil)
   | .groupAdd _, .cons a (.cons b .nil) => .returned (.cons (a + b) .nil)

@@ -89,6 +89,7 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
         [["exchange", name, "V"], [0], [["bool"]], [], name],
         [["draw", "V", field[1]], [7], [field], [], "draw"],
         [["statement", name, [name], 0, name], [6], [], [], ""],
+        [["field.embed", "extension", "base"], [0], [["field", "extension"]], [], ""],
     ]
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
             [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"], None]], [],
@@ -117,8 +118,8 @@ example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
       instructions.map fun (.instruction descriptor _ _ _ _) => match descriptor with
         | .groupIdentity _ => 0 | .groupAdd _ => 1 | .groupScale _ _ => 2
         | .groupEqual _ => 3 | .restrict _ => 4 | .exchange _ _ => 5
-        | .draw _ _ => 6 | .statement _ _ _ _ => 7 | _ => 99
-    | _ => []) = some [0, 1, 2, 3, 4, 5, 6, 7] := by decide +kernel
+        | .draw _ _ => 6 | .statement _ _ _ _ => 7 | .fieldEmbed _ _ => 8 | _ => 99
+    | _ => []) = some [0, 1, 2, 3, 4, 5, 6, 7, 8] := by decide +kernel
 open Zkc.Source.Structured in
 example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     match definition with

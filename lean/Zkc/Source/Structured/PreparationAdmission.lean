@@ -91,13 +91,14 @@ def MapDeclaration.validate (snapshot : Snapshot)
 /-- Structural counterpart for semantic proofs over the existing checked
 carrier. No theorem about return behavior follows merely from this definition. -/
 def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
-  | .fieldConstant .. | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ => true
+  | .fieldEmbed .. | .fieldConstant .. | .fieldAdd _ | .fieldSubtract _ | .fieldMultiply _ => true
   | .invoke helper => helper.kind == .math && validString helper.name &&
       profile.typesAllowed helper.inputs && profile.typesAllowed helper.outputs
   | .fieldEqual _ | .groupIdentity _ | .groupAdd _ | .groupEqual _ | .groupScale _ _ =>
     profile == .realization
   | .indexConstant n => profile == .realization && n < indexLimit
-  | .indexEqual | .booleanConstant _ | .booleanAnd | .booleanOr |
+  | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength _ |
+      .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
   | .select type => profile == .realization && profile.typeAllowed type
   | _ => false

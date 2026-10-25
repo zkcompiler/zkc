@@ -81,7 +81,7 @@ def wrapped(inputs, outputs, body, results, declarations='', after=''):
 {call_results}"protocol.local_call"({actuals}) {{callee=@work,role="P",site="call"}} : ({ins})->({outs})
 {after}
 "protocol.return"({returned_results}) : ({outs})->()
-}}) {{sym_name="main",function_type=({ins})->({outs}),roles=["P","V"],input_roles={scopes_in},output_roles={scopes_out}}} : ()->()
+}}) {{sym_name="main",origin=["main",[]],function_type=({ins})->({outs}),roles=["P","V"],input_roles={scopes_in},output_roles={scopes_out}}} : ()->()
 }}) {{profile=#protocol.profile<protocol>}} : ()->() }}'''
 
 
@@ -267,11 +267,11 @@ with case('same-helper-two-invocations-have-fresh-ssa-values'):
     export(source)
     assert run(source, ['7', '3']) == returned(['13'])
 
-with case('unsupported-unused-math-and-dormant-local-arm'):
+with case('retained-unused-total-math-and-unsupported-dormant-local-arm'):
     unused = 'func.func private @dormant(%a:ui64,%b:ui64) -> i1 { %r = "data.index_less"(%a,%b) : (ui64,ui64)->i1\nreturn %r : i1 }'
     source = base.replace(binding('index.add'), unused + '\n' + binding('index.add'))
-    export(source, refusal='structured-source-operation')
-    run(source, ['1', '2'], refusal='structured-reference-unsupported')
+    export(source)
+    assert run(source, ['1', '2']) == returned(['3'])
     body = f'''"local.if"(%a0,%a1) ({{ ^yes(%xs:{vector}):
       "local.yield"() : ()->()
     }}, {{ ^no(%xs:{vector}):
@@ -352,7 +352,7 @@ def frontend(label):
     assert snapshot[2] == 'sha256:' + interface['original']
     # Whole emitter bytes go directly to export and reference. No extraction or
     # post-emission deletion of declarations/branches is used for positive cases.
-    assert not any(op in source for op in ['"local.realize"', '"algebra.map_realize"',
+    assert not any(op in source for op in ['"algebra.map_realize"',
                                           '"protocol.apply"', '"protocol.repeat"'])
     return source, interface['protocol'], snapshot
 
@@ -372,8 +372,8 @@ with case('actual-multilinear-shape-guards-and-contiguous-halves'):
     shape, shape_symbol, shape_data = captured['Shape']
     table, table_symbol, _ = captured['Table']
     halves, halves_symbol, halves_data = captured['Halves']
-    assert any(row[8] and row[8][0] == 's3h7a6b6311h6d756c74696c696e6561724h726f7773' for row in shape_data[7])
-    assert any(row[8] and row[8][0] == 's3h7a6b6311h6d756c74696c696e6561726h68616c766573' for row in halves_data[7])
+    assert any(row[0] == 'function' and row[8] and row[8][0] == 's3h7a6b6311h6d756c74696c696e6561724h726f7773' for row in shape_data[7])
+    assert any(row[0] == 'function' and row[8] and row[8][0] == 's3h7a6b6311h6d756c74696c696e6561726h68616c766573' for row in halves_data[7])
     valid = [['1', '7', '2', '9'], '1', '2']
     assert run_capture('Shape', valid) == returned([True])
     assert run_capture('Table', valid) == returned(valid)

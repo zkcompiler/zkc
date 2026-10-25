@@ -1,4 +1,4 @@
-import Zkc.Source.Structured.Association
+import Zkc.Source.Structured.BodyBindings
 
 /-! Exact association controls independent of source admission. The fixtures
 construct formed declarations; linking remains a separate invocation premise. -/
@@ -112,5 +112,35 @@ theorem associated_stop (F G : Type) [CommRing F] [AddCommGroup G] [Module F G]
       CheckedDefinition.helper, CheckedDefinition.helpers, Region.erase, Regions.erase,
       RawRegion.operations, RawRegions.operations, Op.helpers]
   exact (association.invoke linked .nil).trans rfl
+
+/-- Automatic association searches the actual list, including reordered tables. -/
+example : BodyIn [actual, unrelated] helper (valueBody true) := by bind_structured_bodies
+example : BodyIn [unrelated, actual] helper (valueBody true) := by bind_structured_bodies
+
+private structure Installed (definitions : List CheckedDefinition) : Prop where
+  value : BodyIn definitions helper (valueBody true)
+  stopped : BodyIn definitions stopped.helper (.stop .abort)
+
+example : Installed [unrelated, stopped, actual] := by bind_structured_bodies
+
+/-- Search refuses body, kind, signature, absence and arbitrary proposition gaps. -/
+example : True := by
+  fail_if_success
+    have : BodyIn [wrongRaw] helper (valueBody true) := by bind_structured_bodies
+  fail_if_success
+    have : BodyIn [wrongKind] helper (valueBody true) := by bind_structured_bodies
+  fail_if_success
+    have : BodyIn [wrongInputs] helper (valueBody true) := by bind_structured_bodies
+  fail_if_success
+    have : BodyIn [wrongOutputs] helper (valueBody true) := by bind_structured_bodies
+  fail_if_success
+    have : BodyIn [unrelated] helper (valueBody true) := by bind_structured_bodies
+  fail_if_success
+    have : Installed [actual] := by bind_structured_bodies
+  fail_if_success
+    have : True := by bind_structured_bodies
+  fail_if_success
+    have : False := by bind_structured_bodies
+  trivial
 
 end Tests.StructuredAssociations

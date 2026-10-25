@@ -12,7 +12,7 @@ namespace ZkcExamples.Construction.OkamotoProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:4a96c34c8d665ab61e29f95ad93af90b7247c0db91d91ffcf797486b949a394c"
+  source := "sha256:30bfdee9961c4afce61517ff8cafb63cad37d88f778def0a43aa91c0bea0206a"
   candidate := "sha256:bcc52761b2b051765cb3a0adf33086bf6ce93b4d745ca130cd5bb1245a35fcb8"
   policy := ⟨"zkl_9cdd0a5f70a0ca96171d93c3dd785e5e27e287a64a646c3fc511d97f10bd4aec", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

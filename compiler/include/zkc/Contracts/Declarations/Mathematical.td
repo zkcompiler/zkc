@@ -102,4 +102,10 @@ def IntrinsicPolynomialEvaluateDomain : ZKC_MathematicalIntrinsic<"poly.evaluate
 def IntrinsicPolynomialInterpolate : ZKC_MathematicalIntrinsic<"poly.interpolate", MathPolynomialInterpolate, "Field", 29, 0, 1>;
 def IntrinsicPolynomialFixTable : ZKC_MathematicalIntrinsic<"poly.fix_table", MathPolynomialFixTable, "Field", 30, 2>;
 
+// Append-only source catalogue meanings.
+def MathVectorLength : ZKC_MathematicalIdentity<"VectorLength", 36>;
+def MathIndexPowerOfTwo : ZKC_MathematicalIdentity<"IndexPowerOfTwo", 37>;
+def IntrinsicVectorLength : ZKC_MathematicalIntrinsic<"vector.length", MathVectorLength, "Field", 31>;
+def IntrinsicIndexPowerOfTwo : ZKC_MathematicalIntrinsic<"index.power_of_two", MathIndexPowerOfTwo, "Index", 32>;
+
 #endif

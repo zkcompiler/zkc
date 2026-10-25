@@ -151,12 +151,10 @@ def Definition.headerValid (definition : Definition) : Bool :=
     (f.kind != .math || f.visibility == .privateDef) &&
     (f.kind == .math || f.preconditions.isEmpty) &&
     (match f.kind, f.origin with
-    | .local, some (name, bindings) => validString name && bindings.length ≤ Limits.originBindings &&
-      (bindings.map Prod.fst).eraseDups.length == bindings.length &&
-      bindings.all (fun (key, value) => validString key && validString value)
-    | .local, none => false
-    | _, none => true
-    | _, some _ => false)
+    | .local, some value@(.local ..) => value.valid
+    | .protocol, some value@(.protocol ..) => value.valid
+    | .math, none => true
+    | _, _ => false)
   | .finite f => !(f.inputs ++ f.outputs).any Ty.isService &&
     validString f.domain && validString f.step && validString f.predicate true
   | .realization f => validPreparationName f.name && validString f.helper &&
@@ -259,8 +257,9 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   match descriptor with
   | .exec .. => kind == .local
   | .booleanConstant _ => true
-  | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
-    .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+    .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+    .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
   | .boundedAt .. => kind == .math
@@ -335,9 +334,23 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (catalogue.require d .field "Field" : Except String Unit)
   match descriptor with
   | .exec operation binding parameters =>
-    return .exec (← resolvePrimitive snapshot operation binding parameters)
+    if operation == "algebra.exec.field_embed" then
+      let binding ← requireSome (snapshot.bindings.find? (·.name == binding)) "structured-unknown-binding"
+      if !binding.valid then throw "structured-binding"
+      if binding.contract != "field.embed" then throw "structured-binding-contract"
+      let extension ← binding.resolveRoot catalogue
+      if !parameters.isEmpty then throw "structured-primitive-parameters"
+      let nominal ← catalogue.expect extension .field
+      let some base := nominal.member "BaseField" | throw "structured-domain-member"
+      catalogue.requireEmbedding extension base
+      return .fieldEmbed extension base
+    else
+      return .exec (← resolvePrimitive snapshot operation binding parameters)
   | .indexConstant text => return .indexConstant (← Format.indexDecimal text)
   | .indexEqual => return .indexEqual
+  | .indexLess => return .indexLess
+  | .indexPowerOfTwo => return .indexPowerOfTwo
+  | .vectorLength d => checkField d; return .vectorLength d
   | .fieldConstant d text =>
     checkField d
     let value ← Format.decimal text
@@ -346,6 +359,9 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .fieldAdd d => checkField d; return .fieldAdd d
   | .fieldSubtract d => checkField d; return .fieldSubtract d
   | .fieldMultiply d => checkField d; return .fieldMultiply d
+  | .fieldEmbed extension base =>
+    catalogue.requireEmbedding extension base
+    return .fieldEmbed extension base
   | .fieldEqual d => checkField d; return .fieldEqual d
   | .groupIdentity d =>
     catalogue.require d .group "ScalarAction"

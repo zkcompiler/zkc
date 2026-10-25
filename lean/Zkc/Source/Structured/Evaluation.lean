@@ -89,10 +89,14 @@ def operation {F G : Type} {interface : PIR.Signature}
   | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluate args)
   | .indexConstant value, .nil, .nil => .done (.cons value .nil)
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
+  | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
   | .fieldMultiply _, .cons a (.cons b .nil), .nil => .done (.cons (a * b) .nil)
+  | .fieldEmbed _ _, .cons value .nil, .nil => .done (.cons value .nil)
   | .fieldEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .groupIdentity _, .nil, .nil =>
       .done (.cons 0 .nil)
@@ -129,6 +133,31 @@ def operation {F G : Type} {interface : PIR.Signature}
 -- Generate the dependent equation lemmas in their defining module. Otherwise
 -- separate public clients can export competing lazily generated declarations.
 attribute [local simp] operation
+
+theorem operation_indexLess {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (a b : Nat) :
+    operation observations table .indexLess (.cons a (.cons b .nil)) .nil =
+      .done (.cons (decide (a < b)) .nil) := rfl
+
+/-- Pure length returns on every list, without a representability premise. -/
+theorem operation_vectorLength {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface)
+    (domain : String) (values : List F) :
+    operation observations table (.vectorLength domain) (.cons values .nil) .nil =
+      .done (.cons values.length .nil) := rfl
+
+/-- The efficient evaluator has the exact unbounded natural meaning. -/
+theorem operation_indexPowerOfTwo {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (n r : Nat) :
+    operation observations table .indexPowerOfTwo (.cons n (.cons r .nil)) .nil =
+      .done (.cons (decide (n = 2 ^ r)) .nil) := by
+  change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
+    PIR.Process interface (Values (assignment F G) [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  rfl
 
 /-- Keep the value assignment visible to dependent clients; operation evaluation
 remains a named definition with its own laws. -/

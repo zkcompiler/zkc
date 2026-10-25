@@ -193,7 +193,7 @@ theorem output_filter_preserves_stop (x : Option F) :
 
 private def projectionSnapshot : Snapshot :=
   (let contractDefinitions : List Definition := [.function ⟨"main", .protocol, .publicDef, [.boolean], [],
-      some ⟨["P"], [["P"]], []⟩, [], none,
+      some ⟨["P"], [["P"]], []⟩, [], some (.protocol ⟨"main", []⟩),
       .block [.instruction (.guard "P") [0] [] [] "checked_guard"] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>

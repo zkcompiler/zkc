@@ -2,6 +2,7 @@
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Names.h"
+#include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
@@ -530,8 +531,12 @@ Expected<std::string> inspectSourceClaimInventory(const CheckedProject &project,
         if (auto e = work.charge(1, claim.span))
           return std::move(e);
         json::Array arguments;
-        for (const auto &argument : block.arguments)
-          arguments.push_back(formatType(argument));
+        for (const auto &argument : block.arguments) {
+          auto term = encodeStaticTerm(argument);
+          if (!term)
+            return term.takeError();
+          arguments.push_back(std::move(*term));
+        }
         inventory.push_back(json::Object{
             {"node", json::Object{{"kind", "source-claim"},
                                   {"owner", owner.qualifiedName},
