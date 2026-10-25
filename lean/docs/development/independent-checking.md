@@ -1,0 +1,134 @@
+# Independent checking of locked declarations
+
+From the repository root, use `python3 lean/checks/check_independent.py` to
+capture existing compiled declarations or compare two explicit export captures.
+The default covers all 88 declarations in `checks/claims.lock.json`: main (41),
+security (24), ArkLib (20), and Clean (3). Each package's `comparator.json` must
+match its lock entries exactly and permit only `propext`, `Classical.choice`,
+and `Quot.sound`. Definition holes are forbidden.
+
+Prepare dependencies and build each package separately using the normal formal
+development commands. Capture **before** changing the proofs, preserve that
+directory, then capture the independently rebuilt candidate:
+
+```sh
+python3 lean/checks/check_independent.py capture --output /path/to/base-exports
+# Change proofs and build the affected packages separately.
+python3 lean/checks/check_independent.py capture --output /path/to/candidate-exports
+python3 lean/checks/check_independent.py compare \
+  --base-manifest /path/to/base-exports/manifest.json \
+  --candidate-manifest /path/to/candidate-exports/manifest.json \
+  --output /path/to/comparison
+```
+
+Output directories must be new. `--lean-root` selects another checkout's `lean`
+directory, and `--lake` selects its Lake launcher (with a sibling `lean`
+launcher). Toolchain discovery invokes `lean --print-prefix` directly and never
+evaluates the workspace Lake configuration. Repeat `--package main`,
+`--package security`, `--package arklib`, or `--package clean` for a partial run;
+its verdict covers only those packages. Every comparator configuration is still
+validated. Capture never invokes `lake build` and never certifies that existing
+oleans correspond to current sources. It records the Git revision and dirty
+status, diff hash, lock/configuration hashes, tool versions and binary hashes,
+selected olean file hashes, commands, and export SHA-256/size. Dependency
+declarations are included transitively by `leanexport`.
+
+For each package, capture explicitly runs:
+
+```text
+lake env <toolchain>/bin/leanexport <locked modules> -- <locked names> <standard axioms> <primitive targets>
+```
+
+The primitive targets match Lean 4.35.0's `Lake/CLI/Check.lean`
+`primitiveTargets`/`builtinTargets`, including `Nat.xor`, `semiOutParam`, and
+the quotient declarations. Compare runs these commands sequentially:
+
+```text
+lake comparator --config <package comparator.json> --challenge-from-export <base export> --solution-from-export <candidate export>
+lake check --paranoid --from-export <candidate export>
+```
+
+Both exports bypass Lake's build/export path, including for packages with
+dependencies outside their directory (`path = ".."`). The comparator's module
+labels `LockedStatements` are inert with these flags; they are not aggregate
+Lean modules. Always supply both exports. The comparator checks identical
+statements and their referenced declarations, permitted axiom closure, and the
+default kernel. The second command additionally requires all five bundled
+checkers: Lean paranoid, lean4lean, nanoda, con-leche, and con-ron. Linux and a
+working `bwrap` sandbox are required. Missing tools, rejected declarations,
+resource exhaustion, and sandbox failures fail the run; no checker is skipped
+and sandboxing is never disabled. The driver currently requires Lean 4.35.0
+because the explicit primitive list is version-specific.
+
+The comparator is deliberately stricter than semantic equivalence. Lean 4.35
+compares the complete constant records of non-target dependencies, including
+theorem proof bodies reached through definitions in a locked statement. A
+proof-only simplification of such a helper can therefore fail comparison even
+when its type is unchanged. The real-tool controls reproduce this case. Keep
+that refusal; do not add definition holes or silently replace the baseline.
+To diagnose proof validity separately, run the documented `lake check --paranoid
+--from-export` command on each candidate export. That replay proves neither
+baseline correspondence nor source freshness and must be reported separately.
+
+Lean 4.35's replay implementations also have a string-literal dependency
+limitation. The full main export contains `Char.ofNat` and `String.ofList`, yet
+Lean default/paranoid replay rejects `SumcheckVerifierBodies.roundBody` with
+unknown `String.ofList`, and lean4lean rejects `ProtocolOp.arguments` with
+unknown `Char.ofNat`. Replay walks explicit constant references; string literals
+can require primitives that this walk has not installed yet. A small two-string
+definition control reproduces lean4lean's ordering failure. Three other bundled
+kernels accept the full main export, but this is not an all-kernel verdict.
+Keep the failed result and diagnose without `--silent` using `leanchecker
+--from-export` or `leanchecker-paranoid --from-export` inside a read-only sandbox.
+Do not alter protocol meanings, skip a checker, or classify the failure as a pass.
+A correction belongs in the upstream replay implementation.
+
+Comparison checks artifact hashes before and after checking, requires identical
+declaration coverage, and rejects shared manifest/export paths, symlinks, and
+hard links between base and candidate. Distinct captures can have identical
+bytes when nothing changed; their capture provenance remains reviewable.
+`report.json` records the verdict, selected declarations, input provenance and
+commands. `failure.json` and command logs explain unsuccessful runs. A capture
+alone is not a checking verdict. Preserve trusted baseline artifacts and review
+their provenance; hashes establish file identity, not authenticity or source
+freshness. Do not modify artifacts while checking them.
+
+The defaults bound each child to 8192 MiB of address space, 1800 seconds,
+8 MiB of combined diagnostic output, and 2048 MiB per export. Configure these
+with `--memory-mb`, `--timeout`, `--log-mb`, and `--export-mb`. Limits apply to
+each process, not aggregate descendant memory. Commands run sequentially and
+oversized output or timeout kills their process group. Large captures may need
+an explicitly larger memory limit. Logs and exports stream to disk.
+
+Lean 4.35 does not forward a worker limit to bundled `con-leche`. Its default
+reserves approximately 1 GiB of virtual stack per hardware thread, so the
+8 GiB default can fail even on a tiny proof on a many-core host. For a full
+run, choose `--memory-mb` explicitly from the export size and hardware thread
+count; `(hardware threads + 32) * 1024` MiB allowed the local controls to run.
+This is an address-space ceiling, not measured resident memory. No checker
+is omitted to satisfy the limit.
+
+Run the Python configuration, artifact, and process controls without Lean:
+
+```sh
+uv run --no-sync --locked pytest common/tests/harness/test_lean_independent.py
+```
+
+The small real-tool controls compile temporary fixtures with `lean` and check
+distinct proof terms, changed statements/dependencies, forbidden axioms, and a
+corrupted proof. They do not build the project:
+
+```sh
+ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean && lake env lean --print-prefix)" \
+  uv run --no-sync --locked pytest lean/checks/tests/test_independent_tools.py
+```
+
+If a namespace probe fails, the tests explicitly skip the sandbox-dependent
+controls; statement, dependency, and axiom mismatch controls and direct default
+kernel replay controls still run. Direct replay is a separate control, not a
+verdict from `lake check --paranoid`. The production driver never skips kernels
+or treats a sandbox failure as acceptance.
+
+These checks apply to the exported locked declarations and their dependencies.
+They do not establish correspondence with native zkc execution or security
+properties beyond the statements and assumptions being checked. CI is unchanged.
