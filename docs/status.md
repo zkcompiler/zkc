@@ -39,10 +39,13 @@ adapters preserve current native descriptors and installation checks. Local and
 Plan own no value types. See [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
 
 Runtime scope/transfer formation, flat-CFG ownership and scoped native instruction
-reconstruction are available as compiler APIs. The reconstruction reader checks
+emission/reconstruction are available as compiler APIs. The reconstruction reader checks
 actual Func/CF conditional, variant and loop bodies, reached instructions,
 cleanup, carry transport and logical/represented ports, then independently
-admits the native model. These APIs are not yet the default executable
+admits the native model. Generated nested control is compared with baseline
+artifacts through the existing VM, including exact results, stops, origins,
+frame effects, installation and budget observations. These bounded controls are
+not a native correspondence theorem. These APIs are not yet the default executable
 Local-control path; the pipeline and independent artifact comparator still use
 the existing consumer.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).

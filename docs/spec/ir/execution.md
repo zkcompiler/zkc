@@ -122,8 +122,13 @@ executable-profile reader and its independent artifact comparison.
 
 ## Scoped native instruction profile
 
-The local execution reconstruction API reads a bounded Func/CF profile into
-the existing native program model. A function takes one borrowed Runtime scope
+The local execution writer and reconstruction reader connect a bounded Func/CF
+profile to the existing native program model. The writer first admits the model,
+recovers exact native result types, outlines control bodies and verifies the
+emitted CFG and scope ownership. It constructs no body metadata for the reader
+to trust. Its caller loads the required native value-type dialects; missing
+value types and an excessive outlined definition inventory are checked refusals.
+The reader independently inspects actual instructions and edges. A function takes one borrowed Runtime scope
 before its native arguments and returns one explicit outcome. Root functions
 retain their logical origin in `runtime.origin`; private outlined region bodies
 carry a unit `runtime.region` marker. The marker supplies no body or execution

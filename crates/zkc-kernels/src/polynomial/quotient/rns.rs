@@ -135,8 +135,8 @@ impl<'a> Matrix<'a> {
         // The fixed arrays avoid hidden allocation; unused slots are copies
         // of an admitted transform and are never read by the active prefix.
         let mut forward = [transform(0)?; 3];
-        for i in 1..limbs {
-            forward[i] = transform(i)?;
+        for (i, slot) in forward.iter_mut().enumerate().take(limbs).skip(1) {
+            *slot = transform(i)?;
         }
         Ok(Self {
             coefficients,
