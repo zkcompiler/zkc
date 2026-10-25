@@ -1,3 +1,4 @@
+#include "ControlCursor.h"
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
@@ -42,19 +43,18 @@ class BodyComparison {
   Comparison &owner;
   func::FuncOp function;
   Value scope;
-  exec::OutcomeType outcome;
-  Block *current = nullptr, *failure = nullptr;
-  Block::iterator position;
-  llvm::DenseSet<Block *> checked;
+  exec::detail::ControlCursor control;
   llvm::DenseMap<Value, std::string> names;
-  bool enter(Block *block);
-  Operation *take();
-  bool end() const { return position == current->end(); }
+  bool enter(Block *block) { return control.enter(block); }
+  Operation *take() { return control.take(); }
+  bool end() const { return control.atEnd(); }
   bool inputs(ValueRange, ArrayRef<std::string>) const;
   bool bind(ValueRange, ArrayRef<std::string>);
-  bool stop(Block *block);
+  bool stop(Block *block) { return control.failure(block); }
   bool dispatch(Value value, SmallVectorImpl<Value> &payload,
-                Block *failed = nullptr);
+                Block *failed = nullptr) {
+    return control.dispatch(value, payload, failed);
+  }
   bool region(runtime::EnterScopeOp enter, StringRef kind, StringRef site,
               StringRef selection, const program::Body &body,
               ArrayRef<std::string> arguments, SmallVectorImpl<Value> &results);
@@ -63,8 +63,8 @@ class BodyComparison {
   bool loop(const program::Instruction &, const program::For &);
 
 public:
-  BodyComparison(Comparison &owner, func::FuncOp function)
-      : owner(owner), function(function) {}
+  BodyComparison(Comparison &owner, func::FuncOp function, unsigned &remaining)
+      : owner(owner), function(function), control(function, remaining) {}
   bool run(const program::Body &, ArrayRef<std::string> arguments);
 };
 class Comparison {
@@ -141,7 +141,8 @@ public:
       for (Type port : ports)
         valid &= type(port);
     if (valid)
-      valid = BodyComparison(*this, function).run(expected, arguments);
+      valid =
+          BodyComparison(*this, function, remaining).run(expected, arguments);
     active.erase(function);
     return valid;
   }
@@ -153,17 +154,6 @@ public:
   }
   bool run(const program::LocalDefinitions &expected, bool mixed = false);
 };
-bool BodyComparison::enter(Block *block) {
-  if (!block || block->getParent() != &function.getBody() ||
-      !checked.insert(block).second)
-    return false;
-  current = block;
-  position = block->begin();
-  return true;
-}
-Operation *BodyComparison::take() {
-  return owner.charge() && !end() ? &*position++ : nullptr;
-}
 bool BodyComparison::inputs(ValueRange actual,
                             ArrayRef<std::string> expected) const {
   if (actual.size() != expected.size())
@@ -181,33 +171,6 @@ bool BodyComparison::bind(ValueRange actual, ArrayRef<std::string> expected) {
   for (auto [value, name] : zip(actual, expected))
     if (!owner.type(value.getType()) || !names.try_emplace(value, name).second)
       return false;
-  return true;
-}
-bool BodyComparison::stop(Block *block) {
-  if (failure)
-    return block == failure;
-  if (!block || block->getParent() != &function.getBody() || block == current ||
-      !checked.insert(block).second || block->getNumArguments() != 1 ||
-      !isa<exec::StopType>(block->getArgument(0).getType()) ||
-      block->getOperations().size() != 2 || !owner.charge() || !owner.charge())
-    return false;
-  auto stopped = dyn_cast<exec::FailureOp>(block->front());
-  if (!stopped || !attrs(stopped) ||
-      stopped.getStop() != block->getArgument(0) ||
-      stopped.getOutcome().getType() != outcome ||
-      !returns(&block->back(), stopped.getOutcome()))
-    return false;
-  failure = block;
-  return true;
-}
-bool BodyComparison::dispatch(Value value, SmallVectorImpl<Value> &payload,
-                              Block *failed) {
-  auto edge = dyn_cast_or_null<exec::DispatchOp>(take());
-  if (!edge || !attrs(edge) || edge.getOutcome() != value || !end() ||
-      !(failed ? edge.getStopped() == failed : stop(edge.getStopped())) ||
-      !enter(edge.getReturned()))
-    return false;
-  append_range(payload, current->getArguments());
   return true;
 }
 bool BodyComparison::region(runtime::EnterScopeOp entry, StringRef kind,
@@ -271,7 +234,8 @@ bool BodyComparison::conditional(const program::Instruction &instruction,
       return false;
     join = edge.getDest();
   }
-  return enter(join) && bind(current->getArguments(), record.outputs);
+  return enter(join) &&
+         bind(control.currentBlock()->getArguments(), record.outputs);
 }
 bool BodyComparison::match(const program::Instruction &instruction,
                            const program::Match &record) {
@@ -306,7 +270,8 @@ bool BodyComparison::match(const program::Instruction &instruction,
     for (Value argument : arm->getArguments())
       names.erase(argument);
   }
-  return enter(join) && bind(current->getArguments(), record.outputs);
+  return enter(join) &&
+         bind(control.currentBlock()->getArguments(), record.outputs);
 }
 bool BodyComparison::loop(const program::Instruction &instruction,
                           const program::For &record) {
@@ -331,9 +296,9 @@ bool BodyComparison::loop(const program::Instruction &instruction,
       initialEdge.getDestOperands() !=
           ValueRange{bounds[0], initial.getTransfer()} ||
       !end() || !enter(initialEdge.getDest()) ||
-      current->getNumArguments() != 2)
+      control.currentBlock()->getNumArguments() != 2)
     return false;
-  auto *header = current;
+  auto *header = control.currentBlock();
   Value coordinate = header->getArgument(0), previous = header->getArgument(1);
   auto compare = dyn_cast_or_null<arith::CmpIOp>(take());
   auto edge = dyn_cast_or_null<cf::CondBranchOp>(take());
@@ -353,14 +318,12 @@ bool BodyComparison::loop(const program::Instruction &instruction,
       iteration.getCoordinate() != coordinate ||
       iteration.getSite() != instruction.site)
     return false;
-  auto iterationEdge =
-      dyn_cast_or_null<exec::DispatchOp>(end() ? nullptr : &*position);
+  auto iterationEdge = dyn_cast_or_null<exec::DispatchOp>(control.peek());
   if (!iterationEdge)
     return false;
   Block *cleanup = iterationEdge.getStopped();
-  if (!cleanup || cleanup == current ||
-      cleanup->getParent() != &function.getBody() ||
-      !checked.insert(cleanup).second || cleanup->getNumArguments() != 1 ||
+  if (!cleanup || cleanup == control.currentBlock() ||
+      !control.inspect(cleanup) || cleanup->getNumArguments() != 1 ||
       cleanup->getOperations().size() != 2 || !owner.charge() ||
       !owner.charge())
     return false;
@@ -462,7 +425,6 @@ bool BodyComparison::loop(const program::Instruction &instruction,
 }
 bool BodyComparison::run(const program::Body &expected,
                          ArrayRef<std::string> arguments) {
-  outcome = cast<exec::OutcomeType>(function.getResultTypes().front());
   scope = function.getArgument(0);
   if (!enter(&function.front()) ||
       !bind(function.getArguments().drop_front(), arguments))
@@ -557,7 +519,7 @@ bool BodyComparison::run(const program::Body &expected,
     } else
       return false;
   }
-  return end() && checked.size() == function.getBody().getBlocks().size();
+  return control.complete();
 }
 bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
   for (const auto &binding : expected.bindings) {
