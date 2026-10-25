@@ -13,4 +13,5 @@
 
 #include "zkc/Dialect/Data/IR/DataOps.h"
 
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #endif

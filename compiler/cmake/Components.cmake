@@ -172,6 +172,7 @@ add_zkc_component(IR
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
   lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
+  lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Kernel/IR/KernelDialect.cpp
@@ -225,6 +226,7 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Algebra.cpp
   lib/Dialect/TypeAdapters/Commitment.cpp
   lib/Dialect/TypeAdapters/Core.cpp
+  lib/Dialect/TypeAdapters/Runtime.cpp
   lib/Dialect/TypeAdapters/Curve.cpp
   lib/Dialect/TypeAdapters/Polynomial.cpp
   lib/Dialect/TypeAdapters/Registry.cpp

@@ -7,7 +7,7 @@ use zkc_runtime::vm::{
 };
 
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
-    use Type::{Bool, Index, Indices};
+    use Type::{Bool, Index, Indices, QuotientMatrix};
     if !binding.arguments.is_empty()
         || binding.implementation != format!("native/{}", binding.contract)
     {
@@ -15,6 +15,11 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     }
     // Authored independently of runtime admission and compiler declarations.
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
+        "quotient.prepare_matrix" => (
+            &[Indices, Index, Index, Index, Index, Index],
+            &[QuotientMatrix],
+        ),
+        "quotient.matvec" => (&[QuotientMatrix, Indices], &[Indices]),
         "quotient.add" | "quotient.subtract" | "quotient.multiply" | "quotient.pointwise" => {
             (&[Indices, Indices, Index], &[Indices])
         }
@@ -48,6 +53,9 @@ pub(crate) fn apply(
     available: usize,
 ) -> Result<Vec<Value>> {
     use Value::{Index, Indices};
+    if matches!(name, "quotient.prepare_matrix" | "quotient.matvec") {
+        return apply_matrix(name, args, policy, available);
+    }
     if matches!(name, "quotient.project" | "quotient.ntt" | "quotient.intt") {
         return apply_unary(name, args, policy, available);
     }
@@ -164,6 +172,8 @@ fn apply_unary(
 }
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/quotient.prepare_matrix", "quotient.prepare_matrix"),
+    ("native/quotient.matvec", "quotient.matvec"),
     ("native/quotient.add", "quotient.add"),
     ("native/quotient.subtract", "quotient.subtract"),
     ("native/quotient.multiply", "quotient.multiply"),
@@ -173,6 +183,91 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/quotient.intt", "quotient.intt"),
     ("native/quotient.pointwise", "quotient.pointwise"),
 ];
+
+fn apply_matrix(
+    name: &str,
+    args: &[Value],
+    policy: &Policy,
+    available: usize,
+) -> Result<Vec<Value>> {
+    use quotient::rns::Matrix;
+    use std::sync::Arc;
+    let failure = |e: quotient::Error| refused(e.code());
+    let call = crate::numerical::Call::new(policy, available);
+    let output = match (name, args) {
+        (
+            "quotient.prepare_matrix",
+            [
+                Value::Indices(coefficients),
+                Value::Index(q),
+                Value::Index(n),
+                Value::Index(rows),
+                Value::Index(columns),
+                Value::Index(bound),
+            ],
+        ) => {
+            policy.vector_width(coefficients.len(), 8)?;
+            let dimension = |value| usize::try_from(value).map_err(|_| refused("quotient-shape"));
+            // Reached admission scans and compute-basis construction consume
+            // work even when mathematical admission subsequently refuses.
+            call.work(
+                Matrix::admission_work(coefficients.len())
+                    .ok_or_else(|| exhausted("numerical-work"))?,
+            )?;
+            let matrix = Matrix::new(
+                coefficients,
+                *q,
+                dimension(*n)?,
+                dimension(*rows)?,
+                dimension(*columns)?,
+                *bound,
+            )
+            .map_err(failure)?;
+            let len = matrix.storage_elements();
+            policy.vector_width(len, 8)?;
+            let retained = crate::value::quotient_matrix_bytes(len)?;
+            policy.output(retained, available)?;
+            call.work(matrix.work().ok_or_else(|| exhausted("numerical-work"))?)?;
+            let mut scratch = call.scratch(matrix.scratch_elements(), 0u64)?;
+            let output = call.output_owned(len, 0u64, retained)?;
+            output.finish(|storage| {
+                Ok(Value::QuotientMatrix(Arc::new(
+                    matrix.prepare(storage, scratch.as_mut()).map_err(failure)?,
+                )))
+            })?
+        }
+        ("quotient.matvec", [Value::QuotientMatrix(matrix), Value::Indices(input)]) => {
+            // A prepared mathematical fact does not inherit the preparing
+            // backend's policy. This call admits its actual resident object.
+            policy.output(
+                crate::value::quotient_matrix_bytes(matrix.storage_capacity())?,
+                usize::MAX,
+            )?;
+            policy.vector_width(matrix.storage_elements(), 8)?;
+            policy.vector_width(input.len(), 8)?;
+            call.work_items(input.len(), 4, 0)?;
+            let product = matrix.digits(input).map_err(failure)?;
+            let len = matrix.output_elements();
+            policy.vector_width(len, 8)?;
+            let retained = size(len, 8)?;
+            policy.output(retained, available)?;
+            call.work(matrix.work().ok_or_else(|| exhausted("numerical-work"))?)?;
+            let mut scratch = call.scratch(
+                matrix
+                    .scratch_elements()
+                    .ok_or_else(|| exhausted("size-overflow"))?,
+                0u64,
+            )?;
+            let mut output = call.output_owned(len, 0u64, retained)?;
+            product
+                .evaluate(output.as_mut_slice(), scratch.as_mut())
+                .map_err(failure)?;
+            output.finish(|values| Ok(Value::Indices(values.into())))?
+        }
+        _ => return Err(refused("quotient-operands")),
+    };
+    Ok(vec![output])
+}
 
 #[cfg(test)]
 mod tests {
@@ -295,3 +390,6 @@ mod tests {
         assert!(matches!(&args[0], Value::Indices(xs) if xs.as_ref() == [1, 2]));
     }
 }
+
+#[cfg(test)]
+mod matrix_tests;

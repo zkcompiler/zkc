@@ -76,6 +76,14 @@ do not provide a complete signature verifier. Formal `!poly.quotient<q,n>` value
 and source intrinsics retain exact modulus/degree until checked coefficient
 realization; helpers may carry them, executable ports and messages may not.
 
+[Prepared quotient matrices](spec/domains/quotient-matrices.md) use immutable
+Runtime values and exact chunked RNS reconstruction. Source clients prepare once
+and reuse matrices with separately checked digit vectors, including even and
+composite protocol moduli. The selected compute-prime profile, declared digit
+bound, canonical inputs and current invocation limits are enforced independently
+by the native path. This does not implement a signature verifier or a general
+formal-matrix rewrite.
+
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and

@@ -10,4 +10,5 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
 
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #endif

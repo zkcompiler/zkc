@@ -146,3 +146,6 @@ native path retains reached admission and work/storage/publication failures.
 A different algorithm must state its resource and observation relation before
 it can replace this realization. These compiler checks and arithmetic tests do
 not establish a native execution or cryptographic theorem.
+
+[Prepared matrix products](quotient-matrices.md) use exact bounded integer lifts
+over independent compute primes while retaining this protocol-ring meaning.

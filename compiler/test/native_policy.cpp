@@ -37,8 +37,10 @@ int main() {
       "index", "indices", "vector", "matrix",     "polynomial",  "table",
       "point", "round",   "groups", "commitment", "commitments", "proof"};
   const llvm::StringSet<> locals{
-      "opening_states", "prover_key", "verifier_key",  "opening_state", "rng",
-      "nonce",          "transcript", "resource_unit", "shake128_state"};
+      "opening_states", "prover_key",    "verifier_key",
+      "opening_state",  "rng",           "nonce",
+      "transcript",     "resource_unit", "shake128_state",
+      "quotient_matrix"};
   for (const auto &instance : protocol::installedDomains().allLogicalTypes()) {
     protocol::BoundType type{instance.kind, instance.domain, {}};
     cases.run(type.spelling(), [&] {

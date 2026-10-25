@@ -277,6 +277,10 @@ impl Core {
                 }
                 None
             }
+            Value::QuotientMatrix(matrix) => {
+                self.policy.vector_width(matrix.storage_elements(), 8)?;
+                None
+            }
             Value::Shake128State(..)
             | Value::ResourceUnit(..)
             | Value::Bn254Field(..)

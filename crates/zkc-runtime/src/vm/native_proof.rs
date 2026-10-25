@@ -586,7 +586,7 @@ fn verifier_data(ty: &PhysicalType, contracts: &super::Contracts) -> bool {
     }
     // Private copyable snapshots are local computation data. Wire admission
     // remains a separate boundary; a verifier can initialize its own snapshot.
-    if ty.kind() == Type::Shake128State {
+    if matches!(ty.kind(), Type::Shake128State | Type::QuotientMatrix) {
         return true;
     }
     let local = |logical: &super::LogicalType| {

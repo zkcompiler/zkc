@@ -9,4 +9,5 @@ include "zkc/Dialect/Polynomial/IR/PolynomialTypeBindings.td"
 include "zkc/Dialect/Algebra/IR/CurveTypeBindings.td"
 include "zkc/Dialect/Commitment/IR/CommitmentTypeBindings.td"
 include "zkc/Dialect/Local/IR/ResourcesTypeBindings.td"
+include "zkc/Dialect/Runtime/IR/RuntimeTypeBindings.td"
 #endif

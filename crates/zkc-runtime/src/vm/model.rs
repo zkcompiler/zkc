@@ -46,6 +46,7 @@ pub enum Type {
     Indices,
     Bytes,
     Shake128State,
+    QuotientMatrix,
     Matrix,
     Vector,
     Polynomial,
@@ -79,6 +80,7 @@ impl Type {
             Self::Indices => "indices",
             Self::Bytes => "bytes",
             Self::Shake128State => "shake128_state",
+            Self::QuotientMatrix => "quotient_matrix",
             Self::Matrix => "matrix",
             Self::Vector => "vector",
             Self::Polynomial => "polynomial",
@@ -117,6 +119,7 @@ impl Type {
             Self::FieldArray
             | Self::Index
             | Self::Bytes
+            | Self::QuotientMatrix
             | Self::Shake128State
             | Self::Indices
             | Self::Matrix
@@ -140,7 +143,8 @@ impl Type {
     }
     pub fn is_serializable(self) -> bool {
         match self {
-            Self::Shake128State
+            Self::QuotientMatrix
+            | Self::Shake128State
             | Self::Sequence
             | Self::FieldArray
             | Self::FixedVector
@@ -195,6 +199,7 @@ impl Type {
             Self::FieldArray
             | Self::Index
             | Self::Bytes
+            | Self::QuotientMatrix
             | Self::Shake128State
             | Self::Indices
             | Self::Matrix
@@ -226,6 +231,7 @@ impl Type {
             "indices" => Self::Indices,
             "bytes" => Self::Bytes,
             "shake128_state" => Self::Shake128State,
+            "quotient_matrix" => Self::QuotientMatrix,
             "matrix" => Self::Matrix,
             "vector" => Self::Vector,
             "polynomial" => Self::Polynomial,

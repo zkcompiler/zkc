@@ -11,4 +11,5 @@ include "zkc/Dialect/Crypto/IR/CryptoTypes.td"
 include "zkc/Dialect/Plan/IR/PlanTypes.td"
 include "zkc/Dialect/Commitment/IR/CommitmentTypes.td"
 
+include "zkc/Dialect/Runtime/IR/RuntimeTypes.td"
 #endif
