@@ -24,8 +24,11 @@ readExecutionDefinitions(mlir::Operation *symbolTable, bool physical);
 /// their exact outcome. Root functions package returns without a native tick;
 /// outlined control bodies still perform charged native yield. Checks every
 /// actual helper body and admits the complete acyclic closure. This component
-/// does not admit mathematical/finite realization requests or prove language
-/// source correspondence, and its result cannot be published unexpanded.
+/// also admits every immediate plain mathematical function and its domain
+/// closure through the mathematical owner. The returned view contains only
+/// scoped definitions; it does not describe mathematical equations or admit
+/// mathematical/finite realization requests. It is not language-source
+/// correspondence, and its result cannot be published unexpanded.
 llvm::Expected<program::LocalDefinitions>
 readSourceExecutionDefinitions(mlir::Operation *symbolTable);
 /// Independently compare current actual CFG with admitted native definitions.
@@ -44,6 +47,8 @@ verifyExecutionDefinitions(mlir::Operation *symbolTable,
                            bool physical);
 /// Independently compare the same logical source-scoped profile, including
 /// actual helper targets, occurrences, ports and every dormant definition.
+/// Recheck plain mathematical admission too; correspondence of those equations
+/// to their source remains the language/mathematical checker's responsibility.
 llvm::Error
 verifySourceExecutionDefinitions(mlir::Operation *symbolTable,
                                  const program::LocalDefinitions &expected);

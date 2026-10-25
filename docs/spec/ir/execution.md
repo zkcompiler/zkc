@@ -218,6 +218,15 @@ is checked, and the internal logical admission checks the complete acyclic
 call closure. Standard symbol and function verification alone does not supply
 these execution guarantees.
 
+The same source table may also contain plain mathematical `func.func`
+definitions. A scope, transfer, stop or outcome in a signature, or a Runtime
+origin/region annotation, selects execution checking. Every other immediate
+function is checked by the existing total mathematical owner, including dormant
+functions and their finite-domain and bound premises. Neither absence nor
+presence of an annotation grants admission. The mathematical inventory stays
+in the same symbol table, preserving actual helper and domain references;
+nested symbol tables remain their enclosing profile's responsibility.
+
 A source helper returns through `exec.returned` followed by `func.return`.
 Expansion removes this packaging, so it must not introduce a native return tick.
 Outlined conditional, match and iteration bodies retain `exec.complete`: their
@@ -230,8 +239,12 @@ The independent comparison binds the actual callee, occurrence, ordered ports,
 returned payload and failure continuation to admitted logical definitions. A
 same-typed retargeting can form a different valid source graph while failing
 comparison with the earlier graph. Each comparison rereads current SSA.
-These APIs cover ordinary scoped helpers; mathematical and finite realization
-requests need their separate actual-body and domain admission. They neither
+The returned native structural view contains only scoped definitions. The
+comparison also rechecks mathematical admission, but does not bind those
+equations to authored source: a different total equation can pass this
+component. Language and mathematical correspondence must supply that check.
+Mathematical and finite realization requests are not admitted by these APIs;
+they need their separate actual-body, port and domain checks. These APIs neither
 replace language-source correspondence nor establish the default compiler
 cutover. The native record writer is not an authored-source emitter.
 

@@ -66,6 +66,14 @@ mlir::LogicalResult verifyReferences(mlir::Operation *op,
 // computations; isolated access verification checks only structure. Recheck
 // the closure after changing any inspected helper body.
 mlir::LogicalResult verifyClosure(mlir::Operation *unit);
+// Apply the same finite-reference and bound-premise checks to explicitly owned,
+// already formed immediate definitions in a mixed symbol table. Finite cycle
+// traversal shares one budget. As above, ordinary helper admission remains the
+// mathematical/local owner's responsibility. The enclosing profile must account
+// for every omitted declaration separately.
+mlir::LogicalResult
+verifyDefinitionClosure(mlir::Operation *unit,
+                        llvm::ArrayRef<mlir::Operation *> definitions);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);
 // Mandatory checks and comparison readers retain Capacity explicitly. The

@@ -60,8 +60,11 @@ The logical source-scoped API additionally retains ordinary helper calls,
 checks their complete acyclic closure and independently compares current actual
 callees, occurrences and ordered operands. Source helper return packaging is
 distinct from charged native completion; outlined control yields retain their
-tick. This covers the scoped helper component, not mathematical/finite requests
-or the authored-source emitter migration. See the
+tick. Plain mathematical functions can share that source table; all are checked
+by the mathematical owner with their actual finite-domain and bound premises.
+Their equations still need separate source correspondence. This covers callable
+inventory and the scoped helper component, not mathematical/finite requests or
+the authored-source emitter migration. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a

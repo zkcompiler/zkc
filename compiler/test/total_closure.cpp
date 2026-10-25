@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
@@ -61,6 +62,24 @@ int main() {
   ScopedDiagnosticHandler silence(&context,
                                   [](Diagnostic &) { return success(); });
   Cases cases;
+  cases.run("finite root selection requires unique immediate ownership", [&] {
+    auto module = parse(helpers, context);
+    auto other = parse(helpers, context);
+    auto entry = function(*module, "entry");
+    auto helper = function(*module, "choose");
+    require(
+        succeeded(finite::verifyDefinitionClosure(*module, {entry, helper})),
+        "owned finite closure roots were refused");
+    require(failed(finite::verifyDefinitionClosure(*module, {entry, entry})),
+            "duplicate roots granted another traversal budget");
+    require(failed(finite::verifyDefinitionClosure(
+                *module, {function(*other, "entry")})),
+            "foreign root escaped the selected symbol table");
+    require(failed(finite::verifyDefinitionClosure(*module, {nullptr})) &&
+                failed(finite::verifyDefinitionClosure(nullptr, {})) &&
+                failed(finite::verifyDefinitionClosure(entry, {})),
+            "malformed root selection was accepted");
+  });
   cases.run("explicit entry preserves unused dependency requirements", [&] {
     auto module = parse(helpers, context);
     SymbolTableCollection symbols;

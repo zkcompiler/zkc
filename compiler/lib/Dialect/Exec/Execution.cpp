@@ -678,6 +678,8 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
         continue;
       return error("execution-cfg", "unexpected execution definition");
     }
+    if (source && !detail::isScopedExecutionFunction(function))
+      continue;
     if (function->getAttrOfType<UnitAttr>("runtime.region"))
       continue;
     auto origin = function->getAttrOfType<ArrayAttr>("runtime.origin");
@@ -717,7 +719,8 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
     result.functions.push_back(std::move(record));
   }
   for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
-    if (!visited.contains(function))
+    if ((!source || detail::isScopedExecutionFunction(function)) &&
+        !visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
   if (source) {
     if (auto e = admitNativeLocalDefinitions(result))
@@ -748,7 +751,8 @@ readExecutionDefinitions(Operation *symbolTable, bool physical) {
 }
 Expected<program::LocalDefinitions>
 readSourceExecutionDefinitions(Operation *symbolTable) {
-  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable,
+                                                    /*source=*/true)))
     return error("execution-cfg", "invalid source execution definition scope");
   return Reader(symbolTable, /*physical=*/false, /*source=*/true)
       .run(/*mixed=*/true);

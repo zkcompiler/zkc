@@ -605,25 +605,39 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
     }
   return success();
 }
-LogicalResult verifyClosure(Operation *unit) {
+LogicalResult verifyDefinitionClosure(Operation *unit,
+                                      ArrayRef<Operation *> definitions) {
+  if (!unit || !unit->hasTrait<OpTrait::SymbolTable>() ||
+      unit->getNumRegions() != 1 || !hasSingleElement(unit->getRegion(0)))
+    return failure();
+  llvm::DenseSet<Operation *> roots;
+  for (auto *definition : definitions)
+    if (!definition || definition->getParentOp() != unit ||
+        !roots.insert(definition).second)
+      return refuse(unit, "closure roots must be unique owned definitions");
   bool hasFinite = false;
-  unit->walk([&](Operation *op) { hasFinite |= isComputation(op); });
+  for (auto *definition : definitions)
+    definition->walk([&](Operation *op) { hasFinite |= isComputation(op); });
   if (!hasFinite) {
     // Preserve the existing pure/local cycle diagnostics in units without a
     // finite reference edge. Call premises and bounded accesses still require
     // evidence from this verified symbol closure.
-    auto checked = unit->walk([&](Operation *op) -> WalkResult {
-      if (isa<func::FuncOp, local::FuncOp>(op) &&
-          failed(verifyPreconditions(op)))
-        return WalkResult::interrupt();
-      if (isa<func::CallOp, local::ApplyOp>(op) &&
-          failed(verifyCallPreconditions(op)))
-        return WalkResult::interrupt();
-      if (failed(verifyBoundedAccess(op)))
-        return WalkResult::interrupt();
-      return WalkResult::advance();
-    });
-    return failure(checked.wasInterrupted());
+    for (auto *definition : definitions) {
+      auto checked = definition->walk([&](Operation *op) -> WalkResult {
+        if (isa<func::FuncOp, local::FuncOp>(op) &&
+            failed(verifyPreconditions(op)))
+          return WalkResult::interrupt();
+        if (isa<func::CallOp, local::ApplyOp>(op) &&
+            failed(verifyCallPreconditions(op)))
+          return WalkResult::interrupt();
+        if (failed(verifyBoundedAccess(op)))
+          return WalkResult::interrupt();
+        return WalkResult::advance();
+      });
+      if (checked.wasInterrupted())
+        return failure();
+    }
+    return success();
   }
   llvm::DenseMap<Operation *, unsigned> color;
   SymbolTableCollection symbols;
@@ -674,10 +688,19 @@ LogicalResult verifyClosure(Operation *unit) {
     color[definition] = 2;
     return success();
   };
-  for (auto &op : unit->getRegion(0).front())
-    if (failed(visit(&op, 0)))
+  for (auto *definition : definitions)
+    if (failed(visit(definition, 0)))
       return failure();
   return success();
+}
+LogicalResult verifyClosure(Operation *unit) {
+  if (!unit || !unit->hasTrait<OpTrait::SymbolTable>() ||
+      unit->getNumRegions() != 1 || !hasSingleElement(unit->getRegion(0)))
+    return failure();
+  SmallVector<Operation *> definitions;
+  for (auto &op : unit->getRegion(0).front())
+    definitions.push_back(&op);
+  return verifyDefinitionClosure(unit, definitions);
 }
 } // namespace zkc::finite
 

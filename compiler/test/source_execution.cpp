@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -105,7 +106,7 @@ int main() {
       "an external signature cannot stand in for an actual helper body", [&] {
         auto actual = parse(source);
         auto helper = actual->lookupSymbol<func::FuncOp>("sum");
-        helper.getBody().getBlocks().clear();
+        helper.eraseBody();
         helper.setPrivate();
         require(succeeded(verify(*actual)),
                 "external helper declaration formation");
@@ -183,5 +184,144 @@ int main() {
         llvm::consumeError(read.takeError());
         refused(protocol::verifySourceExecutionDefinitions(*actual, record));
       });
+  auto mixed = [&] {
+    auto actual = parse(source);
+    auto mathematics = parse(R"mlir(
+      !F = !algebra.field<"koala-bear">
+      module {
+        func.func private @math_sum(%a: !F, %b: !F) -> !F {
+          %v = algebra.field_add %a, %b : (!F, !F) -> !F
+          func.return %v : !F
+        }
+        func.func private @math_caller(%a: !F, %b: !F) -> !F {
+          %v = func.call @math_sum(%a, %b) : (!F, !F) -> !F
+          func.return %v : !F
+        }
+      })mlir");
+    for (auto function : mathematics->getOps<func::FuncOp>())
+      actual->getBody()->push_back(function.clone());
+    return actual;
+  };
+  cases.run("one source table checks both callable owners", [&] {
+    auto actual = mixed();
+    auto record = take(protocol::readSourceExecutionDefinitions(*actual));
+    require(record.functions.size() == 4,
+            "mathematical bodies entered the native scoped view");
+    accepted(protocol::verifySourceExecutionDefinitions(*actual, expected));
+    auto native = protocol::readExecutionDefinitions(*actual, false);
+    require(!native, "prepared profile admitted unselected mathematics");
+    llvm::consumeError(native.takeError());
+    refused(protocol::verifyExecutionDefinitions(*actual, expected, false));
+  });
+  auto invalidMath = [&](StringRef label, auto mutate) {
+    cases.run(label.str(), [&] {
+      auto actual = mixed();
+      accepted(protocol::verifySourceExecutionDefinitions(*actual, expected));
+      mutate(*actual);
+      require(succeeded(verify(*actual)),
+              "mathematical negative control must remain formed MLIR");
+      auto read = protocol::readSourceExecutionDefinitions(*actual);
+      require(!read, "mathematical definition escaped both checking owners");
+      llvm::consumeError(read.takeError());
+      refused(protocol::verifySourceExecutionDefinitions(*actual, expected));
+    });
+  };
+  invalidMath("dormant mathematical declaration needs an actual body",
+              [](ModuleOp actual) {
+                actual.lookupSymbol<func::FuncOp>("math_sum").eraseBody();
+              });
+  invalidMath(
+      "dormant mathematical recursion remains rejected", [](ModuleOp actual) {
+        auto function = actual.lookupSymbol<func::FuncOp>("math_caller");
+        cast<func::CallOp>(function.front().front()).setCallee("math_caller");
+      });
+  invalidMath(
+      "mathematical bodies cannot hide a terminal stop", [](ModuleOp actual) {
+        auto function = actual.lookupSymbol<func::FuncOp>("math_sum");
+        OpBuilder builder(&function.front().front());
+        exec::StopOp::create(builder, function.getLoc(),
+                             exec::StopType::get(actual.getContext()), "abort");
+      });
+  invalidMath("a source math helper cannot claim a public entry",
+              [](ModuleOp actual) {
+                actual.lookupSymbol<func::FuncOp>("math_sum").setPublic();
+              });
+  invalidMath("execution annotation cannot admit a mathematical signature",
+              [](ModuleOp actual) {
+                auto function = actual.lookupSymbol<func::FuncOp>("math_sum");
+                Builder builder(actual.getContext());
+                function->setAttr(
+                    "runtime.origin",
+                    builder.getArrayAttr({builder.getStringAttr("math_sum"),
+                                          builder.getArrayAttr({})}));
+              });
+  invalidMath("removing an origin cannot hide an execution signature",
+              [](ModuleOp actual) {
+                actual.lookupSymbol<func::FuncOp>("identity")
+                    ->removeAttr("runtime.origin");
+              });
+  cases.run(
+      "mathematical admission does not claim equation correspondence", [&] {
+        auto actual = mixed();
+        auto function = actual->lookupSymbol<func::FuncOp>("math_sum");
+        cast<func::ReturnOp>(function.front().back())
+            ->setOperand(0, function.getArgument(0));
+        // This different equation remains total. Its source binding is
+        // checked by the mathematical/language owner, not this view.
+        take(protocol::readSourceExecutionDefinitions(*actual));
+        accepted(protocol::verifySourceExecutionDefinitions(*actual, expected));
+      });
+  cases.run(
+      "mixed inventory does not verify another symbol table's bodies", [&] {
+        auto actual = mixed();
+        auto other = parse(R"mlir(
+                 module @other {
+                   func.func private @unchecked(
+                       %xs: !algebra.field_vector<"koala-bear">, %i: ui64)
+                       -> !algebra.field<"koala-bear"> {
+                     %v = "data.bounded_at"(%xs, %i) :
+                       (!algebra.field_vector<"koala-bear">, ui64)
+                       -> !algebra.field<"koala-bear">
+                     func.return %v : !algebra.field<"koala-bear">
+                   }
+                 })mlir");
+        actual->getBody()->push_back(other->clone());
+        // The nested owner's bound-premise checks fail. Merely placing
+        // it beside this component must not transfer its ownership.
+        require(succeeded(verify(*actual)), "nested owner formation");
+        require(
+            failed(mathematical::verifyTotalClosure(*other)),
+            "unrelated mathematical control unexpectedly discharged its bound");
+        take(protocol::readSourceExecutionDefinitions(*actual));
+        accepted(protocol::verifySourceExecutionDefinitions(*actual, expected));
+      });
+  for (StringRef name :
+       {"mathematical/helper-realization", "finite/realized-total",
+        "structured-source/indexed-helper"})
+    cases.run("mixed mathematical closure: " + name, [&] {
+      auto fixture = llvm::MemoryBuffer::getFile(std::string(ZKC_FIXTURES) +
+                                                 "/" + name.str() + ".mlir");
+      require(bool(fixture), "missing mathematical source fixture");
+      auto mathematical = parse((*fixture)->getBuffer());
+      auto owner =
+          *mathematical->getOps<protocol_ir::ProtocolModuleOp>().begin();
+      auto actual = parse(source);
+      for (auto &op : owner.getBody().front())
+        if (isa<func::FuncOp, data::DomainOp>(op))
+          actual->getBody()->push_back(op.clone());
+      require(succeeded(verify(*actual)), "mixed domain closure formation");
+      take(protocol::readSourceExecutionDefinitions(*actual));
+      accepted(protocol::verifySourceExecutionDefinitions(*actual, expected));
+      if (name == "structured-source/indexed-helper") {
+        auto step = actual->lookupSymbol<func::FuncOp>("step");
+        auto call = cast<func::CallOp>(step.front().front());
+        call->setOperand(0, step.getArgument(3));
+        require(succeeded(verify(*actual)), "mutated domain closure formation");
+        auto read = protocol::readSourceExecutionDefinitions(*actual);
+        require(!read, "a same-typed vector inherited another vector's bound");
+        llvm::consumeError(read.takeError());
+        refused(protocol::verifySourceExecutionDefinitions(*actual, expected));
+      }
+    });
   return cases.result();
 }
