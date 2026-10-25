@@ -300,18 +300,12 @@ discarding the policies. Moving these conditions into source `input` clauses
 and the registered relation meaning is a separately coordinated semantic and
 identity migration. Evidence-only migration does not reissue those requests.
 
-The old compiled-round descriptor and view fixtures remain only where they
-have independent regression consumers. They do not supply the canonical
-receipts of these migrated roots. The maintained interpreted-bytes Sumcheck
-leaf is a different stage and remains supported until its stage transport
-and claim-preservation obligations are discharged.
-
-`Generation.SumcheckInputs` traces each producer loop's initial table through
-the def-use graph to propose a public reference input. This is an untrusted
-hint: a helper may transform its input, so the generated execution and target
-proofs must still validate the candidate. Ambiguous dependencies, unknown
-sources and private tables remain unresolved. This bounded table-family search
-is not a generic invariant-inference procedure.
+`Generation.Roots.Stages` owns production completeness and soundness generation.
+The superseded compiled-descriptor generators and their exclusive round/view
+fixtures have been removed. `Families.Sumcheck.CompiledRound` remains part of
+the reusable table readback library. The maintained interpreted-bytes Sumcheck
+leaf proves a different stage's claim and remains supported until its stage
+transport and claim-preservation obligations are discharged.
 
 Common root assembly is owned by `ZkcTools.StructuredSource.Root` and
 `ZkcSecurity.Generation.RootCompleteness`. It emits the source-indexed subject,

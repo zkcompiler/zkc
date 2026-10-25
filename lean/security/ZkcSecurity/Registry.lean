@@ -457,10 +457,6 @@ def entries : List Entry := [
     "The actual Domain process has both the specified typed reading with its return \
     postcondition and observation-history coherence with that same postcondition; \
     source-to-artifact binding is separate."⟩,
-  ⟨"wellformed.sumcheck-round-connection", .wellFormedness,
-    some `ZkcSecurity.Families.Sumcheck.CompiledValidator.RoundConnection,
-    "At every round index, the actual low, high, challenge and delivery origins resolve \
-    to the selected schedule, and the admitted append helper returns the extended point."⟩,
   ⟨"family.sumcheck-readback-helpers", .familyProperty,
     some `ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound.HelperLaws,
     "The actual admitted message, fold, projection and append helpers compute their \
@@ -578,15 +574,7 @@ def entries : List Entry := [
   ⟨"wellformed.sumcheck-original-security-routes", .wellFormedness,
     some `ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.Routes,
     "At every reached source loop index and outer frame, source messages, draw and \
-    delivery resolve to the selected schedule and service handle in validator mode."⟩,
-  ⟨"wellformed.round-occurrence-template", .wellFormedness,
-    some `ZkcSecurity.Families.Sumcheck.RoundDescriptor.templateValid,
-    "The template belongs to the selected Entry, has one repeat coordinate and contains \
-    only apply and repeat path steps."⟩,
-  ⟨"wellformed.round-origin-bases", .wellFormedness,
-    some `ZkcSecurity.Families.Sumcheck.RoundDescriptor.OriginBases.Valid,
-    "The four valid occurrence templates resolve to the exact low, high, challenge and \
-    delivery origins, with the selected field request and random-service contract."⟩
+    delivery resolve to the selected schedule and service handle in validator mode."⟩
 ]
 
 /-- The registry as data of core types, for the declaration-record emitter:
