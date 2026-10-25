@@ -32,6 +32,8 @@ endfunction()
 add_zkc_test(kernel_ir IR kernel-ir)
 mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
 
+add_zkc_test(execution_finite IR execution-finite)
+mlir_target_link_libraries(zkc-execution_finite-test PRIVATE MLIRParser)
 add_zkc_test(execution_computation IR execution-computation)
 mlir_target_link_libraries(zkc-execution_computation-test PRIVATE MLIRParser)
 

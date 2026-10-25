@@ -163,6 +163,42 @@ logical ports; formal polynomial/quotient invocation ports and ordered finite
 requests still require their own realization. Source-equation correspondence,
 candidate comparison and executable extraction remain separate checks.
 
+## Ordered finite requests
+
+`exec.fold` and `exec.collect` retain finite computation before selection. Each
+occurrence borrows its containing function's exact entry scope, references an
+actual private Data domain and private Func callbacks, and returns one explicit
+outcome. Fold data operands are domain arguments, initial state and captures;
+collect data operands are domain arguments and captures. The outcome carries
+the fold state or the collected value. A zero-state fold still returns an
+outcome and retains reached domain checks, callbacks and stops.
+
+Callbacks prepend a borrowed scope to the [finite callback ABI](finite.md#helper-and-operand-abi).
+Their single result is an outcome carrying the step state, one collected element,
+or the predicate Boolean. A callback can have multiple CFG blocks. The ABI
+reader exposes actual entry formals and their ordered partitions; it does not
+invent a returned expression or totality claim for that CFG. Binding retains
+the supplied scope and distinct formal positions even when actual data aliases.
+Declared data preconditions index actual function arguments, including the
+scope position. Domain and capture premises are discharged against this
+occurrence's actual operands; successor arguments do not inherit entry facts by
+position. Exact fixed collection cardinality uses the same actual domain.
+
+The operations implement `SymbolUserOpInterface`. They have no loop region or
+induction argument and do not implement `LoopLikeOpInterface`. Their adapted
+callback signatures do not implement ordinary `CallOpInterface`. They advertise
+neither purity nor speculation. Total finite mathematics remains in Algebra;
+selected ordered control uses standard Func/CF with explicit outcomes.
+
+Formation checks symbols, port partitions, logical type policies and callback
+premises. Whole-source admission additionally checks every potential body,
+reference cycles, actual outcome dispatch and affine state behavior. The
+mathematical result-dependency summary does not describe a scoped outcome.
+Unrealized finite requests are excluded from executable extraction. Source
+emission, selected realization and their independent comparisons must be
+connected before this component replaces the default finite compilation path;
+[status](../../status.md) records that migration boundary.
+
 ## Scoped native instruction profile
 
 The local execution writer and reconstruction reader connect a bounded Func/CF

@@ -53,6 +53,28 @@ FunctionType signature(Operation *op) {
   auto attr = op ? op->getAttrOfType<TypeAttr>("function_type") : TypeAttr();
   return attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
 }
+bool isScoped(Operation *op) {
+  return isa_and_nonnull<exec::FoldOp, exec::CollectOp>(op);
+}
+ValueRange dataOperands(const Computation &c) {
+  return c.scoped ? c.operation->getOperands().drop_front()
+                  : c.operation->getOperands();
+}
+FunctionType computationSignature(Operation *op) {
+  if (isDeclaration(op))
+    return signature(op);
+  if (!isScoped(op))
+    return FunctionType::get(op->getContext(), op->getOperandTypes(),
+                             op->getResultTypes());
+  if (op->getNumOperands() == 0 || op->getNumResults() != 1 ||
+      !isa<runtime::ScopeType>(op->getOperand(0).getType()))
+    return {};
+  auto outcome = dyn_cast<exec::OutcomeType>(op->getResult(0).getType());
+  return outcome ? FunctionType::get(op->getContext(),
+                                     op->getOperands().drop_front().getTypes(),
+                                     outcome.getPayload())
+                 : FunctionType();
+}
 Operation *resolve(Operation *op, StringRef key) {
   auto ref = op->getAttrOfType<FlatSymbolRefAttr>(key);
   return ref ? SymbolTable::lookupNearestSymbolFrom(op, ref) : nullptr;
@@ -132,9 +154,9 @@ template <typename Query>
 auto domainEvidence(const Computation &c, EvidenceWork &work, Query query) {
   auto actual = [&](facts::DomainLeaf leaf) {
     Value value = detail::domainValue(leaf);
-    return c.total ? c.operation->getOperand(
-                         cast<BlockArgument>(value).getArgNumber())
-                   : value;
+    return c.total || c.scoped
+               ? dataOperands(c)[cast<BlockArgument>(value).getArgNumber()]
+               : value;
   };
   auto node = detail::cardinalityNode;
   auto child = detail::cardinalityChild;
@@ -178,11 +200,12 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
     return refuse(c.operation, "finite item bound partition", "finite-bound");
   if (!work.charge(attrs.size() + 1))
     return requireEvidence(c.operation, facts::Status::Capacity, {});
-  unsigned offset = callback->formals.state.size();
+  unsigned offset =
+      unsigned(bool(callback->scope)) + callback->formals.state.size();
   unsigned argBase = offset + callback->formals.items.size();
   llvm::DenseMap<Value, Value> invariants;
-  if (c.total) {
-    auto entry = partitionEntry(c, c.operation->getOperands());
+  if (c.total || c.scoped) {
+    auto entry = partitionEntry(c, dataOperands(c));
     if (failed(entry))
       return failure();
     for (auto [formal, actual] : zip(callback->formals.domain, entry->domain))
@@ -205,13 +228,13 @@ LogicalResult helperAssumptions(const Computation &c, CallbackRole role,
         valid = a < argBase + c.arguments &&
                 fact.argument == int(a - argBase) &&
                 fact.axis == bound.getAxis();
-        // A total computation can read a captured container using the domain
-        // index when the caller establishes equality of the selected extents.
+        // An actual occurrence can read a capture using the domain index when
+        // its caller establishes equality of the selected extents.
         // This transfers only a bound, never container or element identity.
         if (!valid && fact.argument >= 0 && actual(a))
-          valid = equalUnder(c.operation->getOperand(fact.argument), fact.axis,
-                             actual(a), bound.getAxis(),
-                             work) == facts::Status::Proven;
+          valid =
+              equalUnder(dataOperands(c)[fact.argument], fact.axis, actual(a),
+                         bound.getAxis(), work) == facts::Status::Proven;
       }
       if (!valid && actual(i) && actual(a))
         valid = provesBoundUnder(actual(i), actual(a), bound.getAxis(), work) ==
@@ -252,7 +275,8 @@ Type elementType(Type container, bool matrix) {
 }
 bool isComputation(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp,
-                         algebra::FiniteFoldOp, algebra::FiniteCollectOp>(op);
+                         algebra::FiniteFoldOp, algebra::FiniteCollectOp,
+                         exec::FoldOp, exec::CollectOp>(op);
 }
 bool isDeclaration(Operation *op) {
   return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp>(op);
@@ -366,12 +390,12 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
   c.operation = op;
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
-  c.total = !isDeclaration(op);
-  c.collect = isa<local::FiniteCollectOp, algebra::FiniteCollectOp>(op);
-  c.signature = c.total
-                    ? FunctionType::get(op->getContext(), op->getOperandTypes(),
-                                        op->getResultTypes())
-                    : signature(op);
+  c.scoped = isScoped(op);
+  c.total = !c.scoped && !isDeclaration(op);
+  c.collect =
+      isa<local::FiniteCollectOp, algebra::FiniteCollectOp, exec::CollectOp>(
+          op);
+  c.signature = computationSignature(op);
   auto reference = [&](StringRef name) {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>(name);
     if (symbols && ref)
@@ -386,8 +410,9 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
   if (!c.signature || !c.domain || !c.helper ||
       (op->hasAttr("predicate") && !c.predicate))
     return refuse(op, "unresolved finite domain/helper signature");
-  auto dt = c.domain.getFunctionType();
-  if (!c.domain.getBody().hasOneBlock() || c.domain.getBody().front().empty() ||
+  auto dt = signature(c.domain);
+  if (!dt || c.domain->getNumRegions() != 1 ||
+      !c.domain.getBody().hasOneBlock() || c.domain.getBody().front().empty() ||
       !isa<data::DomainYieldOp>(c.domain.getBody().front().back()))
     return refuse(op, "domain requires a constructor body");
   if (dt.getNumResults() != 1 || !isa<data::DomainType>(dt.getResult(0)))
@@ -442,7 +467,8 @@ FailureOr<CallbackABI> readCallbackABI(const Computation &c,
   auto visibility = helper ? helper->getAttrOfType<StringAttr>("sym_visibility")
                            : StringAttr();
   if (!type || !visibility || visibility.getValue() != "private" ||
-      (c.total ? !isa<func::FuncOp>(helper) : !isa<local::FuncOp>(helper)) ||
+      ((c.total || c.scoped) ? !isa<func::FuncOp>(helper)
+                             : !isa<local::FuncOp>(helper)) ||
       helper->getNumRegions() != 1 || helper->getRegion(0).empty())
     return failure();
   auto &body = helper->getRegion(0).front();
@@ -450,6 +476,8 @@ FailureOr<CallbackABI> readCallbackABI(const Computation &c,
       cast<data::DomainType>(signature(c.domain).getResult(0)).getItemTypes();
   unsigned states = role == CallbackRole::Step ? c.states : 0;
   SmallVector<Type> inputs, outputs;
+  if (c.scoped)
+    inputs.push_back(runtime::ScopeType::get(helper->getContext()));
   if (states)
     append_range(inputs, c.signature.getResults());
   append_range(inputs, items);
@@ -465,11 +493,18 @@ FailureOr<CallbackABI> readCallbackABI(const Computation &c,
     outputs.push_back(element);
   } else
     append_range(outputs, c.signature.getResults());
+  if (c.scoped) {
+    if (helper->hasAttr("runtime.region"))
+      return failure();
+    outputs = {exec::OutcomeType::get(helper->getContext(), outputs)};
+  }
   if (type.getInputs() != ArrayRef<Type>(inputs) ||
       type.getResults() != ArrayRef<Type>(outputs) || body.empty() ||
       !sameTypes(body.getArguments(), inputs))
     return failure();
-  ValueRange formals = body.getArguments();
+  Value scope = c.scoped ? body.getArgument(0) : Value();
+  ValueRange formals =
+      c.scoped ? body.getArguments().drop_front() : body.getArguments();
   return CallbackABI{helper,
                      &body,
                      type,
@@ -477,11 +512,12 @@ FailureOr<CallbackABI> readCallbackABI(const Computation &c,
                      {formals.take_front(states),
                       formals.slice(states, items.size()),
                       formals.slice(states + items.size(), c.arguments),
-                      formals.drop_front(states + items.size() + c.arguments)}};
+                      formals.drop_front(states + items.size() + c.arguments)},
+                     scope};
 }
 FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
   auto abi = readCallbackABI(c, role);
-  if (failed(abi) || !abi->entry->getParent()->hasOneBlock())
+  if (failed(abi) || abi->scope || !abi->entry->getParent()->hasOneBlock())
     return failure();
   auto *terminator = &abi->entry->back();
   bool stop = !c.total && isa<local::StopOp>(terminator);
@@ -495,8 +531,13 @@ FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
       stop ? ValueRange{} : ValueRange(terminator->getOperands())};
 }
 FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
-                                        CallbackValues actuals) {
+                                        CallbackValues actuals, Value scope) {
+  if (bool(scope) != bool(callback.scope) ||
+      (scope && scope.getType() != callback.scope.getType()))
+    return failure();
   CallEnvironment result{callback, {}};
+  if (scope)
+    result.actuals.push_back(scope);
   for (auto [formal, actual] :
        {std::pair{callback.formals.state, actuals.state},
         std::pair{callback.formals.items, actuals.items},
@@ -517,22 +558,35 @@ FailureOr<Value> CallEnvironment::lookup(BlockArgument formal) const {
 LogicalResult verifyLocal(Operation *op) {
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
-  bool total = !isDeclaration(op);
-  bool collect = isa<local::FiniteCollectOp, algebra::FiniteCollectOp>(op);
+  bool declaration = isDeclaration(op), scoped = isScoped(op);
+  bool collect =
+      isa<local::FiniteCollectOp, algebra::FiniteCollectOp, exec::CollectOp>(
+          op);
   for (auto attr : op->getAttrs()) {
     StringRef name = attr.getName().getValue();
     if (name == "domain" || name == "predicate" ||
         name == (collect ? "body" : "step"))
       continue;
-    if (!total && (name == "sym_name" || name == "function_type"))
+    if ((declaration && (name == "sym_name" || name == "function_type")) ||
+        (scoped && name == "site"))
       continue;
     return refuse(op, "unexpected finite attribute");
   }
-  auto type = total ? FunctionType::get(op->getContext(), op->getOperandTypes(),
-                                        op->getResultTypes())
-                    : signature(op);
+  auto type = computationSignature(op);
   if (!type || (collect && type.getNumResults() != 1))
     return refuse(op, "finite result signature");
+  if (scoped) {
+    auto function = dyn_cast_or_null<func::FuncOp>(op->getParentOp());
+    auto site = op->getAttrOfType<StringAttr>("site");
+    if (!site || site.getValue().empty())
+      return refuse(op, "ordered finite invocation requires an occurrence");
+    if (!function || function.getBody().empty() ||
+        function.getBody().front().getNumArguments() == 0 ||
+        op->getOperand(0) != function.getBody().front().getArgument(0) ||
+        !function->getParentOp() ||
+        !function->getParentOp()->hasTrait<OpTrait::SymbolTable>())
+      return refuse(op, "expected the containing function's borrowed scope");
+  }
   return success();
 }
 LogicalResult verify(Operation *op) {
@@ -548,10 +602,13 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
   auto inputs = c.signature.getInputs();
   // The current total/Local profile additionally requires its existing body
   // shape. An inspectable ABI alone must not weaken finite admission.
-  auto callback =
-      readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+  auto role = c.collect ? CallbackRole::Body : CallbackRole::Step;
+  auto callback = readCallbackABI(c, role);
   if (failed(callback) ||
-      (c.predicate && failed(readCallback(c, CallbackRole::Predicate))))
+      (c.predicate && failed(readCallbackABI(c, CallbackRole::Predicate))) ||
+      (!c.scoped &&
+       (failed(readCallback(c, role)) ||
+        (c.predicate && failed(readCallback(c, CallbackRole::Predicate))))))
     return refuse(op, "expected defined private helper with exact finite ABI");
   auto native = [&](Type type) {
     auto bound = protocol::encodeBoundType(type, false);
@@ -575,7 +632,7 @@ LogicalResult verifyReferences(Operation *op, SymbolTableCollection &symbols) {
       return refuse(op, "finite result policy");
   }
   EvidenceWork work(op);
-  if (failed(helperAssumptions(c, callback->abi.role, work)) ||
+  if (failed(helperAssumptions(c, callback->role, work)) ||
       (c.predicate &&
        failed(helperAssumptions(c, CallbackRole::Predicate, work))))
     return failure();
@@ -735,6 +792,16 @@ FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
   return finite::verifyReferences(*this, symbols);
 }
 } // namespace zkc::local
+namespace zkc::exec {
+LogicalResult FoldOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult CollectOp::verify() { return finite::verifyLocal(*this); }
+LogicalResult FoldOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
+}
+LogicalResult CollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
+  return finite::verifyReferences(*this, symbols);
+}
+} // namespace zkc::exec
 namespace zkc::algebra {
 LogicalResult FiniteFoldOp::verify() { return finite::verifyLocal(*this); }
 LogicalResult FiniteCollectOp::verify() { return finite::verifyLocal(*this); }
@@ -846,6 +913,8 @@ public:
     Computation c;
     if (failed(describe(op, c)))
       return failure();
+    if (c.scoped)
+      return refuse(op, "scoped outcomes require ordered dependency analysis");
     const Summary *step;
     if (failed(helper(c.helper, step)))
       return failure();

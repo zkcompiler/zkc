@@ -91,6 +91,8 @@ when they have no result dependencies.
 | `algebra.finite_collect` | `(A..., C...) -> R` | `body` |
 | `local.finite_fold` declaration | Same fold signature | `step` |
 | `local.finite_collect` declaration | Same collect signature | `body` |
+| `exec.fold` occurrence | `(scope, A..., S..., C...) -> outcome(S...)` | `step` |
+| `exec.collect` occurrence | `(scope, A..., C...) -> outcome(R)` | `body` |
 
 Every computation has a static `domain` reference and an optional `predicate`.
 Helpers use exactly these signatures:
@@ -106,6 +108,13 @@ private Local helpers; a Math helper can be explicitly realized and called from
 a Local wrapper. Local finite declarations implement the preparation callable
 interface and are invoked through `local.apply`. An owned protocol occurrence
 calls an ordinary Local wrapper through `protocol.local_call`.
+
+The scoped Exec forms reference actual private Func callbacks that prepend a
+borrowed scope and return one explicit outcome around the data results above.
+They retain actual invocation operands and support CFG callback ABI inspection,
+without treating the body as a total mathematical expression. See
+[ordered finite requests](execution.md#ordered-finite-requests) for formation,
+premises and the source-to-executable migration boundary.
 
 The canonical operand partition does not reorder the operations that produced
 those operands. Domain arguments and invariant captures permit Copy/Drop. Local

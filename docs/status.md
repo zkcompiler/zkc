@@ -81,6 +81,14 @@ refuse unresolved mathematical requests. This operation has not yet replaced
 the default `kernel.call` path. See
 [mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).
 
+Retained `exec.fold` and `exec.collect` have checked scoped callback ABIs,
+actual domain/capture premise discharge, zero-state outcomes, and scoped
+ownership formation. Multi-block callbacks remain distinct from single-block
+expression views. This is a pre-selection component: source emission,
+realization and independent comparison still require migration before the
+default Local finite route is replaced. Unresolved requests are refused by
+executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,

@@ -14,7 +14,7 @@ struct Computation {
   mlir::Operation *predicate = nullptr;
   mlir::FunctionType signature;
   unsigned arguments = 0, states = 0, captures = 0;
-  bool total = false, collect = false;
+  bool total = false, collect = false, scoped = false;
 };
 enum class CallbackRole { Step, Body, Predicate };
 enum class CallbackExit { Return, Stop };
@@ -32,6 +32,9 @@ struct CallbackABI {
   mlir::FunctionType signature;
   CallbackRole role;
   CallbackValues formals;
+  // Present only for an ordered scoped callback. Signature and entry retain
+  // actual ports, including this borrowed scope and the outcome result.
+  mlir::Value scope;
 };
 // A stronger, single-block expression view. This view cannot describe a
 // general ordered CFG; callers needing only ports use CallbackABI instead.
@@ -54,7 +57,8 @@ mlir::FailureOr<CallbackABI> readCallbackABI(const Computation &computation,
 mlir::FailureOr<CallbackView> readCallback(const Computation &computation,
                                            CallbackRole role);
 mlir::FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
-                                              CallbackValues actuals);
+                                              CallbackValues actuals,
+                                              mlir::Value scope = {});
 mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);
 bool isDeclaration(mlir::Operation *op);

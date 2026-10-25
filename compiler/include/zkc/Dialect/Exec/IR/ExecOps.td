@@ -19,6 +19,22 @@ def Exec_ComputeOp : Op<ExecDialect, "compute",
     ::mlir::func::FuncOp resolveCallee(::mlir::SymbolTableCollection &symbols);
   }];
 }
+// Ordered finite requests retain actual domain and callback associations until
+// selection. They have no loop region and are not ordinary callback ABI calls.
+class ExecFinite<string name, string helper> : Op<ExecDialect, name,
+    [DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let arguments = !if(!eq(helper, "step"),
+    (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
+      FlatSymbolRefAttr:$domain, FlatSymbolRefAttr:$step,
+      OptionalAttr<FlatSymbolRefAttr>:$predicate, StrAttr:$site),
+    (ins RuntimeScope:$scope, Variadic<AnyType>:$inputs,
+      FlatSymbolRefAttr:$domain, FlatSymbolRefAttr:$body,
+      OptionalAttr<FlatSymbolRefAttr>:$predicate, StrAttr:$site));
+  let results = (outs ExecOutcome:$outcome);
+  let hasVerifier = 1;
+}
+def Exec_FoldOp : ExecFinite<"fold", "step">;
+def Exec_CollectOp : ExecFinite<"collect", "body">;
 // A reached native instruction uses the active scope. Its outcome includes
 // tick, admission, allocation and output binding, not merely its value result.
 def Exec_ApplyOp : Op<ExecDialect, "apply"> {
