@@ -187,8 +187,8 @@ theorem relation_iff (firstBase firstKey secondBase secondKey : G) (firstWitness
   change (PIR.Process.done (I := closedInterface) (.cons ((decide (firstKey = firstWitness • firstBase)) && (decide (secondKey = secondWitness • secondBase))) .nil :
     Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
-  change (decide (firstKey = firstWitness • firstBase) && decide (secondKey = secondWitness • secondBase)) = true ↔ _
-  simp
+  all_goals change ((decide (firstKey = firstWitness • firstBase)) && (decide (secondKey = secondWitness • secondBase))) = true ↔ firstKey = firstWitness • firstBase ∧ secondKey = secondWitness • secondBase
+  all_goals simp
 
 /-- The subject's only relation is this formula. -/
 def environment : RelationEnvironment imported F G where

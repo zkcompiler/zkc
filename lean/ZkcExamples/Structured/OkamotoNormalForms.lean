@@ -179,8 +179,8 @@ theorem relation_iff (firstBase secondBase point : G) (firstScalar secondScalar 
   change (PIR.Process.done (I := closedInterface) (.cons (decide (point = (firstScalar • firstBase) + (secondScalar • secondBase))) .nil :
     Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
-  change decide (point = firstScalar • firstBase + secondScalar • secondBase) = true ↔ point = firstScalar • firstBase + secondScalar • secondBase
-  simp only [decide_eq_true_eq]
+  all_goals change (decide (point = (firstScalar • firstBase) + (secondScalar • secondBase))) = true ↔ point = (firstScalar • firstBase) + (secondScalar • secondBase)
+  all_goals simp
 
 /-- The subject's only relation is this formula. -/
 def environment : RelationEnvironment imported F G where

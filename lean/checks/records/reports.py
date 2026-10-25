@@ -125,7 +125,12 @@ def telescope(record, registry, origin):
 def attached(manifest):
     """Digests the manifest's generated modules carry, with each file's digest."""
     rows = []
-    for key, value in sorted((manifest.get("generated") or {}).items()):
+    generated = dict(manifest.get("generated") or {})
+    if request := (manifest.get("normal_forms") or {}).get("request"):
+        # The request owns the output path; do not duplicate that configuration
+        # in the subject manifest or omit it from the freshness join.
+        generated["normal-forms"] = tomllib.loads((ROOT / request).read_text())["output"]
+    for key, value in sorted(generated.items()):
         paths = value if isinstance(value, list) else [value]
         for relative in paths:
             path = ROOT / relative
