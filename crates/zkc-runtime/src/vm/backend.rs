@@ -29,16 +29,14 @@ pub trait Value: Clone {
 
     /// Pack only the selected payload. Clones copy handles, never authority.
     fn pack_variant(
-        _descriptor: Arc<super::VariantDescriptor>,
+        _ty: PhysicalType,
         _alternative: usize,
         _payload: Vec<Self>,
     ) -> Result<Self, BackendError> {
         Err(BackendError::new("variant-unsupported"))
     }
     /// Trusted checked decomposition; active payload only, in declaration order.
-    fn unpack_variant(
-        &self,
-    ) -> Result<(Arc<super::VariantDescriptor>, usize, Vec<Self>), BackendError> {
+    fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>), BackendError> {
         Err(BackendError::new("variant-unsupported"))
     }
     /// Trusted scalar access for backend-independent local control.
@@ -61,7 +59,7 @@ pub trait Value: Clone {
     /// be overreserved. Override only with an independently valid upper bound.
     /// Borrow operands so this bound needs no owned payload allocation or clones.
     fn variant_allocation_bound<'a>(
-        descriptor: &super::VariantDescriptor,
+        ty: &PhysicalType,
         payload: impl ExactSizeIterator<Item = &'a Self>,
     ) -> usize
     where
@@ -70,7 +68,7 @@ pub trait Value: Clone {
         let slots = payload
             .len()
             .checked_mul(std::mem::size_of::<Self>().max(512))
-            .and_then(|n| n.checked_add(descriptor.retained_bytes()))
+            .and_then(|n| n.checked_add(ty.descriptor_bytes()))
             .and_then(|n| n.checked_add(512));
         payload
             .fold(slots, |sum, value| {
@@ -382,6 +380,15 @@ pub struct ServiceInvocation<'a> {
 /// Operations may have effects or fail after a resource transition.
 pub trait InstalledOperation {
     fn signature(&self) -> &BoundSignature;
+    /// The actual handler's independently installed scoped identity. Standard
+    /// fixed implementations use no extension slot.
+    fn implementation_id(&self) -> Option<super::ImplementationId> {
+        None
+    }
+    /// Actual code premises, independently authored from the expected catalog.
+    fn requirements(&self) -> super::ImplementationRequirements {
+        Default::default()
+    }
     /// Read-only installation fact, stable for the instance's lifetime.
     /// Fixed inputs, attributes and backend policy determine this operation's
     /// outputs or refusal. It cannot observe frame identity, resources, time,
@@ -762,12 +769,14 @@ mod domain_tests {
             arguments: vec![("F".into(), "bls12-381.fr".into())],
         };
         let binding = |implementation: &str| {
-            ResolvedBinding::explicit(OperationBinding {
-                contract: "poly.fold".into(),
-                arguments: vec!["bls12-381.fr".into()],
-                implementation: implementation.into(),
-            })
-            .unwrap()
+            crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+                .resolve(OperationBinding {
+                    physical_arguments: vec![],
+                    contract: "poly.fold".into(),
+                    arguments: vec!["bls12-381.fr".into()],
+                    implementation: implementation.into(),
+                })
+                .unwrap()
         };
         let lsb = binding("arkworks/poly.fold");
         let msb = binding("arkworks-msb/poly.fold");
@@ -802,12 +811,14 @@ mod domain_tests {
 
     #[test]
     fn explicit_local_domain_bytes_bind_semantic_operation_and_origin() {
-        let binding = ResolvedBinding::explicit(OperationBinding {
-            contract: "field.add".into(),
-            arguments: vec!["bls12-381.fr".into()],
-            implementation: "arkworks/field.add".into(),
-        })
-        .unwrap();
+        let binding = crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            .resolve(OperationBinding {
+                physical_arguments: vec![],
+                contract: "field.add".into(),
+                arguments: vec!["bls12-381.fr".into()],
+                implementation: "arkworks/field.add".into(),
+            })
+            .unwrap();
         let origin = LogicalOrigin {
             definition: "Add".into(),
             arguments: vec![("F".into(), "bls12-381.fr".into())],

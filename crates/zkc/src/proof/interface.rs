@@ -89,6 +89,7 @@ impl<'a> DeploymentPolicy<'a> {
 pub(super) struct RoleInterface {
     pub(super) maps: BTreeMap<String, RoleMap>,
     pub(super) public: Vec<Port>,
+    pub(super) public_types: Vec<PhysicalType>,
     // Preserve the final acceptance-presence check after setup authority.
     pub(super) acceptance: Option<usize>,
 }
@@ -271,9 +272,39 @@ impl RoleInterface {
                 return Err("native-proof-shared-port-type".into());
             }
         }
+        // Source maps authenticate logical ports; storage belongs to the
+        // admitted Program. Preserve the complete selection, including inactive
+        // variant children, and require agreement at every shared occurrence.
+        // A projected producer can bind inputs used only by the absent validator.
+        // Without a retained endpoint selecting storage, the descriptor's logical
+        // type and codec admit only its canonical default, never a guessed layout.
+        let mut public_types = Vec::with_capacity(public.len());
+        for public_port in &public {
+            let mut selected = None;
+            for role in &roles {
+                let Some(mapping) = maps.get(&role.role) else {
+                    continue;
+                };
+                for (port, (_, ty)) in mapping.data.iter().zip(&role.inputs) {
+                    if port.original != public_port.original {
+                        continue;
+                    }
+                    if selected.is_some_and(|previous| previous != ty) {
+                        return Err("native-proof-shared-port-type".into());
+                    }
+                    selected = Some(ty);
+                }
+            }
+            public_types.push(match selected {
+                Some(ty) => ty.clone(),
+                None => PhysicalType::default_for(public_port.logical.clone())
+                    .map_err(|e| e.to_string())?,
+            });
+        }
         Ok(Self {
             maps,
             public,
+            public_types,
             acceptance,
         })
     }
@@ -288,7 +319,7 @@ fn ports(value: &Json, actual: &[PhysicalType]) -> Result<Vec<Port>> {
         let row = array(row, 2)?;
         let original = index(&row[0])?;
         let logical = LogicalType::parse(text(&row[1])?).map_err(|e| e.to_string())?;
-        if logical != ty.logical() || ports.last().is_some_and(|p: &Port| p.original >= original) {
+        if &logical != ty.logical() || ports.last().is_some_and(|p: &Port| p.original >= original) {
             return Err("native-proof-port-map".into());
         }
         ports.push(Port { original, logical });

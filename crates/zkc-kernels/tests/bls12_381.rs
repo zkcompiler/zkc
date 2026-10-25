@@ -84,6 +84,18 @@ fn ceremony_points_use_the_interoperable_compressed_encoding() {
     let tau1 = G1::from_bytes(&hex(G1_TAU)).unwrap();
     let tau2 = G2::from_bytes(&hex(G2_TAU)).unwrap();
     assert_eq!(tau2.to_bytes().unwrap().to_vec(), hex(G2_TAU));
+    use zkc_kernels::blst::bls12_381 as blst;
+    let foreign1 = blst::G1::from_bytes(&hex(G1_TAU)).unwrap();
+    let foreign2 = blst::G2::from_bytes(&hex(G2_TAU)).unwrap();
+    assert_eq!(foreign1.to_bytes().to_vec(), hex(G1_TAU));
+    assert_eq!(foreign2.to_bytes().to_vec(), hex(G2_TAU));
+    assert!(
+        blst::pairing_check(
+            &[foreign1, blst::G1::generator().neg()],
+            &[blst::G2::generator(), foreign2]
+        )
+        .unwrap()
+    );
     // Both powers commit to the same secret: e([tau]_1, [1]_2) = e([1]_1, [tau]_2).
     assert!(
         bls12_381::pairing_check(&[tau1, G1::generator().neg()], &[G2::generator(), tau2]).unwrap()
@@ -97,8 +109,10 @@ fn ceremony_points_use_the_interoperable_compressed_encoding() {
 
 #[test]
 fn canonical_curve_subgroup_flag_and_infinity_refusals() {
+    use zkc_kernels::blst::bls12_381 as blst;
     for n in [0, 48, 95, 97, 192] {
         assert!(G2::from_bytes(&vec![0; n]).is_err());
+        assert!(blst::G2::from_bytes(&vec![0; n]).is_err());
     }
     let identity = G2::identity().to_bytes().unwrap();
     assert_eq!(identity[0], 0xc0);
@@ -113,10 +127,12 @@ fn canonical_curve_subgroup_flag_and_infinity_refusals() {
             bad[0] = 0xc0;
         }
         assert!(G2::from_bytes(&bad).is_err());
+        assert!(blst::G2::from_bytes(&bad).is_err());
     }
     let mut uncompressed = hex(G2_ONE);
     uncompressed[0] &= 0x7f;
     assert!(G2::from_bytes(&uncompressed).is_err());
+    assert!(blst::G2::from_bytes(&uncompressed).is_err());
     // Flip the sign: the other root is a valid, different point.
     let mut negated = hex(G2_ONE);
     negated[0] ^= 0x20;
@@ -129,6 +145,7 @@ fn canonical_curve_subgroup_flag_and_infinity_refusals() {
     noncanonical[48..].copy_from_slice(&modulus);
     noncanonical[0] = 0x80;
     assert!(G2::from_bytes(&noncanonical).is_err());
+    assert!(blst::G2::from_bytes(&noncanonical).is_err());
     // A point on the curve outside the prime-order subgroup.
     let wrong = (0u64..100)
         .find_map(|n| {
@@ -140,6 +157,7 @@ fn canonical_curve_subgroup_flag_and_infinity_refusals() {
     let mut bytes = Vec::new();
     wrong.serialize_compressed(&mut bytes).unwrap();
     assert!(G2::from_bytes(&bytes).is_err());
+    assert!(blst::G2::from_bytes(&bytes).is_err());
     // An x coordinate with no curve point.
     let off = (0u64..100)
         .find(|n| {
@@ -154,6 +172,7 @@ fn canonical_curve_subgroup_flag_and_infinity_refusals() {
     absent[48..].copy_from_slice(&x);
     absent[0] |= 0x80;
     assert!(G2::from_bytes(&absent).is_err());
+    assert!(blst::G2::from_bytes(&absent).is_err());
 }
 
 #[test]

@@ -101,7 +101,7 @@ fn new_codecs_are_domain_distinct_exact_and_canonical() {
         );
     }
     let view = PhysicalType::new(
-        vector(false, &[]).physical_type().logical(),
+        vector(false, &[]).physical_type().logical().clone(),
         Representation::FrDiagonal,
     )
     .unwrap();

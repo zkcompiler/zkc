@@ -9,7 +9,10 @@ use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, PhysicalType, Value a
 fn array(length: usize) -> Value {
     Value::FieldArray(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, length as u64).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(Identity::Bls12381Fr, length as u64).unwrap(),
+            )
+            .unwrap(),
             (1..=length)
                 .map(|x| Scalar::from(x as u64))
                 .collect::<Vec<_>>()
@@ -93,7 +96,8 @@ fn construction_and_policy_are_checked_before_decode_allocation() {
     assert!(LogicalType::field_array(Identity::Bls12381Fr, 1_048_577).is_err());
     assert!(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),
+            PhysicalType::default_for(LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap())
+                .unwrap(),
             [Scalar::from(1)].into()
         )
         .is_err()
@@ -134,7 +138,7 @@ fn decoder_charges_the_temporary_and_retained_array_at_the_peak() {
     let bytes = ark_backend(None).encode_native_value(&value).unwrap();
     let backend = NativeBackend::new(
         Policy {
-            max_value_bytes: 1408,
+            max_value_bytes: value.retained_bytes() + 2 * 32,
             ..Policy::default()
         },
         common::entry(None),
@@ -199,21 +203,24 @@ fn encoding_and_decoding_charge_their_own_value_memory() {
         )
         .unwrap()
     };
-    // Encoding retains 32*N+1280 bytes; decoding also needs a temporary
-    // 32*N-byte vector. Identical policies need not admit both operations.
+    // Encoding retains descriptor and payload storage; decoding also reserves
+    // the temporary scalar buffer before constructing the retained carrier.
+    let retained = value.retained_bytes();
     assert_eq!(
-        backend(1343).encode_native_value(&value).unwrap_err(),
+        backend(retained - 1)
+            .encode_native_value(&value)
+            .unwrap_err(),
         NativeWireError::Limit
     );
-    let bytes = backend(1344).encode_native_value(&value).unwrap();
+    let bytes = backend(retained).encode_native_value(&value).unwrap();
     assert_eq!(
-        backend(1344)
+        backend(retained)
             .decode_native_value(&value.physical_type(), &bytes)
             .unwrap_err(),
         NativeWireError::Limit
     );
     assert!(
-        backend(1408)
+        backend(retained + 64)
             .decode_native_value(&value.physical_type(), &bytes)
             .is_ok()
     );

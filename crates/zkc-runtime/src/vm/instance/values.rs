@@ -97,20 +97,13 @@ impl<B: Backend> Instance<B> {
     where
         B::Value: 'a,
     {
-        let descriptor = ty
-            .logical()
-            .variant_descriptor()
-            .expect("admitted variant")
-            .clone();
-        let reservation = self.reserve_constructor(B::Value::variant_allocation_bound(
-            &descriptor,
-            payload.clone(),
-        ))?;
+        let reservation =
+            self.reserve_constructor(B::Value::variant_allocation_bound(ty, payload.clone()))?;
         // The bound includes the owned payload slots, not just the adapter's
         // final value. Keep their collection and operand clones after admission.
         let payload = payload.cloned().collect();
         let value = self.accept(
-            B::Value::pack_variant(descriptor, alternative, payload)?,
+            B::Value::pack_variant(ty.clone(), alternative, payload)?,
             ty,
         )?;
         self.retain_reserved(
@@ -130,13 +123,17 @@ impl<B: Backend> Instance<B> {
         arms: &'a [Arm],
     ) -> Result<(&'a Arm, Vec<B::Value>)> {
         self.validate_backend(value)?;
-        let (descriptor, alternative, args) = value.unpack_variant()?;
-        if value.physical_type().logical().variant_descriptor() != Some(&descriptor) {
+        let (ty, alternative, args) = value.unpack_variant()?;
+        if value.physical_type() != ty {
             return Err(BackendError::new("variant-descriptor").into());
         }
         let arm = arms
             .get(alternative)
             .ok_or_else(|| BackendError::new("variant-alternative"))?;
+        let logical = ty.logical();
+        let descriptor = logical
+            .variant_descriptor()
+            .ok_or_else(|| BackendError::new("variant-descriptor"))?;
         let declared = descriptor
             .alternatives()
             .get(alternative)
@@ -144,8 +141,15 @@ impl<B: Backend> Instance<B> {
         if arm.alternative != declared.label() || args.len() != declared.payload().len() {
             return Err(BackendError::new("variant-payload").into());
         }
-        for (value, (_, ty)) in args.iter().zip(arm.body.inputs.iter()) {
-            self.validate(value, ty, false)?;
+        let expected = ty
+            .variant_payload(alternative)
+            .ok_or_else(|| BackendError::new("variant-payload"))?;
+        for ((value, expected), (_, port)) in args.iter().zip(expected).zip(arm.body.inputs.iter())
+        {
+            if expected != port {
+                return Err(BackendError::new("variant-payload").into());
+            }
+            self.validate(value, expected, false)?;
         }
         Ok((arm, args))
     }
@@ -187,11 +191,15 @@ impl<B: Backend> Instance<B> {
                 .validate_value_retained(value, self.ledger.view())?;
         }
         if wire {
-            if !ty.is_message_type() {
+            if !self
+                .admitted
+                .contracts()
+                .permits_wire(ty, WireCodec::Native)
+            {
                 return Err(RuntimeError::Payload);
             }
-            // Keep the value-level check for types with an existing codec.
-            // Complete native-only frames were admitted by is_message_type.
+            // Retain existing value-level checks in addition to the exact
+            // trusted layout/codec permission and backend validation above.
             if ty.is_serializable() {
                 value.validate_serializable()?;
             }

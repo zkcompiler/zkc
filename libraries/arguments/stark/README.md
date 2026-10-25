@@ -20,6 +20,8 @@ the three-table argument builds on the same concrete domains.
 |---|---|
 | `stark::configurations::contract` | The `Configuration` interface and layout helpers |
 | `stark::configurations::koala_bear_quartic` | The KoalaBear quartic Poseidon2 configuration |
+| `stark::configurations::baby_bear_quartic` | BabyBear quartic, width-16 Poseidon2 and direct quartic Merlin draws |
+| `stark::configurations::goldilocks_quadratic` | Goldilocks quadratic, width-8 Poseidon2 and direct quadratic Merlin draws |
 | `stark::single_table` | The parameterized single-table argument |
 | `stark::single_table::low_degree` | Its FRI: pair-leaf commit phase and multi-opening query phase |
 | `air::polynomial` | Scope vanishing polynomials and coefficient-block quotient splitting |
@@ -113,6 +115,16 @@ rejection-samples each coordinate independently, so under its uniformity
 premise the first four coordinates of a draw are a uniform quartic element.
 A suite drawing quartic elements directly replaces the `challenge` member
 alone. Index draws use the same suite's `UniformIndex` transition.
+
+`stark::configurations::baby_bear_quartic::Poseidon2` and
+`stark::configurations::goldilocks_quadratic::Poseidon2` implement the same
+interface with their explicitly named fields and
+[row profiles](../../../docs/spec/domains/oracles.md#poseidon2-instances).
+Their coset shifts are primitive generators 31 and 7 respectively. Select
+`merlin3.baby-bear.ext4-binomial11.rejection31le/0` or
+`merlin3.goldilocks.ext2-binomial7.rejection64le/0` in the proof construction;
+these suites draw the selected extension directly. The protocol algorithm and
+natural row/pair-leaf layout are shared with the KoalaBear configuration.
 
 ### Protocol order
 

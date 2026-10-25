@@ -7,7 +7,7 @@ use crate::{Policy, Result, exhausted};
 use zkc_kernels::numerical::{self, Scratch};
 
 /// The native adapter selects the numerical limits; no backend authority enters
-/// the scope. Value constructors run while staging and result charges overlap.
+/// the scope. Constructors retain the storage required by their freeze contract.
 pub(crate) struct Call {
     scope: numerical::Call,
 }
@@ -47,7 +47,43 @@ impl Call {
     pub(crate) fn scratch<T: Clone>(&self, len: usize, initial: T) -> Result<Scratch<'_, T>> {
         self.scope.scratch(len, initial).map_err(failure)
     }
-    pub(crate) fn reserve_workspace<T>(&self, elements: usize) -> Result<impl Drop + '_> {
+    /// The final constructor adopts this Vec without allocating another buffer.
+    pub(crate) fn output_owned<T: Clone>(
+        &self,
+        len: usize,
+        initial: T,
+        retained_bytes: usize,
+    ) -> Result<Output<'_, T>> {
+        self.scope
+            .output_owned(len, initial, retained_bytes)
+            .map(Output)
+            .map_err(failure)
+    }
+    pub(crate) fn memory_bytes(&self) -> usize {
+        self.scope.usage().memory
+    }
+    /// Couple provider-owned storage to its charge before allocation. Dense
+    /// nonresident callers retain their existing, uncharged construction path.
+    pub(crate) fn destination<T>(
+        &self,
+        resident: bool,
+        bytes: usize,
+        construct: impl FnOnce() -> Result<T>,
+    ) -> Result<Destination<'_, T>> {
+        let reservation = if resident {
+            Some(self.reserve_workspace::<u8>(bytes)?)
+        } else {
+            None
+        };
+        Ok(Destination {
+            storage: construct()?,
+            reservation,
+        })
+    }
+    pub(crate) fn reserve_workspace<T>(
+        &self,
+        elements: usize,
+    ) -> Result<numerical::StorageReservation<'_>> {
         self.scope.reserve_workspace::<T>(elements).map_err(failure)
     }
 }
@@ -71,5 +107,38 @@ impl<T> Output<'_, T> {
     }
     pub(crate) fn finish(self, freeze: impl FnOnce(Vec<T>) -> Result<Value>) -> Result<Value> {
         self.0.finish(freeze)
+    }
+}
+
+/// A private final buffer and its reservation have one lifetime. Field order
+/// destroys abandoned storage before releasing its charge, including on unwind.
+pub(crate) struct Destination<'a, T> {
+    storage: T,
+    reservation: Option<numerical::StorageReservation<'a>>,
+}
+impl<T> std::ops::Deref for Destination<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.storage
+    }
+}
+impl<T> std::ops::DerefMut for Destination<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.storage
+    }
+}
+impl<T> Destination<'_, T> {
+    /// The constructor adopts this buffer without a second element allocation.
+    /// Keep charges live through construction and after successful publication.
+    pub(crate) fn finish(self, freeze: impl FnOnce(T) -> Result<Value>) -> Result<Value> {
+        let Self {
+            storage,
+            reservation,
+        } = self;
+        let value = freeze(storage)?;
+        if let Some(reservation) = reservation {
+            reservation.retain();
+        }
+        Ok(value)
     }
 }

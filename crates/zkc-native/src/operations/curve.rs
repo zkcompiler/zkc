@@ -11,8 +11,11 @@ use curve25519_dalek::{
 };
 use std::sync::Arc;
 use zkc_runtime::vm::Invocation;
-trait Group: Copy + PartialEq {
+/// Typed group algebra and provider scaling plans, independent of Native values
+/// and policy. Destinations are reserved by the calling family adapter.
+pub(super) trait Group: Copy + PartialEq {
     type Scalar: Copy;
+    type Error;
     fn generator() -> Self;
     fn identity() -> Self;
     fn add(self, other: Self) -> Self;
@@ -26,7 +29,7 @@ trait Group: Copy + PartialEq {
         scalar: Self::Scalar,
         output: &mut Vec<Self>,
         _workspace_bytes: usize,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Self::Error> {
         output.extend(points.iter().map(|point| point.scale(scalar)));
         Ok(())
     }
@@ -35,7 +38,7 @@ trait Group: Copy + PartialEq {
         points: &[Self],
         output: &mut Vec<Self>,
         _workspace_bytes: usize,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Self::Error> {
         output.extend(
             points
                 .iter()
@@ -44,18 +47,166 @@ trait Group: Copy + PartialEq {
         );
         Ok(())
     }
-    fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self>;
+}
+
+/// Borrow points without requiring their validated wrappers to be slice storage.
+/// A view returns typed points by value; it never reconstructs them from raw data.
+pub(super) trait PointView<G: Group>: Copy {
+    fn len(self) -> usize;
+    fn get(self, index: usize) -> Option<G>;
+    fn iter(self) -> impl ExactSizeIterator<Item = G> + DoubleEndedIterator {
+        (0..self.len()).map(move |index| self.get(index).expect("point view extent"))
+    }
+}
+impl<G: Group> PointView<G> for &[G] {
+    fn len(self) -> usize {
+        <[G]>::len(self)
+    }
+    fn get(self, index: usize) -> Option<G> {
+        <[G]>::get(self, index).copied()
+    }
+}
+
+/// Storage mechanics for the shared dispatcher. Resident destinations retain
+/// their provider's raw buffer privately and accept only validated points.
+pub(super) trait PointStorage<G: Group> {
+    type View<'a>: PointView<G>
+    where
+        G: 'a;
+    type Output;
+    fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
+        G::scaling_workspace_bound(len, max_workspace)
+    }
+    fn reserve(len: usize) -> Result<Self::Output>;
+    fn push(output: &mut Self::Output, point: G);
+    fn extend(output: &mut Self::Output, points: impl IntoIterator<Item = G>) {
+        for point in points {
+            Self::push(output, point);
+        }
+    }
+    /// The dispatcher admits equal input lengths and reserves the complete
+    /// private destination before invoking this storage-specific arithmetic.
+    fn add_many(
+        left: Self::View<'_>,
+        right: Self::View<'_>,
+        output: &mut Self::Output,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(output, left.iter().zip(right.iter()).map(|(a, b)| a.add(b)));
+        Ok(())
+    }
+    fn scale_many(
+        points: Self::View<'_>,
+        scalar: G::Scalar,
+        output: &mut Self::Output,
+        _workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(output, points.iter().map(|point| point.scale(scalar)));
+        Ok(())
+    }
+    fn scale_each(
+        scalars: &[G::Scalar],
+        points: Self::View<'_>,
+        output: &mut Self::Output,
+        _workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        Self::extend(
+            output,
+            points
+                .iter()
+                .zip(scalars)
+                .map(|(point, scalar)| point.scale(*scalar)),
+        );
+        Ok(())
+    }
+}
+
+pub(super) struct SliceStorage;
+impl<G: Group> PointStorage<G> for SliceStorage {
+    type View<'a>
+        = &'a [G]
+    where
+        G: 'a;
+    type Output = Vec<G>;
+    fn reserve(len: usize) -> Result<Self::Output> {
+        reserve(len)
+    }
+    fn push(output: &mut Self::Output, point: G) {
+        output.push(point);
+    }
+    fn extend(output: &mut Self::Output, points: impl IntoIterator<Item = G>) {
+        output.extend(points);
+    }
+    fn scale_many(
+        points: &[G],
+        scalar: G::Scalar,
+        output: &mut Vec<G>,
+        workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        G::scale_many(points, scalar, output, workspace_bytes)
+    }
+    fn scale_each(
+        scalars: &[G::Scalar],
+        points: &[G],
+        output: &mut Vec<G>,
+        workspace_bytes: usize,
+    ) -> std::result::Result<(), G::Error> {
+        G::scale_each(scalars, points, output, workspace_bytes)
+    }
+}
+
+#[cfg(test)]
+mod point_addition_tests {
+    use super::*;
+
+    fn check_slice_fallback<G: Group>() {
+        let g = G::generator();
+        let left = [G::identity(), g, g.neg()];
+        let right = [g, g.neg(), g];
+        let mut output = <SliceStorage as PointStorage<G>>::reserve(left.len()).unwrap();
+        let address = output.as_ptr();
+        let guard = zkc_kernels::allocation::failure::after(0);
+        assert!(<SliceStorage as PointStorage<G>>::add_many(&left, &right, &mut output).is_ok());
+        assert!(output.as_slice() == [g, G::identity(), G::identity()]);
+        assert_eq!(output.as_ptr(), address);
+        assert!(zkc_kernels::allocation::reserve::<u8>(1).is_err());
+        drop(guard);
+        let mut empty = <SliceStorage as PointStorage<G>>::reserve(0).unwrap();
+        assert!(<SliceStorage as PointStorage<G>>::add_many(&[], &[], &mut empty).is_ok());
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn serial_slice_addition_preserves_all_group_families() {
+        check_slice_fallback::<G1>();
+        check_slice_fallback::<crate::Bls12381G2>();
+        check_slice_fallback::<crate::Bn254G1>();
+        check_slice_fallback::<crate::Bn254G2>();
+        check_slice_fallback::<RistrettoPoint>();
+        check_slice_fallback::<crate::EdwardsPrime>();
+    }
+}
+
+type SliceMsm<G, S = SliceStorage> =
+    fn(&[<G as Group>::Scalar], <S as PointStorage<G>>::View<'_>) -> Result<G>;
+
+/// Native projection, publication and resource admission for group families.
+pub(super) trait Family<S: PointStorage<Self> = SliceStorage>: Group {
+    const RESIDENT_STORAGE: bool = false;
+    /// None means this adapter requires a distinct bulk MSM handler. It does
+    /// not imply that the provider lacks MSM on its own retained bulk carriers.
+    const SLICE_MSM: Option<SliceMsm<Self, S>> = None;
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError;
     fn point(v: &Value) -> Result<Self>;
-    fn points(v: &Value) -> Result<&Arc<[Self]>>;
+    fn points(v: &Value) -> Result<S::View<'_>>;
     fn scalar(v: &Value) -> Result<Self::Scalar>;
     fn scalars(v: &Value) -> Result<&[Self::Scalar]>;
     fn value(v: Self) -> Value;
-    fn values(v: Arc<[Self]>) -> Value;
+    fn values(v: S::Output) -> Value;
     fn limit(p: &Policy, n: usize) -> Result<()>;
     fn width() -> usize;
 }
 // The destination has already passed the historical group/output preflights
-// and exact reservation. Only arkworks needs an initialized affine destination.
+// and exact reservation. The slice adapter initializes its affine destination.
 macro_rules! ark_scaling {
     () => {
         fn scaling_workspace_bound(len: usize, max_workspace: usize) -> usize {
@@ -66,47 +217,49 @@ macro_rules! ark_scaling {
             scalar: Self::Scalar,
             output: &mut Vec<Self>,
             workspace_bytes: usize,
-        ) -> Result<()> {
+        ) -> std::result::Result<(), Self::Error> {
             let mut plan = Self::scaling_plan(
                 points.len(),
                 zkc_kernels::arkworks::scaling::Selection::Automatic {
                     max_workspace: workspace_bytes,
                 },
-            )
-            .map_err(crate::ark)?;
+            )?;
             output.resize(points.len(), Self::identity());
-            Self::scale_many_into(points, scalar, output, &mut plan).map_err(crate::ark)
+            Self::scale_many_into(points, scalar, output, &mut plan)
         }
         fn scale_each(
             scalars: &[Self::Scalar],
             points: &[Self],
             output: &mut Vec<Self>,
             workspace_bytes: usize,
-        ) -> Result<()> {
+        ) -> std::result::Result<(), Self::Error> {
             let mut plan = Self::scaling_plan(
                 points.len(),
                 zkc_kernels::arkworks::scaling::Selection::Automatic {
                     max_workspace: workspace_bytes,
                 },
-            )
-            .map_err(crate::ark)?;
+            )?;
             output.resize(points.len(), Self::identity());
-            Self::scale_each_into(scalars, points, output, &mut plan).map_err(crate::ark)
+            Self::scale_each_into(scalars, points, output, &mut plan)
         }
     };
 }
 
-fn with_scaling_workspace<G: Group>(
+fn with_scaling_workspace<G: Group, S: PointStorage<G>>(
     len: usize,
     policy: &Policy,
-    available: usize,
+    call: &crate::numerical::Call,
     scale: impl FnOnce(usize) -> Result<()>,
 ) -> Result<()> {
-    // Existing output storage retains its historical owner and admission order.
-    // Call accounts only for optional, scoped projective/Z/prefix payload. These
+    // Output storage retains its historical admission order. Optional scoped
+    // projective/Z/prefix payload shares the destination's live call allowance. These
     // operations historically have no numerical work charge; do not add one.
-    let call = crate::numerical::Call::new(policy, available);
-    let bytes = G::scaling_workspace_bound(len, policy.max_numerical_bytes);
+    let bytes = S::scaling_workspace_bound(
+        len,
+        policy
+            .max_numerical_bytes
+            .saturating_sub(call.memory_bytes()),
+    );
     let workspace = if bytes > 0 {
         call.reserve_workspace::<u8>(bytes).ok()
     } else {
@@ -138,7 +291,8 @@ mod scaling_workspace_tests {
                 ..Policy::default()
             };
             // No output or work floor is attached to this optional scope.
-            with_scaling_workspace::<G>(len, &policy, 0, |workspace_bytes| {
+            let call = crate::numerical::Call::new(&policy, 0);
+            with_scaling_workspace::<G, SliceStorage>(len, &policy, &call, |workspace_bytes| {
                 assert_eq!(workspace_bytes, expected);
                 Ok(())
             })
@@ -156,22 +310,30 @@ mod scaling_workspace_tests {
 
     #[test]
     fn dalek_never_requests_arkworks_workspace() {
+        let policy = Policy::default();
+        let call = crate::numerical::Call::new(&policy, 0);
         for len in [0, 1, 257] {
-            with_scaling_workspace::<RistrettoPoint>(len, &Policy::default(), 0, |chunk| {
+            with_scaling_workspace::<RistrettoPoint, SliceStorage>(len, &policy, &call, |chunk| {
                 assert_eq!(chunk, 0);
                 Ok(())
             })
             .unwrap();
-            with_scaling_workspace::<crate::EdwardsPrime>(len, &Policy::default(), 0, |chunk| {
-                assert_eq!(chunk, 0);
-                Ok(())
-            })
+            with_scaling_workspace::<crate::EdwardsPrime, SliceStorage>(
+                len,
+                &policy,
+                &call,
+                |chunk| {
+                    assert_eq!(chunk, 0);
+                    Ok(())
+                },
+            )
             .unwrap();
         }
     }
 }
 impl Group for G1 {
     type Scalar = Scalar;
+    type Error = zkc_kernels::arkworks::Error;
     ark_scaling!();
     fn generator() -> Self {
         Self::generator()
@@ -188,8 +350,11 @@ impl Group for G1 {
     fn scale(self, scalar: Scalar) -> Self {
         Self::scale(&self, scalar)
     }
-    fn msm(s: &[Scalar], p: &[Self]) -> Result<Self> {
-        Self::msm(s, p).map_err(crate::ark)
+}
+impl Family for G1 {
+    const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| Self::msm(s, p).map_err(crate::ark));
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+        crate::ark(error)
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Curve(v) = v {
@@ -198,7 +363,7 @@ impl Group for G1 {
             Err(refused("kernel-operands"))
         }
     }
-    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+    fn points(v: &Value) -> Result<&[Self]> {
         if let Value::Groups(v) = v {
             Ok(v)
         } else {
@@ -222,8 +387,8 @@ impl Group for G1 {
     fn value(v: Self) -> Value {
         Value::Curve(v)
     }
-    fn values(v: Arc<[Self]>) -> Value {
-        Value::Groups(v)
+    fn values(v: Vec<Self>) -> Value {
+        Value::Groups(v.into())
     }
     fn limit(p: &Policy, n: usize) -> Result<()> {
         p.groups(n)
@@ -234,6 +399,7 @@ impl Group for G1 {
 }
 impl Group for RistrettoPoint {
     type Scalar = RistrettoScalar;
+    type Error = std::convert::Infallible;
     fn generator() -> Self {
         RISTRETTO_BASEPOINT_POINT
     }
@@ -249,9 +415,14 @@ impl Group for RistrettoPoint {
     fn scale(self, scalar: RistrettoScalar) -> Self {
         self * scalar
     }
-    fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
+}
+impl Family for RistrettoPoint {
+    const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| {
         equal_len(s.len(), p.len())?;
         Ok(Self::multiscalar_mul(s, p))
+    });
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+        match error {}
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::RistrettoGroup(v) = v {
@@ -260,7 +431,7 @@ impl Group for RistrettoPoint {
             Err(refused("kernel-operands"))
         }
     }
-    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+    fn points(v: &Value) -> Result<&[Self]> {
         if let Value::RistrettoGroups(v) = v {
             Ok(v)
         } else {
@@ -284,8 +455,8 @@ impl Group for RistrettoPoint {
     fn value(v: Self) -> Value {
         Value::RistrettoGroup(v)
     }
-    fn values(v: Arc<[Self]>) -> Value {
-        Value::RistrettoGroups(v)
+    fn values(v: Vec<Self>) -> Value {
+        Value::RistrettoGroups(v.into())
     }
     fn limit(p: &Policy, n: usize) -> Result<()> {
         p.dalek_groups(n)
@@ -296,6 +467,7 @@ impl Group for RistrettoPoint {
 }
 impl Group for crate::EdwardsPrime {
     type Scalar = RistrettoScalar;
+    type Error = std::convert::Infallible;
     fn generator() -> Self {
         Self::generator()
     }
@@ -311,9 +483,14 @@ impl Group for crate::EdwardsPrime {
     fn scale(self, scalar: RistrettoScalar) -> Self {
         self.scale(scalar)
     }
-    fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
+}
+impl Family for crate::EdwardsPrime {
+    const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| {
         equal_len(s.len(), p.len())?;
         Self::msm(s, p).ok_or_else(|| refused("length-mismatch"))
+    });
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+        match error {}
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::EdwardsGroup(v) = v {
@@ -322,7 +499,7 @@ impl Group for crate::EdwardsPrime {
             Err(refused("kernel-operands"))
         }
     }
-    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+    fn points(v: &Value) -> Result<&[Self]> {
         if let Value::EdwardsGroups(v) = v {
             Ok(v)
         } else {
@@ -346,8 +523,8 @@ impl Group for crate::EdwardsPrime {
     fn value(v: Self) -> Value {
         Value::EdwardsGroup(v)
     }
-    fn values(v: Arc<[Self]>) -> Value {
-        Value::EdwardsGroups(v)
+    fn values(v: Vec<Self>) -> Value {
+        Value::EdwardsGroups(v.into())
     }
     fn limit(p: &Policy, n: usize) -> Result<()> {
         p.dalek_groups(n)
@@ -360,6 +537,7 @@ macro_rules! bn_group {
     ($t:ty,$one:ident,$many:ident) => {
         impl Group for $t {
             type Scalar = crate::Bn254Scalar;
+            type Error = zkc_kernels::arkworks::Error;
             ark_scaling!();
             fn generator() -> Self {
                 Self::generator()
@@ -376,8 +554,12 @@ macro_rules! bn_group {
             fn scale(self, s: Self::Scalar) -> Self {
                 Self::scale(&self, s)
             }
-            fn msm(s: &[Self::Scalar], p: &[Self]) -> Result<Self> {
-                Self::msm(s, p).map_err(crate::ark)
+        }
+        impl Family for $t {
+            const SLICE_MSM: Option<SliceMsm<Self>> =
+                Some(|s, p| Self::msm(s, p).map_err(crate::ark));
+            fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+                crate::ark(error)
             }
             fn point(v: &Value) -> Result<Self> {
                 if let Value::$one(v) = v {
@@ -386,7 +568,7 @@ macro_rules! bn_group {
                     Err(refused("kernel-operands"))
                 }
             }
-            fn points(v: &Value) -> Result<&Arc<[Self]>> {
+            fn points(v: &Value) -> Result<&[Self]> {
                 if let Value::$many(v) = v {
                     Ok(v)
                 } else {
@@ -410,8 +592,8 @@ macro_rules! bn_group {
             fn value(v: Self) -> Value {
                 Value::$one(v)
             }
-            fn values(v: Arc<[Self]>) -> Value {
-                Value::$many(v)
+            fn values(v: Vec<Self>) -> Value {
+                Value::$many(v.into())
             }
             fn limit(p: &Policy, n: usize) -> Result<()> {
                 p.typed_groups::<Self>(n)
@@ -426,6 +608,7 @@ bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
 bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
 impl Group for crate::Bls12381G2 {
     type Scalar = Scalar;
+    type Error = zkc_kernels::arkworks::Error;
     ark_scaling!();
     fn generator() -> Self {
         Self::generator()
@@ -442,8 +625,11 @@ impl Group for crate::Bls12381G2 {
     fn scale(self, s: Scalar) -> Self {
         Self::scale(&self, s)
     }
-    fn msm(s: &[Scalar], p: &[Self]) -> Result<Self> {
-        Self::msm(s, p).map_err(crate::ark)
+}
+impl Family for crate::Bls12381G2 {
+    const SLICE_MSM: Option<SliceMsm<Self>> = Some(|s, p| Self::msm(s, p).map_err(crate::ark));
+    fn bulk_failure(error: Self::Error) -> zkc_runtime::vm::BackendError {
+        crate::ark(error)
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bls12381G2(v) = v {
@@ -452,7 +638,7 @@ impl Group for crate::Bls12381G2 {
             Err(refused("kernel-operands"))
         }
     }
-    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+    fn points(v: &Value) -> Result<&[Self]> {
         if let Value::Bls12381G2Vector(v) = v {
             Ok(v)
         } else {
@@ -476,8 +662,8 @@ impl Group for crate::Bls12381G2 {
     fn value(v: Self) -> Value {
         Value::Bls12381G2(v)
     }
-    fn values(v: Arc<[Self]>) -> Value {
-        Value::Bls12381G2Vector(v)
+    fn values(v: Vec<Self>) -> Value {
+        Value::Bls12381G2Vector(v.into())
     }
     fn limit(p: &Policy, n: usize) -> Result<()> {
         p.typed_groups::<Self>(n)
@@ -554,7 +740,16 @@ pub(crate) fn apply(
         _ => Err(refused("kernel-operands")),
     }
 }
-fn dense<G: Group>(
+pub(super) fn dense<G: Family>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    dense_with_storage::<G, SliceStorage>(name, args, i, p)
+}
+
+pub(super) fn dense_with_storage<G: Family<S>, S: PointStorage<G>>(
     name: &str,
     args: &[Value],
     i: &Invocation<'_>,
@@ -563,19 +758,27 @@ fn dense<G: Group>(
     let arg = |j| args.get(j).ok_or_else(|| refused("kernel-operands"));
     let point = |j| G::point(arg(j)?);
     let points = |j| G::points(arg(j)?);
+    let call = crate::numerical::Call::new(p, i.max_output_bytes);
     let alloc = |n| {
         G::limit(p, n)?;
-        p.output(size(n, G::width())?, i.max_output_bytes)?;
-        reserve::<G>(n)
+        let bytes = size(n, G::width())?;
+        p.output(bytes, i.max_output_bytes)?;
+        call.destination(G::RESIDENT_STORAGE, bytes, || S::reserve(n))
     };
-    if i.binding
+    let scalar_output = i
+        .binding
         .signature()
         .outputs
         .iter()
-        .all(|t| t.kind() != zkc_runtime::vm::Type::Groups)
-    {
+        .all(|ty| ty.kind() != zkc_runtime::vm::Type::Groups);
+    if scalar_output {
         p.output(512, i.max_output_bytes)?;
     }
+    let _scalar_reservation = if G::RESIDENT_STORAGE && scalar_output {
+        Some(call.reserve_workspace::<u8>(512)?)
+    } else {
+        None
+    };
     let result = match name {
         "curve.identity" => G::value(G::identity()),
         "curve.generator" => G::value(G::generator()),
@@ -584,12 +787,9 @@ fn dense<G: Group>(
         "curve.scale" => G::value(point(0)?.scale(G::scalar(arg(1)?)?)),
         "curve.equal" => Value::Bool(point(0)? == point(1)?),
         "curve.nonidentity" => Value::Bool(point(0)? != G::identity()),
-        "curve.empty" => {
-            p.output(size(0, G::width())?, i.max_output_bytes)?;
-            G::values(Arc::from([]))
-        }
+        "curve.empty" => alloc(0)?.finish(|values| Ok(G::values(values)))?,
         "curve.at" => G::value(
-            *points(0)?
+            points(0)?
                 .get(natural(i.attributes, 0)?)
                 .ok_or_else(|| refused("group-index"))?,
         ),
@@ -600,7 +800,7 @@ fn dense<G: Group>(
             // Conversion failure is out of bounds too, including on 32-bit hosts.
             let index = usize::try_from(*index).map_err(|_| refused("group-index"))?;
             G::value(
-                *points(0)?
+                points(0)?
                     .get(index)
                     .ok_or_else(|| refused("group-index"))?,
             )
@@ -630,16 +830,17 @@ fn dense<G: Group>(
                     usize::MAX,
                 )?;
             }
-            G::value(G::msm(s, b)?)
+            let msm = G::SLICE_MSM.ok_or_else(|| refused("resident-msm-bulk-required"))?;
+            G::value(msm(s, b)?)
         }
         "curve.scale_each" => {
             let (s, b) = (G::scalars(arg(0)?)?, points(1)?);
             equal_len(s.len(), b.len())?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
-                G::scale_each(s, b, &mut out, workspace_bytes)
+            with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
+                S::scale_each(s, b, &mut out, workspace_bytes).map_err(G::bulk_failure)
             })?;
-            G::values(out.into())
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.append" => {
             let b = points(0)?;
@@ -649,18 +850,18 @@ fn dense<G: Group>(
                     .checked_add(1)
                     .ok_or_else(|| exhausted("size-overflow"))?,
             )?;
-            out.extend_from_slice(b);
-            out.push(x);
-            G::values(out.into())
+            S::extend(&mut out, b.iter());
+            S::push(&mut out, x);
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.vector_scale" => {
             let b = points(0)?;
             let x = G::scalar(arg(1)?)?;
             let mut out = alloc(b.len())?;
-            with_scaling_workspace::<G>(b.len(), p, i.max_output_bytes, |workspace_bytes| {
-                G::scale_many(b, x, &mut out, workspace_bytes)
+            with_scaling_workspace::<G, S>(b.len(), p, &call, |workspace_bytes| {
+                S::scale_many(b, x, &mut out, workspace_bytes).map_err(G::bulk_failure)
             })?;
-            G::values(out.into())
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.vector_add" | "curve.concat" => {
             let (a, b) = (points(0)?, points(1)?);
@@ -674,12 +875,12 @@ fn dense<G: Group>(
             };
             let mut out = alloc(n)?;
             if name == "curve.concat" {
-                out.extend_from_slice(a);
-                out.extend_from_slice(b);
+                S::extend(&mut out, a.iter());
+                S::extend(&mut out, b.iter());
             } else {
-                out.extend(a.iter().zip(b.iter()).map(|(a, b)| a.add(*b)));
+                S::add_many(a, b, &mut out).map_err(G::bulk_failure)?;
             }
-            G::values(out.into())
+            out.finish(|values| Ok(G::values(values)))?
         }
         "curve.split" => {
             let a = points(0)?;
@@ -692,9 +893,12 @@ fn dense<G: Group>(
             )?;
             let mut left = alloc(half)?;
             let mut right = alloc(half)?;
-            left.extend_from_slice(&a[..half]);
-            right.extend_from_slice(&a[half..]);
-            return Ok(vec![G::values(left.into()), G::values(right.into())]);
+            S::extend(&mut left, a.iter().take(half));
+            S::extend(&mut right, a.iter().skip(half));
+            return Ok(vec![
+                left.finish(|values| Ok(G::values(values)))?,
+                right.finish(|values| Ok(G::values(values)))?,
+            ]);
         }
         _ => return Err(refused("kernel-operands")),
     };
@@ -798,23 +1002,21 @@ pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
         &[zkc_runtime::vm::Type::Bool],
         zkc_runtime::vm::AttributeRule::None,
     )
-    .implemented_by(&["arkworks/pairing.check"]),
+    .implemented_by(&["arkworks/pairing.check"])
+    .selectable(),
 ];
 
 /// Prime-order pairing targets: individual values only, no target vectors.
-trait Target: Copy + PartialEq {
+trait Target: Group {
     /// Conservative retained charge of one value, as in `Value::retained_bytes`.
     const RETAINED: usize;
-    fn identity() -> Self;
-    fn generator() -> Self;
-    fn add(self, other: Self) -> Self;
-    fn neg(self) -> Self;
-    fn scale(self, scalar: &Value) -> Result<Self>;
+    fn scalar(v: &Value) -> Result<Self::Scalar>;
     fn point(v: &Value) -> Result<Self>;
     fn value(v: Self) -> Value;
 }
-impl Target for crate::Bn254Gt {
-    const RETAINED: usize = 512;
+impl Group for crate::Bn254Gt {
+    type Scalar = crate::Bn254Scalar;
+    type Error = std::convert::Infallible;
     fn identity() -> Self {
         Self::identity()
     }
@@ -827,11 +1029,17 @@ impl Target for crate::Bn254Gt {
     fn neg(self) -> Self {
         Self::neg(&self)
     }
-    fn scale(self, scalar: &Value) -> Result<Self> {
+    fn scale(self, scalar: Self::Scalar) -> Self {
+        Self::scale(&self, scalar)
+    }
+}
+impl Target for crate::Bn254Gt {
+    const RETAINED: usize = 512;
+    fn scalar(scalar: &Value) -> Result<Self::Scalar> {
         let Value::Bn254Field(s) = scalar else {
             return Err(refused("kernel-operands"));
         };
-        Ok(Self::scale(&self, *s))
+        Ok(*s)
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bn254Gt(v) = v {
@@ -844,8 +1052,9 @@ impl Target for crate::Bn254Gt {
         Value::Bn254Gt(v)
     }
 }
-impl Target for crate::Bls12381Gt {
-    const RETAINED: usize = 1024;
+impl Group for crate::Bls12381Gt {
+    type Scalar = Scalar;
+    type Error = std::convert::Infallible;
     fn identity() -> Self {
         Self::identity()
     }
@@ -858,11 +1067,17 @@ impl Target for crate::Bls12381Gt {
     fn neg(self) -> Self {
         Self::neg(&self)
     }
-    fn scale(self, scalar: &Value) -> Result<Self> {
+    fn scale(self, scalar: Self::Scalar) -> Self {
+        Self::scale(&self, scalar)
+    }
+}
+impl Target for crate::Bls12381Gt {
+    const RETAINED: usize = 1024;
+    fn scalar(scalar: &Value) -> Result<Self::Scalar> {
         let Value::Field(s) = scalar else {
             return Err(refused("kernel-operands"));
         };
-        Ok(Self::scale(&self, *s))
+        Ok(*s)
     }
     fn point(v: &Value) -> Result<Self> {
         if let Value::Bls12381Gt(v) = v {
@@ -891,7 +1106,7 @@ fn target<G: Target>(
         ("curve.neg", [a]) => G::value(G::point(a)?.neg()),
         ("curve.nonidentity", [a]) => Value::Bool(G::point(a)? != G::identity()),
         ("curve.add", [a, b]) => G::value(G::point(a)?.add(G::point(b)?)),
-        ("curve.scale", [a, s]) => G::value(G::point(a)?.scale(s)?),
+        ("curve.scale", [a, s]) => G::value(G::point(a)?.scale(G::scalar(s)?)),
         ("curve.equal", [a, b]) => Value::Bool(G::point(a)? == G::point(b)?),
         _ => return Err(refused("kernel-operands")),
     };

@@ -218,7 +218,7 @@ fn backend(function: &str) -> NativeBackend {
 }
 #[test]
 fn numerical_function_root_uses_existing_native_backend() {
-    let program = Program::decode(PROGRAM.as_bytes()).unwrap();
+    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
     let mut runner = LocalRunner::new(
         &program,
         "helper",
@@ -238,7 +238,7 @@ fn numerical_function_root_uses_existing_native_backend() {
 }
 #[test]
 fn numerical_loop_and_output_guard_share_native_ledger() {
-    let program = Program::decode(PROGRAM.as_bytes()).unwrap();
+    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
     let limits = ValueBudget {
         live_bytes: 16384,
         total_bytes: 262144,
@@ -277,7 +277,7 @@ fn numerical_loop_and_output_guard_share_native_ledger() {
 }
 #[test]
 fn native_entry_policy_is_still_checked_for_a_local_root() {
-    let program = Program::decode(PROGRAM.as_bytes()).unwrap();
+    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
     let refusal = LocalRunner::new(
         &program,
         "helper",
@@ -317,7 +317,7 @@ fn variant_program(elements: usize) -> Program {
         [],
         []
     ]);
-    Program::decode(&serde_json::to_vec(&carrier).unwrap()).unwrap()
+    Program::decode(&serde_json::to_vec(&carrier).unwrap(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap()
 }
 fn variant_runner(
     program: &Program,

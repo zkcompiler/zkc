@@ -1,13 +1,13 @@
 use super::*;
 use p3_field::PrimeCharacteristicRing;
 
-fn sample<E: Family>(seed: usize) -> E {
+fn sample<E: Registered>(seed: usize) -> E {
     E::from_basis_coefficients_fn(|coordinate| {
-        KoalaBear::from_usize(seed * seed + 7 * seed + 11 * coordinate + 1)
+        E::Base::from_usize(seed * seed + 7 * seed + 11 * coordinate + 1)
     })
 }
 
-fn args<E: Family>(values: Vec<E>, columns: u64, height: u64, size: u64) -> Vec<Value> {
+fn args<E: Registered>(values: Vec<E>, columns: u64, height: u64, size: u64) -> Vec<Value> {
     vec![
         E::vector_value(values),
         Value::Index(columns),
@@ -17,7 +17,7 @@ fn args<E: Family>(values: Vec<E>, columns: u64, height: u64, size: u64) -> Vec<
     ]
 }
 
-fn run<E: Family>(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+fn run<E: Registered>(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
     execute::<E>(
         "poly.coset_evaluate_batch",
         args,
@@ -27,7 +27,7 @@ fn run<E: Family>(args: &[Value], policy: &Policy, available: usize) -> Result<V
     )
 }
 
-fn provider_and_horner_checks<E: Family>() {
+fn provider_and_horner_checks<E: Registered>() {
     let policy = Policy::default();
     for columns in [1, 3, 16] {
         for (height, size) in [(0, 1), (0, 8), (1, 1), (1, 8), (3, 8), (8, 8), (5, 2)] {
@@ -84,9 +84,13 @@ fn coefficient_batches_match_pinned_dft_and_horner_in_every_coordinate() {
     provider_and_horner_checks::<KoalaBear>();
     provider_and_horner_checks::<KoalaBearExt4>();
     provider_and_horner_checks::<KoalaBearExt8>();
+    provider_and_horner_checks::<crate::BabyBear>();
+    provider_and_horner_checks::<crate::BabyBearExt4>();
+    provider_and_horner_checks::<crate::Goldilocks>();
+    provider_and_horner_checks::<crate::GoldilocksExt2>();
 }
 
-fn allocation_failure_checks<E: Family>() {
+fn allocation_failure_checks<E: Registered>() {
     let policy = Policy::default();
     let values: Vec<_> = (0..9).map(sample::<E>).collect();
     let arguments = args(values.clone(), 3, 3, 8);
@@ -124,9 +128,13 @@ fn coefficient_batch_allocation_failures_publish_nothing_and_preserve_inputs() {
     allocation_failure_checks::<KoalaBear>();
     allocation_failure_checks::<KoalaBearExt4>();
     allocation_failure_checks::<KoalaBearExt8>();
+    allocation_failure_checks::<crate::BabyBear>();
+    allocation_failure_checks::<crate::BabyBearExt4>();
+    allocation_failure_checks::<crate::Goldilocks>();
+    allocation_failure_checks::<crate::GoldilocksExt2>();
 }
 
-fn boundary_checks<E: Family>() {
+fn boundary_checks<E: Registered>() {
     let policy = Policy::default();
     let values: Vec<_> = (0..9).map(sample::<E>).collect();
     let arguments = args(values.clone(), 3, 3, 8);
@@ -231,9 +239,13 @@ fn coefficient_batch_exact_output_workspace_and_work_boundaries() {
     boundary_checks::<KoalaBear>();
     boundary_checks::<KoalaBearExt4>();
     boundary_checks::<KoalaBearExt8>();
+    boundary_checks::<crate::BabyBear>();
+    boundary_checks::<crate::BabyBearExt4>();
+    boundary_checks::<crate::Goldilocks>();
+    boundary_checks::<crate::GoldilocksExt2>();
 }
 
-fn refusal_checks<E: Family>() {
+fn refusal_checks<E: Registered>() {
     let policy = Policy::default();
     for (len, columns, height, size, expected) in [
         (1, 0, 0, 0, "refused:coset-batch-shape"),
@@ -307,9 +319,9 @@ fn refusal_checks<E: Family>() {
     if E::DIMENSION > 1 {
         shrinking[9] = E::from_basis_coefficients_fn(|j| {
             if j == E::DIMENSION - 1 {
-                KoalaBear::ONE
+                E::Base::ONE
             } else {
-                KoalaBear::ZERO
+                E::Base::ZERO
             }
         });
     } else {
@@ -356,4 +368,8 @@ fn coefficient_batch_empty_zero_height_shrink_nominal_and_overflow_refusals() {
     refusal_checks::<KoalaBear>();
     refusal_checks::<KoalaBearExt4>();
     refusal_checks::<KoalaBearExt8>();
+    refusal_checks::<crate::BabyBear>();
+    refusal_checks::<crate::BabyBearExt4>();
+    refusal_checks::<crate::Goldilocks>();
+    refusal_checks::<crate::GoldilocksExt2>();
 }

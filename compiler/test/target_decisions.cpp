@@ -941,21 +941,20 @@ local.return %result : !R)";
                                              "arkworks/control.require"},
                 "stopping source instructions retain their original positions");
       });
-  cases.run("nested control captures retain default interface layouts", [&] {
+  cases.run("nested control captures preserve actual interface layouts", [&] {
     auto module = take(executableFixture(nestedLayouts(), context));
     auto plan = take(proposePhysical(*module));
     auto &control = site(plan, *module, "choose");
-    require(control.conversions.size() == 1 &&
-                control.conversions.front().operand == 1,
-            "capture converted immediately before control");
-    auto logical = take(parseBoundType("table:bls12-381.fr", false));
-    auto physical =
-        decodeBoundType(&context, take(defaultRepresentation(logical)));
+    require(control.conversions.empty(),
+            "an exact capture was converted before control");
+    auto physical = decodeBoundType(
+        &context,
+        take(parseBoundType("table:bls12-381.fr@arkworks.mle-msb/0", true)));
     require(control.inputs[1] == physical &&
                 control.blockArguments[0][0] == physical &&
                 control.blockArguments[1][0] == physical &&
                 control.outputs[0] == physical,
-            "all control boundaries retain installed default layout");
+            "control ports preserve the actual complete layout");
     auto checked = take(validatePhysical(*module, plan));
     accept(materializePhysical(*module, checked));
     require(succeeded(verify(*module)),

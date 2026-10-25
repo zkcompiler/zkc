@@ -17,6 +17,7 @@ fn binding(domain: usize, contract: &str) -> OperationBinding {
         contract: contract.into(),
         arguments: vec![field.into()],
         implementation: format!("{provider}/{contract}"),
+        physical_arguments: vec![],
     }
 }
 fn vector(domain: usize, values: &[u64]) -> Value {
@@ -130,13 +131,16 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
     for (d, modulus) in moduli.iter().enumerate() {
         for bad in ["", "01", "+1", "-1", "1.0", "١", modulus] {
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&plan(d, "vector.constant", &["1", bad]))
-                    .and_then(|program| {
-                        program.check_installation(&backend(Policy::default()))?;
-                        Ok(program)
-                    })
-                    .unwrap_err()
-                    .code,
+                zkc_runtime::vm::Program::decode(
+                    &plan(d, "vector.constant", &["1", bad]),
+                    zkc_native::native_contracts()
+                )
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .unwrap_err()
+                .code,
                 ErrorCode::Attributes
             );
         }
@@ -148,13 +152,16 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
             vec!["1", "-1"],
         ] {
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&plan(d, "vector.scatter_sum", &attrs))
-                    .and_then(|program| {
-                        program.check_installation(&backend(Policy::default()))?;
-                        Ok(program)
-                    })
-                    .unwrap_err()
-                    .code,
+                zkc_runtime::vm::Program::decode(
+                    &plan(d, "vector.scatter_sum", &attrs),
+                    zkc_native::native_contracts()
+                )
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .unwrap_err()
+                .code,
                 ErrorCode::Attributes
             );
         }
@@ -168,12 +175,15 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
                 .spelling()
         );
         assert!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&backend(Policy::default()))?;
-                    Ok(program)
-                })
-                .is_err()
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&bad).unwrap(),
+                zkc_native::native_contracts()
+            )
+            .and_then(|program| {
+                program.check_installation(&backend(Policy::default()))?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
 }

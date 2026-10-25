@@ -119,7 +119,7 @@ def small_package():
   }) : () -> ()
 }) : () -> ()
 '''
-    program = ['zkc.program/0', [['binding', 'vector.map', ['field'], 'native/vector.map']],
+    program = ['zkc.program/0', [['binding', 'vector.map', ['field'], 'native/vector.map', []]],
                [['function', 'helper', [], [], [['op', 'site', 'binding', [], [], []]]]], [], []]
     return {'format': 'zkc.entry/0', 'original': original,
             'artifact': json.dumps(['zkc.native-proof/0', '', [], '', json.dumps(program), '', [], [], []]),

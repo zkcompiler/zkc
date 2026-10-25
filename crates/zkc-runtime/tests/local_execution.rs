@@ -220,12 +220,19 @@ fn module(functions: Json, participants: Json, entries: Json) -> Json {
     json!([
         "zkc.program/0",
         [
-            ["add", "field.add", ["bls12-381.fr"], "arkworks/field.add"],
+            [
+                "add",
+                "field.add",
+                ["bls12-381.fr"],
+                "arkworks/field.add",
+                []
+            ],
             [
                 "multiply",
                 "field.mul",
                 ["bls12-381.fr"],
-                "arkworks/field.mul"
+                "arkworks/field.mul",
+                []
             ]
         ],
         functions,
@@ -272,7 +279,11 @@ fn loop_function() -> Json {
     )
 }
 fn decode(source: Json) -> Program {
-    Program::decode(&serde_json::to_vec(&source).unwrap()).unwrap()
+    Program::decode(
+        &serde_json::to_vec(&source).unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap()
 }
 fn program() -> Program {
     decode(module(
@@ -424,17 +435,27 @@ fn wrong_root_inputs_and_installation_return_backend_custody() {
         }
     }
     assert_eq!(
-        Program::decode(&serde_json::to_vec(&module(json!([]), json!([]), json!([]))).unwrap())
-            .unwrap_err()
-            .code,
+        Program::decode(
+            &serde_json::to_vec(&module(json!([]), json!([]), json!([]))).unwrap(),
+            &zkc_runtime::vm::Contracts::standard(
+                zkc_runtime::vm::ExecutionPolicy::general_purpose()
+            )
+        )
+        .unwrap_err()
+        .code,
         ErrorCode::Symbol
     );
     let mut malformed = module(json!([add()]), json!([]), json!([]));
     malformed[2][0][4][0][4] = json!(["undefined", "b"]);
     assert_eq!(
-        Program::decode(&serde_json::to_vec(&malformed).unwrap())
-            .unwrap_err()
-            .code,
+        Program::decode(
+            &serde_json::to_vec(&malformed).unwrap(),
+            &zkc_runtime::vm::Contracts::standard(
+                zkc_runtime::vm::ExecutionPolicy::general_purpose()
+            )
+        )
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
 }
@@ -1415,9 +1436,14 @@ fn installation_checks_every_potential_branch_of_the_selected_function() {
     // root-specific installation or value-dependent branch selection.
     source[2][0][4][0][5][0][4] = json!(["undefined", "y"]);
     assert_eq!(
-        Program::decode(&serde_json::to_vec(&source).unwrap())
-            .unwrap_err()
-            .code,
+        Program::decode(
+            &serde_json::to_vec(&source).unwrap(),
+            &zkc_runtime::vm::Contracts::standard(
+                zkc_runtime::vm::ExecutionPolicy::general_purpose()
+            )
+        )
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
 }

@@ -105,7 +105,9 @@ fn main() {
     assert!(!zkc::EXECUTION_COUNTS_ENABLED);
     let args:Vec<_>=std::env::args().collect();
     let bytes=std::fs::read(&args[4]).unwrap();
-    let host=numerical::admit(&bytes,Default::default(),Default::default()).unwrap();
+    let cpu=zkc::execution::CpuExecution::new(2).unwrap();
+    let host=numerical::admit_with_cpu(&bytes,Default::default(),Default::default(),cpu.clone()).unwrap();
+    assert_eq!(host.cpu().workers(),2);
     let prepared=host.prepare(zkc::entry::FunctionRequest {
         arguments:numerical::Arguments{value:7}.into(),context:Default::default(),
     }).unwrap();
@@ -117,7 +119,7 @@ fn main() {
         assert!(result.report.usage.execution.instructions>0);
     }
     let bytes=std::fs::read(&args[5]).unwrap();
-    let host=generic::admit(&bytes,Default::default(),authority(&bytes,&generic::PACKAGE_SHA256)).unwrap();
+    let host=generic::admit_with_cpu(&bytes,Default::default(),authority(&bytes,&generic::PACKAGE_SHA256),cpu.clone()).unwrap();
     for value in [17u64,23] {
         let arguments=zkc::entry::NamedValues::from([("inputs".into(),zkc::entry::Value::Record(
             [("P".into(),zkc::entry::Value::Record([("value".into(),value.into())].into()))].into()))]);

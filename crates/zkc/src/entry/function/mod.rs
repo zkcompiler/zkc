@@ -13,6 +13,7 @@ mod schema;
 
 pub use super::interface::raw::{Alternative, Field, Kind as SchemaKind, Permission, Schema};
 use super::{EntryError, EntryPhase, NamedValues, Package, SetupAuthority};
+use crate::execution::CpuExecution;
 use crate::run::HostLimits;
 pub use data::TypedValue;
 pub use execution::{
@@ -144,6 +145,7 @@ impl Deployment {
 }
 /// Checked execution state owned by the authenticated FunctionEntry.
 struct EntryHost {
+    cpu: CpuExecution,
     entry: String,
     functions: Vec<carrier::Function>,
     interface: FunctionInterface,
@@ -159,12 +161,51 @@ pub struct FunctionEntry {
     host: EntryHost,
 }
 impl FunctionEntry {
+    /// Share the context with numerical calls and all admitted child deployments.
+    pub fn with_cpu(mut self, cpu: CpuExecution) -> Self {
+        self.host.deployments = self
+            .host
+            .deployments
+            .into_iter()
+            .map(|(id, mut deployment)| {
+                deployment.kind = match deployment.kind {
+                    DeploymentKind::Run(entry) => {
+                        DeploymentKind::Run(Box::new(entry.with_cpu(cpu.clone())))
+                    }
+                    DeploymentKind::Proof { entry, operation } => DeploymentKind::Proof {
+                        entry: Box::new(entry.with_cpu(cpu.clone())),
+                        operation,
+                    },
+                };
+                (id, deployment)
+            })
+            .collect();
+        self.host.cpu = cpu;
+        self
+    }
+    pub fn cpu(&self) -> &CpuExecution {
+        &self.host.cpu
+    }
     pub fn admit(
         package: Package,
         options: FunctionOptions,
         authority: BTreeMap<String, SetupAuthority>,
     ) -> Result<Self> {
-        let host = admission::admit(&package, options, authority)?;
+        Self::admit_with_cpu(
+            package,
+            options,
+            authority,
+            CpuExecution::serial().map_err(|e| error(&e.to_string()))?,
+        )
+    }
+    /// Share one context from admission through calculations and child calls.
+    pub fn admit_with_cpu(
+        package: Package,
+        options: FunctionOptions,
+        authority: BTreeMap<String, SetupAuthority>,
+        cpu: CpuExecution,
+    ) -> Result<Self> {
+        let host = cpu.enter(|| admission::admit(&package, options, authority, cpu.clone()))?;
         Ok(Self { package, host })
     }
     pub fn deployments(&self) -> impl Iterator<Item = (&str, &str)> {
@@ -196,7 +237,7 @@ impl FunctionEntry {
         self.host.describe()
     }
     pub fn prepare(&self, request: FunctionRequest) -> Result<PreparedFunction<'_>> {
-        self.host.prepare(request)
+        self.host.cpu.enter(|| self.host.prepare(request))
     }
     pub fn check_inputs(&self, request: FunctionRequest) -> Result<()> {
         self.prepare(request).map(drop)

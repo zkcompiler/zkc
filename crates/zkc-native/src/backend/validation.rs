@@ -53,16 +53,45 @@ impl Core {
             }
             Value::FieldArray(value) => {
                 value.validate()?;
-                self.policy.vector(value.elements().len())?;
+                self.policy.vector(value.len())?;
                 None
             }
             Value::FixedVector(value) => {
                 value.validate()?;
-                self.policy.vector_width(value.elements().len(), 4)?;
+                self.policy
+                    .vector_width(value.len(), value.element_width())?;
                 None
             }
             Value::Bn254Matrix(m) => {
                 m.policy(&self.policy)?;
+                None
+            }
+            Value::BlstVector(v) => {
+                self.policy.vector(v.len())?;
+                None
+            }
+            Value::BlstG1Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::blst::bls12_381::G1>(v.len())?;
+                None
+            }
+            Value::BlstG2Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::blst::bls12_381::G2>(v.len())?;
+                None
+            }
+            Value::HaloVector(v) => {
+                self.policy.vector(v.len())?;
+                None
+            }
+            Value::HaloG1Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::halo2curves::bn254::G1>(v.len())?;
+                None
+            }
+            Value::HaloG2Vector(v) => {
+                self.policy
+                    .typed_groups::<zkc_kernels::halo2curves::bn254::G2>(v.len())?;
                 None
             }
             Value::Bn254Vector(v) => {
@@ -104,23 +133,30 @@ impl Core {
                 m.policy(&self.policy)?;
                 None
             }
-            Value::KoalaBearExt8Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearExt4Matrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearExt4Vector(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                None
-            }
-            Value::KoalaBearExt4Polynomial(a) => {
-                self.policy.vector_width(a.len(), 16)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
+            // Keep dispatch exhaustive; registration owns collection checks.
+            Value::KoalaBearVector(..)
+            | Value::KoalaBearMatrix(..)
+            | Value::KoalaBearPolynomial(..)
+            | Value::KoalaBearExt4Vector(..)
+            | Value::KoalaBearExt4Matrix(..)
+            | Value::KoalaBearExt4Polynomial(..)
+            | Value::KoalaBearExt8Vector(..)
+            | Value::KoalaBearExt8Matrix(..)
+            | Value::KoalaBearExt8Polynomial(..)
+            | Value::BabyBearVector(..)
+            | Value::BabyBearMatrix(..)
+            | Value::BabyBearPolynomial(..)
+            | Value::BabyBearExt4Vector(..)
+            | Value::BabyBearExt4Matrix(..)
+            | Value::BabyBearExt4Polynomial(..)
+            | Value::GoldilocksVector(..)
+            | Value::GoldilocksMatrix(..)
+            | Value::GoldilocksPolynomial(..)
+            | Value::GoldilocksExt2Vector(..)
+            | Value::GoldilocksExt2Matrix(..)
+            | Value::GoldilocksExt2Polynomial(..) => {
+                crate::fields::validate_collection(v, &self.policy)
+                    .expect("registered residue collection")?;
                 None
             }
             Value::Binary64Matrix(m) => {
@@ -148,32 +184,6 @@ impl Core {
             }
             Value::Binary64Ext3Polynomial(a) => {
                 self.policy.vector_width(a.len(), 24)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::KoalaBearExt8Vector(a) => {
-                self.policy.vector_width(a.len(), 32)?;
-                None
-            }
-            Value::KoalaBearExt8Polynomial(a) => {
-                self.policy.vector_width(a.len(), 32)?;
-                if !zkc_kernels::polynomial::normalized(a) {
-                    return Err(refused("polynomial-normalization"));
-                }
-                None
-            }
-            Value::KoalaBearMatrix(m) => {
-                m.policy(&self.policy)?;
-                None
-            }
-            Value::KoalaBearVector(a) => {
-                self.policy.vector_width(a.len(), 4)?;
-                None
-            }
-            Value::KoalaBearPolynomial(a) => {
-                self.policy.vector_width(a.len(), 4)?;
                 if !zkc_kernels::polynomial::normalized(a) {
                     return Err(refused("polynomial-normalization"));
                 }
@@ -274,6 +284,12 @@ impl Core {
             | Value::Bn254G1(..)
             | Value::Bn254Gt(..)
             | Value::Bn254G2(..)
+            | Value::BlstField(..)
+            | Value::BlstG1(..)
+            | Value::HaloField(..)
+            | Value::HaloG1(..)
+            | Value::HaloG2(..)
+            | Value::BlstG2(..)
             | Value::Bls12381G2(..)
             | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)
@@ -283,7 +299,15 @@ impl Core {
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)
             | Value::KoalaBearExt4Field(..)
+            | Value::BabyBearField(..)
+            | Value::BabyBearExt4Field(..)
+            | Value::GoldilocksField(..)
+            | Value::GoldilocksExt2Field(..)
             | Value::KoalaBearExt4Round(..)
+            | Value::BabyBearRound(..)
+            | Value::BabyBearExt4Round(..)
+            | Value::GoldilocksRound(..)
+            | Value::GoldilocksExt2Round(..)
             | Value::Binary64Field(..)
             | Value::Binary64Round(..)
             | Value::Binary64Ext3Field(..)
@@ -397,7 +421,13 @@ impl Core {
             return Err(refused("kernel-operands"));
         }
         if let Some(call) = call {
-            super::NativeCall::prepare_invocation(call, binding, i.attributes)?;
+            super::NativeCall::prepare_invocation(
+                call,
+                binding,
+                i.attributes,
+                &self.policy,
+                i.max_output_bytes,
+            )?;
         } else {
             super::NativeCall::check(signature.attributes, i.attributes)?;
         }

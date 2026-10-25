@@ -4,8 +4,8 @@ mod attempts;
 mod inputs;
 mod interface;
 mod messages;
-use crate::execution::Capacity;
 use crate::execution::InputValue;
+use crate::execution::{Capacity, CpuExecution};
 pub use inputs::ProofInputs;
 use zkc_runtime::host::proof::{self as driver, ArtifactFailure, ArtifactReport};
 mod entropy;
@@ -49,6 +49,7 @@ pub(crate) struct RoleMap {
 /// with [`crate::entry::ProofOptions`] to require managed transcript binding.
 #[derive(Clone)]
 pub struct NativeDeployment {
+    cpu: CpuExecution,
     ring_assets: zkc_native::ring::Registry,
     relation_assets: zkc_native::relation::Registry,
     ring_work_limit: u64,
@@ -69,6 +70,7 @@ pub struct NativeDeployment {
     binding_metadata_bytes: usize,
     format: ProofFormat,
     public: Vec<Port>,
+    public_types: Vec<PhysicalType>,
     maps: BTreeMap<String, RoleMap>,
 }
 pub(crate) struct SourceInterface<'a> {
@@ -201,8 +203,9 @@ fn backend(
     entry: &str,
     keys: zkc_native::SetupRegistry,
     ports: BTreeMap<String, zkc_native::PortConstraint>,
+    cpu: CpuExecution,
 ) -> Result<NativeBackend> {
-    NativeBackend::new(
+    NativeBackend::new_with_cpu(
         policy,
         EntryPolicy::new(
             Domain::new(&role.role, "native-proof", entry, Some(&role.instance)),
@@ -210,6 +213,7 @@ fn backend(
         )
         .with_ports(ports),
         keys,
+        cpu,
     )
     .map_err(|e| e.to_string())
 }
@@ -229,6 +233,20 @@ impl NativeDeployment {
         expected_sha256: &[u8; 32],
         authority: SetupAuthority,
     ) -> Result<Self> {
+        Self::admit_with_cpu(
+            bytes,
+            expected_sha256,
+            authority,
+            CpuExecution::serial().map_err(|e| e.to_string())?,
+        )
+    }
+    /// Admit with the context retained by preparation and every proof role.
+    pub fn admit_with_cpu(
+        bytes: &[u8],
+        expected_sha256: &[u8; 32],
+        authority: SetupAuthority,
+        cpu: CpuExecution,
+    ) -> Result<Self> {
         if bytes.len() > INPUT_LIMIT {
             return Err("native-proof-deployment-limit".into());
         }
@@ -236,18 +254,20 @@ impl NativeDeployment {
         if &identity != expected_sha256 {
             return Err("native-proof-deployment-binding".into());
         }
-        Self::admit_payload(bytes, &hex(expected_sha256), authority, None, false)
+        Self::admit_payload(bytes, &hex(expected_sha256), authority, None, false, cpu)
     }
     pub(crate) fn admit_artifact(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
+        cpu: CpuExecution,
     ) -> Result<Self> {
-        Self::admit_artifact_operation(artifact, authority, None)
+        Self::admit_artifact_operation(artifact, authority, None, cpu)
     }
     pub(crate) fn admit_artifact_operation(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
         operation: Option<bool>,
+        cpu: CpuExecution,
     ) -> Result<Self> {
         Self::admit_payload(
             artifact.bytes(),
@@ -255,12 +275,14 @@ impl NativeDeployment {
             authority,
             operation,
             false,
+            cpu,
         )
     }
     pub(crate) fn admit_host_operation(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
         producer: bool,
+        cpu: CpuExecution,
     ) -> Result<Self> {
         Self::admit_payload(
             artifact.bytes(),
@@ -268,6 +290,7 @@ impl NativeDeployment {
             authority,
             Some(producer),
             true,
+            cpu,
         )
     }
     // The public loader checks the caller's deployment pin; the private view
@@ -280,6 +303,7 @@ impl NativeDeployment {
         authority: SetupAuthority,
         operation: Option<bool>,
         retained_inputs: bool,
+        cpu: CpuExecution,
     ) -> Result<Self> {
         let value = parse(bytes, INPUT_LIMIT)?;
         let envelope = array(&value, 9)?;
@@ -324,14 +348,18 @@ impl NativeDeployment {
             return Err("native-proof-format".into());
         }
         let admitted = {
-            let dummy = NativeBackend::new(
+            let dummy = NativeBackend::new_with_cpu(
                 Policy::default(),
                 EntryPolicy::new(Domain::new(producer, "native-proof", entry, None), None),
                 Default::default(),
+                cpu.clone(),
             )
             .map_err(|e| e.to_string())?;
-            let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
-                .map_err(|e| e.to_string())?;
+            let program = zkc_runtime::vm::Program::decode(
+                candidate.as_bytes(),
+                zkc_native::native_contracts(),
+            )
+            .map_err(|e| e.to_string())?;
             match operation {
                 Some(producing) => program.check_role_installation(
                     entry,
@@ -348,6 +376,7 @@ impl NativeDeployment {
         let interface::RoleInterface {
             maps,
             public,
+            public_types,
             acceptance,
         } = interface::RoleInterface::read(
             &admitted,
@@ -425,6 +454,7 @@ impl NativeDeployment {
         }
         .map_err(|e| e.to_string())?;
         Ok(Self {
+            cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
             ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
@@ -458,8 +488,17 @@ impl NativeDeployment {
                 .saturating_add(4096),
             format: policy.format,
             public,
+            public_types,
             maps,
         })
+    }
+    /// Share one CPU context across proof roles and repeated attempts.
+    pub fn with_cpu(mut self, cpu: CpuExecution) -> Self {
+        self.cpu = cpu;
+        self
+    }
+    pub fn cpu(&self) -> &CpuExecution {
+        &self.cpu
     }
     /// Bound public computation storage independently of invocation capacity.
     /// Reconfiguration starts a new empty store; clones otherwise share it.
@@ -532,6 +571,9 @@ impl NativeDeployment {
     }
     pub fn entry(&self) -> &NativeProofEntry {
         &self.entry
+    }
+    pub(crate) fn public_types(&self) -> &[PhysicalType] {
+        &self.public_types
     }
     // The source Host consumes this admitted view rather than decoding the
     // deployment carrier again or keeping a second interpretation of its ABI.
@@ -654,7 +696,8 @@ impl NativeDeployment {
     ) -> Result<inputs::Prepared> {
         imports.set_ledger(self.shared_ledger.clone());
         let role = self.selected_role(producer)?;
-        inputs::prepare(self, input, role, producer, imports)
+        self.cpu
+            .enter(|| inputs::prepare(self, input, role, producer, imports))
     }
     fn execute_with_imports(
         &self,

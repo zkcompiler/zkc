@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_PROTOCOL_H
 
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Target/Selection.h"
 #include "llvm/Support/Error.h"
 #include <string>
 #include <utility>
@@ -14,7 +15,8 @@ mlir::LogicalResult lowerPhysical(
     mlir::ModuleOp,
     llvm::ArrayRef<std::pair<std::string, std::string>> selections = {},
     bool linearContractions = false, LinearContractionStats *stats = nullptr,
-    bool releaseStorage = false);
+    bool releaseStorage = false,
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
 /// Check that a physical candidate only inserts admitted storage releases,
 /// preserving the positions and operands of existing releases.
 /// Preserves computation under sufficient capacity, not equal heap high water

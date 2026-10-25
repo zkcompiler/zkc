@@ -181,6 +181,7 @@ mod tests {
                 contract: "hash.poseidon2_16".into(),
                 arguments: arguments.into_iter().map(String::from).collect(),
                 implementation: implementation.into(),
+                physical_arguments: vec![],
             };
             assert_eq!(signature(&binding).is_some(), admitted, "{binding:?}");
         }

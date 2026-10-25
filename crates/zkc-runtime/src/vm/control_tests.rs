@@ -146,6 +146,7 @@ fn runner(nested: bool, taken: bool, fail: Option<u64>, total: usize) -> Runner<
     };
     let admitted = crate::vm::Program::decode(
         &serde_json::to_vec(&artifact(body(nested), json!([]))).unwrap(),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
     )
     .and_then(|program| {
         program.check_installation(&store)?;
@@ -176,8 +177,11 @@ fn participant_frames_use_admitted_loop_ports_and_reject_mistyped_captures() {
     use crate::vm::{instance::Instance, retention::Retention};
     let mut source = body(true);
     source[0][4] = json!(["n", "c"]); // preserve declared order, not lexical order
-    let program =
-        Program::decode(&serde_json::to_vec(&artifact(source, json!([]))).unwrap()).unwrap();
+    let program = Program::decode(
+        &serde_json::to_vec(&artifact(source, json!([]))).unwrap(),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     let ports = |site| {
         program
             .loop_inputs("p", site)
@@ -332,12 +336,15 @@ fn continuing_resources_stay_single_use_and_controls_are_explicit() {
     let mut invalid = artifact(body(false), json!([]));
     invalid[3][0][6][1][1][1] = json!("r");
     assert!(
-        crate::vm::Program::decode(&serde_json::to_vec(&invalid).unwrap())
-            .and_then(|program| {
-                program.check_installation(&Store::default())?;
-                Ok(program)
-            })
-            .is_err()
+        crate::vm::Program::decode(
+            &serde_json::to_vec(&invalid).unwrap(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Store::default())?;
+            Ok(program)
+        })
+        .is_err()
     );
     let mut r = runner(false, true, None, 1000);
     assert!(matches!(r.poll(), Action::Stopped(_))); // poll must not silently cross control
@@ -406,12 +413,15 @@ fn bounded_local_condition_skips_unreached_iterations() {
             .as_array_mut()
             .unwrap()
             .push(json!(["hi", INDEX]));
-        let admitted = crate::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-            .and_then(|program| {
-                program.check_installation(&Store::default())?;
-                Ok(program)
-            })
-            .unwrap();
+        let admitted = crate::vm::Program::decode(
+            &serde_json::to_vec(&program).unwrap(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&Store::default())?;
+            Ok(program)
+        })
+        .unwrap();
         for upper in [0, 1, 4] {
             let mut r = Runner::new_with_budgets(
                 &admitted,
@@ -450,41 +460,53 @@ fn bounded_local_condition_skips_unreached_iterations() {
             let mut changed = program.clone();
             changed[2][0][4][0][7][1][1] = json!(["r"]);
             assert!(
-                crate::vm::Program::decode(&serde_json::to_vec(&changed).unwrap())
-                    .and_then(|program| {
-                        program.check_installation(&Store::default())?;
-                        Ok(program)
-                    })
-                    .is_err()
-            );
-            changed = program.clone();
-            changed[2][0][4][0][7][1][1] = json!(["i", "r"]);
-            assert!(
-                crate::vm::Program::decode(&serde_json::to_vec(&changed).unwrap())
-                    .and_then(|program| {
-                        program.check_installation(&Store::default())?;
-                        Ok(program)
-                    })
-                    .is_err()
-            );
-            changed = program.clone();
-            changed[2][0][4][0][7] = json!([["stop", "halt", "abort"]]);
-            let error = crate::vm::Program::decode(&serde_json::to_vec(&changed).unwrap())
+                crate::vm::Program::decode(
+                    &serde_json::to_vec(&changed).unwrap(),
+                    &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+                )
                 .and_then(|program| {
                     program.check_installation(&Store::default())?;
                     Ok(program)
                 })
-                .unwrap_err();
+                .is_err()
+            );
+            changed = program.clone();
+            changed[2][0][4][0][7][1][1] = json!(["i", "r"]);
+            assert!(
+                crate::vm::Program::decode(
+                    &serde_json::to_vec(&changed).unwrap(),
+                    &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+                )
+                .and_then(|program| {
+                    program.check_installation(&Store::default())?;
+                    Ok(program)
+                })
+                .is_err()
+            );
+            changed = program.clone();
+            changed[2][0][4][0][7] = json!([["stop", "halt", "abort"]]);
+            let error = crate::vm::Program::decode(
+                &serde_json::to_vec(&changed).unwrap(),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+            )
+            .and_then(|program| {
+                program.check_installation(&Store::default())?;
+                Ok(program)
+            })
+            .unwrap_err();
             assert!(error.to_string().contains("local-control-yield"));
             changed = program.clone();
             changed[0] = json!("invalid.program");
             assert!(
-                crate::vm::Program::decode(&serde_json::to_vec(&changed).unwrap())
-                    .and_then(|program| {
-                        program.check_installation(&Store::default())?;
-                        Ok(program)
-                    })
-                    .is_err()
+                crate::vm::Program::decode(
+                    &serde_json::to_vec(&changed).unwrap(),
+                    &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+                )
+                .and_then(|program| {
+                    program.check_installation(&Store::default())?;
+                    Ok(program)
+                })
+                .is_err()
             );
         }
     }
@@ -501,12 +523,15 @@ fn false_exits_preserve_iterations_and_malformed_records_refuse() {
         let mut program = artifact(body(false), json!([]));
         program[0] = json!(tag);
         assert!(
-            crate::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&Store::default())?;
-                    Ok(program)
-                })
-                .is_err()
+            crate::vm::Program::decode(
+                &serde_json::to_vec(&program).unwrap(),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .and_then(|program| {
+                program.check_installation(&Store::default())?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
     for changed in [
@@ -518,12 +543,15 @@ fn false_exits_preserve_iterations_and_malformed_records_refuse() {
         let mut program = artifact(body(false), json!([]));
         program[3][0][6][0] = changed;
         assert!(
-            crate::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&Store::default())?;
-                    Ok(program)
-                })
-                .is_err()
+            crate::vm::Program::decode(
+                &serde_json::to_vec(&program).unwrap(),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .and_then(|program| {
+                program.check_installation(&Store::default())?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
 }
@@ -534,12 +562,15 @@ fn extra_participant_fields_and_malformed_instructions_refuse() {
     for parameters in [json!([["n", "2"]]), json!([["n", ["ingress", "8", []]]])] {
         let mut program = base.clone();
         program[3][0].as_array_mut().unwrap().insert(4, parameters);
-        let error = crate::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-            .and_then(|program| {
-                program.check_installation(&Store::default())?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = crate::vm::Program::decode(
+            &serde_json::to_vec(&program).unwrap(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&Store::default())?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(error.code, ErrorCode::Record);
     }
     for instruction in [
@@ -551,12 +582,15 @@ fn extra_participant_fields_and_malformed_instructions_refuse() {
         let mut program = base.clone();
         program[3][0][6] = json!([instruction, ["return", []]]);
         assert!(
-            crate::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&Store::default())?;
-                    Ok(program)
-                })
-                .is_err()
+            crate::vm::Program::decode(
+                &serde_json::to_vec(&program).unwrap(),
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .and_then(|program| {
+                program.check_installation(&Store::default())?;
+                Ok(program)
+            })
+            .is_err()
         );
     }
 }

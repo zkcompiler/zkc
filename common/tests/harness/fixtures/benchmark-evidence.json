@@ -3,7 +3,10 @@
     "compiler_options": [],
     "contracts": {},
     "format": "zkc.benchmark/0",
-    "host": {},
+    "host": {
+      "affinity": null,
+      "requested_cpus": null
+    },
     "ingress": "prepared",
     "matrix": [
       {
@@ -66,12 +69,15 @@
       },
       {
         "backend": {
-          "accept_role": "P",
+          "arguments": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/0-P.json",
+          "check": {
+            "kind": "acceptance",
+            "role": "P"
+          },
           "ingress": "prepared",
           "kind": "run",
           "package": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/entry.zkpkg",
-          "sha256": "23a56c3ef27366433a4f77bd66c1a25243aa6b0aaf975d474256a692d418197f",
-          "arguments": "/benchmark-fixtures/runs/ingress-prepared/cases/host-vector-kb-length-65536/0-P.json"
+          "sha256": "23a56c3ef27366433a4f77bd66c1a25243aa6b0aaf975d474256a692d418197f"
         },
         "boundary": "admitted_function_call",
         "case": "host-vector-kb-length-65536",
@@ -239,6 +245,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 15740928,
@@ -491,6 +498,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 15773696,
@@ -755,6 +763,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 12869632,
@@ -815,7 +824,8 @@
         }
       }
     ],
-    "status": "passed"
+    "status": "passed",
+    "threads": 1
   },
   "negative_host": {
     "completed_calls": 1,
@@ -861,7 +871,10 @@
     "compiler_options": [],
     "contracts": {},
     "format": "zkc.benchmark/0",
-    "host": {},
+    "host": {
+      "affinity": null,
+      "requested_cpus": null
+    },
     "ingress": "json",
     "matrix": [
       {
@@ -928,6 +941,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 3952640,
@@ -1069,6 +1083,7 @@
           "process": {
             "affinity": "0-31",
             "rayon_num_threads": "1",
+            "cpu_workers": 1,
             "threads_at_exit": "1"
           },
           "process_peak_rss_bytes": 3944448,
@@ -1137,7 +1152,8 @@
         }
       }
     ],
-    "status": "passed"
+    "status": "passed",
+    "threads": 1
   },
   "source": "Current version-0 native ingress and reference worker reports, reduced to one process. Filesystem roots are normalized under /benchmark-fixtures; file identities and observations are retained as structural fixtures only."
 }

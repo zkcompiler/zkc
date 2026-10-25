@@ -66,11 +66,24 @@ Neither depends on a prover's intended construction of the coefficients.
 `TwoAdicField(F)` supplies a declared compatible family of two-power roots,
 in addition to `Field(F)`. A particular installation states its maximum order
 and root convention. This capability does not follow merely from being a field.
-The current KoalaBear, octic-extension and quartic-extension installations admit power-of-two
-sizes through `2^24`, with smaller execution limits. Their size-`n` root is
-`1791270792^(2^24/n)` in the base field, embedded explicitly for the extension.
-Extension challenges and coset shifts may be outside the base field; domain
-points stay in their selected nominal field.
+The [registered residue families](values.md#registered-residue-fields) use these
+base-field conventions, with smaller execution limits:
+
+| Prime base | Maximum log size | Maximal root |
+| --- | --- | --- |
+| `koala-bear` | 24 | 1791270792 |
+| `baby-bear` | 27 | 440564289 |
+| `goldilocks` | 32 | 1753635133440165772 |
+
+The size-`n` root is `r^(2^a/n)` for the listed root `r` and maximum log `a`.
+BabyBear's constant is Plonky3 0.8.0's `TWO_ADIC_GENERATORS[27]`
+(`0x1a427a41`), checked by its `test_baby_bear_two_adicity_generators`;
+Goldilocks' is that release's `TWO_ADIC_GENERATORS[32]`
+(`0x185629dcda58878c`), selected by `TwoAdicField::two_adic_generator`.
+Every registered extension uses its prime base's convention, embedded into the
+extension. Its larger multiplicative two-adicity does not enlarge this domain
+API. Extension challenges and coset shifts may have nonzero nonbase coordinates;
+domain points stay in their selected nominal field.
 
 The logical order of a size-`n` coset with nonzero shift `s` is
 `x_i = s * g_n^i`, for `0 ≤ i < n`. `poly.domain_root<F>(n)`,

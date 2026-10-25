@@ -23,7 +23,7 @@ fn preflight(bytes: &[u8]) -> Result<()> {
             continue;
         }
         if string {
-            if i - start > 256 * 1024 + 19 {
+            if i - start > super::physical::PHYSICAL_SPELLING_LIMIT + 1 {
                 return Err(err(ErrorCode::Limit, "string byte ceiling"));
             }
             if escape {
@@ -159,17 +159,18 @@ fn insert<T>(map: &mut BTreeMap<String, T>, key: String, value: T, code: ErrorCo
     }
     Ok(())
 }
-struct Decoder {
+struct Decoder<'a> {
+    contracts: &'a super::Contracts,
     bindings: BTreeMap<String, Arc<ResolvedBinding>>,
     instructions: usize,
     types: BTreeMap<String, PhysicalType>,
     type_bytes: usize,
 }
-impl Decoder {
+impl Decoder<'_> {
     fn charge_type(&mut self, ty: &PhysicalType) -> Result<()> {
         self.type_bytes = self
             .type_bytes
-            .checked_add(ty.logical().descriptor_bytes())
+            .checked_add(ty.descriptor_bytes())
             .filter(|n| *n <= Limits::TYPE_BYTES)
             .ok_or_else(|| err(ErrorCode::Limit, "type descriptor byte ceiling"))?;
         Ok(())
@@ -181,7 +182,7 @@ impl Decoder {
         if let Some(ty) = self.types.get(spelling) {
             return Ok(ty.clone());
         }
-        let ty = PhysicalType::parse(spelling).map_err(|error| {
+        let ty = self.contracts.physical_type(spelling).map_err(|error| {
             // The carrier-level reason agrees with source readers; keep the
             // descriptor parser's more specific reason for callers diagnosing it.
             if spelling.starts_with("variant:") && error.code != ErrorCode::Limit {
@@ -483,7 +484,7 @@ impl Decoder {
         })
     }
 }
-pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
+pub(crate) fn physical(bytes: &[u8], contracts: &super::Contracts) -> Result<Model> {
     preflight(bytes)?;
     let json: Json = serde_json::from_slice(bytes)
         .map_err(|_| err(ErrorCode::Json, "invalid JSON or trailing input"))?;
@@ -497,7 +498,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
         "zkc.program/0" => {
             for value in list(&a[1], Limits::DEFINITIONS)? {
                 let r = array(value)?;
-                if r.len() != 4 {
+                if r.len() != 5 {
                     return Err(err(ErrorCode::Record, "operation binding arity"));
                 }
                 let declaration = OperationBinding {
@@ -507,16 +508,29 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
                         .map(|v| Ok(string(v)?.to_owned()))
                         .collect::<Result<_>>()?,
                     implementation: string(&r[3])?.into(),
+                    physical_arguments: list(&r[4], 128)?
+                        .iter()
+                        .map(|v| {
+                            let spelling = v
+                                .as_str()
+                                .ok_or_else(|| err(ErrorCode::Record, "expected type string"))?;
+                            if spelling.len() > super::physical::PHYSICAL_SPELLING_LIMIT {
+                                return Err(err(ErrorCode::Limit, "physical type spelling limit"));
+                            }
+                            Ok(spelling.to_owned())
+                        })
+                        .collect::<Result<_>>()?,
                 };
-                let binding = ResolvedBinding::explicit(declaration)?;
+                let binding = contracts.resolve(declaration)?;
                 for ty in binding
                     .signature()
                     .inputs
                     .iter()
                     .chain(&binding.signature().outputs)
+                    .chain(binding.physical_arguments())
                 {
                     binding_type_bytes = binding_type_bytes
-                        .checked_add(ty.logical().descriptor_bytes())
+                        .checked_add(ty.descriptor_bytes())
                         .filter(|n| *n <= Limits::TYPE_BYTES)
                         .ok_or_else(|| err(ErrorCode::Limit, "type descriptor byte ceiling"))?;
                 }
@@ -531,6 +545,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
         _ => return Err(err(ErrorCode::Record, "unknown participant module format")),
     };
     let mut decoder = Decoder {
+        contracts,
         bindings,
         instructions: 0,
         types: BTreeMap::new(),
@@ -655,7 +670,11 @@ mod tests {
     fn repeated_physical_and_nested_variant_descriptors_are_shared() {
         let bytes = carrier(vec![nested("Outer"); 1000]);
         assert!(bytes.len() < Limits::ARTIFACT_BYTES);
-        let program = physical(&bytes).unwrap();
+        let program = physical(
+            &bytes,
+            &super::super::Contracts::standard(super::super::ExecutionPolicy::general_purpose()),
+        )
+        .unwrap();
         let inputs = &program.functions["unused"].inputs;
         let first = inputs[0].1.logical().variant_descriptor().unwrap().clone();
         for (_, ty) in inputs {
@@ -676,7 +695,12 @@ mod tests {
     fn aggregate_distinct_descriptors_refuse_before_retaining_an_unbounded_program() {
         let bytes = carrier((0..128).map(|i| nested(&format!("Outer{i}"))).collect());
         assert!(bytes.len() < Limits::ARTIFACT_BYTES);
-        let error = physical(&bytes).err().unwrap();
+        let error = physical(
+            &bytes,
+            &super::super::Contracts::standard(super::super::ExecutionPolicy::general_purpose()),
+        )
+        .err()
+        .unwrap();
         assert_eq!(error.code, ErrorCode::Limit);
         assert_eq!(error.detail, "type descriptor byte ceiling");
     }
@@ -684,7 +708,7 @@ mod tests {
     fn unused_binding_signatures_share_the_installed_metadata_ceiling_with_ports() {
         let spelling = nested("Payload");
         let ty = PhysicalType::parse(&spelling).unwrap();
-        let charge = ty.logical().descriptor_bytes();
+        let charge = ty.descriptor_bytes();
         let count = Limits::TYPE_BYTES / charge;
         assert!(count > 0 && count < Limits::DEFINITIONS);
         let mut value: Json = serde_json::from_slice(&carrier(vec![])).unwrap();
@@ -695,18 +719,26 @@ mod tests {
                         format!("observe{i}"),
                         "transcript.native.indexed.observe.data",
                         ["merlin3.bls12-381.fr64be/0", ty.logical().spelling()],
-                        "arkworks/transcript.native.indexed.observe.data"
+                        "arkworks/transcript.native.indexed.observe.data",
+                        []
                     ])
                 })
                 .collect(),
         );
         let bytes = serde_json::to_vec(&value).unwrap();
         assert!(bytes.len() < Limits::ARTIFACT_BYTES);
-        physical(&bytes).unwrap();
+        physical(
+            &bytes,
+            &super::super::Contracts::standard(super::super::ExecutionPolicy::general_purpose()),
+        )
+        .unwrap();
         value[2][0][2] = json!([["x", spelling]]);
-        let error = physical(&serde_json::to_vec(&value).unwrap())
-            .err()
-            .unwrap();
+        let error = physical(
+            &serde_json::to_vec(&value).unwrap(),
+            &super::super::Contracts::standard(super::super::ExecutionPolicy::general_purpose()),
+        )
+        .err()
+        .unwrap();
         assert_eq!(error.code, ErrorCode::Limit);
         assert_eq!(error.detail, "type descriptor byte ceiling");
     }

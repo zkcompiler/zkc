@@ -323,10 +323,12 @@ fn proof_cli_requires_explicit_header_policy_after_independent_pin_admission() {
         }
         let mut allowed = args;
         allowed.push("--allow-authored".into());
+        allowed.push("--threads=2".into());
         let accepted = crate::cli::run(command, &allowed);
         assert!(crate::cli::succeeded(&accepted), "{accepted}");
         assert_eq!(accepted["status"], status);
         assert_eq!(accepted["binding_scope"], "header");
+        assert_eq!(accepted["cpu"]["workers"], 2);
         if command == "bundle verify" {
             assert_eq!(std::fs::read(&proof).unwrap(), previous);
         }

@@ -9,8 +9,11 @@ This profile extends [structured mathematics](mathematics.md) and
 `!data.sequence<T>` denotes a finite ordered immutable sequence with a runtime
 length and one exact element type. Its canonical logical spelling is
 `sequence<T>`, where `T` is a canonical logical type spelling. The selected
-physical spelling is `sequence<T>@logical.sequence/0`; every element uses its
-installed default representation. Length is a value property, not a type
+default physical spelling is `sequence<T>@logical.sequence/0`. A selected layout
+retains one complete physical element type, separately from logical `T`; for
+example, `sequence<field:bls12-381.fr>@logical.sequence/0[blst/fr]`. Brackets are
+omitted exactly for the default child layout. Every element must match the stored
+selected layout. Length is a value property, not a type
 parameter. Type formation uses the existing structural depth, expansion and
 spelling bounds.
 
@@ -39,6 +42,10 @@ Mathematical operations require the existing total-data policy for their complet
 types. Checked local `data.exec.sequence_*` operations also handle immutable
 non-total payloads, including PCS records. Closed contracts carry the complete
 logical element type as a static argument and select `native/sequence.*`.
+Their physical specialization selects one complete sequence type: empty returns
+that type, append consumes it and its selected element, length returns `index`,
+and access returns the selected element unchanged. No operation implicitly
+converts or relabels a container.
 Source use additionally requires an admitted Language operation binding.
 
 `sequence.at` succeeds exactly when `index < length`. It returns the element
@@ -65,7 +72,7 @@ Each sequence caches its expanded value-node count and full retained-byte charge
 Count the sequence root, every nested variant/sequence occurrence and each leaf
 value; sharing does not reduce this per-value bound. The full charge includes:
 
-- 256 root bytes and the complete logical descriptor estimate;
+- 256 root bytes and the complete physical descriptor estimate;
 - 256 bytes per tree node;
 - 32 bytes per branch child slot;
 - 512 bytes per element slot and each element's full retained charge.

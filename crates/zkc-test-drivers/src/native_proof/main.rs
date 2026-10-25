@@ -168,7 +168,7 @@ fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
 }
 fn admitted_mutation_refuses(envelope: &Json, candidate: &Json, reason: &str) {
     let candidate_bytes = serde_json::to_vec(candidate).unwrap();
-    zkc_runtime::vm::Program::decode(&candidate_bytes)
+    zkc_runtime::vm::Program::decode(&candidate_bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend())?;
             Ok(program)
@@ -204,12 +204,15 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
             instruction[2] = json!(name);
         }
     }
-    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
-        .and_then(|program| {
-            program.check_installation(&backend())?;
-            Ok(program)
-        })
-        .unwrap();
+    zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&candidate).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend())?;
+        Ok(program)
+    })
+    .unwrap();
     let separate = repin(envelope, &candidate);
     let separate = NativeDeployment::admit(
         &separate,
@@ -307,12 +310,15 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
             .unwrap();
         binding[1] = json!(contract);
         binding[3] = json!(format!("arkworks/{contract}"));
-        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend())?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&candidate).unwrap(),
+            zkc_native::native_contracts(),
+        )
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Signature);
         let bytes = repin(envelope, &candidate);
         assert!(

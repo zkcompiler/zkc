@@ -6,7 +6,11 @@ use zkc_runtime::vm::{DecodeReason, LogicalType, PhysicalType, Value as RuntimeV
 fn sequence(element: &str, values: Vec<Value>) -> Value {
     Value::Sequence(
         Sequence::new(
-            LogicalType::parse(element).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(LogicalType::parse(element).unwrap())
+                    .unwrap(),
+            )
+            .unwrap(),
             values,
             &Policy::default(),
         )
@@ -97,7 +101,10 @@ fn empty_records_sums_and_nested_sequences_have_canonical_boundaries() {
         .map(|n| {
             Value::Variant(
                 Variant::new(
-                    descriptor.clone(),
+                    zkc_runtime::vm::PhysicalType::default_for(
+                        zkc_runtime::vm::LogicalType::variant(descriptor.clone()),
+                    )
+                    .unwrap(),
                     0,
                     vec![
                         Value::Index(n),
@@ -116,7 +123,7 @@ fn empty_records_sums_and_nested_sequences_have_canonical_boundaries() {
     let outer = LogicalType::parse(&outer).unwrap();
     roundtrip(&Value::Variant(
         Variant::new(
-            outer.variant_descriptor().unwrap().clone(),
+            zkc_runtime::vm::PhysicalType::default_for(outer.clone()).unwrap(),
             0,
             vec![sequence(&record, vec![])],
         )
@@ -232,7 +239,11 @@ fn nested_limits_count_expanded_values_before_allocation() {
     let mut refused = false;
     for _ in 0..6 {
         match Sequence::new(
-            value.physical_type().logical(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(value.physical_type().logical().clone())
+                    .unwrap(),
+            )
+            .unwrap(),
             vec![value.clone(); 32],
             &Policy::default(),
         ) {
@@ -304,6 +315,7 @@ fn binding(name: &str, element: &str) -> OperationBinding {
         contract: format!("sequence.{name}"),
         arguments: vec![element.into()],
         implementation: format!("native/sequence.{name}"),
+        physical_arguments: vec![],
     }
 }
 fn one(
@@ -558,7 +570,10 @@ fn default_storage_and_wire_limits_cover_thousands_of_scalar_elements() {
         .clone();
     roundtrip(&Value::Variant(
         Variant::new(
-            descriptor,
+            zkc_runtime::vm::PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(
+                descriptor,
+            ))
+            .unwrap(),
             0,
             vec![Value::matrix(0, 7, &[], &Policy::default()).unwrap()],
         )
@@ -572,6 +587,7 @@ fn nested_data_and_external_calls_retain_independent_work_across_failed_frames()
         contract: "external.monero.hash".into(),
         arguments: vec![],
         implementation: "native/external.monero.hash".into(),
+        physical_arguments: vec![],
     };
     let words = || Value::Indices(vec![0; 64].into());
     let backend = support::backend(Policy::default())

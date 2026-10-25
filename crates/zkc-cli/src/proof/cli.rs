@@ -6,7 +6,11 @@ use serde_json::{Value as Json, json};
 type Result<T> = std::result::Result<T, String>;
 const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 use crate::files::Outputs;
-pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
+pub(crate) fn run(
+    produce: bool,
+    args: &crate::cli::Arguments<'_>,
+    cpu: &crate::execution::CpuExecution,
+) -> Json {
     let mut report =
         json!({"format":"zkc.native-proof-run/0", "status":"refused", "phase":"arguments"});
     let result = (|| -> Result<()> {
@@ -38,6 +42,7 @@ pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
                 "--capacity" => {
                     capacity = Some(Capacity::parse(&read_regular(value.unwrap(), 4096)?)?)
                 }
+                "--threads" => continue, // The command dispatcher owns the CPU context.
                 _ => unreachable!("validated proof bundle option"),
             }
             protected.extend(value);
@@ -50,10 +55,11 @@ pub(crate) fn run(produce: bool, args: &crate::cli::Arguments<'_>) -> Json {
         let mut destinations = Outputs::new(&output_paths, &protected)?;
         report["phase"] = json!("admission");
         let deployment_bytes = read_regular(deployment_path, INPUT_LIMIT)?;
-        let deployment = NativeDeployment::admit(
+        let deployment = NativeDeployment::admit_with_cpu(
             &deployment_bytes,
             &expected_digest,
             authority.unwrap_or_default(),
+            cpu.clone(),
         )?
         .with_capacity(capacity.unwrap_or_default())?;
         report["binding_scope"] = json!(match deployment.binding_scope() {

@@ -1,8 +1,13 @@
 //! Program deterministic Bundle assets, actual-column assertion evaluation,
 //! the polynomial view's descriptors and point substitutions, and the
 //! interaction view's widths, policy, descriptors and record substitutions.
-use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
-use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
+#[cfg(test)]
+use crate::KoalaBear;
+use crate::operations::field::Family;
+use crate::{Policy, Result, Value, exhausted, refused};
+#[cfg(test)]
+use p3_field::BasedVectorSpace;
+use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 use zkc_runtime::{
     relation::{
@@ -74,7 +79,13 @@ impl Registry {
             .ok_or_else(|| refused("relation-asset-missing"))?;
         if !matches!(
             carrier,
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+            Identity::KoalaBear
+                | Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBear
+                | Identity::BabyBearExt4
+                | Identity::Goldilocks
+                | Identity::GoldilocksExt2
         ) {
             return Err(refused("relation-table-carrier"));
         }
@@ -170,12 +181,11 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     {
         return None;
     }
-    let domain = match field.as_str() {
-        "koala-bear" => crate::domains::KOALA_BEAR,
-        "koala-bear.ext8-binomial3" => crate::domains::KOALA_BEAR_EXT8,
-        "koala-bear.ext4-binomial3" => crate::domains::KOALA_BEAR_EXT4,
-        _ => return None,
-    };
+    let identity = Identity::parse(field).ok()?;
+    if !crate::fields::contains(identity) {
+        return None;
+    }
+    let domain = crate::domains::for_identity(identity)?;
     let vector = domain.physical(Type::Vector)?;
     let index = domain.physical(Type::Index)?;
     let (inputs, outputs) = match binding.contract.as_str() {
@@ -203,24 +213,33 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
 }
 
 struct Arithmetic<S>(PhantomData<S>);
-impl<S: crate::ring::Carrier + BasedVectorSpace<KoalaBear>> Algebra for Arithmetic<S> {
+impl<S: crate::ring::Carrier> Algebra for Arithmetic<S> {
     type Value = S;
     fn value(&self, field: Identity, coordinates: &[String]) -> std::result::Result<S, Error> {
         let width = zkc_runtime::relation::degree(field).ok_or(Error("relation-table-carrier"))?;
-        if coordinates.len() != width || width > S::DIMENSION {
+        if (field != S::IDENTITY && S::IDENTITY.base_field() != Some(field))
+            || coordinates.len() != width
+            || width > S::DIMENSION
+        {
             return Err(Error("relation-table-carrier"));
         }
         let values = coordinates
             .iter()
-            .map(|s| zkc_kernels::plonky3::parse_decimal(s).map_err(|_| Error("bundle-value")))
+            .map(|s| {
+                zkc_kernels::plonky3::residue::parse_base::<S::Base>(s)
+                    .map_err(|_| Error("bundle-value"))
+            })
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(S::from_basis_coefficients_fn(|i| {
-            values.get(i).copied().unwrap_or(KoalaBear::ZERO)
+            values.get(i).copied().unwrap_or(S::Base::ZERO)
         }))
     }
-    fn constant(&self, _: Identity, literal: &str) -> std::result::Result<S, Error> {
-        let n = zkc_kernels::plonky3::parse_decimal(literal).map_err(|_| Error("bundle-value"))?;
-        Ok(S::from_u32(n.as_canonical_u32()))
+    fn constant(&self, field: Identity, literal: &str) -> std::result::Result<S, Error> {
+        if field != S::IDENTITY && S::IDENTITY.base_field() != Some(field) {
+            return Err(Error("relation-table-carrier"));
+        }
+        zkc_kernels::plonky3::residue::parse_decimal::<S>(literal)
+            .map_err(|_| Error("bundle-value"))
     }
     fn add(&self, _: Identity, a: &S, b: &S) -> S {
         *a + *b
@@ -238,13 +257,13 @@ impl<S: crate::ring::Carrier + BasedVectorSpace<KoalaBear>> Algebra for Arithmet
         a.as_basis_coefficients_slice()
             [..zkc_runtime::relation::degree(field).expect("admitted field")]
             .iter()
-            .map(|c| c.as_canonical_u32().to_string())
+            .map(|c| c.as_canonical_u64().to_string())
             .collect()
     }
 }
 
 #[allow(clippy::too_many_arguments)] // Keep the three distinct authorities and execution limits explicit.
-fn rows<S: crate::ring::Carrier + BasedVectorSpace<KoalaBear>>(
+fn rows<S: crate::ring::Carrier>(
     view: TableView<'_>,
     height: u64,
     witness: &[S],
@@ -460,17 +479,19 @@ fn interaction(
                 d.count_degree,
             ]))
         }
-        ("relation.table_record_points", [Value::KoalaBearVector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearVector(values.into())])
-        }
-        ("relation.table_record_points", [Value::KoalaBearExt8Vector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
-        }
-        ("relation.table_record_points", [Value::KoalaBearExt4Vector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
+        ("relation.table_record_points", [value, Value::Index(rows)]) => {
+            crate::fields::with_residue!(carrier, |S| {
+                points(
+                    &view,
+                    S::vector(value)?,
+                    *rows,
+                    true,
+                    policy,
+                    budget,
+                    available,
+                )
+                .map(|values| vec![S::vector_value(values)])
+            })
         }
         _ => Err(refused("kernel-operands")),
     }
@@ -507,29 +528,31 @@ fn polynomial(
     let view = registry.polynomial_reference(digest, table, carrier)?;
     let available = i.max_output_bytes;
     match (contract, args) {
-        ("relation.table_point", [Value::KoalaBearVector(v)]) => {
-            points(&view, v, 1, false, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearVector(values.into())])
-        }
-        ("relation.table_point", [Value::KoalaBearExt8Vector(v)]) => {
-            points(&view, v, 1, false, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
-        }
-        ("relation.table_point", [Value::KoalaBearExt4Vector(v)]) => {
-            points(&view, v, 1, false, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
-        }
-        ("relation.table_points", [Value::KoalaBearVector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearVector(values.into())])
-        }
-        ("relation.table_points", [Value::KoalaBearExt8Vector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
-        }
-        ("relation.table_points", [Value::KoalaBearExt4Vector(v), Value::Index(rows)]) => {
-            points(&view, v, *rows, true, policy, budget, available)
-                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
+        ("relation.table_point", [value]) => crate::fields::with_residue!(carrier, |S| {
+            points(
+                &view,
+                S::vector(value)?,
+                1,
+                false,
+                policy,
+                budget,
+                available,
+            )
+            .map(|v| vec![S::vector_value(v)])
+        }),
+        ("relation.table_points", [value, Value::Index(rows)]) => {
+            crate::fields::with_residue!(carrier, |S| {
+                points(
+                    &view,
+                    S::vector(value)?,
+                    *rows,
+                    true,
+                    policy,
+                    budget,
+                    available,
+                )
+                .map(|v| vec![S::vector_value(v)])
+            })
         }
         ("relation.table_shape", [Value::Index(height)]) => {
             budget.charge(view.work())?;
@@ -577,25 +600,25 @@ pub(crate) fn apply(
     if i.binding.declaration().contract != "relation.table_rows" {
         return polynomial(registry, budget, args, i, policy, digest, table);
     }
-    macro_rules! dispatch {
-        ($variant:ident, $carrier:expr) => {
-            if let [
-                Value::$variant(w),
-                Value::$variant(c),
-                Value::$variant(p),
-                Value::Index(h),
-            ] = args
-            {
-                let view = registry.table_reference(digest, table, $carrier)?;
-                return rows(view, *h, w, c, p, policy, budget, i.max_output_bytes)
-                    .map(|values| vec![Value::$variant(values.into())]);
-            }
+    let carrier = Identity::parse(&i.binding.declaration().arguments[0])
+        .map_err(|_| refused("relation-table-carrier"))?;
+    crate::fields::with_residue!(carrier, |S| {
+        let [witness, configuration, public_data, Value::Index(height)] = args else {
+            return Err(refused("kernel-operands"));
         };
-    }
-    dispatch!(KoalaBearVector, Identity::KoalaBear);
-    dispatch!(KoalaBearExt8Vector, Identity::KoalaBearExt8);
-    dispatch!(KoalaBearExt4Vector, Identity::KoalaBearExt4);
-    Err(refused("kernel-operands"))
+        let view = registry.table_reference(digest, table, carrier)?;
+        rows(
+            view,
+            *height,
+            S::vector(witness)?,
+            S::vector(configuration)?,
+            S::vector(public_data)?,
+            policy,
+            budget,
+            i.max_output_bytes,
+        )
+        .map(|v| vec![S::vector_value(v)])
+    })
 }
 
 #[cfg(test)]

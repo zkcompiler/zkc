@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum V {
-    Variant(std::sync::Arc<VariantDescriptor>, usize, Vec<V>),
+    Variant(PhysicalType, usize, Vec<V>),
     Field(u64),
     Bool(bool),
     Cap {
@@ -55,32 +55,32 @@ impl Drop for Forging {
 }
 impl Value for V {
     fn pack_variant(
-        descriptor: std::sync::Arc<VariantDescriptor>,
+        ty: PhysicalType,
         alternative: usize,
         payload: Vec<Self>,
     ) -> Result<Self, BackendError> {
-        let arm = descriptor
-            .alternatives()
-            .get(alternative)
+        let expected = ty
+            .variant_payload(alternative)
             .ok_or_else(|| BackendError::new("variant-alternative"))?;
-        if arm.payload().len() != payload.len()
-            || arm
-                .payload()
+        if expected.len() != payload.len()
+            || expected
                 .iter()
                 .zip(&payload)
-                .any(|(t, v)| PhysicalType::default_for(t.clone()).unwrap() != v.physical_type())
+                .any(|(t, v)| *t != v.physical_type())
         {
             return Err(BackendError::new("variant-payload"));
         }
-        Ok(Self::Variant(descriptor, alternative, payload))
+        Ok(Self::Variant(ty, alternative, payload))
     }
-    fn unpack_variant(
-        &self,
-    ) -> Result<(std::sync::Arc<VariantDescriptor>, usize, Vec<Self>), BackendError> {
+    fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>), BackendError> {
         match self {
             Self::Variant(d, a, p) => Ok(match FORGERY.with(|f| f.borrow().clone()) {
                 None => (d.clone(), *a, p.clone()),
-                Some(Forgery::Descriptor(other)) => (other, *a, p.clone()),
+                Some(Forgery::Descriptor(other)) => (
+                    PhysicalType::default_for(LogicalType::variant(other)).unwrap(),
+                    *a,
+                    p.clone(),
+                ),
                 Some(Forgery::Alternative(other)) => (d.clone(), other, p.clone()),
                 Some(Forgery::Payload) => {
                     let mut extra = p.clone();
@@ -94,7 +94,7 @@ impl Value for V {
 
     fn physical_type(&self) -> PhysicalType {
         if let Self::Variant(d, _, _) = self {
-            return PhysicalType::default_for(LogicalType::variant(d.clone())).unwrap();
+            return d.clone();
         }
         let logical = match self {
             Self::Bool(_) => "bool",
@@ -112,7 +112,7 @@ impl Value for V {
     fn retained_bytes(&self) -> usize {
         match self {
             Self::Variant(d, _, p) => {
-                256 + d.retained_bytes() + p.iter().map(Value::retained_bytes).sum::<usize>()
+                256 + d.descriptor_bytes() + p.iter().map(Value::retained_bytes).sum::<usize>()
             }
             Self::Sized(bytes) => *bytes,
             _ => 16,
@@ -435,7 +435,7 @@ fn module(mut functions: Json, mut participants: Json, entries: Json) -> Json {
         } else {
             vec!["bls12-381.fr"]
         };
-        json!([key, key, args, format!("arkworks/{key}")])
+        json!([key, key, args, format!("arkworks/{key}"), []])
     })
     .collect();
     json!(["zkc.program/0", bindings, functions, participants, entries])
@@ -471,12 +471,15 @@ fn bytes(j: &Json) -> Vec<u8> {
     serde_json::to_vec(j).unwrap()
 }
 fn admitted(j: &Json) -> Program {
-    crate::vm::Program::decode(&bytes(j))
-        .and_then(|program| {
-            program.check_installation(&Mock::new())?;
-            Ok(program)
-        })
-        .unwrap()
+    crate::vm::Program::decode(
+        &bytes(j),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::new())?;
+        Ok(program)
+    })
+    .unwrap()
 }
 fn runner(j: &Json, role: &str, backend: Mock, inputs: Vec<V>) -> Runner<Mock> {
     Runner::new(&admitted(j), "main", role, "test-session", backend, inputs).unwrap()
@@ -503,13 +506,16 @@ fn local(r: &mut Runner<Mock>) {
 }
 fn reject(j: &Json, code: ErrorCode) {
     assert_eq!(
-        crate::vm::Program::decode(&bytes(j))
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(j),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         code
     );
 }
@@ -596,33 +602,42 @@ fn strict_json_scalars_objects_trailing_and_truncation() {
         b"[\"x\",{}]",
     ] {
         assert!(
-            crate::vm::Program::decode(bad)
-                .and_then(|program| {
-                    program.check_installation(&Mock::new())?;
-                    Ok(program)
-                })
-                .is_err(),
+            crate::vm::Program::decode(
+                bad,
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .is_err(),
             "{bad:?}"
         );
     }
     let mut data = bytes(&identity());
     data.push(b'0');
     assert!(
-        crate::vm::Program::decode(&data)
+        crate::vm::Program::decode(
+            &data,
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .is_err()
+    );
+    for length in 0..bytes(&identity()).len() {
+        assert!(
+            crate::vm::Program::decode(
+                &bytes(&identity())[..length],
+                &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+            )
             .and_then(|program| {
                 program.check_installation(&Mock::new())?;
                 Ok(program)
             })
             .is_err()
-    );
-    for length in 0..bytes(&identity()).len() {
-        assert!(
-            crate::vm::Program::decode(&bytes(&identity())[..length])
-                .and_then(|program| {
-                    program.check_installation(&Mock::new())?;
-                    Ok(program)
-                })
-                .is_err()
         );
     }
 }
@@ -654,44 +669,56 @@ fn exact_tags_arities_names_and_limits() {
     let mut padded = serde_json::to_vec(&identity()).unwrap();
     padded.resize(Limits::ARTIFACT_BYTES, b' ');
     assert!(
-        crate::vm::Program::decode(&padded)
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .is_ok()
+        crate::vm::Program::decode(
+            &padded,
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .is_ok()
     );
     padded.push(b' ');
     assert_eq!(
-        crate::vm::Program::decode(&padded)
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &padded,
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Limit
     );
     let huge = vec![b' '; Limits::ARTIFACT_BYTES + 1];
     assert_eq!(
-        crate::vm::Program::decode(&huge)
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &huge,
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Limit
     );
     let deep = format!("{}{}", "[".repeat(100), "]".repeat(100));
     assert_eq!(
-        crate::vm::Program::decode(deep.as_bytes())
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            deep.as_bytes(),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Limit
     );
 }
@@ -722,12 +749,20 @@ fn static_instruction_limit_is_cumulative_and_includes_returns() {
             + 1,
         65536
     );
-    crate::vm::Program::decode(&bytes(&program)).unwrap();
+    crate::vm::Program::decode(
+        &bytes(&program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     program[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(0, json!(["bool_constant", "extra", "extra", true]));
-    let refusal = crate::vm::Program::decode(&bytes(&program)).unwrap_err();
+    let refusal = crate::vm::Program::decode(
+        &bytes(&program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap_err();
     assert_eq!(refusal.code, ErrorCode::Limit);
     assert_eq!(refusal.detail, "static instruction ceiling");
 }
@@ -802,13 +837,16 @@ fn installed_signatures_are_not_artifact_authority() {
     let mut backend = Mock::new();
     backend.wrong_signature = true;
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&j))
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&j),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Backend
     );
     assert!(
@@ -1731,12 +1769,15 @@ fn group_exchange() -> Json {
 #[test]
 fn nonpolynomial_group_roles_use_distinct_typed_backend_and_consumed_nonce() {
     let j = group_exchange();
-    let a = crate::vm::Program::decode(&bytes(&j))
-        .and_then(|program| {
-            program.check_installation(&GroupMock::new())?;
-            Ok(program)
-        })
-        .unwrap();
+    let a = crate::vm::Program::decode(
+        &bytes(&j),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&GroupMock::new())?;
+        Ok(program)
+    })
+    .unwrap();
     for hostile in [false, true] {
         let mut p = Runner::new(
             &a,
@@ -2023,7 +2064,7 @@ fn data_arm(binding: Json, arm: Json) -> Json {
 }
 
 fn external_binding(contract: &str) -> Json {
-    json!(["kernel", contract, [], format!("native/{contract}")])
+    json!(["kernel", contract, [], format!("native/{contract}"), []])
 }
 
 fn external_arm(contract: &str, inputs: Json, outputs: Json, yielded: &str) -> Json {
@@ -2081,12 +2122,15 @@ fn private_match_refuses_every_external_history_effect() {
         ),
     ] {
         let j = external_arm(contract, inputs, outputs, yielded);
-        let error = crate::vm::Program::decode(&bytes(&j))
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = crate::vm::Program::decode(
+            &bytes(&j),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(
             (error.code, error.detail.as_str()),
             (ErrorCode::Signature, "match-protocol-effect"),
@@ -2106,12 +2150,15 @@ fn private_match_admits_external_construction_and_stateless_hash() {
         ("external.openvm.init", json!([])),
     ] {
         let j = external_arm(contract, inputs, json!(["s2"]), "s2");
-        crate::vm::Program::decode(&bytes(&j))
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_or_else(|e| panic!("{contract}: {}", e.detail));
+        crate::vm::Program::decode(
+            &bytes(&j),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_or_else(|e| panic!("{contract}: {}", e.detail));
     }
 }
 
@@ -2138,12 +2185,15 @@ fn private_match_refuses_a_history_effect_under_nested_local_control() {
             ["yield", ["sampled"]]
         ]),
     );
-    let error = crate::vm::Program::decode(&bytes(&j))
-        .and_then(|program| {
-            program.check_installation(&Mock::new())?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = crate::vm::Program::decode(
+        &bytes(&j),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::new())?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Signature, "match-protocol-effect")
@@ -2249,17 +2299,21 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
             "kernel",
             contract,
             arguments,
-            format!("arkworks/{contract}")
+            format!("arkworks/{contract}"),
+            []
         ]));
         let mut outside_match = j.clone();
         outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", ["t2"]]]);
         admitted(&outside_match);
-        let error = crate::vm::Program::decode(&bytes(&j))
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err();
+        let error = crate::vm::Program::decode(
+            &bytes(&j),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err();
         assert_eq!(
             (error.code, error.detail.as_str()),
             (ErrorCode::Signature, "match-protocol-effect"),
@@ -2329,13 +2383,16 @@ fn leaf_payload_types_have_a_single_canonical_spelling() {
     }
     admitted(&tagged_witness("bool"));
     assert_eq!(
-        crate::vm::Program::decode(&bytes(&tagged_witness("bool:")))
-            .and_then(|program| {
-                program.check_installation(&Mock::new())?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        crate::vm::Program::decode(
+            &bytes(&tagged_witness("bool:")),
+            &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose())
+        )
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Type
     );
 }
@@ -2360,12 +2417,15 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
-    crate::vm::Program::decode(&bytes(&program))
-        .and_then(|program| {
-            program.check_installation(&Mock::new())?;
-            Ok(program)
-        })
-        .unwrap();
+    crate::vm::Program::decode(
+        &bytes(&program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::new())?;
+        Ok(program)
+    })
+    .unwrap();
     let affine = zkc_test_support::variants::logical(
         "Local",
         json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
@@ -2373,12 +2433,15 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let affine = format!("{affine}@logical.variant/0");
     program[3][0][4][0][1] = json!(affine);
     program[3][0][5][0] = json!(affine);
-    let error = crate::vm::Program::decode(&bytes(&program))
-        .and_then(|program| {
-            program.check_installation(&Mock::new())?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = crate::vm::Program::decode(
+        &bytes(&program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::new())?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(error.code, ErrorCode::Type);
     assert_eq!(error.detail, "variant-participant-boundary");
 }
@@ -2417,12 +2480,15 @@ fn local_stop_identifies_its_namespace_when_a_participant_site_collides() {
 fn admitted_program_owns_its_bytes() {
     let mut data = bytes(&identity());
     let expected = data.clone();
-    let admitted = crate::vm::Program::decode(&data)
-        .and_then(|program| {
-            program.check_installation(&Mock::new())?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = crate::vm::Program::decode(
+        &data,
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::new())?;
+        Ok(program)
+    })
+    .unwrap();
     data.fill(b' ');
     assert_eq!(admitted.bytes(), expected);
 }
@@ -2462,7 +2528,13 @@ fn asset_references_cover_called_functions_and_every_local_region() {
     };
     let program = json!([
         "zkc.program/0",
-        [["ring", "ring.point", ["koala-bear"], "plonky3/ring.point"]],
+        [[
+            "ring",
+            "ring.point",
+            ["koala-bear"],
+            "plonky3/ring.point",
+            []
+        ]],
         [
             function(
                 "evaluate",

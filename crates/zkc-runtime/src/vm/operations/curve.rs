@@ -47,7 +47,7 @@ pub(super) const CONTRACTS: &[Contract] = &[
         (&[Group, Group], &[Group], AttributeRule::None),
     )
     .implemented_by(&["arkworks/pairing.apply"]),
-    Contract::new(
+    Contract::selectable(
         "pairing.check",
         (&[Groups, Groups], &[Bool], AttributeRule::None),
     )
@@ -165,26 +165,17 @@ fn select(
     logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
-    if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {
-        if binding.implementation != format!("arkworks/{}", binding.contract) {
-            return Err(AdmissionError::new(
-                ErrorCode::Signature,
-                "uninstalled operation binding",
-            ));
-        }
-        default_ports(binding, logical, selection)
-    } else {
-        support::select_nominal(binding, logical, selection)
-    }
+    support::select_nominal(binding, logical, selection)
 }
 
 use super::super::Representation;
 use super::super::domain_bindings::PortTransform;
 const ALTERNATIVES: &[Alternative] = &[
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "dalek-diagonal/curve.scale_each",
         contract: "curve.scale_each",
-        primary: Identity::Ristretto255Group,
+        domains: &[Identity::Ristretto255Group],
         ports: PortTransform::Diagonal {
             output: true,
             port: 0,
@@ -192,9 +183,10 @@ const ALTERNATIVES: &[Alternative] = &[
         },
     },
     Alternative {
+        timing: TimingRequirement::Unspecified,
         implementation: "dalek-diagonal/curve.msm",
         contract: "curve.msm",
-        primary: Identity::Ristretto255Group,
+        domains: &[Identity::Ristretto255Group],
         ports: PortTransform::Diagonal {
             output: false,
             port: 1,

@@ -71,7 +71,7 @@ pub fn program(
     .unwrap()
 }
 pub fn load<B: Backend<Value = Value>>(bytes: &[u8], backend: B, inputs: Vec<Value>) -> Runner<B> {
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -253,6 +253,7 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
                     .map(|v| v.as_str().unwrap().to_owned())
                     .collect(),
                 implementation: implementation.clone(),
+                physical_arguments: vec![],
             };
             let signature = declaration.signature().unwrap();
             for (v, ty) in op[5].as_array().unwrap().iter().zip(signature.outputs) {
@@ -268,7 +269,7 @@ pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error
             };
             bindings.insert(
                 key.clone(),
-                json!([key, contract, arguments, implementation]),
+                json!([key, contract, arguments, implementation, []]),
             );
             op[2] = json!(key);
         }

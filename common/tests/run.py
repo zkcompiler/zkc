@@ -166,6 +166,9 @@ def execute(scope, args):
              f"--junit-xml={reports / (scope + '.xml')}"])
     elif scope == "rust":
         run(["cargo", "test", "--workspace", "--locked", "--all-features", "--no-fail-fast"])
+        # Timing controls refuse execution-count instrumentation, so their
+        # ordinary-build tests need a separate lane from the feature-on refusal.
+        run(["cargo", "test", "--locked", "-p", "zkc-benchmarks"])
         # Keep the feature-off collector's zero-cost contract in the maintained lane.
         run(["cargo", "test", "--locked", "-p", "zkc-runtime", "--lib", "execution_counts"])
     elif scope == "compiler":

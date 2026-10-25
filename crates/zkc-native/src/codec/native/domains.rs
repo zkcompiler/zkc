@@ -4,9 +4,6 @@ use zkc_runtime::vm::Value as _;
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {
-        Value::KoalaBearVector(v) => (20, 4usize, v.len()),
-        Value::KoalaBearExt8Vector(v) => (27, 32, v.len()),
-        Value::KoalaBearExt4Vector(v) => (22, 16, v.len()),
         Value::Binary64Vector(v) => (74, 8, v.len()),
         Value::Binary64Ext3Vector(v) => (77, 24, v.len()),
         Value::Vector(v) => (66, 32, v.len()),
@@ -39,21 +36,6 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
                 .to_le_bytes(),
         );
         match value {
-            Value::KoalaBearVector(values) => {
-                for x in values.iter() {
-                    out.extend(zkc_kernels::plonky3::encode_scalar(*x));
-                }
-            }
-            Value::KoalaBearExt8Vector(values) => {
-                for x in values.iter() {
-                    out.extend(zkc_kernels::plonky3::encode_extension(*x));
-                }
-            }
-            Value::KoalaBearExt4Vector(values) => {
-                for x in values.iter() {
-                    out.extend(zkc_kernels::plonky3::encode_quartic(*x));
-                }
-            }
             Value::Binary64Vector(values) => {
                 for x in values.iter() {
                     out.extend(zkc_kernels::plonky3::binary::encode(*x));

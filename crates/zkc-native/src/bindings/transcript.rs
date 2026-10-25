@@ -73,8 +73,17 @@ fn observe(
         if !logical.is_native_message_data() {
             return None;
         }
-        let payload = PhysicalType::default_for(logical).ok()?;
-        if !crate::has_native_wire(&payload) {
+        let payload = match binding.physical_arguments.as_slice() {
+            [] => PhysicalType::default_for(logical.clone()).ok()?,
+            [selected] => crate::native_contracts().physical_type(selected).ok()?,
+            _ => return None,
+        };
+        if payload.logical() != &logical {
+            return None;
+        }
+        if !crate::has_native_wire(&payload)
+            || !crate::native_contracts().permits_wire(&payload, zkc_runtime::vm::WireCodec::Native)
+        {
             return None;
         }
         support::ports(binding, selection, t.provider)?;

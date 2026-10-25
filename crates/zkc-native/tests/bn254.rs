@@ -3,12 +3,15 @@ mod support;
 use ark_ff::{Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use zkc_native::{Bn254G1 as G1, Bn254G2 as G2, Bn254Scalar as F, Policy, Value};
-use zkc_runtime::vm::{Backend, Identity, OperationBinding, Value as RuntimeValue};
+#[cfg(feature = "test-utils")]
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{Backend, OperationBinding, Value as RuntimeValue};
 fn binding(name: &str, domain: &str) -> OperationBinding {
     OperationBinding {
         contract: name.into(),
         arguments: vec![domain.into()],
         implementation: format!("arkworks/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn call(name: &str, domain: &str, args: Vec<Value>) -> Vec<Value> {
@@ -375,7 +378,7 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
                 &["v".into()],
             );
             assert!(
-                zkc_runtime::vm::Program::decode(&program)
+                zkc_runtime::vm::Program::decode(&program, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend)?;
                         Ok(program)

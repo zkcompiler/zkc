@@ -78,6 +78,7 @@ fn binding(vector: &Value) -> OperationBinding {
         contract: "vector.product".into(),
         arguments: vec![identity.name().into()],
         implementation: format!("{}/vector.product", identity.provider().unwrap()),
+        physical_arguments: vec![],
     }
 }
 
@@ -179,6 +180,7 @@ fn product_refuses_wrong_value_kind_nominal_field_parameters_and_implementation(
                 .implementation
                 .replace("vector.product", "vector.sum"),
             arguments: original.arguments,
+            physical_arguments: vec![],
         });
         assert_eq!(
             one(controlled, binding(vector), &[], vec![vector.clone()])
@@ -248,7 +250,7 @@ fn native_reader_refuses_product_port_and_attribute_mutations() {
                 &["out".into()],
             );
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&bytes)
+                zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend(Policy::default()))?;
                         Ok(program)

@@ -7,10 +7,11 @@ pub use render::human;
 
 const SETUPS: Opt = Opt::new("--setups=AUTHORITY");
 const CAPACITY: Opt = Opt::new("--capacity=LIMITS");
+const THREADS: Opt = Opt::new("--threads=COUNT").unsigned_range(1, 256);
 const AUTHORED: Opt = Opt::new("--allow-authored");
 const RESULTS: Opt = Opt::new("--results=FILE");
 const INVOCATIONS: Opt = Opt::new("--invocations=FILE");
-const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.";
+const BUNDLE_PROOF: &str = "DEPLOYMENT is zkc-compile protocol-proof output. EXPECTED_SHA256 must come from\ntrusted compilation or deployment configuration. INPUTS supplies public bindings\nand one role's invocation values. Authored transcripts require --allow-authored.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).";
 // Source and pinned package modes share spelling, but cannot be combined.
 macro_rules! entry_options {
     (@inspection $($extra:expr),* $(,)?) => {
@@ -38,7 +39,9 @@ build/zkc/<entry-stem>.zkproof; run results use .results.json. Explicit paths wi
 Named Entry stems replace :: with dots; generic runs append a full selector digest.
 Outside a project, input and proof paths must be explicit unless the input group is empty.
 Function arguments use one parameter-named arguments.json map. Static child context
-uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.";
+uses --invocations=FILE with exact deployment IDs. Use run --no-results to skip result publication.
+--threads=COUNT selects 1..=256 shared CPU workers (default: 1), including with --dry-run.
+Dry-run validates inputs without executing numerical work.";
 const COMMANDS: &[Command] = &[
     Command {
         name: "test", summary: "Run manifest test recipes through ordinary consumer Entries", positional: "[TEST]",
@@ -126,6 +129,7 @@ Pinned packages support only the Entry view.",
         summary: "Compile and execute an Entry function",
         positional: "[ENTRY]",
         options: entry_options!(
+            THREADS,
             Opt::new("--instrument=counts"),
             Opt::new("--dry-run"),
             Opt::new("--input=FILE"),
@@ -143,6 +147,7 @@ Pinned packages support only the Entry view.",
         summary: "Compile a proof Entry and produce a proof",
         positional: "[ENTRY]",
         options: entry_options!(
+            THREADS,
             Opt::new("--instrument=counts"),
             Opt::new("--dry-run"),
             Opt::new("--public=FILE"),
@@ -166,6 +171,7 @@ Pinned packages support only the Entry view.",
         summary: "Verify a proof with independently supplied public inputs",
         positional: "[ENTRY]",
         options: entry_options!(
+            THREADS,
             Opt::new("--instrument=counts"),
             Opt::new("--dry-run"),
             Opt::new("--public=FILE"),
@@ -193,21 +199,21 @@ Pinned packages support only the Entry view.",
         name: "bundle run",
         summary: "Execute an authenticated run bundle",
         positional: "BUNDLE EXPECTED_SHA256 INPUTS",
-        options: &[SETUPS, CAPACITY, Opt::new("--limits=LIMITS")],
-        description: "BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs/0 array.\nEXPECTED_SHA256 comes from trusted compilation or deployment configuration.\nCompleted execution does not interpret protocol acceptance outputs.",
+        options: &[SETUPS, CAPACITY, THREADS, Opt::new("--limits=LIMITS")],
+        description: "BUNDLE is protocol-bundle output; INPUTS is a zkc.bundle-inputs/0 array.\nEXPECTED_SHA256 comes from trusted compilation or deployment configuration.\nCompleted execution does not interpret protocol acceptance outputs.\n--threads=COUNT selects 1..=256 shared CPU workers (default: 1).",
     },
     Command {
         name: "bundle prove",
         summary: "Produce a proof from a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, Opt::new("--attempt-policy=FILE"), CAPACITY, AUTHORED],
+        options: &[SETUPS, Opt::new("--attempt-policy=FILE"), CAPACITY, THREADS, AUTHORED],
         description: BUNDLE_PROOF,
     },
     Command {
         name: "bundle verify",
         summary: "Verify a proof with a pinned deployment",
         positional: "DEPLOYMENT EXPECTED_SHA256 INPUTS PROOF",
-        options: &[SETUPS, CAPACITY, AUTHORED],
+        options: &[SETUPS, CAPACITY, THREADS, AUTHORED],
         description: BUNDLE_PROOF,
     },
 ];
@@ -321,6 +327,28 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
     {
         return serde_json::json!({"status":"refused","phase":"arguments","code":"instrument-unavailable"});
     }
+    // Include worker readiness and report-directory preparation in the command
+    // observation. Argument parsing precedes this boundary; publication follows it.
+    let started = std::time::Instant::now();
+    let cpu = if matches!(
+        name,
+        "run" | "prove" | "verify" | "bundle run" | "bundle prove" | "bundle verify"
+    ) {
+        let result = match args.value("--threads") {
+            Some(count) => {
+                zkc::execution::CpuExecution::new(count.parse().expect("validated threads"))
+            }
+            None => zkc::execution::CpuExecution::serial(),
+        };
+        match result {
+            Ok(cpu) => Some(cpu),
+            Err(error) => {
+                return serde_json::json!({"status":"refused","phase":"arguments","code":error.to_string()});
+            }
+        }
+    } else {
+        None
+    };
     let directory = match args
         .value("--report")
         .map(crate::project::observation::ReportDirectory::create)
@@ -331,17 +359,29 @@ pub fn run(name: &str, args: &[String]) -> serde_json::Value {
             return serde_json::json!({"status":"refused","phase":"observation","code":code});
         }
     };
-    let started = std::time::Instant::now();
-    let mut report = match name {
+    let dispatch = || match name {
         "test" => crate::project::testing::run(&args),
         "inspect" if args.value("--view").is_some_and(|view| view != "entry") => {
             crate::project::cli::inspect(&args)
         }
         "compile" | "check" => crate::project::cli::run(name, &args),
-        "bundle run" => crate::run::cli::run(&args),
-        "bundle prove" | "bundle verify" => crate::proof::cli::run(name == "bundle prove", &args),
-        _ => crate::entry::cli::run(name, &args),
+        "bundle run" => crate::run::cli::run(&args, cpu.as_ref().expect("execution command")),
+        "bundle prove" | "bundle verify" => crate::proof::cli::run(
+            name == "bundle prove",
+            &args,
+            cpu.as_ref().expect("execution command"),
+        ),
+        _ => crate::entry::cli::run(name, &args, cpu.as_ref()),
     };
+    // Keep validation, file effects and VM control on the caller while imports
+    // and numerical leaves can find the command's explicitly owned context.
+    let mut report = match &cpu {
+        Some(cpu) => cpu.enter(dispatch),
+        None => dispatch(),
+    };
+    if let Some(cpu) = cpu {
+        report["cpu"] = serde_json::json!({"workers":cpu.workers()});
+    }
     if directory.is_some() || args.has("--instrument") {
         report["command_microseconds"] = serde_json::json!(started.elapsed().as_micros());
         report["measurement"] = serde_json::json!({"clock":"wall","inclusive":true,"instrument":args.value("--instrument"),"counts_build":zkc::EXECUTION_COUNTS_ENABLED});
@@ -385,6 +425,89 @@ mod tests {
     use super::*;
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).into()).collect()
+    }
+
+    #[test]
+    fn threads_surface_is_exact_bounded_and_available_for_execution_dry_runs() {
+        let execution = [
+            "run",
+            "prove",
+            "verify",
+            "bundle run",
+            "bundle prove",
+            "bundle verify",
+        ];
+        for spec in COMMANDS {
+            let positional = match spec.name {
+                "bundle run" => args(&["bundle", "pin", "inputs"]),
+                "bundle prove" | "bundle verify" => args(&["deployment", "pin", "inputs", "proof"]),
+                _ => vec![],
+            };
+            if !execution.contains(&spec.name) {
+                assert!(!spec.help().contains("--threads"), "{}", spec.name);
+                assert_eq!(
+                    run(spec.name, &args(&["--threads=2"]))["code"],
+                    "cli-option"
+                );
+                continue;
+            }
+            assert!(spec.help().contains("--threads=COUNT"));
+            assert!(spec.help().contains("1..=256"));
+            assert!(spec.help().contains("default: 1"));
+            for count in ["1", "2", "256"] {
+                let mut values = positional.clone();
+                values.push(format!("--threads={count}"));
+                let parsed = spec.parse(&values).unwrap();
+                assert_eq!(parsed.value("--threads"), Some(count));
+            }
+            for invalid in [
+                vec!["--threads=0"],
+                vec!["--threads=257"],
+                vec!["--threads=18446744073709551616"],
+                vec!["--threads=-1"],
+                vec!["--threads=+1"],
+                vec!["--threads=1.0"],
+                vec!["--threads= 2"],
+                vec!["--threads=auto"],
+                vec!["--threads="],
+                vec!["--threads"],
+                vec!["--threads", "2"],
+                vec!["--threads=1", "--threads=2"],
+                vec!["--workers=2"],
+                vec!["--thread-count=2"],
+                vec!["-j=2"],
+            ] {
+                let mut values = positional.clone();
+                values.extend(invalid.into_iter().map(String::from));
+                let report = run(spec.name, &values);
+                assert_eq!(
+                    report["code"], "cli-option",
+                    "{}: {values:?}: {report}",
+                    spec.name
+                );
+                assert_eq!(report["phase"], "arguments");
+                assert!(report.get("cpu").is_none());
+            }
+        }
+        for name in ["run", "prove", "verify"] {
+            let values = args(&["--dry-run", "--threads=2"]);
+            let parsed = command(name).unwrap().parse(&values).unwrap();
+            assert!(parsed.has("--dry-run"));
+            assert_eq!(parsed.value("--threads"), Some("2"));
+        }
+    }
+
+    #[test]
+    fn cpu_worker_report_is_the_configured_context_even_on_execution_refusal() {
+        for name in ["run", "prove", "verify"] {
+            for (flag, workers) in [(None, 1), (Some("--threads=2"), 2)] {
+                let mut values = args(&["--dry-run", "--project=/missing-cpu-test-project"]);
+                values.extend(flag.map(String::from));
+                let report = run(name, &values);
+                assert_eq!(report["cpu"]["workers"], workers, "{report}");
+                assert!(human(&report).contains(&format!("CPU workers: {workers}\n")));
+            }
+        }
     }
 
     #[test]

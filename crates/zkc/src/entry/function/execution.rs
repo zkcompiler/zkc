@@ -427,7 +427,7 @@ impl Execution<'_> {
         for v in values {
             v.flatten(&mut inputs).map_err(|e| self.fail(e))?;
         }
-        let backend = data::backend_for(capacity, &c.function)
+        let backend = data::numerical_backend(self.host, capacity, &c.function)
             .map_err(|e| self.fail(e))?
             .with_ring_assets(self.host.assets.registry().clone())
             .map_err(|e| self.fail(e))?

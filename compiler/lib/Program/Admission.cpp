@@ -473,16 +473,22 @@ class Admission {
         if (arm == descriptor->alternatives.end())
           return fail("variant-alternative");
         std::vector<Port> payload, expected;
-        for (const auto &leaf : arm->payload) {
-          auto parsed = parseBoundType(leaf, false);
-          assert(parsed && "validated descriptor");
+        auto complete = parseBoundType(pack->type, physical);
+        if (!complete) {
+          consumeError(complete.takeError());
+          return fail("variant-type");
+        }
+        size_t offset = 0;
+        for (auto previous = descriptor->alternatives.begin(); previous != arm;
+             ++previous)
+          offset += previous->payload.size();
+        for (auto [i, leaf] : enumerate(arm->payload)) {
           if (physical) {
-            auto selected = defaultRepresentation(*parsed);
-            if (!selected) {
-              consumeError(selected.takeError());
+            if (!complete->physicalChildren ||
+                offset + i >= complete->physicalChildren->size())
               return fail("binding-representation");
-            }
-            expected.push_back({selected->spelling()});
+            expected.push_back(
+                {(*complete->physicalChildren)[offset + i].spelling()});
           } else
             expected.push_back({leaf});
         }
@@ -504,6 +510,12 @@ class Admission {
           return fail("variant-type");
         if (match->arms.size() != descriptor->alternatives.size())
           return fail("local-match-arms");
+        auto complete = parseBoundType(input[0].type, physical);
+        if (!complete) {
+          consumeError(complete.takeError());
+          return fail("variant-type");
+        }
+        size_t payloadOffset = 0;
         std::optional<std::vector<Port>> outputs;
         for (size_t i = 0; i < match->arms.size(); ++i) {
           const auto &arm = match->arms[i];
@@ -515,19 +527,17 @@ class Admission {
           for (size_t j = 0; j < arm.payload.size(); ++j) {
             std::string leaf = alternative.payload[j];
             if (physical) {
-              auto parsed = parseBoundType(leaf, false);
-              assert(parsed && "validated descriptor");
-              auto selected = defaultRepresentation(*parsed);
-              if (!selected) {
-                consumeError(selected.takeError());
+              if (!complete->physicalChildren ||
+                  payloadOffset + j >= complete->physicalChildren->size())
                 return fail("binding-representation");
-              }
-              leaf = selected->spelling();
+              leaf =
+                  (*complete->physicalChildren)[payloadOffset + j].spelling();
             }
             if (!name(arm.payload[j]) ||
                 !inner.emplace(arm.payload[j], Port{leaf}).second)
               return fail("local-match-payload");
           }
+          payloadOffset += alternative.payload.size();
           for (auto [capture, port] : zip(match->captures, captures))
             if (!inner.emplace(capture, port).second)
               return fail("local-control-capture");

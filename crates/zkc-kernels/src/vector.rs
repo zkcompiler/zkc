@@ -10,6 +10,8 @@ use std::ops::{Add, Mul, Neg, Sub};
 /// `WIDTH` elements; they must preserve lane order without extra storage.
 pub trait Packing<S: Coefficient> {
     type Value: Copy
+        + Send
+        + Sync
         + Add<Output = Self::Value>
         + Sub<Output = Self::Value>
         + Mul<Output = Self::Value>
@@ -122,24 +124,33 @@ impl<S: Coefficient> Plan<S> {
         a: &[S],
         b: &[S],
         out: &mut [S],
-        scalar: impl Fn(S, S) -> S,
-        packed: impl Fn(Packed<S>, Packed<S>) -> Packed<S>,
+        scalar: impl Fn(S, S) -> S + Send + Sync,
+        packed: impl Fn(Packed<S>, Packed<S>) -> Packed<S> + Send + Sync,
     ) -> Result<()> {
         equal_len(self.len, a.len())?;
         equal_len(self.len, b.len())?;
         equal_len(self.len, out.len())?;
         let end = self.packed_end();
         let width = S::Packing::WIDTH;
-        for ((a, b), out) in a[..end]
-            .chunks_exact(width)
-            .zip(b[..end].chunks_exact(width))
-            .zip(out[..end].chunks_exact_mut(width))
-        {
-            S::Packing::store(packed(S::Packing::load(a), S::Packing::load(b)), out);
-        }
-        for ((a, b), out) in a[end..].iter().zip(&b[end..]).zip(&mut out[end..]) {
-            *out = scalar(*a, *b);
-        }
+        let grain = (4096 / width).max(1) * width;
+        crate::cpu::chunks_mut(&mut out[..end], grain, |start, out| {
+            for ((a, b), out) in a[start..start + out.len()]
+                .chunks_exact(width)
+                .zip(b[start..start + out.len()].chunks_exact(width))
+                .zip(out.chunks_exact_mut(width))
+            {
+                S::Packing::store(packed(S::Packing::load(a), S::Packing::load(b)), out);
+            }
+        });
+        crate::cpu::chunks_mut(&mut out[end..], 4096, |start, out| {
+            for ((a, b), out) in a[end + start..end + start + out.len()]
+                .iter()
+                .zip(&b[end + start..end + start + out.len()])
+                .zip(out)
+            {
+                *out = scalar(*a, *b);
+            }
+        });
         Ok(())
     }
     #[inline]
@@ -147,22 +158,27 @@ impl<S: Coefficient> Plan<S> {
         &self,
         a: &[S],
         out: &mut [S],
-        scalar: impl Fn(S) -> S,
-        packed: impl Fn(Packed<S>) -> Packed<S>,
+        scalar: impl Fn(S) -> S + Send + Sync,
+        packed: impl Fn(Packed<S>) -> Packed<S> + Send + Sync,
     ) -> Result<()> {
         equal_len(self.len, a.len())?;
         equal_len(self.len, out.len())?;
         let end = self.packed_end();
         let width = S::Packing::WIDTH;
-        for (a, out) in a[..end]
-            .chunks_exact(width)
-            .zip(out[..end].chunks_exact_mut(width))
-        {
-            S::Packing::store(packed(S::Packing::load(a)), out);
-        }
-        for (a, out) in a[end..].iter().zip(&mut out[end..]) {
-            *out = scalar(*a);
-        }
+        let grain = (4096 / width).max(1) * width;
+        crate::cpu::chunks_mut(&mut out[..end], grain, |start, out| {
+            for (a, out) in a[start..start + out.len()]
+                .chunks_exact(width)
+                .zip(out.chunks_exact_mut(width))
+            {
+                S::Packing::store(packed(S::Packing::load(a)), out);
+            }
+        });
+        crate::cpu::chunks_mut(&mut out[end..], 4096, |start, out| {
+            for (a, out) in a[end + start..end + start + out.len()].iter().zip(out) {
+                *out = scalar(*a);
+            }
+        });
         Ok(())
     }
     #[inline]

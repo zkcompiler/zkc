@@ -13,6 +13,7 @@ fn binding(name: &str, domain: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![domain.into()],
         implementation: format!("arkworks/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn call(name: &str, domain: &str, args: Vec<Value>) -> Vec<Value> {

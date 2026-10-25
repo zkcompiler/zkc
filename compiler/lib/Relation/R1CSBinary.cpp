@@ -95,9 +95,14 @@ Expected<R1CS> readR1CS(StringRef bytes) {
     return prime.takeError();
   StringRef field;
   for (StringRef candidate :
-       {"bls12-381.fr", "ristretto255.scalar", "koala-bear", "bn254.fr"})
+       {"bls12-381.fr", "ristretto255.scalar", "bn254.fr"})
     if (Field::primeModulus(candidate) == *prime) {
       field = candidate;
+      break;
+    }
+  for (const auto &candidate : protocol::plonky3Fields())
+    if (candidate.degree == 1 && candidate.modulus == *prime) {
+      field = candidate.identity;
       break;
     }
   if (field.empty())

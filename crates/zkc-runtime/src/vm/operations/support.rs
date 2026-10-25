@@ -38,6 +38,20 @@ pub(super) fn field_type(kind: Type, field: Identity) -> Result<LogicalType> {
 
 pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
     match (rule, field) {
+        (
+            AttributeRule::FieldDecimal,
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+        ) => AttributeRule::ResidueLiteral(field),
+        (
+            AttributeRule::FieldDecimals,
+            Identity::BabyBear
+            | Identity::BabyBearExt4
+            | Identity::Goldilocks
+            | Identity::GoldilocksExt2,
+        ) => AttributeRule::ResidueLiterals(field),
         (AttributeRule::FieldDecimal, Identity::Ristretto255Scalar) => {
             AttributeRule::RistrettoDecimal
         }

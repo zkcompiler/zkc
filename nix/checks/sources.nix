@@ -25,6 +25,9 @@ runCommand "zkc-source-boundaries" { nativeBuildInputs = [ python3 ]; } ''
   test ! -e ${sources.rustConsumer}/compiler
   test -f ${sources.rust}/crates/zkc/Cargo.toml
   test -f ${sources.rust}/crates/zkc-benchmarks/Cargo.toml
+  for source in ${sources.rust} ${sources.rustTests} ${sources.rustConsumer}; do
+    test -f "$source/crates/zkc-kernels/src/blst/bls12_381/README.md"
+  done
   test -f ${sources.format}/common/benchmarks/monero.cpp
   test ! -e ${sources.rust}/scripts
   test ! -e ${sources.rust}/compiler

@@ -51,7 +51,7 @@ pub(super) fn physical_signature(
                 .get_mut(port)
                 .ok_or_else(|| AdmissionError::new(ErrorCode::Signature, "binding-port"))?
         };
-        *port = PhysicalType::new(port.logical(), representation)?;
+        *port = PhysicalType::new(port.logical().clone(), representation)?;
     }
     Ok(OperationSignature {
         inputs,

@@ -1,4 +1,5 @@
 use super::*;
+use p3_field::BasedVectorSpace;
 use std::fmt::Debug;
 
 /// Dense arithmetic is independent of the providers and traverses every cell.

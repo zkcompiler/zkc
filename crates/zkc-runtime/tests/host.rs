@@ -47,6 +47,7 @@ fn program() -> Program {
             [["entry", "main", [["P", "p"], ["V", "v"]]]]
         ]))
         .unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
     )
     .unwrap()
 }
@@ -56,7 +57,7 @@ fn bundle() -> Bundle {
         "format":"zkc.run/0", "candidate":candidate, "entry":"main", "roles":["P","V"],
         "steps":[{"role":0,"instruction":0,"anchor":0}, {"role":1,"instruction":0,"anchor":0},
                  {"role":0,"instruction":1,"anchor":null}, {"role":1,"instruction":1,"anchor":null}]
-    })).unwrap(), &Host::default(), BundleLimits::default()).unwrap()
+    })).unwrap(), &Host::default(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()), BundleLimits::default()).unwrap()
 }
 fn run_limits() -> RunLimits {
     RunLimits {
@@ -323,6 +324,7 @@ fn proof_encoding_allowance_covers_append_and_is_released_between_messages() {
             [["entry", "main", [["P", "p"], ["V", "v"]]]]
         ]))
         .unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
     )
     .unwrap();
     // The smaller capacity admits encoding, but cannot also admit its append.
@@ -1030,6 +1032,7 @@ fn raw_record_borrows_payload_and_respects_publication_limit() {
             [["entry", "main", [["P", "p"]]]]
         ]))
         .unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
     )
     .unwrap();
     for limit in [2, 3] {
@@ -1154,6 +1157,7 @@ fn raw_message_proof_uses_borrowed_bytes_and_measured_receive_without_header() {
             [["entry", "main", [["P", "p"], ["V", "v"]]]]
         ]))
         .unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
     )
     .unwrap();
     for payload in [b"".as_slice(), b"ZKCPRF00arbitrary", b"\xff\x00"] {

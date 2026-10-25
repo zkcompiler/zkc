@@ -40,7 +40,8 @@ allowance, without resource stores, randomness, transcript state or interpreter
 environments. It does not create an additional frame or instruction charge.
 
 Results are built in initialized private destinations. The adapter fixes their
-lengths before allocation and exposes only mutable slices. Freezing consumes
+extents before allocation. Scoped typed buffers expose mutable slices; provider
+builders initialize their reserved final storage without growing it. Freezing consumes
 the destination through its owning representation constructor. Native output
 validation and the VM still check the complete returned tuple and its retention.
 Results become observable only after successful completion; a failed operation
@@ -61,10 +62,28 @@ concrete values. The scope reserves:
 
 Scope reservations precede managed allocation and use checked arithmetic.
 Staging and final storage are both counted while freezing can overlap them.
+An explicit `output_owned` reservation instead counts one buffer when its
+trusted constructor adopts the supplied Vec without growth, reallocation or
+a second element buffer, including on error and unwind. Its output and memory
+charge is the maximum of the typed payload and the caller's complete retained
+bound. This contract is audited at each adapter; it is not inferred from an
+arbitrary Rust type. Native flat dense values use immutable `Buffer<T>` owners
+that adopt initialized vectors without moving their elements. Their retained
+charge includes spare capacity; clones and mathematical views retain the same
+complete owner. Ordinary output paths keep their conservative staging-plus-final
+reservation even when publication adopts the vector. Explicit `output_owned`
+paths retain their single-buffer contract.
 Finished results remain charged until the scope ends. Scratch and abandoned
 destinations release their reservations when dropped. Scratch exposes only
 borrowed slices and cannot be frozen through the result API. Accepted work
 charges are not refunded.
+
+Provider builders couple their storage and memory-only reservation in one
+destination owner. Abandonment destroys storage before releasing its charge;
+freezing retains the charge through the trusted constructor and, on success,
+until call end. Their existing shape, output and complete-tuple checks remain
+with Native. Optional scaling scratch shares the destination's live memory
+allowance; it cannot independently consume a second call allowance.
 
 The defaults are 256 MiB of managed memory and 2^26 numerical work units per
 call. These native policy fields are included in preparation compatibility;
@@ -84,24 +103,69 @@ bit-operation complexity or a constant-time guarantee.
 
 The scoped path covers dense vector addition, subtraction, multiplication,
 scaling, filling, geometric sequences, sums, products, dot products, matrix-vector
-products and splitting over all eight installed field families. It also covers
+products and splitting over all installed field families. It also covers
+ordinary and fixed-vector dot products (including resident scalar storage),
 `poly.fold` for BLS LSB/MSB tables and
-`poly.opening_quotient` for KoalaBear and its degree-four/eight extensions.
+`poly.opening_quotient` for the
+[registered residue fields](../domains/values.md#registered-residue-fields).
 The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
-Arkworks curve vector scaling uses a scoped reservation only for optional
-projective, Z-coordinate and inversion-prefix scratch, in chunks of at most
-256 points. The existing output checks and allocation precede this scope.
+Arkworks curve vector scaling reserves optional projective, Z-coordinate and
+inversion-prefix scratch, in chunks of at most 256 points. The existing output
+checks and allocation precede scratch admission.
 Insufficient scratch allowance or a failed optional allocation selects the
 existing per-point path before writing results; these calls acquire no new
 numerical work or mandatory memory floor. Both paths retain affine-base scalar
 multiplication and private complete-output publication. Dalek scaling keeps its
 existing constant-time provider calls and does not use this scratch.
 
-`poly.coset_extend` also uses this scope on BN254 Fr, KoalaBear and its
-quartic/octic extensions. Shape and domain checks precede numerical admission;
+`blst/resident/*` and `halo2curves-axiom/resident/*` alternatives operate on
+selected BLS12-381 and BN254 scalar, G1 and G2 storage, respectively.
+Canonical bridges and subgroup checks occur in reached
+`representation.convert` calls. Linking checks the conversion endpoints;
+arithmetic reuses those admitted signatures without parsing them again.
+Imports adopt their provider buffers; bulk exports to Arkworks keep staging
+and final storage reserved together. There are no implicit operand imports.
+
+Resident shared-scalar and elementwise vector scaling call the typed bulk
+kernels, borrowing the original scalar storage and filling one reserved point
+buffer. BLST splits independent multiplications; Halo additionally uses optional
+bounded projective/affine scratch for batch normalization. Insufficient scratch
+or a failed optional allocation selects Direct before numerical writes. Both
+paths keep the existing work charges and mandatory destination bounds.
+
+Resident field/vector arithmetic uses the shared dense adapter. Resident curve
+arithmetic uses the shared curve adapter; it does not inherit the admission
+weights of the earlier bridge-per-operation implementation. Both providers
+admit explicit MSM and pairing workspace. Their work scores are:
+
+| Provider | MSM, `n` points | Pairing check, `n` pairs |
+|---|---|---|
+| BLST | `256*n + 1` | `8192*(n + 1)` |
+| Halo2curves | `32*n + (n + 2*b + w)*q + 1` for `n > 0`; zero for empty input | `182*n + 8192` for `n > 0`; zero for empty input |
+
+For Halo2curves MSM, `w` is 1 when `n < 4`, 3 when `4 <= n < 32`,
+and `ceil(ln(n))` otherwise; `b = 2^(w-1)` and `q = floor(256/w) + 1`.
+The input length must fit `u32`. The score bounds scalar-byte scanning and the
+pinned serial Pippenger schedule independently of scalar values. Pairing counts
+91 preparation and 91 Miller coefficient steps per pair, plus the fixed
+final-exponentiation allowance. For one point, the Halo2curves MSM score is
+1061; for one pair, its pairing score is 8374.
+
+Conversion admits `4096 * max(elements, 1) + 1` units. These are conservative
+admission scores, not runtime predictions. Input aliases remain immutable and any refusal
+publishes no result. Provider-internal allocation failure can still abort the
+process. Every invocation checks current implementation permission before
+charging work, including a retained prepared handle after idle policy changes.
+Selection does not establish a constant-time guarantee; MSM is variable-time.
+Canonical ports and Contracts defaults remain Arkworks; the compiler's
+[Target preferences](../../compiler/representation.md#resident-providers) may
+select resident G2 scaling and pairing checks with explicit conversions.
+
+`poly.coset_extend` also uses this scope on BN254 Fr and the registered residue
+fields. Shape and domain checks precede numerical admission;
 the whole input/output vectors must fit the element policy. Work admission
 counts both transform lengths, base coordinates, complete extension shift
 arithmetic and construction. Adapter-owned transform payloads are reserved
@@ -112,7 +176,7 @@ Every column must succeed before publication, including when a later column
 fails a shrinking-degree check. The operation has its own resource profile;
 the library's use of it does not promise the exhaustion point of separate calls.
 
-`poly.coset_evaluate_batch` uses this scope on the same four fields for exact
+`poly.coset_evaluate_batch` uses this scope on the same fields for exact
 column-major coefficient blocks. Let `w` be the number of columns, `h` the
 coefficient height, `n` the output height, `I=w*h`, `O=w*n`, `d` the extension
 degree over the installed base field and `e=sizeof(F)`. Retained output is
@@ -140,7 +204,7 @@ the call. Source quotient splitting supplies its own interpolation, capacity
 check and coefficient padding, then calls this authored operation once; this
 does not assert identical exhaustion behavior to the former sequence of calls.
 
-`poly.coset_evaluate_at` uses the same scoped output ownership on those four
+`poly.coset_evaluate_at` uses the same scoped output ownership on those
 fields. Its exact column-major shape and domain are checked before numerical
 admission. One result per column is constructed privately; point-dependent
 weights and adapter-owned inversion scratch are call-local and charged before
@@ -153,7 +217,7 @@ it is a mathematical case of the operation, not a constant-time guarantee.
 The operation does not retain values or weights across invocations.
 
 `poly.opening_quotient_sum` constructs one weighted sum of selected off-domain
-column quotients on those same four fields. All descriptors, including zero
+column quotients on those same fields. All descriptors, including zero
 weights, must pass column and pole checks before result construction. Complete
 input vectors pass element and byte admission first. Domain construction and the
 ordered column/pole scan then precede numerical work admission; a zero work

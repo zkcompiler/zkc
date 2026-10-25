@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Value, refused};
-use std::{panic::AssertUnwindSafe, sync::Arc};
+use std::panic::AssertUnwindSafe;
 use zkc_kernels::matrix::RowMajor;
 
 fn policy(memory: usize) -> Policy {
@@ -410,8 +410,8 @@ fn empty_storage_still_reserves_positive_final_representation_bytes() {
 
 #[test]
 fn repeated_immutable_input_aliases_remain_unchanged() {
-    let input: Arc<[u64]> = vec![1, 2, 3, 4].into();
-    let alias = Arc::clone(&input);
+    let input: crate::Buffer<u64> = vec![1, 2, 3, 4].into();
+    let alias = input.clone();
     let left = RowMajor::new(&input, 2, 2).unwrap();
     let right = RowMajor::new(&alias, 2, 2).unwrap();
     let call = Call::new(&policy(320), 288);
@@ -431,6 +431,116 @@ fn repeated_immutable_input_aliases_remain_unchanged() {
     assert_eq!(&*input, &[1, 2, 3, 4]);
     assert_eq!(&*alias, &[1, 2, 3, 4]);
     assert_eq!(&*result, &[2, 4, 6, 8]);
-    assert!(Arc::ptr_eq(&input, &alias));
-    assert!(!Arc::ptr_eq(&input, &result));
+    assert!(crate::Buffer::ptr_eq(&input, &alias));
+    assert!(!crate::Buffer::ptr_eq(&input, &result));
+}
+
+#[test]
+fn dense_publication_adopts_the_initialized_numerical_destination() {
+    let p = policy(4096);
+    let call = Call::new(&p, 4096);
+    let mut output = call.output(17, 0u64, 512).unwrap();
+    let pointer = output.as_mut_slice().as_ptr();
+    output.as_mut_slice()[16] = 9;
+    let memory = call.memory_bytes();
+    let Value::Indices(value) = output.finish(|v| Ok(Value::Indices(v.into()))).unwrap() else {
+        panic!("indices");
+    };
+    assert_eq!(value.as_ptr(), pointer);
+    assert_eq!(value.len(), 17);
+    assert_eq!(value[16], 9);
+    // The old staging-plus-final ceiling remains a conservative admission floor;
+    // completing publication releases the staging reservation as before.
+    assert_eq!(memory, 512 + 17 * size_of::<u64>());
+    assert_eq!(call.memory_bytes(), 512);
+}
+
+#[test]
+fn provider_destinations_keep_storage_charges_through_publication() {
+    let call = Call::new(&policy(8), 0);
+    let mut destination = call.destination(true, 8, || Ok(vec![1u8; 8])).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    assert_eq!(call.scope.usage().outputs, 0); // Preserve this family's existing output checks.
+    destination[0] = 9;
+    let value = destination
+        .finish(|values| {
+            assert_eq!(call.memory_bytes(), 8);
+            assert_eq!(
+                code(call.reserve_workspace::<u8>(1)),
+                "exhausted:numerical-bytes"
+            );
+            bytes(values)
+        })
+        .unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    assert_eq!(call.scope.usage().outputs, 0);
+    drop(value);
+    assert_eq!(call.memory_bytes(), 8);
+}
+
+#[test]
+fn provider_destination_abandonment_failure_and_unwind_release_after_storage() {
+    let call = Call::new(&policy(8), 0);
+    struct Storage<'a>(&'a Call);
+    impl Drop for Storage<'_> {
+        fn drop(&mut self) {
+            assert_eq!(self.0.memory_bytes(), 8);
+        }
+    }
+    for kind in 0..3 {
+        let destination = call.destination(true, 8, || Ok(Storage(&call))).unwrap();
+        match kind {
+            0 => drop(destination),
+            1 => assert_eq!(
+                code(destination.finish(|_storage| Err(refused("freeze")))),
+                "refused:freeze"
+            ),
+            _ => assert!(
+                std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    let _ = destination.finish(|_storage| panic!("freeze"));
+                }))
+                .is_err()
+            ),
+        }
+        assert_eq!(call.memory_bytes(), 0);
+    }
+    assert_eq!(
+        code(call.destination::<()>(true, 9, || panic!("admission precedes allocation"))),
+        "exhausted:numerical-bytes"
+    );
+    assert_eq!(
+        code(call.destination::<()>(true, 8, || Err(exhausted("allocation")))),
+        "exhausted:allocation"
+    );
+    assert_eq!(call.memory_bytes(), 0);
+    assert!(
+        std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _ = call.destination::<()>(true, 8, || {
+                assert_eq!(call.memory_bytes(), 8);
+                panic!("construct");
+            });
+        }))
+        .is_err()
+    );
+    assert_eq!(call.memory_bytes(), 0);
+    let destination = call.destination(false, 8, || Ok(vec![0u8; 8])).unwrap();
+    assert_eq!(call.memory_bytes(), 0);
+    destination.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 0);
+}
+
+#[test]
+fn two_provider_destinations_share_the_live_limit_before_either_is_published() {
+    let call = Call::new(&policy(8), 0);
+    let left = call.destination(true, 4, || Ok(vec![1u8; 4])).unwrap();
+    assert_eq!(
+        code(call.destination::<()>(true, 5, || panic!("live limit"))),
+        "exhausted:numerical-bytes"
+    );
+    let right = call.destination(true, 4, || Ok(vec![2u8; 4])).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    left.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
+    right.finish(bytes).unwrap();
+    assert_eq!(call.memory_bytes(), 8);
 }

@@ -63,13 +63,15 @@ fn start(
     backend: NativeBackend,
 ) -> Participant {
     let entry = bundle["entry"].as_str().unwrap();
-    let admitted =
-        zkc_runtime::vm::Program::decode(bundle["candidate"].as_str().unwrap().as_bytes())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(
+        bundle["candidate"].as_str().unwrap().as_bytes(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })
+    .unwrap();
     Participant {
         runner: Runner::new(&admitted, entry, role, "language_test", backend, inputs)
             .map_err(|failure| failure.error)
@@ -247,6 +249,7 @@ fn service_backends(
     let admitted = Bundle::admit(
         bundle.to_string().as_bytes(),
         &backend(bundle, role),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap();
@@ -516,7 +519,13 @@ fn native_data(directory: &Path, optimized: u32) {
             .collect();
         let data = Value::Sequence(
             Sequence::new(
-                LogicalType::parse("matrix:bls12-381.fr").unwrap(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(
+                        LogicalType::parse("matrix:bls12-381.fr").unwrap(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
                 matrices,
                 &Policy::default(),
             )

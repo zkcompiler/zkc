@@ -36,7 +36,8 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
       arguments.push_back(builder.getStringAttr(argument));
     local::OperationBindingOp::create(
         builder, location, name, application.contract,
-        builder.getArrayAttr(arguments), application.implementation);
+        builder.getArrayAttr(arguments), application.implementation,
+        mlir::ArrayAttr{});
     found = bindings.emplace(std::move(key), name).first;
   }
   return FlatSymbolRefAttr::get(builder.getContext(), found->second);

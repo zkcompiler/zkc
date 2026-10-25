@@ -146,6 +146,7 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
     ] {
         assert!(
             v.binding_signature(&zkc_runtime::vm::OperationBinding {
+                physical_arguments: vec![],
                 contract: contract.into(),
                 arguments: vec!["bls12-381.fr".into()],
                 implementation: implementation.into(),

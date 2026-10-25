@@ -12,6 +12,7 @@ fn binding(domain: Domain, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![domain.identity().name().into()],
         implementation: format!("plonky3/{name}"),
+        physical_arguments: vec![],
     }
 }
 fn run(domain: Domain, name: &str, args: Vec<Value>) -> Vec<Value> {

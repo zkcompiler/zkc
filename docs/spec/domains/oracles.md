@@ -163,6 +163,24 @@ limits above; these kernels charge no external work. Hashing and the tree are
 delegated to that pinned implementation, and the adapter checks shape,
 positions, widths and digest encodings before calling it.
 
+The same carriers and tree rules install these explicit Plonky3 0.8.0 profiles:
+
+| Scheme suffix after `rows.merkle-` | Value field | Permutation and leaf sponge | Compression | Digest |
+|---|---|---|---|---|
+| `poseidon2-16.baby-bear/0` | `baby-bear` | `default_babybear_poseidon2_16`; `PaddingFreeSponge<_,16,8,8>` | `TruncatedPermutation<_,2,8,16>` | Eight canonical four-byte base words |
+| `poseidon2-16.baby-bear.ext4-binomial11/0` | BabyBear quartic | Same, over four ascending base coordinates per element | Same | Same |
+| `poseidon2-8.goldilocks/0` | `goldilocks` | `default_goldilocks_poseidon2_8`; `PaddingFreeSponge<_,8,4,4>` | `TruncatedPermutation<_,2,4,8>` | Four canonical eight-byte base words |
+| `poseidon2-8.goldilocks.ext2-binomial7/0` | Goldilocks quadratic | Same, over two ascending base coordinates per element | Same | Same |
+
+Every digest is 32 little-endian bytes. BabyBear uses eight full and thirteen
+partial rounds with the seventh-power S-box; Goldilocks uses eight full and
+twenty-two partial rounds with the seventh-power S-box. The pinned upstream
+default fixes constants and linear layers. These are distinct nominal schemes,
+selected explicitly rather than inferred from field arithmetic. Extension rows
+use `ExtensionMmcs` and retain the corresponding base tree's root/proof bytes.
+The protocol binds the scheme and dimensions separately. These primitive
+profiles do not assert compatibility with a complete external proof format.
+
 ## Publication, queries and acceptance
 
 A protocol that claims authenticated sampling must bind the actual received root,

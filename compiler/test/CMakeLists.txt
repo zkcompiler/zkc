@@ -306,6 +306,7 @@ add_zkc_test(linear_interfaces Transforms linear-interfaces)
 add_zkc_test(target_decisions Transforms target-decisions)
 target_link_libraries(zkc-target_decisions-test PRIVATE ZkcTranslation)
 add_zkc_test(domains IR nominal-domains)
+add_zkc_test(plonky3_fields Contracts plonky3-fields)
 add_zkc_test(relation_declarations IR relation-declarations)
 mlir_target_link_libraries(zkc-relation_declarations-test PRIVATE MLIRParser)
 add_zkc_test(native_policy Transforms native-local-policy)
@@ -475,3 +476,14 @@ add_zkc_test(language_entry_functions Language language-entry-functions)
 add_zkc_test(language_source_claims Compiler language-source-claims)
 target_compile_definitions(zkc-language_source_claims-test PRIVATE
   ZKC_CLAIM_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")
+
+add_zkc_test(resident_representations Transforms resident-representations)
+add_zkc_test(halo2curves_provider Compiler halo2curves-provider)
+mlir_target_link_libraries(zkc-halo2curves_provider-test PRIVATE MLIRParser MLIRPass)
+mlir_target_link_libraries(zkc-resident_representations-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(native_preferences Transforms native-preferences)
+mlir_target_link_libraries(zkc-native_preferences-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(aggregate_layouts Transforms aggregate-layouts)
+mlir_target_link_libraries(zkc-aggregate_layouts-test PRIVATE MLIRParser MLIRPass)

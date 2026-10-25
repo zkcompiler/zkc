@@ -120,7 +120,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/vector.from_table",
         original: "arkworks/vector.from_table",
-        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        domains: &[zkc_runtime::vm::Identity::Bls12381Fr],
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
         deterministic: true,
@@ -128,7 +128,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/vector.to_table",
         original: "arkworks/vector.to_table",
-        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        domains: &[zkc_runtime::vm::Identity::Bls12381Fr],
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
         deterministic: true,

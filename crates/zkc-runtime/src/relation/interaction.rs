@@ -56,13 +56,19 @@ impl Bundle {
             .tables
             .get(table)
             .ok_or(Error("relation-table-index"))?;
-        // Every node an output needs has the output's field or, below Ext8,
-        // KoalaBear: checking each output checks its whole sub-DAG. Every
+        // Every node an output needs has the output's field or its declared
+        // prime base: checking each output checks its whole sub-DAG. Every
         // arena output is an assertion or interaction output.
         let facts = &self.facts[table];
         if !matches!(
             field,
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+            Identity::KoalaBear
+                | Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBear
+                | Identity::BabyBearExt4
+                | Identity::Goldilocks
+                | Identity::GoldilocksExt2
         ) || self.publics.iter().any(|p| !lifts(p.field, field))
             || t.groups.iter().any(|g| !lifts(g.field, field))
             || t.assertions

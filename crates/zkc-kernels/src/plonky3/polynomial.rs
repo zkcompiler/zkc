@@ -1,13 +1,14 @@
-//! Univariate numerical kernels over Plonky3's KoalaBear DFT.
+//! Univariate numerical kernels over Plonky3 base-field DFTs.
 //!
 //! Logical order is `shift * generator^i`, never a bit-reversed storage order.
 //! An evaluation vector is arbitrary data: these functions assert neither a
 //! degree bound nor successful authentication. Extension coordinates are all
 //! retained; the DFT acts over the base field on each coordinate.
 
-use p3_dft::{Radix2DitParallel, TwoAdicSubgroupDft};
-use p3_field::{ExtensionField, Field, PrimeCharacteristicRing, TwoAdicField};
-use p3_koala_bear::KoalaBear;
+use super::residue::{PrimeWord, Residue};
+use super::{BabyBear, Goldilocks, KoalaBear};
+use p3_dft::{Radix2DFTSmallBatch, TwoAdicSubgroupDft};
+use p3_field::{Field, PrimeCharacteristicRing, TwoAdicField};
 use p3_matrix::dense::RowMajorMatrix;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,23 +31,23 @@ pub enum Error {
 /// A checked multiplicative coset. The generator is the installed base-field
 /// generator embedded in `E`, including when `E` is an extension field.
 #[derive(Clone, Copy, Debug)]
-pub struct Domain<E> {
+pub struct Domain<E: Residue> {
     size: usize,
     shift: E,
-    generator: KoalaBear,
+    generator: E::Base,
 }
-impl<E: ExtensionField<KoalaBear>> Domain<E> {
+impl<E: Residue> Domain<E> {
     pub fn new(size: usize, shift: E, max_elements: usize) -> Result<Self, Error> {
         Self::validate(size, shift, max_elements)?;
         Ok(Self {
             size,
             shift,
-            generator: KoalaBear::two_adic_generator(size.trailing_zeros() as usize),
+            generator: E::Base::two_adic_generator(size.trailing_zeros() as usize),
         })
     }
     /// Structural admission without domain powers or field arithmetic.
     pub fn validate(size: usize, shift: E, max_elements: usize) -> Result<(), Error> {
-        if !size.is_power_of_two() || size.trailing_zeros() as usize > KoalaBear::TWO_ADICITY {
+        if !size.is_power_of_two() || size.trailing_zeros() as usize > E::Base::TWO_ADICITY {
             return Err(Error::DomainSize);
         }
         if size > max_elements {
@@ -68,7 +69,7 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
     }
     /// The subgroup always lies in the base field, even for a non-base shift.
     /// Retain that fact when advancing extension-valued coset points.
-    pub fn base_generator(&self) -> KoalaBear {
+    pub fn base_generator(&self) -> E::Base {
         self.generator
     }
     pub fn point(&self, index: usize) -> Result<E, Error> {
@@ -95,14 +96,14 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
 /// Checked column-major coefficient blocks on one exact coset. Construction
 /// validates input extents and discarded coefficients before workspace admission.
 /// The borrowed coefficients cannot change while the checked batch is retained.
-pub struct CoefficientBatch<'a, E> {
+pub struct CoefficientBatch<'a, E: Residue> {
     coefficients: &'a [E],
     width: usize,
     height: usize,
     domain: Domain<E>,
     output_len: usize,
 }
-impl<'a, E: ExtensionField<KoalaBear>> CoefficientBatch<'a, E> {
+impl<'a, E: Residue> CoefficientBatch<'a, E> {
     pub fn new(
         coefficients: &'a [E],
         width: usize,
@@ -158,9 +159,9 @@ impl<'a, E: ExtensionField<KoalaBear>> CoefficientBatch<'a, E> {
             }
             power *= domain.shift;
         }
-        let evaluations = kernels
-            .dft
-            .dft_algebra_batch(RowMajorMatrix::new(scaled, width));
+        let evaluations = crate::cpu::install(|| {
+            E::Base::dft(kernels).dft_algebra_batch(RowMajorMatrix::new(scaled, width))
+        });
         for column in 0..width {
             for row in 0..domain.size {
                 destination[column * domain.size + row] = evaluations.values[row * width + column];
@@ -173,7 +174,9 @@ impl<'a, E: ExtensionField<KoalaBear>> CoefficientBatch<'a, E> {
 /// Reusable DFT preparation is local numerical state, not protocol state.
 #[derive(Clone, Default)]
 pub struct Kernels {
-    dft: Radix2DitParallel<KoalaBear>,
+    pub(super) koala: super::dft::Monty31<KoalaBear>,
+    pub(super) baby: super::dft::Monty31<BabyBear>,
+    pub(super) goldilocks: Radix2DFTSmallBatch<Goldilocks>,
 }
 
 impl Kernels {
@@ -181,7 +184,7 @@ impl Kernels {
     /// destination. The caller admits output and transform workspace first.
     /// Neither the borrowed input nor published values are modified. The
     /// destination remains private until the complete batch succeeds.
-    pub fn coset_extend_into<E: ExtensionField<KoalaBear>>(
+    pub fn coset_extend_into<E: Residue>(
         &self,
         values: &[E],
         width: usize,
@@ -207,9 +210,9 @@ impl Kernels {
                 rows[row * width + col] = values[col * input.size + row];
             }
         }
-        let coefficients = self
-            .dft
-            .idft_algebra_batch(RowMajorMatrix::new(rows, width));
+        let coefficients = crate::cpu::install(|| {
+            E::Base::dft(self).idft_algebra_batch(RowMajorMatrix::new(rows, width))
+        });
         if output.size < input.size
             && coefficients.values[output_len..]
                 .iter()
@@ -228,9 +231,9 @@ impl Kernels {
             power *= ratio;
         }
         drop(coefficients);
-        let evaluations = self
-            .dft
-            .dft_algebra_batch(RowMajorMatrix::new(scaled, width));
+        let evaluations = crate::cpu::install(|| {
+            E::Base::dft(self).dft_algebra_batch(RowMajorMatrix::new(scaled, width))
+        });
         for col in 0..width {
             for row in 0..output.size {
                 destination[col * output.size + row] = evaluations.values[row * width + col];
@@ -239,7 +242,7 @@ impl Kernels {
         Ok(())
     }
 
-    pub fn evaluate<E: ExtensionField<KoalaBear>>(
+    pub fn evaluate<E: Residue>(
         &self,
         coefficients: &[E],
         domain: Domain<E>,
@@ -254,12 +257,14 @@ impl Kernels {
             power *= domain.shift;
         }
         scaled.resize(domain.size, E::ZERO);
-        Ok(self.dft.dft_algebra(scaled))
+        Ok(crate::cpu::install(|| {
+            E::Base::dft(self).dft_algebra(scaled)
+        }))
     }
 
     /// Every vector of the admitted length has a unique interpolant. This is
     /// not a low-degree test; the result may have degree `domain.size - 1`.
-    pub fn interpolate<E: ExtensionField<KoalaBear>>(
+    pub fn interpolate<E: Residue>(
         &self,
         values: &[E],
         domain: Domain<E>,
@@ -267,7 +272,8 @@ impl Kernels {
         if values.len() != domain.size {
             return Err(Error::EvaluationCount);
         }
-        let mut coefficients = self.dft.idft_algebra(values.to_vec());
+        let values = values.to_vec();
+        let mut coefficients = crate::cpu::install(|| E::Base::dft(self).idft_algebra(values));
         let inverse = domain.shift.inverse();
         let mut power = E::ONE;
         for c in &mut coefficients {
@@ -290,7 +296,7 @@ pub fn evaluate_at<E: Field>(coefficients: &[E], point: E) -> E {
 /// Scratch is supplied by the policy-owning adapter; this routine allocates
 /// nothing and shares one set of barycentric weights across every column.
 /// A domain point selects its matching input row before any inversion.
-pub fn coset_evaluate_at_into<E: ExtensionField<KoalaBear>>(
+pub fn coset_evaluate_at_into<E: Residue>(
     values: &[E],
     domain: Domain<E>,
     point: E,
@@ -324,7 +330,7 @@ pub fn coset_evaluate_at_into<E: ExtensionField<KoalaBear>>(
     }
     let shift_power = domain.shift.exp_u64(domain.size as u64);
     let scale = (point.exp_u64(domain.size as u64) - shift_power)
-        / (E::from(KoalaBear::from_usize(domain.size)) * shift_power);
+        / (E::from(E::Base::from_usize(domain.size)) * shift_power);
     batch_inverse_into(denominators, weights, |row, inverse| {
         scale * (point - denominators[row]) * inverse
     })?;
@@ -369,17 +375,13 @@ pub fn normalize<E: Field>(coefficients: &mut Vec<E>) {
 
 /// Even/odd polynomial folding in natural coset order. Pair i with i+n/2,
 /// then place the folded value at `(shift * generator^i)^2`.
-pub fn fold<E: ExtensionField<KoalaBear>>(
-    values: &[E],
-    domain: Domain<E>,
-    challenge: E,
-) -> Result<Vec<E>, Error> {
+pub fn fold<E: Residue>(values: &[E], domain: Domain<E>, challenge: E) -> Result<Vec<E>, Error> {
     let next = domain.folded()?;
     if values.len() != domain.size {
         return Err(Error::EvaluationCount);
     }
     let half = next.size;
-    let inverse_two = KoalaBear::TWO.inverse();
+    let inverse_two = E::Base::TWO.inverse();
     let mut inverse_twice_x = E::from(inverse_two) / domain.shift;
     let inverse_generator = domain.generator.inverse();
     let mut result = Vec::with_capacity(half);
@@ -415,7 +417,7 @@ pub fn divide_opening<E: Field>(coefficients: &[E], point: E, value: E) -> Resul
 
 /// Pointwise opening quotient on a coset, using one batch inversion. A point
 /// on the evaluation domain is refused before allocating inversion workspace.
-pub fn opening_quotient<E: ExtensionField<KoalaBear>>(
+pub fn opening_quotient<E: Residue>(
     values: &[E],
     domain: Domain<E>,
     point: E,
@@ -430,14 +432,14 @@ pub fn opening_quotient<E: ExtensionField<KoalaBear>>(
 
 /// Borrow checked mathematical inputs before admitting or allocating workspace.
 /// The same validation serves the public helper and the scoped native adapter.
-pub struct OpeningQuotient<'a, E> {
+pub struct OpeningQuotient<'a, E: Residue> {
     values: &'a [E],
     domain: Domain<E>,
     point: E,
     value: E,
 }
 
-impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
+impl<'a, E: Residue> OpeningQuotient<'a, E> {
     pub fn new(values: &'a [E], domain: Domain<E>, point: E, value: E) -> Result<Self, Error> {
         if values.len() != domain.size {
             return Err(Error::EvaluationCount);
@@ -474,7 +476,7 @@ impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
 /// A rational linear combination of selected column openings. Claims are
 /// arbitrary scalars: this helper asserts neither degree nor authentication.
 /// Every descriptor is checked before the caller supplies writable storage.
-pub struct OpeningQuotientSum<'a, E> {
+pub struct OpeningQuotientSum<'a, E: Residue> {
     values: &'a [E],
     domain: Domain<E>,
     columns: &'a [u64],
@@ -483,7 +485,7 @@ pub struct OpeningQuotientSum<'a, E> {
     weights: &'a [E],
 }
 
-impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotientSum<'a, E> {
+impl<'a, E: Residue> OpeningQuotientSum<'a, E> {
     pub fn new(
         values: &'a [E],
         width: usize,
@@ -581,7 +583,7 @@ mod tests {
         E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(3 * i * i + 7 * i + j + 1))
     }
 
-    fn opening_sum_scalar_checks<F: ExtensionField<KoalaBear>>() {
+    fn opening_sum_scalar_checks<F: Residue<Base = KoalaBear>>() {
         let element =
             |i| F::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
         for height in [1, 2, 8, 32] {
@@ -717,7 +719,7 @@ mod tests {
         }
     }
 
-    fn base_action_matches_embedding<F: ExtensionField<KoalaBear>>() {
+    fn base_action_matches_embedding<F: Residue<Base = KoalaBear>>() {
         for log_n in 1..=6 {
             let n = 1 << log_n;
             let sample =
@@ -756,11 +758,11 @@ mod tests {
         base_action_matches_embedding::<crate::plonky3::KoalaBearExt8>();
     }
 
-    fn batch_extension_matches_independent_columns<F: ExtensionField<KoalaBear>>() {
+    fn batch_extension_matches_independent_columns<F: Residue>() {
         let kernels = Kernels::default();
         let element =
-            |i| F::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
-        for width in [1, 4, 16] {
+            |i| F::from_basis_coefficients_fn(|j| F::Base::from_usize(11 * i + 7 * j + 1));
+        for width in [1, 4, 16, 31, 32, 33] {
             for (height, size) in [(1, 1), (1, 4), (4, 1), (4, 2), (4, 8), (8, 4), (8, 16)] {
                 let input = Domain::new(height, element(3), 32).unwrap();
                 let output = Domain::new(size, element(5), 32).unwrap();
@@ -818,6 +820,10 @@ mod tests {
         batch_extension_matches_independent_columns::<KoalaBear>();
         batch_extension_matches_independent_columns::<crate::plonky3::KoalaBearExt4>();
         batch_extension_matches_independent_columns::<crate::plonky3::KoalaBearExt8>();
+        batch_extension_matches_independent_columns::<crate::plonky3::BabyBear>();
+        batch_extension_matches_independent_columns::<crate::plonky3::BabyBearExt4>();
+        batch_extension_matches_independent_columns::<crate::plonky3::Goldilocks>();
+        batch_extension_matches_independent_columns::<crate::plonky3::GoldilocksExt2>();
     }
 
     #[test]

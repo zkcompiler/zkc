@@ -20,12 +20,13 @@ fn main() {
                         Default::default(),
                     )
                     .unwrap();
-                    let admitted = zkc_runtime::vm::Program::decode(&bytes)
-                        .and_then(|program| {
-                            program.check_installation(&backend)?;
-                            Ok(program)
-                        })
-                        .unwrap();
+                    let admitted =
+                        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+                            .and_then(|program| {
+                                program.check_installation(&backend)?;
+                                Ok(program)
+                            })
+                            .unwrap();
                     let group = |n: u64| Value::Curve(G1::generator().scale(Scalar::from(n)));
                     let mut runner = Runner::new(
                         &admitted,
@@ -90,7 +91,7 @@ fn main() {
             Default::default(),
         )
         .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)

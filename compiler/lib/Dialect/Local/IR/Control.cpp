@@ -49,22 +49,24 @@ LogicalResult localRegion(Operation *op, Region &region, TypeRange inputs,
   return success();
 }
 // Both construction and matching materialize the same flattened payload.
-Expected<SmallVector<Type>> variantPayloadTypes(ArrayRef<std::string> payload,
-                                                bool physical,
-                                                MLIRContext *context) {
+Expected<SmallVector<Type>>
+variantPayloadTypes(const protocol::BoundType &bound,
+                    const protocol::VariantDescriptor &descriptor,
+                    unsigned alternative, MLIRContext *context) {
   SmallVector<Type> types;
-  for (const auto &leaf : payload) {
+  size_t offset = 0;
+  for (unsigned i = 0; i < alternative; ++i)
+    offset += descriptor.alternatives[i].payload.size();
+  for (auto [i, leaf] :
+       enumerate(descriptor.alternatives[alternative].payload)) {
     auto parsed = protocol::parseBoundType(leaf, false);
-    if (!parsed) {
-      consumeError(parsed.takeError());
-      return zkc::error("variant-type");
-    }
-    if (physical) {
-      parsed = protocol::defaultRepresentation(*parsed);
-      if (!parsed) {
-        consumeError(parsed.takeError());
+    if (!parsed)
+      return parsed.takeError();
+    if (!bound.representation.empty()) {
+      if (!bound.physicalChildren ||
+          offset + i >= bound.physicalChildren->size())
         return zkc::error("binding-representation");
-      }
+      parsed = (*bound.physicalChildren)[offset + i];
     }
     auto type = protocol::decodeBoundType(context, *parsed);
     if (!type)
@@ -90,7 +92,8 @@ LogicalResult zkc::local::VariantInjectOp::verify() {
   if (arm == descriptor->alternatives.end())
     return diagnostics::emit(emitOpError(), "variant-alternative");
   auto expected = variantPayloadTypes(
-      arm->payload, !bound->representation.empty(), getContext());
+      *bound, *descriptor, std::distance(descriptor->alternatives.begin(), arm),
+      getContext());
   if (!expected)
     return diagnostics::emit(emitOpError(), expected.takeError());
   if (getOperandTypes() != TypeRange(*expected))
@@ -117,7 +120,7 @@ LogicalResult zkc::local::LocalMatchOp::verifyRegions() {
     auto label = dyn_cast<StringAttr>(getAlternatives()[i]);
     if (!label || label.getValue() != arm.label)
       return diagnostics::emit(emitOpError(), "local-match-arm");
-    auto inputs = variantPayloadTypes(arm.payload, physical, getContext());
+    auto inputs = variantPayloadTypes(*bound, *descriptor, i, getContext());
     if (!inputs)
       return diagnostics::emit(emitOpError(), inputs.takeError());
     llvm::append_range(*inputs, getOperands().drop_front().getTypes());

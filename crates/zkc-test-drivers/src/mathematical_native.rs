@@ -25,7 +25,7 @@ fn group(value: u64) -> Value {
 
 fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
     let native = backend(role);
-    let admitted = zkc_runtime::vm::Program::decode(bytes)
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)

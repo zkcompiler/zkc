@@ -1,4 +1,4 @@
-//! The Poseidon2 instances: the width-16 KoalaBear permutation of
+//! The KoalaBear Poseidon2 instances: the width-16 KoalaBear permutation of
 //! `crate::plonky3::poseidon2`, padding-free overwrite sponge leaves with rate
 //! eight and eight output elements, two-to-one truncated-permutation
 //! compression, and digests of eight canonical KoalaBear words. This is
@@ -8,6 +8,34 @@
 //! call where the build enables SIMD packing. Rows of the quartic extension are
 //! flattened to their ascending base coordinates before hashing, as Plonky3's
 //! `ExtensionMmcs` does, so both instances share one tree and digest form.
+//!
+//! BabyBear and Goldilocks have separately selected profiles in the modules
+//! below. Arithmetic support alone does not select a Merkle instance.
+
+// Share only forwarding; each profile keeps its codec helpers and validation.
+macro_rules! delegate_instance_codec {
+    ($base:ty, $words:literal) => {
+        fn root(c: &MerkleCap<$base, Digest>) -> Vec<u8> {
+            root(c)
+        }
+        fn commitment(bytes: &[u8]) -> Result<MerkleCap<$base, Digest>, DecodeError> {
+            commitment(bytes)
+        }
+        fn proof_bytes(p: &PrunedMerklePaths<$base, $words>) -> Vec<u8> {
+            proof_bytes(p)
+        }
+        fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<$base, $words>, DecodeError> {
+            proof(bytes)
+        }
+        fn valid_digests(bytes: &[u8]) -> bool {
+            valid_digests(bytes)
+        }
+    };
+}
+
+pub mod baby_bear;
+pub mod goldilocks;
+
 use super::{DecodeError, Instance, decode_digests, encode_digests};
 use crate::plonky3::{KoalaBear, KoalaBearExt4, poseidon2::permutation};
 use p3_commit::ExtensionMmcs;
@@ -74,21 +102,7 @@ impl Instance for Base {
     fn mmcs() -> &'static BaseMmcs {
         base_mmcs()
     }
-    fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(KoalaBear, 8);
 }
 
 /// Rows of `koala-bear.ext4-binomial3` elements, hashed as base coordinates.
@@ -100,19 +114,5 @@ impl Instance for Quartic {
     fn mmcs() -> &'static QuarticMmcs {
         quartic_mmcs()
     }
-    fn root(c: &MerkleCap<KoalaBear, Digest>) -> Vec<u8> {
-        root(c)
-    }
-    fn commitment(bytes: &[u8]) -> Result<MerkleCap<KoalaBear, Digest>, DecodeError> {
-        commitment(bytes)
-    }
-    fn proof_bytes(p: &PrunedMerklePaths<KoalaBear, 8>) -> Vec<u8> {
-        proof_bytes(p)
-    }
-    fn proof(bytes: &[u8]) -> Result<PrunedMerklePaths<KoalaBear, 8>, DecodeError> {
-        proof(bytes)
-    }
-    fn valid_digests(bytes: &[u8]) -> bool {
-        valid_digests(bytes)
-    }
+    delegate_instance_codec!(KoalaBear, 8);
 }

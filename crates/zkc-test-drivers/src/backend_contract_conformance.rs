@@ -50,6 +50,7 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
         contract: "field.add".into(),
         arguments: vec!["bls12-381.fr".into()],
         implementation: "arkworks/field.add".into(),
+        physical_arguments: Vec::new(),
     };
     // Literal witness independent of either registry's generated inventory.
     let field = "field:bls12-381.fr@arkworks.fr/0";
@@ -59,7 +60,8 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
             "add_binding",
             "field.add",
             ["bls12-381.fr"],
-            "arkworks/field.add"
+            "arkworks/field.add",
+            []
         ]],
         [[
             "function",
@@ -88,15 +90,19 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
     let original = native.binding_signature(&binding)?;
     let mutated = AttributeDrift(native).binding_signature(&binding)?;
     let result = if drift {
-        zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
-            program.check_installation(&AttributeDrift(native))?;
-            Ok(program)
-        })
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(&AttributeDrift(native))?;
+                Ok(program)
+            },
+        )
     } else {
-        zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
-            program.check_installation(native)?;
-            Ok(program)
-        })
+        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts()).and_then(
+            |program| {
+                program.check_installation(native)?;
+                Ok(program)
+            },
+        )
     };
     Some(json!({"accepted": true, "admitted": result.is_ok(),
         "error": result.err().map(|error| error.code.as_str()),
@@ -117,7 +123,7 @@ fn respond(native: &NativeBackend, line: &[u8]) -> Option<Value> {
         );
     }
     // The backend does not own logical formation or logical-stage admission.
-    if request.len() != 4 || !request.get("physical")?.as_bool()? {
+    if request.len() != 5 || !request.get("physical")?.as_bool()? {
         return None;
     }
     let arguments = request.get("arguments")?.as_array()?;
@@ -131,6 +137,12 @@ fn respond(native: &NativeBackend, line: &[u8]) -> Option<Value> {
             .iter()
             .map(|v| v.as_str().map(str::to_owned))
             .collect::<Option<_>>()?,
+        physical_arguments: request
+            .get("physical_arguments")?
+            .as_array()?
+            .iter()
+            .map(|value| value.as_str().map(str::to_owned))
+            .collect::<Option<Vec<_>>>()?,
     };
     let signature = native.binding_signature(&binding)?;
     Some(json!({"accepted":true, "physical":true,
@@ -147,6 +159,10 @@ fn main() -> std::io::Result<()> {
         EntryPolicy::new(Domain::new("P", "session", "main", None), None),
         Default::default(),
     )
+    .map_err(|error| std::io::Error::other(error.code))?
+    .with_contracts(zkc_native::native_contracts_with_policy(
+        zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+    ))
     .map_err(|error| std::io::Error::other(error.code))?;
     zkc_test_support::json_lines::run(|line| respond(&native, line))
 }

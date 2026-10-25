@@ -28,7 +28,11 @@ fn vector(values: &[u64]) -> Value {
 fn sequence(element: &str, values: Vec<Value>) -> Value {
     Value::Sequence(
         Sequence::new(
-            LogicalType::parse(element).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(LogicalType::parse(element).unwrap())
+                    .unwrap(),
+            )
+            .unwrap(),
             values,
             &Policy::default(),
         )
@@ -86,10 +90,9 @@ fn r1cs(rows: usize, change: &str) -> Vec<Value> {
     ]
 }
 fn air(ty: &LogicalType, height: usize, change: &str) -> Vec<Value> {
-    let descriptor = ty.variant_descriptor().unwrap().clone();
     let config = Value::Variant(
         Variant::new(
-            descriptor,
+            zkc_runtime::vm::PhysicalType::default_for(ty.clone()).unwrap(),
             0,
             vec![
                 Value::Field(Scalar::from(if change == "configuration" { 2 } else { 1 })),

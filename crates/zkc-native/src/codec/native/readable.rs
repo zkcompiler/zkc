@@ -2,7 +2,9 @@
 //! inputs. This module allocates bytes only; Host admission owns native decoding.
 use super::{bulk, frame, structured, table_type};
 use serde_json::Value as Json;
-use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Type};
+#[cfg(test)]
+use zkc_runtime::vm::LogicalType;
+use zkc_runtime::vm::{Identity, PhysicalType, Type};
 type Result<T> = std::result::Result<T, &'static str>;
 
 /// Decode readable JSON using an independently checked expected physical type.
@@ -124,26 +126,30 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     if matches!(identity, Binary64 | Binary64Ext3) {
         return binary(identity, value, out);
     }
-    // A KoalaBear extension element: a base decimal embeds, or one decimal per
-    // coordinate in the ascending basis.
-    let degree = match identity {
-        KoalaBearExt8 => Some(8),
-        KoalaBearExt4 => Some(4),
-        _ => Option::None,
-    };
-    if let Some(degree) = degree {
-        if value.is_string() {
-            scalar(KoalaBear, value, out)?;
-            return out.put(&[0; 28][..4 * (degree - 1)]);
-        }
-        let values = array(value)?;
-        if values.len() != degree {
-            return Err("entry-input-shape");
-        }
-        for v in values {
-            scalar(KoalaBear, v, out)?;
-        }
-        return Ok(());
+    if crate::fields::contains(identity) {
+        return crate::fields::with_residue_or!(identity, Err("entry-input-codec"), |E| {
+            use p3_field::{BasedVectorSpace, PrimeField64};
+            use zkc_kernels::plonky3::residue::{PrimeWord, Residue};
+            type B = <E as Residue>::Base;
+            let modulus = B::ORDER_U64.to_string();
+            if value.is_string() {
+                let text = decimal(value, &modulus)?;
+                let element = zkc_kernels::plonky3::residue::parse_decimal::<E>(text)
+                    .map_err(|_| "entry-input-decimal")?;
+                out.put(&crate::fields::scalar_bytes(&element))
+            } else {
+                let coordinates = array(value)?;
+                if coordinates.len() != <E as BasedVectorSpace<B>>::DIMENSION {
+                    return Err("entry-input-shape");
+                }
+                for coordinate in coordinates {
+                    let text = decimal(coordinate, &modulus)?;
+                    let word: u64 = text.parse().map_err(|_| "entry-input-decimal")?;
+                    out.put(&word.to_le_bytes()[..B::WORD_BYTES])?;
+                }
+                Ok(())
+            }
+        });
     }
     let (modulus, width) = match identity {
         Bls12381Fr => (zkc_kernels::arkworks::bls12_381::SCALAR_MODULUS_DECIMAL, 32),
@@ -152,7 +158,6 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
             32,
         ),
         Ristretto255Scalar => (zkc_kernels::dalek::ristretto255::SCALAR_MODULUS_DECIMAL, 32),
-        KoalaBear => ("2130706433", 4),
         _ => return Err("entry-input-codec"),
     };
     let s = decimal(value, modulus)?;
@@ -170,6 +175,7 @@ fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     }
     out.put(&bytes[..width])
 }
+#[cfg(test)]
 fn physical(logical: LogicalType) -> Result<PhysicalType> {
     PhysicalType::default_for(logical).map_err(|_| "entry-input-codec")
 }
@@ -290,17 +296,11 @@ fn write(ty: &PhysicalType, value: &Json, out: &mut Buffer, depth: usize) -> Res
                 let values = array(value)?;
                 out.header(tag)?;
                 out.count(values.len())?;
-                let logical = ty.logical();
-                let element = physical(
-                    logical
-                        .sequence_element()
-                        .ok_or("entry-input-codec")?
-                        .clone(),
-                )?;
+                let element = ty.sequence_element().ok_or("entry-input-codec")?;
                 for v in values {
                     let at = out.bytes.len();
                     out.count(0)?;
-                    write(&element, v, out, depth + 1)?;
+                    write(element, v, out, depth + 1)?;
                     let length =
                         u32::try_from(out.bytes.len() - at - 4).map_err(|_| "entry-input-limit")?;
                     out.bytes[at..at + 4].copy_from_slice(&length.to_le_bytes());
@@ -368,8 +368,13 @@ impl serde::Serialize for Scalar<'_> {
     ) -> std::result::Result<S::Ok, S::Error> {
         use zkc_kernels::plonky3::binary;
         let word = |b: &[u8; binary::WIDTH]| binary::readable(binary::Binary64::from_le_bytes(*b));
-        if matches!(self.0, Identity::KoalaBearExt8 | Identity::KoalaBearExt4) {
-            serializer.collect_seq(self.1.as_chunks::<4>().0.iter().map(|b| decimal_text(b)))
+        if let Some(base) = self
+            .0
+            .base_field()
+            .filter(|_| crate::fields::contains(self.0))
+        {
+            let bytes = crate::fields::element_width(base).map_err(serde::ser::Error::custom)?;
+            serializer.collect_seq(self.1.chunks_exact(bytes).map(decimal_text))
         } else if self.0 == Identity::Binary64Ext3 {
             serializer.collect_seq(self.1.as_chunks::<{ binary::WIDTH }>().0.iter().map(word))
         } else if self.0 == Identity::Binary64 {
@@ -474,15 +479,13 @@ impl serde::Serialize for Frame<'_> {
                 );
             }
             if ty.kind() == Type::Sequence {
-                let logical = ty.logical();
-                let child = physical(logical.sequence_element().expect("native sequence").clone())
-                    .expect("native sequence element");
+                let child = ty.sequence_element().expect("native sequence element");
                 let count = u32::from_le_bytes(bytes[6..10].try_into().unwrap()) as usize;
                 let mut sequence = serializer.serialize_seq(Some(count))?;
                 let mut rest = &bytes[10..];
                 while !rest.is_empty() {
                     let n = u32::from_le_bytes(rest[..4].try_into().unwrap()) as usize;
-                    sequence.serialize_element(&Frame(&child, &rest[4..4 + n]))?;
+                    sequence.serialize_element(&Frame(child, &rest[4..4 + n]))?;
                     rest = &rest[4 + n..];
                 }
                 return sequence.end();
@@ -576,7 +579,10 @@ mod tests {
             Value::Bytes(vec![0, 127, 128, 255].into()),
             Value::FieldArray(
                 crate::FieldArray::new(
-                    LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),
+                    PhysicalType::default_for(
+                        LogicalType::field_array(Identity::Bls12381Fr, 2).unwrap(),
+                    )
+                    .unwrap(),
                     vec![crate::Scalar::from(1), crate::Scalar::from(2)].into(),
                 )
                 .unwrap(),
@@ -584,7 +590,10 @@ mod tests {
             Value::groups(&[crate::G1::identity()], &Policy::default()).unwrap(),
             Value::Sequence(
                 crate::Sequence::new(
-                    LogicalType::parse("index").unwrap(),
+                    PhysicalType::default_for(
+                        LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
+                    )
+                    .unwrap(),
                     vec![Value::Index(1), Value::Index(2)],
                     &Policy::default(),
                 )

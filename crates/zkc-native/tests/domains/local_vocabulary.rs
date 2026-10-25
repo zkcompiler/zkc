@@ -94,7 +94,7 @@ fn dynamic_group_access_preserves_order_domains_bounds_and_output_charges() {
                 &outputs,
             );
             assert!(
-                zkc_runtime::vm::Program::decode(&bytes)
+                zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend(Policy::default()))?;
                         Ok(program)

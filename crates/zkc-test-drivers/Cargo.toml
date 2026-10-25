@@ -80,6 +80,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "resident_representations"
+path = "src/resident_representations.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "mathematical_native"
 path = "src/mathematical_native.rs"
 test = false

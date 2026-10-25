@@ -180,6 +180,9 @@ and Wire owners. `Prepared` retains decoded immutable data with its canonical
 encoding; each invocation still checks type, policy, setup and loading limits.
 `WireFile` retains an opened regular descriptor and an expected
 SHA-256; common Host preparation reads and authenticates it under input limits.
+Applications can use `InputFile::read_verified` to materialize the same pinned
+descriptor under an explicit byte ceiling before constructing a `Wire` input.
+Materialization checks the pin; ordinary Host type and capacity checks still apply.
 The admitted source schema's `constructible` authority applies recursively
 through products and alternative payloads. A matching native representation does
 not confer private constructor authority. Source randomness comes through named
@@ -310,7 +313,10 @@ ordinary computations without being retained as keys.
 
 Reuse requires the exact admitted executable, identical backend policy and
 remaining runtime/backend capacities that dominate the original initial
-allowances. It replays cumulative work and allocation charges, advances frame
+allowances. Native checkpoints also require the same immutable catalog and
+execution-authorization view, including exact timing grants. An authorization
+change prevents replay even when numerical policy and capacities are unchanged.
+Reuse replays cumulative work and allocation charges, advances frame
 IDs, and installs returned backing through the ordinary live-storage ledger.
 Otherwise execution follows the original body, including failure location,
 partial usage and cleanup. Failed evaluations are never retained. Reaching a

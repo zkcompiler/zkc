@@ -23,7 +23,9 @@ mod sealed {
 }
 /// The leaf codec fixes the field, defining polynomial and ordered basis.
 /// It intentionally does not use Plonky3's internal Montgomery serialization.
-pub trait Element: ExtensionField<KoalaBear> + sealed::Sealed {
+pub trait Element:
+    ExtensionField<KoalaBear> + super::residue::Residue<Base = KoalaBear> + sealed::Sealed
+{
     const CODEC: &'static str;
 }
 impl Element for KoalaBear {
@@ -179,7 +181,9 @@ pub fn commit<E: Element>(
     if shape.retained_bytes::<E>()? > max_bytes {
         return Err(Error::ByteLimit);
     }
-    let (root, state) = tree::<E>(shape).commit(vec![RowMajorMatrix::new(values, shape.width)]);
+    let (root, state) = crate::cpu::install(|| {
+        tree::<E>(shape).commit(vec![RowMajorMatrix::new(values, shape.width)])
+    });
     Ok((root.roots()[0], State { shape, tree: state }))
 }
 

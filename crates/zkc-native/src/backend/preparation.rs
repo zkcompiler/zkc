@@ -1,9 +1,11 @@
 //! Fixed native policy and cumulative work evidence for pure computations.
 use super::NativeBackend;
 use crate::Policy;
+use zkc_runtime::vm::AuthorizationId;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ComputationCheckpoint {
+    authorization: AuthorizationId,
     policy: Policy,
     external: Meter,
     sequence: Meter,
@@ -27,6 +29,7 @@ impl Meter {
 impl NativeBackend {
     pub(super) fn checkpoint(&self) -> ComputationCheckpoint {
         ComputationCheckpoint {
+            authorization: self.contracts.authorization_id(),
             policy: self.core.policy,
             external: Meter {
                 limit: self.external_work.limit,
@@ -48,7 +51,11 @@ impl NativeBackend {
         after: ComputationCheckpoint,
     ) -> bool {
         let current = self.checkpoint();
-        if current.policy != before.policy || after.policy != before.policy {
+        if current.authorization != before.authorization
+            || after.authorization != before.authorization
+            || current.policy != before.policy
+            || after.policy != before.policy
+        {
             return false;
         }
         let Some(external) = current.external.replay(before.external, after.external) else {
@@ -143,5 +150,53 @@ mod tests {
         backend.core.policy = policy;
         backend.core.policy.max_numerical_bytes -= 1;
         assert!(!backend.replay(before, before));
+    }
+
+    #[test]
+    fn replay_requires_the_same_immutable_authorization_view() {
+        use crate::{Domain, EntryPolicy, SetupRegistry};
+        use zkc_runtime::vm::{ExecutionPolicy, ImplementationRequirements, OperationBinding};
+        let mut backend = NativeBackend::new(
+            Policy::default(),
+            EntryPolicy::new(Domain::new("P", "s", "e", None), None),
+            SetupRegistry::default(),
+        )
+        .unwrap();
+        let contracts = backend.contracts.clone();
+        let before = backend.checkpoint();
+        let mut after = before;
+        after.external.spent = 3;
+        assert_eq!(
+            contracts.authorization_id(),
+            contracts.clone().authorization_id()
+        );
+        assert_eq!(
+            contracts.authorization_id(),
+            contracts.with_policy(contracts.policy()).authorization_id()
+        );
+        let granted = contracts
+            .with_timing_grant(
+                OperationBinding {
+                    contract: "field.mul".into(),
+                    arguments: vec!["bls12-381.fr".into()],
+                    implementation: "arkworks/field.mul".into(),
+                    physical_arguments: vec![],
+                },
+                ImplementationRequirements::default(),
+            )
+            .unwrap();
+        for changed in [
+            contracts.with_policy(ExecutionPolicy::general_purpose()),
+            granted,
+            zkc_runtime::vm::Contracts::standard(contracts.policy()),
+        ] {
+            backend.contracts = changed;
+            assert!(!backend.replay(before, after));
+            assert_eq!(backend.external_work.spent, 0);
+            assert!(!backend.replay(backend.checkpoint(), after));
+        }
+        backend.contracts = contracts;
+        assert!(backend.replay(before, after));
+        assert_eq!(backend.external_work.spent, 3);
     }
 }

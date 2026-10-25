@@ -43,6 +43,7 @@ fn exact_contracts_and_wrong_operation_arities_fail_closed() {
         contract: contract.into(),
         arguments: vec!["multilinear.kzg.bls12-381/0".into()],
         implementation: format!("arkworks/{contract}"),
+        physical_arguments: vec![],
     };
     let commit = b.binding_signature(&binding("pcs.commit")).unwrap();
     let open = b.binding_signature(&binding("pcs.open")).unwrap();
@@ -82,7 +83,7 @@ fn exact_contracts_and_wrong_operation_arities_fail_closed() {
             &[],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&b)?;
                     Ok(program)
@@ -383,13 +384,16 @@ fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
     unpassed[3][0][6][0][3] = json!(["p"]);
     unpassed[3][0][6][1][3] = json!(["p"]);
     assert_eq!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&unpassed).unwrap())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .code,
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&unpassed).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .code,
         ErrorCode::Ssa
     );
     let aliases = program(
@@ -429,7 +433,7 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
             .unwrap(),
         )
         .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)
@@ -470,7 +474,7 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
         &[],
     );
     let backend = common::backend().verifier(k.verifier_key().clone()).build();
-    let admitted = zkc_runtime::vm::Program::decode(&mixed)
+    let admitted = zkc_runtime::vm::Program::decode(&mixed, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&backend)?;
             Ok(program)
@@ -573,13 +577,16 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         let mut artifact: serde_json::Value = serde_json::from_slice(&open_program()).unwrap();
         artifact[3][0][6].as_array_mut().unwrap().insert(0, action);
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&artifact).unwrap())
-                .and_then(|program| {
-                    program.check_installation(&backend)?;
-                    Ok(program)
-                })
-                .unwrap_err()
-                .code,
+            zkc_runtime::vm::Program::decode(
+                &serde_json::to_vec(&artifact).unwrap(),
+                zkc_native::native_contracts()
+            )
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
             ErrorCode::Type
         );
     }

@@ -105,6 +105,7 @@ fn binding_for(suite: Identity, contract: &str) -> OperationBinding {
         contract: contract.into(),
         arguments,
         implementation: format!("{}/{contract}", suite.provider().unwrap()),
+        physical_arguments: vec![],
     }
 }
 fn token(v: &Value) -> &Capability {
@@ -372,7 +373,7 @@ fn refusals_leave_no_successor() {
     let old = t.clone();
     let (out, b) = run_program(b, &p, vec![t, seven(BLS)]);
     assert!(out.is_ok());
-    let admitted = Program::decode(&p).unwrap();
+    let admitted = Program::decode(&p, zkc_native::native_contracts()).unwrap();
     admitted.check_installation(&b).unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![old]).is_err());
     // A state of another suite is not this program's transcript.
@@ -380,7 +381,7 @@ fn refusals_leave_no_successor() {
     let wrong = b
         .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
         .unwrap();
-    let admitted = Program::decode(&p).unwrap();
+    let admitted = Program::decode(&p, zkc_native::native_contracts()).unwrap();
     admitted.check_installation(&b).unwrap();
     assert!(
         Runner::new(

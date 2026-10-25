@@ -127,13 +127,18 @@ impl Bundle {
             .tables
             .get(table)
             .ok_or(Error("relation-table-index"))?;
-        // Arena formation admits add and mul only of equal fields and only the
-        // KoalaBear-to-Ext8 embedding. Every node an output needs therefore has
-        // the output's field or, below Ext8, KoalaBear: checking each assertion
-        // output checks its whole sub-DAG.
+        // Arena formation admits add and mul only of equal fields and explicit
+        // base-to-extension embeddings. Checking every assertion's output
+        // therefore checks compatibility of its whole sub-DAG.
         if !matches!(
             field,
-            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+            Identity::KoalaBear
+                | Identity::KoalaBearExt8
+                | Identity::KoalaBearExt4
+                | Identity::BabyBear
+                | Identity::BabyBearExt4
+                | Identity::Goldilocks
+                | Identity::GoldilocksExt2
         ) || self.publics.iter().any(|p| !lifts(p.field, field))
             || t.groups.iter().any(|g| !lifts(g.field, field))
             || t.assertions

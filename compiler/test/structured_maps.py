@@ -145,7 +145,7 @@ with case('other-installed-fields-export-with-their-rows'):
     commands.verified(source)
     nominals, services = export(source)[9]
     assert nominals == [['nominal', 'koala-bear', 'Field', [],
-                         ['TwoAdicField', 'Field', 'CommRing', 'PrimeField', 'CharacteristicNotTwo'],
+                         ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo', 'PrimeField'],
                          '2130706433']] and services == []
     run(source, [], refusal='structured-reference-unsupported')
 

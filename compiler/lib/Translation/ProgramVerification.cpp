@@ -322,7 +322,11 @@ public:
         if (b.getSymName() != expected.name ||
             b.getContract() != expected.application.contract ||
             b.getImplementation() != expected.application.implementation ||
-            !strings(b.getArguments(), expected.application.arguments))
+            !strings(b.getArguments(), expected.application.arguments) ||
+            (b.getPhysicalArgumentsAttr()
+                 ? !strings(b.getPhysicalArgumentsAttr(),
+                            expected.application.physicalArguments)
+                 : !expected.application.physicalArguments.empty()))
           return false;
       } else if (auto fn = dyn_cast<local::FuncOp>(op)) {
         if (function == program.functions.size())

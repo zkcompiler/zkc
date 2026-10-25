@@ -35,10 +35,13 @@ pub(crate) fn check_native_data(
             if arm.payload().len() != payload.len() {
                 return Err("native-input-payload".into());
             }
-            for (expected, child) in arm.payload().iter().zip(payload) {
-                let physical =
-                    PhysicalType::default_for(expected.clone()).map_err(|e| e.to_string())?;
-                check_native_data(&physical, child, capacity)?;
+            for (physical, child) in ty
+                .variant_payload(*alternative)
+                .ok_or("native-input-type")?
+                .iter()
+                .zip(payload)
+            {
+                check_native_data(physical, child, capacity)?;
             }
             Ok(())
         }
@@ -74,9 +77,13 @@ pub(crate) fn check_retained_data(
             if arm.payload().len() != payload.len() {
                 return Err("native-input-payload".into());
             }
-            for (logical, input) in arm.payload().iter().zip(payload) {
-                let ty = PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
-                check_retained_data(&ty, input, capacity)?;
+            for (physical, input) in ty
+                .variant_payload(*alternative)
+                .ok_or("native-input-type")?
+                .iter()
+                .zip(payload)
+            {
+                check_retained_data(physical, input, capacity)?;
             }
             Ok(())
         }
@@ -121,14 +128,13 @@ impl<'a> Admission<'a> {
                 alternative,
                 payload,
             } => {
-                let logical = ty.logical();
-                let descriptor = logical.variant_descriptor().ok_or("native-input-type")?;
-                let arm = &descriptor.alternatives()[*alternative];
+                let arm = ty
+                    .variant_payload(*alternative)
+                    .ok_or("native-input-type")?;
                 let mut children = Vec::new();
-                let mut bytes = descriptor.retained_bytes() + 256 + payload.len() * 512;
-                for (logical, input) in arm.payload().iter().zip(payload) {
-                    let physical =
-                        PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
+                let mut bytes = ty.descriptor_bytes() + 256 + payload.len() * 512;
+                for (physical, input) in arm.iter().zip(payload) {
+                    let physical = physical.clone();
                     let child = if zkc_native::has_native_wire(&physical) {
                         self.plan(backend, physical, input, selected.clone())?.0
                     } else {
@@ -204,10 +210,14 @@ impl<'a> Admission<'a> {
                 }
                 let mut inputs = Vec::new();
                 let mut sizes = Vec::new();
-                for (logical, value) in arm.payload().iter().zip(payload) {
-                    let physical =
-                        PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
-                    let (input, size) = self.plan(backend, physical, value, selected.clone())?;
+                for (physical, value) in ty
+                    .variant_payload(*alternative)
+                    .ok_or("native-input-type")?
+                    .iter()
+                    .zip(payload)
+                {
+                    let (input, size) =
+                        self.plan(backend, physical.clone(), value, selected.clone())?;
                     inputs.push(input);
                     sizes.push(size);
                 }
@@ -306,13 +316,8 @@ pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
                 .into_iter()
                 .map(|child| load(backend, child))
                 .collect::<Result<Vec<_>>>()?;
-            let descriptor = ty
-                .logical()
-                .variant_descriptor()
-                .expect("planned variant")
-                .clone();
             let value = Value::Variant(
-                Variant::new(descriptor, alternative, values).map_err(|e| e.to_string())?,
+                Variant::new(ty.clone(), alternative, values).map_err(|e| e.to_string())?,
             );
             if value.retained_bytes() > estimate {
                 return Err("artifact-input-size-estimate".into());

@@ -48,6 +48,7 @@ pub(super) fn admit(
     package: &Package,
     options: FunctionOptions,
     mut authority: BTreeMap<String, SetupAuthority>,
+    cpu: CpuExecution,
 ) -> Result<EntryHost> {
     options
         .limits
@@ -59,13 +60,13 @@ pub(super) fn admit(
     let mut validator = structure(&document, &interface)?;
     let mut native_calculations = BTreeMap::new();
     let mut references = Vec::new();
-    let backend = data::backend(options.limits.capacity)
+    let backend = data::backend(options.limits.capacity, cpu.clone())
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
     for c in &document.calculations {
         for s in c.parameters.iter().chain(&c.results) {
             check_schema(s, &mut validator.schemas)?;
         }
-        let program = Program::decode(c.program.as_bytes())
+        let program = Program::decode(c.program.as_bytes(), zkc_native::native_contracts())
             .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
         require(
             program.entry_names().next().is_none(),
@@ -101,7 +102,7 @@ pub(super) fn admit(
                 .map(|(_, t)| t)
                 .chain(&local.outputs)
                 .all(|t| {
-                    zkc_runtime::vm::PhysicalType::default_for(t.logical())
+                    zkc_runtime::vm::PhysicalType::default_for(t.logical().clone())
                         .as_ref()
                         .ok()
                         == Some(t)
@@ -147,6 +148,7 @@ pub(super) fn admit(
                 child,
                 options.limits,
                 authority.clone(),
+                cpu.clone(),
             )?)),
             "prove" | "verify" => {
                 let operation = if d.operation == "prove" {
@@ -164,6 +166,7 @@ pub(super) fn admit(
                         },
                         authority.clone(),
                         operation,
+                        cpu.clone(),
                     )?),
                     operation,
                 }
@@ -236,6 +239,7 @@ pub(super) fn admit(
     let types = validator.schemas.finish();
     drop(validator.calls);
     Ok(EntryHost {
+        cpu,
         entry: document.entry,
         functions: document.functions,
         interface,

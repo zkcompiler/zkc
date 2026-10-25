@@ -1,4 +1,6 @@
-//! Scalar counterparts of the index_preparation Runner and boundary probes.
+//! Typed literal preparation through real Runner frames and boundary probes.
+#[path = "vector_literal_tests.rs"]
+mod vectors;
 use super::{CallBinding, CallPayload, NativeCall};
 use crate::operations::field::LITERAL_DECODES;
 use crate::{Domain, EntryPolicy, NativeBackend, NativeOperation, Policy, Result, Value};
@@ -30,6 +32,7 @@ fn binding(field: &str, name: &str) -> OperationBinding {
         contract: name.into(),
         arguments: vec![field.into()],
         implementation: format!("{provider}/{name}"),
+        physical_arguments: vec![],
     }
 }
 
@@ -52,7 +55,15 @@ fn program(
     let rows: Vec<_> = bindings
         .iter()
         .enumerate()
-        .map(|(i, b)| json!([format!("b{i}"), b.contract, b.arguments, b.implementation]))
+        .map(|(i, b)| {
+            json!([
+                format!("b{i}"),
+                b.contract,
+                b.arguments,
+                b.implementation,
+                b.physical_arguments
+            ])
+        })
         .collect();
     operations.push(json!(["return", returns]));
     serde_json::to_vec(&json!([
@@ -96,6 +107,7 @@ struct Caller {
     attempts: usize,
     leaves: Vec<(FrameKind, FrameExit)>,
     cleanup_error: bool,
+    revoke: bool,
 }
 impl Caller {
     fn new(prepared: bool) -> Self {
@@ -111,6 +123,7 @@ impl Caller {
             attempts: 0,
             leaves: vec![],
             cleanup_error: false,
+            revoke: false,
         }
     }
 }
@@ -142,7 +155,10 @@ impl Backend for Caller {
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        if i.binding.declaration().contract != "field.constant" {
+        if !matches!(
+            i.binding.declaration().contract.as_str(),
+            "field.constant" | "vector.constant"
+        ) {
             return self.inner.apply(operation, i, args);
         }
         self.attempts += 1;
@@ -157,6 +173,12 @@ impl Backend for Caller {
             replacement
         });
         let operation = replacement.as_ref().unwrap_or(operation);
+        if self.revoke {
+            self.inner.contracts = self
+                .inner
+                .contracts
+                .with_policy(zkc_runtime::vm::ExecutionPolicy::operand_independent());
+        }
         let i = Invocation {
             context: CallContext {
                 attributes: self.attributes.as_deref().unwrap_or(i.attributes),
@@ -182,7 +204,7 @@ fn run<B: Backend<Value = Value>>(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (std::result::Result<Vec<Value>, Stop>, Usage, B) {
-    let admitted = Program::decode(bytes).unwrap();
+    let admitted = Program::decode(bytes, crate::native_contracts()).unwrap();
     admitted.check_installation(&caller).unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted, "main", "P", "session", caller, args, values, work,
@@ -404,7 +426,7 @@ fn distinct_literal_sites_share_installed_metadata_and_keep_instance_preparation
         &[],
         &[],
     );
-    let admitted = Program::decode(&bytes).unwrap();
+    let admitted = Program::decode(&bytes, crate::native_contracts()).unwrap();
     LITERAL_DECODES.set(0);
     let mut runners: Vec<_> = (0..2)
         .map(|_| {
@@ -462,9 +484,23 @@ fn separately_installed_equal_literal_metadata_reuses_the_retained_value() {
     let mut slot = None;
     let attributes = ["1".into()];
     LITERAL_DECODES.set(0);
-    NativeCall::prepare_literal(&mut slot, &first.binding, &attributes).unwrap();
+    NativeCall::prepare_literal(
+        &mut slot,
+        &first.binding,
+        &attributes,
+        &Policy::default(),
+        usize::MAX,
+    )
+    .unwrap();
     let value = std::ptr::from_ref(slot.as_ref().unwrap().literal().unwrap());
-    NativeCall::prepare_literal(&mut slot, &second.binding, &attributes).unwrap();
+    NativeCall::prepare_literal(
+        &mut slot,
+        &second.binding,
+        &attributes,
+        &Policy::default(),
+        usize::MAX,
+    )
+    .unwrap();
     assert_eq!(LITERAL_DECODES.get(), 1);
     assert_eq!(
         value,
@@ -711,7 +747,7 @@ fn incompatible_signatures_and_uninstalled_implementations_do_not_use_warm_liter
             } else {
                 Representation::Fr
             };
-            assert!(PhysicalType::new(signature.outputs[0].logical(), other).is_err());
+            assert!(PhysicalType::new(signature.outputs[0].logical().clone(), other).is_err());
             let mut wrong = signature.clone();
             wrong.outputs[0] = Value::Index(0).physical_type();
             caller.signature = Some(wrong);
@@ -905,6 +941,7 @@ fn real_runner_slots_preserve_exact_usage_exhaustion_and_later_failure() {
                         contract: "index.div".into(),
                         arguments: vec![],
                         implementation: "native/index.div".into(),
+                        physical_arguments: vec![],
                     },
                 ],
                 &[index.clone(), index.clone()],
@@ -1133,5 +1170,86 @@ fn binary_kernel_literals_match_independent_vm_admission() {
             };
             assert_eq!(admitted, accepted, "{text} in {width} bits");
         }
+    }
+}
+
+#[test]
+fn resident_literal_cold_warm_failures_preserve_usage_and_typed_retained_facts() {
+    for (field, provider, expected) in [
+        (
+            "bls12-381.fr",
+            "blst",
+            Value::BlstField(zkc_kernels::blst::bls12_381::Scalar::from(7)),
+        ),
+        (
+            "bn254.fr",
+            "halo2curves-axiom",
+            Value::HaloField(zkc_kernels::halo2curves::bn254::Scalar::from(7)),
+        ),
+    ] {
+        let binding = OperationBinding {
+            contract: "field.constant".into(),
+            arguments: vec![field.into()],
+            implementation: format!("{provider}/resident/field.constant"),
+            physical_arguments: vec![],
+        };
+        let operation = backend().prepare_binding(&binding).unwrap();
+        let bytes = program(
+            &[binding],
+            &[],
+            vec![json!(["op", "literal", "b0", ["7"], [], ["n"]])],
+            &operation.binding.signature.outputs,
+            &["n".into()],
+        );
+        let mut observations = Vec::new();
+        for prepared in [false, true] {
+            let mut caller = Caller::new(prepared);
+            LITERAL_DECODES.set(0);
+            let mut retained = None;
+            let mut usages = Vec::new();
+            for (visit, limit) in [511, 512, 511, 512].into_iter().enumerate() {
+                caller.output_limit = Some(limit);
+                let (result, usage, next) = run(
+                    caller,
+                    &bytes,
+                    vec![],
+                    Default::default(),
+                    Default::default(),
+                );
+                caller = next;
+                assert_eq!(caller.inner.active_frames(), 0);
+                usages.push(usage);
+                if limit == 511 {
+                    assert_eq!(code(&result.unwrap_err()), "exhausted:output-bytes");
+                } else {
+                    equal(&result.unwrap()[0], &expected);
+                }
+                assert_eq!(LITERAL_DECODES.get(), if prepared { 1 } else { visit + 1 });
+                if prepared {
+                    let literal = caller.call.as_ref().unwrap().literal().unwrap();
+                    equal(literal, &expected);
+                    let pointer = std::ptr::from_ref(literal);
+                    assert_eq!(*retained.get_or_insert(pointer), pointer);
+                }
+            }
+            // A failed replacement retains old facts but must never execute them.
+            caller.attributes = Some(vec!["00".into()]);
+            let (result, _, caller) = run(
+                caller,
+                &bytes,
+                vec![],
+                Default::default(),
+                Default::default(),
+            );
+            assert_eq!(code(&result.unwrap_err()), "refused:noncanonical-scalar");
+            if prepared {
+                assert_eq!(
+                    std::ptr::from_ref(caller.call.as_ref().unwrap().literal().unwrap()),
+                    retained.unwrap()
+                );
+            }
+            observations.push(usages);
+        }
+        assert_eq!(observations[0], observations[1]);
     }
 }

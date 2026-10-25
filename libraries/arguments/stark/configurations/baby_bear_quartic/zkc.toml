@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::configurations::baby_bear_quartic" = "lib.zkc"
+
+["dependencies"]
+"stark-contract" = "../contract"
+"collections" = "../../../../core/collections"
+"primitive-cryptography" = "../../../../core/primitives/cryptography"

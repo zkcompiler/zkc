@@ -254,7 +254,7 @@ def test_native_base_supports_ordinary_affine_handlers(toolchain, journal, direc
                 if target[2][-1][1].startswith('index@'):
                     names[coordinate] = target[2][-1][0]
                 else:
-                    program[1].append(['zero_index', 'index.constant', [], 'native/index.constant'])
+                    program[1].append(['zero_index', 'index.constant', [], 'native/index.constant', []])
                     replacement[4].insert(0, ['op', 'zero_coordinate', 'zero_index',
                                               ['0'], [], [coordinate]])
                 def rename(value):

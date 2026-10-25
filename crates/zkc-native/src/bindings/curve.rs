@@ -41,10 +41,14 @@ fn check_pairing(
     row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
-    if !matches!(selection, Selection::Default)
-        || binding.implementation != format!("arkworks/{}", binding.contract)
-    {
-        return None;
+    match selection {
+        Selection::Default
+            if binding.implementation == format!("arkworks/{}", binding.contract) => {}
+        Selection::Alternative {
+            ports: PortTransform::Default,
+            ..
+        } => {}
+        _ => return None,
     }
     // Each installed pairing field fixes its ordered source and target groups.
     let (g1, g2, gt) = match binding.arguments.as_slice() {

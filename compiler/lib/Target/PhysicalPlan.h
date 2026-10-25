@@ -5,6 +5,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Program/Model.h"
 #include "zkc/Target/Catalog.h"
+#include "zkc/Target/Selection.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "zkc/Transforms/MathematicalWork.h"
@@ -25,13 +26,14 @@ using OperationIndex = size_t;
 using BindingIndex = size_t;
 /// Original declarations include bindings generated in the selected Local
 /// payload; they need not have existed in the original Kernel source.
-enum class BindingPurpose { Original, Contraction, Conversion };
+enum class BindingPurpose { Original, Contraction, Conversion, Specialization };
 struct BindingDecision {
   protocol::OperationBinding binding;
   BindingPurpose purpose = BindingPurpose::Original;
   std::optional<OperationIndex> declaration;
   bool fixed = false;
   OperationIndex location = 0;
+  std::optional<BindingIndex> origin = {};
 };
 struct UseConversion {
   unsigned operand;
@@ -90,6 +92,8 @@ struct PhysicalPlanOptions {
   uint64_t *numericalCopy = nullptr;
   uint64_t *numericalSiteBytes = nullptr;
   MathematicalSelectionPolicy numericalPolicy = {};
+  llvm::SmallVector<FunctionPortSelection> functionPorts = {};
+  llvm::SmallVector<ValueLayoutSelection> valueLayouts = {};
 };
 class PhysicalPlan {
   // Own the original identity/content snapshot and, for numerical input, the

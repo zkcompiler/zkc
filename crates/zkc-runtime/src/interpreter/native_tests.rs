@@ -173,12 +173,15 @@ fn program_with_type(field: &str) -> Program {
         ],
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    crate::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
-        .and_then(|program| {
-            program.check_installation(&Mock::default())?;
-            Ok(program)
-        })
-        .unwrap()
+    crate::vm::Program::decode(
+        &serde_json::to_vec(&value).unwrap(),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::default())?;
+        Ok(program)
+    })
+    .unwrap()
 }
 fn receiver() -> Runner<Mock> {
     receiver_with(
@@ -588,12 +591,15 @@ fn local_candidate(body: serde_json::Value) -> Program {
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    crate::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-        .and_then(|program| {
-            program.check_installation(&Mock::default())?;
-            Ok(program)
-        })
-        .unwrap()
+    crate::vm::Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::default())?;
+        Ok(program)
+    })
+    .unwrap()
 }
 
 #[test]
@@ -744,12 +750,15 @@ fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    let admitted = crate::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-        .and_then(|program| {
-            program.check_installation(&Mock::default())?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted = crate::vm::Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .and_then(|program| {
+        program.check_installation(&Mock::default())?;
+        Ok(program)
+    })
+    .unwrap();
     let mut runner = Runner::new(
         &admitted,
         "main",

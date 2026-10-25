@@ -16,9 +16,13 @@ pub(crate) fn support(
         Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
     };
     if method == "index" {
-        // UniformIndex(bound) is installed only for the octic field's root,
-        // whose RNG supplies the uniform words the masked sampler requires.
-        if contract != ServiceContract::RandomExtensionField {
+        // Explicit residue RNG roots supply uniform words for the masked sampler.
+        if !matches!(
+            contract,
+            ServiceContract::RandomExtensionField
+                | ServiceContract::RandomBabyBearExt4
+                | ServiceContract::RandomGoldilocksExt2
+        ) {
             return None;
         }
         let index = PhysicalType::new(
@@ -42,6 +46,12 @@ pub(crate) fn support(
         ServiceContract::RandomBn254Field => (Identity::Bn254Fr, Representation::Bn254Fr),
         ServiceContract::RandomRistrettoField => {
             (Identity::Ristretto255Scalar, Representation::DalekScalar)
+        }
+        ServiceContract::RandomBabyBearExt4 => {
+            (Identity::BabyBearExt4, Representation::BabyBearExt4)
+        }
+        ServiceContract::RandomGoldilocksExt2 => {
+            (Identity::GoldilocksExt2, Representation::GoldilocksExt2)
         }
         ServiceContract::RandomExtensionField => {
             (Identity::KoalaBearExt8, Representation::KoalaBearExt8)

@@ -41,7 +41,10 @@ fn scalar(s: &str) -> Scalar {
 fn array(values: Vec<Scalar>) -> Value {
     Value::FieldArray(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            )
+            .unwrap(),
             values.into(),
         )
         .unwrap(),
@@ -98,7 +101,7 @@ impl Hooks<NativeBackend> for Wire {
             let changed = match decoded {
                 Value::Field(x) => Value::Field(x + Scalar::from(1)),
                 Value::FieldArray(a) => {
-                    let mut elements = a.elements().to_vec();
+                    let mut elements = a.ark_elements().unwrap().to_vec();
                     elements[0] += Scalar::from(1);
                     array(elements)
                 }
@@ -212,6 +215,7 @@ fn main() {
         let bundle = Bundle::admit(
             &std::fs::read(directory.join(format!("{}.bundle", case.name))).unwrap(),
             &backend("admission"),
+            zkc_native::native_contracts(),
             BundleLimits::default(),
         )
         .unwrap();

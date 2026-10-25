@@ -18,6 +18,7 @@ fn binding(contract: &str, arguments: &[&str], implementation: &str) -> Operatio
         contract: contract.into(),
         arguments: arguments.iter().map(|s| (*s).into()).collect(),
         implementation: implementation.into(),
+        physical_arguments: vec![],
     }
 }
 fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
@@ -48,7 +49,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "b",
             binding.contract,
             binding.arguments,
-            binding.implementation
+            binding.implementation,
+            binding.physical_arguments
         ]],
         [[
             "function",
@@ -89,7 +91,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "dot",
             "vector.dot",
             ["bls12-381.fr"],
-            dot
+            dot,
+            []
         ]));
         carrier[2][0][3] = json!(["field:bls12-381.fr@arkworks.fr/0"]);
         carrier[2][0][4] = json!([
@@ -103,7 +106,7 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             ["return", ["out"]]
         ]);
     }
-    if binding.contract == "curve.scale_each" {
+    if binding.contract == "curve.scale_each" && binding.arguments == ["ristretto255.group"] {
         let msm = if binding.implementation.starts_with("dalek-diagonal/") {
             "dalek-diagonal/curve.msm"
         } else {
@@ -113,7 +116,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
             "msm",
             "curve.msm",
             ["ristretto255.group"],
-            msm
+            msm,
+            []
         ]));
         carrier[2][0][3] = json!(["group:ristretto255.group@dalek.ristretto/0"]);
         carrier[2][0][4] = json!([
@@ -135,12 +139,13 @@ fn run(
     attributes: &[&str],
     args: Vec<Value>,
 ) -> (std::result::Result<Vec<Value>, String>, NativeBackend) {
-    let admitted = zkc_runtime::vm::Program::decode(&program(binding, attributes))
-        .and_then(|program| {
-            program.check_installation(&backend)?;
-            Ok(program)
-        })
-        .unwrap();
+    let admitted =
+        zkc_runtime::vm::Program::decode(&program(binding, attributes), crate::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, args)
         .unwrap_or_else(|e| panic!("{}", e.error));
     loop {
@@ -209,8 +214,8 @@ fn identical_ports_preserve_exact_handler_selection() {
     );
     assert_eq!(a.signature().unwrap(), b.signature().unwrap());
     let mut registry = installed().unwrap().clone();
-    registry.entries.get_mut(&a.implementation).unwrap().handler = first_handler;
-    registry.entries.get_mut(&b.implementation).unwrap().handler = second_handler;
+    registry.entries.get_mut(&a.implementation).unwrap().handler = Dispatch::Direct(first_handler);
+    registry.entries.get_mut(&b.implementation).unwrap().handler = Dispatch::Direct(second_handler);
     let registry = Box::leak(Box::new(registry));
     for (binding, refusal) in [(a, "refused:first-handler"), (b, "refused:second-handler")] {
         let mut backend = backend();
@@ -309,7 +314,8 @@ fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
             &[invalid.physical_type().logical().identity().name()],
             "plonky3/opening_states.length",
         );
-        let admitted = Program::decode(&program(&operation, &[])).unwrap();
+        let admitted =
+            Program::decode(&program(&operation, &[]), crate::native_contracts()).unwrap();
         let error = Runner::new(&admitted, "main", "P", "session", native, vec![invalid])
             .err()
             .expect("mismatched list member must refuse loading");
@@ -323,7 +329,10 @@ fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
 
 #[test]
 fn every_payload_has_explicit_identity_and_retained_charge() {
-    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar};
+    use crate::{
+        BabyBear, BabyBearExt4, Bn254Scalar, Goldilocks, GoldilocksExt2, KoalaBear, KoalaBearExt4,
+        KoalaBearExt8, RistrettoScalar,
+    };
     use std::{collections::HashSet, sync::Arc};
     use zkc_runtime::vm::{
         Identity as I, LogicalType, PhysicalType, Representation as R, ResourceDomain, Type,
@@ -348,97 +357,130 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             }
             _ => LogicalType::new(kind, identity).unwrap(),
         };
-        let representation = match value.payload_name() {
-            "Sequence" => R::Sequence,
-            "FixedVector" => R::FixedVector,
-            "FieldArray" => R::FieldArray,
-            "Variant" => R::Variant,
-            "ResourceUnit" => R::ResourceUnit,
-            "Bn254Field" => R::Bn254Fr,
-            "Bn254Vector" => R::Bn254FrVector,
-            "Bn254Polynomial" => R::Bn254Polynomial,
-            "Bn254Round" => R::Bn254Round,
-            "Bn254Matrix" => R::Bn254SparseCoo,
-            "Bn254G1" => R::Bn254G1,
-            "Bn254Gt" => R::Bn254Gt,
-            "Bn254G1Vector" => R::Bn254G1Vector,
-            "Bn254G2" => R::Bn254G2,
-            "Bn254G2Vector" => R::Bn254G2Vector,
-            "Bls12381G2" => R::Bls12381G2,
-            "Bls12381G2Vector" => R::Bls12381G2Vector,
-            "Bls12381Gt" => R::Bls12381Gt,
-            "OracleRoot" => R::MerkleRoot,
-            "OraclePath" => R::MerklePath,
-            "OracleState" => R::MerkleState,
-            "OracleRoots" => R::MerkleRoots,
-            "OracleStates" => R::MerkleStates,
-            "MerkleDigest" => R::MerkleDigest,
-            "MerkleProof" => R::MerkleProof,
-            "MerkleTree" => R::MerkleTree,
-            "MerkleDigests" => R::MerkleDigests,
-            "MerkleTrees" => R::MerkleTrees,
-            "Index" => R::Index,
-            "Indices" => R::Indices,
-            "Bytes" => R::Bytes,
-            "Shake128State" => R::Shake128State,
-            "Matrix" => R::FrSparseCoo,
-            "RistrettoMatrix" => R::DalekSparseCoo,
-            "KoalaBearMatrix" => R::KoalaBearSparseCoo,
-            "KoalaBearExt8Matrix" => R::KoalaBearExt8SparseCoo,
-            "KoalaBearExt8Field" => R::KoalaBearExt8,
-            "KoalaBearExt8Vector" => R::KoalaBearExt8Vector,
-            "KoalaBearExt8Polynomial" => R::KoalaBearExt8Polynomial,
-            "KoalaBearExt8Round" => R::KoalaBearExt8Round,
-            "KoalaBearExt4Matrix" => R::KoalaBearExt4SparseCoo,
-            "KoalaBearExt4Field" => R::KoalaBearExt4,
-            "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
-            "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
-            "KoalaBearExt4Round" => R::KoalaBearExt4Round,
-            "Binary64Matrix" => R::Binary64SparseCoo,
-            "Binary64Field" => R::Binary64,
-            "Binary64Vector" => R::Binary64Vector,
-            "Binary64Polynomial" => R::Binary64Polynomial,
-            "Binary64Round" => R::Binary64Round,
-            "Binary64Ext3Matrix" => R::Binary64Ext3SparseCoo,
-            "Binary64Ext3Field" => R::Binary64Ext3,
-            "Binary64Ext3Vector" => R::Binary64Ext3Vector,
-            "Binary64Ext3Polynomial" => R::Binary64Ext3Polynomial,
-            "Binary64Ext3Round" => R::Binary64Ext3Round,
-            "KoalaBearField" => R::KoalaBear,
-            "KoalaBearVector" => R::KoalaBearVector,
-            "KoalaBearPolynomial" => R::KoalaBearPolynomial,
-            "KoalaBearRound" => R::KoalaBearRound,
-            "Vector" => R::FrVector,
-            "Polynomial" => R::Polynomial,
-            "RistrettoField" => R::DalekScalar,
-            "RistrettoVector" => R::DalekVector,
-            "RistrettoPolynomial" => R::DalekPolynomial,
-            "RistrettoRound" => R::DalekRound,
-            "RistrettoGroup" => R::Ristretto,
-            "RistrettoGroups" => R::RistrettoVector,
-            "EdwardsGroup" => R::EdwardsPrime,
-            "EdwardsGroups" => R::EdwardsPrimeVector,
-            "FrDiagonal" => R::FrDiagonal,
-            "RistrettoDiagonal" => R::RistrettoDiagonal,
-            "Field" => R::Fr,
-            "Table" => R::TableLsb,
-            "TableMsb" => R::TableMsb,
-            "Point" => R::Point,
-            "Round" => R::Round,
-            "Bool" => R::Bool,
-            "Rng" => R::Resource,
-            "Commitment" => R::Pcs,
-            "OpeningState" => R::Pcs,
-            "Proof" => R::Pcs,
-            "ProverKey" => R::Pcs,
-            "VerifierKey" => R::Pcs,
-            "Nonce" => R::Resource,
-            "Transcript" => R::Resource,
-            "Curve" => R::G1,
-            "Groups" => R::Groups,
-            name => panic!("missing physical fixture for {name}"),
+        let representation =
+            match value.payload_name() {
+                "Sequence" => R::Sequence,
+                "FixedVector" => R::FixedVector,
+                "FieldArray" => R::FieldArray,
+                "Variant" => R::Variant,
+                "ResourceUnit" => R::ResourceUnit,
+                "BlstField" | "BlstVector" | "BlstG1" | "BlstG1Vector" | "BlstG2"
+                | "BlstG2Vector" => crate::operations::blst::physical(kind, identity)
+                    .unwrap()
+                    .representation(),
+                "HaloField" | "HaloVector" | "HaloG1" | "HaloG1Vector" | "HaloG2"
+                | "HaloG2Vector" => crate::operations::halo2curves::physical(kind, identity)
+                    .unwrap()
+                    .representation(),
+                "Bn254Field" => R::Bn254Fr,
+                "Bn254Vector" => R::Bn254FrVector,
+                "Bn254Polynomial" => R::Bn254Polynomial,
+                "Bn254Round" => R::Bn254Round,
+                "Bn254Matrix" => R::Bn254SparseCoo,
+                "Bn254G1" => R::Bn254G1,
+                "Bn254Gt" => R::Bn254Gt,
+                "Bn254G1Vector" => R::Bn254G1Vector,
+                "Bn254G2" => R::Bn254G2,
+                "Bn254G2Vector" => R::Bn254G2Vector,
+                "Bls12381G2" => R::Bls12381G2,
+                "Bls12381G2Vector" => R::Bls12381G2Vector,
+                "Bls12381Gt" => R::Bls12381Gt,
+                "OracleRoot" => R::MerkleRoot,
+                "OraclePath" => R::MerklePath,
+                "OracleState" => R::MerkleState,
+                "OracleRoots" => R::MerkleRoots,
+                "OracleStates" => R::MerkleStates,
+                "MerkleDigest" => R::MerkleDigest,
+                "MerkleProof" => R::MerkleProof,
+                "MerkleTree" => R::MerkleTree,
+                "MerkleDigests" => R::MerkleDigests,
+                "MerkleTrees" => R::MerkleTrees,
+                "Index" => R::Index,
+                "Indices" => R::Indices,
+                "Bytes" => R::Bytes,
+                "Shake128State" => R::Shake128State,
+                "Matrix" => R::FrSparseCoo,
+                "RistrettoMatrix" => R::DalekSparseCoo,
+                "KoalaBearMatrix" => R::KoalaBearSparseCoo,
+                "KoalaBearExt8Matrix" => R::KoalaBearExt8SparseCoo,
+                "KoalaBearExt8Field" => R::KoalaBearExt8,
+                "KoalaBearExt8Vector" => R::KoalaBearExt8Vector,
+                "KoalaBearExt8Polynomial" => R::KoalaBearExt8Polynomial,
+                "KoalaBearExt8Round" => R::KoalaBearExt8Round,
+                "KoalaBearExt4Matrix" => R::KoalaBearExt4SparseCoo,
+                "KoalaBearExt4Field" => R::KoalaBearExt4,
+                "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
+                "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
+                "KoalaBearExt4Round" => R::KoalaBearExt4Round,
+                "BabyBearField" => R::BabyBear,
+                "BabyBearVector" => R::BabyBearVector,
+                "BabyBearPolynomial" => R::BabyBearPolynomial,
+                "BabyBearRound" => R::BabyBearRound,
+                "BabyBearMatrix" => R::BabyBearSparseCoo,
+                "BabyBearExt4Field" => R::BabyBearExt4,
+                "BabyBearExt4Vector" => R::BabyBearExt4Vector,
+                "BabyBearExt4Polynomial" => R::BabyBearExt4Polynomial,
+                "BabyBearExt4Round" => R::BabyBearExt4Round,
+                "BabyBearExt4Matrix" => R::BabyBearExt4SparseCoo,
+                "GoldilocksField" => R::Goldilocks,
+                "GoldilocksVector" => R::GoldilocksVector,
+                "GoldilocksPolynomial" => R::GoldilocksPolynomial,
+                "GoldilocksRound" => R::GoldilocksRound,
+                "GoldilocksMatrix" => R::GoldilocksSparseCoo,
+                "GoldilocksExt2Field" => R::GoldilocksExt2,
+                "GoldilocksExt2Vector" => R::GoldilocksExt2Vector,
+                "GoldilocksExt2Polynomial" => R::GoldilocksExt2Polynomial,
+                "GoldilocksExt2Round" => R::GoldilocksExt2Round,
+                "GoldilocksExt2Matrix" => R::GoldilocksExt2SparseCoo,
+                "Binary64Matrix" => R::Binary64SparseCoo,
+                "Binary64Field" => R::Binary64,
+                "Binary64Vector" => R::Binary64Vector,
+                "Binary64Polynomial" => R::Binary64Polynomial,
+                "Binary64Round" => R::Binary64Round,
+                "Binary64Ext3Matrix" => R::Binary64Ext3SparseCoo,
+                "Binary64Ext3Field" => R::Binary64Ext3,
+                "Binary64Ext3Vector" => R::Binary64Ext3Vector,
+                "Binary64Ext3Polynomial" => R::Binary64Ext3Polynomial,
+                "Binary64Ext3Round" => R::Binary64Ext3Round,
+                "KoalaBearField" => R::KoalaBear,
+                "KoalaBearVector" => R::KoalaBearVector,
+                "KoalaBearPolynomial" => R::KoalaBearPolynomial,
+                "KoalaBearRound" => R::KoalaBearRound,
+                "Vector" => R::FrVector,
+                "Polynomial" => R::Polynomial,
+                "RistrettoField" => R::DalekScalar,
+                "RistrettoVector" => R::DalekVector,
+                "RistrettoPolynomial" => R::DalekPolynomial,
+                "RistrettoRound" => R::DalekRound,
+                "RistrettoGroup" => R::Ristretto,
+                "RistrettoGroups" => R::RistrettoVector,
+                "EdwardsGroup" => R::EdwardsPrime,
+                "EdwardsGroups" => R::EdwardsPrimeVector,
+                "FrDiagonal" => R::FrDiagonal,
+                "RistrettoDiagonal" => R::RistrettoDiagonal,
+                "Field" => R::Fr,
+                "Table" => R::TableLsb,
+                "TableMsb" => R::TableMsb,
+                "Point" => R::Point,
+                "Round" => R::Round,
+                "Bool" => R::Bool,
+                "Rng" => R::Resource,
+                "Commitment" => R::Pcs,
+                "OpeningState" => R::Pcs,
+                "Proof" => R::Pcs,
+                "ProverKey" => R::Pcs,
+                "VerifierKey" => R::Pcs,
+                "Nonce" => R::Resource,
+                "Transcript" => R::Resource,
+                "Curve" => R::G1,
+                "Groups" => R::Groups,
+                name => panic!("missing physical fixture for {name}"),
+            };
+        let expected = if matches!(representation, R::Extension(_)) {
+            crate::contracts::physical(kind, identity).unwrap().clone()
+        } else {
+            PhysicalType::new(logical, representation).unwrap()
         };
-        let expected = PhysicalType::new(logical, representation).unwrap();
         assert_eq!(value.physical_type(), expected, "{value:?}");
         classified.push((value.clone(), expected.clone()));
         assert_eq!(value.retained_bytes(), bytes, "{value:?}");
@@ -452,6 +494,92 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         // Every payload is safe to clone/drop without executing an operation.
         drop(cloned);
     };
+    use zkc_kernels::blst::bls12_381 as blst;
+    check(
+        Value::BlstField(blst::Scalar::from(1)),
+        Type::Field,
+        I::Bls12381Fr,
+        512,
+    );
+    check(
+        Value::BlstVector(Arc::new(
+            blst::ScalarVector::filled(2, blst::Scalar::from(1)).unwrap(),
+        )),
+        Type::Vector,
+        I::Bls12381Fr,
+        320,
+    );
+    check(
+        Value::BlstG1(blst::G1::generator()),
+        Type::Group,
+        I::Bls12381G1,
+        512,
+    );
+    check(
+        Value::BlstG1Vector(Arc::new(
+            blst::G1Vector::filled(2, blst::G1::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bls12381G1,
+        256 + 2 * std::mem::size_of::<blst::G1Element>(),
+    );
+    check(
+        Value::BlstG2(Arc::new(blst::G2::generator())),
+        Type::Group,
+        I::Bls12381G2,
+        512,
+    );
+    check(
+        Value::BlstG2Vector(Arc::new(
+            blst::G2Vector::filled(2, blst::G2::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bls12381G2,
+        256 + 2 * std::mem::size_of::<blst::G2Element>(),
+    );
+    use zkc_kernels::halo2curves::bn254 as halo;
+    check(
+        Value::HaloField(halo::Scalar::from(1)),
+        Type::Field,
+        I::Bn254Fr,
+        512,
+    );
+    check(
+        Value::HaloVector(Arc::new(
+            halo::ScalarVector::filled(2, halo::Scalar::from(1)).unwrap(),
+        )),
+        Type::Vector,
+        I::Bn254Fr,
+        320,
+    );
+    check(
+        Value::HaloG1(halo::G1::generator()),
+        Type::Group,
+        I::Bn254G1,
+        512,
+    );
+    check(
+        Value::HaloG1Vector(Arc::new(
+            halo::G1Vector::filled(2, halo::G1::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bn254G1,
+        256 + 2 * std::mem::size_of::<halo::G1Element>(),
+    );
+    check(
+        Value::HaloG2(Arc::new(halo::G2::generator())),
+        Type::Group,
+        I::Bn254G2,
+        512,
+    );
+    check(
+        Value::HaloG2Vector(Arc::new(
+            halo::G2Vector::filled(2, halo::G2::generator()).unwrap(),
+        )),
+        Type::Groups,
+        I::Bn254G2,
+        256 + 2 * std::mem::size_of::<halo::G2Element>(),
+    );
     check(
         Value::Shake128State(Arc::new(crate::hash::Shake128State::default())),
         Type::Shake128State,
@@ -542,6 +670,46 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt4Polynomial,
         KoalaBearExt4Round,
         KoalaBearExt4Matrix,
+        16
+    );
+    scalar_family!(
+        BabyBear::new(1),
+        BabyBear,
+        BabyBearField,
+        BabyBearVector,
+        BabyBearPolynomial,
+        BabyBearRound,
+        BabyBearMatrix,
+        4
+    );
+    scalar_family!(
+        BabyBearExt4::from(BabyBear::new(1)),
+        BabyBearExt4,
+        BabyBearExt4Field,
+        BabyBearExt4Vector,
+        BabyBearExt4Polynomial,
+        BabyBearExt4Round,
+        BabyBearExt4Matrix,
+        16
+    );
+    scalar_family!(
+        Goldilocks::new(1),
+        Goldilocks,
+        GoldilocksField,
+        GoldilocksVector,
+        GoldilocksPolynomial,
+        GoldilocksRound,
+        GoldilocksMatrix,
+        8
+    );
+    scalar_family!(
+        GoldilocksExt2::from(Goldilocks::new(1)),
+        GoldilocksExt2,
+        GoldilocksExt2Field,
+        GoldilocksExt2Vector,
+        GoldilocksExt2Polynomial,
+        GoldilocksExt2Round,
+        GoldilocksExt2Matrix,
         16
     );
     scalar_family!(
@@ -792,20 +960,24 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     );
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap();
     let fixed = Value::FixedVector(
-        crate::FixedVector::new(logical, [KoalaBear::new(1); 2].into()).unwrap(),
+        crate::FixedVector::new(
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
+            [KoalaBear::new(1); 2].into(),
+        )
+        .unwrap(),
     );
-    check(fixed.clone(), Type::FixedVector, I::None, 1288);
+    let fixed_bytes = 1288 + fixed.physical_type().descriptor_bytes();
+    check(fixed.clone(), Type::FixedVector, I::None, fixed_bytes);
+    let array_type = zkc_runtime::vm::PhysicalType::default_for(
+        LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
+    )
+    .unwrap();
+    let array_bytes = 1344 + array_type.descriptor_bytes();
     check(
-        Value::FieldArray(
-            crate::FieldArray::new(
-                LogicalType::field_array(I::Bls12381Fr, 2).unwrap(),
-                [Scalar::from(1); 2].into(),
-            )
-            .unwrap(),
-        ),
+        Value::FieldArray(crate::FieldArray::new(array_type, [Scalar::from(1); 2].into()).unwrap()),
         Type::FieldArray,
         I::None,
-        1344,
+        array_bytes,
     );
     let descriptor = LogicalType::parse(&zkc_test_support::variants::logical(
         "Bulk",
@@ -815,12 +987,17 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     .variant_descriptor()
     .unwrap()
     .clone();
-    let variant_bytes = descriptor.retained_bytes() + 256 + 512 + 1288;
-    let sequence_type = LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap();
+    let variant_type =
+        zkc_runtime::vm::PhysicalType::default_for(LogicalType::variant(descriptor)).unwrap();
+    let variant_bytes = variant_type.descriptor_bytes() + 256 + 512 + fixed_bytes;
+    let sequence_type = zkc_runtime::vm::PhysicalType::default_for(
+        LogicalType::sequence(LogicalType::parse("index").unwrap()).unwrap(),
+    )
+    .unwrap();
     check(
         Value::Sequence(
             crate::Sequence::new(
-                LogicalType::parse("index").unwrap(),
+                sequence_type.clone(),
                 vec![Value::Index(7)],
                 &Policy::default(),
             )
@@ -831,7 +1008,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         256 + sequence_type.descriptor_bytes() + 256 + 512 + 512,
     );
     check(
-        Value::pack_variant(descriptor, 0, vec![fixed]).unwrap(),
+        Value::pack_variant(variant_type, 0, vec![fixed]).unwrap(),
         Type::Variant,
         I::None,
         variant_bytes,
@@ -877,6 +1054,19 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     drop(check);
     assert_eq!(seen, Value::PAYLOAD_NAMES.iter().copied().collect());
     for (value, actual) in &classified {
+        if let zkc_runtime::vm::Representation::Extension(representation) = actual.representation()
+        {
+            // Equal names and mathematical types in another catalog do not
+            // authorize that catalog to classify an installed resident payload.
+            let mut foreign = zkc_runtime::vm::ContractsBuilder::standard();
+            let other = foreign
+                .add_representation(representation.name(), actual.logical().clone())
+                .unwrap();
+            assert_eq!(actual.spelling(), other.spelling());
+            assert_ne!(*actual, other);
+            assert!(!value.has_type(&other));
+            assert!(value.has_type(&actual.clone()));
+        }
         for (_, expected) in &classified {
             assert_eq!(value.has_type(expected), actual == expected);
         }
@@ -969,12 +1159,13 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                     [["entry", "main", [["P", "actor"]]]]
                 ]))
                 .unwrap();
-                let admitted = zkc_runtime::vm::Program::decode(&carrier)
-                    .and_then(|program| {
-                        program.check_installation(&native)?;
-                        Ok(program)
-                    })
-                    .unwrap();
+                let admitted =
+                    zkc_runtime::vm::Program::decode(&carrier, crate::native_contracts())
+                        .and_then(|program| {
+                            program.check_installation(&native)?;
+                            Ok(program)
+                        })
+                        .unwrap();
                 native = match Runner::new(&admitted, "main", "P", "session", native, vec![wrong]) {
                     Err(error) => {
                         assert!(
@@ -997,7 +1188,7 @@ fn independent_same_port_provider_and_missing_owner_are_checked() {
     let mut row = Alternative {
         identity: "independent/field.mul",
         original: "arkworks/field.mul",
-        primary: zkc_runtime::vm::Identity::Bls12381Fr,
+        domains: &[zkc_runtime::vm::Identity::Bls12381Fr],
         ports: crate::bindings::PortTransform::Default,
         handler: Some(arithmetic),
         deterministic: true,
@@ -1052,7 +1243,7 @@ fn fixed_implementations_reject_alternative_registration() {
     for original in [
         "arkworks/table.relayout",
         "plonky3/fixed_vector.dot",
-        "arkworks/pairing.check",
+        "arkworks/pairing.apply",
         "plonky3/field.embed",
         "plonky3/vector.embed",
         "arkworks/bool.and",
@@ -1065,7 +1256,7 @@ fn fixed_implementations_reject_alternative_registration() {
                 .alternative(&Alternative {
                     identity: "independent/fixed",
                     original,
-                    primary: Identity::Bls12381Fr,
+                    domains: &[Identity::Bls12381Fr],
                     ports: crate::bindings::PortTransform::Default,
                     handler: None,
                     deterministic: true,
@@ -1085,7 +1276,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
         .alternative(&Alternative {
             identity: "independent/observation",
             original: "arkworks/transcript.native.indexed.observe.data",
-            primary: Identity::Merlin3Fr64Be,
+            domains: &[Identity::Merlin3Fr64Be],
             ports: crate::bindings::PortTransform::Default,
             handler: None,
             deterministic: true,
@@ -1123,7 +1314,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
             .alternative(&Alternative {
                 identity: "independent/second",
                 original: "independent/observation",
-                primary: Identity::Merlin3Fr64Be,
+                domains: &[Identity::Merlin3Fr64Be],
                 ports: crate::bindings::PortTransform::Default,
                 handler: None,
                 deterministic: false,
@@ -1141,7 +1332,7 @@ fn curve_alternative_requires_the_exact_group() {
         .alternative(&Alternative {
             identity: "independent/bn254-add",
             original: "arkworks/curve.add",
-            primary: Identity::Bn254G1,
+            domains: &[Identity::Bn254G1],
             ports: crate::bindings::PortTransform::Default,
             handler: None,
             deterministic: true,
@@ -1184,7 +1375,7 @@ fn transcript_alternative_refuses_unsupported_table_payload() {
         .alternative(&Alternative {
             identity: "independent/msb-observation",
             original: "arkworks/transcript.native.indexed.observe.data",
-            primary: Identity::Merlin3Fr64Be,
+            domains: &[Identity::Merlin3Fr64Be],
             ports: crate::bindings::PortTransform::Msb,
             handler: None,
             deterministic: true,
@@ -1283,6 +1474,7 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "matrix.dimension",
         "matrix.get",
         "matrix.identity_check",
+        "pairing.check",
         "matrix.mul_vector",
         "matrix.row_dot",
         "matrix.shape_check",
@@ -1470,7 +1662,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
         let normalize = |v: Value| match v {
             Value::TableMsb(t) => Value::Table(Arc::new(t.to_lsb(&policy.ark_bounds()).unwrap())),
             Value::Point(v) | Value::Polynomial(v) => Value::Vector(v),
-            Value::Round(v) => Value::Vector(Arc::from(v)),
+            Value::Round(v) => Value::Vector(v.into()),
             other => other,
         };
         let encode = |v: Value| native().encode_native_value(&normalize(v)).unwrap();
@@ -1485,31 +1677,39 @@ fn every_alternative_executes_and_preserves_the_original_result() {
 
 #[test]
 fn collection_limits_follow_payload_storage() {
-    use std::sync::Arc;
-    use zkc_runtime::vm::{Backend, Identity, LogicalType, Type};
+    use zkc_runtime::vm::{Backend, Identity, LogicalType, Type, Value as _};
     let mut native = backend();
     native.core.policy.max_table_elements = 2;
-    let roots = Value::OracleRoots(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 3]));
+    let roots = Value::OracleRoots(crate::oracle::Domain::Base, [[0u8; 32]; 3].into());
     assert_eq!(
         native.validate_value(&roots).unwrap_err().code,
         "exhausted:element-limit"
     );
     native.core.policy.max_table_elements = 64;
-    let path = Value::OraclePath(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 25]));
+    let path = Value::OraclePath(crate::oracle::Domain::Base, [[0u8; 32]; 25].into());
     assert_eq!(
         native.validate_value(&path).unwrap_err().code,
         "refused:oracle-path-length"
     );
-    native.core.policy.max_value_bytes = 1800;
     let logical = LogicalType::fixed_vector(
         LogicalType::new(Type::Field, Identity::KoalaBear).unwrap(),
         64,
     )
     .unwrap();
     let fixed = Value::FixedVector(
-        crate::FixedVector::new(logical, vec![crate::KoalaBear::new(1); 64].into()).unwrap(),
+        crate::FixedVector::new(
+            zkc_runtime::vm::PhysicalType::default_for(logical).unwrap(),
+            vec![crate::KoalaBear::new(1); 64].into(),
+        )
+        .unwrap(),
     );
+    native.core.policy.max_value_bytes = fixed.retained_bytes();
     native.validate_value(&fixed).unwrap();
+    native.core.policy.max_value_bytes -= 1;
+    assert_eq!(
+        native.validate_value(&fixed).unwrap_err().code,
+        "exhausted:output-bytes"
+    );
 }
 
 #[test]
@@ -1518,7 +1718,22 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
     let native = backend();
     let runtime_rows = OperationBinding::installed_implementations().unwrap();
     let backend_rows = native.installed_implementations();
-    assert_eq!(runtime_rows, backend_rows);
+    let mut standard_rows = runtime_rows
+        .into_iter()
+        .filter(|(name, _)| !name.starts_with("blst/"))
+        .collect::<Vec<_>>();
+    let mut actual_standard = backend_rows
+        .iter()
+        .filter(|(name, _)| {
+            !name.starts_with("blst/resident/")
+                && !name.starts_with("halo2curves-axiom/resident/")
+                && name != "native/representation.convert"
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    standard_rows.sort();
+    actual_standard.sort();
+    assert_eq!(standard_rows, actual_standard);
     let arguments: &[&[&str]] = &[
         &[],
         &["bls12-381.fr"],
@@ -1563,6 +1778,12 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["bls12-381.fr", "arkworks.mle-lsb/0", "arkworks.mle-msb/0"],
     ];
     for (implementation, contract) in &backend_rows {
+        if implementation.starts_with("blst/resident/")
+            || implementation.starts_with("halo2curves-axiom/resident/")
+            || implementation == "native/representation.convert"
+        {
+            continue;
+        }
         assert!(
             arguments.iter().any(|args| {
                 let binding = binding(contract, args, implementation);
@@ -1620,4 +1841,846 @@ fn nested_transcript_observation_keeps_its_own_work_contract() {
     assert!(!native.prepare_binding(&observe).unwrap().sequence);
     let join = binding("bytes.join", &[], "native/bytes.join");
     assert!(native.prepare_binding(&join).unwrap().sequence);
+}
+
+#[test]
+fn residue_field_and_profile_instances_have_independently_expected_ports() {
+    use std::collections::BTreeMap;
+    use zkc_runtime::vm::{
+        AttributeRule as A, Backend, BoundSignature, LogicalType, OperationSignature, PhysicalType,
+        Representation as R, Type, Type::*,
+    };
+
+    // These acceptance facts are authored here, independently of owner rows,
+    // implementation-name inventories and either signature resolver.
+    let carriers = [
+        (
+            Identity::BabyBear,
+            [
+                R::BabyBear,
+                R::BabyBearVector,
+                R::BabyBearSparseCoo,
+                R::BabyBearPolynomial,
+                R::BabyBearRound,
+            ],
+            Identity::MerklePoseidon2BabyBear,
+        ),
+        (
+            Identity::BabyBearExt4,
+            [
+                R::BabyBearExt4,
+                R::BabyBearExt4Vector,
+                R::BabyBearExt4SparseCoo,
+                R::BabyBearExt4Polynomial,
+                R::BabyBearExt4Round,
+            ],
+            Identity::MerklePoseidon2BabyBearExt4,
+        ),
+        (
+            Identity::Goldilocks,
+            [
+                R::Goldilocks,
+                R::GoldilocksVector,
+                R::GoldilocksSparseCoo,
+                R::GoldilocksPolynomial,
+                R::GoldilocksRound,
+            ],
+            Identity::MerklePoseidon2Goldilocks,
+        ),
+        (
+            Identity::GoldilocksExt2,
+            [
+                R::GoldilocksExt2,
+                R::GoldilocksExt2Vector,
+                R::GoldilocksExt2SparseCoo,
+                R::GoldilocksExt2Polynomial,
+                R::GoldilocksExt2Round,
+            ],
+            Identity::MerklePoseidon2GoldilocksExt2,
+        ),
+    ];
+    let neutral = |kind| {
+        let representation = match kind {
+            Bool => R::Bool,
+            Index => R::Index,
+            Indices => R::Indices,
+            Bytes => R::Bytes,
+            _ => panic!("missing independent neutral port: {kind:?}"),
+        };
+        PhysicalType::new(
+            LogicalType::new(kind, Identity::None).unwrap(),
+            representation,
+        )
+        .unwrap()
+    };
+    let mut expected = BTreeMap::new();
+    let mut arguments = Vec::new();
+    for (field, representations, scheme) in carriers {
+        let port = |kind| {
+            let representation = match kind {
+                Field => representations[0],
+                Vector => representations[1],
+                Matrix => representations[2],
+                Polynomial => representations[3],
+                Round => representations[4],
+                Rng => R::Resource,
+                _ => return neutral(kind),
+            };
+            PhysicalType::new(LogicalType::new(kind, field).unwrap(), representation).unwrap()
+        };
+        let mut record = |names: &[&str], inputs: &[Type], outputs: &[Type], attributes| {
+            for name in names {
+                let declaration = binding(name, &[field.name()], &format!("plonky3/{name}"));
+                let key = (
+                    declaration.implementation,
+                    declaration.contract,
+                    declaration.arguments,
+                );
+                assert!(
+                    expected
+                        .insert(
+                            key,
+                            OperationSignature {
+                                inputs: inputs.iter().copied().map(port).collect(),
+                                outputs: outputs.iter().copied().map(port).collect(),
+                                attributes,
+                            }
+                        )
+                        .is_none(),
+                    "duplicate acceptance instance: {name}"
+                );
+            }
+        };
+        record(&["field.constant"], &[], &[Field], A::ResidueLiteral(field));
+        record(
+            &["field.add", "field.sub", "field.mul"],
+            &[Field, Field],
+            &[Field],
+            A::None,
+        );
+        record(&["field.neg", "field.inverse"], &[Field], &[Field], A::None);
+        record(&["field.equal"], &[Field, Field], &[Bool], A::None);
+        record(&["field.from_index"], &[Index], &[Field], A::None);
+        record(
+            &["vector.constant"],
+            &[],
+            &[Vector],
+            A::ResidueLiterals(field),
+        );
+        record(&["vector.empty"], &[], &[Vector], A::None);
+        record(
+            &["vector.splat", "vector.powers"],
+            &[Field],
+            &[Vector],
+            A::NaturalIndex,
+        );
+        record(
+            &["vector.fill", "vector.geometric"],
+            &[Field, Index],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["vector.append", "vector.scale"],
+            &[Vector, Field],
+            &[Vector],
+            A::None,
+        );
+        record(&["vector.find_last"], &[Vector, Field], &[Index], A::None);
+        record(
+            &[
+                "vector.add",
+                "vector.sub",
+                "vector.mul",
+                "vector.concat",
+                "vector.interleave",
+                "vector.kronecker",
+            ],
+            &[Vector, Vector],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["vector.matvec"],
+            &[Vector, Vector],
+            &[Vector],
+            A::MatrixShape,
+        );
+        record(&["vector.equal"], &[Vector, Vector], &[Bool], A::None);
+        record(&["vector.dot"], &[Vector, Vector], &[Field], A::None);
+        record(
+            &["vector.sum", "vector.product"],
+            &[Vector],
+            &[Field],
+            A::None,
+        );
+        record(
+            &[
+                "vector.inverse",
+                "vector.prefix_sum",
+                "vector.prefix_product",
+                "vector.bit_reverse",
+            ],
+            &[Vector],
+            &[Vector],
+            A::None,
+        );
+        record(&["vector.split"], &[Vector], &[Vector, Vector], A::None);
+        record(
+            &["vector.rotate", "vector.bit_reverse_rows"],
+            &[Vector, Index],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["vector.slice", "vector.transpose"],
+            &[Vector, Index, Index],
+            &[Vector],
+            A::None,
+        );
+        record(&["vector.get"], &[Vector, Index], &[Field], A::None);
+        record(&["vector.at"], &[Vector], &[Field], A::NaturalIndex);
+        record(&["vector.length"], &[Vector], &[Index], A::None);
+        record(
+            &["vector.length_check"],
+            &[Vector],
+            &[Bool],
+            A::NaturalIndex,
+        );
+        record(&["vector.gather"], &[Vector], &[Vector], A::NaturalIndices);
+        record(
+            &["vector.scatter_sum"],
+            &[Vector],
+            &[Vector],
+            A::ScatterShape,
+        );
+        record(
+            &["matrix.mul_vector", "matrix.transpose_mul_vector"],
+            &[Matrix, Vector],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["matrix.bilinear"],
+            &[Matrix, Vector, Vector],
+            &[Field],
+            A::None,
+        );
+        record(
+            &["matrix.row_dot", "matrix.column_dot"],
+            &[Matrix, Vector, Index],
+            &[Field],
+            A::None,
+        );
+        record(&["matrix.get"], &[Matrix, Index, Index], &[Field], A::None);
+        record(&["matrix.dimension"], &[Matrix], &[Index], A::Unsigned64);
+        record(
+            &["matrix.shape_check"],
+            &[Matrix],
+            &[Bool],
+            A::MatrixDimensions,
+        );
+        record(
+            &["matrix.identity_check"],
+            &[Matrix],
+            &[Bool],
+            A::MatrixIdentity,
+        );
+        record(
+            &["poly.from_coefficients"],
+            &[Vector],
+            &[Polynomial],
+            A::None,
+        );
+        record(&["poly.coefficients"], &[Polynomial], &[Vector], A::None);
+        record(
+            &["poly.coefficient_count"],
+            &[Polynomial],
+            &[Index],
+            A::None,
+        );
+        record(
+            &["poly.degree_check"],
+            &[Polynomial],
+            &[Bool],
+            A::NaturalIndex,
+        );
+        record(
+            &["poly.divide_opening"],
+            &[Polynomial, Field, Field],
+            &[Polynomial],
+            A::None,
+        );
+        record(
+            &["poly.univariate_evaluate"],
+            &[Polynomial, Field],
+            &[Field],
+            A::None,
+        );
+        record(
+            &["poly.univariate_boundary"],
+            &[Polynomial],
+            &[Field],
+            A::None,
+        );
+        record(&["poly.boundary"], &[Round], &[Field], A::None);
+        record(&["poly.round_evaluate"], &[Round, Field], &[Field], A::None);
+        record(
+            &["poly.coset_evaluate"],
+            &[Polynomial, Field, Index],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["poly.coset_interpolate"],
+            &[Vector, Field],
+            &[Polynomial],
+            A::None,
+        );
+        record(
+            &["poly.coset_evaluate_batch"],
+            &[Vector, Index, Index, Field, Index],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["poly.coset_evaluate_at"],
+            &[Vector, Index, Index, Field, Field],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["poly.coset_extend"],
+            &[Vector, Index, Index, Field, Field, Index],
+            &[Vector],
+            A::None,
+        );
+        record(&["poly.domain_root"], &[Index], &[Field], A::None);
+        record(
+            &["poly.domain_point"],
+            &[Field, Index, Index],
+            &[Field],
+            A::None,
+        );
+        record(&["poly.domain_points"], &[Field, Index], &[Vector], A::None);
+        record(
+            &["poly.even_odd_fold"],
+            &[Vector, Field, Field],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["poly.opening_quotient"],
+            &[Vector, Field, Field, Field],
+            &[Vector],
+            A::None,
+        );
+        record(
+            &["poly.opening_quotient_sum"],
+            &[
+                Vector, Index, Index, Field, Indices, Vector, Vector, Vector, Vector,
+            ],
+            &[Vector],
+            A::None,
+        );
+        record(&["ring.point"], &[Vector], &[Vector], A::AssetIdentity);
+        record(
+            &["ring.rows", "ring.coefficients"],
+            &[Vector, Index],
+            &[Vector],
+            A::AssetIdentity,
+        );
+        record(
+            &["ring.affine_sum"],
+            &[Vector, Vector, Index],
+            &[Vector],
+            A::AssetIdentity,
+        );
+        record(&["encoding.field_le"], &[Field], &[Bytes], A::None);
+        record(&["encoding.fields_le"], &[Vector], &[Bytes], A::None);
+        record(
+            &["encoding.field_from_le"],
+            &[Bytes],
+            &[Bool, Field],
+            A::None,
+        );
+        record(
+            &["encoding.fields_from_le"],
+            &[Bytes],
+            &[Bool, Vector],
+            A::None,
+        );
+        if matches!(field, Identity::BabyBear | Identity::BabyBearExt4) {
+            record(
+                &["encoding.field_montgomery_le"],
+                &[Field],
+                &[Bytes],
+                A::None,
+            );
+            record(
+                &["encoding.fields_montgomery_le"],
+                &[Vector],
+                &[Bytes],
+                A::None,
+            );
+            record(
+                &["encoding.field_from_montgomery_le"],
+                &[Bytes],
+                &[Bool, Field],
+                A::None,
+            );
+            record(
+                &["encoding.fields_from_montgomery_le"],
+                &[Bytes],
+                &[Bool, Vector],
+                A::None,
+            );
+        }
+        if matches!(field, Identity::BabyBearExt4 | Identity::GoldilocksExt2) {
+            record(&["random.draw"], &[Rng], &[Field, Rng], A::None);
+            record(&["random.vector"], &[Rng], &[Vector, Rng], A::NaturalIndex);
+            record(&["random.index"], &[Rng, Index], &[Index, Rng], A::None);
+        }
+        arguments.push(vec![field.name().to_owned()]);
+
+        if matches!(field, Identity::BabyBearExt4 | Identity::GoldilocksExt2) {
+            let base = if field == Identity::BabyBearExt4 {
+                carriers[0]
+            } else {
+                carriers[2]
+            };
+            for (contract, kind, representation) in [
+                ("field.embed", Field, base.1[0]),
+                ("vector.embed", Vector, base.1[1]),
+            ] {
+                expected.insert(
+                    (
+                        format!("plonky3/{contract}"),
+                        contract.to_owned(),
+                        vec![field.name().to_owned()],
+                    ),
+                    OperationSignature {
+                        inputs: vec![
+                            PhysicalType::new(
+                                LogicalType::new(kind, base.0).unwrap(),
+                                representation,
+                            )
+                            .unwrap(),
+                        ],
+                        outputs: vec![port(kind)],
+                        attributes: A::None,
+                    },
+                );
+            }
+        }
+        // Numeric parameters are families. Exercise empty, scalar, vector and
+        // mixed masks, and both endpoints of the relation-table index range.
+        for mask in ["", "0", "1", "01", "10"] {
+            let args = vec![field.name().to_owned(), mask.to_owned()];
+            arguments.push(args.clone());
+            let inputs = std::iter::once(neutral(Index))
+                .chain(
+                    mask.bytes()
+                        .map(|bit| port(if bit == b'0' { Field } else { Vector })),
+                )
+                .collect::<Vec<_>>();
+            for (contract, output) in [
+                ("numerical.map", Vector),
+                ("numerical.sum", Field),
+                ("numerical.product", Field),
+            ] {
+                expected.insert(
+                    (
+                        format!("plonky3/{contract}"),
+                        contract.to_owned(),
+                        args.clone(),
+                    ),
+                    OperationSignature {
+                        inputs: inputs.clone(),
+                        outputs: vec![port(output)],
+                        attributes: A::NumericalExpression,
+                    },
+                );
+            }
+        }
+        for table in ["0", "1", "10", "1048576"] {
+            let args = vec![field.name().to_owned(), table.to_owned()];
+            arguments.push(args.clone());
+            for (contract, inputs, outputs) in [
+                (
+                    "relation.table_rows",
+                    vec![Vector, Vector, Vector, Index],
+                    vec![Vector],
+                ),
+                ("relation.table_shape", vec![Index], vec![Index; 7]),
+                ("relation.table_input", vec![Index; 2], vec![Index; 3]),
+                ("relation.table_scope", vec![Index; 2], vec![Index; 2]),
+                ("relation.table_point", vec![Vector], vec![Vector]),
+                ("relation.table_points", vec![Vector, Index], vec![Vector]),
+                (
+                    "relation.table_record_points",
+                    vec![Vector, Index],
+                    vec![Vector],
+                ),
+                ("relation.table_widths", vec![], vec![Index; 3]),
+                ("relation.table_policy", vec![], vec![Index; 5]),
+                ("relation.table_interactions", vec![Index], vec![Index; 2]),
+                (
+                    "relation.table_interaction",
+                    vec![Index; 2],
+                    vec![Index; 12],
+                ),
+            ] {
+                expected.insert(
+                    (
+                        format!("plonky3/{contract}"),
+                        contract.to_owned(),
+                        args.clone(),
+                    ),
+                    OperationSignature {
+                        inputs: inputs.into_iter().map(port).collect(),
+                        outputs: outputs.into_iter().map(port).collect(),
+                        attributes: A::AssetIdentity,
+                    },
+                );
+            }
+        }
+
+        let row_port = |kind| match kind {
+            Vector => port(Vector),
+            Index | Indices | Bool => neutral(kind),
+            _ => PhysicalType::new(
+                LogicalType::new(kind, scheme).unwrap(),
+                match kind {
+                    Commitment => R::MerkleDigest,
+                    Proof => R::MerkleProof,
+                    OpeningState => R::MerkleTree,
+                    Commitments => R::MerkleDigests,
+                    OpeningStates => R::MerkleTrees,
+                    _ => panic!("missing independent row port: {kind:?}"),
+                },
+            )
+            .unwrap(),
+        };
+        let args = vec![scheme.name().to_owned()];
+        arguments.push(args.clone());
+        for (contract, inputs, outputs) in [
+            (
+                "oracle.commit",
+                vec![Vector, Index],
+                vec![Commitment, OpeningState],
+            ),
+            (
+                "oracle.open",
+                vec![OpeningState, Index],
+                vec![Vector, Proof],
+            ),
+            (
+                "oracle.check",
+                vec![Commitment, Index, Index, Index, Vector, Proof],
+                vec![Bool],
+            ),
+            (
+                "oracle.open_many",
+                vec![OpeningState, Indices],
+                vec![Vector, Proof],
+            ),
+            (
+                "oracle.check_many",
+                vec![Commitment, Index, Index, Indices, Vector, Proof],
+                vec![Bool],
+            ),
+            ("commitments.empty", vec![], vec![Commitments]),
+            (
+                "commitments.append",
+                vec![Commitments, Commitment],
+                vec![Commitments],
+            ),
+            ("commitments.at", vec![Commitments, Index], vec![Commitment]),
+            ("commitments.length", vec![Commitments], vec![Index]),
+            ("opening_states.empty", vec![], vec![OpeningStates]),
+            (
+                "opening_states.append",
+                vec![OpeningStates, OpeningState],
+                vec![OpeningStates],
+            ),
+            (
+                "opening_states.at",
+                vec![OpeningStates, Index],
+                vec![OpeningState],
+            ),
+            ("opening_states.length", vec![OpeningStates], vec![Index]),
+        ] {
+            expected.insert(
+                (
+                    format!("plonky3/{contract}"),
+                    contract.to_owned(),
+                    args.clone(),
+                ),
+                OperationSignature {
+                    inputs: inputs.into_iter().map(row_port).collect(),
+                    outputs: outputs.into_iter().map(row_port).collect(),
+                    attributes: A::None,
+                },
+            );
+        }
+        let suite = match field {
+            Identity::BabyBearExt4 => Identity::Merlin3BabyBearExt4,
+            Identity::GoldilocksExt2 => Identity::Merlin3GoldilocksExt2,
+            _ => continue,
+        };
+        let state =
+            PhysicalType::new(LogicalType::new(Transcript, suite).unwrap(), R::Resource).unwrap();
+        let transcript_port = |kind| {
+            if kind == Transcript {
+                state.clone()
+            } else {
+                port(kind)
+            }
+        };
+        let args = vec![suite.name().to_owned()];
+        arguments.push(args.clone());
+        for (contract, inputs, outputs, attributes) in [
+            (
+                "transcript.observe",
+                vec![Transcript, Bytes, Bytes],
+                vec![Transcript],
+                A::None,
+            ),
+            (
+                "transcript.challenge",
+                vec![Transcript, Bytes],
+                vec![Transcript, Field],
+                A::None,
+            ),
+            (
+                "transcript.index",
+                vec![Transcript, Bytes, Index],
+                vec![Transcript, Index],
+                A::None,
+            ),
+            (
+                "transcript.native.indexed.challenge",
+                vec![Transcript, Indices],
+                vec![Field, Transcript],
+                A::NativeChallengeTemplate,
+            ),
+            (
+                "transcript.native.indexed.index",
+                vec![Transcript, Index, Indices],
+                vec![Index, Transcript],
+                A::NativeIndexTemplate,
+            ),
+        ] {
+            expected.insert(
+                (
+                    format!("plonky3/{contract}"),
+                    contract.to_owned(),
+                    args.clone(),
+                ),
+                OperationSignature {
+                    inputs: inputs.into_iter().map(transcript_port).collect(),
+                    outputs: outputs.into_iter().map(transcript_port).collect(),
+                    attributes,
+                },
+            );
+        }
+        let mut payloads = vec![
+            neutral(Bool),
+            neutral(Index),
+            neutral(Indices),
+            neutral(Bytes),
+        ];
+        for (identity, representations, _) in carriers {
+            for (kind, representation) in [
+                (Field, representations[0]),
+                (Vector, representations[1]),
+                (Matrix, representations[2]),
+            ] {
+                payloads.push(
+                    PhysicalType::new(LogicalType::new(kind, identity).unwrap(), representation)
+                        .unwrap(),
+                );
+            }
+        }
+        for payload in payloads {
+            let args = vec![suite.name().to_owned(), payload.logical().spelling()];
+            arguments.push(args.clone());
+            let contract = "transcript.native.indexed.observe.data";
+            expected.insert(
+                (format!("plonky3/{contract}"), contract.to_owned(), args),
+                OperationSignature {
+                    inputs: vec![state.clone(), payload, neutral(Indices)],
+                    outputs: vec![state.clone()],
+                    attributes: A::NativeMessageTemplate,
+                },
+            );
+        }
+    }
+    arguments.sort();
+    arguments.dedup();
+    let native = backend();
+    let mut native_instances = BTreeMap::new();
+    let mut runtime_instances = BTreeMap::new();
+    for actual_native in [false, true] {
+        let (rows, instances) = if actual_native {
+            (native.installed_implementations(), &mut native_instances)
+        } else {
+            (
+                OperationBinding::installed_implementations().unwrap(),
+                &mut runtime_instances,
+            )
+        };
+        for (implementation, contract) in rows {
+            // This inventory concerns Plonky3 field/profile installations.
+            // Optional logical resources accept arbitrary nominal names;
+            // a slot named "baby-bear" is not a field implementation.
+            if !implementation.starts_with("plonky3/") {
+                continue;
+            }
+            for args in &arguments {
+                let declaration = OperationBinding {
+                    contract: contract.into(),
+                    arguments: args.clone(),
+                    implementation: implementation.clone(),
+                    physical_arguments: vec![],
+                };
+                let signature: Option<BoundSignature> = if actual_native {
+                    native.binding_signature(&declaration)
+                } else {
+                    declaration.signature().ok()
+                };
+                if let Some(signature) = signature {
+                    instances.insert(
+                        (implementation.clone(), contract.to_owned(), args.clone()),
+                        signature,
+                    );
+                }
+            }
+        }
+    }
+    for (owner, instances) in [
+        ("runtime", &runtime_instances),
+        ("native", &native_instances),
+    ] {
+        assert_eq!(
+            instances.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>(),
+            "{owner} nominal installation inventory"
+        );
+        for (instance, signature) in &expected {
+            assert_eq!(
+                instances.get(instance),
+                Some(signature),
+                "{owner} ports for {instance:?}"
+            );
+        }
+    }
+
+    // Removing one field admission leaves the implementation-name witness and
+    // KoalaBear admission intact, but loses an independently required instance.
+    let mut missing = installed().unwrap().clone();
+    missing
+        .entries
+        .get_mut("plonky3/field.mul")
+        .unwrap()
+        .signature = Signature::Custom(|b| {
+        if b.arguments == ["goldilocks.ext2-binomial7"] {
+            None
+        } else {
+            installed()
+                .unwrap()
+                .get("plonky3/field.mul")
+                .unwrap()
+                .signature(b)
+        }
+    });
+    assert_eq!(
+        missing.implementations(),
+        installed().unwrap().implementations()
+    );
+    assert!(
+        missing
+            .get("plonky3/field.mul")
+            .unwrap()
+            .signature(&binding("field.mul", &["koala-bear"], "plonky3/field.mul"))
+            .is_some()
+    );
+    let lost = expected
+        .iter()
+        .filter(|((implementation, contract, args), signature)| {
+            let declaration = OperationBinding {
+                contract: contract.clone(),
+                arguments: args.clone(),
+                implementation: implementation.clone(),
+                physical_arguments: vec![],
+            };
+            missing
+                .get(implementation)
+                .and_then(|entry| entry.signature(&declaration))
+                .as_ref()
+                != Some(*signature)
+        })
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        lost,
+        vec![(
+            "plonky3/field.mul".to_owned(),
+            "field.mul".to_owned(),
+            vec!["goldilocks.ext2-binomial7".to_owned()]
+        )]
+    );
+}
+
+#[test]
+fn actual_handler_timing_metadata_refuses_a_weakened_expected_contract_before_frames() {
+    use zkc_runtime::vm::{
+        Backend, ExecutionPolicy, ImplementationRequirements, InstalledOperation, Program,
+        TimingRequirement,
+    };
+    let known = ImplementationRequirements {
+        timing: TimingRequirement::VariableTime,
+        timing_operands: &[0, 1],
+    };
+    let installed = installed().unwrap();
+    assert_eq!(
+        installed
+            .get("blst/resident/curve.msm")
+            .unwrap()
+            .requirements,
+        known
+    );
+    // Model an expected inventory that incorrectly says Unspecified while the
+    // installed handler explicitly retains the independently known MSM premise.
+    // Keeping the fixed ports and identity unchanged isolates metadata checking.
+    let b = binding("curve.msm", &["bls12-381.g1"], "arkworks/curve.msm");
+    let contracts = crate::native_contracts_with_policy(ExecutionPolicy::general_purpose());
+    let expected = Program::decode(&program(&b, &[]), &contracts).unwrap();
+    assert_eq!(
+        contracts.resolve(b.clone()).unwrap().requirements(),
+        ImplementationRequirements::default()
+    );
+    let mut inventory = installed.clone();
+    inventory
+        .entries
+        .get_mut(&b.implementation)
+        .unwrap()
+        .requirements = known;
+    let mut actual = backend().with_contracts(contracts).unwrap();
+    actual.implementations = Box::leak(Box::new(inventory));
+    assert_eq!(actual.prepare_binding(&b).unwrap().requirements(), known);
+    assert!(expected.check_installation(&actual).is_err());
+    let error = match Runner::new(
+        &expected,
+        "main",
+        "P",
+        "session",
+        actual,
+        vec![Value::Vector(vec![].into()), Value::Groups(vec![].into())],
+    ) {
+        Ok(_) => panic!("weakened timing contract entered a frame"),
+        Err(error) => error,
+    };
+    assert_eq!(error.backend.active_frames(), 0);
 }

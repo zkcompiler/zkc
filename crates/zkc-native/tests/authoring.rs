@@ -141,7 +141,7 @@ fn runtime_backend_signature_divergence_is_refused_at_admission() {
         &["out".into()],
     );
     for input in [false, true] {
-        let error = zkc_runtime::vm::Program::decode(&bytes)
+        let error = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
             .and_then(|program| {
                 program.check_installation(&Divergent { input })?;
                 Ok(program)
@@ -160,34 +160,43 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     let bytes = program(&[b], &[], vec![], &[], &[]);
     let mut carrier: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     // A retained valid declaration needs no reachable operation advertisement.
-    zkc_runtime::vm::Program::decode(&bytes)
+    zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&Divergent { input: true })?;
             Ok(program)
         })
         .unwrap();
     carrier[1][0][3] = json!("artifact-authorized/vector.dot");
-    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-        .and_then(|program| {
-            program.check_installation(&Divergent { input: true })?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&Divergent { input: true })?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
     carrier[1][0][3] = json!("arkworks-pairwise/vector.dot");
-    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-        .and_then(|program| {
-            program.check_installation(&backend(Policy::default()))?;
-            Ok(program)
-        })
-        .unwrap();
+    zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend(Policy::default()))?;
+        Ok(program)
+    })
+    .unwrap();
     carrier[1][0][2] = json!(["koala-bear"]);
-    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
-        .and_then(|program| {
-            program.check_installation(&Divergent { input: true })?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&Divergent { input: true })?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
 }
 #[test]
@@ -196,6 +205,7 @@ fn unknown_implementations_and_extra_authority_facets_are_refused() {
         contract: "curve.msm".into(),
         arguments: vec!["ristretto255.group".into()],
         implementation: "invalid/curve.msm".into(),
+        physical_arguments: vec![],
     };
     assert!(b.signature().is_err());
     assert!(backend(Policy::default()).binding_signature(&b).is_none());
@@ -208,12 +218,15 @@ fn unknown_implementations_and_extra_authority_facets_are_refused() {
         serde_json::from_slice(&program(&[b], &sig.inputs, vec![], &[], &[])).unwrap();
     bytes[1][0].as_array_mut().unwrap().push(json!([]));
     // An extra producer facet is a malformed record, not a security override.
-    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bytes).unwrap())
-        .and_then(|program| {
-            program.check_installation(&backend(Policy::default()))?;
-            Ok(program)
-        })
-        .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(
+        &serde_json::to_vec(&bytes).unwrap(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend(Policy::default()))?;
+        Ok(program)
+    })
+    .unwrap_err();
     assert_eq!(error.code, ErrorCode::Record);
     assert_eq!(error.detail, "operation binding arity");
 }

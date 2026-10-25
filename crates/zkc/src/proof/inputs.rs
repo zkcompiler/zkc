@@ -206,7 +206,12 @@ pub(super) fn prepare(
     let mut admission = Admission::new(host.capacity.loading())?
         .with_shared_ledger(host.shared_ledger.clone())
         .with_retained_inputs(host.retained_inputs);
-    for (input, port) in request.public.iter().zip(&host.public) {
+    for ((input, port), ty) in request
+        .public
+        .iter()
+        .zip(&host.public)
+        .zip(&host.public_types)
+    {
         if port.logical.kind() == Type::VerifierKey {
             let InputValue::Wire(bytes) = input else {
                 return Err("native-input-private".into());
@@ -214,8 +219,7 @@ pub(super) fn prepare(
             host.capacity.check_wire(bytes.len())?;
             admission.work(bytes.len())?;
         } else {
-            let ty = PhysicalType::default_for(port.logical.clone()).map_err(|e| e.to_string())?;
-            crate::host::admission::check_native_data(&ty, input, host.capacity)?;
+            crate::host::admission::check_native_data(ty, input, host.capacity)?;
         }
     }
     let _root_tree = zkc_runtime::host::wire::reserve_allocation(
@@ -258,7 +262,7 @@ pub(super) fn prepare(
             .get(&port.original)
             .ok_or("native-proof-key-authority")?;
         let key = imports.import(bytes, pin)?;
-        let id = admission.add(Input::Ready(Value::VerifierKey(key.clone())))?;
+        let id = admission.add(Input::ready(Value::VerifierKey(key.clone())))?;
         public_ids.insert(port.original, id);
         material
             .entry(bytes.as_slice())
@@ -295,14 +299,21 @@ pub(super) fn prepare(
             );
         }
     }
-    let backend = backend(policy, role, host.entry.entry(), registry, constraints)?
-        .with_ring_assets(host.ring_assets.clone())
-        .map_err(|e| e.to_string())?
-        .with_relation_assets(host.relation_assets.clone())
-        .map_err(|e| e.to_string())?
-        .with_ring_work_limit(host.ring_work_limit)
-        .with_external_work_limit(host.external_work_limit)
-        .with_sequence_work_limit(host.sequence_work_limit);
+    let backend = backend(
+        policy,
+        role,
+        host.entry.entry(),
+        registry,
+        constraints,
+        host.cpu.clone(),
+    )?
+    .with_ring_assets(host.ring_assets.clone())
+    .map_err(|e| e.to_string())?
+    .with_relation_assets(host.relation_assets.clone())
+    .map_err(|e| e.to_string())?
+    .with_ring_work_limit(host.ring_work_limit)
+    .with_external_work_limit(host.external_work_limit)
+    .with_sequence_work_limit(host.sequence_work_limit);
     let selected = |original| {
         host.setups
             .inputs
@@ -315,12 +326,16 @@ pub(super) fn prepare(
         .zip(&request.public)
         .map(|(port, input)| (port.original, input))
         .collect();
-    for (input, port) in request.public.iter().zip(&host.public) {
+    for ((input, port), ty) in request
+        .public
+        .iter()
+        .zip(&host.public)
+        .zip(&host.public_types)
+    {
         if port.logical.kind() == Type::VerifierKey {
             continue;
         }
-        let ty = PhysicalType::default_for(port.logical.clone()).map_err(|e| e.to_string())?;
-        let id = admission.native_data(&backend, ty, input, selected(port.original))?;
+        let id = admission.native_data(&backend, ty.clone(), input, selected(port.original))?;
         if input.wire_bytes().is_none() {
             admission.charge_encoding(id)?;
         }
@@ -341,7 +356,7 @@ pub(super) fn prepare(
             InputValue::VerifierKey => *public_ids
                 .get(&port.original)
                 .ok_or("native-proof-key-port")?,
-            InputValue::ProverKey(material) => admission.add(Input::Ready(
+            InputValue::ProverKey(material) => admission.add(Input::ready(
                 material.operand(
                     ty,
                     selected(port.original)
@@ -382,11 +397,9 @@ pub(super) fn prepare(
                     ) => a.same_source(b) && a_pin == b_pin,
                     _ => false,
                 };
-                let same = same_source
-                    && PhysicalType::default_for(port.logical.clone())
-                        .ok()
-                        .as_ref()
-                        == Some(ty);
+                // Deployment admission checked the complete physical type at
+                // every role occurrence of this public source port.
+                let same = same_source;
                 let id = if same {
                     public_ids[&port.original]
                 } else {

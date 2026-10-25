@@ -108,6 +108,9 @@ root and invocation input decoding and validation, preparation, SDK execution, a
 materialization, and output encoding/publication when requested. Proof SDK
 execution includes preparation and is labelled that way. Times are inclusive wall
 times and must not be summed across nested scopes.
+The CLI command timer starts after argument validation, includes CPU initialization
+and report-directory preparation, and stops before report publication. External
+subprocess wall time additionally includes process startup and publication.
 Count-enabled builds and diagnostic runs are separate from release timing
 baselines. Counts can reveal reached control flow.
 

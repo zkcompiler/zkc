@@ -157,10 +157,10 @@ pub(super) fn proof_inputs(
     interface: &Interface,
     role: &RolePorts,
     public: &[InputValue],
+    public_types: &[zkc_runtime::vm::PhysicalType],
     private: NamedValues,
     capacity: crate::host::capacity::Capacity,
 ) -> Result<Vec<InputValue>, String> {
-    use zkc_runtime::vm::PhysicalType;
     let private = values(interface.named_inputs(role), private, None)?;
     let mut private = private.into_iter();
     let mut inputs = Vec::new();
@@ -169,13 +169,11 @@ pub(super) fn proof_inputs(
         if port.key == Some(zkc_runtime::vm::Type::VerifierKey) {
             inputs.push(InputValue::VerifierKey);
         } else if let Some((start, len)) = port.public {
-            for (input, spelling) in public[start..start + len].iter().zip(&port.schema.leaves) {
-                let logical = interface
-                    .logical_type(spelling)
-                    .expect("checked input type");
-                let physical =
-                    PhysicalType::default_for(logical.clone()).map_err(|e| e.to_string())?;
-                crate::host::admission::check_native_data(&physical, input, capacity)?;
+            for (input, physical) in public[start..start + len]
+                .iter()
+                .zip(&public_types[start..start + len])
+            {
+                crate::host::admission::check_native_data(physical, input, capacity)?;
                 inputs.push(duplicate(input, capacity, &mut public_wire_bytes)?);
             }
         } else {

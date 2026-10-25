@@ -98,6 +98,7 @@ impl Bundle {
         bytes: &[u8],
         expected_sha256: &[u8; 32],
         backend: &B,
+        contracts: &crate::vm::Contracts,
         limits: BundleLimits,
     ) -> Result<Self, BundleError> {
         limits.validate()?;
@@ -108,13 +109,14 @@ impl Bundle {
         if &actual != expected_sha256 {
             return Err(BundleError::Identity);
         }
-        Self::admit(bytes, backend, limits)
+        Self::admit(bytes, backend, contracts, limits)
     }
     /// Decode outer bounds, then let Runtime admit and type the exact candidate.
     /// Every schedule check runs before any runner or backend root is created.
     pub fn admit<B: WireBackend>(
         bytes: &[u8],
         backend: &B,
+        contracts: &crate::vm::Contracts,
         limits: BundleLimits,
     ) -> Result<Self, BundleError> {
         limits.validate()?;
@@ -122,7 +124,7 @@ impl Bundle {
         if raw.format != "zkc.run/0" {
             return Err(BundleError::Format);
         }
-        let admitted = crate::vm::Program::decode(raw.candidate.as_bytes())
+        let admitted = crate::vm::Program::decode(raw.candidate.as_bytes(), contracts)
             .map_err(|e| BundleError::Candidate(e.to_string()))?;
         admitted
             .check_installation(backend)
@@ -190,7 +192,11 @@ impl Bundle {
             }
             for action in &r.actions {
                 if let ProgramAction::Send { ty, .. } | ProgramAction::Receive { ty, .. } = action
-                    && !backend.supports_wire(ty)
+                    && (!self
+                        .admitted
+                        .contracts()
+                        .permits_wire(ty, crate::vm::WireCodec::Native)
+                        || !backend.supports_wire(ty))
                 {
                     return Err(BundleError::WireType);
                 }

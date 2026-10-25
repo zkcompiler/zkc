@@ -56,6 +56,7 @@ fn binding_for(suite: Identity, contract: &str) -> OperationBinding {
             },
             contract
         ),
+        physical_arguments: vec![],
     }
 }
 fn program_for(suite: Identity, observations: bool) -> Vec<u8> {
@@ -212,7 +213,7 @@ fn nominal_provider_codec_and_wrong_field_admission() {
         );
         let bytes = program_for(SUITE, contract.contains("observe"));
         assert!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&b)?;
                     Ok(program)
@@ -253,7 +254,7 @@ fn malformed_roots_wrong_suite_authority_and_budget() {
     let wrong = b
         .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
         .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(&p)
+    let admitted = zkc_runtime::vm::Program::decode(&p, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -263,7 +264,7 @@ fn malformed_roots_wrong_suite_authority_and_budget() {
     let mut a = backend(Policy::default());
     let t = a.issue_transcript_for(SUITE, domain(), 2, &root()).unwrap();
     let other = backend(Policy::default());
-    let admitted = zkc_runtime::vm::Program::decode(&p)
+    let admitted = zkc_runtime::vm::Program::decode(&p, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&other)?;
             Ok(program)
@@ -286,7 +287,7 @@ fn stale_handle_and_malformed_origin_do_not_create_a_successor() {
     let old = t.clone();
     let (out, b) = run_program(b, &p, vec![t]);
     assert!(out.is_ok());
-    let admitted = zkc_runtime::vm::Program::decode(&p)
+    let admitted = zkc_runtime::vm::Program::decode(&p, zkc_native::native_contracts())
         .and_then(|program| {
             program.check_installation(&b)?;
             Ok(program)
@@ -297,12 +298,15 @@ fn stale_handle_and_malformed_origin_do_not_create_a_successor() {
     let mut malformed: Json = serde_json::from_slice(&p).unwrap();
     malformed[2][0][4][1][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
     assert!(
-        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&malformed).unwrap())
-            .and_then(|program| {
-                program.check_installation(&b)?;
-                Ok(program)
-            })
-            .is_err()
+        zkc_runtime::vm::Program::decode(
+            &serde_json::to_vec(&malformed).unwrap(),
+            zkc_native::native_contracts()
+        )
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .is_err()
     );
 }
 #[test]

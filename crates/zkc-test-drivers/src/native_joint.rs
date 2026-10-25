@@ -20,6 +20,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &bytes,
         &backend("Alice", "admission", "main"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap()
@@ -378,6 +379,7 @@ fn services(directory: &Path) {
     let b = Bundle::admit(
         raw.to_string().as_bytes(),
         &backend("Alice", "admission", "main"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap();

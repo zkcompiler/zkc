@@ -315,7 +315,7 @@ module { "protocol.module"() ({
                       module.getBody()->front().getRegion(0).front().begin());
     local::OperationBindingOp::create(
         builder, module.getLoc(), "extra", "vector.add",
-        builder.getStrArrayAttr({"koala-bear"}), "");
+        builder.getStrArrayAttr({"koala-bear"}), "", mlir::ArrayAttr{});
   });
 
   // Formation refuses while parsing. A `defended` refusal is also refused by

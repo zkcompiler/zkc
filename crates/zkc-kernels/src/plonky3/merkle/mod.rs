@@ -171,14 +171,19 @@ pub fn commit<I: Instance>(
     values: Vec<I::Element>,
     shape: Shape,
     max_bytes: usize,
-) -> std::result::Result<(Vec<u8>, Tree<I>), Error> {
+) -> std::result::Result<(Vec<u8>, Tree<I>), Error>
+where
+    Commitment<I>: Send,
+    ProverData<I>: Send,
+{
     if values.len() != shape.elements() {
         return Err(Error::ValueCount);
     }
     if retained_bytes::<I>(shape).is_none_or(|bytes| bytes > max_bytes) {
         return Err(Error::ByteLimit);
     }
-    let (commitment, data) = I::mmcs().commit(vec![RowMajorMatrix::new(values, shape.width())]);
+    let (commitment, data) =
+        crate::cpu::install(|| I::mmcs().commit(vec![RowMajorMatrix::new(values, shape.width())]));
     Ok((I::root(&commitment), Tree { shape, data }))
 }
 

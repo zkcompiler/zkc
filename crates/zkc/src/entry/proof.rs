@@ -133,6 +133,13 @@ impl ProofReport {
     }
 }
 impl ProofEntry {
+    pub fn with_cpu(mut self, cpu: crate::execution::CpuExecution) -> Self {
+        self.native = self.native.with_cpu(cpu);
+        self
+    }
+    pub fn cpu(&self) -> &crate::execution::CpuExecution {
+        self.native.cpu()
+    }
     /// Set deployment-owned public computation storage. Zero limits disable it.
     pub fn with_preparation_limits(mut self, limits: zkc_runtime::vm::PreparationLimits) -> Self {
         self.native = self.native.with_preparation_limits(limits);
@@ -151,7 +158,21 @@ impl ProofEntry {
         options: ProofOptions,
         setups: SetupAuthority,
     ) -> EntryResult<Self> {
-        Self::admit_inner(package, options, setups, None, false)
+        Self::admit_with_cpu(
+            package,
+            options,
+            setups,
+            crate::execution::CpuExecution::serial().map_err(|e| E::new(P::Admission, e))?,
+        )
+    }
+    /// Supply CPU ownership before admitting any proof backend.
+    pub fn admit_with_cpu(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+        cpu: crate::execution::CpuExecution,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, options, setups, None, false, cpu)
     }
     /// Admit only the selected operation's executable installation and input plan.
     pub fn admit_operation(
@@ -160,15 +181,32 @@ impl ProofEntry {
         setups: SetupAuthority,
         operation: ProofOperation,
     ) -> EntryResult<Self> {
-        Self::admit_inner(package, options, setups, Some(operation), false)
+        Self::admit_operation_with_cpu(
+            package,
+            options,
+            setups,
+            operation,
+            crate::execution::CpuExecution::serial().map_err(|e| E::new(P::Admission, e))?,
+        )
+    }
+    /// Admit one operation with an application-owned CPU context.
+    pub fn admit_operation_with_cpu(
+        package: Package,
+        options: ProofOptions,
+        setups: SetupAuthority,
+        operation: ProofOperation,
+        cpu: crate::execution::CpuExecution,
+    ) -> EntryResult<Self> {
+        Self::admit_inner(package, options, setups, Some(operation), false, cpu)
     }
     pub(crate) fn admit_host_operation(
         package: Package,
         options: ProofOptions,
         setups: SetupAuthority,
         operation: ProofOperation,
+        cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
-        Self::admit_inner(package, options, setups, Some(operation), true)
+        Self::admit_inner(package, options, setups, Some(operation), true, cpu)
     }
     fn admit_inner(
         package: Package,
@@ -176,6 +214,7 @@ impl ProofEntry {
         setups: SetupAuthority,
         operation: Option<ProofOperation>,
         retained_inputs: bool,
+        cpu: crate::execution::CpuExecution,
     ) -> EntryResult<Self> {
         let interface =
             crate::entry::BoundInterface::read(&package).map_err(|e| E::new(P::Interface, e))?;
@@ -224,13 +263,17 @@ impl ProofEntry {
                 &package.authenticated_artifact(),
                 authority,
                 op == ProofOperation::Prove,
+                cpu,
             ),
             Some(op) => NativeDeployment::admit_artifact_operation(
                 &package.authenticated_artifact(),
                 authority,
                 Some(op == ProofOperation::Prove),
+                cpu,
             ),
-            None => NativeDeployment::admit_artifact(&package.authenticated_artifact(), authority),
+            None => {
+                NativeDeployment::admit_artifact(&package.authenticated_artifact(), authority, cpu)
+            }
         }
         .and_then(|n| n.with_capacity(options.capacity))
         .and_then(|n| n.with_external_work_limit(options.external_work))
@@ -465,6 +508,7 @@ impl ProofEntry {
             &self.interface,
             role,
             &public,
+            self.native.public_types(),
             request.private.inputs,
             capacity,
         )?;
@@ -571,13 +615,16 @@ impl ProofEntry {
         let output_setups = if encode_results {
             // Reconstruct logical setup pins from the checked deployment, rather
             // than accepting result-encoding authority from candidate data.
-            crate::entry::files::output_setups_with(
-                &request.setups,
-                &self.setup_authority,
-                capacity,
-                &mut imports,
-            )
-            .map_err(|e| E::new(P::Preparation, e))?
+            self.cpu()
+                .enter(|| {
+                    crate::entry::files::output_setups_with(
+                        &request.setups,
+                        &self.setup_authority,
+                        capacity,
+                        &mut imports,
+                    )
+                })
+                .map_err(|e| E::new(P::Preparation, e))?
         } else {
             Default::default()
         };
@@ -602,6 +649,7 @@ impl ProofFileCall<'_> {
                 .execute_with(self.request, proof, self.attempts, &mut self.imports)?;
         Ok(ProofFileResult {
             report,
+            cpu: self.host.cpu().clone(),
             capacity: self.host.native.capacity(),
             output_setups: self.output_setups,
             encode_results: self.encode_results,
@@ -612,6 +660,7 @@ impl ProofFileCall<'_> {
 /// Execution observations survive later result encoding failures.
 pub struct ProofFileResult {
     pub report: ProofReport,
+    cpu: crate::execution::CpuExecution,
     capacity: Capacity,
     output_setups: zkc_native::SetupRegistry,
     encode_results: bool,
@@ -623,13 +672,14 @@ impl ProofFileResult {
         if !self.encode_results {
             return Ok(None);
         }
-        crate::entry::files::proof_outputs(
+        crate::entry::files::proof_outputs_with_cpu(
             self.report
                 .outputs
                 .as_ref()
                 .ok_or("entry-proof-incomplete")?,
             self.capacity,
             self.output_setups.clone(),
+            self.cpu.clone(),
         )
         .map(Some)
     }

@@ -105,10 +105,11 @@ pub fn check(
             .unwrap()
             .push(json!(["9", logical]));
         let bytes = serde_json::to_vec(&candidate).unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
-            program.check_installation(&codec)?;
-            Ok(program)
-        });
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+            .and_then(|program| {
+                program.check_installation(&codec)?;
+                Ok(program)
+            });
         admitted.expect("unused private input must pass ordinary typed admission");
         changed[4] = json!(String::from_utf8(bytes.clone()).unwrap());
         changed[5] = json!(digest(&bytes));

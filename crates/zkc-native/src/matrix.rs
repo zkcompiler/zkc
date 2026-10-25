@@ -2,8 +2,7 @@
 //! The logical matrix contract has no storage layout or backend dependency.
 use crate::operations::arithmetic::{Coefficient, reserve};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use ark_ff::{BigInt, BigInteger, PrimeField};
-use p3_field::{BasedVectorSpace, PrimeField32};
+use ark_ff::{BigInt, PrimeField};
 use sha2::{Digest, Sha256};
 use zkc_runtime::vm::Identity;
 
@@ -35,26 +34,6 @@ impl IdentityCoefficient for crate::RistrettoScalar {
         BigInt::<4>::new(limbs).to_string()
     }
 }
-impl IdentityCoefficient for crate::KoalaBear {
-    const IDENTITY: Identity = Identity::KoalaBear;
-    fn canonical(self) -> String {
-        self.as_canonical_u32().to_string()
-    }
-}
-impl IdentityCoefficient for crate::KoalaBearExt4 {
-    const IDENTITY: Identity = Identity::KoalaBearExt4;
-    fn canonical(self) -> String {
-        // As for the octic extension: sum(c_i * p^i) in the ascending basis.
-        let radix = BigInt::<4>::from(zkc_kernels::plonky3::MODULUS);
-        let mut value = BigInt::<4>::default();
-        let coordinates: &[crate::KoalaBear] = self.as_basis_coefficients_slice();
-        for c in coordinates.iter().rev() {
-            value = value.mul_low(&radix);
-            value.add_with_carry(&BigInt::from(c.as_canonical_u32()));
-        }
-        value.to_string()
-    }
-}
 // A binary field's coefficient is the decimal integer of its bit pattern,
 // sum(c_i * 2^i) over its coordinates c_i in GF(2): the extension rule above
 // with characteristic two (docs/spec/domains/vectors.md).
@@ -70,23 +49,6 @@ impl IdentityCoefficient for crate::Binary64Ext3 {
         BigInt::<3>::new(zkc_kernels::plonky3::binary::ext3_bits(self)).to_string()
     }
 }
-impl IdentityCoefficient for crate::KoalaBearExt8 {
-    const IDENTITY: Identity = Identity::KoalaBearExt8;
-    fn canonical(self) -> String {
-        // The installed ascending power basis gives the canonical integer
-        // sum(c_i * p^i). Its decimal spelling is injective and agrees with
-        // prime-field spelling for embedded base elements. p^8 < 2^256.
-        let radix = BigInt::<4>::from(zkc_kernels::plonky3::MODULUS);
-        let mut value = BigInt::<4>::default();
-        let coordinates: &[crate::KoalaBear] = self.as_basis_coefficients_slice();
-        for c in coordinates.iter().rev() {
-            value = value.mul_low(&radix);
-            value.add_with_carry(&BigInt::from(c.as_canonical_u32()));
-        }
-        value.to_string()
-    }
-}
-
 pub const MATRIX_DIMENSION_LIMIT: usize = 1 << 16;
 pub const MATRIX_NONZERO_LIMIT: usize = 1 << 20;
 
@@ -286,48 +248,6 @@ impl Wire for crate::RistrettoScalar {
         Value::RistrettoMatrix(m)
     }
 }
-impl Wire for crate::KoalaBear {
-    const WIDTH: usize = 4;
-    const TAG: u8 = 25;
-    fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_kernels::plonky3::decode_scalar(bytes).map_err(crate::field_error)
-    }
-    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_kernels::plonky3::encode_scalar(self));
-        Ok(())
-    }
-    fn value(m: SparseCoo<Self>) -> Value {
-        Value::KoalaBearMatrix(m)
-    }
-}
-impl Wire for crate::KoalaBearExt8 {
-    const WIDTH: usize = 32;
-    const TAG: u8 = 30;
-    fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_kernels::plonky3::decode_extension(bytes).map_err(crate::field_error)
-    }
-    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_kernels::plonky3::encode_extension(self));
-        Ok(())
-    }
-    fn value(m: SparseCoo<Self>) -> Value {
-        Value::KoalaBearExt8Matrix(m)
-    }
-}
-impl Wire for crate::KoalaBearExt4 {
-    const WIDTH: usize = 16;
-    const TAG: u8 = 28;
-    fn decode(bytes: &[u8]) -> Result<Self> {
-        zkc_kernels::plonky3::decode_quartic(bytes).map_err(crate::field_error)
-    }
-    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
-        out.extend(zkc_kernels::plonky3::encode_quartic(self));
-        Ok(())
-    }
-    fn value(m: SparseCoo<Self>) -> Value {
-        Value::KoalaBearExt4Matrix(m)
-    }
-}
 impl Wire for crate::Binary64 {
     const WIDTH: usize = zkc_kernels::plonky3::binary::WIDTH;
     const TAG: u8 = 75;
@@ -391,6 +311,11 @@ pub(crate) fn encode(v: &Value, p: &Policy) -> Option<Result<Vec<u8>>> {
         Value::KoalaBearMatrix(m) => encode_matrix(m, p),
         Value::KoalaBearExt8Matrix(m) => encode_matrix(m, p),
         Value::KoalaBearExt4Matrix(m) => encode_matrix(m, p),
+        Value::BabyBearMatrix(m) => encode_matrix(m, p),
+        Value::BabyBearExt4Matrix(m) => encode_matrix(m, p),
+        Value::GoldilocksMatrix(m) => encode_matrix(m, p),
+        Value::GoldilocksExt2Matrix(m) => encode_matrix(m, p),
+
         Value::Binary64Matrix(m) => encode_matrix(m, p),
         Value::Binary64Ext3Matrix(m) => encode_matrix(m, p),
         _ => return None,
@@ -438,3 +363,16 @@ constructor!(bn254_matrix, Bn254Matrix, crate::Bn254Scalar);
 
 #[cfg(test)]
 mod tests;
+
+constructor!(baby_bear_matrix, BabyBearMatrix, crate::BabyBear);
+constructor!(
+    baby_bear_ext4_matrix,
+    BabyBearExt4Matrix,
+    crate::BabyBearExt4
+);
+constructor!(goldilocks_matrix, GoldilocksMatrix, crate::Goldilocks);
+constructor!(
+    goldilocks_ext2_matrix,
+    GoldilocksExt2Matrix,
+    crate::GoldilocksExt2
+);

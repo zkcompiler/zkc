@@ -62,6 +62,26 @@ pub const KOALA_BEAR_EXT4: NativeDomain = NativeDomain {
     group: None,
     provider: "plonky3",
 };
+pub const BABY_BEAR: NativeDomain = NativeDomain {
+    field: Identity::BabyBear,
+    group: None,
+    provider: "plonky3",
+};
+pub const BABY_BEAR_EXT4: NativeDomain = NativeDomain {
+    field: Identity::BabyBearExt4,
+    group: None,
+    provider: "plonky3",
+};
+pub const GOLDILOCKS: NativeDomain = NativeDomain {
+    field: Identity::Goldilocks,
+    group: None,
+    provider: "plonky3",
+};
+pub const GOLDILOCKS_EXT2: NativeDomain = NativeDomain {
+    field: Identity::GoldilocksExt2,
+    group: None,
+    provider: "plonky3",
+};
 /// Characteristic-two fields from Plonky3 0.8.0's `p3-binary-field`.
 pub const BINARY64: NativeDomain = NativeDomain {
     field: Identity::Binary64,
@@ -80,6 +100,10 @@ pub const INSTALLED: &[NativeDomain] = &[
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
     KOALA_BEAR_EXT4,
+    BABY_BEAR,
+    BABY_BEAR_EXT4,
+    GOLDILOCKS,
+    GOLDILOCKS_EXT2,
     BINARY64,
     BINARY64_EXT3,
     BN254_G1,
@@ -116,6 +140,9 @@ impl NativeDomain {
             };
             return PhysicalType::new(LogicalType::new(kind, group).ok()?, representation).ok();
         }
+        if let Some(physical) = crate::fields::physical(self.field, kind) {
+            return Some(physical);
+        }
         let (identity, representation) = match (self.field, kind) {
             (Identity::Bn254Fr, Field) => (self.field, R::Bn254Fr),
             (Identity::Bn254Fr, Vector) => (self.field, R::Bn254FrVector),
@@ -130,17 +157,6 @@ impl NativeDomain {
             (_, Shake128State) => (Identity::None, R::Shake128State),
             (Identity::Bls12381Fr, Matrix) => (self.field, R::FrSparseCoo),
             (Identity::Ristretto255Scalar, Matrix) => (self.field, R::DalekSparseCoo),
-            (Identity::KoalaBear, Matrix) => (self.field, R::KoalaBearSparseCoo),
-            (Identity::KoalaBearExt8, Field) => (self.field, R::KoalaBearExt8),
-            (Identity::KoalaBearExt8, Vector) => (self.field, R::KoalaBearExt8Vector),
-            (Identity::KoalaBearExt8, Polynomial) => (self.field, R::KoalaBearExt8Polynomial),
-            (Identity::KoalaBearExt8, Round) => (self.field, R::KoalaBearExt8Round),
-            (Identity::KoalaBearExt8, Matrix) => (self.field, R::KoalaBearExt8SparseCoo),
-            (Identity::KoalaBearExt4, Field) => (self.field, R::KoalaBearExt4),
-            (Identity::KoalaBearExt4, Vector) => (self.field, R::KoalaBearExt4Vector),
-            (Identity::KoalaBearExt4, Polynomial) => (self.field, R::KoalaBearExt4Polynomial),
-            (Identity::KoalaBearExt4, Round) => (self.field, R::KoalaBearExt4Round),
-            (Identity::KoalaBearExt4, Matrix) => (self.field, R::KoalaBearExt4SparseCoo),
             (Identity::Binary64, Field) => (self.field, R::Binary64),
             (Identity::Binary64, Vector) => (self.field, R::Binary64Vector),
             (Identity::Binary64, Polynomial) => (self.field, R::Binary64Polynomial),
@@ -151,10 +167,6 @@ impl NativeDomain {
             (Identity::Binary64Ext3, Polynomial) => (self.field, R::Binary64Ext3Polynomial),
             (Identity::Binary64Ext3, Round) => (self.field, R::Binary64Ext3Round),
             (Identity::Binary64Ext3, Matrix) => (self.field, R::Binary64Ext3SparseCoo),
-            (Identity::KoalaBear, Field) => (self.field, R::KoalaBear),
-            (Identity::KoalaBear, Vector) => (self.field, R::KoalaBearVector),
-            (Identity::KoalaBear, Polynomial) => (self.field, R::KoalaBearPolynomial),
-            (Identity::KoalaBear, Round) => (self.field, R::KoalaBearRound),
             (Identity::Ristretto255Scalar, Field) => (self.field, R::DalekScalar),
             (Identity::Ristretto255Scalar, Vector) => (self.field, R::DalekVector),
             (Identity::Ristretto255Scalar, Polynomial) => (self.field, R::DalekPolynomial),
@@ -168,7 +180,9 @@ impl NativeDomain {
             (Identity::Bls12381Fr, Commitment | Proof | ProverKey | VerifierKey | OpeningState) => {
                 (Identity::MultilinearKzgBls12381, R::Pcs)
             }
-            (Identity::KoalaBearExt8, Rng) => (self.field, R::Resource),
+            (Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2, Rng) => {
+                (self.field, R::Resource)
+            }
             (Identity::Bls12381Fr | Identity::Ristretto255Scalar, Rng | Nonce) => {
                 (self.field, R::Resource)
             }
@@ -205,6 +219,16 @@ pub struct NativeTranscript {
     pub provider: &'static str,
 }
 pub const TRANSCRIPTS: &[NativeTranscript] = &[
+    NativeTranscript {
+        suite: Identity::Merlin3BabyBearExt4,
+        domain: BABY_BEAR_EXT4,
+        provider: "plonky3",
+    },
+    NativeTranscript {
+        suite: Identity::Merlin3GoldilocksExt2,
+        domain: GOLDILOCKS_EXT2,
+        provider: "plonky3",
+    },
     NativeTranscript {
         suite: Identity::Merlin3KoalaBearExt8,
         domain: KOALA_BEAR_EXT8,

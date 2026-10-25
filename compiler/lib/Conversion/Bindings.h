@@ -1,6 +1,7 @@
 #ifndef ZKC_PROTOCOL_BINDING_PHYSICAL_H
 #define ZKC_PROTOCOL_BINDING_PHYSICAL_H
 #include "mlir/IR/BuiltinOps.h"
+#include "zkc/Target/Selection.h"
 namespace zkc {
 struct LinearContractionStats;
 }
@@ -25,6 +26,7 @@ mlir::LogicalResult lowerBoundPhysical(
     mlir::ModuleOp,
     llvm::ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats,
-    bool releaseStorage = false);
+    bool releaseStorage = false,
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
 } // namespace zkc::protocol
 #endif

@@ -17,7 +17,12 @@ fn resolve(
         return None;
     }
     let domain = support::field_domain(binding)?;
-    if binding.contract == "random.index" && domain.field != Identity::KoalaBearExt8 {
+    if binding.contract == "random.index"
+        && !matches!(
+            domain.field,
+            Identity::KoalaBearExt8 | Identity::BabyBearExt4 | Identity::GoldilocksExt2
+        )
+    {
         return None;
     }
     support::domain_signature(binding, row, selection, domain)

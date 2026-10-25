@@ -46,6 +46,7 @@ fn rectangular_transpose_preserves_coordinates_and_is_an_involution() {
             contract: "vector.transpose".into(),
             arguments: vec![nominal.into()],
             implementation: format!("{provider}/vector.transpose"),
+            physical_arguments: vec![],
         };
         let original = backend(p).encode_native_value(&vector).unwrap();
         let width = (original.len() - 10) / numbers.len();

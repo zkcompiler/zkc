@@ -261,6 +261,8 @@ impl Type {
 pub enum AttributeRule {
     None,
     FieldDecimal,
+    ResidueLiteral(super::Identity),
+    ResidueLiterals(super::Identity),
     Bn254Decimal,
     Bn254Decimals,
     RistrettoDecimal,

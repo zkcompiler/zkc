@@ -292,9 +292,10 @@ with case('binary-and-extension-identities-export-their-rows'):
         ['nominal', binary + '.ext3-trinomial1', 'Field', [['BaseField', binary]],
          ['ExtensionField', 'Field', 'CommRing'], '2']] and services == []
     nominals, _ = export(dead('koala-bear.ext4-binomial3'))[9]
-    assert [row[1] for row in nominals] == ['koala-bear.ext4-binomial3', 'koala-bear']
-    assert nominals[0][3:] == [[['BaseField', 'koala-bear']],
-                               ['ExtensionField', 'TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo'],
+    assert {row[1] for row in nominals} == {'koala-bear.ext4-binomial3', 'koala-bear'}
+    extension = next(row for row in nominals if row[1] == 'koala-bear.ext4-binomial3')
+    assert extension[3:] == [[['BaseField', 'koala-bear']],
+                               ['TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo', 'ExtensionField'],
                                '2130706433']
 
 with case('unsupported-service-contract'):

@@ -61,6 +61,9 @@ impl Keys {
     /// A seeded RNG is suitable for reproducible tests only. The trait bound
     /// does not establish unpredictable seeding or honest setup generation.
     /// No fresh setup occurs in commit/open/check.
+    /// Setup accepts non-Send RNGs and follows the caller's Rayon context.
+    /// Use `cpu.execute(|| Keys::setup_with_rng(...))` to confine local setup;
+    /// lexical `cpu.enter` alone does not install this development operation.
     pub fn setup_with_rng<R: RngCore + CryptoRng>(
         n: usize,
         rng: &mut R,
@@ -155,7 +158,7 @@ impl ProverKey {
     /// The returned opening state shares the table's immutable allocation.
     pub fn commit(&self, table: &Table) -> Result<CommittedTable, Error> {
         same_arity(self.metadata().arity, table.arity())?;
-        let raw = Pcs::commit(&self.inner.key, table.polynomial.as_ref());
+        let raw = crate::cpu::install(|| Pcs::commit(&self.inner.key, table.polynomial.as_ref()));
         same_arity(self.metadata().arity, raw.nv)?;
         let commitment = Commitment {
             raw,
@@ -193,11 +196,13 @@ impl CommittedTable {
     pub fn open(&self, point: &[Scalar]) -> Result<(Scalar, OpeningProof), Error> {
         same_arity(self.key.metadata().arity, point.len())?;
         let value = self.original.evaluate(point)?;
-        let raw = Pcs::open(
-            &self.key.inner.key,
-            self.original.polynomial.as_ref(),
-            point,
-        );
+        let raw = crate::cpu::install(|| {
+            Pcs::open(
+                &self.key.inner.key,
+                self.original.polynomial.as_ref(),
+                point,
+            )
+        });
         same_arity(self.key.metadata().arity, raw.proofs.len())?;
         Ok((
             value,
@@ -245,13 +250,9 @@ impl VerifierKey {
         same_arity(meta.arity, point.len())?; // upstream permits excess
         same_arity(meta.arity, proof.raw.proofs.len())?;
         // Verifier shape is established once by private constructors/import.
-        Ok(Pcs::check(
-            &self.inner.key,
-            &commitment.raw,
-            point,
-            value,
-            &proof.raw,
-        ))
+        Ok(crate::cpu::install(|| {
+            Pcs::check(&self.inner.key, &commitment.raw, point, value, &proof.raw)
+        }))
     }
 
     /// Encode this public key using the fixed envelope and fixed-size points.

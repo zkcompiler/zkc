@@ -11,12 +11,18 @@ use zkc_runtime::vm::{
 type LogicalResolver =
     fn(&OperationBinding) -> Result<OperationSignature<LogicalType>, AdmissionError>;
 
+fn expected_logical(
+    binding: &OperationBinding,
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
+    zkc_native::native_contracts().logical_signature(binding)
+}
+
 // Test-only resolver drift; no declaration, admission rule or serialized result
 // is replaced. Physical resolution continues through the installed runtime.
 fn divergent_logical_resolver(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>, AdmissionError> {
-    let mut signature = binding.logical_signature()?;
+    let mut signature = expected_logical(binding)?;
     if binding.contract == "field.add" {
         signature.outputs = vec![LogicalType::parse("bool")?];
     }
@@ -26,7 +32,13 @@ fn divergent_logical_resolver(
 // Construct only SSA plumbing. Production admission owns attribute syntax,
 // ranges, field selection, affine uses and installed backend agreement.
 fn operation_program(binding: &OperationBinding, attributes: &[Value]) -> Option<Vec<u8>> {
-    let signature = binding.signature().ok()?;
+    let signature = zkc_native::native_contracts_with_policy(
+        zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+    )
+    .resolve(binding.clone())
+    .ok()?
+    .signature()
+    .clone();
     let inputs: Vec<_> = signature
         .inputs
         .iter()
@@ -46,7 +58,8 @@ fn operation_program(binding: &OperationBinding, attributes: &[Value]) -> Option
             "probe_binding",
             binding.contract,
             binding.arguments,
-            binding.implementation
+            binding.implementation,
+            binding.physical_arguments
         ]],
         [[
             "function",
@@ -108,8 +121,7 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         return Some(entry_interface(request.get("entry_interface")?.as_str()?));
     }
     if request.len() == 1 && request.get("implementations") == Some(&Value::Bool(true)) {
-        let entries: Vec<_> = OperationBinding::installed_implementations()
-            .ok()?
+        let entries: Vec<_> = zkc_native::native_contracts().installed_implementations()
             .into_iter()
             .map(|(implementation, contract)| json!({"contract": contract, "implementation": implementation}))
             .collect();
@@ -117,8 +129,18 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
             json!({"accepted": true, "discovery": "physical-registry", "implementations": entries}),
         );
     }
+    if request.len() == 1 && request.contains_key("physical_properties") {
+        let contracts = zkc_native::native_contracts();
+        let ty = contracts
+            .physical_type(request.get("physical_properties")?.as_str()?)
+            .ok()?;
+        return Some(json!({"accepted":true, "copy":ty.is_duplicable(),
+            "drop":ty.is_discardable(), "native_message":contracts.permits_wire(&ty, zkc_runtime::vm::WireCodec::Native)}));
+    }
     if request.len() == 1 && request.contains_key("physical_type") {
-        let ty = PhysicalType::parse(request.get("physical_type")?.as_str()?).ok()?;
+        let ty = zkc_native::native_contracts()
+            .physical_type(request.get("physical_type")?.as_str()?)
+            .ok()?;
         return Some(json!({"accepted": true, "canonical": ty.spelling()}));
     }
     if request.len() == 1 {
@@ -131,8 +153,8 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
             "serializable": logical.kind().is_serializable(), "default_physical": physical}));
     }
     let facet_query = request.len() == 2 && request.contains_key("facets");
-    let attribute_query = request.len() == 5 && request.contains_key("attributes");
-    if !facet_query && !attribute_query && request.len() != 4 {
+    let attribute_query = request.len() == 6 && request.contains_key("attributes");
+    if !facet_query && !attribute_query && request.len() != 5 {
         return None;
     }
     let arguments = request.get("arguments")?.as_array()?;
@@ -153,6 +175,16 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         } else {
             request.get("implementation")?.as_str()?.to_owned()
         },
+        physical_arguments: if facet_query {
+            Vec::new()
+        } else {
+            request
+                .get("physical_arguments")?
+                .as_array()?
+                .iter()
+                .map(|value| value.as_str().map(str::to_owned))
+                .collect::<Option<Vec<_>>>()?
+        },
     };
     if facet_query {
         resolve(&binding).ok()?;
@@ -162,6 +194,9 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
                             "conjunction", "unclassifiedProviderEffect"]}));
     }
     let physical = request.get("physical")?.as_bool()?;
+    if !physical && !binding.physical_arguments.is_empty() {
+        return None;
+    }
     if attribute_query {
         if !physical {
             return None;
@@ -172,17 +207,28 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         }
         let bytes = operation_program(&binding, attributes)?;
         return Some(observed(
-            zkc_runtime::vm::Program::decode(&bytes)
-                .and_then(|program| {
-                    program.check_installation(native)?;
-                    Ok(program)
-                })
-                .map(|_| ())
-                .map_err(|e| e.code),
+            zkc_runtime::vm::Program::decode(
+                &bytes,
+                &zkc_native::native_contracts_with_policy(
+                    zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+                ),
+            )
+            .and_then(|program| {
+                program.check_installation(native)?;
+                Ok(program)
+            })
+            .map(|_| ())
+            .map_err(|e| e.code),
         ));
     }
     let (inputs, outputs): (Vec<_>, Vec<_>) = if physical {
-        let signature = binding.signature().ok()?;
+        let signature = zkc_native::native_contracts_with_policy(
+            zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+        )
+        .resolve(binding.clone())
+        .ok()?
+        .signature()
+        .clone();
         (
             signature
                 .inputs
@@ -212,7 +258,7 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
 fn main() -> io::Result<()> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
     let resolve: LogicalResolver = match arguments.as_slice() {
-        [] => OperationBinding::logical_signature,
+        [] => expected_logical,
         [flag] if flag == "--divergent-logical-field-add" => divergent_logical_resolver,
         _ => {
             eprintln!("usage: contract-conformance [--divergent-logical-field-add]");
@@ -224,6 +270,10 @@ fn main() -> io::Result<()> {
         EntryPolicy::new(Domain::new("P", "session", "main", None), None),
         Default::default(),
     )
+    .map_err(|error| io::Error::other(error.code))?
+    .with_contracts(zkc_native::native_contracts_with_policy(
+        zkc_runtime::vm::ExecutionPolicy::general_purpose(),
+    ))
     .map_err(|error| io::Error::other(error.code))?;
     zkc_test_support::json_lines::run(|line| respond(&native, line, resolve))
 }

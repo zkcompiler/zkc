@@ -28,11 +28,19 @@ The complete logical message grammar is:
 - `sequence<T>` with `T` recursively in this grammar. The
   [nested-data profile](../ir/data.md) defines its storage and framing.
 
-Only each type's installed default physical representation is admitted.
+Transport requires the admitted `Contracts` context's positive permission for
+both the complete physical layout and the selected codec, plus independently
+checked support from the actual backend. Native contributes the default layouts
+and resident blst Fr, G1 and G2 scalar/vector layouts. Standard sequence and
+variant storage accepts selected children only when every stored child layout,
+including inactive alternatives, has that permission. A contributed aggregate
+storage owner must separately authorize its frame family; Native does this for
+resident BLS field arrays. Fixed vectors remain local-only.
+
 One-alternative variants are records. Existing variant formation, descriptor
 identity, nesting and expansion bounds apply. Peer bytes supply no type
 descriptor. A local copy permission, registered leaf codec or inactive payload
-does not admit a container outside this grammar. Tables, arbitrary providers,
+does not admit a container outside this grammar. Tables, uninstalled providers,
 keys and affine resources cannot be nested as
 messages. Existing standalone private table and key input constructors retain
 their distinct contracts.
@@ -81,6 +89,10 @@ Additional leaf frames reuse the installed ZKCV encodings exactly:
 | KoalaBear base | 19 | 10 |
 | KoalaBear ext8 | 26 | 38 |
 | KoalaBear ext4 | 21 | 22 |
+| BabyBear base | 90 | 10 |
+| BabyBear quartic | 93 | 22 |
+| Goldilocks base | 96 | 14 |
+| Goldilocks quadratic | 99 | 22 |
 | Binary GF(2^64) | 73 | 14 |
 | Binary cubic extension GF(2^192) | 76 | 30 |
 | Ristretto scalar | 13 | 38 |
@@ -101,17 +113,20 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 
 | Leaf | Tags by domain | Complete frame bytes | Aggregate charge |
 |---|---|---|---|
-| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22, GF(2^64) 74, GF(2^192) 77 | `10 + n*w`; scalar width `w=4` for KoalaBear, 16 for ext4, 8 for GF(2^64), 24 for GF(2^192), otherwise 32 | `n` elements |
+| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22, BabyBear 91, ext4 94, Goldilocks 97, ext2 100, GF(2^64) 74, GF(2^192) 77 | `10 + n*w`; scalar width `w=4` for KoalaBear/BabyBear, 16 for their quartics and Goldilocks ext2, 8 for Goldilocks/GF(2^64), 24 for GF(2^192), otherwise 32 | `n` elements |
 | Source-group vector | BLS 67, BLS G2 52, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 96, 32, 64, 32, 32 respectively | `n` groups |
 | Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28, GF(2^64) 75, GF(2^192) 78 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
+| Registered residue vector | BabyBear 91, BabyBear quartic 94, Goldilocks 97, Goldilocks quadratic 100 | `10 + n*w`; element widths 4, 16, 8, 16 respectively | `n` elements |
+| Registered residue matrix | BabyBear 92, BabyBear quartic 95, Goldilocks 98, Goldilocks quadratic 101 | `18 + n*(8+w)`; element widths 4, 16, 8, 16 respectively | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
 | Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |
 | Digest-generic Merkle root | 71 | `6 + w` | one element |
 | Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
 
 Digest-generic Merkle frames carry digests of the scheme's width `w` in its
-canonical encoding: `w = 32` and eight canonical four-byte little-endian words
-for both [Poseidon2 instances](../domains/oracles.md#poseidon2-instances); the
+canonical encoding: `w = 32`, with eight canonical four-byte words for
+KoalaBear/BabyBear or four canonical eight-byte words for Goldilocks, all
+little-endian, for the [Poseidon2 instances](../domains/oracles.md#poseidon2-instances); the
 frame does not name the scheme, which the declared type supplies. Decoding
 refuses a noncanonical word. A proof frame holds a single path or a pruned
 multi-opening proof in the
@@ -232,7 +247,7 @@ transcript.native.indexed.observe.data<Suite, CompleteLogicalType>
 
 Its static arguments are the suite and canonical complete logical type. The
 installed implementation requires an installed native challenge suite, the closed
-message grammar and exact default physical representations. The suites are the
+message grammar and complete physical layouts with positive codec permission. The suites are the
 existing BLS Merlin/Spongefish suites, Ristretto Merlin
 `merlin3.ristretto255.scalar64le/0`, KoalaBear ext8 Merlin
 `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and the

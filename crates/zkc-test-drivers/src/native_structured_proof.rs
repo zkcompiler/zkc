@@ -38,7 +38,7 @@ fn batch(tag: usize, count: usize) -> Value {
     );
     Value::Variant(
         Variant::new(
-            ty.variant_descriptor().unwrap().clone(),
+            zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
             tag,
             match tag {
                 0 => vec![],
@@ -457,12 +457,15 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     assert_eq!(&proof[40..48], &(expected.len() as u64).to_le_bytes());
     assert_eq!(&proof[48..], &expected);
     // Unknown deployment formats refuse before message-type interpretation.
-    zkc_runtime::vm::Program::decode(envelope[4].as_str().unwrap().as_bytes())
-        .and_then(|program| {
-            program.check_installation(&backend())?;
-            Ok(program)
-        })
-        .unwrap();
+    zkc_runtime::vm::Program::decode(
+        envelope[4].as_str().unwrap().as_bytes(),
+        zkc_native::native_contracts(),
+    )
+    .and_then(|program| {
+        program.check_installation(&backend())?;
+        Ok(program)
+    })
+    .unwrap();
     let mut changed = envelope.clone();
     changed[0] = json!("invalid.native-proof");
     let changed = serde_json::to_vec(&changed).unwrap();

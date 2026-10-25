@@ -39,7 +39,10 @@ fn scalars(values: &[String]) -> Vec<Scalar> {
 fn array(values: &[Scalar]) -> Value {
     Value::FieldArray(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(Identity::Bls12381Fr, values.len() as u64).unwrap(),
+            )
+            .unwrap(),
             values.into(),
         )
         .unwrap(),
@@ -49,7 +52,7 @@ fn elements(value: &Value) -> &[Scalar] {
     let Value::FieldArray(array) = value else {
         panic!("field array")
     };
-    array.elements()
+    array.ark_elements().unwrap()
 }
 fn backend(role: &str, entry: &str) -> NativeBackend {
     NativeBackend::new(
@@ -63,6 +66,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &std::fs::read(directory.join(format!("{name}.bundle"))).unwrap(),
         &backend("admission", "main"),
+        zkc_native::native_contracts(),
         BundleLimits::default(),
     )
     .unwrap()

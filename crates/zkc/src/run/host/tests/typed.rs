@@ -58,7 +58,7 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     );
     let (raw, _) = fixture(&logical);
     let host = host(&raw, HostLimits::default());
-    let source: Arc<[zkc_native::Scalar]> = [0u64, 1, 7, 19]
+    let source: zkc_native::Buffer<zkc_native::Scalar> = [0u64, 1, 7, 19]
         .into_iter()
         .map(zkc_native::Scalar::from)
         .collect::<Vec<_>>()
@@ -66,7 +66,7 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     let ty = zkc_runtime::vm::LogicalType::parse(&logical).unwrap();
     let value = Value::Variant(
         zkc_native::Variant::new(
-            ty.variant_descriptor().unwrap().clone(),
+            zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
             0,
             vec![Value::Vector(source.clone()), Value::Vector(source.clone())],
         )
@@ -121,12 +121,15 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
             };
             assert_eq!(a.as_ref(), source.as_ref());
             assert_eq!(b.as_ref(), source.as_ref());
-            assert_eq!(Arc::ptr_eq(a, b), constructor != "wire");
-            assert_eq!(Arc::ptr_eq(a, &source), constructor != "wire");
+            assert_eq!(zkc_native::Buffer::ptr_eq(a, b), constructor != "wire");
+            assert_eq!(
+                zkc_native::Buffer::ptr_eq(a, &source),
+                constructor != "wire"
+            );
             role_backings.push(a.clone());
         }
         assert_eq!(
-            Arc::ptr_eq(&role_backings[0], &role_backings[1]),
+            zkc_native::Buffer::ptr_eq(&role_backings[0], &role_backings[1]),
             constructor != "wire"
         );
     }
@@ -335,7 +338,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
         let committed = key.prover_key().commit(&table).unwrap();
         let value = Value::Sequence(
             zkc_native::Sequence::new(
-                logical.clone(),
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
+                )
+                .unwrap(),
                 vec![Value::Commitment(Arc::new(committed.commitment().clone()))],
                 &policy,
             )
@@ -434,7 +440,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                     let good = first.prover_key().commit(&table).unwrap();
                     let good = Value::Sequence(
                         zkc_native::Sequence::new(
-                            logical.clone(),
+                            zkc_runtime::vm::PhysicalType::default_for(
+                                zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
+                            )
+                            .unwrap(),
                             vec![Value::Commitment(Arc::new(good.commitment().clone()))],
                             &policy,
                         )
@@ -457,7 +466,11 @@ fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
     let leaf = Value::vector(&[zkc_native::Scalar::from(1); 3], &policy).unwrap();
     let value = Value::Sequence(
         zkc_native::Sequence::new(
-            leaf.physical_type().logical(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::sequence(leaf.physical_type().logical().clone())
+                    .unwrap(),
+            )
+            .unwrap(),
             vec![leaf.clone(), leaf],
             &policy,
         )

@@ -6,7 +6,7 @@ use super::Call;
 fn payload_bytes<T>(len: usize) -> crate::Result<usize> {
     zkc_kernels::numerical::payload_bytes::<T>(len).map_err(|e| crate::exhausted(e.code()))
 }
-use crate::operations::field::Family;
+use crate::operations::field::StructuredFamily;
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::mem::size_of;
 use zkc_kernels::vector;
@@ -73,6 +73,10 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         Identity::KoalaBear
         | Identity::KoalaBearExt4
         | Identity::KoalaBearExt8
+        | Identity::BabyBear
+        | Identity::BabyBearExt4
+        | Identity::Goldilocks
+        | Identity::GoldilocksExt2
         | Identity::Binary64
         | Identity::Binary64Ext3 => "plonky3",
         _ => return None,
@@ -115,12 +119,31 @@ pub(crate) enum Prepared {
     Bn254(Plan<crate::Bn254Scalar>),
     Bls12381(Plan<crate::Scalar>),
     Ristretto(Plan<crate::RistrettoScalar>),
-    KoalaBear(Plan<crate::KoalaBear>),
-    KoalaBearExt4(Plan<crate::KoalaBearExt4>),
-    KoalaBearExt8(Plan<crate::KoalaBearExt8>),
+    Residue(ResiduePlan),
     Binary64(Plan<crate::Binary64>),
     Binary64Ext3(Plan<crate::Binary64Ext3>),
 }
+
+macro_rules! residue_plans {
+    ((); $(($s:ty, $id:ident, $base:ident, $f:ident, $v:ident, $m:ident, $p:ident, $r:ident, $sparse:ident, $ft:literal, $vt:literal, $mt:literal),)*) => {
+        pub(crate) enum ResiduePlan { $($id(Plan<$s>),)* }
+        impl ResiduePlan {
+            fn new(field: Identity, expression: Expression, mask: &[u8], mode: Mode, bytes: usize, binding: &OperationBinding) -> Result<Self> {
+                match field {
+                    $(Identity::$id => Ok(Self::$id(Plan::<$s>::new(expression, mask, mode, bytes, binding)?)),)*
+                    _ => Err(refused("numerical-binding")),
+                }
+            }
+            fn apply(&self, args: &[Value], available: usize, policy: &Policy) -> Result<Vec<Value>> {
+                match self { $(Self::$id(plan) => plan.apply(args, available, policy),)* }
+            }
+        }
+        fn residue_vector_length(value: &Value) -> Option<usize> {
+            match value { $(Value::$v(values) => Some(values.len()),)* _ => None }
+        }
+    }
+}
+crate::fields::inventory!([residue_plans], ());
 
 pub(crate) struct Plan<S> {
     expression: Expression,
@@ -178,9 +201,14 @@ pub(crate) fn prepare(
         Identity::Bn254Fr => plan!(crate::Bn254Scalar, Bn254),
         Identity::Bls12381Fr => plan!(crate::Scalar, Bls12381),
         Identity::Ristretto255Scalar => plan!(crate::RistrettoScalar, Ristretto),
-        Identity::KoalaBear => plan!(crate::KoalaBear, KoalaBear),
-        Identity::KoalaBearExt4 => plan!(crate::KoalaBearExt4, KoalaBearExt4),
-        Identity::KoalaBearExt8 => plan!(crate::KoalaBearExt8, KoalaBearExt8),
+        field if crate::fields::contains(field) => Prepared::Residue(ResiduePlan::new(
+            field,
+            expression,
+            mask,
+            mode,
+            body.len(),
+            binding,
+        )?),
         Identity::Binary64 => plan!(crate::Binary64, Binary64),
         Identity::Binary64Ext3 => plan!(crate::Binary64Ext3, Binary64Ext3),
         _ => return Err(refused("numerical-binding")),
@@ -209,7 +237,7 @@ fn work_counts(bytes: usize, inputs: usize, nodes: usize) -> Result<(u64, u64)> 
     Ok((per_row, setup))
 }
 
-impl<S: Family> Plan<S> {
+impl<S: StructuredFamily> Plan<S> {
     fn new(
         expression: Expression,
         mask: &[u8],
@@ -355,7 +383,7 @@ impl<S: Family> Plan<S> {
             *destination = if *bit == b'0' {
                 Operand::Scalar(S::field(operand)?)
             } else {
-                Operand::Column(S::vector(operand)?.as_ref())
+                Operand::Column(S::vector(operand)?)
             };
         }
         let mut scratch = call.scratch(self.expression.nodes().len() * stride, S::zero())?;
@@ -371,7 +399,7 @@ impl<S: Family> Plan<S> {
                 )?;
                 destination.copy_from_slice(values);
             }
-            output.finish(|values| Ok(S::vector_value(values.into())))?
+            output.finish(|values| Ok(S::vector_value(values)))?
         } else {
             let output = call.scalar(retained)?;
             let mut accumulator = if matches!(self.mode, Mode::Sum) {
@@ -465,12 +493,9 @@ fn vector_length(value: &Value) -> Option<usize> {
         Value::Bn254Vector(values) => values.len(),
         Value::Vector(values) => values.len(),
         Value::RistrettoVector(values) => values.len(),
-        Value::KoalaBearVector(values) => values.len(),
-        Value::KoalaBearExt4Vector(values) => values.len(),
-        Value::KoalaBearExt8Vector(values) => values.len(),
         Value::Binary64Vector(values) => values.len(),
         Value::Binary64Ext3Vector(values) => values.len(),
-        _ => return None,
+        _ => return residue_vector_length(value),
     })
 }
 
@@ -485,9 +510,7 @@ impl Prepared {
             Self::Bn254(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Bls12381(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Ristretto(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBear(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBearExt4(plan) => plan.apply(args, i.max_output_bytes, policy),
-            Self::KoalaBearExt8(plan) => plan.apply(args, i.max_output_bytes, policy),
+            Self::Residue(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Binary64(plan) => plan.apply(args, i.max_output_bytes, policy),
             Self::Binary64Ext3(plan) => plan.apply(args, i.max_output_bytes, policy),
         }
@@ -497,13 +520,15 @@ impl Prepared {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operations::field::Family as _;
     use serde_json::json;
 
-    fn captured_square<S: Family>(field: Identity, mode: Mode) -> Plan<S> {
+    fn captured_square<S: StructuredFamily>(field: Identity, mode: Mode) -> Plan<S> {
         let binding = OperationBinding {
             contract: "numerical.map".into(),
             arguments: vec![field.name().into(), "10".into()],
             implementation: "test/numerical.map".into(),
+            physical_arguments: vec![],
         };
         let body = json!([
             "zkc.ring/0",
@@ -522,7 +547,7 @@ mod tests {
         .unwrap()
     }
 
-    fn varying_memory_floor<S: Family>(field: Identity) {
+    fn varying_memory_floor<S: StructuredFamily>(field: Identity) {
         for mode in [Mode::Map, Mode::Sum, Mode::Product] {
             let plan = captured_square::<S>(field, mode);
             for rows in [0, 1, 513] {
@@ -540,7 +565,7 @@ mod tests {
                     + retained;
                 let args = [
                     Value::Index(rows as u64),
-                    S::vector_value(vec![S::one(); rows].into()),
+                    S::vector_value(vec![S::one(); rows]),
                     S::field_value(S::one()),
                 ];
                 let policy = Policy {
@@ -592,15 +617,14 @@ mod tests {
                             .collect();
                         let args = [
                             Value::Index(rows as u64),
-                            S::vector_value(inputs.clone().into()),
+                            S::vector_value(inputs.clone()),
                             S::field_value(S::new(capture)),
                         ];
                         let result = plan.apply(&args, retained, &policy).unwrap();
                         match mode {
-                            Mode::Map => assert_eq!(
-                                S::vector(&result[0]).unwrap().as_ref(),
-                                expected.as_slice()
-                            ),
+                            Mode::Map => {
+                                assert_eq!(S::vector(&result[0]).unwrap(), expected.as_slice())
+                            }
                             Mode::Sum => assert_eq!(
                                 S::field(&result[0]).unwrap(),
                                 expected.iter().copied().sum::<S>()
@@ -623,6 +647,10 @@ mod tests {
         varying_memory_floor::<crate::RistrettoScalar>(Identity::Ristretto255Scalar);
         varying_memory_floor::<crate::KoalaBear>(Identity::KoalaBear);
         varying_memory_floor::<crate::KoalaBearExt4>(Identity::KoalaBearExt4);
+        varying_memory_floor::<crate::BabyBear>(Identity::BabyBear);
+        varying_memory_floor::<crate::BabyBearExt4>(Identity::BabyBearExt4);
+        varying_memory_floor::<crate::Goldilocks>(Identity::Goldilocks);
+        varying_memory_floor::<crate::GoldilocksExt2>(Identity::GoldilocksExt2);
         varying_memory_floor::<crate::KoalaBearExt8>(Identity::KoalaBearExt8);
         varying_memory_floor::<crate::Binary64>(Identity::Binary64);
         varying_memory_floor::<crate::Binary64Ext3>(Identity::Binary64Ext3);

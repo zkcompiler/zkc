@@ -2,16 +2,14 @@
 //! preparation; no protocol value or transcript state lives in this cache.
 use crate::numerical::coset::CosetBatchShape;
 use crate::numerical::opening::OpeningQuotientSumShape;
-use crate::{
-    KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, numerical::Call,
-    refused, value::size,
-};
-use p3_field::ExtensionField;
+#[cfg(test)]
+use crate::{KoalaBear, KoalaBearExt4, KoalaBearExt8};
+use crate::{Policy, Result, Value, exhausted, numerical::Call, refused, value::size};
 use zkc_kernels::plonky3::polynomial::{self, CoefficientBatch, Domain, Error, Kernels};
 use zkc_runtime::vm::{Identity, Invocation};
 
 #[cfg(test)]
-#[path = "koala_bear_coefficient_batch_tests.rs"]
+#[path = "residue_coefficient_batch_tests.rs"]
 mod coefficient_batch_tests;
 
 fn failure(error: Error) -> zkc_runtime::vm::BackendError {
@@ -35,69 +33,9 @@ fn failure(error: Error) -> zkc_runtime::vm::BackendError {
         Error::SizeOverflow | Error::Allocation => unreachable!(),
     })
 }
-trait Family: ExtensionField<KoalaBear> {
-    fn field(v: &Value) -> Result<Self>;
-    fn vector(v: &Value) -> Result<&[Self]>;
-    fn polynomial(v: &Value) -> Result<&[Self]>;
-    fn field_value(v: Self) -> Value;
-    fn vector_value(v: Vec<Self>) -> Value;
-    fn polynomial_value(v: Vec<Self>) -> Value;
-}
-macro_rules! family {
-    ($t:ty, $f:ident, $v:ident, $p:ident) => {
-        impl Family for $t {
-            fn field(v: &Value) -> Result<Self> {
-                if let Value::$f(x) = v {
-                    Ok(*x)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn vector(v: &Value) -> Result<&[Self]> {
-                if let Value::$v(x) = v {
-                    Ok(x)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn polynomial(v: &Value) -> Result<&[Self]> {
-                if let Value::$p(x) = v {
-                    Ok(x)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn field_value(v: Self) -> Value {
-                Value::$f(v)
-            }
-            fn vector_value(v: Vec<Self>) -> Value {
-                Value::$v(v.into())
-            }
-            fn polynomial_value(v: Vec<Self>) -> Value {
-                Value::$p(v.into())
-            }
-        }
-    };
-}
-family!(
-    KoalaBear,
-    KoalaBearField,
-    KoalaBearVector,
-    KoalaBearPolynomial
-);
-family!(
-    KoalaBearExt8,
-    KoalaBearExt8Field,
-    KoalaBearExt8Vector,
-    KoalaBearExt8Polynomial
-);
-family!(
-    KoalaBearExt4,
-    KoalaBearExt4Field,
-    KoalaBearExt4Vector,
-    KoalaBearExt4Polynomial
-);
-
+use crate::fields::Registered;
+#[cfg(test)]
+use crate::operations::field::Family;
 pub(crate) fn apply(
     name: &str,
     field: Option<Identity>,
@@ -122,20 +60,13 @@ pub(crate) fn apply(
     ) {
         return Err(refused("kernel-operands"));
     }
-    match field {
-        Some(Identity::KoalaBear) => {
-            execute::<KoalaBear>(name, args, policy, invocation.max_output_bytes, kernels)
-        }
-        Some(Identity::KoalaBearExt8) => {
-            execute::<KoalaBearExt8>(name, args, policy, invocation.max_output_bytes, kernels)
-        }
-        Some(Identity::KoalaBearExt4) => {
-            execute::<KoalaBearExt4>(name, args, policy, invocation.max_output_bytes, kernels)
-        }
-        _ => Err(refused("coset-field")),
-    }
+    crate::fields::with_residue!(
+        field.ok_or_else(|| refused("coset-field"))?,
+        |E| execute::<E>(name, args, policy, invocation.max_output_bytes, kernels)
+    )
 }
-fn execute<E: Family>(
+
+fn execute<E: Registered>(
     name: &str,
     args: &[Value],
     policy: &Policy,
@@ -200,7 +131,7 @@ fn execute<E: Family>(
             let v = vector(0)?;
             let d = domain(v.len(), field(1)?)?;
             allocation(v.len())?;
-            E::polynomial_value(kernels.interpolate(v, d).map_err(failure)?)
+            E::polynomial_value(kernels.interpolate(v, d).map_err(failure)?.into())?
         }
         "poly.coset_evaluate_batch" => {
             let coefficients = vector(0)?;
@@ -330,7 +261,7 @@ fn execute<E: Family>(
     Ok(vec![output])
 }
 
-fn opening_quotient_sum<E: Family>(
+fn opening_quotient_sum<E: Registered>(
     args: &[Value],
     policy: &Policy,
     available: usize,
@@ -411,8 +342,8 @@ fn opening_quotient_work(len: usize) -> Result<u64> {
     // generation, prefix products, and the reverse quotient
     // pass. A unit is one native field operation or bounded scalar-loop step.
     // The fixed allowance covers two <=64-bit membership powers (<=256 field
-    // operations) and the pinned KoalaBear degree-1/4/8 inversion routines:
-    // finite quartic/octic formulas and the base field's bounded 31-bit GCD.
+    // operations) and the pinned degree-1/2/4/8 inversion routines over
+    // the 31/64-bit bases. The allowance also covers extension arithmetic.
     // This is a work bound, not elapsed time or a constant-time guarantee.
     u64::try_from(len)
         .ok()
@@ -426,9 +357,9 @@ mod tests {
     use super::*;
     use p3_field::PrimeCharacteristicRing;
 
-    fn opening_args<E: Family>() -> Vec<Value> {
+    fn opening_args<E: Registered>() -> Vec<Value> {
         let element =
-            |i: usize| E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+            |i: usize| E::from_basis_coefficients_fn(|j| E::Base::from_usize(11 * i + 7 * j + 1));
         vec![
             E::vector_value((0..12).map(element).collect()),
             Value::Index(3),
@@ -442,7 +373,7 @@ mod tests {
         ]
     }
 
-    fn run_opening<E: Family>(
+    fn run_opening<E: Registered>(
         args: &[Value],
         policy: &Policy,
         available: usize,
@@ -456,7 +387,7 @@ mod tests {
         )
     }
 
-    fn opening_native_checks<E: Family>(repeated: bool) {
+    fn opening_native_checks<E: Registered>(repeated: bool) {
         let mut args = opening_args::<E>();
         if repeated {
             args[5] = E::vector_value(vec![E::ZERO; 3]);
@@ -540,6 +471,10 @@ mod tests {
             opening_native_checks::<KoalaBear>(repeated);
             opening_native_checks::<KoalaBearExt4>(repeated);
             opening_native_checks::<KoalaBearExt8>(repeated);
+            opening_native_checks::<crate::BabyBear>(repeated);
+            opening_native_checks::<crate::BabyBearExt4>(repeated);
+            opening_native_checks::<crate::Goldilocks>(repeated);
+            opening_native_checks::<crate::GoldilocksExt2>(repeated);
         }
     }
 
@@ -551,6 +486,10 @@ mod tests {
             ..Policy::default()
         };
         let original = opening_args::<KoalaBearExt8>();
+        opening_args::<crate::BabyBear>();
+        opening_args::<crate::BabyBearExt4>();
+        opening_args::<crate::Goldilocks>();
+        opening_args::<crate::GoldilocksExt2>();
         let snapshots = [0, 6, 8].map(|i| KoalaBearExt8::vector(&original[i]).unwrap().to_vec());
         let domain = Domain::new(4, KoalaBearExt8::field(&original[3]).unwrap(), 4).unwrap();
         for (columns, points, expected) in [
@@ -725,7 +664,7 @@ mod tests {
         assert_eq!(KoalaBear::vector(&args[8]).unwrap(), snapshot);
     }
 
-    fn point_args<E: Family>(
+    fn point_args<E: Registered>(
         values: Vec<E>,
         width: u64,
         height: u64,
@@ -741,7 +680,7 @@ mod tests {
         ]
     }
 
-    fn run_point<E: Family>(
+    fn run_point<E: Registered>(
         args: &[Value],
         policy: &Policy,
         available: usize,
@@ -755,10 +694,10 @@ mod tests {
         )
     }
 
-    fn point_evaluation_checks<E: Family>() {
+    fn point_evaluation_checks<E: Registered>() {
         let policy = Policy::default();
         let element =
-            |i: usize| E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(11 * i + 7 * j + 1));
+            |i: usize| E::from_basis_coefficients_fn(|j| E::Base::from_usize(11 * i + 7 * j + 1));
         let shift = element(3);
         for width in [0, 1, 4, 16] {
             for height in [1, 2, 8, 32] {
@@ -935,9 +874,13 @@ mod tests {
         point_evaluation_checks::<KoalaBear>();
         point_evaluation_checks::<KoalaBearExt4>();
         point_evaluation_checks::<KoalaBearExt8>();
+        point_evaluation_checks::<crate::BabyBear>();
+        point_evaluation_checks::<crate::BabyBearExt4>();
+        point_evaluation_checks::<crate::Goldilocks>();
+        point_evaluation_checks::<crate::GoldilocksExt2>();
     }
 
-    fn point_refusal_checks<E: Family>() {
+    fn point_refusal_checks<E: Registered>() {
         let policy = Policy::default();
         for (len, width, height, shift, expected) in [
             (1, 0, 0, E::ZERO, "refused:coset-batch-shape"),
@@ -1017,24 +960,28 @@ mod tests {
         point_refusal_checks::<KoalaBear>();
         point_refusal_checks::<KoalaBearExt4>();
         point_refusal_checks::<KoalaBearExt8>();
+        point_refusal_checks::<crate::BabyBear>();
+        point_refusal_checks::<crate::BabyBearExt4>();
+        point_refusal_checks::<crate::Goldilocks>();
+        point_refusal_checks::<crate::GoldilocksExt2>();
     }
 
-    fn batch_args<E: Family>(values: Vec<E>, width: u64, height: u64, size: u64) -> Vec<Value> {
+    fn batch_args<E: Registered>(values: Vec<E>, width: u64, height: u64, size: u64) -> Vec<Value> {
         vec![
             E::vector_value(values),
             Value::Index(width),
             Value::Index(height),
             E::field_value(E::from_basis_coefficients_fn(|j| {
-                KoalaBear::from_usize(3 + j)
+                E::Base::from_usize(3 + j)
             })),
             E::field_value(E::from_basis_coefficients_fn(|j| {
-                KoalaBear::from_usize(7 + 2 * j)
+                E::Base::from_usize(7 + 2 * j)
             })),
             Value::Index(size),
         ]
     }
 
-    fn run<E: Family>(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
+    fn run<E: Registered>(args: &[Value], policy: &Policy, available: usize) -> Result<Vec<Value>> {
         execute::<E>(
             "poly.coset_extend",
             args,
@@ -1044,7 +991,7 @@ mod tests {
         )
     }
 
-    fn native_batch_checks<E: Family>() {
+    fn native_batch_checks<E: Registered>() {
         let policy = Policy::default();
         let kernels = Kernels::default();
         let args = batch_args::<E>(vec![], 1, 4, 2);
@@ -1162,6 +1109,10 @@ mod tests {
         native_batch_checks::<KoalaBear>();
         native_batch_checks::<KoalaBearExt4>();
         native_batch_checks::<KoalaBearExt8>();
+        native_batch_checks::<crate::BabyBear>();
+        native_batch_checks::<crate::BabyBearExt4>();
+        native_batch_checks::<crate::Goldilocks>();
+        native_batch_checks::<crate::GoldilocksExt2>();
     }
 
     #[test]

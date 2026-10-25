@@ -529,7 +529,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         Default::default(),
     )
     .map_err(harness)?;
-    let admitted = Program::decode(bytes).map_err(harness)?;
+    let admitted = Program::decode(bytes, zkc_native::native_contracts()).map_err(harness)?;
     admitted.check_installation(&native).map_err(harness)?;
     require(admitted.bytes() == bytes, "admitted byte custody")?;
     let endpoint = admitted

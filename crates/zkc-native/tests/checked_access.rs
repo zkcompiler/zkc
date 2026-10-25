@@ -24,6 +24,7 @@ fn binding(contract: &str, field: usize, length: Option<usize>) -> OperationBind
         contract: contract.into(),
         arguments,
         implementation: format!("{}/{contract}", FIELDS[field].1),
+        physical_arguments: vec![],
     }
 }
 
@@ -167,7 +168,10 @@ fn matrix_lookup_refuses_empty_shapes_and_untruncated_large_coordinates() {
 fn array(length: usize) -> Value {
     Value::FieldArray(
         FieldArray::new(
-            LogicalType::field_array(Identity::Bls12381Fr, length as u64).unwrap(),
+            zkc_runtime::vm::PhysicalType::default_for(
+                LogicalType::field_array(Identity::Bls12381Fr, length as u64).unwrap(),
+            )
+            .unwrap(),
             (0..length)
                 .map(|i| Scalar::from((3 * i + 7) as u64))
                 .collect::<Vec<_>>()
@@ -262,7 +266,7 @@ fn checked_access_rejects_attributes_wrong_ports_and_output_exhaustion() {
                 &["out".into()],
             );
             assert_eq!(
-                zkc_runtime::vm::Program::decode(&bytes)
+                zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                     .and_then(|program| {
                         program.check_installation(&backend(Policy::default()))?;
                         Ok(program)
@@ -283,7 +287,7 @@ fn checked_access_rejects_attributes_wrong_ports_and_output_exhaustion() {
             &["out".into()],
         );
         assert_eq!(
-            zkc_runtime::vm::Program::decode(&bytes)
+            zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
                 .and_then(|program| {
                     program.check_installation(&backend(Policy::default()))?;
                     Ok(program)
