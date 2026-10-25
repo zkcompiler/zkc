@@ -12,6 +12,6 @@ module {
       %second:2 = func.call @pair(%first#1, %first#0) : (!F, !F) -> (!F, !F)
       %product = algebra.field_multiply %second#0, %second#1 : (!F, !F) -> !F
       "protocol.return"(%first#0, %first#1, %second#0, %second#1, %product) : (!F, !F, !F, !F, !F) -> ()
-    }) {sym_name = "main", function_type = (!F, !F) -> (!F, !F, !F, !F, !F), roles = ["P"], input_roles = [["P"], ["P"]], output_roles = [["P"], ["P"], ["P"], ["P"], ["P"]]} : () -> ()
+    }) {sym_name = "main", origin = ["main", []], function_type = (!F, !F) -> (!F, !F, !F, !F, !F), roles = ["P"], input_roles = [["P"], ["P"]], output_roles = [["P"], ["P"], ["P"], ["P"], ["P"]]} : () -> ()
   }) {profile = #protocol.profile<protocol>} : () -> ()
 }

@@ -394,7 +394,7 @@ def protocol(name, body_text="", roles=("P", "Q"),
     return f'''"protocol.func"() ({{ ^entry({args}):
       {body_text}
       "protocol.return"({','.join(returns)}) : ({outs})->()
-    }}) {{sym_name="{name}",function_type=({ins})->({outs}),roles={json.dumps(roles)},
+    }}) {{sym_name="{name}",origin=["{name}",[]],function_type=({ins})->({outs}),roles={json.dumps(roles)},
       input_roles={json.dumps([s for _, _, s in inputs])},
       output_roles={json.dumps([s for _, s in outputs])}}} : ()->()'''
 
@@ -719,7 +719,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         # Raw source snapshots need their own call closure and effective-site checks.
         bad, row = fresh()
         child = ["function", "child", "protocol", "public", [], [],
-                 ["protocol", ["P", "Q"], [], []], [], [], ["block", [], ["return", []]]]
+                 ["protocol", ["P", "Q"], [], []], [], ["child", []], ["block", [], ["return", []]]]
         bad[7].append(child)
         bad[8].append(["child", []])
         row[3][0][2][1] = [[["protocol_apply", "child", ["P", "Q"]], [], [], [], "escape"]]
