@@ -215,8 +215,8 @@ def observeBinding (physical : List PhysicalType) : Binding :=
   ⟨"observe", "transcript.native.indexed.observe.data", [nativeSuite, "field:bls12-381.fr"],
     "arkworks/transcript.native.indexed.observe.data", physical⟩
 
-theorem default_observation_installed :
-    (installed.installed? (observeBinding [])).isSome = true := by decide +kernel
+theorem missing_observation_specialization_refused :
+    installed.installed? (observeBinding []) = none := by decide +kernel
 
 theorem explicit_observation_installed :
     (installed.installed? (observeBinding

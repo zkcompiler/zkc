@@ -21,11 +21,6 @@ from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 
 
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
-
-
 def instructions(block):
     for instruction in block:
         yield instruction
@@ -86,19 +81,28 @@ def main():
                                    "--symbol=" + data[1][3][1]]))
         (output / (name + "-source.json")).write_text(json.dumps(original, indent=2) + "\n")
         queries = [op for op in instructions(data[1][7]) if op[0] == "protocol.service_query"]
-        require(queries and all(len(op) == 7 and op[3] == [] for op in queries), 'service query envelope or argument list changed')
-        require(len(data[2][9]) == (1 if name == "Aliases" else 0), 'validator service-port inventory changed')
-        require(len(data[1][5]) == 4, 'producer source inputs must exclude nonce witnesses')
+        if not (queries and all(len(op) == 7 and op[3] == [] for op in queries)):
+            raise AssertionError('local service queries must have explicit empty operands')
+        if not (len(data[2][9]) == (1 if name == "Aliases" else 0)):
+            raise AssertionError('unexpected borrowed service ports')
+        if not (len(data[1][5]) == 4):
+            raise AssertionError('producer inputs must be base, point, scalar and transcript, without a nonce')
         if name == "Aliases":
-            require(len(data[1][9]) == 3, 'producer service ports must include unused spare ports')
-            require(len(queries) == 5, 'producer must retain unused replies and borrowed aliases')
+            if not (len(data[1][9]) == 3):
+                raise AssertionError('alias fixture must retain the unused spare port')
+            if not (len(queries) == 5):
+                raise AssertionError('alias fixture must retain unused replies and both aliases')
             events = [lean_render.template(op[6][0])[-1] for op in queries]
-            require({event[3] for event in events} >= {"input_0", "input_1"}, 'borrowed aliases lost their distinct input origins')
-            require(len({dict(op[1])["port"][1] for op in queries}) == 2, 'borrowed aliases lost their distinct ports')
+            if not ({event[3] for event in events} >= {"input_0", "input_1"}):
+                raise AssertionError('alias origins must retain both input roots')
+            if not (len({dict(op[1])["port"][1] for op in queries}) == 2):
+                raise AssertionError('alias queries must retain both service ports')
         if name == "Repeated":
-            require(len(queries) == 2 and all(len(op[6][1]) == 1 for op in queries), 'repeated services must retain one dynamic coordinate')
+            if not (len(queries) == 2 and all(len(op[6][1]) == 1 for op in queries)):
+                raise AssertionError('repeated draws must retain one dynamic coordinate')
         if name == "LocalRepeated":
-            require([len(op[6][1]) for op in queries] == [1, 0], 'local repeated service coordinates changed')
+            if not ([len(op[6][1]) for op in queries] == [1, 0]):
+                raise AssertionError('local and repeated draws must retain distinct coordinates')
         definitions.append(lean_render.strip_header(snapshot.render(original, name + ".Source")))
         definitions.append(lean_render.strip_header(pair.render(data, name)))
         data_by_name[name] = data

@@ -336,7 +336,9 @@ noncomputable def adaptiveResolved (binding : ApplicationBinding) (symbol : bind
       subject, Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkCapabilities,
       soundnessParameters, decodeSoundnessParameters, requireExactSoundness, relationChecked,
       resolveModel, models, Registry.lookup, modelSchema, modelSchemaWith, named, checkArguments, reference,
-      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel]
+      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel,
+      soundnessParameters, decodeSoundnessParameters, requireExactSoundness]
+    rfl
 noncomputable def adaptiveMeaning (binding : ApplicationBinding) (symbol : binding.symbol = "application") :
     Evaluated (adaptiveResolved (F := F) (G := G) binding symbol) := ⟨(adaptiveRequest binding).meaning, rfl⟩
 theorem adaptiveBound (binding : ApplicationBinding) : (adaptiveRequest (F := F) (G := G) binding).meaning := by

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.PairValidator
+public import Zkc.Source.Structured.Labels
 
 @[expose] public section
 
@@ -12,13 +13,7 @@ No author supplies a length prefix, encoded native path or occurrence ordinal.
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.Domain.ChargeSite
 open Zkc.Source Zkc.Construction
-
-/-- The explicit-label case of the frontend's `nativeSiteName`. Unlabelled
-ordinal sites need an explicit structured-path selection, not a guessed label. -/
-def encodedLabel (label : String) : String :=
-  let digits := "0123456789abcdef".toList
-  "label_" ++ String.ofList (label.toByteArray.data.toList.flatMap fun byte =>
-    [digits[byte.toNat / 16]!, digits[byte.toNat % 16]!])
+open Zkc.Source.Structured (encodedLabel)
 
 def sourcePath (template : Template) : Option (List String) := do
   let ["query", _, site, _, _, _, _] := template.event | none

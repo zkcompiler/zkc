@@ -39,19 +39,19 @@ theorem prefix_representation {dimension n : Nat} (root : GkrRoundsBinding.State
   | initial => exact represented
   | step s m r _ ih => exact restriction_represents s.raw s.reference ih r
 
-/-- The same full actual helper41/helper45 laws apply at every verifier prefix.
+/-- The same full actual round_message/fix_gates laws apply at every verifier prefix.
 Role 1 retains the separate mathematical factors while role 0 executes these
 helpers. No equality with an adversarially received triple is assumed. -/
 theorem prefix_helpers {dimension n : Nat} (root : GkrRoundsBinding.State F dimension)
     (s : GkrRoundsBinding.State F (n + 1)) (represented : Represents root.raw root.reference)
     (reachedPrefix : Prefix root s) (r : F) :
     invoke (GkrRoundsHelpers.table (G := G))
-        ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.helper41Helper s.raw.values =
+        GkrRoundsHelpers.roundMessageHelper s.raw.values =
       .done (.cons (GkrRoundsReference.message s.reference).constant
         (.cons (GkrRoundsReference.message s.reference).linear
           (.cons (GkrRoundsReference.message s.reference).quadratic .nil))) ∧
     invoke (GkrRoundsHelpers.table (G := G))
-        ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.helper45Helper
+        GkrRoundsHelpers.gateRestrictionHelper
         (s.raw.values.append (.cons r .nil)) = .done (s.raw.restrict r).values ∧
     Represents (s.raw.restrict r) (GkrRoundsReference.restrict s.reference r) ∧
     ((GkrRoundsReference.data F).polynomial s.reference).natDegree ≤ 2 ∧

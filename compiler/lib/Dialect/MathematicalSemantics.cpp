@@ -42,10 +42,10 @@ FailureOr<SmallVector<unsigned>> operandDependencies(Operation *op,
     return refuse();
   SmallVector<unsigned> dependencies;
   if (auto model = dyn_cast<MathematicalOpInterface>(op)) {
-    // Dimension observation is total for every admitted container. Only the
-    // field-vector case has the scalar catalogue identity VectorLength; the
-    // other container/axis cases retain their independently checked recipes.
-    // A missing scalar identity does not erase their input dependency.
+    // Native dimension semantics covers every admitted collection and axis.
+    // Its scalar source-export identity is narrower (field-vector length).
+    // DimOp::verify owns collection/axis admission; the interface still has
+    // to supply the exact operand dependencies checked below.
     if (!model.getMathematicalIdentity() && !isa<data::DimOp>(op))
       return refuse();
     dependencies = model.getOperandDependencies(result);

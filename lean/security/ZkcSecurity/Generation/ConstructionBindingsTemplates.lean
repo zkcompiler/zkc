@@ -1,14 +1,15 @@
 module
 
+public import ZkcSecurity.Generation.ConstructionBindingsMethods
+
 @[expose] public section
 
-/-! Installed Reduce callback proof templates. Adapted from the checked original
-callback certificates. One schema per role is instantiated at source-derived
-occurrences and SSA-derived captures; each emitted proof constructs a structural
-simulation against the actual exported callback. No whole-root script is stored. -/
+/-! Fixed full callback statements and shared proof applications. Explicit checked
+derivation supplies only an alternative proof body. Both methods bind the same
+actual View, source process, captures and complete output interface. -/
 namespace ZkcSecurity.Generation.ConstructionBindingsTemplates
 
-def validator : String :=
+def validatorStatement : String :=
   r###"noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
     (size : captured.length = $OFFSET) (index handle : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) :
@@ -25,38 +26,22 @@ def validator : String :=
       ($BODY (ringModel F G) program context
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" point),
           .data (.field "bls12-381.fr" scalar), .transcript context.suite history])) := by
-  rw [original_round program.payload verifier_bodies
-    (routing handle) occurrence.protocol (by decide +kernel) index handle
-    (occurrence.origins context index) point scalar _ (routes handle index)]
-  unfold_component_bodies [$BODY]
-  derive_artifact_binding
-    normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size]
-      try normalize_artifact_operations
-        [ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append program helper_bodies.sumcheck]
-        unfolding [verifier, Occurrence.origins, routing, occurrence, Occurrence.protocol,
-          context, Original.queryField, OccurrenceResolution.atCoordinates_request,
-          Context.message, Origin.message, Context.query, Origin.query, Domain.queryOrigin, Domain.templateOrigin,
-          Template.origin, Template.repeats, Template.qualify, Template.applicationPrefix,
-          ProtocolContext.enter, roleSubstitution, Context.role,
-          SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite,
-          SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite]
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size,
-        List.getElem?_cons_zero, List.getElem?_cons_succ])
-    solving (first
-      | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
-      | (unfold VerifierReturns
-         refine ⟨_, _, rfl, ?_⟩
-         simp (disch := omega) [outputs, Original.ValuesHolds,
-      Original.ComponentHolds, SumcheckVerifierBodies.repeatState, Values.get, Option.bind,
-      List.getElem?_cons_zero, List.getElem?_cons_succ,
-      Domain.Value.decode, Domain.Payload.value,
-      SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState,
-      Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-      List.getElem?_append_right, size]))
 "###
 
-def producer : String :=
+def sharedValidatorProof : String :=
+  r###"  rw [body_instance, output_instance]
+  exact ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound
+    program helper_bodies.sumcheck verifier_bodies (routing handle) context rfl occurrence
+    (by decide +kernel) $ORIGINS $OFFSET captured size index handle point scalar history
+    (routes handle index)
+"###
+
+def validator (method : ConstructionBindings.ProofMethod := .sharedTemplate) : String :=
+  validatorStatement ++ match method with
+  | .sharedTemplate => sharedValidatorProof
+  | .checkedDerivation => ConstructionBindingsMethods.validatorProof
+
+def producerStatement : String :=
   r###"noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
     (size : captured.length = $OFFSET) (index handle : Nat)
     (raw : List F) (dimension width : Nat) (point : List F)
@@ -78,48 +63,20 @@ def producer : String :=
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" raw),
           .data (.index dimension), .data (.index width),
           .data (.vector "bls12-381.fr" point), .transcript context.suite history])) := by
-  rw [original_round program.payload helper_bodies.sumcheck
-    (routing handle) occurrence.protocol (by decide +kernel) index none
-    (occurrence.origins context index) raw dimension width point shape bounded positive _
-    (routes handle index)]
-  have sumsEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.sums (F := F) (G := G) program helper_bodies.sumcheck
-    raw dimension width (lt_trans shape.2.1 (by decide +kernel)) positive
-    (shape.split_valid positive)
-  have firstEq (challenge : F) := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.first (F := F) (G := G)
-    program helper_bodies.sumcheck raw dimension width challenge shape bounded positive
-  have appendEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck
-  unfold_component_bodies [$BODY]
-  derive_artifact_binding
-    normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size]
-      try normalize_artifact_operations
-        [sumsEq, firstEq, appendEq]
-        unfolding [producer, Occurrence.origins, routing,
-          occurrence, Occurrence.protocol,
-          context, Original.queryField,
-          OccurrenceResolution.atCoordinates_request,
-          Context.message, Origin.message, Context.query, Origin.query,
-          Domain.queryOrigin, Domain.templateOrigin,
-          Template.origin, Template.repeats, Template.qualify, Template.applicationPrefix,
-          ProtocolContext.enter, roleSubstitution, Context.role,
-          SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite,
-          SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite]
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size,
-        List.getElem?_cons_zero, List.getElem?_cons_succ]
-      try dsimp only
-      change Original.Simulation _ _ _ _)
-    solving (first
-      | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
-      | (unfold RoundReturns
-         constructor
-         · unfold ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns
-           refine ⟨_, _, _, _, rfl, ?_⟩
-           simp (disch := omega) [outputs, SumcheckProverLaws.embedP,
-             Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-             List.getElem?_append_right, size,
-             List.getElem?_cons_zero, List.getElem?_cons_succ]
-         · exact ⟨_, rfl⟩))
 "###
+
+def sharedProducerProof : String :=
+  r###"  rw [body_instance, output_instance]
+  exact ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound
+    program helper_bodies.sumcheck (routing handle) context rfl occurrence
+    (by decide +kernel) $ORIGINS $OFFSET captured size index raw dimension width point
+    shape bounded positive history (routes handle index)
+"###
+
+def producer (method : ConstructionBindings.ProofMethod := .sharedTemplate) : String :=
+  producerStatement ++ match method with
+  | .sharedTemplate => sharedProducerProof
+  | .checkedDerivation => ConstructionBindingsMethods.producerProof
 
 def producerRoutes : String :=
   r###"theorem routes (handle index : Nat) :

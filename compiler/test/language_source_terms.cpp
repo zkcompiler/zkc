@@ -177,6 +177,20 @@ int main() {
           }
         }
         require(found, "protocol not exported");
+        for (StringRef malformedOrigin :
+             {R"(["orig::Run",[["N",["nat","01"]]]])",
+              R"(["orig::Run",[["T",["parameter","T"]]]])"}) {
+          auto candidate = mlir::parseSourceString<mlir::ModuleOp>(
+              original.bytes(), &context);
+          require(bool(candidate),
+                  "cannot parse original for malformed origin");
+          candidate->walk([&](zkc::protocol_ir::MathematicalOp op) {
+            op.setOriginAttr(zkc::protocol_ir::protocolOriginAttr(
+                &context, jsonValue(malformedOrigin)));
+          });
+          require(failed(mlir::verify(*candidate)),
+                  "malformed protocol origin passed IR verification");
+        }
         for (
             StringRef changedOrigin :
             {R"(["orig::Run",[["N",["nat","7"]],["T",["tuple",[["field","bls12-381.fr"],["index"]]]]]])",

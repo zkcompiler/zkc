@@ -1,4 +1,8 @@
-"""Request/receipt joins and Lean-owned assurance reporting controls."""
+"""Lean-backed request/receipt reporting controls, run by lean-security.
+
+These tests require prepared core and security packages. Missing Lean is a
+failed prerequisite, never a reason to skip the receipt policy checks.
+"""
 from copy import deepcopy
 import json
 from pathlib import Path

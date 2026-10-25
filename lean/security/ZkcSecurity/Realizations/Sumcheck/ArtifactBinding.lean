@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.ArtifactBinding
 public import Zkc.Construction.OriginalABI
+public import Zkc.Source.Structured.Labels
 public import ZkcExamples.Structured.OriginalSumcheckLibrary
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 
@@ -45,14 +46,14 @@ def Occurrence.message (occurrence : Occurrence) (site : String) (sender receive
     ["message", occurrence.library, site, site, sender, receiver]⟩
 
 def Occurrence.low (occurrence : Occurrence) : Template :=
-  occurrence.message "label_726f756e64_0" "role00000000" "role00000001"
+  occurrence.message (encodedLabel "round" ++ "_0") "role00000000" "role00000001"
 def Occurrence.high (occurrence : Occurrence) : Template :=
-  occurrence.message "label_726f756e64_1" "role00000000" "role00000001"
+  occurrence.message (encodedLabel "round" ++ "_1") "role00000000" "role00000001"
 def Occurrence.delivery (occurrence : Occurrence) : Template :=
-  occurrence.message "label_64656c6976657279_0" "role00000001" "role00000000"
+  occurrence.message (encodedLabel "delivery" ++ "_0") "role00000001" "role00000000"
 def Occurrence.draw (occurrence : Occurrence) : Template :=
   ⟨occurrence.entry, occurrence.steps,
-    ["query", occurrence.library, "label_6368616c6c656e6765", "input_5",
+    ["query", occurrence.library, encodedLabel "challenge", "input_5",
       "random.bls12-381.fr/0", "draw", "role00000001"]⟩
 
 def Occurrence.messages (occurrence : Occurrence) : List Template :=

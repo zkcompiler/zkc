@@ -31,8 +31,8 @@ private def clients : List (Snapshot × Output × Bool × String) := [
     { moduleName := "ZkcExamples.Structured.Generated.Bindings.GkrRounds"
       sourceModule := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs"
       programExpression := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.program"
-      importedExpression := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.imported"
-      protocols := [0] }, true, "ZkcExamples.Structured.Generated.Bindings.GkrRoundsData")]
+      importedExpression := "ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.imported" }, true,
+      "ZkcExamples.Structured.Generated.Bindings.GkrRoundsData")]
 
 private def require (result : Except String String) : IO String :=
   match result with
@@ -40,7 +40,13 @@ private def require (result : Except String String) : IO String :=
   | .error reason => throw (IO.userError reason)
 
 def main (args : List String) : IO Unit := do
-  let [directory] := args | throw (IO.userError "expected output directory")
+  let (directory, selected) ← match args with
+    | [directory] => pure (directory, none)
+    | [directory, "--only", client] => do
+      unless clients.any (fun (_, output, _, _) => output.moduleName.endsWith ("." ++ client)) do
+        throw (IO.userError "unknown bindings client")
+      pure (directory, some client)
+    | _ => throw (IO.userError "expected output directory [--only client]")
   let generic := Tests.StructuredBindingsGeneric.program
   let genericOutput : Output := {
     moduleName := "Tests.Generated.StructuredBindingsGeneric"
@@ -55,17 +61,26 @@ def main (args : List String) : IO Unit := do
   IO.FS.writeFile (genericPath.withExtension "callbacks.lean") (← require (callbacksSource generic genericOutput))
   IO.println "generated no-helper default callback fixture"
   for (snapshot, output, gate, dataModule) in clients do
+    if selected.any (fun client => !output.moduleName.endsWith ("." ++ client)) then continue
     let program ← match check snapshot with
       | .ok program => pure program
       | .error reason => throw (IO.userError reason)
+    let output ← if gate then do
+      let selected ← match gkrProtocols program with
+        | .ok indices => pure indices
+        | .error reason => throw (IO.userError reason)
+      pure { output with protocols := selected }
+      else pure output
     let path := System.FilePath.mk directory / (output.moduleName.replace "." "/" ++ ".lean")
     IO.FS.createDirAll path.parent.get!
     IO.FS.writeFile (path.withExtension "inputs.lean") (inputsSource program output.sourceModule dataModule)
     IO.FS.writeFile path (← require (source program output))
     IO.FS.writeFile (path.withExtension "callbacks.lean") (← require (if gate then callbacksSource program output else
       Tests.Generators.SumcheckBindings.sumcheckCallbacksSource program output))
-    let template ← require (if gate then gateSource program output ⟨31, 37⟩ else
+    let template ← require (if gate then do gateSource program output (← gkrGateOutput program) else
       Tests.Generators.SumcheckBindings.sumcheckSource program output)
+    if gate then
+      IO.FS.writeFile (path.withExtension "caller.lean") (← require (gkrCallerSource program output))
     IO.FS.writeFile (path.withExtension "template.lean") template
     IO.FS.writeFile (path.withExtension "obligations.json") ((obligationLedger program output).pretty ++ "\n")
     IO.println s!"generated {output.moduleName}"

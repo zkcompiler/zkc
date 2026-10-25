@@ -51,7 +51,7 @@ noncomputable def executeRestrictions : (count : Nat) →
       (Values (assignment F G) [vector, vector, vector, vector])
   | 0, args, _ => .done args
   | count + 1, args, challenges =>
-    (invoke table helper45Helper (args.append (.cons (challenges 0) .nil))).bind
+    (invoke table gateRestrictionHelper (args.append (.cons (challenges 0) .nil))).bind
       fun result => executeRestrictions count result (challenges ∘ Fin.succ)
 
 /-- Mathematical prefixes are the results of executing the actual helper,
@@ -121,9 +121,9 @@ factor update. Successful message realization does not assume admissibility;
 admissibility is used for the reference's evaluation and boundary laws. -/
 theorem helper_realization {n : Nat} (raw : RawState F) (s : State F (n + 1))
     (represented : Represents raw s) (r : F) :
-    invoke (table (G := G)) helper41Helper raw.values =
+    invoke (table (G := G)) roundMessageHelper raw.values =
       .done (.cons (message s).constant (.cons (message s).linear (.cons (message s).quadratic .nil))) ∧
-    invoke (table (G := G)) helper45Helper (raw.values.append (.cons r .nil)) =
+    invoke (table (G := G)) gateRestrictionHelper (raw.values.append (.cons r .nil)) =
       .done (raw.restrict r).values ∧
     Represents (raw.restrict r) (restrict s r) ∧
     ((data F).polynomial s).natDegree ≤ 2 ∧
@@ -143,10 +143,10 @@ theorem prefix_helper_realization {n : Nat} (count : Nat) (raw : RawState F)
     (challenges : Fin count → F) (r : F) :
     let residual := (data F).restrictPrefix count s challenges
     let vectors := raw.prefix count challenges
-    invoke (table (G := G)) helper41Helper vectors.values =
+    invoke (table (G := G)) roundMessageHelper vectors.values =
       .done (.cons (message residual).constant
         (.cons (message residual).linear (.cons (message residual).quadratic .nil))) ∧
-    invoke (table (G := G)) helper45Helper (vectors.values.append (.cons r .nil)) =
+    invoke (table (G := G)) gateRestrictionHelper (vectors.values.append (.cons r .nil)) =
       .done (vectors.restrict r).values ∧
     Represents (vectors.restrict r) (restrict residual r) ∧
     ((data F).polynomial residual).natDegree ≤ 2 ∧

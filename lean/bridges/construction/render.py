@@ -71,8 +71,24 @@ def attributes(value):
         kind, payload = record(attribute, 2)
         require(kind in ("string", "symbol", "integer", "bool", "strings", "text"),
                 "unknown attribute kind")
+        if kind == "bool":
+            valid = type(payload) is bool
+        elif kind == "strings":
+            valid = isinstance(payload, list) and all(isinstance(item, str) for item in payload)
+        elif kind == "integer":
+            valid = isinstance(payload, str) and re.fullmatch(r"0|-?[1-9][0-9]*", payload) is not None
+        else:
+            valid = isinstance(payload, str)
+        require(valid, "invalid attribute payload")
         result[name] = (kind, payload)
     return result
+
+
+def binding_attributes(attrs):
+    """The typed attribute roles shared by the admitted bound operations."""
+    return (set(attrs) == {"binding", "parameters", "site"}
+            and attrs["binding"][0] == "symbol" and attrs["parameters"][0] == "strings"
+            and attrs["site"][0] == "string")
 
 
 def string_attribute(attrs, name):
@@ -116,35 +132,35 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         return (f".send {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
                 f"{text(string_attribute(attrs, 'peer'))}")
     if name == "algebra.exec.indices_empty" and binding == ["indices.empty", [], ""] \
-            and set(attrs) == {"binding", "parameters", "site"} and attrs["parameters"] == ("strings", []):
+            and binding_attributes(attrs) and attrs["parameters"] == ("strings", []):
         return ".indicesEmpty"
     if name == "algebra.exec.indices_append" and binding == ["indices.append", [], ""] \
-            and set(attrs) == {"binding", "parameters", "site"} and attrs["parameters"] == ("strings", []):
+            and binding_attributes(attrs) and attrs["parameters"] == ("strings", []):
         require(len(operand_kinds) == 2 and operand_kinds[0][0] == "indices" and operand_kinds[1][0] == "index"
                 and len(result_kinds) == 1 and result_kinds[0][0] == "indices", "indices append shape")
         return ".indicesAppend"
     # The kernel site is a diagnostic frame name; it never enters transcript identity.
-    if name == "crypto.exec.indexed_transcript_observe_data" and set(attrs) == {"binding", "parameters", "site"} \
+    if name == "crypto.exec.indexed_transcript_observe_data" and binding_attributes(attrs) \
             and isinstance(binding, list) and len(binding) == 3 \
             and binding[0] == "transcript.native.indexed.observe.data" and binding[2] == "":
         suite, leaf = record(binding[1], 2)
         require(len(operand_kinds) == 3 and operand_kinds[1][0] in ("field", "group")
                 and leaf == f"{operand_kinds[1][0]}:{operand_kinds[1][1]}", "observed leaf type")
         return f".observe {text(suite)} {origin(one_parameter(attrs))}"
-    if name == "crypto.exec.indexed_transcript_challenge" and set(attrs) == {"binding", "parameters", "site"} \
+    if name == "crypto.exec.indexed_transcript_challenge" and binding_attributes(attrs) \
             and isinstance(binding, list) and len(binding) == 3 \
             and binding[0] == "transcript.native.indexed.challenge" and binding[2] == "":
         (suite,) = record(binding[1], 1)
         require(len(result_kinds) == 2 and result_kinds[0][0] == "field", "challenge results")
         return f".challenge {text(suite)} {text(result_kinds[0][1])} {origin(one_parameter(attrs))}"
     if name == "algebra.exec.field_embed":
-        require(set(attrs) == {"binding", "parameters", "site"}
+        require(binding_attributes(attrs)
                 and attrs["parameters"] == ("strings", []), "field embedding attributes")
         require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
                 and len(result_kinds) == 1 and result_kinds[0][0] == "field", "field embedding ports")
         extension, base = result_kinds[0][1], operand_kinds[0][1]
         require(isinstance(binding, list) and len(binding) == 3 and binding[0] == "field.embed"
-                and binding[1] == [extension], "field embedding binding")
+                and binding[1] == [extension] and binding[2] == "", "field embedding binding")
         return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
     if name == "algebra.group_scale" and not attrs and binding == []:
         require(len(operand_kinds) == 2 and operand_kinds[0][0] == "group" and operand_kinds[1][0] == "field",

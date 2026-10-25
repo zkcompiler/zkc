@@ -87,15 +87,15 @@ theorem fix_success {n : Nat} (xs : List F) (s : Table F (n + 1))
   obtain ⟨low, high⟩ := restrictValues_halves_length xs shape
   rw [fix, split_success xs s decoded]
   simp only [PIR.Process.bind, Values.get_cons, Values.get]
-  change invoke table helper43Helper
+  change invoke table interpolationsHelper
     (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil))) = _
   exact map_interpolate _ _ r (by omega) (by omega)
 
 theorem fixGates_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
     (decoded : Decodes raw s) (capacity : 2 ^ n < indexLimit) (r : F) :
-    invoke (table (G := G)) helper45Helper (raw.values.append (.cons r .nil)) =
+    invoke (table (G := G)) gateRestrictionHelper (raw.values.append (.cons r .nil)) =
       .done (raw.restrict r).values := by
-  change invoke table helper45Helper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right (.cons r .nil))))) = _
+  change invoke table gateRestrictionHelper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right (.cons r .nil))))) = _
   rw [fixGates_equation]
   simp only [fixGates, fix_success _ _ decoded.1 capacity,
     fix_success _ _ decoded.2.1 capacity, fix_success _ _ decoded.2.2.1 capacity,
@@ -167,7 +167,7 @@ theorem get_there {Value : Structured.Ty → Type} {types : List Structured.Ty} 
 
 theorem round_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
     (decoded : Decodes raw s) (capacity : 2 ^ n < indexLimit) :
-    invoke (table (G := G)) helper41Helper raw.values =
+    invoke (table (G := G)) roundMessageHelper raw.values =
       .done (.cons (message s).constant (.cons (message s).linear (.cons (message s).quadratic .nil))) := by
   have da0 := decode_low_half raw.add s.add decoded.1
   have da1 := decode_high_half raw.add s.add decoded.1
@@ -177,7 +177,7 @@ theorem round_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
   have dl1 := decode_high_half raw.left s.left decoded.2.2.1
   have dr0 := decode_low_half raw.right s.right decoded.2.2.2
   have dr1 := decode_high_half raw.right s.right decoded.2.2.2
-  change invoke table helper41Helper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right .nil)))) = _
+  change invoke table roundMessageHelper (.cons raw.add (.cons raw.mul (.cons raw.left (.cons raw.right .nil)))) = _
   rw [round_equation]
   unfold round
   rw [split_success _ _ decoded.1, split_success _ _ decoded.2.1,
@@ -201,16 +201,16 @@ theorem generated_table : (helpers (F := F) (G := G) payload).closed = table :=
 /-- This is the actual local-call seam of both generated participant views.
 Every absent input is incomplete; an inactive owner skips the call. -/
 theorem owned_round (self owner : Nat)
-    (args : Values (Component (assignment F G)) helper41Helper.inputs) :
+    (args : Values (Component (assignment F G)) roundMessageHelper.inputs) :
     Participant.owned self owner
-      (invoke (helpers (F := F) (G := G) payload).toOn.closed helper41Helper) args =
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed roundMessageHelper) args =
     if owner = self then
       match RoleFamily.sequence args with
       | none => .halt .incomplete
       | some values => (round (values.get .here) (values.get (.there .here))
           (values.get (.there (.there .here)))
           (values.get (.there (.there (.there .here))))).bind fun out => .done out.present
-    else .done (Values.absent (assignment F G) helper41Helper.outputs) := by
+    else .done (Values.absent (assignment F G) roundMessageHelper.outputs) := by
   unfold Participant.owned
   split
   · cases sequenced : RoleFamily.sequence args with
@@ -221,22 +221,22 @@ theorem owned_round (self owner : Nat)
         | cons m rest => cases rest with
           | cons l rest => cases rest with
             | cons r rest => cases rest
-                             change (invoke (helpers payload).closed helper41Helper _).bind _ = _
+                             change (invoke (helpers payload).closed roundMessageHelper _).bind _ = _
                              rw [generated_table, round_equation]
                              rfl
   · rfl
 
 theorem owned_fixGates (self owner : Nat)
-    (args : Values (Component (assignment F G)) helper45Helper.inputs) :
+    (args : Values (Component (assignment F G)) gateRestrictionHelper.inputs) :
     Participant.owned self owner
-      (invoke (helpers (F := F) (G := G) payload).toOn.closed helper45Helper) args =
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed gateRestrictionHelper) args =
     if owner = self then
       match RoleFamily.sequence args with
       | none => .halt .incomplete
       | some values => (fixGates (values.get .here) (values.get (.there .here))
           (values.get (.there (.there .here))) (values.get (.there (.there (.there .here))))
           (values.get (.there (.there (.there (.there .here)))))).bind fun out => .done out.present
-    else .done (Values.absent (assignment F G) helper45Helper.outputs) := by
+    else .done (Values.absent (assignment F G) gateRestrictionHelper.outputs) := by
   unfold Participant.owned
   split
   · cases sequenced : RoleFamily.sequence args with
@@ -248,7 +248,7 @@ theorem owned_fixGates (self owner : Nat)
           | cons l rest => cases rest with
             | cons r rest => cases rest with
               | cons challenge rest => cases rest
-                                       change (invoke (helpers payload).closed helper45Helper _).bind _ = _
+                                       change (invoke (helpers payload).closed gateRestrictionHelper _).bind _ = _
                                        rw [generated_table, fixGates_equation]
                                        rfl
   · rfl

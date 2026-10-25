@@ -332,6 +332,10 @@ source node, block declaration, label, source location and resolved subject
 export does not change the request wire format or authorize a receipt. The
 subject/report pipeline records which nodes belong to its selected requests;
 unselected nodes remain visible without becoming claims of that report.
+The SDK and installed CLI require and preserve this array (empty when there
+are no claims), as a compiler-owned diagnostic view. They do not interpret its
+entries as security evidence; the source-check envelope still rejects unknown
+fields.
 
 ## Diagnostics and limits
 

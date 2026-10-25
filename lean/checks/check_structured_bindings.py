@@ -17,11 +17,6 @@ import tempfile
 import types
 
 
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
-
-
 CLIENTS = ("SmallSumcheck", "TwoSums", "GkrRounds")
 
 
@@ -33,7 +28,7 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     directory = (options.records or Path(tempfile.mkdtemp(prefix="zkc-structured-bindings-"))).resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "LEAN_NUM_THREADS": "2"}
+    env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS", "2")}
     # Poison the legacy Python proof producer in this orchestration process.
     # The Lean route must still produce identical checked artifacts.
     class ForbiddenLegacyProducer:
@@ -67,7 +62,8 @@ def main() -> None:
         cwd=root, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
-    require(result.returncode == 0, "generation failed; see regenerate.log")
+    if result.returncode:
+        raise AssertionError("generation failed; see regenerate.log")
     generated = []
     relative = Path("ZkcExamples/Structured/Generated/Bindings")
     for client in CLIENTS:
@@ -77,31 +73,48 @@ def main() -> None:
         ]:
             expected = (regenerated / relative / (client + printed)).read_bytes()
             actual = (root / relative / (client + shipped)).read_bytes()
-            require(expected == actual, f"stale generated artifact: {client + shipped}")
-            require(b"public import ZkcTools" not in actual, f"proof imports tools: {client + shipped}")
-            require(b"ZkcTools.StructuredSource.Presentation" not in actual, f"proof uses tool metadata: {client + shipped}")
+            if expected != actual:
+                raise AssertionError(f"stale generated artifact: {client + shipped}")
+            if b"public import ZkcTools" in actual:
+                raise AssertionError(f"proof imports tools: {client + shipped}")
+            if b"ZkcTools.StructuredSource.Presentation" in actual:
+                raise AssertionError(f"proof uses tool metadata: {client + shipped}")
             generated.append({"module": client + shipped,
                               "sha256": hashlib.sha256(actual).hexdigest()})
+        if client == "GkrRounds":
+            expected = (regenerated / relative / (client + ".caller.lean")).read_bytes()
+            actual = (root / relative / (client + "Caller.lean")).read_bytes()
+            if expected != actual:
+                raise AssertionError("stale generated GKR caller")
+            if b"public import ZkcTools" in actual:
+                raise AssertionError('generated GKR caller imports tooling')
+            generated.append({"module": client + "Caller.lean",
+                              "sha256": hashlib.sha256(actual).hexdigest()})
         ledger = json.loads((regenerated / relative / (client + ".obligations.json")).read_text())
-        require(ledger["attribution_is_proof_status"] is False, 'attribution must not establish proof status')
-        require(all(row["expected_layer"] == "I" and row["route"] == "general-rule"
+        if ledger["attribution_is_proof_status"] is not False:
+            raise AssertionError('attribution must not determine proof status')
+        if not (all(row["expected_layer"] == "I" and row["route"] == "general-rule"
                    and row["proof_status"] == "external-kernel-receipt-required"
-                   for row in ledger["structural"]), 'structural obligations must require external kernel receipts')
-        require(all(row["proof_status"] == "open" for row in ledger["mathematical_helpers"]
-                   if row["route"] == "unattributed"), 'unattributed mathematics must retain open obligations')
+                   for row in ledger["structural"])):
+            raise AssertionError('structural obligations must require kernel receipts')
+        if not (all(row["proof_status"] == "open" for row in ledger["mathematical_helpers"]
+                   if row["route"] == "unattributed")):
+            raise AssertionError('unattributed helper obligations must stay open')
     for printed, shipped in [(".lean", ".lean"), (".inputs.lean", "Inputs.lean"),
                              (".callbacks.lean", "Callbacks.lean")]:
         stem = "Tests/Generated/StructuredBindingsGeneric"
         expected = (regenerated / (stem + printed)).read_bytes()
         actual = (root / (stem + shipped)).read_bytes()
-        require(expected == actual, f"stale generic callback fixture: {shipped}")
+        if expected != actual:
+            raise AssertionError(f"stale generic callback fixture: {shipped}")
         generated.append({"module": stem + shipped,
                           "sha256": hashlib.sha256(actual).hexdigest()})
     # Production tools must not import mathematical examples, even transitively
     # through the ledger or default callback printer.
     for source_directory in [root / "ZkcTools/StructuredSource/Bindings",
                       root / "Zkc/Source/Structured/Bindings"]:
-        require(all("ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean")), 'production binding tools must not import examples')
+        if not (all("ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean"))):
+            raise AssertionError('production binding tools must not import mathematical examples')
 
     header = """import Tests.StructuredBindingsSources
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
@@ -146,11 +159,14 @@ example : GkrRoundsGate.valueDefinition.body.component
         result = run(path, "-DwarningAsError=true", "-DElab.async=false")
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
-        require(result.returncode > 0, f"stale certificate accepted: {name}")
-        require("error" in log and any(reason in log for reason in [
-            "rfl", "definitionally equal", "declaration type mismatch"]), name)
-        require(not any(error in log for error in ["unexpected token", "Unknown identifier",
-                                                  "object file", "failed to synthesize"]), log)
+        if not (result.returncode > 0):
+            raise AssertionError(f"expected ordinary certificate refusal: {name}; exit={result.returncode}")
+        if not ("error" in log and any(reason in log for reason in [
+            "rfl", "definitionally equal", "declaration type mismatch"])):
+            raise AssertionError(name)
+        if any(error in log for error in ["unexpected token", "Unknown identifier",
+                                         "object file", "failed to synthesize"]):
+            raise AssertionError(log)
         refused.append({"name": name, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
     # Compile the actual emitter output for dense and sparse selections. The
@@ -162,7 +178,8 @@ example : GkrRoundsGate.valueDefinition.body.component
         cwd=root, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "dispatch-generate.log").write_text(result.stdout + result.stderr)
-    require(result.returncode == 0, "dispatch generation failed; see dispatch-generate.log")
+    if result.returncode:
+        raise AssertionError("dispatch generation failed; see dispatch-generate.log")
     objects = dispatch / "objects"
     objects.mkdir(parents=True, exist_ok=True)
     env["LEAN_PATH"] = str(objects.resolve()) + os.pathsep + env.get("LEAN_PATH", "")
@@ -175,7 +192,8 @@ example : GkrRoundsGate.valueDefinition.body.component
                      "--root=" + str(dispatch.resolve()), "-o", str(target.resolve()))
         log = result.stdout + result.stderr
         (directory / (name + ".log")).write_text(log)
-        require(result.returncode == 0 and "sorryAx" not in log, f"dispatch client failed: {name}")
+        if not (result.returncode == 0 and "sorryAx" not in log):
+            raise AssertionError(f"dispatch client failed: {name}")
         checked_dispatch.append(name)
         print(f"PASS {name}", flush=True)
     report = {"format": "zkc.structured-binding-controls/0", "legacy_evaluator_step_disabled": True,

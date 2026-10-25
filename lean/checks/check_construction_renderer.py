@@ -159,6 +159,27 @@ example : RenderedCaptures.participant.instructions =
         ("field embedding attributes", [embedding_attrs[0], ["parameters", ["strings", ["extra"]]],
                                         embedding_attrs[2]], ["field.embed", ["extension"], ""], [0], [extension]),
     ]
+    # An explicit implementation is outside this mathematical profile. Retain
+    # the exact binding boundary instead of erasing a third field of any type.
+    embedding_refusals.extend(
+        ("field embedding binding", embedding_attrs,
+         ["field.embed", ["extension"], implementation], [0], [extension])
+        for implementation in ("unregistered/field.embed", None, False, 0, [], {}))
+    # Valid tagged payloads still need the operation's exact attribute roles.
+    for position, attribute in ((0, ["string", "embed"]), (0, ["bool", True]),
+                                (2, ["symbol", "embedding"]), (2, ["bool", False])):
+        attrs = list(embedding_attrs)
+        attrs[position] = [attrs[position][0], attribute]
+        embedding_refusals.append(("field embedding attributes", attrs,
+                                   ["field.embed", ["extension"], ""], [0], [extension]))
+    # Check the common tagged-value decoder before a diagnostic-only attribute
+    # can be dropped. In particular, bool is not an integer payload.
+    for kind, payload in (("string", {}), ("symbol", 0), ("bool", 1),
+                          ("integer", 1), ("integer", "1.5"), ("strings", "x"),
+                          ("strings", [1]), ("text", [])):
+        attrs = [*embedding_attrs[:2], ["site", [kind, payload]]]
+        embedding_refusals.append(("invalid attribute payload", attrs,
+                                   ["field.embed", ["extension"], ""], [0], [extension]))
     for diagnostic, attrs, binding, operands, results in embedding_refusals:
         try:
             renderer.render(export([base, TRANSCRIPT],

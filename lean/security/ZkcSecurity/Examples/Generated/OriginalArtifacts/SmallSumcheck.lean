@@ -5,18 +5,16 @@ public import ZkcExamples.Construction.Generated.SmallSumcheckPair
 public import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
 public import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer
 public import ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
+public import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates
+public import ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates
 public import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingLoop
 public import ZkcSecurity.Realizations.Sumcheck.OriginalProducerReduce
 public import Zkc.Source.Structured.BodyBindings
-
-public meta import Zkc.Construction.ArtifactBindingTactic
-public meta import ZkcSecurity.Tools.ProcessView
 
 @[expose] public section
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
-set_option backward.isDefEq.respectTransparency false
 set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck
@@ -40,6 +38,11 @@ theorem occurrence0_delivery_valid : SourceOccurrences.valid program.snapshot co
 theorem occurrence0_delivery_checked : SourceDelivery.checked program.snapshot context occurrence0.draw occurrence0.delivery = true := by decide +kernel
 theorem occurrence0_query : occurrence0.draw = ({ entry := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",   steps := [{ kind := "apply",               protocol := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",               site := "label_726564756365" },             { kind := "repeat",               protocol := "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5",               site := "s15" }],   event := ["query", "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5", "label_6368616c6c656e6765",             "input_5", "random.bls12-381.fr/0", "draw", "role00000001"] }) := by kernel_rfl
 theorem occurrence0_messages : occurrence0.messages = ([{ entry := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",    steps := [{ kind := "apply",                protocol := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",                site := "label_726564756365" },              { kind := "repeat",                protocol := "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5",                site := "s15" }],    event := ["message", "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5", "label_726f756e64_0",              "label_726f756e64_0", "role00000000", "role00000001"] },  { entry := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",    steps := [{ kind := "apply",                protocol := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",                site := "label_726564756365" },              { kind := "repeat",                protocol := "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5",                site := "s15" }],    event := ["message", "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5", "label_726f756e64_1",              "label_726f756e64_1", "role00000000", "role00000001"] },  { entry := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",    steps := [{ kind := "apply",                protocol := "zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071",                site := "label_726564756365" },              { kind := "repeat",                protocol := "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5",                site := "s15" }],    event := ["message", "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5",              "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }]) := by kernel_rfl
+theorem occurrence0_origins :
+    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context occurrence0 := by
+  constructor <;> intro index <;>
+    simp [Domain.queryOrigin, Occurrence.origins, occurrence0, occurrence0_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+
 
 abbrev routing (handle : Nat) : Original.Routing :=
   ⟨program.snapshot, context, .validator, handle, occurrence0.messages, [occurrence0.draw], [⟨occurrence0.draw, occurrence0.delivery⟩], []⟩
@@ -70,6 +73,13 @@ theorem capture_size : ((validatorArtifact.instructions.take 1).foldl (fun size 
 theorem loop_operands : (validatorArtifact.instructions.get ⟨1, by decide +kernel⟩).operands = [2, 4, 1, 3] := by kernel_rfl
 theorem loop_operation : (validatorArtifact.instructions.get ⟨1, by decide +kernel⟩).operation = (Zkc.Construction.Operation.loop "apply_18_label_726564756365_s15" 2 [26, 31, 25]) := by kernel_rfl
 abbrev routes := occurrence0_routes
+theorem body_syntax : (validatorArtifact.instructions.get ⟨1, by decide +kernel⟩).body =
+    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorInstructions context occurrence 5 := by kernel_rfl
+theorem loop_sorts : (validatorArtifact.instructions.get ⟨1, by decide +kernel⟩).results = VerifierOutputs.sorts context.suite := by kernel_rfl
+theorem loop_site : "apply_18_label_726564756365_s15" = qualifyProtocolSite occurrence.protocol.applicationPrefix "s15" := by kernel_rfl
+theorem body_instance : ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep1Body (ringModel F G) program context =
+    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorBody (ringModel F G) program context occurrence 5 := by kernel_rfl
+theorem output_instance : outputs = ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.verifierOutputs context 5 := by kernel_rfl
 noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
     (size : captured.length = 5) (index handle : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) :
@@ -86,35 +96,11 @@ noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
       (ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep1Body (ringModel F G) program context
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" point),
           .data (.field "bls12-381.fr" scalar), .transcript context.suite history])) := by
-  rw [original_round program.payload verifier_bodies
-    (routing handle) occurrence.protocol (by decide +kernel) index handle
-    (occurrence.origins context index) point scalar _ (routes handle index)]
-  unfold_component_bodies [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep1Body]
-  derive_artifact_binding
-    normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size]
-      try normalize_artifact_operations
-        [ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append program helper_bodies.sumcheck]
-        unfolding [verifier, Occurrence.origins, routing, occurrence, occurrence0, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.routing, qualifyProtocolSite, Request.draw, occurrence0_decimal, Occurrence.protocol,
-          context, Original.queryField, OccurrenceResolution.atCoordinates_request,
-          Context.message, Origin.message, Context.query, Origin.query, Domain.queryOrigin, Domain.templateOrigin,
-          Template.origin, Template.repeats, Template.qualify, Template.applicationPrefix,
-          ProtocolContext.enter, roleSubstitution, Context.role,
-          SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite,
-          SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite]
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size,
-        List.getElem?_cons_zero, List.getElem?_cons_succ])
-    solving (first
-      | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
-      | (unfold VerifierReturns
-         refine ⟨_, _, rfl, ?_⟩
-         simp (disch := omega) [outputs, Original.ValuesHolds,
-      Original.ComponentHolds, SumcheckVerifierBodies.repeatState, Values.get, Option.bind,
-      List.getElem?_cons_zero, List.getElem?_cons_succ,
-      Domain.Value.decode, Domain.Payload.value,
-      SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState,
-      Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-      List.getElem?_append_right, size]))
+  rw [body_instance, output_instance]
+  exact ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound
+    program helper_bodies.sumcheck verifier_bodies (routing handle) context rfl occurrence
+    (by decide +kernel) occurrence0_origins 5 captured size index handle point scalar history
+    (routes handle index)
 
 def callback (handle : Nat) : VerifierCallback program (routing handle) occurrence context outputs 5 handle
   (ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep1Body (ringModel F G) program context) :=
@@ -199,6 +185,13 @@ theorem routes (handle index : Nat) :
     rfl
   · exact Original.Routing.draw_request (occurrence0_routes handle index).draw
 
+theorem body_syntax : (producerArtifact.instructions.get ⟨10, by decide +kernel⟩).body =
+    ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerInstructions context occurrence 13 := by kernel_rfl
+theorem loop_sorts : (producerArtifact.instructions.get ⟨10, by decide +kernel⟩).results = ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs.sorts context.suite := by kernel_rfl
+theorem loop_site : "apply_18_label_726564756365_s15" = qualifyProtocolSite occurrence.protocol.applicationPrefix "s15" := by kernel_rfl
+theorem body_instance : ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.bodyStep10Body (ringModel F G) program context =
+    ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerBody (ringModel F G) program context occurrence 13 := by kernel_rfl
+theorem output_instance : outputs = ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerOutputs context 13 := by kernel_rfl
 noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
     (size : captured.length = 13) (index handle : Nat)
     (raw : List F) (dimension width : Nat) (point : List F)
@@ -220,47 +213,11 @@ noncomputable def round (captured : Domain.Environment (uniformCarriers F G))
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" raw),
           .data (.index dimension), .data (.index width),
           .data (.vector "bls12-381.fr" point), .transcript context.suite history])) := by
-  rw [original_round program.payload helper_bodies.sumcheck
-    (routing handle) occurrence.protocol (by decide +kernel) index none
-    (occurrence.origins context index) raw dimension width point shape bounded positive _
-    (routes handle index)]
-  have sumsEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.sums (F := F) (G := G) program helper_bodies.sumcheck
-    raw dimension width (lt_trans shape.2.1 (by decide +kernel)) positive
-    (shape.split_valid positive)
-  have firstEq (challenge : F) := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.first (F := F) (G := G)
-    program helper_bodies.sumcheck raw dimension width challenge shape bounded positive
-  have appendEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck
-  unfold_component_bodies [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.bodyStep10Body]
-  derive_artifact_binding
-    normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size]
-      try normalize_artifact_operations
-        [sumsEq, firstEq, appendEq]
-        unfolding [producer, Occurrence.origins, routing,
-          occurrence, occurrence0, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.routing, qualifyProtocolSite, Request.draw, occurrence0_decimal, Occurrence.protocol,
-          context, Original.queryField,
-          OccurrenceResolution.atCoordinates_request,
-          Context.message, Origin.message, Context.query, Origin.query,
-          Domain.queryOrigin, Domain.templateOrigin,
-          Template.origin, Template.repeats, Template.qualify, Template.applicationPrefix,
-          ProtocolContext.enter, roleSubstitution, Context.role,
-          SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite,
-          SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite]
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size,
-        List.getElem?_cons_zero, List.getElem?_cons_succ]
-      try dsimp only
-      change Original.Simulation _ _ _ _)
-    solving (first
-      | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
-      | (unfold RoundReturns
-         constructor
-         · unfold ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns
-           refine ⟨_, _, _, _, rfl, ?_⟩
-           simp (disch := omega) [outputs, SumcheckProverLaws.embedP,
-             Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-             List.getElem?_append_right, size,
-             List.getElem?_cons_zero, List.getElem?_cons_succ]
-         · exact ⟨_, rfl⟩))
+  rw [body_instance, output_instance]
+  exact ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound
+    program helper_bodies.sumcheck (routing handle) context rfl occurrence
+    (by decide +kernel) occurrence0_origins 13 captured size index raw dimension width point
+    shape bounded positive history (routes handle index)
 
 def callback (handle : Nat) : ZkcSecurity.Realizations.Sumcheck.OriginalProducer.ProducerCallback program (routing handle) occurrence context outputs 13 handle
   (ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.bodyStep10Body (ringModel F G) program context) :=

@@ -27,6 +27,19 @@ private meta def refuses {α : Type} (expected : String) (result : Except String
 run_cmd do
   for root in ← Roots.evaluateSelections do
     let program ← accepted (Zkc.Source.Structured.check root.snapshot)
+    let shared ← accepted (ConstructionBindings.source program root.artifacts.validator
+      root.artifacts.producer "Candidate" root.sourceModule root.pairModule)
+    let explicitShared ← accepted (ConstructionBindings.source program root.artifacts.validator
+      root.artifacts.producer "Candidate" root.sourceModule root.pairModule .sharedTemplate)
+    unless shared == explicitShared && !shared.contains "derive_artifact_binding" &&
+        !shared.contains "respectTransparency" && shared.contains "body_instance" &&
+        !shared.contains "body_correspondence" do
+      Lean.throwError "production default must select shared proofs without occurrence derivation"
+    let derived ← accepted (ConstructionBindings.source program root.artifacts.validator
+      root.artifacts.producer "Candidate" root.sourceModule root.pairModule .checkedDerivation)
+    unless derived.contains "derive_artifact_binding" && !derived.contains "theorem body_instance" &&
+        derived.contains "body_correspondence" && derived.contains "outputs_derived" do
+      Lean.throwError "explicit derivation must certify the actual body and output interface"
     let layout ← accepted (ZkcTools.ConstructionBindings.analyze program root.artifacts.validator)
     for (producer, artifact) in [(false, root.artifacts.validator), (true, root.artifacts.producer)] do
       let selected ← accepted (ZkcTools.ConstructionBindings.analyzeWithContext program layout.context artifact)
@@ -51,9 +64,11 @@ run_cmd do
         else
           refuses "construction-binding-verifier-output-abi"
             (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.verifierOutputs "wrong-suite" artifact loop.instruction)
-    let .error _ := ConstructionBindings.source program root.artifacts.validator
-        { root.artifacts.producer with policy := { root.artifacts.producer.policy with suite := "wrong-suite" } } "Candidate" root.sourceModule root.pairModule
-      | Lean.throwError "wrong policy accepted"
-  Lean.logInfo "PASS exact actual-yield derivation, both roots/roles, arity/sort/reference/suite/policy refusals"
+    for method in [ConstructionBindings.ProofMethod.sharedTemplate, .checkedDerivation] do
+      let .error _ := ConstructionBindings.source program root.artifacts.validator
+          { root.artifacts.producer with policy := { root.artifacts.producer.policy with suite := "wrong-suite" } }
+          "Candidate" root.sourceModule root.pairModule method
+        | Lean.throwError "wrong policy accepted"
+  Lean.logInfo "PASS explicit proof methods, exact actual yields, both roots/roles, arity/sort/reference/suite/policy refusals"
 
 end TestsSecurity.ArtifactSlotsGeneration

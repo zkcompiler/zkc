@@ -201,10 +201,11 @@ def render(deployment, namespace):
         require(isinstance(contract, str) and isinstance(implementation, str)
                 and isinstance(arguments, list) and all(isinstance(a, str) for a in arguments), "binding shape")
         require(isinstance(physical_arguments, list), "physical binding arguments")
-        # Preserve every selected physical type. The independent installed
-        # vocabulary admits the exact specialization, not just its logical name.
-        physical_types = seq(physical_arguments, physical)
-        declared[name] = (name, contract, arguments, implementation, physical_types)
+        # Keep specialization in the carrier; the Lean vocabulary decides
+        # which exact implementation and physical arguments have a meaning.
+        for argument in physical_arguments:
+            physical(argument)
+        declared[name] = (name, contract, arguments, implementation, physical_arguments)
     reached = called(body)
     selected_functions, used = [], set()
     for function in functions:
@@ -216,8 +217,10 @@ def render(deployment, namespace):
         used |= used_bindings(steps)
         selected_functions.append((name, f"⟨{text(name)}, {ports(arguments)}, {seq(outputs, physical)}, [\n"
                                   + ",\n".join(f"    {s}" for s in rendered_steps) + "]⟩"))
-    rendered_bindings = [f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, {text(implementation)}, {physical_types}⟩"
-                         for name, contract, arguments, implementation, physical_types in declared.values() if name in used]
+    rendered_bindings = [f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, {text(implementation)}, "
+                         f"{seq(physical_arguments, physical)}⟩"
+                         for name, contract, arguments, implementation, physical_arguments in declared.values()
+                         if name in used]
     actions = ",\n    ".join(action(item) for item in body)
     function_definitions = "".join(
         f"/-- The local function `{name}`. -/\ndef function{index} : Function :=\n  {literal}\n\n"

@@ -44,9 +44,9 @@ example (challenge : ℚ) :
   prefix_represents 1 raw _ concrete_represents (Fin.cons challenge Fin.elim0)
 
 theorem first_message :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper raw.values =
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper raw.values =
       .done (.cons 88 (.cons 264 (.cons 200 .nil))) := by
-  change invoke (table (F := ℚ) (G := ℚ)) helper41Helper
+  change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
     (.cons [1, 2, 3, 4] (.cons [2, 5, 7, 11] (.cons [2, 2, 6, 6] (.cons [2, 6, 2, 6] .nil)))) = _
   rw [round_equation]
   norm_num [raw, RawState.values, round, split, Primitive.evaluate, primitiveOutcome,
@@ -58,17 +58,17 @@ theorem first_state : raw.restrict 2 = (⟨[5, 6], [12, 17], [10, 10], [2, 6]⟩
   norm_num [RawState.restrict, raw, restrictValues]
 
 theorem first_restriction :
-    invoke (table (F := ℚ) (G := ℚ)) helper45Helper (raw.values.append (.cons 2 .nil)) =
+    invoke (table (F := ℚ) (G := ℚ)) gateRestrictionHelper (raw.values.append (.cons 2 .nil)) =
       .done (.cons [5, 6] (.cons [12, 17] (.cons [10, 10] (.cons [2, 6] .nil)))) := by
   rw [fixGates_success raw _ concrete_represents.1 (by norm_num [indexLimit]) 2]
   rw [first_state]
   rfl
 
 theorem second_message :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper (raw.restrict 2).values =
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper (raw.restrict 2).values =
       .done (.cons 300 (.cons 612 (.cons 204 .nil))) := by
   rw [first_state]
-  change invoke (table (F := ℚ) (G := ℚ)) helper41Helper (.cons [5, 6]
+  change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper (.cons [5, 6]
     (.cons [12, 17] (.cons [10, 10] (.cons [2, 6] .nil)))) = _
   rw [round_equation]
   norm_num [round, split, Primitive.evaluate, primitiveOutcome, mapped,
@@ -91,20 +91,20 @@ theorem two_round_execution :
 
 /-- Empty/odd splits remain refused in the actual helper. -/
 theorem empty_refuses :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
       (.cons [] (.cons [1, 2] (.cons [1, 2] (.cons [1, 2] .nil)))) = .halt .refused := by
   rw [round_equation]
   rfl
 
 theorem odd_fix_refuses :
-    invoke (table (F := ℚ) (G := ℚ)) helper44Helper (.cons [1, 2, 3] (.cons 2 .nil)) =
+    invoke (table (F := ℚ) (G := ℚ)) factorRestrictionHelper (.cons [1, 2, 3] (.cons 2 .nil)) =
       .halt .refused := by
   rw [fix_equation, fix_all]
   norm_num
 
 /-- Every split is valid here; the actual map still refuses unequal shapes. -/
 theorem unequal_maps_refuse :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
       (.cons [1, 2] (.cons [1, 2, 3, 4] (.cons [1, 2] (.cons [1, 2] .nil)))) =
       .halt .refused := by
   rw [round_equation]
@@ -118,13 +118,13 @@ theorem even_once_is_insufficient :
 
 /-- Symbolic capacity control does not allocate a 2^64-entry test fixture. -/
 theorem capacity_exhausts (low high : List ℚ) (large : ¬ low.length < indexLimit) :
-    invoke (table (F := ℚ) (G := ℚ)) helper43Helper (.cons low (.cons high (.cons 2 .nil))) =
+    invoke (table (F := ℚ) (G := ℚ)) interpolationsHelper (.cons low (.cons high (.cons 2 .nil))) =
       .halt .exhausted := map_interpolate_exhausted low high 2 large
 
 /-- Availability is checked by the real owned Local-call ABI before splitting. -/
 theorem missing_local_input :
     Participant.owned (0 : Nat) 0
-      (invoke (helpers (F := ℚ) (G := ℚ) payload).toOn.closed helper41Helper)
+      (invoke (helpers (F := ℚ) (G := ℚ) payload).toOn.closed roundMessageHelper)
       (.cons (some []) (.cons (some [1, 2]) (.cons (some [1, 2]) (.cons none .nil)))) =
       .halt .incomplete := by
   rw [owned_round]
@@ -132,15 +132,15 @@ theorem missing_local_input :
 
 theorem inactive_owner_skips :
     Participant.owned (1 : Nat) 0
-      (invoke (helpers (F := ℚ) (G := ℚ) payload).toOn.closed helper45Helper)
+      (invoke (helpers (F := ℚ) (G := ℚ) payload).toOn.closed gateRestrictionHelper)
       (.cons none (.cons none (.cons none (.cons none (.cons none .nil))))) =
-      .done (Values.absent (assignment ℚ ℚ) helper45Helper.outputs) := by
+      .done (Values.absent (assignment ℚ ℚ) gateRestrictionHelper.outputs) := by
   rw [owned_fixGates]
   rfl
 
 /-- Retaining the old left factor's full table causes an actual shape refusal. -/
 theorem stale_factor_refuses :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
       (.cons [5, 6] (.cons [12, 17] (.cons raw.left (.cons [2, 6] .nil)))) = .halt .refused := by
   rw [round_equation]
   norm_num [raw, round, split, Primitive.evaluate, primitiveOutcome, mapped,
@@ -182,9 +182,9 @@ theorem cubic_not_represented :
 It is the realization invariant, rather than a dynamic independence check,
 that excludes interpreting this triple as the reference marginal. -/
 theorem actual_cubic_message :
-    invoke (table (F := ℚ) (G := ℚ)) helper41Helper cubicRaw.values =
+    invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper cubicRaw.values =
       .done (.cons 0 (.cons 1 (.cons 0 .nil))) := by
-  change invoke (table (F := ℚ) (G := ℚ)) helper41Helper
+  change invoke (table (F := ℚ) (G := ℚ)) roundMessageHelper
     (.cons [0, 0] (.cons [0, 1] (.cons [0, 1] (.cons [0, 1] .nil)))) = _
   rw [round_equation]
   norm_num [round, split, Primitive.evaluate, primitiveOutcome, mapped,

@@ -107,7 +107,7 @@ def callback (ctx : ProtocolContext) (point : Option (List F))
               (delivery ctx r).bind fun _ =>
                 (Participant.owned (ctx.roles 1) (ctx.roles 1)
                   (invoke (helpers (F := F) (G := G) payload).toOn.closed
-                    ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs.helper1Helper)
+                    GkrRoundsHelpers.appendHelper)
                   (.cons point (.cons (some r) .nil))).bind fun appended =>
                   .done (.cons none (.cons none (.cons none (.cons none (.cons none
                     (.cons (appended.get .here) (.cons (some (c0 + r * (c1 + r * c2))) .nil)))))))

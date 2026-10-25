@@ -152,6 +152,12 @@ for the responsibility and trust boundaries.
 
 ## Compiled subjects
 
+The composed-Sumcheck manifest report is retired. The same source is covered
+by the generated `TwoSums` root, with exact scalar and charged soundness
+requests and a compiled-ideal completeness receipt; see the
+[subject routes](../subjects/README.md). The following table covers the
+remaining manifest pipeline and does not duplicate that root.
+
 One row per selected canonical security claim, or per subject with no selected
 security claim, from its generated [assurance report](spec/assurance-report.md).
 Author claims remain separate in that report. A certified row establishes
@@ -162,8 +168,6 @@ correspondence remains open. Other Entry trials stay visible in the full report.
 | Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
 |---|---|---|---|---|---|---|
 | chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
-| composed-sumcheck | `example::Proof` | compiled-ideal | soundness |  |  | open: mismatched artifact: request differs from the checked Lean authority artifact roles |
-| composed-sumcheck | `example::Proof` | compiled-ideal | soundness |  |  | open: mismatched artifact: request differs from the checked Lean authority artifact roles |
 | deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
 | gkr | `example::Proof` |  |  |  |  | no-claim |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |

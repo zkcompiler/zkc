@@ -1,46 +1,50 @@
-"""Executable imports retain physical specialization for independent admission."""
+"""Physical specialization survives rendering; the Lean vocabulary admits it."""
 
+import hashlib
 import json
-
 import pytest
-
 from harness import load
 
 
-@pytest.fixture
 def renderer():
-    return load("executable_binding_render", "lean/bridges/executable/render.py")
+    return load('executable_binding_render', 'lean/bridges/executable/render.py')
 
 
-def deployment(renderer, physical_arguments):
-    program = ["zkc.program/0", [["observe", "transcript.native.indexed.observe.data",
-        ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"],
-        "arkworks/transcript.native.indexed.observe.data", physical_arguments]],
-        [["function", "helper", [], [],
-          [["op", "site", "observe", [], [], []], ["return", []]], None]],
-        [["participant", "validator", "proof", "verifier", [], [],
-          [["local", "call", "helper", [], []], ["return", []]], []]],
-        [["entry", "proof", [["verifier", "validator"]]]]]
-    candidate = json.dumps(program)
-    return ["zkc.native-proof/0", None, [None, [None, "proof", None, "verifier"]],
-            None, candidate, renderer.lean_render.digest(candidate.encode()), None, None, None]
+def deployment(arguments):
+    binding = ['operation', 'field.add', ['bls12-381.fr'], 'arkworks/field.add', arguments]
+    function = ['function', 'helper', [], [],
+                [['op', 'site', 'operation', [], [], []], ['ret', []]], None]
+    participant = ['participant', 'validator', 'entry', 'V', [], [],
+                   [['local', 'site', 'helper', [], []], ['return', []]], []]
+    program = json.dumps(['zkc.program/0', [binding], [function], [participant],
+                          [['entry', 'entry', [['V', 'validator']]]]])
+    return ['zkc.native-proof/0', '', ['', ['', 'entry', 'P', 'V']], '', program,
+            hashlib.sha256(program.encode()).hexdigest(), None, None, None]
 
 
-def test_explicit_layout_is_retained_instead_of_erased(renderer):
-    default = renderer.render(deployment(renderer, []), "Example")
-    explicit = renderer.render(deployment(renderer, ["field:bls12-381.fr@arkworks.fr/0"]), "Example")
-    assert default != explicit
-    assert '"arkworks/transcript.native.indexed.observe.data", []⟩' in default
-    assert '"arkworks/transcript.native.indexed.observe.data", [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]⟩' in explicit
+def test_physical_arguments_are_preserved_as_typed_data():
+    render = renderer().render
+    empty = render(deployment([]), 'Control')
+    physical = render(deployment(['field:bls12-381.fr@arkworks.fr/0']), 'Control')
+    assert '"arkworks/field.add", []⟩' in empty
+    assert '"arkworks/field.add", [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]⟩' in physical
+    assert empty != physical
+    # Syntactically valid but uninstalled data remains visible for Lean to refuse.
+    assert '"other.fr/0"' in render(deployment(['field:bls12-381.fr@other.fr/0']), 'Control')
 
 
-def test_unknown_well_formed_layout_reaches_the_lean_vocabulary(renderer):
-    rendered = renderer.render(deployment(renderer, ["field:bls12-381.fr@foreign.fr/0"]), "Example")
-    assert '"foreign.fr/0"' in rendered
+@pytest.mark.parametrize('arguments', [None, 'field:bls12-381.fr@arkworks.fr/0', [True],
+                                      ['field:bls12-381.fr'], ['array<field>@aggregate/layout']])
+def test_malformed_or_unsupported_physical_arguments_are_refused(arguments):
+    with pytest.raises(ValueError):
+        renderer().render(deployment(arguments), 'Control')
 
 
-@pytest.mark.parametrize("arguments", [None, {}, "field:bls12-381.fr@arkworks.fr/0",
-    ["field:bls12-381.fr"], ["field:bls12-381.fr@"], ["field:bls12-381.fr@@arkworks.fr/0"], [1]])
-def test_malformed_physical_arguments_are_refused(renderer, arguments):
-    with pytest.raises(renderer.Refused):
-        renderer.render(deployment(renderer, arguments), "Example")
+def test_old_four_field_binding_is_refused():
+    value = deployment([])
+    program = json.loads(value[4])
+    program[1][0].pop()
+    value[4] = json.dumps(program)
+    value[5] = hashlib.sha256(value[4].encode()).hexdigest()
+    with pytest.raises(ValueError, match='expected array of size 5'):
+        renderer().render(value, 'Control')

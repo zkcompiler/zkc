@@ -6,8 +6,8 @@ public import Zkc.Executable.Execution
 
 /-! The installed vocabulary of the native BLS12-381 proof deployments.
 
-Each row assigns a meaning to an exact contract, logical and physical arguments
-and installed implementation; each representation row admits a value sort at an installed
+Each row assigns a meaning to an exact contract, static arguments, installed
+implementation and physical specialization; each representation row admits a value sort at an installed
 representation. These rows are assumptions about native code, not theorems:
 the arkworks kernels compute BLS12-381 scalar-field, G1 and scalar-vector
 operations, the native index kernels compute unsigned 64-bit index operations
@@ -32,9 +32,6 @@ it. Above the row bound the kernel refuses, a capacity limit like the element
 limit of every vector kernel, which only stops a run.
 
 A row absent from this table makes the lowering rule refuse.
-The explicit transcript payload rows admit only the same canonical field/G1
-layouts as their default rows. An explicit layout is retained in the binding;
-it is not erased or admitted merely because its logical sort agrees.
 -/
 
 set_option autoImplicit false
@@ -58,15 +55,9 @@ def installed : Vocabulary where
     ⟨"indices.empty", [], "native/indices.empty", .indicesEmpty, []⟩,
     ⟨"indices.append", [], "native/indices.append", .indicesAppend, []⟩,
     ⟨"transcript.native.indexed.observe.data", [nativeSuite, "group:bls12-381.g1"],
-      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.group "bls12-381.g1"), []⟩,
+      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.group "bls12-381.g1"), [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩]⟩,
     ⟨"transcript.native.indexed.observe.data", [nativeSuite, "field:bls12-381.fr"],
-      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.field scalarField), []⟩,
-    ⟨"transcript.native.indexed.observe.data", [nativeSuite, "group:bls12-381.g1"],
-      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.group "bls12-381.g1"),
-      [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩]⟩,
-    ⟨"transcript.native.indexed.observe.data", [nativeSuite, "field:bls12-381.fr"],
-      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.field scalarField),
-      [⟨.data (.field scalarField), "arkworks.fr/0"⟩]⟩,
+      "arkworks/transcript.native.indexed.observe.data", .observe nativeSuite (.field scalarField), [⟨.data (.field scalarField), "arkworks.fr/0"⟩]⟩,
     ⟨"transcript.native.indexed.challenge", [nativeSuite],
       "arkworks/transcript.native.indexed.challenge", .challenge nativeSuite scalarField, []⟩,
     ⟨"curve.scale", ["bls12-381.g1"], "arkworks/curve.scale",

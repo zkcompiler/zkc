@@ -16,11 +16,6 @@ import subprocess
 import tempfile
 
 
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
-
-
 ROLES = (
     "SmallSumcheckProducer",
     "SmallSumcheckValidator",
@@ -50,7 +45,8 @@ def change_return(text: str) -> str:
         return match[1] + ", ".join(map(str, changed)) + match[3]
 
     changed, count = re.subn(pattern, replacement, text, count=1)
-    require(count == 1 and changed != text, 'mutation did not select exactly one returned value list')
+    if not (count == 1 and changed != text):
+        raise AssertionError('mutation did not select a return')
     return changed
 
 
@@ -88,22 +84,29 @@ def main() -> None:
         cwd=root, env=env, text=True, capture_output=True, timeout=120,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
-    require(result.returncode == 0, "Lean syntax generation failed; see regenerate.log")
+    if result.returncode:
+        raise AssertionError("Lean syntax generation failed; see regenerate.log")
     originals: dict[str, str] = {}
     receipts = []
     for role in ROLES:
         path = root / "ZkcExamples/Structured/Generated/Constructed" / f"{role}.lean"
         text = path.read_text()
-        require(text == (regenerated / path.name).read_text(), f"stale generated view: {role}")
+        if text != (regenerated / path.name).read_text():
+            raise AssertionError(f"stale generated view: {role}")
         imports = re.findall(r"^public import (.+)$", text, re.MULTILINE)
-        require(len(imports) == 2 and imports[1] == "Zkc.Construction.DomainBinding", 'constructed view must import only its subject and domain binding')
-        require(imports[0] in {
+        if not (len(imports) == 2 and imports[1] == "Zkc.Construction.DomainBinding"):
+            raise AssertionError('generated view has unexpected imports')
+        if imports[0] not in {
             "ZkcExamples.Construction.Generated.SmallSumcheckPair",
             "ZkcExamples.Construction.Generated.TwoSumsPair",
-        }, 'constructed view imports an unexpected subject')
-        require(not re.search(r"\bDomain\.(?:evaluate|step)\b", text), 'constructed view delegates to a generic evaluator')
-        require(not re.search(r":=\s*(?:\([^\n]*\s)?Domain\.participant\b", text), 'constructed view aliases the generic participant evaluator')
-        require("sourceImported" not in text and "protocol1Role" not in text, 'constructed view retains a superseded source reference')
+        }:
+            raise AssertionError('generated view imports an unexpected constructed pair')
+        if re.search(r"\bDomain\.(?:evaluate|step)\b", text):
+            raise AssertionError('generated view uses the generic evaluator')
+        if re.search(r":=\s*(?:\([^\n]*\s)?Domain\.participant\b", text):
+            raise AssertionError('generated view aliases the generic participant')
+        if not ("sourceImported" not in text and "protocol1Role" not in text):
+            raise AssertionError('generated view depends on a source-only participant')
         originals[role] = text
         receipts.append({"role": role, "sha256": hashlib.sha256(text.encode()).hexdigest()})
 
@@ -137,7 +140,8 @@ def main() -> None:
     mutations = []
     for name, role, transform in cases:
         mutated = transform(originals[role])
-        require(mutated != originals[role], name)
+        if mutated == originals[role]:
+            raise AssertionError(name)
         path = directory / f"{name}.lean"
         path.write_text(mutated)
         result = subprocess.run(
@@ -146,11 +150,14 @@ def main() -> None:
         )
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
-        require(result.returncode > 0, f"stale proof accepted mutation: {name}")
+        if not (result.returncode > 0):
+            raise AssertionError(f"expected ordinary proof refusal: {name}; exit={result.returncode}")
         refused = "Type mismatch" in log or (name == "validator-loop-slot-frame" and
                                             "declaration type mismatch" in log)
-        require(refused, f"mutation did not fail at its proof equation: {name}")
-        require("unexpected token" not in log and "object file" not in log, name)
+        if not refused:
+            raise AssertionError(f"mutation did not fail at its proof equation: {name}")
+        if not ("unexpected token" not in log and "object file" not in log):
+            raise AssertionError(name)
         mutations.append({"name": name, "role": role, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
     report = {"format": "zkc.constructed-view-controls/0", "generated": receipts, "mutations": mutations}

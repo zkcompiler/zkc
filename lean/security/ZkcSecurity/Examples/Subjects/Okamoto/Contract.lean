@@ -125,4 +125,24 @@ theorem holds_pinned (statement : artifacts.Statement F G) (witnesses : F × F) 
   (retained.holds_iff_of_arguments statement (embed witnesses) (arguments statement witnesses)
     (arguments_read statement witnesses)).symm
 
+/-- Only private producer coordinates are used by the generic reader. -/
+def embed (witnesses : F × F) : retained.Witness F G :=
+  fun type selector => match type with
+    | .field _ => if selector.port.index = 3 then some witnesses.1
+        else if selector.port.index = 4 then some witnesses.2 else none
+    | _ => none
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Exact ordered application read, derived through the compiled policy. -/
+theorem arguments_read (statement : artifacts.Statement F G) (witnesses : F × F) :
+    retained.arguments statement (embed witnesses) = some (arguments statement witnesses) := by
+  match statement with
+  | .cons firstBase (.cons secondBase (.cons point .nil)) => rfl
+
+/-- The existing mathematical predicate is exactly the retained application. -/
+theorem holds_pinned (statement : artifacts.Statement F G) (witnesses : F × F) :
+    holds statement witnesses ↔ retained.Holds statement (embed witnesses) :=
+  (retained.holds_iff_of_arguments statement (embed witnesses) (arguments statement witnesses)
+    (arguments_read statement witnesses)).symm
+
 end ZkcSecurity.Examples.Subjects.Okamoto.Contract

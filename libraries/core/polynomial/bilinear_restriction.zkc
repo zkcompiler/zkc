@@ -15,13 +15,13 @@ pub struct Affine<F: Field> {
 
 // Fix x and retain both coefficients needed at every future y.
 // The fixed ABI needs no dynamic support allocation or shape guard.
-pub math fn restrict_first<F: Field>(input: Bilinear<F>, challenge: F) -> Affine<F> {
+pub math fn restrict_first<F: Field>(input: Bilinear<F>, challenge: F) -> Affine<F> where () {
   return Affine<F> {
     constant: input.c00 + input.c10 * challenge,
     linear: input.c01 + input.c11 * challenge
   };
 }
 
-pub math fn evaluate<F: Field>(input: Affine<F>, challenge: F) -> F {
+pub math fn evaluate<F: Field>(input: Affine<F>, challenge: F) -> F where () {
   return input.constant + input.linear * challenge;
 }

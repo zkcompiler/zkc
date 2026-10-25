@@ -85,8 +85,7 @@ def wire (extractor : Wire.Expr) : Wire.Request :=
     accept := subject.acceptance
     quantity := .guarantee ⟨forking, [(some "extractor", extractor)]⟩ }
 
-/- The selected subject owns its extractor profile; a request cannot replace
-it through a guarantee argument, even with a familiar registered name. -/
+-- The closed guarantee schema refuses request-selected extraction methods.
 set_option maxRecDepth 8192 in
 example : knowledgeArguments (models .empty .idealMeaning)
     (wire (.application "extractors.witness_search" (some 0) []))

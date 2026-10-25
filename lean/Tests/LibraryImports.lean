@@ -226,6 +226,7 @@ import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.InputAdmission
 import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.IterationObservations
+import Zkc.Source.Structured.Labels
 import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
@@ -341,6 +342,7 @@ import Tests.OriginalSumcheck
 import Tests.ParticipantInterface
 import Tests.ProcessNotation
 import Tests.ProjectionControls
+import Tests.ProofAccount
 import Tests.ReceiptStatus
 import Tests.ReferenceDiscovery
 import Tests.RegionCompatibility
@@ -521,6 +523,7 @@ import ZkcExamples.Structured.ChaumPedersenNormalForms
 import ZkcExamples.Structured.ChaumPedersenViews
 import ZkcExamples.Structured.Generated.Bindings.GkrRounds
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsCallbacks
+import ZkcExamples.Structured.Generated.Bindings.GkrRoundsCaller
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsData
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
 import ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
@@ -760,8 +763,10 @@ import ZkcExamples.Structured.UnitStateData
 import ZkcExamples.StructuredPrograms
 import ZkcTools.CommonSource.Reference
 import ZkcTools.JsonSupport
+import ZkcTools.ProofAccount
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bindings.Callbacks
+import ZkcTools.StructuredSource.Bindings.Calls
 import ZkcTools.StructuredSource.Bindings.Generate
 import ZkcTools.StructuredSource.Bindings.Gkr
 import ZkcTools.StructuredSource.Bindings.Inputs

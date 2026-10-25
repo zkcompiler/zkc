@@ -3,6 +3,8 @@ module
 public import ZkcTools.ConstructionBindings.Analysis
 public import ZkcSecurity.Generation.ConstructionBindingsTemplates
 public import ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
+public import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates
+public import ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates
 
 @[expose] public section
 
@@ -14,17 +16,19 @@ namespace ZkcSecurity.Generation.ConstructionBindings
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcTools.ConstructionBindings
 open ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
+open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
 open ZkcTools.StructuredSource.Presentation
 
 
 def literal {α : Type} [Repr α] (value : α) : String :=
   "(" ++ (reprStr value).replace "\n" " " ++ ")"
 
-def preamble (name : String) (imports : List String) : String :=
+def preamble (name : String) (imports : List String) (search : Bool := true) : String :=
   "module\n\n" ++ String.join (imports.map fun name => "public import " ++ name ++ "\n") ++
-  "\npublic meta import Zkc.Construction.ArtifactBindingTactic\npublic meta import ZkcSecurity.Tools.ProcessView\n" ++
+  (if search then "\npublic meta import Zkc.Construction.ArtifactBindingTactic\npublic meta import ZkcSecurity.Tools.ProcessView\n" else "") ++
   "\n@[expose] public section\nset_option autoImplicit false\nset_option maxRecDepth 50000\n" ++
-  "set_option maxHeartbeats 8000000\nset_option backward.isDefEq.respectTransparency false\n" ++
+  "set_option maxHeartbeats 8000000\n" ++
+  (if search then "set_option backward.isDefEq.respectTransparency false\n" else "") ++
   "set_option linter.unusedSimpArgs false\nnoncomputable section\nnamespace " ++ name ++ "\n" ++
   "open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured\n" ++
   "open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding\n" ++
@@ -59,8 +63,48 @@ def routes (layout : Layout) (index : Nat) : String := Id.run do
     "    simp only [OccurrenceResolution.matchesOccurrence, " ++ ", ".intercalate valid ++ "]\n" ++
     "    simp [" ++ nominalSimp layout ++ "]\n\n"
 
+/-- Applicability only: compare exact syntax with the installed layout before
+attempting View conversion. This uses the existing structural Instruction equality;
+it is not a semantic evaluator or a replacement for the emitted kernel checks. -/
+def templateMatches (producer : Bool) (context : Zkc.Construction.Context)
+    (occurrence : Occurrence) (offset : Nat) (instruction : Zkc.Construction.Instruction) : Bool :=
+  let expected := if producer then
+    ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerInstructions context occurrence offset
+    else ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorInstructions context occurrence offset
+  let outputs := if producer then
+    (ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerOutputs context offset).references
+    else (ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.verifierOutputs context offset).references
+  let sorts := if producer then
+    ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs.sorts context.suite
+    else VerifierOutputs.sorts context.suite
+  match instruction.operation with
+  | .loop site _ yielded =>
+    decide (site = qualifyProtocolSite occurrence.protocol.applicationPrefix "s15") &&
+    decide (yielded = outputs) && decide (instruction.results = sorts) &&
+    @decide (instruction.body = expected) (Instruction.decideList instruction.body expected)
+  | _ => false
+
+/-- Check the chosen proof method, without interpreting a refusal as invalid
+semantics or silently switching to another method. Derivation applicability is
+ultimately established by elaborating and kernel-checking its emitted proof. -/
+def checkApplicability (method : ProofMethod) (producer : Bool)
+    (context : Zkc.Construction.Context) (occurrence : Occurrence) (offset : Nat)
+    (instruction : Zkc.Construction.Instruction) (index : Nat) : Except String Unit := do
+  if method == .sharedTemplate then
+    unless templateMatches producer context occurrence offset instruction do
+      throw ("construction-binding-template-unsupported: " ++
+        (if producer then "Producer" else "Validator") ++ " call " ++ toString index)
+
+/-- Print the four local origin equations once per source occurrence. -/
+def originLaws (layout : Layout) (index : Nat) : String :=
+  "theorem " ++ occurrenceName index ++ "_origins :\n" ++
+  "    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context " ++ occurrenceName index ++ " := by\n" ++
+  "  constructor <;> intro index <;>\n" ++
+  "    simp [Domain.queryOrigin, Occurrence.origins, " ++ nominalSimp layout ++ "]\n\n"
+
 def source (program : Program) (validator producer : Participant)
-    (moduleName sourceModule pairModule : String) : Except String String := do
+    (moduleName sourceModule pairModule : String)
+    (method : ProofMethod := .sharedTemplate) : Except String String := do
   let layout ← analyze program validator
   let producerLayout ← analyzeWithContext program layout.context producer
   unless producer.policy == validator.policy do throw "construction-binding-policy-mismatch"
@@ -69,10 +113,12 @@ def source (program : Program) (validator producer : Participant)
     "ZkcExamples.Structured.Generated.Constructed." ++ rootName ++ "Validator",
     "ZkcExamples.Structured.Generated.Constructed." ++ rootName ++ "Producer",
     "ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs",
+    "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates",
+    "ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates",
     "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingLoop",
     "ZkcSecurity.Realizations.Sumcheck.OriginalProducerReduce",
     "Zkc.Source.Structured.BodyBindings"]
-  let mut text := preamble moduleName imports ++
+  let mut text := preamble moduleName imports (method == .checkedDerivation) ++
     "abbrev program := " ++ sourceModule ++ ".imported.program\n" ++
     "abbrev validatorArtifact := " ++ pairModule ++ ".Validator.participant\n" ++
     "abbrev producerArtifact := " ++ pairModule ++ ".Producer.participant\n" ++
@@ -90,6 +136,7 @@ def source (program : Program) (validator producer : Participant)
     -- inventing authority when its installed local paths no longer fit source.
     text := text ++ "theorem " ++ occurrence ++ "_query : " ++ occurrence ++ ".draw = " ++ literal call.query ++ " := by kernel_rfl\n" ++
       "theorem " ++ occurrence ++ "_messages : " ++ occurrence ++ ".messages = " ++ literal call.messages ++ " := by kernel_rfl\n"
+  for index in List.range layout.calls.length do text := text ++ originLaws layout index
   let names := occurrenceNames layout
   text := text ++ "\nabbrev routing (handle : Nat) : Original.Routing :=\n" ++
     "  ⟨program.snapshot, context, .validator, handle, " ++
@@ -101,6 +148,10 @@ def source (program : Program) (validator producer : Participant)
     "theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=\n  ⟨helper_bodies.sumcheck.empty, helper_bodies.sumcheck.append, helper_bodies.sumcheck.width, helper_bodies.sumcheck.«variables», helper_bodies.sumcheck.values⟩\n\n"
   for (role, selected) in [("Validator", layout), ("Producer", producerLayout)] do
     for (loop, index) in selected.loops.zipIdx do
+      let sourceOccurrence : Occurrence := ⟨layout.context.entry, loop.call.library, loop.call.application⟩
+      let some instruction := (if role == "Producer" then producer else validator).instructions[loop.instruction]?
+        | throw "construction-binding-template-loop-index"
+      checkApplicability method (role == "Producer") layout.context sourceOccurrence loop.offset instruction index
       let scope := role ++ "Call" ++ toString index
       let constructed := "ZkcExamples.Structured.Generated.Constructed." ++ moduleName.toName.getString! ++ role
       -- The caller supplies module naming; it never participates in analysis.
@@ -135,8 +186,33 @@ def source (program : Program) (validator producer : Participant)
             "$VALIDATOR_ROUTES" (occurrenceName index ++ "_routes")).replace
             "$OCCURRENCES" (nominalSimp layout)) ++ "\n"
       else text := text ++ "abbrev routes := " ++ occurrenceName index ++ "_routes\n"
-      let template := if role == "Validator" then ConstructionBindingsTemplates.validator else ConstructionBindingsTemplates.producer
-      text := text ++ ((template.replace "occurrence, Occurrence.protocol" ("occurrence, " ++ occurrenceName index ++ ", " ++ moduleName ++ ".routing, qualifyProtocolSite, Request.draw, " ++ ", ".intercalate (names.map (· ++ "_decimal")) ++ ", Occurrence.protocol")).replace "$OFFSET" (toString loop.offset)).replace "$BODY" body ++ "\n"
+      let owner := if role == "Validator" then
+        "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates" else
+        "ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates"
+      let roleName := if role == "Validator" then "validator" else "producer"
+      let outputName := if role == "Validator" then "verifierOutputs" else "producerOutputs"
+      let selectedInstruction := "(" ++ artifact ++ ".instructions.get ⟨" ++ toString loop.instruction ++ ", by decide +kernel⟩)"
+      let bodySyntax := if method == .sharedTemplate then
+        owner ++ "." ++ roleName ++ "Instructions context occurrence " ++ toString loop.offset
+        else literal instruction.body
+      text := text ++ "theorem body_syntax : " ++ selectedInstruction ++ ".body =\n    " ++
+        bodySyntax ++ " := by kernel_rfl\n" ++
+        "theorem loop_sorts : " ++ selectedInstruction ++ ".results = " ++
+        (if role == "Validator" then "VerifierOutputs" else "ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs") ++
+        ".sorts context.suite := by kernel_rfl\n" ++
+        "theorem loop_site : " ++ quoted loop.site ++ " = qualifyProtocolSite occurrence.protocol.applicationPrefix \"s15\" := by kernel_rfl\n"
+      if method == .sharedTemplate then
+        text := text ++ "theorem body_instance : " ++ body ++ " (ringModel F G) program context =\n    " ++
+          owner ++ "." ++ roleName ++ "Body (ringModel F G) program context occurrence " ++ toString loop.offset ++ " := by kernel_rfl\n" ++
+          "theorem output_instance : outputs = " ++ owner ++ "." ++ outputName ++ " context " ++ toString loop.offset ++ " := by kernel_rfl\n"
+      else
+        text := text ++ "theorem body_correspondence : Domain.Correspondence.Block (program := program) (context := context)\n    " ++
+          selectedInstruction ++ ".body (" ++ body ++ " (ringModel F G) program context) :=\n  " ++
+          body ++ "_eq (ringModel F G) program context\n"
+      let template := if role == "Validator" then ConstructionBindingsTemplates.validator method else ConstructionBindingsTemplates.producer method
+      text := text ++ ((((template.replace "$OFFSET" (toString loop.offset)).replace "$BODY" body).replace
+        "$ORIGINS" (occurrenceName index ++ "_origins")).replace
+        "$ORIGIN_DEFINITIONS" (nominalSimp layout)) ++ "\n"
       let callbackType := if role == "Validator" then "VerifierCallback" else "ZkcSecurity.Realizations.Sumcheck.OriginalProducer.ProducerCallback"
       text := text ++ "def callback (handle : Nat) : " ++ callbackType ++ " program (routing handle) occurrence context outputs " ++ toString loop.offset ++ " handle\n  (" ++ body ++ " (ringModel F G) program context) :=\n"
       text := text ++ (if role == "Validator" then

@@ -81,8 +81,8 @@ inductive Action where
   | unsupported (name : String)
   deriving Repr
 
-/-- A declared operation binding: contract, static arguments, installed
-implementation and its exact physical specialization. -/
+/-- A declared operation binding, including the physical specialization of its
+installed implementation. -/
 structure Binding where
   symbol : String
   contract : String

@@ -114,4 +114,3 @@ elab "derive_component_rejection " "[" leaves:term,* "]" " unfolding " "[" defin
   derive (← getMainGoal) leaves.getElems definitions.getElems finish
   setGoals ((← getGoals) ++ pending)
 end ZkcSecurity.Tools.ComponentDerivation
-

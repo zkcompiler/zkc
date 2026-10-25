@@ -38,8 +38,22 @@ run_cmd do
     let generated ← accepted (ZkcTools.StructuredSource.Constructed.source artifact
       ⟨moduleName, pairModule, pairModule ++ "." ++ role ++ ".participant"⟩)
     sources := sources ++ [(moduleName, generated)]
+  -- Internal SSA insertion is outside the fixed shared template. Refusal is
+  -- method applicability; the explicit derivation still proves the full result.
+  match ConstructionBindings.source program validator producer
+      bindingModule root.sourceModule pairModule with
+  | .error reason =>
+      unless reason == "construction-binding-template-unsupported: Validator call 0" do
+        Lean.throwError m!"unexpected shared-template refusal: {reason}"
+  | .ok _ => Lean.throwError "shared template accepted the shifted internal SSA layout"
+  match ConstructionBindings.source program root.artifacts.validator producer
+      bindingModule root.sourceModule pairModule with
+  | .error reason =>
+      unless reason == "construction-binding-template-unsupported: Producer call 0" do
+        Lean.throwError m!"unexpected producer shared-template refusal: {reason}"
+  | .ok _ => Lean.throwError "shared template accepted the shifted producer SSA layout"
   let generated ← accepted (ConstructionBindings.source program validator producer
-    bindingModule root.sourceModule pairModule)
+    bindingModule root.sourceModule pairModule .checkedDerivation)
   sources := sources ++ [(bindingModule, generated)]
   let layout ← accepted (ZkcTools.ConstructionBindings.analyze program validator)
   let original ← accepted (ZkcTools.ConstructionBindings.analyze program root.artifacts.validator)
@@ -64,7 +78,7 @@ run_cmd do
       ("ZkcExamples.Structured.Generated.OriginalArtifacts." ++ root.name ++ "ProducerSource"))
     sources := sources ++ [(moduleName, generated)]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `sources) : List (String × String) := $(Lean.quote sources)))
-  Lean.logInfo "PASS shifted callback SSA/output layout generation"
+  Lean.logInfo "PASS default template refusal and explicit checked derivation for shifted callback SSA/output layout"
 
 end TestsSecurity.ArtifactSlotsGenerate
 

@@ -12,7 +12,7 @@ private def localHelper (name : String) (inputs outputs : List Ty) (body : Block
 private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (List String))
     (body : Block) (roles : List String := ["P", "V"]) : Definition :=
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨"test::Main", []⟩), body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨"main", []⟩), body⟩
 private def unit (definitions : List Definition) (relations : List Relation := []) : Snapshot :=
   (let contractDefinitions : List Definition := definitions
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], contractDefinitions,

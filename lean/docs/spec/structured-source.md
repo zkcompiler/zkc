@@ -435,7 +435,12 @@ the pair, including for unused bindings. The Local `exec` descriptor lowers to
 lowering. No additional primitive interpreter or wire record is introduced.
 `Construction.Calculation.fieldEmbed` maps to this same operation; constructed
 participant rendering recognizes the exact `algebra.exec.field_embed` binding
-and ordered base/extension ports.
+and ordered base/extension ports. Its implementation field must be the empty
+string: an explicit implementation or a malformed field refuses the export,
+rather than being erased into the mathematical embedding.
+Constructed attribute decoding validates every tagged payload before rendering;
+bound operations require a symbol binding, a string-array parameter list and a
+string site, including when a diagnostic site is omitted from the meaning.
 
 Index values are `Nat` with explicit `value < 2^64` conditions. Exec checks
 both index operands, including comparisons. Add/multiply overflow, subtraction

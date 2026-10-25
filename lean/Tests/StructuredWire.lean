@@ -39,7 +39,7 @@ private def body (instructions : List Json := []) (terminal : Json :=
 private def rootFields : List Json := [
   .str "function", .str "main", .str "protocol", .str "public",
   arr [fieldTy, groupTy, serviceTy], arr [boolTy, boolTy], ports, empty,
-  arr [.str "test::Main", empty],
+  arr [.str "main", empty],
   body [
     instruction (strings ["group.identity", groupDomain]) [] [groupTy],
     instruction (strings ["group.add", groupDomain]) [0, 2] [groupTy],
@@ -67,7 +67,7 @@ private def mathFields : List Json := [
 private def otherRoot : Json := arr [
   .str "function", .str "other", .str "protocol", .str "private", empty, empty,
   arr [.str "protocol", strings ["Bob", "Alice"], empty, empty], empty,
-  arr [.str "test::Other", empty], body]
+  arr [.str "other", empty], body]
 
 private def domainFields : List Json := [
   .str "domain", .str "items", arr [strings ["vector", scalarDomain]],
@@ -423,7 +423,7 @@ private def run : IO Unit := do
     (Format.relation (arr (relationFields.set 7 (arr [fieldTy])))))
   check "duplicate-origin-refused" (hasError
     (Format.origin .local (arr [.str "origin", arr [strings ["k", "a"], strings ["k", "b"]]]))
-    "structured-origin")
+      "structured-origin")
   let errors ← failures.get
   unless errors.isEmpty do
     for error in errors.reverse do IO.eprintln s!"structured wire failed: {error}"

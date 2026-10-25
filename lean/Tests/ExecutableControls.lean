@@ -105,6 +105,29 @@ theorem uninstalled_refused :
     refusal (checkLowering installed constructed uninstalled) = some (.binding "_kernel_binding_4") := by
   decide +kernel
 
+/-- Physical specialization is part of the installed binding's identity. -/
+def withPhysicalArguments (validator : Validator) (symbol : String)
+    (arguments : List PhysicalType) : Validator :=
+  { validator with bindings := validator.bindings.map fun binding =>
+      if binding.symbol = symbol then { binding with physicalArguments := arguments } else binding }
+
+theorem missingSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_transcript_0" [])) = some (.binding "_transcript_0") := by
+  decide +kernel
+
+theorem wrongSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_transcript_0"
+        [⟨.data (.group "bls12-381.g1"), "other.g1/0"⟩])) = some (.binding "_transcript_0") := by
+  decide +kernel
+
+theorem additionalSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_kernel_binding_4"
+        [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩])) = some (.binding "_kernel_binding_4") := by
+  decide +kernel
+
 /-- Retain the actual operation and implementation, but substitute its payload layout. -/
 def foreignPayloadLayout : Validator :=
   { actual with bindings := actual.bindings.map fun binding =>

@@ -22,54 +22,50 @@ noncomputable section
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-theorem empty_body (args : Values (assignment F G) helper0Helper.inputs) :
-    invoke table helper0Helper args =
-      helper0Body.denote (Evaluation.meaning (.silent _) table) args.get :=
-  Evaluation.definitions_invoke_body_view_as (.silent _) payload.definitions payload.linked
-    (payload.definitions.get ⟨0, by decide +kernel⟩) (List.get_mem _ _)
-    helper0Helper rfl helper0Body rfl args
+theorem empty_body (args : Values (assignment F G) emptyHelper.inputs) :
+    invoke table emptyHelper args =
+      emptyBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.empty_closed args
 
-theorem append_body (args : Values (assignment F G) helper1Helper.inputs) :
-    invoke table helper1Helper args =
-      helper1Body.denote (Evaluation.meaning (.silent _) table) args.get :=
-  Evaluation.definitions_invoke_body_view_as (.silent _) payload.definitions payload.linked
-    (payload.definitions.get ⟨1, by decide +kernel⟩) (List.get_mem _ _)
-    helper1Helper rfl helper1Body rfl args
+theorem append_body (args : Values (assignment F G) appendHelper.inputs) :
+    invoke table appendHelper args =
+      appendBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.append_closed args
 
-theorem empty : invoke (table (F := F) (G := G)) helper0Helper .nil =
+theorem empty : invoke (table (F := F) (G := G)) emptyHelper .nil =
     .done (.cons [] .nil) := by
   rw [empty_body]
   rfl
 
 theorem append (point : List F) (r : F) :
-    invoke (table (G := G)) helper1Helper (.cons point (.cons r .nil)) =
+    invoke (table (G := G)) appendHelper (.cons point (.cons r .nil)) =
       .done (.cons (point ++ [r]) .nil) := by
   rw [append_body]
   rfl
 
 theorem owned_empty (self : Nat) :
     Participant.owned self self
-      (invoke (helpers (F := F) (G := G) payload).toOn.closed helper0Helper) .nil =
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed emptyHelper) .nil =
       .done (.cons (some []) .nil) := by
-  change Participant.owned self self (invoke (helpers payload).closed helper0Helper) .nil = _
+  change Participant.owned self self (invoke (helpers payload).closed emptyHelper) .nil = _
   rw [generated_table]
   simp only [Participant.owned, ite_true, RoleFamily.sequence, empty, PIR.Process.bind]
   rfl
 
 theorem owned_append (self : Nat) (point : Option (List F)) (r : F) :
     Participant.owned self self
-      (invoke (helpers (F := F) (G := G) payload).toOn.closed helper1Helper)
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed appendHelper)
       (.cons point (.cons (some r) .nil)) =
       match point with
       | none => .halt .incomplete
       | some point => .done (.cons (some (point ++ [r])) .nil) := by
-  change Participant.owned self self (invoke (helpers payload).closed helper1Helper) _ = _
+  change Participant.owned self self (invoke (helpers payload).closed appendHelper) _ = _
   rw [generated_table]
   rw [Participant.owned, ite_eq_left (Eq.refl self)]
   cases point with
   | none => rfl
   | some point =>
-    change (invoke table helper1Helper (.cons point (.cons r .nil))).bind _ = _
+    change (invoke table appendHelper (.cons point (.cons r .nil))).bind _ = _
     rw [append]
     rfl
 

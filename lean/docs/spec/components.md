@@ -46,9 +46,35 @@ or hashes alone do not prove a helper's mathematical behavior.
 The Lean normalizer supplies the meaning of a generated view. The printer
 emits ordinary definitions and applications of its soundness theorem. The
 `structured-source component-bindings` command also emits a ledger indexed by
-source occurrence and obligation responsibility. It does not execute Python
+source occurrence and obligation responsibility. This is a proposal inventory,
+not evidence that its open rows were discharged. It does not execute Python
 to construct its expression language. Python remains responsible for external
 process orchestration, byte capture, report joins and retained older clients.
+
+For the installed table method, `python3
+lean/security/checks/check_derivation_accounts.py` emits a separate discharge
+account from the actual SmallSumcheck and TwoSums charged receipts.
+`ZkcTools.ProofAccount` inspects applications in checked declaration bodies;
+the method defines its checkpoints once in
+`ZkcSecurity.Generation.SumcheckAccounts`. Initialization, preservation, exit,
+frame and terminal rows retain their selected proof terms, inferred types,
+complete local telescopes, dependency paths and source occurrences. Root
+applications bind actual schedules, raw inputs, claims and round counts;
+TwoSums records both composition branches and the reached history. Authored
+target mathematics, sampling and cost are recorded separately. A shared
+library application is counted once and referenced by its occurrences.
+
+Responsibility and method labels are measurement annotations. Syntactic
+reachability is not a minimal semantic dependency analysis. Missing, ambiguous
+or stale associations fail this measurement; they never invalidate an otherwise
+valid receipt. Direct proofs may remain unattributed. The account does not
+promote rows in the proposal inventory or claim to account for every possible
+proof method. Call association checks the full typed equation, not merely the
+presence of declaration names. The driver pins project import sources and the
+objects directly encountered from those imports, including external objects;
+it does not inventory external packages' transitive object closure. Object bytes
+and source bytes are recorded separately. It requires prepared package
+dependencies and is not a fresh build.
 
 Binding equations preserve optional inputs and output masks, captures,
 complete return values, callbacks, call contexts, bounded loops, effects and

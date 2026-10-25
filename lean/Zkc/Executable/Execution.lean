@@ -127,8 +127,7 @@ def Installed.takes (row : Installed) (arguments : List String) : Bool :=
 def Vocabulary.installed? (vocabulary : Vocabulary) (binding : Binding) : Option Installed :=
   vocabulary.operations.find? fun row =>
     row.contract == binding.contract && row.takes binding.arguments &&
-      row.implementation == binding.implementation &&
-      row.physicalArguments == binding.physicalArguments
+      row.implementation == binding.implementation && row.physicalArguments == binding.physicalArguments
 
 /-- Resolve a binding and its parameters: transcript operations carry exactly
 one occurrence, constants exactly one canonical decimal below `2 ^ 64`, a

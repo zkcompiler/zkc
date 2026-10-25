@@ -54,10 +54,10 @@ def round (a m l r : List F) :
 
 set_option linter.unusedSimpArgs false in
 theorem round_equation (a m l r : List F) :
-    invoke (table (G := G)) helper41Helper (.cons a (.cons m (.cons l (.cons r .nil)))) =
+    invoke (table (G := G)) roundMessageHelper (.cons a (.cons m (.cons l (.cons r .nil)))) =
       round a m l r := by
   rw [round_message_body]
-  simp only [helper41Body, Region.denote, Evaluation.meaning, Evaluation.operation,
+  simp only [roundMessageBody, Region.denote, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
     prepend_one, prepend_two, prepend_three, Environment.prepend, Environment.push,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
@@ -66,11 +66,11 @@ theorem round_equation (a m l r : List F) :
 
 theorem map_interpolate (low high : List F) (r : F)
     (small : low.length < indexLimit) (same : high.length = low.length) :
-    invoke (table (G := G)) helper43Helper (.cons low (.cons high (.cons r .nil))) =
+    invoke (table (G := G)) interpolationsHelper (.cons low (.cons high (.cons r .nil))) =
       .done (.cons (List.zipWith (fun a b => a + (b - a) * r) low high) .nil) := by
   rw [interpolations_body]
   change (Evaluation.denoteMap table
-    ⟨helper42Helper.name, "bls12-381.fr", [true, true, false]⟩
+    ⟨interpolationHelper.name, "bls12-381.fr", [true, true, false]⟩
     (.cons low (.cons high (.cons r .nil)))).bind _ = _
   rw [Evaluation.denoteMap_twoRows_broadcast _ _ _ low high r small same _
     (fun a b => interpolate (G := G) a b r)]
@@ -79,14 +79,14 @@ theorem map_interpolate (low high : List F) (r : F)
 def fix (xs : List F) (r : F) :
     PIR.Process (participantInterface F G) (Values (assignment F G) [vector]) :=
   (split xs).bind fun halves =>
-    invoke table helper43Helper (.cons (halves.get .here)
+    invoke table interpolationsHelper (.cons (halves.get .here)
       (.cons (halves.get (.there .here)) (.cons r .nil)))
 
 set_option linter.unusedSimpArgs false in
 theorem fix_equation (xs : List F) (r : F) :
-    invoke (table (G := G)) helper44Helper (.cons xs (.cons r .nil)) = fix xs r := by
+    invoke (table (G := G)) factorRestrictionHelper (.cons xs (.cons r .nil)) = fix xs r := by
   rw [factor_restriction_body]
-  simp only [helper44Body, Region.denote, Evaluation.meaning, Evaluation.operation,
+  simp only [factorRestrictionBody, Region.denote, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
     prepend_one, prepend_two, Environment.prepend, Environment.push, SiteObservations.silent, PIR.Process.bind]
   unfold fix split
@@ -105,11 +105,11 @@ def fixGates (a m l r : List F) (challenge : F) :
 
 set_option linter.unusedSimpArgs false in
 theorem fixGates_equation (a m l r : List F) (challenge : F) :
-    invoke (table (G := G)) helper45Helper
+    invoke (table (G := G)) gateRestrictionHelper
       (.cons a (.cons m (.cons l (.cons r (.cons challenge .nil))))) =
       fixGates a m l r challenge := by
   rw [gate_restriction_body]
-  simp only [helper45Body, Region.denote, Evaluation.meaning, Evaluation.operation,
+  simp only [gateRestrictionBody, Region.denote, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
     prepend_one, Environment.prepend, Environment.push, SiteObservations.silent, PIR.Process.bind, fix_equation]
   rfl
@@ -117,11 +117,11 @@ theorem fixGates_equation (a m l r : List F) (challenge : F) :
 /-- Source map capacity is checked before scalar interpolation. -/
 theorem map_interpolate_exhausted (low high : List F) (r : F)
     (large : ¬ low.length < indexLimit) :
-    invoke (table (G := G)) helper43Helper (.cons low (.cons high (.cons r .nil))) =
+    invoke (table (G := G)) interpolationsHelper (.cons low (.cons high (.cons r .nil))) =
       .halt .exhausted := by
   rw [interpolations_body]
   change (Evaluation.denoteMap table
-    ⟨helper42Helper.name, "bls12-381.fr", [true, true, false]⟩
+    ⟨interpolationHelper.name, "bls12-381.fr", [true, true, false]⟩
     (.cons low (.cons high (.cons r .nil)))).bind _ = _
   rw [Evaluation.denoteMap_first_exhausted _ _ _ low.length [high.length] rfl large]
   rfl
@@ -139,7 +139,7 @@ theorem fix_all (xs : List F) (r : F) :
     obtain ⟨low, high⟩ := restrictValues_halves_length xs even
     unfold fix split
     simp only [Primitive.evaluate, shape, and_self, ite_true, primitiveOutcome, PIR.Process.bind]
-    change invoke table helper43Helper
+    change invoke table interpolationsHelper
       (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil))) = _
     by_cases capacity : xs.length / 2 < indexLimit
     · rw [ite_eq_left capacity]

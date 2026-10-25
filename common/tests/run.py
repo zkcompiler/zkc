@@ -35,8 +35,10 @@ def lean_checks():
     # These tools emit or compare explicitly supplied migration snapshots. They
     # are not checks of the current checkout and have no default input selection.
     snapshot_tools = {"check_migration.py", "source_responsibility.py"}
+    # These checks need the native compiler and run in lean-native instead.
+    native_checks = {"check_local_service_admission.py"}
     return sorted(path for path in (ROOT / "lean/checks").glob("*.py")
-                  if path.name not in snapshot_tools) + sorted(
+                  if path.name not in snapshot_tools | native_checks) + sorted(
         (ROOT / "lean/consumers").glob("*/check.py"))
 
 
@@ -133,6 +135,9 @@ def lean_native(args):
                  "--output", output / "requests"], env=store)
             run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
                  "--output", output / "intent"], env=store)
+            run([sys.executable, ROOT / "lean/checks/check_local_service_admission.py",
+                 "--compiler", compiler / "zkc-compile",
+                 "--output", output / "local-services"], env=store)
     if "subjects" in stages:
         with native_stage(selection, "subjects"):
             # Every subject manifest: exports, generated modules, kernel checks, generic
@@ -184,6 +189,12 @@ def execute(scope, args):
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
         for check in lean_checks():
+            if check.name in {"check_constructed_views.py", "check_structured_bindings.py"}:
+                # The generated syntax and its refusal controls import the
+                # prepared package and must see Lake's dependency search path.
+                run(["lake", "env", sys.executable, check,
+                     "--records", reports / "lean" / check.stem], cwd=ROOT / "lean")
+                continue
             selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py", "check_package_ownership.py"} else []
             if check.name == "check_migration_exporter.py":
                 selection = ["--package", ROOT / "lean", "--output", reports / "lean/migration-exporter"]
@@ -198,6 +209,9 @@ def execute(scope, args):
         run(["lake", "env", sys.executable,
              ROOT / "lean/security/checks/check_abi_installations.py",
              reports / "lean/abi-installations"], cwd=ROOT / "lean/security")
+        run(["uv", "run", "--no-sync", "--locked", "pytest",
+             "lean/security/checks/test_receipt_reporting.py",
+             f"--junit-xml={reports / 'lean/receipt-reporting.xml'}"])
     elif scope == "lean-integration":
         run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
         run([sys.executable, ROOT / "lean/checks/check_package_ownership.py", "--integration", "arklib"])

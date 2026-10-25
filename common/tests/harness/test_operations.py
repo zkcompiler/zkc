@@ -129,6 +129,10 @@ def test_native_lean_checks_subjects_then_requests_then_records(monkeypatch, tmp
                        "--integration", "arklib", "--evidence", str(output / "evidence")]
     assert not any("construction/check.py" in part or "executable/check.py" in part
                    for call in calls for part in call)
+    services, = [call for call in calls if any(part.endswith("check_local_service_admission.py") for part in call)]
+    assert services == [sys.executable, str(tmp_path / "lean/checks/check_local_service_admission.py"),
+                        "--compiler", str(tmp_path / "compiler/zkc-compile"),
+                        "--output", str(output.parent / "local-services")]
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -207,7 +211,7 @@ def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypa
     assert os.path.lexists(prefix)
 
 
-@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint"])
+@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint", "lean-security"])
 def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner = load("runner", "common/tests/run.py")
     calls = []
@@ -218,6 +222,8 @@ def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     assert len(uv) == 1
     assert uv[0][:5] == ["uv", "run", "--no-sync", "--locked", "ruff" if scope in {"style", "lint"} else "pytest"]
     assert not any("sync" in args or "fetch" in args for args in calls)
+    if scope == "lean-security":
+        assert "lean/security/checks/test_receipt_reporting.py" in uv[0]
 
 
 @pytest.mark.parametrize("driver,operation,child", [
@@ -292,4 +298,19 @@ def test_current_lean_checks_do_not_run_snapshot_tools():
     developer = load("test_runner_snapshot_selection", "common/tests/run.py")
     selected = {path.name for path in developer.lean_checks()}
     assert {"audit_imports.py", "check_package_ownership.py", "check_records.py"} <= selected
-    assert not selected.intersection({"check_migration.py", "source_responsibility.py"})
+    assert not selected.intersection({"check_migration.py", "source_responsibility.py",
+                                      "check_local_service_admission.py"})
+
+
+def test_generated_view_controls_use_the_prepared_lean_environment(monkeypatch, tmp_path):
+    runner = load("test_view_control_environment", "common/tests/run.py")
+    calls = []
+    monkeypatch.setattr(runner, "run", lambda args, **kwargs: calls.append((list(map(str, args)), kwargs)))
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
+    runner.execute("lean", SimpleNamespace())
+    for name in ("check_constructed_views", "check_structured_bindings"):
+        (command, options), = [(args, opts) for args, opts in calls
+                              if str(ROOT / f"lean/checks/{name}.py") in args]
+        assert command == ["lake", "env", sys.executable, str(ROOT / f"lean/checks/{name}.py"),
+                           "--records", str(tmp_path / "lean" / name)]
+        assert options["cwd"] == ROOT / "lean"

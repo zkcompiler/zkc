@@ -7,6 +7,14 @@ driver, `python3 lean/bridges/subject.py`, reads only these manifests: adding a
 subject is adding physical configuration and typed Lean exports, with no
 Python edit. `lean/bridges/pipeline/manifest.py` loads and validates them.
 
+The composed-Sumcheck manifest route has been retired. The same source project
+is the `TwoSums` selection in `ZkcSecurity.Generation.Roots.Catalogue`; its
+generated subject, soundness requests and completeness receipt are checked by
+`python3 lean/checks/check_subject_roots.py --exports DIRECTORY`. Use that root's
+exact requests and receipts, rather than the former manifest's unresolved
+report. Historical reports remain historical. The old construction modules
+remain audited regression clients until their separate retirement.
+
 Configured normal-form outputs are built before dependent receipts and take
 part in the report's generated-module freshness comparison. Their request owns
 the output path; changing, deleting or omitting evidence for that output cannot

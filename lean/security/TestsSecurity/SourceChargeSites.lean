@@ -9,7 +9,7 @@ namespace TestsSecurity.SourceChargeSites
 open Zkc.Construction ZkcSecurity.Claims
 open ZkcSecurity.Examples.Generated
 
-example : Domain.ChargeSite.encodedLabel "α" = "label_ceb1" := by decide +kernel
+example : Zkc.Source.Structured.encodedLabel "α" = "label_ceb1" := by decide +kernel
 
 example : (Domain.ChargeSite.selectLabel SmallSumcheck.validatorCompiled
     "reduce.challenge").map (·.native) =
@@ -39,8 +39,8 @@ prefix or parent encoding is supplied by the author. Selection against the
 original admitted participant still refuses this renamed occurrence. -/
 def renamed : Domain.ChallengeOccurrence := {
   suite := "suite", field := "field"
-  template := ⟨"entry", [⟨"apply", "entry", Domain.ChargeSite.encodedLabel "longer"⟩],
-    ["query", "callee", Domain.ChargeSite.encodedLabel "challenge", "input_0", "random", "draw", "V"]⟩ }
+  template := ⟨"entry", [⟨"apply", "entry", Zkc.Source.Structured.encodedLabel "longer"⟩],
+    ["query", "callee", Zkc.Source.Structured.encodedLabel "challenge", "input_0", "random", "draw", "V"]⟩ }
 example : Domain.ChargeSite.resolveLabel [renamed] "longer.challenge" =
     renamed.template.querySite? := by decide +kernel
 example : (Domain.ChargeSite.selectLabel TwoSums.validatorCompiled
