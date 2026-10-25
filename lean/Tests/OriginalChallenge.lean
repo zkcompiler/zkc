@@ -21,7 +21,7 @@ private def snapshot : Snapshot where
   relations := []
   bindings := []
   definitions := [.function ⟨"Root", .protocol, .publicDef, [.service "random.bls12-381.fr/0"], [.field "bls12-381.fr"],
-    some ⟨["P", "V"], [["V"]], [["P", "V"]]⟩, [], none,
+    some ⟨["P", "V"], [["V"]], [["P", "V"]]⟩, [], some (.protocol ⟨"Root", []⟩),
     .block [.instruction (.draw "V" "bls12-381.fr") [0] [.field "bls12-381.fr"] [] "q",
       .instruction (.exchange "V" "P") [0] [.field "bls12-381.fr"] [] "d"] (.ret [0])⟩]
   contracts := [⟨"Root", []⟩]

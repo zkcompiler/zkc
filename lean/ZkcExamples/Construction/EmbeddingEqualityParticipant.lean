@@ -12,7 +12,7 @@ namespace ZkcExamples.Construction.EmbeddingEqualityParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:fc9a282a5ab377d24c58983c7b3c8fdef4361068612f63462deef5318fbb7510"
+  source := "sha256:3cf56d130e2775bfb3dcd336c540b091432f96d4521da89f951aba6948ca95fe"
   candidate := "sha256:a2ca57b0992606b9a96139d519f29ea7e8874ce2e2f8bf103067bc4cf33e7c68"
   policy := ⟨"s7h6578616d706c6517h456d62656464696e67457175616c697479", "role00000000", "role00000001", 0, "merlin3.koala-bear.ext8-binomial3.rejection31le/0", [2], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

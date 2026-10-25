@@ -25,7 +25,7 @@ private def step : Definition := .function ⟨"step", .math, .privateDef,
     .instruction (.getProduct 1) [2] [field] [] "",
     .instruction .booleanAnd [2, 1] [.boolean] [] ""] (.ret [0])⟩
 private def main : Definition := .function ⟨"main", .protocol, .publicDef,
-  [queries], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+  [queries], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"test::Main", []⟩),
   .block [.instruction (.booleanConstant true) [] [.boolean] [] "",
     .instruction (.fold "queries" "step" "") [1, 0] [.boolean] [] ""] (.ret [0])⟩
 private def snapshot : Snapshot :=

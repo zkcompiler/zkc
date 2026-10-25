@@ -23,7 +23,7 @@ def declaration : RealizationDeclaration := ⟨"realized", ports, results, "root
 def emptyDeclaration : RealizationDeclaration := ⟨"empty", ports, [], "zero"⟩
 def snapshot : Snapshot :=
   (let contractDefinitions : List Definition := [.function ⟨"main", .protocol, .publicDef, [], [], some ⟨["P"], [], []⟩,
-      [], none, .block [] (.ret [])⟩, zero, tuple, root,
+      [], some (.protocol ⟨"main", []⟩), .block [] (.ret [])⟩, zero, tuple, root,
       .realization declaration, .realization emptyDeclaration]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>

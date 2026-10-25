@@ -86,6 +86,22 @@ theorem runtime_pack (data : abi.Data) :
   rw [abi.preparation, (abi.complete_iff _ _).mpr rfl]
   rfl
 
+/-- Preparation is characterized before any source truth or execution success.
+This law also transports the unchanged preparation part of historical admission. -/
+theorem prepared_iff_exists (inputs : subject.Inputs) :
+    (∃ producer validator, subject.runtimeInputs inputs = some (producer, validator) ∧
+      Domain.sortsMatch selected.artifacts.producer.inputs producer = true ∧
+      Domain.sortsMatch selected.artifacts.validator.inputs validator = true) ↔
+      ∃ data, inputs = abi.pack data := by
+  constructor
+  · rintro ⟨producer, validator, prepared, _⟩
+    rw [abi.preparation] at prepared
+    cases found : abi.complete inputs with
+    | none => simp [found] at prepared
+    | some data => exact ⟨data, (abi.complete_iff _ _).mp found⟩
+  · rintro ⟨data, rfl⟩
+    exact ⟨_, _, abi.runtime_pack data, abi.producerSorts data, abi.validatorSorts data⟩
+
 theorem honest_exists (inputs : subject.Inputs) (honest : subject.HonestInput inputs) :
     ∃ data, inputs = abi.pack data := by
   obtain ⟨_, _, producer, validator, prepared, _⟩ := honest
@@ -96,17 +112,17 @@ theorem honest_exists (inputs : subject.Inputs) (honest : subject.HonestInput in
 
 theorem honest_pack_iff (data : abi.Data) :
     subject.HonestInput (abi.pack data) ↔
-      subject.inputPolicy.Holds (abi.pack data) ∧
+      inputsRepresentable (abi.pack data) ∧
         ∀ index isInput, subject.inputClause (abi.pack data) index isInput := by
   constructor
   · exact fun honest => ⟨honest.1, honest.2.1⟩
-  · rintro ⟨policy, clauses⟩
-    exact ⟨policy, clauses, _, _, abi.runtime_pack data,
+  · rintro ⟨representable, clauses⟩
+    exact ⟨representable, clauses, _, _, abi.runtime_pack data,
       abi.producerSorts data, abi.validatorSorts data⟩
 
 theorem honest_iff_exists (inputs : subject.Inputs) :
     subject.HonestInput inputs ↔ ∃ data, inputs = abi.pack data ∧
-      subject.inputPolicy.Holds (abi.pack data) ∧
+      inputsRepresentable (abi.pack data) ∧
         ∀ index isInput, subject.inputClause (abi.pack data) index isInput := by
   constructor
   · intro honest

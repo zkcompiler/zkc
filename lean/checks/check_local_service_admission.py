@@ -21,6 +21,11 @@ from bridges.construction import pair  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 def instructions(block):
     for instruction in block:
         yield instruction
@@ -81,19 +86,19 @@ def main():
                                    "--symbol=" + data[1][3][1]]))
         (output / (name + "-source.json")).write_text(json.dumps(original, indent=2) + "\n")
         queries = [op for op in instructions(data[1][7]) if op[0] == "protocol.service_query"]
-        assert queries and all(len(op) == 7 and op[3] == [] for op in queries)
-        assert len(data[2][9]) == (1 if name == "Aliases" else 0)
-        assert len(data[1][5]) == 4  # base, point, scalar, transcript; no nonce input.
+        require(queries and all(len(op) == 7 and op[3] == [] for op in queries), 'service query envelope or argument list changed')
+        require(len(data[2][9]) == (1 if name == "Aliases" else 0), 'validator service-port inventory changed')
+        require(len(data[1][5]) == 4, 'producer source inputs must exclude nonce witnesses')
         if name == "Aliases":
-            assert len(data[1][9]) == 3  # includes unused spare port.
-            assert len(queries) == 5  # includes unused replies and two borrowed aliases.
+            require(len(data[1][9]) == 3, 'producer service ports must include unused spare ports')
+            require(len(queries) == 5, 'producer must retain unused replies and borrowed aliases')
             events = [lean_render.template(op[6][0])[-1] for op in queries]
-            assert {event[3] for event in events} >= {"input_0", "input_1"}
-            assert len({dict(op[1])["port"][1] for op in queries}) == 2
+            require({event[3] for event in events} >= {"input_0", "input_1"}, 'borrowed aliases lost their distinct input origins')
+            require(len({dict(op[1])["port"][1] for op in queries}) == 2, 'borrowed aliases lost their distinct ports')
         if name == "Repeated":
-            assert len(queries) == 2 and all(len(op[6][1]) == 1 for op in queries)
+            require(len(queries) == 2 and all(len(op[6][1]) == 1 for op in queries), 'repeated services must retain one dynamic coordinate')
         if name == "LocalRepeated":
-            assert [len(op[6][1]) for op in queries] == [1, 0]
+            require([len(op[6][1]) for op in queries] == [1, 0], 'local repeated service coordinates changed')
         definitions.append(lean_render.strip_header(snapshot.render(original, name + ".Source")))
         definitions.append(lean_render.strip_header(pair.render(data, name)))
         data_by_name[name] = data

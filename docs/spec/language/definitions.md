@@ -494,6 +494,14 @@ index equality uses that mathematical identity and keeps its direct native
 operation in Local code. Index addition, subtraction and multiplication retain
 their checked Local semantics. Indices are not field elements.
 
+`intrinsic<F>("vector.length", values)` is total for a field vector and lowers
+to `data.dim` on axis zero. `intrinsic("index.power_of_two", n, r)` is the total
+natural predicate `n = 2^r`; it returns false when `r >= 64` on the native
+index ABI. It constructs no runtime natural power. The public index
+`power_of_two` helper exposes this Math meaning. Existing Local vector `length`
+and index `less` helpers retain their checked executable semantics; Math clauses
+use the total intrinsics directly.
+
 ## Native data and library kernels
 
 Libraries can name installed data representations and wrap their operations:
@@ -1061,6 +1069,16 @@ root order. Schemes requiring literal attributes or roots that cannot be recover
 from ports use an ordinary `kernel`/`intrinsic` body. A primitive requires one
 written result; a tuple can represent multiple native results. Invalid declarations
 use `source.primitive` or the more specific installed-contract diagnostic.
+
+The declaration mode selects the installed signature: `math fn` uses the
+mathematical intrinsic registry, and ordinary `fn` uses the executable operation
+registry. A public name may occur in both with different contracts. Adding a
+mathematical spelling does not reclassify an existing local primitive or remove
+its checks and stop behavior. Unknown identities and identities absent from the
+selected registry refuse; a Math body cannot call a local declaration. For
+example, ordinary `vector.length` and `index.less` helpers retain their executable
+contracts, while Math declarations or `intrinsic` bodies select their total
+mathematical meanings.
 
 The installed scalar prelude provides field addition/subtraction/multiplication/
 equality, group addition/scaling/equality, Boolean equality, and ordered index

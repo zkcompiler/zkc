@@ -81,12 +81,12 @@ open Zkc.Source.Structured
 -- resolution, not admission of a new cryptographic domain.
 private def child : Function :=
   ⟨"Child", .protocol, .privateDef, [.service "random.F/0"], [],
-    some ⟨["P", "V"], [["P"]], []⟩, [], none,
+    some ⟨["P", "V"], [["P"]], []⟩, [], some (.protocol ⟨"Child", []⟩),
     .block [.instruction (.draw "P" "F") [0] [.field "F"] [] "q"] (.ret [])⟩
 
 private def parent (swapped : Bool) : Function :=
   ⟨"Root", .protocol, .publicDef, [.field "F", .field "F", .service "random.F/0"], [],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"], ["V"]], []⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"], ["V"]], []⟩, [], some (.protocol ⟨"Root", []⟩),
     .block [.instruction (.protocolApply "Child" (if swapped then ["V", "P"] else ["P", "V"]))
       [2] [] [] "call"] (.ret [])⟩
 

@@ -52,17 +52,13 @@ theorem condition_iff (values : subject.Inputs) :
     | 1 => exact (one_clause_iff values).mpr holds
     | n + 2 => change n + 2 < 2 at bound; omega
 
-/-- A nondefault witness satisfies both the input clause and the input policy. -/
+/-- A nondefault witness satisfies the source input clause and ABI range. -/
 theorem nonvacuous : Nonvacuous subject := by
   let values : subject.Inputs := .cons (some 1) (.cons none .nil)
   refine ⟨values, ⟨.cons (1 : Nat) .nil, rfl, rfl⟩, ?_⟩
   refine ⟨?_, (condition_iff values).mpr rfl, _, _, rfl, rfl, rfl⟩
-  change ∀ rule : InputRule [.index, .service Fixtures.scalarServiceContract],
-    rule ∈ [.boundedIndex .here 2] → rule.Holds values
-  intro rule member
-  have same := List.mem_singleton.mp member
-  subst rule
-  exact ⟨1, rfl, by decide +kernel, by decide +kernel⟩
+  change (1 : Nat) < indexLimit ∧ True ∧ True
+  decide +kernel
 
 #print axioms condition_iff
 #print axioms nonvacuous

@@ -108,6 +108,7 @@ noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (O
 
 -- Reflexivity is a fallback when simplification leaves a definitionally equal goal.
 set_option linter.unusedTactic false in
+set_option linter.unusedSimpArgs false in
 set_option linter.unreachableTactic false in
 theorem protocol0Role0_readable (ctx : ProtocolContext)
     (distinct : RosterDistinct ctx 0 2) (b0 : (Option ((List F)))) (b1 : (Option ((List F)))) (b2 : (Option ((List F)))) (b3 : (Option ((List F)))) (b4 : (Option (F))) (b5 : (Option (Nat))) (b6 : (Option (Nat))) :
@@ -214,6 +215,7 @@ noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (O
 
 -- Reflexivity is a fallback when simplification leaves a definitionally equal goal.
 set_option linter.unusedTactic false in
+set_option linter.unusedSimpArgs false in
 set_option linter.unreachableTactic false in
 theorem protocol0Role1_readable (ctx : ProtocolContext)
     (distinct : RosterDistinct ctx 1 2) (b0 : (Option ((List F)))) (b1 : (Option ((List F)))) (b2 : (Option ((List F)))) (b3 : (Option ((List F)))) (b4 : (Option (F))) (b5 : (Option (Nat))) (b6 : (Option (Nat))) :

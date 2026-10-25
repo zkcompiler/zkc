@@ -538,7 +538,7 @@ The installed Sigma method proves the actual Schnorr and Schnorr AND producers
 with private draws and a shared public challenge. An additional root borrows one
 random service under two aliases before invoking Schnorr AND. A direct theorem
 selection installs the sampled-abort control and its nonzero bound through the
-same Subject, ABI and receipt printers. `SequentialSigma` composes Schnorr and
+same Subject, ABI, canonical endpoint and receipt printers. `SequentialSigma` composes Schnorr and
 Chaum–Pedersen through the same method, drawing its second private nonce after
 the first protocol's challenge and response.
 
@@ -554,7 +554,10 @@ The driver checks ordinary generated Lean files in an isolated
 requires exact regeneration, `--only NAME` selects roots, and `--phase` selects
 export, assembly, proof or receipt. `--dependency-path PATH` supplies another
 prechecked dependency tree when collaborators use separate output directories;
-serialize writers to a single output tree.
+serialize writers to a single output tree. Objects owned by those explicit trees
+take precedence over their inherited cache symlinks, in argument order. Existing
+objects owned by the output tree remain its responsibility; recheck an affected
+module when its source or import closure changes.
 
 The `zkc.component-roots/0` descriptor requires nonempty strings `schema`,
 `model_module`, `model`, `sampling`, `field_type`, `group_type`, and
@@ -564,7 +567,7 @@ strings naming Lean declarations. Every root requires nonempty strings `name`,
 `source`, `entry`, `target`, and `method`, and a `modules` map from nonempty
 module names to nonempty source paths. Root names must be unique identifiers.
 
-The installed `sigma` method accepts an optional `error_expression`; it generates
+The installed `sigma` method selects zero error and generates
 its own proof module and theorem. Optional `method_imports` names additional Lean
 modules, and `nonvacuity_law` supplies a term checked as `Nonvacuous subject` for
 the fixed generated subject. Without that term, the method proposes the default
@@ -573,10 +576,14 @@ evidence; they cannot replace the subject's relation, retained input clauses or
 input policy. `method_imports` is a list of nonempty strings and
 `nonvacuity_law` is a nonempty string. Both are refused for the `direct` method.
 The `direct` method additionally requires
-`proof_module` and permits `proof_name`, defaulting to
-`<proof_module>.compiled_ideal_complete`. Both methods default an omitted
-`error_expression` to `.natural 0`. These optional values must be nonempty
-strings. Unknown keys, missing required keys, wrong value shapes, duplicate
+`proof_module`, `error_bound` (a Lean `ENNReal` term) and `error_expression`
+(request expression syntax). It permits `proof_name`, defaulting to
+`<proof_module>.compiled_ideal_complete`. Its generated endpoint checks the
+selected theorem at `error_bound`; the canonical receipt independently checks
+agreement with `error_expression`. Both fields are required even for a direct
+zero-error theorem. The Sigma method refuses these fields because its installed
+adapter proves perfect completeness. These values must be nonempty strings.
+Unknown keys, missing required keys, wrong value shapes, duplicate
 names, unsupported methods and invalid selections fail before constructing the
 generator, invoking native/Lean tools or creating output directories. Validation
 includes unselected roots. A misspelled bound never activates the zero default.
@@ -591,13 +598,38 @@ nonvacuity terms. Fully empty source rows are checked as emitted structural
 declarations; admission of a service-free pair is not added by those controls.
 
 `ZkcTools.StructuredSource.Root` owns common Subject and receipt assembly.
-`Generation.RootCompleteness` owns the common actual-pair theorem shell used by
-both maintained table roots and Sigma roots. Family extensions supply their
+`Generation.RootCompleteness.Selection` associates an existing indexed Subject,
+canonical endpoint and explicit error with its request output. The indexed
+Subject and ABI already own the typed source/artifact association.
+`RootCompleteness` owns the endpoint declaration used by maintained table roots,
+Sigma readback and direct quantitative proofs. Table mathematics and Sigma
+readback remain installed methods. Family extensions supply their
 mathematics and proof method; `Generation.UniformRoot` is an optional model
 presentation helper. Root configuration selects sources, nominal model,
 installed method or direct theorem and numeric error expression. It supplies no
 occurrence paths or structural proofs. Every emitted proof and receipt must
 elaborate independently.
+
+`security/checks/check_root_assembly.py --output DIRECTORY` compiles fresh
+readback, direct quantitative and canonical receipt outputs in a private overlay.
+It accepts `--dependency-path PATH` for prechecked dependencies and never runs a
+Lake build. Controls reject a wrong Subject, wrong theorem bound and mismatched
+request quantity. These model fixtures do not replace regeneration and receipt
+checks on the actual exported roots.
+
+`lean/checks/check_subject_roots.py --exports DIRECTORY` checks the maintained
+table roots against retained native exports, exact generated outputs and kernel
+preservation equations. Each catalogue-named directory contains `source.json`,
+`producer.json`, `validator.json`, both participant `.identity` files,
+`original.mlir`, `interface.json`, `source-claims.json` and `deployment.json`.
+The same check regenerates the compiled-stage source request declarations through
+the common data renderer; Lean resolves their properties, models and evidence.
+Reissuing a request requires `validator.identity` to contain the current
+`validator.json` bytes. Changed identities require an explicit request migration;
+the checker does not reinterpret a historical receipt as evidence for new bytes.
+Use `--write` to retain regenerated output and `--dependency-path PATH` for a
+prechecked private dependency tree. A successful generation comparison does not
+replace checking the corresponding canonical receipt clients.
 
 These roots use `blsScalarModel`: the source's nominal BLS scalar/group tags are
 retained, while the groups are interpreted as additive modules over the scalar

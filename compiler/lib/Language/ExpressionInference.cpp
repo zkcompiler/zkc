@@ -203,7 +203,8 @@ class ExpressionInference {
     const auto &context = contexts.at(id);
     const auto &primitive = checker.sources[callee.id.index]->primitive;
     unsigned edge =
-        !mapped && primitive && primitiveCallIsInline(context.mode, *primitive)
+        !mapped && primitive &&
+                primitiveCallIsInline(context.mode, callee.kind, *primitive)
             ? 0
             : 1;
     unsigned extra = context.scopedDepth;

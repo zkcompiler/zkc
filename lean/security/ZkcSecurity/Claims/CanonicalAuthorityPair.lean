@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Claims.Completeness
 public import ZkcSecurity.Claims.DomainModel
+public import ZkcSecurity.Claims.Parameters
 
 @[expose] public section
 
@@ -80,11 +81,22 @@ def stageLinkProofs (subject : Subject model original imported selected)
   | ⟨n + 4, impossible⟩ => exact False.elim (by simp [stageLinks] at impossible)
 end Subject
 
+/-- Apply the same conservative dependency rule as soundness to every source
+input formula and the selected target. No input policy is read from a request. -/
+def checkHonestRelations (subject : Subject model original imported selected) :
+    Except ResolutionError Unit := do
+  let definitions := imported.program.payload.definitions
+  checkDefaultRelation definitions subject.target.formula.definition.helper
+  for index in List.finRange subject.target.owner.contract.clauses.length do
+    if isInput : (subject.target.owner.clause index).kind = .input then
+      checkDefaultRelation definitions (subject.inputFormulas index isInput).formula.definition.helper
+
 def completenessArguments (capabilities : Domain.Capabilities model original)
     (registry : ModelRegistry) (request : Wire.Request)
     (subject : Subject model original imported selected) : Except ResolutionError (Except Incomplete ℚ≥0) := do
   subject.check request
-  subject.inputPolicy.checkParameters request.parameters
+  let _ ← completenessParameters.decode request.parameters
+  checkHonestRelations subject
   if !request.capabilities.isEmpty then
     throw (.schema "compiled completeness accepts no capabilities")
   let _ ← resolveModel registry request.model

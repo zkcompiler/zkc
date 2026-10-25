@@ -186,15 +186,46 @@ string. Selected implementations and contracts outside the catalogue below are
 refused, including on dormant declarations. Distinct binding names with the
 same metadata remain distinct retained rows.
 
+### Definition origins
+
 Math preconditions are exact arrays
 `["index_bound", index-argument, container-argument, 0]`. Other relation
-annotations are refused. Protocol and Math origin is `[]`; Local origin is
+annotations are refused. Math origin is `[]`; Local origin is
 `[origin-name, [[key, value], ...]]`, preserving the ordered `logical_origin`
 bindings without flattening them or substituting the helper symbol.
 Bindings have unique nonempty keys and nonempty values, with at most 128 pairs.
 The native verifier validates binding values against installed and canonical
 static identities. Lean retains these values as opaque metadata and checks their
 shape and uniqueness; it does not independently reproduce that identity registry.
+Protocol origin is required in this export and is carried by the native `origin`
+attribute. It uses a public typed tree, independent of generated symbols,
+internal type identities, display spellings and physical layouts:
+
+```text
+origin := [template-path, [[parameter-name, term], ...]]
+term   := ["nat", decimal] | ["field", id] | ["group", id]
+        | ["domain", sort, id] | ["asset", sort, id]
+        | ["bool"] | ["index"] | ["unit"]
+        | ["tuple", [term...]] | ["array", term, decimal]
+        | ["nominal", "record"|"variant"|"associated"|"module", path, [term...]]
+        | ["builtin"|"formal", name, [term...]]
+```
+
+The template path is the logical qualified NFC declaration path, without a
+filesystem path, capped at 2048 UTF-8 bytes. Named arguments occur in declaration
+order with distinct names; a nongeneric declaration has an empty argument list.
+Other strings have at most 512 bytes. Decimal strings are canonical unsigned
+base ten. Each origin permits at most 128 named arguments, 4096 term nodes in
+total and 64 term levels (the root term counts as one). Recursive term lists
+permit at most 512 entries and preserve order. The native input's separate
+textual nesting and byte limits also apply. Symbolic terms and unbound parameters are refused; a closed
+`formal` constructor is permitted. These trees identify a proposed callee;
+source comparison separately checks the checked declaration and body. An origin
+alone establishes neither body equality nor native/formal correspondence.
+Handwritten native IR may omit this source metadata, but cannot then be exported
+by this profile; no origin is inferred from its symbol. Local and protocol
+origins are decoded by definition kind and do not share a binding-value grammar.
+
 Math helpers are private.
 Native protocol formation currently permits no explicit `sym_visibility`
 attribute, including an explicit `public`; its retained visibility is the
@@ -503,7 +534,7 @@ and terminators against the existing 100000 visits, 4096 label bytes and 16 MiB
 label-work bounds. Effective repeat depth is at most 64 and is carried through
 application edges; violations diagnose `structured-source-limit` or independent
 `structured-reference-capacity`. The native expansion re-verification enforces
-its own `mathematical-formation` depth and collision obligations. Lexical JSON
+its own `mathematical-formation` depth and collision obligations. Ordinary lexical JSON
 depth 64 is a distinct wire-profile bound, not permission for 64 stored nested
 callbacks. Reference-graph depth, application summary depth and observer depth
 retain their existing definitions.
@@ -703,7 +734,7 @@ exhaustion branch unreachable; it does not replace it with source refusal.
 
 The writer bounds source bytes to 16 MiB, the complete exported file (including
 its final newline) to 1 MiB, strings
-to 512 UTF-8 bytes (binding names to 256 ASCII bytes), domains, relations,
+to 512 UTF-8 bytes (protocol template paths to 2048 bytes, binding names to 256 ASCII bytes), domains, relations,
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. Operand references index the lexical
 value list and are also at most 4096. The instruction count includes nested
@@ -711,7 +742,11 @@ bodies and one derived instruction per finite, realization or map declaration;
 it excludes terminators and domain
 constructors. The independent native reference enforces the same 4096-instruction
 admission budget, independently of runtime fuel and without expanding calls.
-Lexical JSON and region nesting are bounded by 64. Helper reference depth is the
+General lexical JSON and region nesting are bounded by 64. Only slot 8 of an
+exact ten-slot protocol-function row in the definitions table is exempt from
+ordinary lexical JSON depth; its origin is strictly decoded using the separate
+typed tree limits above, with up to two arrays per term level. The input's MLIR
+nesting preflight still applies. Helper reference depth is the
 longest reference path in **edges**, with a leaf at 0 and a maximum of 64 in both
 native readers. A preparation-to-Math-helper reference contributes one edge,
 as do calls to Local wrappers and preparations. References are derived from
@@ -725,3 +760,15 @@ They do not establish frontend translation, participant projection, finite
 algorithm selection, native provider arithmetic, runtime resource policies or
 protocol security. A later compiler correctness result must relate the exact
 source and target subjects under explicit observations and capacity premises.
+
+### Total shape expressions
+
+`["index.less"]` takes two indices and returns their strict natural comparison.
+`["vector.length", field-domain]` takes a field vector and returns its length;
+its native operation is `data.dim` on axis zero. Other axes or collection kinds
+are outside this descriptor. `["index.power_of_two"]` takes `(n, r)` and returns
+whether `n = 2^r` over naturals. All three are total Math expressions. Within the
+native unsigned 64-bit index ABI the last predicate equals
+`r < 64 && n == (1 << r)`. Its executable recipe enumerates the 64 representable
+powers with safe constant shifts; it does not construct an unbounded power or
+shift by a runtime exponent.

@@ -7,7 +7,7 @@
     "local.binding"() <{arguments = [], contract = "index.mod", implementation = "", sym_name = "zkl_binding_2"}> : () -> ()
     "local.binding"() <{arguments = ["bls12-381.fr"], contract = "vector.length", implementation = "", sym_name = "zkl_binding_1"}> : () -> ()
     "local.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "zkl_binding_0"}> : () -> ()
-    "protocol.func"() <{contracts = [], function_type = (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> i1, input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], output_roles = [["role00000000"]], roles = ["role00000000"], sym_name = "s18h7072696d69746976655f6578616d706c65735h5368617065"}> ({
+    "protocol.func"() <{contracts = [], function_type = (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> i1, input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], origin = ["primitive_examples::Shape", []], output_roles = [["role00000000"]], roles = ["role00000000"], sym_name = "s18h7072696d69746976655f6578616d706c65735h5368617065"}> ({
     ^bb0(%arg20: !algebra.field_vector<"bls12-381.fr">, %arg21: ui64, %arg22: ui64):
       %26 = "protocol.local_call"(%arg20, %arg21, %arg22) <{callee = @zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655, role = "role00000000", site = "s0"}> : (!algebra.field_vector<"bls12-381.fr">, ui64, ui64) -> i1
       "protocol.return"(%26) : (i1) -> ()

@@ -112,9 +112,12 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     require(export["entry"] == entry, "source claims name another Entry")
     admission = export["admission"]
     require(isinstance(admission, dict), "source claims omit admission")
+    require(set(admission) == {"format", "original_sha256", "interface_sha256", "protocol_symbol",
+                               "capture", "installation"},
+            "unexpected source-claim admission fields")
+    for field in ("capture", "installation"):
+        require(isinstance(admission[field], str), f"source-claim {field} must be a string")
     require(admission.get("original_sha256") == digest(source), "source claims bind another original")
-    require(admission.get("original_identity") == digest(source).removeprefix("sha256:"),
-            "source claims carry another original identity")
     # The CLI appends one record terminator; exportSourceClaims hashes the
     # interface payload, before that terminator. Preserve all other bytes.
     require(admission.get("interface_sha256") == digest(interface_text.removesuffix("\n").encode()),
@@ -123,7 +126,7 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     require(isinstance(interface, dict) and interface.get("format") == "zkc.language-interface/0",
             "source claims lack a native entry interface")
     require(interface.get("entry") == entry, "native interface names another Entry")
-    require(interface.get("original") == admission["original_identity"],
+    require(interface.get("original") == admission["original_sha256"].removeprefix("sha256:"),
             "native interface binds another original")
     original = decode(original_text)
     require(isinstance(original, list) and len(original) >= 4, "malformed admitted snapshot export")

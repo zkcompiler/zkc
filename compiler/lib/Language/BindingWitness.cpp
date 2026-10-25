@@ -545,6 +545,8 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
     return refuse();
   const auto &binding = *operation.binding;
   const auto &callee = declarations[binding.target.declaration.index];
+  if (body.mode == Body::Mode::Math && callee.kind == Declaration::Kind::Local)
+    return refuse();
   if ((callee.kind == Declaration::Kind::EntryFunction ||
        (callee.generated && callee.generated->operation)) &&
       body.stage != Body::Stage::Host)
@@ -606,11 +608,11 @@ bool checkCallAction(Semantics &types, ArrayRef<Declaration> declarations,
            refuse();
   }
   const auto *primitive = callee.primitive ? &*callee.primitive : nullptr;
-  const auto *math =
-      primitive ? mathematicalIntrinsic(primitive->identity) : nullptr;
-  bool helper = !primitive || (body.mode == Body::Mode::Protocol && !math) ||
-                (body.mode == Body::Mode::Local && math && !math->scalar);
-  if (helper) {
+  const auto *math = primitive && callee.kind == Declaration::Kind::Math
+                         ? mathematicalIntrinsic(primitive->identity)
+                         : nullptr;
+  if (!primitive ||
+      !primitiveCallIsInline(body.mode, callee.kind, primitive->identity)) {
     auto *action = std::get_if<HelperCall>(&operation.action);
     return (action && action->callee.index == callee.id.index &&
             action->arguments == binding.arguments &&

@@ -56,7 +56,7 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
-  | fieldEmbed =>
+  | fieldEmbed | vectorLength =>
     funext arguments callbacks
     cases arguments with
     | cons value rest => cases rest; cases callbacks; rfl
@@ -65,7 +65,7 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with

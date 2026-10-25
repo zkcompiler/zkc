@@ -10,10 +10,14 @@ public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 @[expose] public section
 
 /-! Original realization generation reuses the production root selections.
-The installed source Sumcheck body is the one explicit family choice. Root
+The installed Sumcheck method owns the template and typed static selection. Root
 bodies, helper selectors, sites, bounds and continuation layouts are derived. -/
 namespace ZkcSecurity.Generation.OriginalRootCatalogue
 open ZkcTools.StructuredSource.OriginalRoot
+
+/-- Method installation is shared by every selected root, including both
+SmallSumcheck and TwoSums. No root name selects a library template. -/
+def installedLibraries := [sumcheckLibrary]
 
 run_cmd do
   let mut sources : List (String × String) := []
@@ -22,7 +26,10 @@ run_cmd do
       | .ok program => pure program
       | .error reason => throwError "{root.name}: admission failed: {reason}"
     let moduleName := "ZkcExamples.Structured.Generated.Original." ++ root.name
-    let generated ← match source program { moduleName, sourceModule := root.sourceModule } with
+    let generated ← match source program {
+        moduleName
+        sourceModule := root.sourceModule
+        libraries := installedLibraries } with
       | .ok text => pure text
       | .error reason => throwError "{root.name}: {reason}"
     sources := sources ++ [(moduleName, generated)]

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Primitives
+public import Zkc.Source.Structured.NaturalPowerOfTwo
 
 @[expose] public section
 
@@ -77,6 +78,9 @@ inductive Op where
   | exec (primitive : Primitive)
   | indexConstant (value : Nat)
   | indexEqual
+  | indexLess
+  | indexPowerOfTwo
+  | vectorLength (domain : String)
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
   | fieldMultiply (domain : String) | fieldEqual (domain : String)
@@ -105,7 +109,8 @@ inductive Op where
 def Op.arguments : Op → List Ty
   | .exec primitive => primitive.arguments
   | .indexConstant _ => []
-  | .indexEqual => [.index, .index]
+  | .indexEqual | .indexLess | .indexPowerOfTwo => [.index, .index]
+  | .vectorLength d => [.vector d]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
   | .fieldEmbed _ base => [.field base]
@@ -126,7 +131,8 @@ def Op.arguments : Op → List Ty
 def Op.results : Op → List Ty
   | .exec primitive => primitive.results
   | .indexConstant _ => [.index]
-  | .indexEqual => [.boolean]
+  | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
+  | .vectorLength _ => [.index]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
   | .fieldEmbed extension _ => [.field extension]
   | .groupIdentity d | .groupAdd d | .groupScale d _ => [.group d]
@@ -156,7 +162,8 @@ def Op.helpers : Op → List Helper
   | .map spec => [spec.helper]
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
-  | .exec .. | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+  | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+    .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |

@@ -85,17 +85,19 @@ def wire (extractor : Wire.Expr) : Wire.Request :=
     accept := subject.acceptance
     quantity := .guarantee ⟨forking, [(some "extractor", extractor)]⟩ }
 
+/- The selected subject owns its extractor profile; a request cannot replace
+it through a guarantee argument, even with a familiar registered name. -/
 set_option maxRecDepth 8192 in
 example : knowledgeArguments (models .empty .idealMeaning)
     (wire (.application "extractors.witness_search" (some 0) []))
     (Schnorr.Registration.subject (F := F) (G := F) .idealMeaning) =
-      .error (.unknownIdentifier ⟨"extractors.witness_search", 0⟩) := rfl
+      .error (.schema "unknown argument: extractor") := rfl
 
 set_option maxRecDepth 8192 in
 example : knowledgeArguments (models .empty .idealMeaning)
     (wire (.application "extractors.response_difference" (some 1) []))
     (Schnorr.Registration.subject (F := F) (G := F) .idealMeaning) =
-      .error (.unknownIdentifier ⟨"extractors.response_difference", 1⟩) := rfl
+      .error (.schema "unknown argument: extractor") := rfl
 
 example : ("wrong.challenge", "label_64656c6976657279_0") ∉ Schnorr.compiled.context.draws := by
   decide +kernel

@@ -8,7 +8,7 @@ namespace ZkcExamples.Construction.Generated.SchnorrAndAliasedPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:a09fea1ab1995b0a9d6b7196b87da230a73b2e3c166ae29f368935f926dca15a"
+  source := "sha256:b83161f00837afaec7d892931354e12c103ab5e13b6a08a718d8fa263463a0bc"
   candidate := "sha256:6dc15becf0c7ff5fb748a3a5d5a0e5d3dac4af3e4672eb7239171be0c3c7e4a0"
   policy := ⟨"s7h6578616d706c6510h416c6961736564416e64", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
@@ -50,7 +50,7 @@ namespace ZkcExamples.Construction.Generated.SchnorrAndAliasedPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:a09fea1ab1995b0a9d6b7196b87da230a73b2e3c166ae29f368935f926dca15a"
+  source := "sha256:b83161f00837afaec7d892931354e12c103ab5e13b6a08a718d8fa263463a0bc"
   candidate := "sha256:6dc15becf0c7ff5fb748a3a5d5a0e5d3dac4af3e4672eb7239171be0c3c7e4a0"
   policy := ⟨"s7h6578616d706c6510h416c6961736564416e64", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

@@ -7,7 +7,7 @@ public import ZkcExamples.Structured.SumcheckRelationContract
 
 @[expose] public section
 
-/-! Complete checked payload and named kernel admission phases. The five formula
+/-! Complete checked payload and named kernel admission phases. The six formula
 helpers reuse the relation-contract bodies; every other body is named in
 `SumcheckSourceBodies`, whose shared helper bodies abbreviate
 `SumcheckHelperBodies`. -/
@@ -21,6 +21,7 @@ structured_views SumcheckSourceData.snapshot
     sumStep := (SumcheckRelationContract.foldSpec.stepHelper, SumcheckRelationContract.stepBody),
     sumTotal := SumcheckRelationContract.total, sumFormula := SumcheckRelationContract.sum,
     tableSumFormula := SumcheckRelationContract.tableSum,
+    inputShape := (SumcheckRelationContract.shapeHelper, SumcheckRelationContract.shapeBody),
     less, rows, shape, table, width, «variables», empty, halves, sums, interpolate, map, first,
     append, step, foldStep, fold, foldWrapper, «prefix», values, valuesRealization, checkTable, check]
   protocols [reduce, run]

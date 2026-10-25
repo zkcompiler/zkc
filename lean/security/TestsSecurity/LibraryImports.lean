@@ -21,7 +21,9 @@ import ZkcSecurity.Claims.HonestModel
 import ZkcSecurity.Claims.Knowledge
 import ZkcSecurity.Claims.Model
 import ZkcSecurity.Claims.PairValidator
+import ZkcSecurity.Claims.Parameters
 import ZkcSecurity.Claims.Premise
+import ZkcSecurity.Claims.PrimitiveDependencies
 import ZkcSecurity.Claims.ReceiptAdmission
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Soundness
@@ -89,6 +91,7 @@ import ZkcSecurity.Examples.EmbeddingEqualityDomains
 import ZkcSecurity.Examples.EmbeddingEqualitySoundness
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.Generated.Components.SampledAbortABI
+import ZkcSecurity.Examples.Generated.Components.SampledAbortCompleteness
 import ZkcSecurity.Examples.Generated.Components.SchnorrAndAliasedABI
 import ZkcSecurity.Examples.Generated.Components.SchnorrAndAliasedCompleteness
 import ZkcSecurity.Examples.Generated.Components.SchnorrAndRandomizedABI
@@ -345,6 +348,7 @@ import ZkcSecurity.Tools.InputLaws
 import ZkcSecurity.Tools.PairConstruction
 import ZkcSecurity.Tools.ProcessView
 import ZkcSecurity.Tools.SigmaReadback
+import ZkcSecurity.Tools.SourceInputClauses
 import ZkcSecurity.Tools.SubjectABI
 import ZkcSecurity.Tools.TableCapacity
 import ZkcSecurity.Tools.TargetEvaluation
@@ -387,6 +391,7 @@ import TestsSecurity.ClaimAxioms
 import TestsSecurity.ClaimChargeControls
 import TestsSecurity.ClaimClosedData
 import TestsSecurity.ClaimReporting
+import TestsSecurity.ClaimSchemas
 import TestsSecurity.Claims
 import TestsSecurity.CompiledRound
 import TestsSecurity.CompiledSchnorrFiatShamir
@@ -470,10 +475,21 @@ import TestsSecurity.ProviderSimulation
 import TestsSecurity.ReferenceDiscovery
 import TestsSecurity.RegisteredExtraction
 import TestsSecurity.RelationalPresentationObstructions
+import TestsSecurity.RootAssemblyFixture
+import TestsSecurity.RootAssemblyGeneration
 import TestsSecurity.SampledReadback
 import TestsSecurity.SampledRootClaims
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
+import TestsSecurity.SourceAdmission.CurrentSubjects
+import TestsSecurity.SourceAdmission.HistoricalPolicy
+import TestsSecurity.SourceAdmission.Migration
+import TestsSecurity.SourceAdmission.Normalization
+import TestsSecurity.SourceAdmission.Presence
+import TestsSecurity.SourceAdmission.RangeDifference
+import TestsSecurity.SourceAdmission.Refusals
+import TestsSecurity.SourceAdmission.Roots
+import TestsSecurity.SourceAdmission.ShapeFixture
 import TestsSecurity.SourceChargeSites
 import TestsSecurity.StageComposition
 import TestsSecurity.StatementBindings

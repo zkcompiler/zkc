@@ -20,8 +20,8 @@ def fixture(claims, stage="compiled-ideal"):
     original=json.dumps(["zkc.structured-source/0", "original", claims.digest(source), "protocol", []])
     export={"format":"zkc.source-claims/0", "entry":"test::Proof", "registry_resolution":"deferred-to-lean",
             "admission":{"format":"zkc.structured-source/0", "original_sha256":claims.digest(source),
-                         "original_identity":claims.digest(source).split(":")[1],
-                         "interface_sha256":claims.digest(interface.encode()), "protocol_symbol":"protocol"},
+                         "interface_sha256":claims.digest(interface.encode()), "protocol_symbol":"protocol",
+                         "capture":"source-capture", "installation":"library-installation"},
             "claims":[{"request":{"subject":{"entry":"test::Proof", "stage":stage},
                                   "target":{"protocol":"protocol","clause":0,"name":"valid"},
                                   "quantity":{"kind":"scalar","expression":{"kind":"natural","value":"0"}},
@@ -43,6 +43,22 @@ def test_source_alias_resolves_to_exact_admitted_protocol(claims):
         "source_entry": "test::Proof", "protocol": "protocol",
         "interface_digest": export["admission"]["interface_sha256"],
         "attribution": "trusted-frontend-checked-interface"}
+
+
+@pytest.mark.parametrize("field", ["capture", "installation"])
+@pytest.mark.parametrize("value", [None, 42, {}, []])
+def test_provenance_requires_schema_strings(claims, field, value):
+    export, args = fixture(claims)
+    export["admission"][field] = value
+    with pytest.raises(claims.Refused, match="must be a string"):
+        claims.bind_export(export, **args)
+
+
+def test_duplicate_original_identity_is_not_a_second_authority(claims):
+    export, args = fixture(claims)
+    export["admission"]["original_identity"] = claims.digest(args["source"]).split(":")[1]
+    with pytest.raises(claims.Refused):
+        claims.bind_export(export, **args)
 
 
 @pytest.mark.parametrize("field,value", [("entry", "test::Other"), ("protocol", "other"),

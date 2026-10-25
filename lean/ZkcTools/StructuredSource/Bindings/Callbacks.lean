@@ -127,6 +127,7 @@ def callbacksSource (program : Program) (output : Output)
         " :=\n" ++ printed.process ++ "\n\n" ++
         "-- Reflexivity is a fallback when simplification leaves a definitionally equal goal.\n" ++
         "set_option linter.unusedTactic false in\n" ++
+        "set_option linter.unusedSimpArgs false in\n" ++
         "set_option linter.unreachableTactic false in\n" ++
         "theorem " ++ name ++ "_readable (ctx : ProtocolContext)\n" ++
         "    (" ++ (if (callbacks definition.body).isEmpty then "_distinct" else "distinct") ++

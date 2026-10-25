@@ -81,6 +81,8 @@ def collectionText : Collection → String
 def opText : Op → String
   | .exec primitive => app ".exec" [primitiveText primitive]
   | .indexConstant n => app ".indexConstant" [toString n] | .indexEqual => ".indexEqual"
+  | .indexLess => ".indexLess" | .indexPowerOfTwo => ".indexPowerOfTwo"
+  | .vectorLength d => app ".vectorLength" [quoted d]
   | .fieldConstant d n => app ".fieldConstant" [quoted d, toString n]
   | .fieldAdd d => app ".fieldAdd" [quoted d] | .fieldSubtract d => app ".fieldSubtract" [quoted d]
   | .fieldMultiply d => app ".fieldMultiply" [quoted d] | .fieldEqual d => app ".fieldEqual" [quoted d]

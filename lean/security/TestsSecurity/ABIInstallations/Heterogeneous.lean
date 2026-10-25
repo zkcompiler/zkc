@@ -27,10 +27,8 @@ structured_views original
 abbrev artifacts := Fixtures.artifacts config
 def selected : AuthoredPair.Selection original :=
   (AuthoredPair.select original artifacts "claim").toOption.get (by decide +kernel)
-def inputPolicy : InputPolicy imported.program.payload.entry.inputs :=
-  ⟨[]⟩
 def subject : Subject model original imported selected := by
-  bind_authored_subject "claim" using inputPolicy exports digest, digest, digest
+  bind_authored_subject "claim" exports digest, digest, digest
 abbrev validatorArtifacts := subject.validatorArtifacts
 def validatorSubject := subject.validatorSubject []
 end TestsSecurity.ABIInstallations.Heterogeneous

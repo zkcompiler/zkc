@@ -1,0 +1,14 @@
+module sample;
+domain F = field("bls12-381.fr");
+type Vector<T:Field> = builtin("vector", T);
+math fn length<T:Field>(values:Vector<T>)->index = primitive("vector.length");
+math fn less(left:index,right:index)->bool = primitive("index.less");
+math fn power_of_two(value:index,exponent:index)->bool = primitive("index.power_of_two");
+math fn shape<T:Field,Max:nat>(values:Vector<T>,rounds:index)->bool {
+  return power_of_two(length(values),rounds) && !less(index<Max>(),rounds);
+}
+protocol Run roles(P)(values:Vector<F>@P,n:index@P,r:index@P)
+    ->(power:bool@P,length:index@P,less:bool@P,shape:bool@P) {
+  return(power=power_of_two(n,r),length=length(values),less=less(n,r),shape=shape<F,4>(values,r));
+}
+entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }

@@ -8,8 +8,10 @@ admission proofs into a second fixture. -/
 namespace TestsSecurity.PairConstruction
 open ZkcSecurity.Examples.Generated
 
-example : SmallSumcheck.subject.inputPolicy = SmallSumcheck.inputPolicy := rfl
-example : TwoSums.subject.inputPolicy = TwoSums.inputPolicy := rfl
+example : (SmallSumcheck.subject.target.owner.contract.clauses.filter
+    (fun clause => clause.kind == .input)).map (·.name) = ["shape"] := by decide +kernel
+example : (TwoSums.subject.target.owner.contract.clauses.filter
+    (fun clause => clause.kind == .input)).map (·.name) = ["left_shape", "right_shape"] := by decide +kernel
 
 example : SmallSumcheck.subject.originalExport ≠ TwoSums.subject.originalExport := by
   decide +kernel

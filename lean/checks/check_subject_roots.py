@@ -3,10 +3,12 @@
 
 Uses a private Lean overlay, the existing export readers, and kernel equations.
 No Lake build or protocol evaluation is performed. --exports contains one
-catalogue-named directory per root with source.json, producer.json, validator.json.
-The participant files use the current strict schema. producer.identity and
-validator.identity contain opaque frozen identity bytes; these are hashed without
-installing a reader for their historical schema.
+catalogue-named directory per root with source.json, producer.json, validator.json,
+producer.identity, validator.identity, original.mlir, interface.json,
+source-claims.json and deployment.json. Participants use the current strict
+schema. Identity files are hashed without interpreting them; reissuing a source
+request additionally requires validator.identity to be the current participant
+bytes. The common request renderer transfers data and Lean resolves its meaning.
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ LEAN = Path(__file__).resolve().parents[1]
 ROOT = LEAN.parent
 sys.path.insert(0, str(LEAN))
 from bridges.construction import pair  # noqa: E402
+from bridges.pipeline import evidence, source_claims  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from bridges.structured.generate_component_roots import Generation  # noqa: E402
 
@@ -68,6 +71,37 @@ def freeze_dependencies(generation: Generation) -> None:
                 temporary = cached.with_name(cached.name + ".snapshot")
                 shutil.copyfile(cached, temporary)
                 os.replace(temporary, cached)
+
+
+def source_request_module(subject_module: str, directory: Path) -> tuple[str, str]:
+    """Print the actual compiled-stage source requests through the common renderer.
+
+    Stage selection chooses this root's interface, not a property or theorem.
+    Lean still resolves each request and checks its exact meaning and method.
+    """
+    interface_text = (directory / "interface.json").read_text()
+    interface = json.loads(interface_text)
+    report = source_claims.decode((directory / "source-claims.json").read_text())
+    deployment = json.loads((directory / "deployment.json").read_text())
+    participant = (directory / "validator.json").read_text()
+    if participant.encode() != (directory / "validator.identity").read_bytes():
+        raise ValueError("source request reissue requires the actual participant identity bytes")
+    bound = source_claims.bind_export(report["source_claims"], entry=interface["entry"],
+        source=(directory / "original.mlir").read_bytes(), interface_text=interface_text,
+        original_text=(directory / "source.json").read_text(),
+        participant_text=participant, program=deployment[4].encode())
+    bound["claims"] = [claim for claim in bound["claims"]
+                       if claim["request"]["subject"]["stage"] == "compiled-ideal"]
+    if not bound["claims"]:
+        raise ValueError("no compiled-stage source requests for the selected root")
+    module = subject_module + "SoundnessClaims"
+    registration = subject_module + "SoundnessRegistration"
+    header = evidence.HEADER.format(
+        imports=f"public import {registration}\npublic meta import {registration}",
+        doc="Generated exact source requests. Regenerate with "
+            "`lean/checks/check_subject_roots.py --exports DIRECTORY --write`. "
+            "The common data renderer emits no property or proof wrapper.")
+    return module, header + evidence.request_commands(module, bound, registration + ".library")
 
 
 def main() -> None:
@@ -209,6 +243,11 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
             raise AssertionError(f"default downstream generation differs: {path}")
     generation.compile("TestsSecurity.GenerateRootControls")
 
+    for row in manifest:
+        module, source = source_request_module(row["subjectModule"], options.exports / row["name"])
+        generation.retain(module, source)
+        generated.append(module)
+
     preservation = ["import ZkcSecurity.Claims.CanonicalAuthorityPair"]
     for row in manifest:
         module = "RootBaseline" + row["name"]
@@ -219,7 +258,7 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
         selected = row["subjectModule"]
         preservation += [f"import {selected}", f"import {module}", ""]
         for field in ["subject.reference", "subject.targetReference", "subject.acceptance",
-                      "subject.inputPolicy.parameters", "validatorSubject.reference",
+                      "validatorSubject.reference",
                       "validatorSubject.targetReference", "validatorSubject.acceptance"]:
             preservation.append(f"example : {selected}.{field} = {module}.{field} := by rfl")
         preservation.append(f"example (inputs : {selected}.subject.Inputs) :\n"
@@ -242,6 +281,7 @@ def main : IO Unit := ZkcSecurity.Generation.Roots.writeSources {json.dumps(str(
     report = {"roots": [row["name"] for row in manifest], "outputs": outputs,
               "exact_downstream_regeneration": True, "fixed_request_preservation": True,
               "exact_default_regeneration": True,
+              "exact_source_request_regeneration": True,
               "current_export_equations": True, "origin_refusals": True,
               "shared_lake_builds": 0, "commands": len(generation.commands)}
     (generation.directory / "validation.json").write_text(json.dumps(report, indent=2) + "\n")

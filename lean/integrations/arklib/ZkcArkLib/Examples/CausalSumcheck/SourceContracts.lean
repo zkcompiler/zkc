@@ -39,7 +39,8 @@ theorem public_target_bound [Fintype F] [SampleableType F]
       let execution ← ((publicInput (G := G) rawV claim n handle).process.interpret forgetSites).runM
         (withUniformQueries network [queryKey SumcheckSourceVerifier.childContext handle] before after) state
       pure ((publicInput rawV claim n handle).returnedEvent
-        ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {} ⟨0, by decide⟩)
+        ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {}
+          (publicOwner.namedClause "public_sum"))
         execution.outcome)) ≤ (n : ENNReal) / Fintype.card F := by
   have child := child_refutation rawV claim n handle (.stopped .incomplete) falseTarget
     (public_translation rawV claim n handle (.stopped .incomplete) bounded)
@@ -47,7 +48,8 @@ theorem public_target_bound [Fintype F] [SampleableType F]
     bounded claim handle child state
   have observed : (fun execution : PIR.Execution S E (Values (Component (assignment F G)) [.boolean]) =>
       (publicInput rawV claim n handle).returnedEvent
-        ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {} ⟨0, by decide⟩) execution.outcome) =
+        ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {}
+          (publicOwner.namedClause "public_sum")) execution.outcome) =
       (fun execution => returnedSatisfies (fun outputs => outputs.get .here = some true) execution) := by
     funext execution
     exact propext (public_accepts rawV claim n handle execution.outcome)
@@ -56,7 +58,8 @@ theorem public_target_bound [Fintype F] [SampleableType F]
       (SumcheckSourceVerifier.sourceRootInputs (some rawV) (some claim) (some n) (some handle))).runM
       (withUniformQueries network [queryKey SumcheckSourceVerifier.childContext handle] before after) state
     pure ((publicInput rawV claim n handle).returnedEvent
-      ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {} ⟨0, by decide⟩) execution.outcome)) ≤ _
+      ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {}
+        (publicOwner.namedClause "public_sum")) execution.outcome)) ≤ _
   refine Eq.trans_le ?_ bound
   apply congrArg mass
   apply bind_congr

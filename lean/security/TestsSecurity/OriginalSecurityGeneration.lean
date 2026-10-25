@@ -34,7 +34,7 @@ run_cmd do
     refuses "wrong public ABI association" (validateABI program binding { metadata with publicPositions := [] })
     refuses "wrong producer ABI association" (validateABI program binding { metadata with producerPositions := some [] })
     refuses "wrong nominal input types" (validateABI program binding
-      { metadata with types := [], inputPolicy := ⟨[]⟩ })
+      { metadata with types := [] })
     refuses "wrong service association" (validateABI program binding
       { metadata with context := { metadata.context with service := metadata.types.length } })
     refuses "missing root calls" (analyze program { root.artifacts.validator with instructions := [] } root.artifacts.producer)

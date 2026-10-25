@@ -22,7 +22,7 @@ def identity : Function where
   outputs := [.index]
   interface := none
   preconditions := []
-  origin := some ("identity", [])
+  origin := some (.local "identity" [])
   body := .block [] (.ret [0])
 
 def callee : Function where
@@ -33,7 +33,7 @@ def callee : Function where
   outputs := [.index]
   interface := some ⟨["P", "V"], [["V"]], [["V"]]⟩
   preconditions := []
-  origin := none
+  origin := some (.protocol ⟨"child", []⟩)
   body := .block [] (.ret [0])
 
 def root : Function where
@@ -44,7 +44,7 @@ def root : Function where
   outputs := [.index]
   interface := some ⟨["P", "V"], [["V"], ["P", "V"], ["V"]], [["V"]]⟩
   preconditions := []
-  origin := none
+  origin := some (.protocol ⟨"main", []⟩)
   body := .block [
     .instruction (.exchange "P" "V") [1] [.index] [] "message",
     .instruction .indexEqual [0, 3] [.boolean] [] "",

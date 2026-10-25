@@ -41,6 +41,14 @@ run_cmd do
     let metadata ← evaluate SubjectABI.Metadata ``SubjectABI.Metadata (← `(SubjectABI.metadata $subject))
     let pair ← evaluate AuthoredPair.Artifacts ``AuthoredPair.Artifacts artifacts
     let modulePrefix := "ABIInstallationClients." ++ label
+    if label == "Ordered" then
+      -- An unconsumed data slot can be absent in the real preparation. The
+      -- all-data-present presentation must refuse it, not change HonestInput.
+      let uncovered : SubjectABI.Metadata := { metadata with
+        producerPositions := some [], publicPositions := [] }
+      match SubjectABI.source uncovered { moduleName := "Uncovered", subjectModule } with
+      | .error "subject-abi-uncovered-data-input:0" => pure ()
+      | _ => Lean.throwError "missing uncovered-data refusal"
     sources := sources ++ [(modulePrefix ++ "ABI", ← require <| SubjectABI.source metadata {
       moduleName := modulePrefix ++ "ABI", subjectModule })]
     for (role, artifact) in [("Producer", pair.producer), ("Validator", pair.validator)] do
@@ -84,14 +92,12 @@ run_cmd do
       -- silently removed from the source ABI by the scalar-only generator.
       for type in [Ty.sequence .boolean, Ty.product "query" "Query" (.cons .boolean .nil)] do
         let aggregate : SubjectABI.Metadata := { metadata with
-          types := [type], producerPositions := some [], publicPositions := [], targetPositions := .ok []
-          inputPolicy := ⟨[]⟩ }
+          types := [type], producerPositions := some [], publicPositions := [], targetPositions := .ok [] }
         match SubjectABI.source aggregate { moduleName := "AggregateRefusal", subjectModule } with
         | .error "subject-abi-aggregate-type" => pure ()
         | _ => Lean.throwError "subject ABI silently discarded an unsupported aggregate input"
       let empty : SubjectABI.Metadata := { metadata with
-        types := [], producerPositions := some [], publicPositions := [], targetPositions := .ok []
-        inputPolicy := ⟨[]⟩ }
+        types := [], producerPositions := some [], publicPositions := [], targetPositions := .ok [] }
       sources := sources ++ [("EmptySourceTemplate", ← require <| SubjectABI.source empty {
         moduleName := "EmptySourceTemplate", subjectModule })]
       sources := sources ++ [("EmptyRootTemplate", ← require <| RootCompleteness.source empty output.toOutput {

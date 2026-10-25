@@ -74,14 +74,14 @@ def rawEnvironment (types : List Ty) (positions : List Nat) : Except String Stri
     encoded ty (inputName index)
   pure ("[" ++ ", ".intercalate entries ++ "]")
 
-def policyProposition {types : List Ty} (policy : InputPolicy types) : String :=
-  " ∧ ".intercalate (policy.rules.map fun rule => match rule with
-    | .boundedIndex ref maximum =>
-        inputName ref.index ++ " ≤ " ++ toString maximum ++ " ∧ " ++ inputName ref.index ++ " < indexLimit"
-    | .cubeTable table rounds width =>
-        "0 < (" ++ toString width ++ " : Nat) ∧ " ++ toString width ++ " < indexLimit ∧ " ++
-        inputName rounds.index ++ " < indexLimit ∧ " ++ inputName table.index ++ ".length < indexLimit ∧ " ++
-        inputName table.index ++ ".length = " ++ toString width ++ " * 2 ^ " ++ inputName rounds.index)
+/-- ABI bounds are derived only from source sorts; shape and round limits
+belong to retained input clauses and their separately checked interpretation. -/
+def representationProposition (types : List Ty) : String :=
+  let bounds := types.zipIdx.filterMap fun (ty, index) => match ty with
+    | .index => some (inputName index ++ " < indexLimit")
+    | .vector _ => some (inputName index ++ ".length < indexLimit")
+    | _ => none
+  if bounds.isEmpty then "True" else " ∧ ".intercalate bounds
 
 structure Metadata where
   types : List Ty
@@ -89,7 +89,6 @@ structure Metadata where
   publicPositions : List Nat
   targetPositions : Except String (List Nat)
   targetPurposes : List String
-  inputPolicy : InputPolicy types
   clausesEmpty : Bool
   suite : String
   context : Context
@@ -108,7 +107,6 @@ def metadata {model : DomainModel} {original : Snapshot} {imported : Imported or
   publicPositions := selected.policy.publicInputs
   targetPositions := selectorPositions subject.target.application.selectors
   targetPurposes := subject.target.application.relation.declaration.purposes
-  inputPolicy := subject.inputPolicy
   clausesEmpty := subject.target.owner.contract.clauses.all (fun clause => clause.kind != .input)
   suite := selected.policy.suite
   context := subject.selection.context
@@ -128,6 +126,12 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     | _ => pure ()
   let some producerPositions := metadata.producerPositions | throw "subject-abi-source-interface"
   let publicPositions := metadata.publicPositions
+  -- This presentation stores every data coordinate as present. Refuse profiles
+  -- whose actual preparation may leave such a coordinate absent; the fixed
+  -- subject semantics must never be strengthened to fit a generated ABI.
+  for (type, index) in types.zipIdx do
+    if Domain.dataType type && !producerPositions.contains index && !publicPositions.contains index then
+      throw ("subject-abi-uncovered-data-input:" ++ toString index)
   let publicTypes ← atPositions types publicPositions
   let targetPositions ← metadata.targetPositions
   let hasPrivate := targetPositions.any (fun position => !publicPositions.contains position)
@@ -166,7 +170,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let producerData ← rawEnvironment types producerPositions
   let validatorData ← rawEnvironment types publicPositions
   let pair := "(" ++ call "producerInputs" producerNames ++ ", " ++ call "validatorInputs" publicNames ++ ")"
-  let policy := if metadata.inputPolicy.rules.isEmpty then "True" else policyProposition metadata.inputPolicy
+  let representable := representationProposition types
   let automaticClauses := metadata.clausesEmpty && output.clauseInterpretation.isNone
   let clauseDeclarations := if automaticClauses then
     "theorem source_clauses (values : subject.Inputs) :\n" ++
@@ -175,16 +179,18 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     else
       let condition := match output.clauseInterpretation with
         | some interpretation => "(" ++ interpretation.condition ++ ") values"
-        | none => "∀ index isInput, subject.inputClause values index isInput"
+        | none => "source_input_condition subject on values"
       let proof := match output.clauseInterpretation with
         | some interpretation => "(" ++ interpretation.law ++ ") values"
-        | none => "Iff.rfl"
+        | none => "by source_input_clauses"
       "def inputCondition (values : subject.Inputs) : Prop :=\n  " ++ condition ++ "\n\n" ++
       "theorem source_clauses (values : subject.Inputs) :\n" ++
       "    (∀ index isInput, subject.inputClause values index isInput) ↔ inputCondition values :=\n  " ++
       proof ++ "\n\n"
-  let honestCondition := if automaticClauses then policy
-    else "(" ++ policy ++ ") ∧ inputCondition " ++ present
+  let honestCondition := if automaticClauses then representable
+    else "(" ++ representable ++ ") ∧ " ++
+      (if output.clauseInterpretation.isNone then "(source_input_condition subject on " ++ present ++ ")"
+       else "inputCondition " ++ present)
   let unpacked := (List.range types.length).map fun index =>
     "(TypedABI.unpack data)" ++ String.join (List.replicate index ".2") ++ ".1"
   let dataPair := "(" ++ call "producerInputs" (producerArgumentPositions.map (fun index => unpacked[index]!)) ++ ", " ++
@@ -192,12 +198,12 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let producerDataName := if producerArgumentPositions.isEmpty then "_data" else "data"
   let validatorDataName := if publicPositions.isEmpty then "_data" else "data"
   let pairDataName := if producerArgumentPositions.isEmpty && publicPositions.isEmpty then "_data" else "data"
-  let imports := ([output.subjectModule, "ZkcSecurity.Tools.SubjectABI"] ++ output.imports).eraseDups
+  let imports := ([output.subjectModule, "ZkcSecurity.Tools.SubjectABI", "ZkcSecurity.Tools.SourceInputClauses"] ++ output.imports).eraseDups
   let mut text := "module\n\n" ++ String.join (imports.map ("public import " ++ · ++ "\n")) ++
     "\n@[expose] public section\nnoncomputable section\n\n" ++
-    "/-! Generated from the actual admitted subject, source ABI, request policy\n" ++
-    "and retained selectors. Regenerate; do not hand edit. Formula mathematics\n" ++
-    "is deliberately absent. Every presentation equation is kernel checked. -/\n" ++
+    "/-! Generated from the actual admitted subject, source ABI, input clauses\n" ++
+    "and retained selectors. Regenerate; do not hand edit. Input formula semantics\n" ++
+    "are reduced in Lean. Target mathematics requires its own checked laws. -/\n" ++
     "set_option autoImplicit false\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
     "namespace " ++ output.moduleName ++ "\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Construction\n" ++
@@ -260,24 +266,21 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "  producerSorts := fun " ++ producerDataName ++ " => producer_sorts" ++ String.join (producerArgumentPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n" ++
     "  validatorSorts := fun " ++ validatorDataName ++ " => validator_sorts" ++ String.join (publicPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n\n" ++
     clauseDeclarations ++
-    (if metadata.inputPolicy.rules.isEmpty then "" else
-      "-- The shared policy normalization basis covers different input layouts.\n" ++
-      "set_option linter.unusedSimpArgs false in\n") ++
+    "set_option linter.unusedSimpArgs false in\n" ++
     "set_option backward.isDefEq.respectTransparency false in\n" ++
-    "theorem policy_iff" ++ dataBinders ++ " :\n" ++
-    "    subject.inputPolicy.Holds " ++ present ++ " ↔ (" ++ policy ++ ") := by\n" ++
-    "  change inputPolicy.Holds " ++ presentSource ++ " ↔ _\n" ++
-    (if metadata.inputPolicy.rules.isEmpty then
-      "  simp [inputPolicy, InputPolicy.Holds]\n\n"
-    else
-      "  simp [inputPolicy, InputPolicy.Holds, InputRule.Holds, sourceInputs, TypedABI.get_cons_here, TypedABI.get_cons_there, and_assoc]\n\n") ++
+    "theorem representable_iff" ++ dataBinders ++ " :\n" ++
+    "    inputsRepresentable " ++ present ++ " ↔ (" ++ representable ++ ") := by\n" ++
+    "  change inputsRepresentable " ++ presentSource ++ " ↔ _\n" ++
+    "  simp [inputsRepresentable, inputRepresentable, sourceInputs, and_assoc]\n\n" ++
     "theorem honestInput_iff" ++ dataBinders ++ " :\n" ++
     "    subject.HonestInput " ++ present ++ " ↔ (" ++ honestCondition ++ ") := by\n" ++
     "  exact (abi.honest_pack_iff " ++ call "data" n ++ ").trans\n" ++
     (if automaticClauses then
-      "    ((and_iff_left (source_clauses _)).trans " ++ call "policy_iff" n ++ ")\n\n"
+      "    ((and_iff_left (source_clauses _)).trans " ++ call "representable_iff" n ++ ")\n\n"
     else
-      "    (and_congr " ++ call "policy_iff" n ++ " (source_clauses _))\n\n") ++
+      "    (and_congr " ++ call "representable_iff" n ++
+        (if output.clauseInterpretation.isNone then " (by source_input_clauses))\n\n"
+         else " (source_clauses _))\n\n")) ++
     "theorem honestInput_exists (values : subject.Inputs) (honest : subject.HonestInput values) :\n" ++
     "    " ++ existential types isService ++ "values = " ++ present ++ " := by\n" ++
     "  obtain ⟨data, rfl⟩ := abi.honest_exists values honest\n" ++

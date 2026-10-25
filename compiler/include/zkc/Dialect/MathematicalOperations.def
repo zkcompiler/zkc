@@ -75,3 +75,5 @@ ZKC_MATH_OPERATION(poly::ObserveQuotientOp, Total, Context::Protocol | Context::
 ZKC_MATH_OPERATION(poly::AddQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(poly::SubtractQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 ZKC_MATH_OPERATION(poly::MultiplyQuotientOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+
+ZKC_MATH_OPERATION(data::PowerOfTwoOp, Total, Context::Protocol | Context::Participant | Context::Helper)

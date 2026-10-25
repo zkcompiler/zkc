@@ -32,5 +32,5 @@ module { "protocol.module"() ({
  ^entry(%a:!F,%b:!F,%c:!F,%d:!F,%lo:ui64,%hi:ui64,%go:i1):
    %r:2 = "protocol.local_call"(%a,%b,%c,%d,%lo,%hi,%go) {callee=@control,role="Owner",site="invoke"} : (!F,!F,!F,!F,ui64,ui64,i1)->(!F,!F)
    "protocol.return"(%r#0,%r#1) : (!F,!F)->()
- }) {sym_name="entry",function_type=(!F,!F,!F,!F,ui64,ui64,i1)->(!F,!F),roles=["Owner"],input_roles=[["Owner"],["Owner"],["Owner"],["Owner"],["Owner"],["Owner"],["Owner"]],output_roles=[["Owner"],["Owner"]]} : ()->()
+ }) {sym_name="entry",origin=["entry",[]],function_type=(!F,!F,!F,!F,ui64,ui64,i1)->(!F,!F),roles=["Owner"],input_roles=[["Owner"],["Owner"],["Owner"],["Owner"],["Owner"],["Owner"],["Owner"]],output_roles=[["Owner"],["Owner"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

@@ -224,7 +224,8 @@ example : knowledgeArguments (modelRegistry .idealMeaning)
     (subject (F := F) (G := G) .idealMeaning) =
       .ok (.error ⟨["exact field challenge cardinality"]⟩) := by
   simp [knowledgeArguments, wire, subject, Subject.check, checkCapabilities,
-    Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkArguments, named, Numeric.natural, Numeric.naturalWith]
+    knowledgeParameters, emptyParameters, Subject.targetReference, Subject.acceptance,
+    Wire.TargetRef.matches, checkArguments, named, Numeric.natural, Numeric.naturalWith]
 
 -- A witness of one request cannot fill a receipt for a different meaning.
 #check_failure (show False from (endpointReceipt (F := F) (G := G) .idealMeaning).proof)

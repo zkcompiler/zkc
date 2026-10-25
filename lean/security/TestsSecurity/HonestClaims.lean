@@ -64,28 +64,29 @@ example (subject : Subject model original imported selected)
   exact falseOnly inputs honest
 
 example : honestModelSchema ⟨honestModelIdentifier, [(some "private_coins", .natural 1)]⟩ =
-    .error (.schema "honest private-uniform model accepts no arguments") := by rfl
+    .error (.schema "compiled honest model requires exactly producer=producers.compiled@0()") := by rfl
 
-example : resolveHonestModel ⟨[honestModelEntry]⟩ ⟨honestModelIdentifier, []⟩ =
+example : resolveHonestModel ⟨[honestModelEntry]⟩ honestModelApplication =
     .ok .privateUniform := by rfl
 
 -- Version zero is pinned by the export/dependency identity. A surface version
 -- bump is not a substitute for that pin while the registry is still pre-v1.
-example : honestModelIdentifier = ⟨"models.honest_fiat_shamir", 0⟩ := by rfl
+example : honestModelIdentifier = ⟨"models.honest", 0⟩ := by rfl
 
 example : resolveHonestModel ⟨[honestModelEntry]⟩
-    ⟨⟨"models.honest_fiat_shamir", 0⟩, []⟩ = .ok .privateUniform := by rfl
+    ⟨⟨"models.honest_fiat_shamir", 0⟩, []⟩ =
+    .error (.unknownIdentifier ⟨"models.honest_fiat_shamir", 0⟩) := by rfl
 
 example : resolveHonestModel ⟨[honestModelEntry]⟩
-    ⟨⟨"models.honest_fiat_shamir", 1⟩, []⟩ =
-    .error (.unknownIdentifier ⟨"models.honest_fiat_shamir", 1⟩) := by rfl
+    ⟨⟨"models.honest", 1⟩, []⟩ =
+    .error (.unknownIdentifier ⟨"models.honest", 1⟩) := by rfl
 
 -- A same-name export with an undefined implementation fails complete-entry
 -- association, independently of whether its key is recognized.
 def undefinedModel : Export (Wire.Application → Except ResolutionError HonestExecutionModel) :=
   { honestModelEntry with definition := none }
 
-example : ¬ HonestModelAdmission ⟨[undefinedModel]⟩ ⟨honestModelIdentifier, []⟩ := by
+example : ¬ HonestModelAdmission ⟨[undefinedModel]⟩ honestModelApplication := by
   intro admission
   have selected := admission.selected
   change Except.ok undefinedModel = Except.ok honestModelEntry at selected

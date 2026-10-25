@@ -18,7 +18,7 @@ def root : Function where
   outputs := [.index]
   interface := some ⟨["Alice", "Bob"], [["Alice", "Bob"], ["Alice", "Bob"]], [["Alice", "Bob"]]⟩
   preconditions := []
-  origin := none
+  origin := some (.protocol ⟨"counter", []⟩)
   body := .block [
     .instruction (.protocolRepeat 1 3 ["Alice", "Bob"] [["Alice", "Bob"]]) [0, 1] [.index]
       [.region [.index, .index] [.index] (.block [] (.yield [1]))] "round"

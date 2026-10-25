@@ -40,6 +40,7 @@ target = "equality"
 method = "direct"
 proof_module = "ZkcSecurity.Examples.SampledAbort"
 proof_name = "ZkcSecurity.Examples.SampledAbort.compiled_ideal_complete"
+error_bound = "1 / (Fintype.card (ZMod blsModulus) : ENNReal)"
 error_expression = '.binary .div (.natural 1) (.application "cardinality" none [(none, .reference "bls12-381.fr")])'
 
 [[root]]

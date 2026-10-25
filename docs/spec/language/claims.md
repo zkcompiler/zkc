@@ -272,7 +272,7 @@ The export separates:
 
 | Field | Role |
 |---|---|
-| `admission` | Exact SHA256 of original bytes and interface JSON, native original identity, capture/installation identities and protocol symbol |
+| `admission` | Sole original-byte SHA256, interface JSON SHA256, capture/installation identities and protocol symbol |
 | `claims[].request` | Subject Entry and stage, property/version/parameters, model expression, retained target reference or imported language, logical acceptance, quantity and capabilities |
 | `claims[].attachment` | Module, block declaration, label, AST node address and source byte range |
 | `claims[].method` | Optional versioned method application; never part of request meaning |
@@ -304,6 +304,12 @@ To join the admitted structured export, emit the same Entry with
 `language-emit`, then run `protocol-structured ORIGINAL.mlir
 --symbol=PROTOCOL_SYMBOL`. The claim admission reference's `original_sha256`
 and `protocol_symbol` match elements 2 and 3 of that structured export.
+`original_sha256` is the sole original-byte hash in claim admission: exactly
+`sha256:` followed by 64 lowercase hexadecimal digits. A consumer comparing it
+with the interface's bare original identity validates this prefix and digest
+syntax before removing the prefix. Subject static `arguments` use the same
+[typed terms](../formats/structured-source.md) as protocol origin bindings;
+display strings are not an identity encoding.
 The parent must still compute and bind the digest of the actually admitted raw
 unit, check the proposed clause or imported-language/selector/site mapping, resolve typed registry
 applications, and attach compiled artifact digests for the selected stage.

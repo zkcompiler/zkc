@@ -135,9 +135,14 @@ source/artifact adapters belong to `Realizations.Sumcheck`. The retained
 compiled-round recognizer remains a regression client and is not the canonical
 roots' binding authority. The existing interpreted executable-bytes Sumcheck
 leaf remains necessary until a separate stage-transport theorem replaces it.
-Current request, target, honest-policy and artifact identities are preserved.
-The agreed source-input-clause and honest-model wire amendments require a
-separate semantic migration and receipt reissuance.
+Verifier-side source input clauses now own the table shape and maximum-round
+conditions. Honest input admission also requires source-sort representability
+and preparation of the pair; the target relation is a separate premise.
+The selected model is `models.honest@0(producer=producers.compiled@0())`, with
+one shared transcript cache and fresh private uniform draws on the admitted
+arithmetic vocabulary. Source/target/artifact and model changes require receipt
+reissuance; an old request digest is not preservation evidence for the new one.
+General cryptographic realization-role models remain outside this installation.
 
 Final source-claim status is selected in Lean from freshly extracted declaration
 types, binder and axiom audits, and required links. Python joins and renders the
@@ -157,7 +162,8 @@ correspondence remains open. Other Entry trials stay visible in the full report.
 | Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
 |---|---|---|---|---|---|---|
 | chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
-| composed-sumcheck | `example::Proof` |  |  |  |  | no-claim |
+| composed-sumcheck | `example::Proof` | compiled-ideal | soundness |  |  | open: mismatched artifact: request differs from the checked Lean authority artifact roles |
+| composed-sumcheck | `example::Proof` | compiled-ideal | soundness |  |  | open: mismatched artifact: request differs from the checked Lean authority artifact roles |
 | deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
 | gkr | `example::Proof` |  |  |  |  | no-claim |
 | guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |

@@ -28,7 +28,7 @@ private def helper (swapped : Bool) : Structured.Definition :=
   .function ⟨"pair", .math, .privateDef, [.boolean, .boolean], [.boolean, .boolean],
     none, [], none, .block [] (.ret (if swapped then [1, 0] else [0, 1]))⟩
 private def stoppingHelper : Structured.Definition :=
-  .function ⟨"stop", .local, .privateDef, [], [], none, [], some ("stop", []),
+  .function ⟨"stop", .local, .privateDef, [], [], none, [], some (.local "stop" []),
     .block [] (.stop .abort "stop")⟩
 private def snapshot (swapped : Bool := false) : Structured.Snapshot where
   source := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
@@ -38,7 +38,7 @@ private def snapshot (swapped : Bool := false) : Structured.Snapshot where
   bindings := []
   definitions := [helper swapped, stoppingHelper,
     .function ⟨"main", .protocol, .publicDef, [], [], some ⟨["P", "V"], [], []⟩,
-      [], none, .block [] (.ret [])⟩]
+      [], some (.protocol ⟨"main", []⟩), .block [] (.ret [])⟩]
   contracts := [⟨"main", []⟩]
   catalogue := ⟨[], [], []⟩
 private def pairBody (swapped : Bool) : Region Structured.dialect

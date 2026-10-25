@@ -17,6 +17,11 @@ import tempfile
 import types
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 CLIENTS = ("SmallSumcheck", "TwoSums", "GkrRounds")
 
 
@@ -62,7 +67,7 @@ def main() -> None:
         cwd=root, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
-    assert result.returncode == 0, "generation failed; see regenerate.log"
+    require(result.returncode == 0, "generation failed; see regenerate.log")
     generated = []
     relative = Path("ZkcExamples/Structured/Generated/Bindings")
     for client in CLIENTS:
@@ -72,31 +77,31 @@ def main() -> None:
         ]:
             expected = (regenerated / relative / (client + printed)).read_bytes()
             actual = (root / relative / (client + shipped)).read_bytes()
-            assert expected == actual, f"stale generated artifact: {client + shipped}"
-            assert b"public import ZkcTools" not in actual, f"proof imports tools: {client + shipped}"
-            assert b"ZkcTools.StructuredSource.Presentation" not in actual, f"proof uses tool metadata: {client + shipped}"
+            require(expected == actual, f"stale generated artifact: {client + shipped}")
+            require(b"public import ZkcTools" not in actual, f"proof imports tools: {client + shipped}")
+            require(b"ZkcTools.StructuredSource.Presentation" not in actual, f"proof uses tool metadata: {client + shipped}")
             generated.append({"module": client + shipped,
                               "sha256": hashlib.sha256(actual).hexdigest()})
         ledger = json.loads((regenerated / relative / (client + ".obligations.json")).read_text())
-        assert ledger["attribution_is_proof_status"] is False
-        assert all(row["expected_layer"] == "I" and row["route"] == "general-rule"
+        require(ledger["attribution_is_proof_status"] is False, 'attribution must not establish proof status')
+        require(all(row["expected_layer"] == "I" and row["route"] == "general-rule"
                    and row["proof_status"] == "external-kernel-receipt-required"
-                   for row in ledger["structural"])
-        assert all(row["proof_status"] == "open" for row in ledger["mathematical_helpers"]
-                   if row["route"] == "unattributed")
+                   for row in ledger["structural"]), 'structural obligations must require external kernel receipts')
+        require(all(row["proof_status"] == "open" for row in ledger["mathematical_helpers"]
+                   if row["route"] == "unattributed"), 'unattributed mathematics must retain open obligations')
     for printed, shipped in [(".lean", ".lean"), (".inputs.lean", "Inputs.lean"),
                              (".callbacks.lean", "Callbacks.lean")]:
         stem = "Tests/Generated/StructuredBindingsGeneric"
         expected = (regenerated / (stem + printed)).read_bytes()
         actual = (root / (stem + shipped)).read_bytes()
-        assert expected == actual, f"stale generic callback fixture: {shipped}"
+        require(expected == actual, f"stale generic callback fixture: {shipped}")
         generated.append({"module": stem + shipped,
                           "sha256": hashlib.sha256(actual).hexdigest()})
     # Production tools must not import mathematical examples, even transitively
     # through the ledger or default callback printer.
     for source_directory in [root / "ZkcTools/StructuredSource/Bindings",
                       root / "Zkc/Source/Structured/Bindings"]:
-        assert all("ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean"))
+        require(all("ZkcExamples" not in path.read_text() for path in source_directory.glob("*.lean")), 'production binding tools must not import examples')
 
     header = """import Tests.StructuredBindingsSources
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
@@ -107,7 +112,7 @@ set_option maxHeartbeats 8000000
 """
     controls = {
         "same-name-changed-helper": """
-example : SmallSumcheckInputs.helper19Body.erase = changedAppend.erase := by
+example : actualAppend.body.erase = changedAppend.erase := by
   kernel_rfl
 """,
         "dropped-actual-guard": """
@@ -141,11 +146,11 @@ example : GkrRoundsGate.valueDefinition.body.component
         result = run(path, "-DwarningAsError=true", "-DElab.async=false")
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
-        assert result.returncode != 0, f"stale certificate accepted: {name}"
-        assert "error" in log and any(reason in log for reason in [
-            "rfl", "definitionally equal", "declaration type mismatch"]), name
-        assert not any(error in log for error in ["unexpected token", "Unknown identifier",
-                                                  "object file", "failed to synthesize"]), log
+        require(result.returncode > 0, f"stale certificate accepted: {name}")
+        require("error" in log and any(reason in log for reason in [
+            "rfl", "definitionally equal", "declaration type mismatch"]), name)
+        require(not any(error in log for error in ["unexpected token", "Unknown identifier",
+                                                  "object file", "failed to synthesize"]), log)
         refused.append({"name": name, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
     # Compile the actual emitter output for dense and sparse selections. The
@@ -157,7 +162,7 @@ example : GkrRoundsGate.valueDefinition.body.component
         cwd=root, env=env, text=True, capture_output=True, timeout=180,
     )
     (directory / "dispatch-generate.log").write_text(result.stdout + result.stderr)
-    assert result.returncode == 0, "dispatch generation failed; see dispatch-generate.log"
+    require(result.returncode == 0, "dispatch generation failed; see dispatch-generate.log")
     objects = dispatch / "objects"
     objects.mkdir(parents=True, exist_ok=True)
     env["LEAN_PATH"] = str(objects.resolve()) + os.pathsep + env.get("LEAN_PATH", "")
@@ -170,7 +175,7 @@ example : GkrRoundsGate.valueDefinition.body.component
                      "--root=" + str(dispatch.resolve()), "-o", str(target.resolve()))
         log = result.stdout + result.stderr
         (directory / (name + ".log")).write_text(log)
-        assert result.returncode == 0 and "sorryAx" not in log, f"dispatch client failed: {name}"
+        require(result.returncode == 0 and "sorryAx" not in log, f"dispatch client failed: {name}")
         checked_dispatch.append(name)
         print(f"PASS {name}", flush=True)
     report = {"format": "zkc.structured-binding-controls/0", "legacy_evaluator_step_disabled": True,

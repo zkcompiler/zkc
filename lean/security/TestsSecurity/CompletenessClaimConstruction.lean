@@ -3,7 +3,7 @@ import ZkcSecurity.Examples.Generated.TwoSumsCompletenessClaims
 import TestsSecurity.ClaimClosedData
 
 /-! The real closed requests produce canonical receipts. Wrong theorem, target,
-and input-policy controls must never leave a receipt declaration behind. -/
+and unsupported-parameter controls must never leave a receipt declaration behind. -/
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 8000000
@@ -16,8 +16,8 @@ example : SmallSumcheckCompletenessClaims.completeEvaluated.proposition := Small
 example : TwoSumsCompletenessClaims.completeEvaluated.proposition := TwoSumsCompletenessClaims.completeReceipt.receipt.proof
 example : SmallSumcheckCompletenessClaims.completeData.quantity = .scalar (.natural 0) := rfl
 example : TwoSumsCompletenessClaims.completeData.quantity = .scalar (.natural 0) := rfl
-example : SmallSumcheckCompletenessClaims.completeData.parameters = SmallSumcheckCompletenessClaims.subject.down.inputPolicy.parameters := rfl
-example : TwoSumsCompletenessClaims.completeData.parameters = TwoSumsCompletenessClaims.subject.down.inputPolicy.parameters := rfl
+example : SmallSumcheckCompletenessClaims.completeData.parameters = none := rfl
+example : TwoSumsCompletenessClaims.completeData.parameters = none := rfl
 
 namespace WrongTheorem
 theorem unrelated : True := trivial
@@ -43,14 +43,15 @@ run_cmd do
     throwError "a crossed target produced a completeness receipt"
 end WrongTarget
 
-namespace MissingInputPolicy
-def completeData : Wire.Request := { SmallSumcheckCompletenessClaims.completeData with parameters := none }
+namespace UnsupportedParameters
+def completeData : Wire.Request := { SmallSumcheckCompletenessClaims.completeData with
+  parameters := some (.application "honest.input_policy" (some 0) []) }
 claim_request completeData using SmallSumcheckCompletenessClaims.library method
   (some (⟨⟨"fs.honest_completeness", 0⟩, []⟩ : Wire.Application))
 run_cmd do
-  if (← Lean.getEnv).contains `TestsSecurity.CompletenessClaimConstruction.MissingInputPolicy.completeReceipt then
-    throwError "an omitted honest-input policy produced a completeness receipt"
-end MissingInputPolicy
+  if (← Lean.getEnv).contains `TestsSecurity.CompletenessClaimConstruction.UnsupportedParameters.completeReceipt then
+    throwError "an unsupported input-policy parameter produced a completeness receipt"
+end UnsupportedParameters
 
 #print axioms SmallSumcheckCompletenessClaims.completeReceipt
 #print axioms TwoSumsCompletenessClaims.completeReceipt

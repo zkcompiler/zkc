@@ -20,5 +20,5 @@ module { "protocol.module"() ({
    %first:2 = func.call @arithmetic(%a,%b,%flag) : (!F,!F,i1)->(!F,i1)
    %second:2 = func.call @arithmetic(%b,%a,%flag) : (!F,!F,i1)->(!F,i1)
    "protocol.return"(%first#0,%second#0,%first#1,%second#1) : (!F,!F,i1,i1)->()
- }) {sym_name="main",function_type=(!F,!F,i1)->(!F,!F,i1,i1),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"],["P"],["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!F,!F,i1)->(!F,!F,i1,i1),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"],["P"],["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

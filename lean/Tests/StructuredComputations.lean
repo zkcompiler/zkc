@@ -22,7 +22,7 @@ def calculation : Definition := .function ⟨"calculation", .math, .privateDef,
   .block [.instruction (.booleanConstant true) [] [.boolean] [] "",
     .instruction (.fold "coordinates" "step" "predicate") [1, 0] [.boolean] [] ""] (.ret [0])⟩
 def main : Definition := .function ⟨"main", .protocol, .publicDef,
-  [vector], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+  [vector], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"test::Main", []⟩),
   .block [.instruction (.call "calculation") [0] [.boolean] [] ""] (.ret [0])⟩
 def realization : RealizationDeclaration := ⟨"realized", [vector], [.boolean], "calculation"⟩
 

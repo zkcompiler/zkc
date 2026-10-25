@@ -31,7 +31,8 @@ theorem equation (raw : List Scalar) (claim : Scalar) (bounded : raw.length < in
   have same : imported.program = ZkcExamples.Structured.SumcheckSourceViews.imported.program :=
     Zkc.Verification.Imported.unique _ _
   rw [same]
-  exact ZkcExamples.Structured.SumcheckContractBindings.public_formula_equation raw claim bounded
+  exact ZkcExamples.Structured.SumcheckContractBindings.public_formula_equation
+    (G := Scalar) raw claim bounded
 
 
 theorem nonvacuous : Nonvacuous subject := by

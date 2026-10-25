@@ -27,14 +27,14 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     (meaning observations table).TotalOperation op := by
   intro args bodies _
   cases op with
-  | fieldEmbed =>
+  | fieldEmbed | vectorLength =>
     cases args with
     | cons value rest => cases rest; cases bodies; exact ⟨_, rfl⟩
   | indexConstant | fieldConstant | booleanConstant | groupIdentity =>
     cases args
     cases bodies
     exact ⟨_, rfl⟩
-  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd |
+  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd |
       booleanOr | booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale |
       groupEqual =>
     cases args with

@@ -44,7 +44,11 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
     reading (application_read input0 input1 input2 input3) evaluating ZkcSecurity.Examples.Components.SmallSumcheck.Formula.equation
   have shape0 : PrimitiveLibrary.HasShape input0 input2 1 := by
     simp only [PrimitiveLibrary.HasShape, Nat.mod_one, Nat.div_one]
-    exact ⟨by decide, by omega, trivial, by simpa only [one_mul] using (by assumption : input0.length = 1 * 2 ^ input2)⟩
+    have tableSize : input0.length = 2 ^ input2 := by assumption
+    have lengthBound : input0.length < indexLimit := by assumption
+    have dimensionBound : input2 < 64 :=
+      (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (tableSize ▸ lengthBound)
+    exact ⟨by decide, dimensionBound, trivial, by simpa only [one_mul] using tableSize⟩
   exact ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Honest.actual input0 input2 (input3.getD 0) shape0 (by assumption) (by assumption) (initialHistory input0 input0.sum input2)
 
 theorem compiled_ideal_complete : CanonicalCompleteness subject 0 :=

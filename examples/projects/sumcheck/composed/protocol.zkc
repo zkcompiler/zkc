@@ -1,6 +1,6 @@
 module sums;
 
-use sumcheck::{Reduce, check};
+use sumcheck::{Reduce, check, TableShape};
 use zkc::vector::{Vector};
 use zkc::boolean::{both};
 use zkc::multilinear as mle;
@@ -23,6 +23,8 @@ pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
      left_sum: F @V, right_sum: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)
     where () spec {
+      input left_shape = TableShape<F, Max>(in.left@V, in.rounds@V);
+      input right_shape = TableShape<F, Max>(in.right@V, in.rounds@V);
       target public_sums = BothSums<F>(in.left@V, in.right@V,
         in.left_sum, in.right_sum) accept out.accepted;
     }

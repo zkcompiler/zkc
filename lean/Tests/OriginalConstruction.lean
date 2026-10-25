@@ -24,7 +24,7 @@ private def source : Snapshot where
   relations := []
   bindings := []
   definitions := [.function ⟨"Root", .protocol, .publicDef, [.boolean], [.boolean],
-    some ⟨["P", "V"], [["P"]], [["V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P"]], [["V"]]⟩, [], some (.protocol ⟨"Root", []⟩),
     .block [.instruction (.exchange "P" "V") [0] [.boolean] [] "m",
       .instruction (.guard "V") [0] [] [] "g"] (.ret [0])⟩]
   contracts := [⟨"Root", []⟩]

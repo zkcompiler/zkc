@@ -9,6 +9,8 @@ public import ZkcSecurity.Generation.OriginalEndpoint
 public import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
 public meta import ZkcSecurity.Generation.OriginalSecurityBindingsCatalogue
 public meta import ZkcSecurity.Generation.OriginalEndpoint
+public import ZkcSecurity.Generation.RootCompleteness
+public meta import ZkcSecurity.Generation.RootCompleteness
 
 public import ZkcSecurity.Generation.OriginalRootCatalogue
 public meta import ZkcSecurity.Generation.OriginalRootCatalogue
@@ -37,13 +39,14 @@ def soundnessOutput (root : Selection) : OriginalEndpoint.Output where
   capabilities := root.mathematics.capabilities
   soundnessNamespace := root.securityModule ++ ".Soundness"
 
-def completenessClaimsOutput (root : Selection) : FixedCompletenessOutput where
-  moduleName := root.subjectModule ++ "CompletenessClaims"
+def completenessSelection (root : Selection) : RootCompleteness.Selection where
+  moduleName := root.componentModule "Completeness"
   subjectModule := root.subjectModule
-  subjectNamespace := root.subjectModule
-  proofModule := root.componentModule "Completeness"
-  proofName := root.componentModule "Completeness" ++ ".compiled_ideal_complete"
-  capabilitiesExpression := root.mathematics.modelModule ++ "." ++ root.mathematics.capabilities
+  error := .zero
+
+def completenessClaimsOutput (root : Selection) : FixedCompletenessOutput :=
+  RootCompleteness.claimsOutput (completenessSelection root) {
+    capabilities := root.mathematics.modelModule ++ "." ++ root.mathematics.capabilities }
 
 def claimLibraryOutput (root : Selection) : DomainClaimLibraryOutput :=
   let proofs := root.componentModule "Soundness"
@@ -78,9 +81,10 @@ run_cmd do
       ("abi", root.componentModule "ABI", ← require <| SubjectABI.source metadata {
         moduleName := root.componentModule "ABI", subjectModule := root.subjectModule }),
       ("soundness", root.componentModule "Soundness", ← require <| OriginalEndpoint.soundnessSource metadata pair.validator (soundnessOutput root)),
-      ("completeness", root.componentModule "Completeness", OriginalEndpoint.completenessSource
-        (root.componentModule "Completeness") root.subjectModule (root.securityModule ++ ".Completeness.compiled_ideal_complete")
-          root.mathematics.sampling),
+      ("completeness", root.componentModule "Completeness", RootCompleteness.directSource
+        (completenessSelection root) (root.securityModule ++ ".Completeness")
+        (root.securityModule ++ ".Completeness.compiled_ideal_complete") root.mathematics.sampling
+        ["ZkcSecurity.Domains.PrimeField"]),
       ("completeness-claims", root.subjectModule ++ "CompletenessClaims", fixedCompletenessSource (completenessClaimsOutput root)),
       ("claim-libraries", root.subjectModule ++ "SoundnessRegistration", domainClaimLibrarySource (claimLibraryOutput root))]
     for (name, source) in OriginalSecurityBindingsCatalogue.sources do

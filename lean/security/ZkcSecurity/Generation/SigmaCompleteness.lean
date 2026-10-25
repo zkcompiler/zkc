@@ -39,6 +39,7 @@ def source (input : Input) : Except String String := do
     metaImports := ["ZkcSecurity.Tools.SigmaReadback"]
     opens := ["ZkcSecurity.Domains.PrimeField", "ZkcSecurity.Tools.SigmaReadback"]
     description := "Installed Sigma module algebra and actual authorized private sampling."
+    error := .zero
     relation := "SampledReadback (SampledReadback.Allowed subject)"
     adapter := "SampledReadback.perfect_abi"
     nonvacuityLaw := "nonvacuous"

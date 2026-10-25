@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import tomllib
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import generate_component_roots as driver
 
@@ -25,6 +25,11 @@ modules = { library = "library.zkc" }
 target = "knowledge"
 method = "sigma"
 '''
+
+DIRECT_DESCRIPTOR = DESCRIPTOR.replace('method = "sigma"', '''method = "direct"
+proof_module = "Example.Proof"
+error_bound = "1"
+error_expression = ".natural 1"''')
 
 
 class ComponentRootDescriptors(unittest.TestCase):
@@ -63,7 +68,10 @@ class ComponentRootDescriptors(unittest.TestCase):
             (DESCRIPTOR.replace('[[root]]', 'theorem_normalization = ["law", 1]\n[[root]]'), "theorem_normalization: expected"),
             (DESCRIPTOR.split("[[root]]")[0] + "root = []\n", "root: expected"),
             (DESCRIPTOR.split("[[root]]")[0] + "root = {}\n", "root: expected"),
-            (DESCRIPTOR + "error_expression = 1\n", "error_expression: expected"),
+            (DIRECT_DESCRIPTOR.replace('error_expression = ".natural 1"', "error_expression = 1"),
+             "error_expression: expected"),
+            (DIRECT_DESCRIPTOR.replace('error_bound = "1"', "error_bound = false"), "error_bound: expected"),
+            (DIRECT_DESCRIPTOR.replace('error_bound = "1"', 'error_bound = " "'), "error_bound: expected"),
         ]
         for descriptor, diagnostic in cases:
             with self.subTest(diagnostic=diagnostic, descriptor=descriptor):
@@ -74,7 +82,7 @@ class ComponentRootDescriptors(unittest.TestCase):
             (DESCRIPTOR + "[[root]]" + DESCRIPTOR.split("[[root]]")[1], "duplicate root name"),
             (DESCRIPTOR.replace('name = "Example"', 'name = "bad-name"'), "invalid root name"),
             (DESCRIPTOR.replace('method = "sigma"', 'method = "unknown"'), "uninstalled proof method"),
-            (DESCRIPTOR.replace('method = "sigma"', 'method = "direct"'), "missing keys: proof_module"),
+            (DESCRIPTOR.replace('method = "sigma"', 'method = "direct"'), "missing keys: .*proof_module"),
             (DESCRIPTOR + 'proof_module = "Example.Proof"\n', "unknown keys: proof_module"),
             (DESCRIPTOR + 'proof_name = "Example.proof"\n', "unknown keys: proof_name"),
         ]
@@ -90,9 +98,7 @@ class ComponentRootDescriptors(unittest.TestCase):
         ]:
             with self.subTest(suffix=suffix):
                 self.assert_refused(DESCRIPTOR + suffix, diagnostic)
-        direct = DESCRIPTOR.replace('method = "sigma"',
-                                    'method = "direct"\nproof_module = "Example.Proof"')
-        self.assert_refused(direct + 'nonvacuity_law = "Example.nonvacuous"\n',
+        self.assert_refused(DIRECT_DESCRIPTOR + 'nonvacuity_law = "Example.nonvacuous"\n',
                             "unknown keys: nonvacuity_law")
         valid = tomllib.loads(DESCRIPTOR + 'method_imports = ["Example.Laws"]\n'
                              'nonvacuity_law = "Example.Laws.nonvacuous"\n')
@@ -104,19 +110,57 @@ class ComponentRootDescriptors(unittest.TestCase):
                             "unknown keys: error_expresion", ["--only", "Example"])
         self.assert_refused(DESCRIPTOR, "unknown or empty root selection", ["--only", "Other"])
 
+    def test_quantitative_selection_requires_both_bound_forms(self):
+        for line, diagnostic in [
+            ('error_bound = "1"\n', "missing keys: error_bound"),
+            ('error_expression = ".natural 1"', "missing keys: error_expression"),
+        ]:
+            self.assert_refused(DIRECT_DESCRIPTOR.replace(line, ""), diagnostic)
+        for key in ("error_bound", "error_expression"):
+            self.assert_refused(DESCRIPTOR + f'{key} = "0"\n', "unknown keys: " + key)
+
     def test_valid_installed_configuration_and_optional_defaults(self):
         driver.validate_config(tomllib.loads(DESCRIPTOR))
-        direct = tomllib.loads(DESCRIPTOR.replace('method = "sigma"',
-                                                'method = "direct"\nproof_module = "Example.Proof"'))
+        direct = tomllib.loads(DIRECT_DESCRIPTOR)
         driver.validate_config(direct)
         self.assertNotIn("proof_name", direct["root"][0])
-        self.assertNotIn("error_expression", direct["root"][0])
+        self.assertEqual(direct["root"][0]["error_expression"], ".natural 1")
         self.assertNotIn("receipt_normalization", direct)
         self.assertNotIn("theorem_normalization", direct)
         persisted = (Path(driver.__file__).parent / "roots/sampled.toml").read_text()
         installed = tomllib.loads(persisted)
         driver.validate_config(installed)
         self.assertEqual(installed, tomllib.loads(persisted))
+
+    def test_direct_proof_is_assembled_before_receipt_selection(self):
+        config = tomllib.loads(DIRECT_DESCRIPTOR)
+        root = config["root"][0]
+        with tempfile.TemporaryDirectory() as directory:
+            generation = driver.Generation.__new__(driver.Generation)
+            generation.directory = Path(directory)
+            (generation.directory / root["name"]).mkdir()
+            generation.prepare = Mock()
+            generation.compile = Mock()
+            generation.retain = Mock()
+            printers = []
+
+            def printer(name, source):
+                printers.append(source)
+                output = "CompletenessClaims.lean" if name.startswith("GenerateReceipt") else "Completeness.lean"
+                (generation.directory / root["name"] / output).write_text("fresh checked printer output")
+
+            generation.printer = printer
+            generation.prove(root, config)
+            endpoint = "ZkcSecurity.Examples.Generated.Components.ExampleCompleteness"
+            generation.retain.assert_called_once_with(endpoint, "fresh checked printer output")
+            generation.compile.assert_called_once_with("Example.Proof")
+            generation.receipt(root, config)
+            self.assertIn("RootCompleteness.directSource", printers[0])
+            self.assertIn("RootCompleteness.claimsSource", printers[1])
+            # Both invocations send the exact same selection to Lean, including
+            # the positive bound. The receipt cannot bypass the emitted endpoint.
+            for source in printers:
+                self.assertIn(driver.completeness_selection(root), source)
 
 
 if __name__ == "__main__":

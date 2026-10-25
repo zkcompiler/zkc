@@ -12,7 +12,7 @@ namespace ZkcExamples.Construction.ChaumPedersenProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:25025607a6290bb4dd79b516efb243edec1b58643b58ccf68934854586b84b2b"
+  source := "sha256:bb8a459d3ad088207b28d1c7ee3c17100b90c3e0c5652f792aa8d0495d23b1a9"
   candidate := "sha256:0bff87aa3aea86cdd63378bfdcbbd3735ffe117588b3065acc1005efe96b8071"
   policy := ⟨"zkl_171308863f7ffea0edd6d7c73a76733c4d6cae9ba8a58405e8c7862fb91df111", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [6], [0, 1, 2, 3], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

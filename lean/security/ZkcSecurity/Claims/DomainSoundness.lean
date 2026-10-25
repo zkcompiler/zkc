@@ -208,8 +208,16 @@ def soundnessArguments (capabilities : Capabilities model art.original)
     Except ResolutionError (Except Incomplete (SoundnessArguments subject)) := do
   subject.check request
   checkCapabilities request
-  if request.parameters.isSome then throw (.schema "dependent soundness has no additional parameters")
+  let parameters ← (soundnessParameters capabilities.cardinality).decode request.parameters
+  checkDefaultRelation subject.compiled.imported.program.payload.definitions
+    subject.target.formula.definition.helper
   let selected ← resolveModel registry request.model
+  match parameters with
+  | .error missing => return .error missing
+  | .ok parameters =>
+    match requireExactSoundness subject.targetReference parameters with
+    | .error missing => return .error missing
+    | .ok () => pure ()
   match selected with
   | .error missing => return .error missing
   | .ok selected =>

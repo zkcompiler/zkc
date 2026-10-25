@@ -11,6 +11,19 @@ Semantics::intrinsicSignature(const Declaration *scope, StringRef name,
                               ArrayRef<std::string> parameters, Span span) {
   const auto *intrinsic = mathematicalIntrinsic(name);
   using K = Type::Kind;
+  if (intrinsic && intrinsic->identity == MathematicalIdentity::VectorLength) {
+    if (arguments.size() != 1 || arguments.front().kind != K::Field ||
+        !parameters.empty()) {
+      fail("source.intrinsic", "vector length requires one field root", span);
+      return {};
+    }
+    auto vector = builtinType("vector", arguments);
+    if (!vector) {
+      accept(vector.takeError(), span);
+      return {};
+    }
+    return CallSignature{{std::move(*vector)}, {Type(K::Index)}};
+  }
   if (intrinsic &&
       intrinsic->domain == MathematicalIntrinsic::Domain::Quotient) {
     if (arguments.size() != 2 || !parameters.empty() ||

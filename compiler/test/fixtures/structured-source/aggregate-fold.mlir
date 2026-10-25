@@ -20,5 +20,5 @@ module { "protocol.module"() ({
     %yes = arith.constant true
     %r = "algebra.finite_fold"(%queries,%yes) {domain=@queries,step=@step} : (!S,i1)->i1
     "protocol.return"(%r) : (i1)->()
-  }) {sym_name="main",function_type=(!S)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+  }) {sym_name="main",origin=["main",[]],function_type=(!S)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

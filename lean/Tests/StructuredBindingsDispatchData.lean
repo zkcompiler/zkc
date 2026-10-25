@@ -10,7 +10,8 @@ independently of their encounter order below. -/
 namespace Tests.StructuredBindingsDispatchData
 open Zkc.Source.Structured
 
-def leaf : Function := { Tests.StructuredBindingsGeneric.root with name := "leaf" }
+def leaf : Function := { Tests.StructuredBindingsGeneric.root with
+  name := "leaf", origin := some (.protocol ⟨"leaf", []⟩) }
 
 def booleanLeaf : Function where
   name := "booleanLeaf"
@@ -20,11 +21,12 @@ def booleanLeaf : Function where
   outputs := [.boolean]
   interface := some ⟨["Alice", "Bob"], [["Bob"]], [["Bob"]]⟩
   preconditions := []
-  origin := none
+  origin := some (.protocol ⟨"booleanLeaf", []⟩)
   body := .block [] (.ret [0])
 
 def middle : Function := { leaf with
   name := "middle"
+  origin := some (.protocol ⟨"middle", []⟩)
   body := .block [
     .instruction (.protocolApply "leaf" ["Bob", "Alice"]) [0, 1] [.index] [] "swapped",
     .instruction (.protocolApply "leaf" ["Alice", "Bob"]) [0, 2] [.index] [] "again"
@@ -32,6 +34,7 @@ def middle : Function := { leaf with
 
 def root : Function := { leaf with
   name := "root"
+  origin := some (.protocol ⟨"root", []⟩)
   inputs := [.index, .index, .boolean]
   interface := some ⟨["Alice", "Bob"],
     [["Alice", "Bob"], ["Alice", "Bob"], ["Alice", "Bob"]], [["Alice", "Bob"]]⟩
@@ -58,6 +61,7 @@ example : program.payload.protocols.map (·.name) = ["leaf", "booleanLeaf", "mid
 /-- Cyclic source dependencies cannot be used to justify recursive view aliases. -/
 def cyclicFunction : Function := { leaf with
   name := "counter"
+  origin := some (.protocol ⟨"counter", []⟩)
   body := .block [.instruction (.protocolApply "counter" ["Alice", "Bob"]) [0, 1] [.index] [] "self"]
     (.ret [0]) }
 

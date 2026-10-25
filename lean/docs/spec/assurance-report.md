@@ -125,7 +125,7 @@ arguments; reporting never erases them to turn a different request into a match.
 | `telescope` | Lean-owned classification of every remaining binder, authorization result and conditional premises with their typed arguments |
 | `capability_consumer` | Diagnostic attribution of the canonical capability consumer; Python does not recognize consumer names |
 | `application_coverage` | Actual model context, interpreted application value and checked designated free binder, or concrete fixed scope |
-| `honest_input_policy` | The selected pair's closed typed policy, checked against the complete wire request parameters |
+| `honest_input` | Retained source input clauses and source-sort ABI admission; both selected participants are prepared from the same source inputs, with the retained target relation as a separate premise |
 | `admission` | Actual Subject.check result and full resolveModel result, with the typed model association and explicit admitted/registered-undefined/refused outcome |
 | `evidence_attribution` | Best-effort referenced Evidence declarations; attribution only, never receipt obligations |
 | `subject` | Actual typed security subject's artifacts declaration, snapshot source/Entry and participant source/candidate identities |
@@ -252,13 +252,14 @@ endpoint bound and a checked existing typed reduction at exactly those prices,
 with complete execution reading, coherence, false-state membership and validator
 cost. This does not change the oracle's keys, cache or query order.
 
-Honest completeness includes a nonvacuity witness. Its closed typed input
-policy fixes source positions, nominal domains, widths and bounds before
-evidence. A nonempty policy must match the version-zero `honest.input_policy`
-descriptor in the existing request parameters exactly; missing, changed or
-extra rules refuse. The report exposes the policy description and the product
-`compiled_ideal_completeness`. This product does not assert native correspondence
-or a general security result for the pair.
+Honest completeness includes a nonvacuity witness. Its input admission combines
+all retained source input clauses, executable ABI representability, and successful
+preparation of both selected participants from those same inputs. The retained
+target relation remains a separate premise. Completeness admits no property
+parameters; the former `honest.input_policy` descriptor is refused. The report's
+`honest_input` field identifies the clauses, ABI admission and preparation
+boundary, alongside the product `compiled_ideal_completeness`. This product does
+not assert native correspondence or a general security result for the pair.
 
 Declaration extraction reconstructs this closed authority from checked type
 indices. One Lean telescope policy classifies remaining binders and exports

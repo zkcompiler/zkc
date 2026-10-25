@@ -32,6 +32,9 @@ def stopJson : PIR.Stop → Json
 def opJson : Op → Json
   | .indexConstant value => .arr #[.str "indexConstant", nat value]
   | .indexEqual => .arr #[.str "indexEqual"]
+  | .indexLess => .arr #[.str "indexLess"]
+  | .indexPowerOfTwo => .arr #[.str "indexPowerOfTwo"]
+  | .vectorLength domain => .arr #[.str "vectorLength", .str domain]
   | .fieldConstant domain value => .arr #[.str "fieldConstant", .str domain, nat value]
   | .fieldAdd domain => .arr #[.str "fieldAdd", .str domain]
   | .fieldSubtract domain => .arr #[.str "fieldSubtract", .str domain]

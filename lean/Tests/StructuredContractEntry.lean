@@ -9,7 +9,7 @@ private def clause (name role : String) : ContractClause :=
   ⟨.target, name, ⟨"R", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, role⟩⟩
 private def original (target : String) : Function :=
   ⟨"main", .protocol, .publicDef, [.boolean], [.boolean],
-    some ⟨["P", "V"], [["P", "V"]], [["P", "V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"]], [["P", "V"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.statement "R" ["P"] 0 (some target)) [0] [] [] ""] (.ret [0])⟩
 private def snapshot (target : String) : Snapshot :=
   ⟨digest, "main", [], [⟨"R", .publicDef, "opaque", "key", "rev", [.boolean], [.boolean],
@@ -93,29 +93,33 @@ namespace Native
 -- bridges/structured/snapshot.py after language-emit and protocol-structured.
 -- Constructor data are checked below; exporting is not a correctness proof.
 private def leftSnapshot : Snapshot where
-  source := "sha256:77afe6adb4eabb6693364a71f6829d94ba11f0617a2830e9d9e019cb62cc3ed8"
+  source := "sha256:829082f63cf67d6e7d024c7872ac48c0e5d17596473ee58634a18fe9f3732c18"
   entry := "s6h73616d706c653h52756e"
   domains := []
   relations := [⟨"s6h73616d706c651h52", .publicDef, "zkc.language.formula/0", "s6h73616d706c651h52", "2a503e2d2037410a4dd256b9f29dfc9dc0bf2ad85e126cc58b5c183d9ec3f610", [.boolean], [.boolean], ["statement"], some ("zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4")⟩]
   bindings := []
-  definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], none, (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("left"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
+  definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], some (.protocol ⟨"sample::Run", []⟩), (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("left"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
   contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
   catalogue := { nominals := [], services := [] }
 
 private def rightSnapshot : Snapshot where
-  source := "sha256:5d771ea94fb901c502ebe138ef4df5a2a35c25fd058b42fa59b32bc589867931"
+  source := "sha256:92acf7ca208aceacb1aadca6c152471c464bd2f62bb16368e0057f46b1143b6a"
   entry := "s6h73616d706c653h52756e"
   domains := []
   relations := [⟨"s6h73616d706c651h52", .publicDef, "zkc.language.formula/0", "s6h73616d706c651h52", "2a503e2d2037410a4dd256b9f29dfc9dc0bf2ad85e126cc58b5c183d9ec3f610", [.boolean], [.boolean], ["statement"], some ("zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4")⟩]
   bindings := []
-  definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], none, (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("right"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
+  definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], some (.protocol ⟨"sample::Run", []⟩), (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("right"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
   contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
   catalogue := { nominals := [], services := [] }
 
+-- Read each actual export's origin instead of deriving it from the emitted symbol.
 private def original (target : String) : Function :=
+  let retained := if target == "left" then leftSnapshot else rightSnapshot
   ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean],
     some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]],
-      [["role00000000", "role00000001"]]⟩, [], none,
+      [["role00000000", "role00000001"]]⟩, [],
+    ((retained.definitions.filterMap (fun | .function function => some function | _ => none)).find?
+      (fun function => function.name == retained.entry)).bind (·.origin),
     .block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0
       (some target)) [0] [] [] ""] (.ret [0])⟩
 private def formulaBody : Region dialect [.boolean] [.boolean] := .ret (.cons .here .nil)

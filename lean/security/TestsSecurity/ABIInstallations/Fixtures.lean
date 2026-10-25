@@ -55,7 +55,7 @@ def source (config : Configuration) : Snapshot where
     [.function ⟨"main", .protocol, .publicDef, config.types, [.boolean],
       some ⟨["P", "V"],
         config.dataTypes.map (fun _ => if config.publicData then ["P", "V"] else ["P"]) ++ [["V"]],
-        [["V"]]⟩, [], none, constantTrue⟩,
+        [["V"]]⟩, [], some (.protocol ⟨"main", []⟩), constantTrue⟩,
      .function ⟨"targetFormula", .math, .privateDef, config.arguments, [.boolean], none, [], none, constantTrue⟩] ++
     (if config.constrained then
       [.function ⟨"oneFormula", .math, .privateDef, [.index], [.boolean], none, [], none,

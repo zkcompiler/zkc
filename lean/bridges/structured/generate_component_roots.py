@@ -63,16 +63,16 @@ def validate_config(config):
     names = set()
     for index, root in enumerate(roots):
         location = f"root[{index}]"
-        shape(root, common, {"error_expression", "proof_module", "proof_name",
+        shape(root, common, {"error_bound", "error_expression", "proof_module", "proof_name",
                              "method_imports", "nonvacuity_law"}, location)
         for key in common - {"modules"}:
             string(root[key], f"{location}.{key}")
         method = root["method"]
         if method not in {"sigma", "direct"}:
             raise ValueError(f"{location}: uninstalled proof method: {method}")
-        required = common | ({"proof_module"} if method == "direct" else set())
-        optional = {"error_expression"} | ({"proof_name"} if method == "direct" else
-                                         {"method_imports", "nonvacuity_law"})
+        required = common | ({"proof_module", "error_bound", "error_expression"}
+                             if method == "direct" else set())
+        optional = {"proof_name"} if method == "direct" else {"method_imports", "nonvacuity_law"}
         shape(root, required, optional, location)
         for key in (required | optional) - {"modules", "method_imports"}:
             if key in root:
@@ -96,6 +96,17 @@ def validate_config(config):
             string(value, f"{location}.modules.{key}")
 
 
+def completeness_selection(root):
+    """Serialize one Lean endpoint/request selection; never interpret a bound."""
+    name = root["name"]
+    error = (".zero" if root["method"] == "sigma" else
+             "{ bound := " + quoted(root["error_bound"]) +
+             ", expression := " + quoted(root["error_expression"]) + " }")
+    return ("({ moduleName := " + quoted(f"ZkcSecurity.Examples.Generated.Components.{name}Completeness") +
+            ", subjectModule := " + quoted(f"ZkcSecurity.Examples.Generated.{name}") +
+            ", error := " + error + " } : RootCompleteness.Selection)")
+
+
 class Generation:
     def __init__(self, args):
         self.args = args
@@ -108,12 +119,17 @@ class Generation:
                                             cwd=self.package, text=True).strip()
         self.lean = subprocess.check_output(["lake", "env", "which", "lean"],
                                             cwd=self.package, text=True).strip()
-        self.environment = dict(os.environ, LEAN_PATH=f"{self.output}:{self.base}")
+        self.environment = dict(os.environ, LEAN_PATH=f"{self.output}:{self.base}", LEAN_NUM_THREADS="1")
         self.commands = []
         self.run_id = str(time.time_ns())
         self.generated = []
         self.prepared = set()
         self.dependency_links = set()
+        # An overlay also contains inherited cache links. Prefer every explicit
+        # dependency's own checked objects before considering those inherited
+        # links, which may name an older build of another supplied dependency.
+        for root in args.dependency_path:
+            self.overlay(Path(root).resolve(), self.output, owned_only=True)
         for root in [*args.dependency_path, *self.base.split(os.pathsep)]:
             self.overlay(Path(root).resolve(), self.output)
 
@@ -137,10 +153,12 @@ class Generation:
             raise RuntimeError("unfinished theorem in generated root")
         return result.stdout
 
-    def overlay(self, source, target):
+    def overlay(self, source, target, *, owned_only=False):
         if not source.is_dir():
             return
         for item in source.iterdir():
+            if owned_only and item.is_symlink():
+                continue
             destination = target / item.name
             if destination in self.dependency_links:
                 continue
@@ -150,7 +168,7 @@ class Generation:
                 if item.is_dir():
                     destination.unlink()
                     destination.mkdir()
-                    self.overlay(item, destination)
+                    self.overlay(item, destination, owned_only=owned_only)
                 elif destination not in self.dependency_links:
                     same_link = destination.readlink() == item
                     if item.is_symlink():
@@ -160,11 +178,11 @@ class Generation:
                         destination.symlink_to(item.resolve())
                     self.dependency_links.add(destination)
             elif destination.is_dir() and item.is_dir():
-                self.overlay(item, destination)
+                self.overlay(item, destination, owned_only=owned_only)
             elif not destination.exists():
                 if item.is_dir():
                     destination.mkdir(parents=True)
-                    self.overlay(item, destination)
+                    self.overlay(item, destination, owned_only=owned_only)
                 else:
                     destination.symlink_to(item.resolve())
                     self.dependency_links.add(destination)
@@ -173,7 +191,7 @@ class Generation:
         package = self.package if module.startswith(("ZkcSecurity.", "TestsSecurity.")) else LEAN
         return package.joinpath(*module.split(".")).with_suffix(".lean")
 
-    def compile(self, module, source=None, run=False):
+    def compile(self, module, source=None, run=False, source_root=None):
         # Merge cached namespaces because Lean resolves each namespace from
         # one search root. All own output artifacts replace symlinks first.
         source = source or self.module_path(module)
@@ -183,7 +201,8 @@ class Generation:
             if artifact.is_symlink():
                 artifact.unlink()
         package = self.package if source.is_relative_to(self.package) else LEAN
-        flags = [] if source.is_relative_to(package) else [f"--root={source.parent}"]
+        flags = ([f"--root={source_root}"] if source_root is not None else
+                 [] if source.is_relative_to(package) else [f"--root={source.parent}"])
         command = [self.lean, "-DwarningAsError=true", *flags]
         command += ["--run", source] if run else ["-o", target, source]
         print(f"Checking {module}", flush=True)
@@ -286,7 +305,7 @@ def main : IO Unit := do
     originalExpression := {quoted(data+'.snapshot')}, importedExpression := {quoted(inputs+'.imported')},
     pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_module+'.artifacts')},
     modelModule := {quoted(config['model_module'])}, modelExpression := {quoted(config['model'])},
-    targetName := {quoted(root['target'])}, inputPolicyExpression := "⟨[]⟩",
+    targetName := {quoted(root['target'])},
     originalExportExpression := {quoted(quoted(identities['original']))},
     producerExportExpression := {quoted(quoted(identities['producer']))},
     validatorExportExpression := {quoted(quoted(identities['validator']))} }})
@@ -310,18 +329,27 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(abi_path))} generated
 
     def prove(self, root, config):
         name = root["name"]
+        self.prepare(["ZkcSecurity.Generation.RootCompleteness"])
+        module = f"ZkcSecurity.Examples.Generated.Components.{name}Completeness"
+        output = self.directory / name / "Completeness.lean"
         if root["method"] == "direct":
             self.compile(root["proof_module"])
+            proof = root.get("proof_name", root["proof_module"] + ".compiled_ideal_complete")
+            self.printer("GenerateCompleteness" + name, f'''import ZkcSecurity.Generation.RootCompleteness
+open ZkcSecurity.Generation
+def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.directSource
+  {completeness_selection(root)} {quoted(root['proof_module'])} {quoted(proof)}
+  {quoted(config['sampling'])} ["ZkcSecurity.Domains.PrimeField"])
+''')
+            self.retain(module, output.read_text())
             return
         self.prepare(root.get("method_imports", []))
         self.prepare([
             "ZkcSecurity.Tools.ProcessView", "ZkcSecurity.Families.Sigma.Algebra",
             "ZkcSecurity.Families.Sigma.Realization", "ZkcSecurity.Tools.SigmaReadback",
-            "ZkcSecurity.Generation.RootCompleteness", "ZkcSecurity.Generation.UniformRoot",
+            "ZkcSecurity.Generation.UniformRoot",
             "ZkcSecurity.Generation.SigmaCompleteness", "ZkcSecurity.Generation.SigmaCompleteness.Command"])
         subject = f"ZkcSecurity.Examples.Generated.{name}"
-        module = f"ZkcSecurity.Examples.Generated.Components.{name}Completeness"
-        output = self.directory / name / "Completeness.lean"
         self.printer("GenerateCompleteness" + name, f'''import ZkcSecurity.Generation.SigmaCompleteness.Command
 import {subject}
 set_option maxRecDepth 50000
@@ -343,23 +371,18 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} generated
         self.retain(module, output.read_text())
 
     def receipt(self, root, config):
-        self.prepare(["ZkcTools.StructuredSource.Root"])
+        self.prepare(["ZkcSecurity.Generation.RootCompleteness"])
         name = root["name"]
         subject = f"ZkcSecurity.Examples.Generated.{name}"
-        proof = root.get("proof_module", f"ZkcSecurity.Examples.Generated.Components.{name}Completeness")
-        theorem = root.get("proof_name", proof + ".compiled_ideal_complete")
         module = subject + "CompletenessClaims"
         output = self.directory / name / "CompletenessClaims.lean"
-        self.printer("GenerateReceipt" + name, f'''import ZkcTools.StructuredSource.Root
-open ZkcTools.StructuredSource.Root
-def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (fixedCompletenessSource {{
-  moduleName := {quoted(module)}, subjectModule := {quoted(subject)},
-  subjectNamespace := {quoted(subject)}, proofModule := {quoted(proof)},
-  proofName := {quoted(theorem)},
-  errorExpression := {quoted(root.get('error_expression', '.natural 0'))},
+        self.printer("GenerateReceipt" + name, f'''import ZkcSecurity.Generation.RootCompleteness
+open ZkcSecurity.Generation
+def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.claimsSource
+  {completeness_selection(root)} {{
   normalization := [{', '.join(map(quoted, config.get('receipt_normalization', [])))}],
   theoremNormalization := [{', '.join(map(quoted, config.get('theorem_normalization', [])))}],
-  capabilitiesExpression := {quoted(config['capabilities'])} }})
+  capabilities := {quoted(config['capabilities'])} }})
 ''')
         self.retain(module, output.read_text())
 

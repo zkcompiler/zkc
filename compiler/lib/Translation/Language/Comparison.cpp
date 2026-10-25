@@ -9,12 +9,14 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
+#include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
@@ -556,7 +558,12 @@ class Comparator {
         for (unsigned i = 0; i < dependencies.size(); ++i)
           if (dependencies[i] != i)
             return fail("mathematical dependency order differs");
-        if (math->identity == MathematicalIdentity::IndexConstant) {
+        if (math->identity == MathematicalIdentity::VectorLength) {
+          auto axis = actual->getAttrOfType<mlir::IntegerAttr>("axis");
+          if (!attributes(*actual, {"axis"}) || !axis ||
+              !axis.getType().isSignlessInteger(64) || axis.getInt() != 0)
+            return fail("vector length axis differs");
+        } else if (math->identity == MathematicalIdentity::IndexConstant) {
           auto literal =
               math->literal.empty()
                   ? std::to_string(
@@ -1293,7 +1300,8 @@ public:
                                                       "roles",
                                                       "input_roles",
                                                       "output_roles",
-                                                      "contracts"}
+                                                      "contracts",
+                                                      "origin"}
           : local
               ? std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "logical_origin"}
@@ -1311,6 +1319,14 @@ public:
           (!protocol && !local &&
            !string(function, "sym_visibility", "private")))
         return error("source.correspondence", "definition attributes differ");
+      if (protocol) {
+        auto origin = take(encodeProtocolOrigin(project, decl));
+        if (!origin)
+          return std::move(failure);
+        if (function.getAttr("origin") !=
+            protocol_ir::protocolOriginAttr(function.getContext(), *origin))
+          return error("source.correspondence", "protocol origin differs");
+      }
       if (local) {
         auto origin = function.getAttrOfType<mlir::ArrayAttr>("logical_origin");
         if (!origin || origin.size() != 2 || !strings(origin[1], {}) ||

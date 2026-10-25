@@ -223,6 +223,7 @@ import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.HelperSources
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Inlining
+import Zkc.Source.Structured.InputAdmission
 import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.IterationObservations
 import Zkc.Source.Structured.Laws
@@ -239,6 +240,7 @@ import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.MathematicsAliases
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.ModelAdmission
+import Zkc.Source.Structured.NaturalPowerOfTwo
 import Zkc.Source.Structured.NormalForm.Denote
 import Zkc.Source.Structured.NormalForm.Normalize
 import Zkc.Source.Structured.NormalForm.Presentation
@@ -250,6 +252,7 @@ import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning
 import Zkc.Source.Structured.Operations
+import Zkc.Source.Structured.Origin
 import Zkc.Source.Structured.Participant
 import Zkc.Source.Structured.PreparationAdmission
 import Zkc.Source.Structured.PrimitiveEvaluation
@@ -330,6 +333,7 @@ import Tests.Obligations
 import Tests.OriginalABI
 import Tests.OriginalChallenge
 import Tests.OriginalConstruction
+import Tests.OriginalOriginBinding
 import Tests.OriginalPolynomial
 import Tests.OriginalRootBindings
 import Tests.OriginalRootGeneration
@@ -380,6 +384,7 @@ import Tests.StructuredDomainModels
 import Tests.StructuredFormation
 import Tests.StructuredHelperSources
 import Tests.StructuredInlining
+import Tests.StructuredInputAdmission
 import Tests.StructuredLinking
 import Tests.StructuredMapClients
 import Tests.StructuredMapRestrictions
@@ -389,10 +394,14 @@ import Tests.StructuredNormalForms
 import Tests.StructuredNormalizerSources
 import Tests.StructuredOpenAdmission
 import Tests.StructuredOpenEvaluation
+import Tests.StructuredOrigin
+import Tests.StructuredOriginDepth
+import Tests.StructuredOriginFixture
 import Tests.StructuredParticipant
 import Tests.StructuredPresentation
 import Tests.StructuredPrimitives
 import Tests.StructuredPrograms
+import Tests.StructuredPureMath
 import Tests.StructuredRealizations
 import Tests.StructuredRepeatAdmission
 import Tests.StructuredRepeatBounds
@@ -767,6 +776,7 @@ import ZkcTools.StructuredSource.Discovery.Search
 import ZkcTools.StructuredSource.Discovery.Selection
 import ZkcTools.StructuredSource.Discovery.View
 import ZkcTools.StructuredSource.Evaluation
+import ZkcTools.StructuredSource.LibraryAssociation
 import ZkcTools.StructuredSource.MathematicsAliases
 import ZkcTools.StructuredSource.NormalForm
 import ZkcTools.StructuredSource.OpenEvaluation

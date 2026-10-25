@@ -33,7 +33,7 @@ def main() -> None:
     logs = output / "logs"
     for directory in (sources, objects, logs):
         directory.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, LEAN_NUM_THREADS="2")
+    env = dict(os.environ, LEAN_NUM_THREADS="1")
     env["LEAN_PATH"] = str(objects) + os.pathsep + env.get("LEAN_PATH", "")
     # A focused rerun reuses the already checked emitted modules and retains
     # their command receipts. Use a full run whenever source/fixtures change.
@@ -47,7 +47,7 @@ def main() -> None:
         result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
         log = result.stdout + result.stderr
         (logs / (name + ".log")).write_text(log)
-        passed = result.returncode != 0 if failure else result.returncode == 0
+        passed = result.returncode > 0 if failure else result.returncode == 0
         if failure:
             passed = passed and failure in log
         # Lean may recover with an admitted placeholder to continue diagnostics;
@@ -138,7 +138,7 @@ example : NoDataABI.initialHistory =
 
 example (n : Nat) (service : Option Nat) :
     Constrained.subject.HonestInput (ConstrainedABI.inputs n service) ↔
-      (n ≤ 2 ∧ n < indexLimit) ∧ ConstrainedABI.inputCondition (ConstrainedABI.inputs n service) :=
+      n < indexLimit ∧ ConstrainedABI.inputCondition (ConstrainedABI.inputs n service) :=
   ConstrainedABI.honestInput_iff n service
 theorem interpreted_condition (n : Nat) (service : Option Nat) :
     ConstrainedInterpretedABI.inputCondition (ConstrainedInterpretedABI.inputs n service) ↔ n = 1 := by
@@ -146,7 +146,7 @@ theorem interpreted_condition (n : Nat) (service : Option Nat) :
   simp only [Option.some.injEq]
 example (n : Nat) (service : Option Nat) :
     Constrained.subject.HonestInput (ConstrainedInterpretedABI.inputs n service) ↔
-      (n ≤ 2 ∧ n < indexLimit) ∧ n = 1 := by
+      n < indexLimit ∧ n = 1 := by
   exact (ConstrainedInterpretedABI.honestInput_iff n service).trans
     (and_congr Iff.rfl (interpreted_condition n service))
 example : ¬ Constrained.subject.HonestInput (ConstrainedInterpretedABI.inputs 0 none) := by
@@ -154,7 +154,7 @@ example : ¬ Constrained.subject.HonestInput (ConstrainedInterpretedABI.inputs 0
   simp
 example : Constrained.subject.HonestInput (ConstrainedInterpretedABI.inputs 1 none) := by
   rw [ConstrainedInterpretedABI.honestInput_iff]
-  exact ⟨⟨by decide +kernel, by decide +kernel⟩, rfl⟩
+  exact ⟨by decide +kernel, rfl⟩
 
 #print axioms PermutedABI.application_read
 #print axioms RepeatedABI.application_read
@@ -173,12 +173,13 @@ open Zkc.Source
 open ABIInstallationClients.PermutedABI
 example : arguments 3 7 = .cons (3 : ZMod 5) (.cons (7 : ZMod 5) .nil) := by rfl
 ''', failure="Tactic `rfl` failed")
-    write_client("WrongPolicyClient", r'''
+    write_client("WrongSourceClauseClient", r'''
 import ABIInstallationClients.ConstrainedInterpretedABI
 open ABIInstallationClients.ConstrainedInterpretedABI
 example : TestsSecurity.ABIInstallations.Constrained.subject.HonestInput (inputs 3 none) := by
   rw [honestInput_iff]
-  exact ⟨⟨by decide +kernel, by decide +kernel⟩, rfl⟩
+  change (3 : Nat) < Zkc.Source.Structured.indexLimit ∧ some (3 : Nat) = some 1
+  exact ⟨by decide +kernel, by decide +kernel⟩
 ''', failure="Tactic `decide` proved")
 
     # Pair admission requires a service input, so zero-source rows cannot

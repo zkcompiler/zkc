@@ -28,6 +28,9 @@ def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
       .cons ((fields.unpack value).get field) .nil
   | .indexConstant value, _, .nil => .cons value .nil
   | .indexEqual, _, .cons a (.cons b .nil) => .cons (decide (a = b)) .nil
+  | .indexLess, _, .cons a (.cons b .nil) => .cons (decide (a < b)) .nil
+  | .indexPowerOfTwo, _, .cons n (.cons r .nil) => .cons (naturalPowerOfTwo n r) .nil
+  | .vectorLength _, _, .cons values .nil => .cons values.length .nil
   | .fieldEmbed extension base, _, .cons value .nil =>
       .cons (model.embed extension base value) .nil
   | .fieldConstant domain value, _, .nil => .cons (value : model.Field domain) .nil

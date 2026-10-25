@@ -1076,7 +1076,7 @@ def requested_claim(item, mappings, records, registry, modules, evidence, checks
             "exported_capabilities": receipt.get("exported_capabilities") or [],
             "application_coverage": receipt.get("application_coverage"),
             "source_entry": entry, "entry_association": item.get("entry_association"),
-            "honest_input_policy": receipt.get("honest_input_policy"),
+            "honest_input": receipt.get("honest_input"),
             "actual_dependency_declarations": receipt.get("proof_dependencies") or [],
             "actual_receipt_dependencies": receipt.get("dependencies") or [], "obligations": obligations,
             "checked_correspondences": [row for row in discharged if row.get("category") == "stage-link"],

@@ -184,8 +184,9 @@ private meta def normalizationNames : List Name :=
     ``HonestPair.modelEntry, ``HonestPair.resolveModel, ``HonestPair.Subject.check, ``HonestPair.Subject.reference,
     ``HonestPair.Subject.targetReference, ``HonestPair.Subject.acceptance,
     ``HonestPair.completenessProperty, ``HonestPair.completenessArguments,
-    ``HonestPair.InputPolicy.checkParameters, ``HonestPair.InputPolicy.matchesParameters,
-    ``HonestPair.matchPolicyRules, ``HonestPair.InputRule.acceptsWire,
+    ``completenessParameters, ``knowledgeParameters, ``emptyParameters,
+    ``decodeSoundnessParameters, ``requireExactSoundness,
+    ``checkDefaultRelation, ``defaultRelationHelper, ``defaultRelationOperation,
     ``HonestPair.resolveHonestModel, ``HonestPair.honestModelEntry, ``HonestPair.honestModelSchema,
     ``forking, ``naturalReflexiveRec, ``naturalBneRec, ``ModelContext.parameter, ``ModelContext.resolveApplication,
     ``Fintype.card_ne_zero, ``NeZero.ne, ``Domain.Capabilities.cardinality, ``Bound.elaborateWith, ``Except.map]
@@ -225,6 +226,7 @@ private meta def normalizeResolution (expression : Expr) (declarations : Array (
           -- Cardinalities and property propositions remain symbolic below.
           if [``CanonicalAuthority.check, ``Domain.Subject.check,
               ``HonestPair.Subject.check, ``Subject.check,
+              ``checkDefaultRelation,
               ``Domain.selectChargeSites,
               ``Zkc.Source.Structured.Catalogue.identitySort].any term.isAppOf && !term.hasMVar then
             let reduced ← withTransparency .all (whnf term)

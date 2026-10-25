@@ -30,7 +30,6 @@ run_cmd do
     match OriginalSecurityBindings.validateABI program binding metadata with
     | .ok () => pure ()
     | .error reason => throwError "{root.name}: {reason}"
-    unless root.honestInputs.width == 1 do throwError "original-security-installed-family-width"
     let moduleName := "ZkcSecurity.Examples.Generated.OriginalSecurity." ++ root.name
     let output : OriginalSecurityBindings.Output := {
       moduleName, originalModule := "ZkcExamples.Structured.Generated.Original." ++ root.name

@@ -8,7 +8,7 @@ public meta import Mathlib.Tactic.Substs
 
 /-! Transport input assertions through selected, independently proved laws.
 Every extra premise is proved in the caller's context. The honest-pair helper
-also splits policy and relation facts after the checked ABI projection; the
+also splits admission and relation facts after the checked ABI projection; the
 component composer still proves the complete execution and successful terminal.
 Adversarial assembly uses only its own source guards and component guarantees.
 -/
@@ -92,9 +92,9 @@ elab "apply_input_law " law:term " solving " side:tactic : tactic =>
     Term.withoutErrToSorry <| withoutRecover do
   let _ ← forwardIff law (some side)
 
-elab "prepare_honest_readback " "using " policy:term " and " relation:term : tactic =>
+elab "prepare_honest_readback " "using " admission:term " and " relation:term : tactic =>
     Term.withoutErrToSorry <| withoutRecover do
-  let _ ← forwardIff policy
+  let _ ← forwardIff admission
   splitFacts
   let _ ← forwardIff relation
   splitFacts

@@ -13,11 +13,11 @@ private def predicate : Function :=
     .block [.instruction .booleanEqual [0, 1] [.boolean] [] ""] (.ret [0])⟩
 private def root : Function :=
   ⟨"main", .protocol, .publicDef, [.boolean, .boolean], [.boolean, .boolean],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"], ["V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"], ["V"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction .booleanEqual [0, 1] [.boolean] [] ""] (.ret [0, 1])⟩
 private def caller : Function :=
   ⟨"caller", .protocol, .publicDef, [.boolean, .boolean], [.boolean, .boolean],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["P"], ["P"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["P"], ["P"]]⟩, [], some (.protocol ⟨"caller", []⟩),
     .block [.instruction (.protocolApply "main" ["V", "P"]) [1, 0] [.boolean, .boolean] [] "invoke"]
       (.ret [0, 1])⟩
 private def relation : Relation :=

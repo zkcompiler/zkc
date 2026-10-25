@@ -231,7 +231,7 @@ with case('receive-vector-capacity-remains-a-reference-diagnostic'):
       "protocol.func"() ({ ^entry(%x:!V):
         %received = "protocol.exchange"(%x) {sender="P",receiver="V",site="vector"} : (!V)->!V
         "protocol.return"(%received) : (!V)->()
-      }) {sym_name="main",function_type=(!V)->!V,roles=["P","V"],input_roles=[["P"]],output_roles=[["V"]]} : ()->()
+      }) {sym_name="main",origin=["main",[]],function_type=(!V)->!V,roles=["P","V"],input_roles=[["P"]],output_roles=[["V"]]} : ()->()
     }) {profile=#protocol.profile<protocol>} : ()->() }'''
     export(source)
     action = ['receive', 'vector', 'P', 'V', ['vector', field[1]]]
@@ -298,7 +298,7 @@ with case('multi-role-math-finite-refusal-follows-retained-calls-and-dormant-roo
     selected_root = '''"protocol.func"() ({
       %yes = arith.constant true
       "protocol.return"(%yes) : (i1)->()
-    }) {sym_name="selected",function_type=()->i1,roles=["Reader"],input_roles=[],output_roles=[["Reader"]]} : ()->()'''
+    }) {sym_name="selected",origin=["selected",[]],function_type=()->i1,roles=["Reader"],input_roles=[],output_roles=[["Reader"]]} : ()->()'''
     source = source.replace('module { "protocol.module"() ({', 'module { "protocol.module"() ({\n' + selected_root)
     export(source, symbol='selected', refusal='structured-source-multirole-math')
     run(source, [], 'Reader', symbol='selected', refusal='structured-reference-unsupported')

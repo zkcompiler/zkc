@@ -19,7 +19,7 @@ def snapshot : Structured.Snapshot where
   relations := []
   bindings := []
   definitions := [.function ⟨"main", .protocol, .publicDef, [], [],
-    some ⟨["P", "V"], [], []⟩, [], none, .block [] (.ret [])⟩]
+    some ⟨["P", "V"], [], []⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [])⟩]
   contracts := [⟨"main", []⟩]
   catalogue := ⟨[], [], []⟩
 

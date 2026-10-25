@@ -189,7 +189,7 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     (operation leftSites left op args bodies).interpret operations =
       operation rightSites right op args (RegionFunctions.translate (dialect := dialect) operations bodies) := by
   cases op with
-  | fieldEmbed =>
+  | fieldEmbed | vectorLength =>
     cases args with
     | cons value rest => cases rest; cases bodies; rfl
   | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
@@ -198,7 +198,7 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values (assignment F G) []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
     simp only [PIR.Process.interpret_bind, sites site, PIR.Process.interpret]
-  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with

@@ -22,13 +22,10 @@ abbrev artifacts := ZkcExamples.Construction.Generated.TwoSumsPair.artifacts
 def selected : Zkc.Construction.AuthoredPair.Selection original :=
   (Zkc.Construction.AuthoredPair.select original artifacts "public_sums").toOption.get (by decide +kernel)
 
-def inputPolicy : ZkcSecurity.Claims.HonestPair.InputPolicy imported.program.payload.entry.inputs :=
-  ⟨[.cubeTable .here (.there (.there (.there (.there .here)))) 1, .cubeTable (.there .here) (.there (.there (.there (.there .here)))) 1, .boundedIndex (.there (.there (.there (.there .here)))) 4]⟩
-
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
-  bind_authored_subject "public_sums" using inputPolicy
-    exports "sha256:ff5b4060dd0ad94db9061d59d7560152b8db7dc820b1d25f3b358433a6e78732", "sha256:0bd526cfbc6d29aef756e4b0389d9fb6fe40d3ba76c557aab569266471957942", "sha256:f1110f3e53e1ab652a83adb2c5e4311a42961b4c21b4ed6c9ed6cbda3efe9fe0"
+  bind_authored_subject "public_sums"
+    exports "sha256:2dce173ee7e75348b151a0a921b5402960ac13c34dba46c91a14ee7ef7ed2dff", "sha256:acdc83f8b481571122cc695d94b43563d9bdf2999f3bfb308fc5badefb4b84ff", "sha256:c4aeab47c47c6d1297c475b16826485dab6edc8ceeba4ddfa6b0923bead527f8"
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled

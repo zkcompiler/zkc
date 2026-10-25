@@ -98,8 +98,9 @@ Header paths are relative to `zkc/`. C++ namespaces express semantic subjects;
 The `Tools` package component imports `Zkc::zkc-compile`, `Zkc::zkc-opt` and
 `Zkc::zkc-tblgen`; it has no `Zkc::Tools` library target.
 
-Support, Contracts, Relation and Program use LLVM without MLIR. Language also
-requires the pinned external utf8proc library for NFC; it depends on Contracts
+Support, Contracts, Relation and Program use LLVM without MLIR. Contracts and
+Language require the pinned external utf8proc library for NFC validation of
+source origins and source text. Language depends on Contracts
 and Relation and still has no MLIR dependency. Program depends on Contracts.
 IR adds MLIR and depends on Program and Relation. Transforms depends on IR; Translation depends on IR and Language; Compiler depends on Transforms
 and Translation; Driver depends on Compiler. Compiler does not link CLI Driver.
@@ -131,10 +132,10 @@ target_link_libraries(source_client PRIVATE Zkc::Language)
 ```
 
 Provide utf8proc 2.12.0 through `CMAKE_PREFIX_PATH` or `utf8proc_DIR` as well as
-the matching LLVM installation. Language discovery requires that exact version
+the matching LLVM installation. Contracts discovery requires that exact version
 and its `utf8proc::utf8proc` CMake target for both static and shared consumers;
 the SDK does not bundle the dependency. A missing or incompatible dependency
-makes Language and its dependent components unavailable. A preloaded target or
+makes Contracts and its dependent components unavailable. A preloaded target or
 explicit package directory cannot silently select a different version. This
 request works with `CMAKE_DISABLE_FIND_PACKAGE_MLIR=TRUE`.
 

@@ -41,6 +41,8 @@ def primitiveJson : Primitive → Json
 def opJson (op : Op) : Json := Json.mkObj [
   ("constructor", toJson (match op with
     | .exec _ => "exec" | .indexConstant _ => "indexConstant" | .indexEqual => "indexEqual"
+    | .indexLess => "indexLess" | .indexPowerOfTwo => "indexPowerOfTwo"
+    | .vectorLength _ => "vectorLength"
     | .fieldConstant .. => "fieldConstant" | .fieldAdd _ => "fieldAdd"
     | .fieldSubtract _ => "fieldSubtract" | .fieldMultiply _ => "fieldMultiply"
     | .fieldEqual _ => "fieldEqual" | .fieldEmbed .. => "fieldEmbed"

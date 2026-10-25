@@ -43,7 +43,7 @@ def reservedIdentifier (identifier : Identifier) : Bool :=
   match namespaceBytes identifier.name.toByteArray.data.toList with
   | none => true
   | some space => ["models", "extractors", "reductions", "assumptions",
-      "charges", "guarantees", "capabilities", "oracles"].any
+      "charges", "guarantees", "capabilities", "oracles", "gaps", "producers"].any
         (fun candidate => candidate.toByteArray.data.toList == space)
 
 theorem PropertyKey.reserved (key : PropertyKey) : reservedIdentifier key.identifier = true := by

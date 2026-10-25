@@ -30,7 +30,7 @@ theorem source_root_association : ZkcExamples.Structured.Generated.Original.Smal
 
 theorem nominal_order : [ZkcExamples.Structured.Generated.Original.SmallSumcheck.callContext0] = [ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol] := by kernel_rfl
 
-theorem check0_helper : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper26.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
+theorem check0_helper : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper27.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
 def schedule0 := schedule ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0 context
  theorem routes0 (handle : Nat) : OriginalSecurity.Routes (routing handle)

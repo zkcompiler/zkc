@@ -845,10 +845,24 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
           ("participant_source", Json.str (← literalString (← field `Zkc.Construction.Participant `source validator))),
           ("participant_candidate", Json.str (← literalString (← field `Zkc.Construction.Participant `candidate validator)))])
     else pure Json.null
-  let honestInputPolicy ← if headName subjectType == some `ZkcSecurity.Claims.HonestPair.Subject then do
-      let policy ← field `ZkcSecurity.Claims.HonestPair.Subject `inputPolicy semanticSubject
-      let description ← listElements (← mkAppM `ZkcSecurity.Claims.HonestPair.InputPolicy.description #[policy])
-      pure (Json.arr (← description.mapM fun row => do return Json.str (← literalString row)))
+  let honestInput ← if headName subjectType == some `ZkcSecurity.Claims.HonestPair.Subject then do
+      let target ← field `ZkcSecurity.Claims.HonestPair.Subject `target semanticSubject
+      let owner ← field `Zkc.Construction.RetainedTarget `owner target
+      let contract ← mkAppM `Zkc.Source.Structured.ContractBinding.contract #[owner]
+      let clauses ← listElements (← field `Zkc.Source.Structured.ProtocolContract `clauses contract)
+      let mut inputs := #[]
+      for index in [:clauses.size] do
+        let clause := clauses[index]!
+        let kind ← whnfD (← field `Zkc.Source.Structured.ContractClause `kind clause)
+        if kind.isConstOf `Zkc.Source.Structured.ContractKind.input then
+          let application ← field `Zkc.Source.Structured.ContractClause `subject clause
+          inputs := inputs.push (Json.mkObj [("index", toJson index),
+            ("name", Json.str (← literalString (← field `Zkc.Source.Structured.ContractClause `name clause))),
+            ("relation", Json.str (← literalString (← field `Zkc.Source.Structured.RelationApplication `relation application)))])
+      pure (Json.mkObj [("source_clauses", Json.arr inputs),
+        ("abi_admission", Json.str "Zkc.Source.Structured.inputsRepresentable"),
+        ("preparation", Json.str "same source inputs prepare both selected participants"),
+        ("relation", Json.str "separate retained-target premise")])
     else pure Json.null
   let resolvedConstructor ← whnfD resolved
   unless resolvedConstructor.isAppOf `Zkc.Claims.Resolved.mk do throwError "unresolved Resolved constructor"
@@ -1288,7 +1302,7 @@ def receiptJson (env : Environment) (info : ConstantInfo) (binders : Array Expr)
     ("registry_checks", Json.mkObj [("lookup", Json.bool lookupChecked), ("property_definition", Json.bool propertyChecked),
       ("property_export", Json.bool exportChecked), ("model_export", Json.bool modelChecked)]),
     ("capability_consumer", if canonicalRegistry then Json.str consumer else Json.null),
-    ("application_coverage", coverage), ("honest_input_policy", honestInputPolicy),
+    ("application_coverage", coverage), ("honest_input", honestInput),
     ("registered_property", registeredIdentifier), ("registered_schema", Json.str registeredSchema),
     ("quantity_kind", Json.str quantityKind),
     ("exported_capabilities", if consumer == "soundness@0" && quantityKind == "charged" then

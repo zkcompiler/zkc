@@ -16,6 +16,11 @@ import subprocess
 import tempfile
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 ROLES = (
     "SmallSumcheckProducer",
     "SmallSumcheckValidator",
@@ -45,7 +50,7 @@ def change_return(text: str) -> str:
         return match[1] + ", ".join(map(str, changed)) + match[3]
 
     changed, count = re.subn(pattern, replacement, text, count=1)
-    assert count == 1 and changed != text
+    require(count == 1 and changed != text, 'mutation did not select exactly one returned value list')
     return changed
 
 
@@ -83,22 +88,22 @@ def main() -> None:
         cwd=root, env=env, text=True, capture_output=True, timeout=120,
     )
     (directory / "regenerate.log").write_text(result.stdout + result.stderr)
-    assert result.returncode == 0, "Lean syntax generation failed; see regenerate.log"
+    require(result.returncode == 0, "Lean syntax generation failed; see regenerate.log")
     originals: dict[str, str] = {}
     receipts = []
     for role in ROLES:
         path = root / "ZkcExamples/Structured/Generated/Constructed" / f"{role}.lean"
         text = path.read_text()
-        assert text == (regenerated / path.name).read_text(), f"stale generated view: {role}"
+        require(text == (regenerated / path.name).read_text(), f"stale generated view: {role}")
         imports = re.findall(r"^public import (.+)$", text, re.MULTILINE)
-        assert len(imports) == 2 and imports[1] == "Zkc.Construction.DomainBinding"
-        assert imports[0] in {
+        require(len(imports) == 2 and imports[1] == "Zkc.Construction.DomainBinding", 'constructed view must import only its subject and domain binding')
+        require(imports[0] in {
             "ZkcExamples.Construction.Generated.SmallSumcheckPair",
             "ZkcExamples.Construction.Generated.TwoSumsPair",
-        }
-        assert not re.search(r"\bDomain\.(?:evaluate|step)\b", text)
-        assert not re.search(r":=\s*(?:\([^\n]*\s)?Domain\.participant\b", text)
-        assert "sourceImported" not in text and "protocol1Role" not in text
+        }, 'constructed view imports an unexpected subject')
+        require(not re.search(r"\bDomain\.(?:evaluate|step)\b", text), 'constructed view delegates to a generic evaluator')
+        require(not re.search(r":=\s*(?:\([^\n]*\s)?Domain\.participant\b", text), 'constructed view aliases the generic participant evaluator')
+        require("sourceImported" not in text and "protocol1Role" not in text, 'constructed view retains a superseded source reference')
         originals[role] = text
         receipts.append({"role": role, "sha256": hashlib.sha256(text.encode()).hexdigest()})
 
@@ -132,7 +137,7 @@ def main() -> None:
     mutations = []
     for name, role, transform in cases:
         mutated = transform(originals[role])
-        assert mutated != originals[role], name
+        require(mutated != originals[role], name)
         path = directory / f"{name}.lean"
         path.write_text(mutated)
         result = subprocess.run(
@@ -141,11 +146,11 @@ def main() -> None:
         )
         log = result.stdout + result.stderr
         (directory / f"{name}.log").write_text(log)
-        assert result.returncode != 0, f"stale proof accepted mutation: {name}"
+        require(result.returncode > 0, f"stale proof accepted mutation: {name}")
         refused = "Type mismatch" in log or (name == "validator-loop-slot-frame" and
                                             "declaration type mismatch" in log)
-        assert refused, f"mutation did not fail at its proof equation: {name}"
-        assert "unexpected token" not in log and "object file" not in log, name
+        require(refused, f"mutation did not fail at its proof equation: {name}")
+        require("unexpected token" not in log and "object file" not in log, name)
         mutations.append({"name": name, "role": role, "status": "kernel-equation-refused"})
         print(f"PASS {name}", flush=True)
     report = {"format": "zkc.constructed-view-controls/0", "generated": receipts, "mutations": mutations}

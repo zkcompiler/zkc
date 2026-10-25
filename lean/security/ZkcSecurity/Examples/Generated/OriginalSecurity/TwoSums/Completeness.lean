@@ -46,10 +46,18 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
     reading (application_read input0 input1 input2 input3 input4 input5) evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation
   have shape0 : PrimitiveLibrary.HasShape input0 input4 1 := by
     simp only [PrimitiveLibrary.HasShape, Nat.mod_one, Nat.div_one]
-    exact ⟨by decide, by omega, trivial, by simpa only [one_mul] using (by assumption : input0.length = 1 * 2 ^ input4)⟩
+    have tableSize : input0.length = 2 ^ input4 := by assumption
+    have lengthBound : input0.length < indexLimit := by assumption
+    have dimensionBound : input4 < 64 :=
+      (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (tableSize ▸ lengthBound)
+    exact ⟨by decide, dimensionBound, trivial, by simpa only [one_mul] using tableSize⟩
   have shape1 : PrimitiveLibrary.HasShape input1 input4 1 := by
     simp only [PrimitiveLibrary.HasShape, Nat.mod_one, Nat.div_one]
-    exact ⟨by decide, by omega, trivial, by simpa only [one_mul] using (by assumption : input1.length = 1 * 2 ^ input4)⟩
+    have tableSize : input1.length = 2 ^ input4 := by assumption
+    have lengthBound : input1.length < indexLimit := by assumption
+    have dimensionBound : input4 < 64 :=
+      (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (tableSize ▸ lengthBound)
+    exact ⟨by decide, dimensionBound, trivial, by simpa only [one_mul] using tableSize⟩
   exact ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Honest.actual input0 input1 input4 (input5.getD 0) shape0 (by assumption) shape1 (by assumption) (by assumption) (initialHistory input0 input1 input0.sum input1.sum input4)
 
 theorem compiled_ideal_complete : CanonicalCompleteness subject 0 :=

@@ -12,5 +12,5 @@ module { "protocol.module"() ({
   ^entry(%g:!G,%s:!F):
     %r:2 = func.call @scale(%g,%s) : (!G,!F)->(!G,i1)
     "protocol.return"(%r#0,%r#1) : (!G,i1)->()
-  }) {sym_name="main",function_type=(!G,!F)->(!G,i1),roles=["P","V"],input_roles=[["P","V"],["P","V"]],output_roles=[["P","V"],["V"]]} : ()->()
+  }) {sym_name="main",origin=["main",[]],function_type=(!G,!F)->(!G,i1),roles=["P","V"],input_roles=[["P","V"],["P","V"]],output_roles=[["P","V"],["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

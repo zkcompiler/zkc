@@ -18,7 +18,7 @@ private def original : Snapshot :=
     [.function ⟨"identity", .math, .privateDef, [.boolean], [.boolean], none, [], none,
       .block [] (.ret [0])⟩,
      .function ⟨"main", .protocol, .publicDef, [.boolean, .service scalarServiceContract], [.boolean],
-      some ⟨["P", "V"], [["P", "V"], ["V"]], [["V"]]⟩, [], none, .block [] (.ret [0])⟩],
+      some ⟨["P", "V"], [["P", "V"], ["V"]], [["V"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩],
     [⟨"main", [inputClause, target]⟩], blsRows⟩
 private def importChecked (snapshot : Snapshot)
     (accepted : (Structured.check snapshot).isOk = true) : Imported snapshot := by

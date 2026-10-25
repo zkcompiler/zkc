@@ -253,6 +253,49 @@ public:
       rewriter.replaceOp(op, rewriter.create(state)->getResults());
       return success();
     }
+    if (isa<data::PowerOfTwoOp>(op)) {
+      for (StringRef contract :
+           {"index.constant", "index.equal", "bool.and", "bool.or"})
+        if (protocol::boundOperationName(contract).empty())
+          return failure();
+      auto emit = [&](StringRef contract, ValueRange operands, Type type,
+                      ArrayRef<Attribute> parameters = {},
+                      bool last = false) -> Value {
+        protocol::BindingApplication application;
+        application.contract = contract.str();
+        OperationState state(op->getLoc(),
+                             protocol::boundOperationName(contract));
+        state.addOperands(operands);
+        state.addTypes(type);
+        auto occurrence =
+            last ? site.getValue().str()
+                 : symbols.freshSite(op->getParentOfType<func::FuncOp>(),
+                                     site.getValue());
+        state.addAttribute("site", rewriter.getStringAttr(occurrence));
+        state.addAttribute("parameters", rewriter.getArrayAttr(parameters));
+        state.addAttribute("binding",
+                           symbols.get(application, op->getLoc(), rewriter));
+        return rewriter.create(state)->getResult(0);
+      };
+      Value result;
+      // The VM has no shift contract. Enumerating its 64 representable powers
+      // implements r < 64 && n == (1 << r), with no runtime shift or overflow.
+      for (unsigned exponent = 0; exponent < 64; ++exponent) {
+        auto constant = [&](uint64_t value) {
+          return emit("index.constant", {}, inputs[0].getType(),
+                      {rewriter.getStringAttr(std::to_string(value))});
+        };
+        auto r = constant(exponent), n = constant(uint64_t(1) << exponent);
+        auto equalR = emit("index.equal", {inputs[1], r}, rewriter.getI1Type());
+        auto equalN = emit("index.equal", {inputs[0], n}, rewriter.getI1Type());
+        auto current = emit("bool.and", {equalR, equalN}, rewriter.getI1Type());
+        result = exponent == 0 ? current
+                               : emit("bool.or", {result, current},
+                                      rewriter.getI1Type(), {}, exponent == 63);
+      }
+      rewriter.replaceOp(op, result);
+      return success();
+    }
     if (auto dim = dyn_cast<data::DimOp>(op)) {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();

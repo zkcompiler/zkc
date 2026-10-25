@@ -31,9 +31,6 @@
         "protocol_symbol": {
           "type": "string"
         },
-        "original_identity": {
-          "type": "string"
-        },
         "interface_sha256": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
@@ -49,7 +46,6 @@
         "format",
         "original_sha256",
         "protocol_symbol",
-        "original_identity",
         "interface_sha256",
         "capture",
         "installation"

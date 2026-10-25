@@ -65,7 +65,7 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
     authorizing rfl
     finishing rfl
 
-theorem compiled_ideal_complete : CanonicalCompleteness subject 0 :=
+theorem compiled_ideal_complete : CanonicalCompleteness ZkcSecurity.Examples.Generated.SchnorrRandomized.subject (0) :=
   SampledReadback.perfect_abi subject abi nonvacuous readback
 
 end ZkcSecurity.Examples.Generated.Components.SchnorrRandomizedCompleteness

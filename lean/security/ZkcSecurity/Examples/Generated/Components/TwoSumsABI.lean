@@ -2,13 +2,14 @@ module
 
 public import ZkcSecurity.Examples.Generated.TwoSums
 public import ZkcSecurity.Tools.SubjectABI
+public import ZkcSecurity.Tools.SourceInputClauses
 
 @[expose] public section
 noncomputable section
 
-/-! Generated from the actual admitted subject, source ABI, request policy
-and retained selectors. Regenerate; do not hand edit. Formula mathematics
-is deliberately absent. Every presentation equation is kernel checked. -/
+/-! Generated from the actual admitted subject, source ABI, input clauses
+and retained selectors. Regenerate; do not hand edit. Input formula semantics
+are reduced in Lean. Target mathematics requires its own checked laws. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
@@ -25,8 +26,8 @@ theorem public_positions : selected.policy.publicInputs = ([0, 1, 2, 3, 4]) := r
 theorem public_types : validatorArtifacts.publics = ([Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.vector "bls12-381.fr",  Zkc.Source.Structured.Ty.field "bls12-381.fr",  Zkc.Source.Structured.Ty.field "bls12-381.fr",  Zkc.Source.Structured.Ty.index]) := rfl
 theorem target_positions : selectorPositions subject.target.application.selectors = .ok ([0, 1, 2, 3]) := rfl
 theorem artifact_identities :
-    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:3b69a20a3bf1c12e4fcfe7cb521bde2f3bb57b6de6fa094caa966248e366553e",  "sha256:5dd732f36008ef6ee75ba430df404fd66d91abaf4de509052cef05cd05a5865c",  "_math_0")) ∧
-    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:3b69a20a3bf1c12e4fcfe7cb521bde2f3bb57b6de6fa094caa966248e366553e",  "sha256:5dd732f36008ef6ee75ba430df404fd66d91abaf4de509052cef05cd05a5865c",  "_math_1")) := by decide +kernel
+    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:6b597ea8baaa7f7ea67f6254e44d49ad6fea52bbf857dbf0dacd4ecf47ebd655",  "sha256:3a1ffb57ab22832390e497ec2a4393dd85e58c26face7a209a8f0645521beb8e",  "_math_0")) ∧
+    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:6b597ea8baaa7f7ea67f6254e44d49ad6fea52bbf857dbf0dacd4ecf47ebd655",  "sha256:3a1ffb57ab22832390e497ec2a4393dd85e58c26face7a209a8f0645521beb8e",  "_math_1")) := by decide +kernel
 
 def sourceInputs (input0 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : Option (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : Option (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : Option (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : Option (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) : subject.Inputs :=
   (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons input4 (.cons input5 .nil))))))
@@ -99,22 +100,24 @@ def abi : Subject.ABI subject where
   producerSorts := fun data => producer_sorts (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1
   validatorSorts := fun data => validator_sorts (TypedABI.unpack data).1 (TypedABI.unpack data).2.1 (TypedABI.unpack data).2.2.1 (TypedABI.unpack data).2.2.2.1 (TypedABI.unpack data).2.2.2.2.1
 
-theorem source_clauses (values : subject.Inputs) :
-    ∀ index isInput, subject.inputClause values index isInput :=
-  Subject.no_input_clauses subject (by decide +kernel) values
+def inputCondition (values : subject.Inputs) : Prop :=
+  source_input_condition subject on values
 
--- The shared policy normalization basis covers different input layouts.
+theorem source_clauses (values : subject.Inputs) :
+    (∀ index isInput, subject.inputClause values index isInput) ↔ inputCondition values :=
+  by source_input_clauses
+
 set_option linter.unusedSimpArgs false in
 set_option backward.isDefEq.respectTransparency false in
-theorem policy_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
-    subject.inputPolicy.Holds (inputs input0 input1 input2 input3 input4 input5) ↔ (0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input0.length < indexLimit ∧ input0.length = 1 * 2 ^ input4 ∧ 0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input1.length < indexLimit ∧ input1.length = 1 * 2 ^ input4 ∧ input4 ≤ 4 ∧ input4 < indexLimit) := by
-  change inputPolicy.Holds (sourceInputs (some input0) (some input1) (some input2) (some input3) (some input4) input5) ↔ _
-  simp [inputPolicy, InputPolicy.Holds, InputRule.Holds, sourceInputs, TypedABI.get_cons_here, TypedABI.get_cons_there, and_assoc]
+theorem representable_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
+    inputsRepresentable (inputs input0 input1 input2 input3 input4 input5) ↔ (input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) := by
+  change inputsRepresentable (sourceInputs (some input0) (some input1) (some input2) (some input3) (some input4) input5) ↔ _
+  simp [inputsRepresentable, inputRepresentable, sourceInputs, and_assoc]
 
 theorem honestInput_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
-    subject.HonestInput (inputs input0 input1 input2 input3 input4 input5) ↔ (0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input0.length < indexLimit ∧ input0.length = 1 * 2 ^ input4 ∧ 0 < (1 : Nat) ∧ 1 < indexLimit ∧ input4 < indexLimit ∧ input1.length < indexLimit ∧ input1.length = 1 * 2 ^ input4 ∧ input4 ≤ 4 ∧ input4 < indexLimit) := by
+    subject.HonestInput (inputs input0 input1 input2 input3 input4 input5) ↔ ((input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) ∧ (source_input_condition subject on (inputs input0 input1 input2 input3 input4 input5))) := by
   exact (abi.honest_pack_iff (data input0 input1 input2 input3 input4 input5)).trans
-    ((and_iff_left (source_clauses _)).trans (policy_iff input0 input1 input2 input3 input4 input5))
+    (and_congr (representable_iff input0 input1 input2 input3 input4 input5) (by source_input_clauses))
 
 theorem honestInput_exists (values : subject.Inputs) (honest : subject.HonestInput values) :
     ∃ (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))), values = (inputs input0 input1 input2 input3 input4 input5) := by
@@ -142,8 +145,8 @@ theorem context_eq : subject.selection.context = ({ entry := "zkl_441c117f800011
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 
-theorem original_export : subject.originalExport = ("sha256:ff5b4060dd0ad94db9061d59d7560152b8db7dc820b1d25f3b358433a6e78732") := rfl
-theorem producer_export : subject.producerExport = ("sha256:0bd526cfbc6d29aef756e4b0389d9fb6fe40d3ba76c557aab569266471957942") := rfl
-theorem validator_export : subject.validatorExport = ("sha256:f1110f3e53e1ab652a83adb2c5e4311a42961b4c21b4ed6c9ed6cbda3efe9fe0") := rfl
+theorem original_export : subject.originalExport = ("sha256:2dce173ee7e75348b151a0a921b5402960ac13c34dba46c91a14ee7ef7ed2dff") := rfl
+theorem producer_export : subject.producerExport = ("sha256:acdc83f8b481571122cc695d94b43563d9bdf2999f3bfb308fc5badefb4b84ff") := rfl
+theorem validator_export : subject.validatorExport = ("sha256:c4aeab47c47c6d1297c475b16826485dab6edc8ceeba4ddfa6b0923bead527f8") := rfl
 
 end ZkcSecurity.Examples.Generated.Components.TwoSumsABI

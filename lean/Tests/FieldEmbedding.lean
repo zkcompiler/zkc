@@ -43,7 +43,7 @@ private def helper (extension base : String) (kind : Kind := .math)
     (descriptor : Descriptor := .fieldEmbed extension base)
     (input : String := base) (output : String := extension) : Definition :=
   .function ⟨"embed_helper", kind, .privateDef, [.field input], [.field output], none, [],
-    if kind == .local then some ("embed_helper", []) else none,
+    if kind == .local then some (.local "embed_helper" []) else none,
     .block [.instruction descriptor [0] [.field output] []
       (if kind == .local then "embed_site" else "")] (.ret [0])⟩
 

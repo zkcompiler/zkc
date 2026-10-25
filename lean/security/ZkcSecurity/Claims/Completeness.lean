@@ -69,7 +69,7 @@ def Nonvacuous (subject : Subject model original imported selected) : Prop :=
   ∃ inputs, subject.Relation inputs ∧ subject.HonestInput inputs
 
 /-- The bound is ENNReal, including the zero-error instance. Input admissibility
-combines the retained source clauses and the fixed typed request policy. -/
+combines the retained source clauses and executable ABI admission facts. -/
 def CanonicalCompleteness (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (error : ENNReal) : Prop :=

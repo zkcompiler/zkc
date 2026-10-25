@@ -614,8 +614,8 @@ int main(int argc, char **argv) {
                          "^entry(%xs:!V,%a:!F,%b:!F,%other:!V)");
     wrong =
         replace(wrong, "(%xs,%a,%b,%xs) {domain", "(%xs,%a,%b,%other) {domain");
-    wrong = replace(wrong, "sym_name=\"main\",function_type=(!V,!F,!F)",
-                    "sym_name=\"main\",function_type=(!V,!F,!F,!V)");
+    wrong = replace(wrong, "function_type=(!V,!F,!F)",
+                    "function_type=(!V,!F,!F,!V)");
     wrong = replace(wrong, "input_roles=[[\"P\"],[\"P\"],[\"P\"]]",
                     "input_roles=[[\"P\"],[\"P\"],[\"P\"],[\"P\"]]");
     refusesIR(wrong, context, "finite-bound");

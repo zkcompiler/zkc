@@ -7,5 +7,5 @@ module { "protocol.module"() ({
     %b = "protocol.query"(%second) {method="draw",owner="P",site="second"} : (!S)->!F
     "protocol.guard"(%flag) {owner="P",site="check"} : (i1)->()
     "protocol.return"(%a,%b,%flag) : (!F,!F,i1)->()
-  }) {sym_name="main",function_type=(!S,!S,i1)->(!F,!F,i1),roles=["P","V"],input_roles=[["P"],["P"],["P","V"]],output_roles=[["P"],["P"],["V"]]} : ()->()
+  }) {sym_name="main",origin=["main",[]],function_type=(!S,!S,i1)->(!F,!F,i1),roles=["P","V"],input_roles=[["P"],["P"],["P","V"]],output_roles=[["P"],["P"],["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

@@ -7,6 +7,8 @@ public import ZkcSecurity.Claims.CanonicalAuthorityKeys
 public import ZkcSecurity.Claims.Premise
 public import ZkcSecurity.Claims.Knowledge
 public import ZkcSecurity.Claims.StageLinks
+public import ZkcSecurity.Claims.Parameters
+public import ZkcSecurity.Claims.PrimitiveDependencies
 
 @[expose] public section
 
@@ -123,8 +125,19 @@ def soundnessArguments (registry : ModelRegistry)
     Except ResolutionError (Except Incomplete (SoundnessRequest subject)) := do
   subject.check request
   checkCapabilities request
-  if request.parameters.isSome then throw (.schema "soundness has no additional parameters")
+  let parameters ← (soundnessParameters (Numeric.cardinality F art.original)).decode request.parameters
+  match subject.target with
+  | .retained target =>
+      checkDefaultRelation subject.compiled.imported.program.payload.definitions
+        target.formula.definition.helper
+  | .importedLanguage _ => pure ()
   let model ← resolveModel registry F art.original endpoint request.model
+  match parameters with
+  | .error missing => return .error missing
+  | .ok parameters =>
+    match requireExactSoundness subject.targetReference parameters with
+    | .error missing => return .error missing
+    | .ok () => pure ()
   match model with
   | .error missing => return .error missing
   | .ok model =>
@@ -142,7 +155,7 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
     Except ResolutionError (Except Incomplete (KnowledgeRequest subject)) := do
   subject.check request
   checkCapabilities request
-  if request.parameters.isSome then throw (.schema "knowledge has no additional parameters")
+  let _ ← knowledgeParameters.decode request.parameters
   if !request.capabilities.isEmpty then return .error ⟨["knowledge capability interpretation"]⟩
   if (named request.model.arguments "validator_cost").isSome then
     throw (.schema "knowledge model has no validator cost")
@@ -152,13 +165,7 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
     | .guarantee form => pure form
     | _ => throw (.schema "knowledge requires a guarantee")
   if guarantee.identifier != forking then throw (.unknownIdentifier guarantee.identifier)
-  checkArguments ["challenges", "cost", "extractor"] guarantee.arguments
-  let extractor := named guarantee.arguments "extractor" |>.getD
-    (.application responseDifference.name (some responseDifference.version) [])
-  match extractor with
-  | .application name (some version) [] =>
-      if ⟨name, version⟩ != responseDifference then throw (.unknownIdentifier ⟨name, version⟩)
-  | _ => throw (.schema "expected a versioned registered extractor without arguments")
+  checkArguments ["challenges", "cost"] guarantee.arguments
   let expectedCost := named guarantee.arguments "cost" |>.getD
     (.application "prover_runs" none [(none, .natural 2)])
   match expectedCost with

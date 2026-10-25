@@ -5,7 +5,7 @@ public import Zkc.Construction.AuthoredPair
 public import Zkc.Construction.RetainedTarget
 public import Zkc.Source.Structured.DomainContract
 public import Zkc.Construction.SourceOccurrences
-public import ZkcSecurity.Claims.HonestInput
+public import Zkc.Source.Structured.InputAdmission
 public import ZkcSecurity.FiatShamir.HonestCompiled
 
 @[expose] public section
@@ -50,7 +50,6 @@ structure Subject (model : DomainModel) (original : Snapshot) (imported : Import
   inputFormulas : (index : Fin target.owner.contract.clauses.length) →
     (target.owner.clause index).kind = .input →
       FormulaClause imported target.owner (target.owner.clause index).subject
-  inputPolicy : InputPolicy target.owner.protocol.inputs
 
 namespace Subject
 variable {model : DomainModel} {original : Snapshot} {imported : Imported original}
@@ -116,11 +115,12 @@ def runtimeInputs (subject : Subject model original imported selected) (inputs :
   return (producer ++ [.transcript selected.policy.suite history],
     validator ++ [.transcript selected.policy.suite history])
 
-/-- The request's closed shape/bound policy and every retained input clause
-must hold. Exact source projections must encode and match the selected compiled
-ABIs. Resource failure inside this domain remains an experiment failure. -/
+/-- The source clauses and executable ABI admission facts fix honest inputs.
+The selected relation is the separate `Relation` premise of completeness.
+Both participants are prepared from this same ordered source tuple, so shared
+role copies cannot disagree. Failure inside this domain remains failure. -/
 def HonestInput (subject : Subject model original imported selected) (inputs : subject.Inputs) : Prop :=
-  subject.inputPolicy.Holds inputs ∧
+  inputsRepresentable inputs ∧
     (∀ index isInput, subject.inputClause inputs index isInput) ∧
     ∃ producer validator, subject.runtimeInputs inputs = some (producer, validator) ∧
       Domain.sortsMatch selected.artifacts.producer.inputs producer = true ∧

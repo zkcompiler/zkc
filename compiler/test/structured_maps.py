@@ -56,7 +56,7 @@ module { "protocol.module"() ({
 ''' + body + '\n}) {profile=#protocol.profile<protocol>} : ()->() }\n'
 
 empty_main = '''"protocol.func"() ({ "protocol.return"() : ()->() })
-{sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()'''
+{sym_name="main",origin=["main",[]],function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()'''
 
 def reference_chain(edges, preparation='map', reverse=False):
     # main -> work -> prepared -> hN -> ... -> h0: N + 3 edges.
@@ -79,7 +79,7 @@ local.return %r : {lifted} }}
 ^entry(%x:{lifted}):
 %r = "protocol.local_call"(%x) {{callee=@work,role="P",site="work"}} : ({lifted})->{lifted}
 "protocol.return"(%r) : ({lifted})->()
-}}) {{sym_name="main",function_type=({lifted})->{lifted},roles=["P","V"],input_roles=[["P"]],output_roles=[["P"]]}} : ()->()'''
+}}) {{sym_name="main",origin=["main",[]],function_type=({lifted})->{lifted},roles=["P","V"],input_roles=[["P"]],output_roles=[["P"]]}} : ()->()'''
     return wrap_unit(body)
 
 
@@ -241,7 +241,7 @@ with case('finite-realization-executes-empty-and-ordered-domains'):
  ^entry(%xs:!V):
    %result = "protocol.local_call"(%xs) {callee=@work,role="P",site="work"} : (!V)->!F
    "protocol.return"(%result) : (!F)->()
- }) {sym_name="main",function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()''')
+ }) {sym_name="main",origin=["main",[]],function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()''')
     # The fixture indents its header; match the same declaration independently
     # of that leading whitespace without changing any body or realization.
     assert 'local.func @work' in source
@@ -392,7 +392,7 @@ func.func private @chain(%x:!F)->!F {
 ''' + '\n'.join(body) + f'\nfunc.return {previous} : !F\n' + '''}
 algebra.map_realize @mapped = @chain [true] : (!V)->!V
 "protocol.func"() ({ "protocol.return"() : ()->() })
-{sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+{sym_name="main",origin=["main",[]],function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }'''
     export(source)
     assert run(source, []) == returned([])

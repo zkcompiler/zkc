@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.TwoSumsPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:3b69a20a3bf1c12e4fcfe7cb521bde2f3bb57b6de6fa094caa966248e366553e"
-  candidate := "sha256:5dd732f36008ef6ee75ba430df404fd66d91abaf4de509052cef05cd05a5865c"
+  source := "sha256:6b597ea8baaa7f7ea67f6254e44d49ad6fea52bbf857dbf0dacd4ecf47ebd655"
+  candidate := "sha256:3a1ffb57ab22832390e497ec2a4393dd85e58c26face7a209a8f0645521beb8e"
   policy := ⟨"zkl_441c117f8000119f8eafff882ba0eaa7842ce440e5d97bb64e08f51893894e2d", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [5], [0, 1, 2, 3, 4], [("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]
@@ -79,8 +79,8 @@ namespace ZkcExamples.Construction.Generated.TwoSumsPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:3b69a20a3bf1c12e4fcfe7cb521bde2f3bb57b6de6fa094caa966248e366553e"
-  candidate := "sha256:5dd732f36008ef6ee75ba430df404fd66d91abaf4de509052cef05cd05a5865c"
+  source := "sha256:6b597ea8baaa7f7ea67f6254e44d49ad6fea52bbf857dbf0dacd4ecf47ebd655"
+  candidate := "sha256:3a1ffb57ab22832390e497ec2a4393dd85e58c26face7a209a8f0645521beb8e"
   policy := ⟨"zkl_441c117f8000119f8eafff882ba0eaa7842ce440e5d97bb64e08f51893894e2d", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [5], [0, 1, 2, 3, 4], [("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.vector "bls12-381.fr"), .data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]

@@ -20,6 +20,6 @@ module {
     ^entry(%xs: !V, %ys: !V, %seed: !F):
       %r = "algebra.finite_fold"(%xs, %xs, %seed) {domain = @items, step = @step} : (!V, !V, !F) -> !F
       "protocol.return"(%r) : (!F) -> ()
-    }) {sym_name = "main", function_type = (!V, !V, !F) -> !F, roles = ["P"], input_roles = [["P"], ["P"], ["P"]], output_roles = [["P"]]} : () -> ()
+    }) {sym_name = "main",origin=["main",[]], function_type = (!V, !V, !F) -> !F, roles = ["P"], input_roles = [["P"], ["P"], ["P"]], output_roles = [["P"]]} : () -> ()
   }) {profile = #protocol.profile<protocol>} : () -> ()
 }

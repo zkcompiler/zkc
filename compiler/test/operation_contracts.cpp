@@ -21,14 +21,17 @@ void require(bool condition, llvm::StringRef message) {
 } // namespace
 int main() {
   using I = zkc::MathematicalIdentity;
-  static_assert(unsigned(I::FieldAdd) == 0 &&
-                unsigned(I::FieldConstant) == 20 &&
-                unsigned(I::PolynomialFixTable) == 35 &&
-                unsigned(I::QuotientMultiply) == 40);
-  require(zkc::mathematicalIntrinsics().size() == 36 &&
+  static_assert(
+      unsigned(I::FieldAdd) == 0 && unsigned(I::FieldConstant) == 20 &&
+      unsigned(I::PolynomialFixTable) == 35 &&
+      unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37 &&
+      unsigned(I::QuotientMultiply) == 42);
+  require(zkc::mathematicalIntrinsics().size() == 38 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
               zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
-              zkc::mathematicalIntrinsics()[35].name ==
+              zkc::mathematicalIntrinsics()[31].name == "vector.length" &&
+              zkc::mathematicalIntrinsics()[32].name == "index.power_of_two" &&
+              zkc::mathematicalIntrinsics()[37].name ==
                   "quotient.value.multiply" &&
               zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
                   "PolynomialMultiply",

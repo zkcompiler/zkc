@@ -24,7 +24,7 @@ private def source : Snapshot where
   bindings := []
   definitions := [.function ⟨"Square", .protocol, .publicDef,
     [.field "bls12-381.fr", .field "bls12-381.fr"], [.boolean],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], some (.protocol ⟨"Square", []⟩),
     .block [
       .instruction (.fieldMultiply "bls12-381.fr") [0, 0] [.field "bls12-381.fr"] [] "",
       .instruction (.fieldEqual "bls12-381.fr") [0, 2] [.boolean] [] ""] (.ret [0])⟩]

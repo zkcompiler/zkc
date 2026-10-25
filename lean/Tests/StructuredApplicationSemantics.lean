@@ -397,9 +397,9 @@ private def dormantBody : Region protocolDialect [] [] :=
 private def dormant : CheckedProtocol := checked dormantSignature dormantBody
 private def snapshot : Snapshot :=
   (let contractDefinitions : List Definition := [
-    .function ⟨"Dormant", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
+    .function ⟨"Dormant", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], some (.protocol ⟨"Dormant", []⟩),
       .block [.instruction (.protocolApply "Flat" ["A"]) [] [] [] "call"] (.ret [])⟩,
-    .function ⟨"Flat", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
+    .function ⟨"Flat", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], some (.protocol ⟨"Flat", []⟩),
       .block [] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Flat", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>

@@ -22,13 +22,10 @@ abbrev artifacts := ZkcExamples.Construction.Generated.SampledAbortPair.artifact
 def selected : Zkc.Construction.AuthoredPair.Selection original :=
   (Zkc.Construction.AuthoredPair.select original artifacts "equality").toOption.get (by decide +kernel)
 
-def inputPolicy : ZkcSecurity.Claims.HonestPair.InputPolicy imported.program.payload.entry.inputs :=
-  ⟨[]⟩
-
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
-  bind_authored_subject "equality" using inputPolicy
-    exports "sha256:754d2cd1c0a0d9eb8f81628aaef2161e5fa6fb2e2ec415dda33fc8ed4443d8e8", "sha256:a04650b08277e411ab0271cfd741a1083bfc9014560127bb6a8505d9eeaed01a", "sha256:6ad884b4c86c33072a7c59d261f863c71298a5760ed1ba2a609213faf8a8bc3d"
+  bind_authored_subject "equality"
+    exports "sha256:ef0af2b02f1269fc2cac4e9ef71209246df5ce9213ef8a8bb5e83b4f31681776", "sha256:4b8b55c2804fe3a02922becc37ca9f959b0793b85daaa460ee63e376ebeffa8c", "sha256:b6a32e9bd8876adf9c01f2fecd67ea9ffe9c8b17664935d5d2562c5ee20f99a8"
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled

@@ -39,14 +39,23 @@ def terminalPositions {Ty Op : Type} : RawRegion Ty Op → List Nat
   | .letOp _ _ _ _ next => terminalPositions next
   | .bind _ _ next => terminalPositions next
 
-def changedAppend : Region dialect SmallSumcheckInputs.helper19Helper.inputs
-    SmallSumcheckInputs.helper19Helper.outputs := .ret (.cons .here .nil)
+/-- Select by the complete helper signature; insertion of unrelated helpers
+must not move a mutation control to a different function. The body is still
+checked separately below. -/
+noncomputable def actualAppend : CheckedDefinition :=
+  (SmallSumcheck.payload.definitions.find? fun definition =>
+    definition.helper == ZkcExamples.Structured.SumcheckHelperBodies.appendHelper).get
+      (by decide +kernel)
+
+def changedAppend : Region dialect
+    ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.inputs
+    ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.outputs := .ret (.cons .here .nil)
 
 theorem same_name_changed_body :
-    SmallSumcheckInputs.helper19Helper = ZkcExamples.Structured.SumcheckHelperBodies.appendHelper ∧
-    changedAppend.erase ≠ SmallSumcheckInputs.helper19Body.erase := by
+    actualAppend.helper = ZkcExamples.Structured.SumcheckHelperBodies.appendHelper ∧
+    changedAppend.erase ≠ actualAppend.body.erase := by
   constructor
-  · rfl
+  · kernel_rfl
   · intro same
     cases same
 

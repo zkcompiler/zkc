@@ -7,8 +7,8 @@ public meta import Lean.Elab.Tactic
 @[expose] public section
 
 /-! Source-driven structural assembly for an already selected authored pair.
-The tactic proves only admission and metadata associations. The explicit input
-policy and export identities remain request data; no success or security law is inferred.
+The tactic proves only admission and metadata associations. The retained input
+clauses and export identities fix the subject; no success or security law is inferred.
 -/
 set_option autoImplicit false
 
@@ -42,7 +42,7 @@ elab "bind_input_formulas" : tactic => Lean.Elab.Tactic.withMainContext do
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)
   Lean.Elab.Tactic.replaceMainGoal []
 
-elab "bind_authored_subject " name:str " using " policy:term
+elab "bind_authored_subject " name:str
     " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
     Lean.Elab.Tactic.withMainContext do
   let target ← Lean.Meta.whnf (← Lean.Elab.Tactic.getMainTarget)
@@ -84,8 +84,7 @@ elab "bind_authored_subject " name:str " using " policy:term
                  inputContractExact := by decide +kernel
                  inputClausesExact := by decide +kernel
                  preconditionsEmpty := by decide +kernel
-                 inputFormulas := by bind_input_formulas
-                 inputPolicy := target.entry.symm ▸ $policy })
+                 inputFormulas := by bind_input_formulas })
   let generated ← Lean.Elab.Term.elabTermEnsuringType term target
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)

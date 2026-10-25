@@ -1,11 +1,11 @@
-import ZkcSecurity.Claims.HonestInput
+import TestsSecurity.SourceAdmission.HistoricalPolicy
 import Mathlib.Tactic.NormNum
 
 /-! Typed shape/bound controls on source-ABI values. No root producer proof or
 discovery candidate is instantiated. -/
 set_option autoImplicit false
 namespace TestsSecurity.HonestInput
-open Zkc.Source Zkc.Source.Structured ZkcSecurity.Claims.HonestPair
+open Zkc.Source Zkc.Source.Structured TestsSecurity.SourceAdmission.HistoricalPolicy
 
 def carriers : Carriers := uniformCarriers Unit Unit
 abbrev Types := [Ty.vector "field", Ty.index]
@@ -80,6 +80,6 @@ example : (InputPolicy.mk ([] : List (InputRule Types))).checkParameters none = 
 #print axioms wrong_shape
 #print axioms above_maximum
 #print axioms illegal_index
-#print axioms ZkcSecurity.Claims.HonestPair.InputRule.wire_eq_of_accepted
-#print axioms ZkcSecurity.Claims.HonestPair.InputPolicy.parameters_eq_of_checked
+#print axioms TestsSecurity.SourceAdmission.HistoricalPolicy.InputRule.wire_eq_of_accepted
+#print axioms TestsSecurity.SourceAdmission.HistoricalPolicy.InputPolicy.parameters_eq_of_checked
 end TestsSecurity.HonestInput

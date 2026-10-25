@@ -178,6 +178,7 @@ private:
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 bool elaborateExpressions(Checker &, SyntaxDeclaration &);
 /// Source depth accounting follows whether the call retains a helper boundary.
-bool primitiveCallIsInline(Body::Mode, llvm::StringRef identity);
+bool primitiveCallIsInline(Body::Mode, Declaration::Kind,
+                           llvm::StringRef identity);
 } // namespace zkc::language::detail
 #endif

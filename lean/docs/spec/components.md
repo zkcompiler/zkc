@@ -264,8 +264,8 @@ The field's sampling and reference laws supply the per-query escape charge;
 the ordinary `Claims.Domain.ChargedExport` and existing compiled-soundness
 consumers supply the fixed scalar and charged meanings.
 
-Completeness has an additional original producer proof, with the retained
-honest table policy and source relation as premises. Its round induction uses
+Completeness has an additional original producer proof, with retained source
+input clauses, ABI admission and the source relation as premises. Its round induction uses
 the same table restriction mathematics as adversarial soundness and covers
 zero rounds and arbitrary public challenge replies. Source readback transports
 through the two independent artifact simulations into the actual registered
@@ -293,12 +293,15 @@ Generated size, generator implementation and checking cost are recorded
 separately; generating a wrapper does not eliminate an upstream handwritten
 proof obligation.
 
-The current roots have no retained source input clauses. Their existing typed
-honest-input policies are preserved as part of the fixed request meaning;
-source types and admitted maxima derive their positions, rather than silently
-discarding the policies. Moving these conditions into source `input` clauses
-and the registered relation meaning is a separately coordinated semantic and
-identity migration. Evidence-only migration does not reissue those requests.
+The two table roots retain verifier-side input clauses for exact power-of-two
+table lengths and their source maximum. `Subject.HonestInput` combines every
+retained input clause with source-sort representability and preparation of both
+participants. It does not take a separately registered table policy. Historical
+policies live only in migration tests: all-input equivalence and positive
+inhabitation must check against the actual imported subjects. Other roots can
+have a stricter representability boundary than their former empty policy; no
+universal old/new equivalence is asserted. Changed source, target and model
+identities require newly issued requests and checked receipts.
 
 `Generation.Roots.Stages` owns production completeness and soundness generation.
 The superseded compiled-descriptor generators and their exclusive round/view
@@ -318,10 +321,20 @@ the common shell does not identify all nominal fields or groups.
 The common ABI separates distinct source-coordinate parameters from ordered
 relation-selector payloads. Payload order and repeated selectors are preserved;
 empty public rows use their unique packed value without an empty existential.
-Retained input clauses stay in `honestInput_iff` together with the request-owned
-input policy. An optional clause presentation must prove equivalence to the exact
+Retained input clauses stay in `honestInput_iff` together with source-sort ABI
+representability. These premises check u64 indices and collection lengths,
+including every member of nested products and sequences. They do not grant
+native ABI support: the current uniform ABI generator still explicitly refuses
+aggregate input types. An optional clause presentation must prove equivalence to the exact
 retained clauses for every source input. Without it, the generated condition is
 the actual clause conjunction.
+
+`Tools.SourceInputClauses` produces ordinary kernel-checked simplification proofs
+from the retained formulas. Optional presence is distinct from representability:
+an absent input cannot satisfy an accidentally simplified clause. The current
+uniform ABI presentation explicitly refuses data inputs covered by neither the
+producer nor public projection, rather than silently requiring their presence
+in the subject's meaning. This is a presentation limit, not a security premise.
 
 Installed Sigma methods may supply a term checked as `Nonvacuous subject` and
 imports for that term. The default still proposes the all-default witness and
@@ -371,20 +384,53 @@ running the printer alone does not check the emitted theorems.
 ## Fixed experiments and receipts
 
 An honest subject fixes the original, actual compiled producer and validator,
-retained relation, input clauses, typed input policy, output selector and
+retained relation, source input clauses and ABI admission, output selector and
 public-input mapping. Completeness requires a concrete admissible input
 (nonvacuity) and bounds failure for every related admissible input. The
 experiment runs both actual participants with one initially empty random-oracle
 cache and counts input preparation failure, stops, decoding failures, rejection
 and unread proof as failures. It has no adversary query parameter.
 
-The canonical model `models.honest_fiat_shamir@0` installs fresh uniform
+The canonical model `models.honest@0(producer=producers.compiled@0())` resolves
+to the subject's actual selected compiled producer and installs fresh uniform
 field draws at the actual producer's admitted owner-local service ports. The
 source spelling remains `Random.draw()`. Service handles retain their source
 root, owner, contract and native port position separately from data inputs.
 Admission checks exact source occurrences, application aliases, nominal result
 types and loop coordinates. Unsupported methods and validator-local requests
 remain refused by the current admission rules.
+
+The compiled schema requires exactly that producer argument. Source-role,
+author-supplied and independently named artifacts, level overrides and retries
+are refused. The previous model name has no alias. Canonical admission checks
+the complete registered export, including its `zkc.model.honest/0` schema and
+definition. The model decoder and encoder have roundtrip and accepted-wire
+equality theorems.
+
+Property parameters have separate typed schemas in `Claims.Parameters`.
+`completeness@0` and `knowledge@0` accept only an absent field. Knowledge keeps
+the registered response-difference extractor fixed; there is no extractor
+parameter or guarantee argument at version zero. `soundness@0` accepts either
+absence (the existing exact soundness) or one
+`gaps.relative_distance@0(delta)` expression. Its decoder resolves arithmetic
+and admitted field cardinalities in Lean and requires a rational in `[0, 1]`.
+Canonical encoding preserves the exact finite numeric expression; equivalent
+arithmetic spellings remain different request identities. Unknown versions,
+duplicate arguments, nonnumeric values and conflicting request fields refuse.
+Unresolved registered cardinalities remain incomplete. No current equality-only
+clause registers a relative-distance interpretation, so every present gap
+remains incomplete with the selected clause named in the diagnostic. Evidence
+cannot supply a gap predicate or substitute exact soundness.
+
+The default soundness and honest adapters share a conservative relation
+dependency check. It follows exact checked helper signatures through every
+nested callback, admitting pure Math and refusing executable primitives,
+observations, missing helpers, duplicates and cycles. The honest adapter checks
+both its selected target and every input formula. This is an applicability
+restriction; it supplies no security theorem. The current compiled experiment
+supports the transcript oracle and owner-local field draws. General realization
+role primitives require an extension of that experiment and its correspondence;
+the present schema does not silently give them deterministic meanings.
 
 `TranscriptOracle.Spec` is the shared public oracle interface. The honest
 `HonestSampling.Spec` adds a uniform summand; it does not enlarge the adversary

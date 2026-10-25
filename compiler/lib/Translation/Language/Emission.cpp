@@ -9,11 +9,13 @@
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
+#include "zkc/Language/SourceTerms.h"
 #include "zkc/Relation/AIR.h"
 #include "zkc/Relation/R1CS.h"
 #include "zkc/Support/BoundedStream.h"
@@ -550,6 +552,12 @@ class Emitter {
           case MathematicalIdentity::IndexEqual:
             name = "data.index_equal";
             break;
+          case MathematicalIdentity::VectorLength:
+            name = "data.dim";
+            break;
+          case MathematicalIdentity::IndexPowerOfTwo:
+            name = "data.index_power_of_two";
+            break;
           case MathematicalIdentity::IndexLess:
             name = "data.index_less";
             break;
@@ -637,6 +645,8 @@ class Emitter {
             return false;
           }
           SmallVector<mlir::NamedAttribute> attrs;
+          if (math->identity == MathematicalIdentity::VectorLength)
+            attrs.push_back(attr("axis", builder.getI64IntegerAttr(0)));
           if (!math->literal.empty())
             attrs.push_back(text("value", math->literal));
           else if (math->identity == MathematicalIdentity::IndexConstant)
@@ -1228,6 +1238,11 @@ public:
         std::vector<std::string> roster;
         for (unsigned i = 0; i < decl.roles.size(); ++i)
           roster.push_back(nativeRoleName(i));
+        auto origin = take(encodeProtocolOrigin(project, decl));
+        if (!origin)
+          return std::move(failure);
+        attrs.push_back(
+            attr("origin", protocol_ir::protocolOriginAttr(&context, *origin)));
         attrs.append({attr("contracts", retained),
                       attr("roles", strings(roster)),
                       attr("input_roles", builder.getArrayAttr(inRoles)),

@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.Generated.SampledAbort
-public import ZkcSecurity.Examples.SampledAbort
+public import ZkcSecurity.Examples.Generated.Components.SampledAbortCompleteness
 public import ZkcSecurity.Tools.ClaimConstruction
 
 @[expose] public section
@@ -26,8 +26,7 @@ noncomputable def properties := authority.properties models
 def completeData : Wire.Request := {
   subject := subject.down.reference
   property := ⟨"completeness", 0⟩
-  parameters := subject.down.inputPolicy.parameters
-  model := ⟨HonestPair.honestModelIdentifier, []⟩
+  model := ⟨HonestPair.honestModelIdentifier, [(some "producer", .application "producers.compiled" (some 0) [])]⟩
   target := subject.down.targetReference
   accept := subject.down.acceptance
   quantity := .scalar (.binary .div (.natural 1) (.application "cardinality" none [(none, .reference "bls12-381.fr")]))
@@ -40,7 +39,7 @@ def library : ZkcSecurity.Tools.ClaimConstruction.Library where
   models := ``models
   normalization := [``subject, ``authority, ``properties, ``models, ``capabilities]
   theoremNormalization := []
-  theoremMethods := [(⟨"fs.honest_completeness", 0⟩, ``ZkcSecurity.Examples.SampledAbort.compiled_ideal_complete)]
+  theoremMethods := [(⟨"fs.honest_completeness", 0⟩, ``ZkcSecurity.Examples.Generated.Components.SampledAbortCompleteness.compiled_ideal_complete)]
 
 claim_request completeData using library method
   (some (⟨⟨"fs.honest_completeness", 0⟩, []⟩ : Wire.Application))

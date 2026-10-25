@@ -12,11 +12,11 @@ public meta import ZkcSecurity.Claims.SourceChargeSites
 @[expose] public section
 
 /-! Production selections for the retained fixed requests. Naming conventions
-are applied once. Family/model/target/policy choices are authored here; source
+are applied once. Family/model/target choices are authored here; source
 aliases, positions and charge labels are derived from the admitted inputs.
-The generated export metadata preserves the original fixed requests. Its
-participant identity bytes predate the current export's trailing local-service
-field; they must not be replaced by current export hashes without migration. -/
+Generated export metadata names the exact current original and participant
+bytes. Changing it reissues the requests and requires an explicit checked
+migration; input-domain equivalence alone does not identify oracle experiments. -/
 namespace ZkcSecurity.Generation.Roots
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcTools.StructuredSource.Root
@@ -41,19 +41,12 @@ def primeField : Mathematics where
   sampling := "rawSampleable blsModulus"
   capabilities := "blsCapabilities original (by decide +kernel)"
 
-/-- Explicit transitional honest-input choice. All vector inputs are cube tables
-of this width at the unique index input, bounded by the unique compiled loop
-maximum. The checked source-clause migration must replace this policy by proof. -/
-structure CubeInputs where
-  width : Nat
-
 structure Selection where
   name : String
   snapshot : Snapshot
   helpers : List String
   artifacts : AuthoredPair.Artifacts
   target : String
-  honestInputs : CubeInputs
   mathematics : Mathematics
   formulaNamespace : String
 
@@ -76,13 +69,13 @@ noncomputable def selections : List Selection := [
     snapshot := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program.snapshot
     helpers := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program.payload.definitions.map (·.name)
     artifacts := ZkcExamples.Construction.Generated.SmallSumcheckPair.artifacts
-    target := "public_sum", honestInputs := ⟨1⟩, mathematics := primeField
+    target := "public_sum", mathematics := primeField
     formulaNamespace := "ZkcSecurity.Examples.Components.SmallSumcheck.Formula" },
   { name := "TwoSums"
     snapshot := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.snapshot
     helpers := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.payload.definitions.map (·.name)
     artifacts := ZkcExamples.Construction.Generated.TwoSumsPair.artifacts
-    target := "public_sums", honestInputs := ⟨1⟩, mathematics := primeField
+    target := "public_sums", mathematics := primeField
     formulaNamespace := "ZkcSecurity.Examples.Components.TwoSums.Formula" }]
 
 /-- Materialize only closed selection data. Proof records and the source
@@ -99,7 +92,6 @@ run_cmd do
   for root in ← evaluateSelections do
     manifest := manifest ++ [Lean.Json.mkObj [
       ("name", Lean.toJson root.name), ("target", Lean.toJson root.target),
-      ("tableWidth", Lean.toJson root.honestInputs.width),
       ("formulaNamespace", Lean.toJson root.formulaNamespace),
       ("model", Lean.toJson root.mathematics.model), ("sourceModule", Lean.toJson root.sourceModule),
       ("pairModule", Lean.toJson root.pairModule), ("subjectModule", Lean.toJson root.subjectModule),
@@ -129,34 +121,6 @@ def chargeLabels (root : Selection) : Except String (List String) := do
     throw "root-missing-charge-origin"
   return labels
 
-mutual
-  def loopBounds : List Zkc.Construction.Instruction → List Nat
-    | [] => []
-    | instruction :: rest => instructionBounds instruction ++ loopBounds rest
-  def instructionBounds : Zkc.Construction.Instruction → List Nat
-    | ⟨.loop _ maximum _, _, _, body⟩ => maximum :: loopBounds body
-    | ⟨_, _, _, body⟩ => loopBounds body
-end
-
-def position (index : Nat) : String :=
-  (List.range index).foldl (fun result _ => "(.there " ++ result ++ ")") ".here"
-
-/-- The policy choice is explicit; positions, nominal field, and the bound
-are derived. Layout changes or ambiguous count inputs refuse generation. -/
-def inputPolicy (root : Selection) : Except String String := do
-  let some entry := root.snapshot.protocolFunctions.find? (·.name == root.snapshot.entry)
-    | throw "root-missing-entry"
-  let [index] := (entry.inputs.zipIdx.filter (fun (ty, _) => ty == .index)).map Prod.snd
-    | throw "root-ambiguous-policy-index"
-  let [maximum] := (loopBounds root.artifacts.producer.instructions ++
-    loopBounds root.artifacts.validator.instructions).eraseDups | throw "root-ambiguous-policy-bound"
-  let tables := entry.inputs.zipIdx.filterMap fun (ty, index) =>
-    match ty with | .vector _ => some index | _ => none
-  if tables.isEmpty || root.honestInputs.width == 0 then throw "root-missing-policy-table"
-  let rules := tables.map fun table =>
-    ".cubeTable " ++ position table ++ " " ++ position index ++ " " ++ toString root.honestInputs.width
-  return "⟨[" ++ ", ".intercalate (rules ++ [".boundedIndex " ++ position index ++ " " ++ toString maximum]) ++ "]⟩"
-
 def subjectOutput (root : Selection) (originalExport producerExport validatorExport : String) : Except String FixedSubjectOutput := do
   return {
     moduleName := root.subjectModule, sourceModule := root.sourceModule
@@ -164,7 +128,7 @@ def subjectOutput (root : Selection) (originalExport producerExport validatorExp
     importedExpression := root.sourceModule ++ ".imported"
     pairModule := root.pairModule, artifactsExpression := root.pairModule ++ ".artifacts"
     modelModule := root.mathematics.modelModule, modelExpression := root.mathematics.model
-    targetName := root.target, inputPolicyExpression := ← inputPolicy root
+    targetName := root.target
     originalExportExpression := quoted originalExport
     producerExportExpression := quoted producerExport
     validatorExportExpression := quoted validatorExport

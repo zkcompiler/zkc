@@ -73,7 +73,7 @@ def main (args : List String) : IO Unit := do
 private def subjectDescriptor : ZkcTools.StructuredSource.Root.FixedSubjectOutput := {
   moduleName := "Generated.Subject", sourceModule := "Source", pairModule := "Pair", modelModule := "Model"
   originalExpression := "snapshot", importedExpression := "imported", artifactsExpression := "artifacts"
-  modelExpression := "model", targetName := "fixed_target", inputPolicyExpression := "policy"
+  modelExpression := "model", targetName := "fixed_target"
   originalExportExpression := "sourceExport"
   producerExportExpression := "producerExport", validatorExportExpression := "validatorExport" }
 

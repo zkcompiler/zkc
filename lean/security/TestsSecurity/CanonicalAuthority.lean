@@ -90,14 +90,14 @@ def unrelatedModel : Export HonestPair.ModelExport :=
   ⟨⟨"example.unrelated", 0⟩, "example/0", none⟩
 
 example : HonestPair.resolveModel ⟨[unrelatedModel, HonestPair.modelEntry]⟩
-    ⟨HonestPair.honestModelIdentifier, []⟩ = .ok .privateUniform := rfl
+    HonestPair.honestModelApplication = .ok .privateUniform := rfl
 
 example : HonestPair.resolveModel ⟨[HonestPair.modelEntry, HonestPair.modelEntry]⟩
-    ⟨HonestPair.honestModelIdentifier, []⟩ = .error (.conflict HonestPair.honestModelIdentifier) := rfl
+    HonestPair.honestModelApplication = .error (.conflict HonestPair.honestModelIdentifier) := rfl
 
 example : HonestPair.resolveModel ⟨[HonestPair.modelEntry]⟩
     ⟨HonestPair.honestModelIdentifier, [(some "queries", .natural 1)]⟩ =
-      .error (.schema "honest private-uniform model accepts no arguments") := rfl
+      .error (.schema "compiled honest model requires exactly producer=producers.compiled@0()") := rfl
 
 def undefinedModel : Export HonestPair.ModelExport := { HonestPair.modelEntry with definition := none }
 
@@ -106,7 +106,7 @@ example {model : DomainModel} {original : Snapshot} (imported : Imported origina
     (capabilities : Domain.Capabilities model original)
     (subject : HonestPair.CanonicalSubject model original imported selected) :
     ¬ CanonicalModelAdmission (CanonicalAuthority.authoredPair imported selected capabilities)
-      ⟨[undefinedModel]⟩ () subject ⟨HonestPair.honestModelIdentifier, []⟩ := by
+      ⟨[undefinedModel]⟩ () subject HonestPair.honestModelApplication := by
   intro admission
   have same := admission.selected
   change Except.ok undefinedModel = Except.ok HonestPair.modelEntry at same
@@ -119,17 +119,6 @@ example {S : Type 1} {authority : ZkcSecurity.Claims.CanonicalAuthority S}
     (admitted : CanonicalModelAdmission authority registry context subject application) :
     authority.resolveModel registry subject application = authority.modelMeaning context subject application :=
   admitted.canonical_resolution
-
-def policy : HonestPair.InputPolicy [.index] := ⟨[.boundedIndex .here 12]⟩
-
-example : policy.checkParameters policy.parameters = .ok () := policy.parameters_checked
-example : policy.checkParameters none =
-    .error (.schema "honest input policy does not match the typed request") := rfl
-example : policy.checkParameters
-    (some (.application "honest.input_policy" (some 0) [(some "rules", .list
-      [.application "honest.bounded_index" (some 0)
-        [(some "input", .natural 0), (some "maximum", .natural 13)]])])) =
-      .error (.schema "honest input policy does not match the typed request") := rfl
 
 example : reservedIdentifier ⟨"completeness", 9⟩ = true := rfl
 example : reservedIdentifier ⟨"soundness", 9⟩ = true := rfl

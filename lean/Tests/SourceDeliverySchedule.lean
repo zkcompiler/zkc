@@ -24,7 +24,7 @@ private def snapshot : Snapshot where
   bindings := []
   definitions := [.function ⟨"Root", .protocol, .publicDef,
     [.service "random.bls12-381.fr/0"], [.field "bls12-381.fr", .field "bls12-381.fr"],
-    some ⟨["P", "V"], [["V"]], [["P", "V"], ["P", "V"]]⟩, [], none,
+    some ⟨["P", "V"], [["V"]], [["P", "V"], ["P", "V"]]⟩, [], some (.protocol ⟨"Root", []⟩),
     .block [
       .instruction (.draw "V" "bls12-381.fr") [0] [.field "bls12-381.fr"] [] "q",
       .instruction (.exchange "V" "P") [0] [.field "bls12-381.fr"] [] "d1",
@@ -90,7 +90,7 @@ theorem shared_validator_queries :
 private def delayedSnapshot : Snapshot :=
   { snapshot with definitions := [.function ⟨"Root", .protocol, .publicDef,
     [.boolean, .service "random.bls12-381.fr/0"], [.field "bls12-381.fr"],
-    some ⟨["P", "V"], [["P"], ["V"]], [["P", "V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P"], ["V"]], [["P", "V"]]⟩, [], some (.protocol ⟨"Root", []⟩),
     .block [
       .instruction (.draw "V" "bls12-381.fr") [1] [.field "bls12-381.fr"] [] "q",
       .instruction (.exchange "P" "V") [1] [.boolean] [] "m",

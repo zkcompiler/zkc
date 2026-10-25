@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -443,6 +444,13 @@ public:
     for (auto attr : program->getAttrs())
       if (!is_contained(program.getAttributeNames(), attr.getName().getValue()))
         return refuse(program, "unsupported mathematical protocol attribute");
+    if (auto origin = program->getAttr("origin")) {
+      auto decoded = protocol_ir::readProtocolOrigin(origin);
+      if (!decoded) {
+        consumeError(decoded.takeError());
+        return refuse(program, "invalid protocol origin tree");
+      }
+    }
     if (!hasSingleElement(program.getBody()))
       return refuse(program, "expected exactly one common block");
     auto ft = program.getFunctionType();
