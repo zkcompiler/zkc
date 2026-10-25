@@ -21,7 +21,7 @@ using namespace llvm;
 namespace zkc::kernel {
 namespace {
 bool polynomial(Operation &op) {
-  return op.getName().getDialectNamespace() == "poly";
+  return poly::isPolynomialNormalizationOperation(&op);
 }
 bool flatTotal(Operation &op) {
   return !op.getNumRegions() && !op.getNumSuccessors() &&

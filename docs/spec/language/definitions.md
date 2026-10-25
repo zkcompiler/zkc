@@ -774,6 +774,16 @@ and cannot cross participant or external boundaries. Mathematical helper ports,
 products, fixed arrays and ordinary record fields can contain formal values. A zero-length array retains
 its formal element meaning even though it has no SSA leaves.
 
+`formal("quotient", Q, N)` instead denotes `(Z/QZ)[X]/(X^N+1)`. Both static
+arguments are naturals, with `2 <= Q` and `1 <= N`; neither primality nor a
+power-of-two degree is assumed. Its total intrinsics `quotient.value.project`,
+`quotient.value.coefficients`, `quotient.value.add`, `quotient.value.subtract`
+and `quotient.value.multiply` retain those exact parameters. Projection accepts
+arbitrary `Indices` and reduces them; coefficient observation returns exactly
+`N` canonical residues. The binary operations require the same `Q,N`. The
+[quotient contract](../domains/quotient-rings.md) defines negacyclic products,
+source views and their executable boundary.
+
 Formal values are confined to mathematical helpers. Protocol and local-function
 ports and body values require executable types, including messages, explicit role
 restriction operations and distributed loop carriers/captures. The same restriction applies to `Type` static arguments, variants,

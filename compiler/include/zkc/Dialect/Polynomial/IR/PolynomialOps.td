@@ -155,4 +155,27 @@ def QuotientNTTOp : BoundOp<PolynomialDialect, "exec.quotient_ntt", [OpQuotientN
 def QuotientINTTOp : BoundOp<PolynomialDialect, "exec.quotient_intt", [OpQuotientINTT]>;
 def QuotientPointwiseOp : BoundOp<PolynomialDialect, "exec.quotient_pointwise", [OpQuotientPointwise]>;
 
+// Projection is total reduction. Executable canonical admission is a separate
+// ordered contract; quotient values themselves carry no field cancellation law.
+def ProjectQuotientOp : Op<PolynomialDialect, "quotient_project",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins Indices:$coefficients);
+  let results = (outs Quotient:$value);
+  let assemblyFormat = "$coefficients attr-dict `:` functional-type(operands, results)";
+}
+def ObserveQuotientOp : Op<PolynomialDialect, "quotient_coefficients",
+    [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
+  let arguments = (ins Quotient:$value);
+  let results = (outs Indices:$coefficients);
+  let assemblyFormat = "$value attr-dict `:` functional-type(operands, results)";
+}
+class QuotientBinaryOp<string mnemonic> : PolynomialMathOp<mnemonic> {
+  let arguments = (ins Quotient:$lhs, Quotient:$rhs);
+  let results = (outs Quotient:$value);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` functional-type(operands, results)";
+}
+def AddQuotientOp : QuotientBinaryOp<"quotient_add">;
+def SubtractQuotientOp : QuotientBinaryOp<"quotient_subtract">;
+def MultiplyQuotientOp : QuotientBinaryOp<"quotient_multiply">;
+
 #endif

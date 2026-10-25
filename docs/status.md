@@ -70,7 +70,10 @@ Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
 negacyclic arithmetic, exact centered norms and natural-order transforms through
 ordered native contracts. Coefficient and evaluation values have distinct kernel
 APIs; evaluation operations retain the exact basis. These arithmetic capabilities
-do not provide a complete signature verifier.
+do not provide a complete signature verifier. Formal `!poly.quotient<q,n>` values
+and source intrinsics retain exact modulus/degree until checked coefficient
+realization; helpers may carry them, executable ports and messages may not.
+
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and

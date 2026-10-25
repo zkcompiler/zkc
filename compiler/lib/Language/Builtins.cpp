@@ -98,10 +98,18 @@ Expected<std::string> kernelArgument(const Type &type, StringRef sort) {
   return error("source.builtin", "installed static argument sort differs");
 }
 Expected<Type> formalType(StringRef name, ArrayRef<Type> arguments) {
-  if (name != "polynomial" || arguments.size() != 2 ||
-      arguments[0].kind != K::Field || arguments[1].kind != K::Natural)
+  bool quotient = name == "quotient";
+  if ((name != "polynomial" && !quotient) || arguments.size() != 2 ||
+      arguments[0].kind != (quotient ? K::Natural : K::Field) ||
+      arguments[1].kind != K::Natural)
+    return error("source.formal", "formal polynomial requires field/arity; "
+                                  "quotient requires modulus/degree");
+  if (quotient && ((arguments[0].dimension.isClosed() &&
+                    arguments[0].dimension.closedValue() < 2) ||
+                   (arguments[1].dimension.isClosed() &&
+                    arguments[1].dimension.closedValue() == 0)))
     return error("source.formal",
-                 "formal polynomial requires a field and natural arity");
+                 "quotient requires 2 <= modulus and 1 <= degree");
   Type result(K::Formal, name.str());
   result.arguments.assign(arguments.begin(), arguments.end());
   return result;

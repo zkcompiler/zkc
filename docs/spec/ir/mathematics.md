@@ -1,7 +1,7 @@
 # Structured native mathematics
 
 This profile extends [mathematical protocols](protocols.md) with
-formal polynomial SSA and static field data. Mathematical meaning belongs to
+formal polynomial and quotient SSA and static field data. Mathematical meaning belongs to
 [tables and polynomials](../domains/polynomials.md). It retains
 the profiles `protocol → participant → exec → physical`; an analysis or
 lowering does not introduce another editable mathematical graph.
@@ -14,6 +14,18 @@ This is a compile-time mathematical value. Transparent, acyclic private helpers
 may produce it; protocol inputs, outputs, messages and executable bindings may
 not contain it. Helper preparation exposes constructors before degree analysis.
 It is distinct from the existing normalized concrete `!poly.univariate` object.
+
+`!poly.quotient<q,n>` denotes `(Z/qZ)[X]/(X^n+1)`, for `2 <= q <= 2^64-1`
+and `1 <= n <= 2^64-1`. It is a total mathematical value with exact ring identity;
+composite moduli and zero divisors are allowed. It has no executable port,
+message or wire encoding. Transparent mathematical helpers may carry it.
+`poly.quotient_project` reduces an arbitrary finite `!algebra.indices` polynomial
+into the ring; `poly.quotient_coefficients` observes exactly `n` canonical
+ascending coefficients. `poly.quotient_add`, `poly.quotient_subtract` and
+`poly.quotient_multiply` require identical modulus and degree on all ports.
+Multiplication is negacyclic convolution, not coordinate-wise multiplication.
+No field inversion, cancellation or FFT capability follows from this type.
+The [quotient contract](../domains/quotient-rings.md) defines these meanings.
 
 Concrete field arrays use `!algebra.field_array<"F", N>`, with exact nominal
 field identity and `0 ≤ N ≤ 1048576`. Logical encoding remains
@@ -124,6 +136,17 @@ numerical reader still checks the actual final payload and all length guards.
 The private tensor program grants no general Tensor/Linalg admission, buffer
 ownership, vectorized machine representation, native correspondence theorem,
 or permission to change runtime refusal behavior.
+
+This is a checked compilation of total mathematics into a selected executable
+program. The observation relation requires equal returned mathematical values
+and preserves the surrounding ordered action/capture boundary. Each emitted
+program retains actual runtime work, scratch, fresh-output and retained-storage
+checks; no result is published after a stop. Fusion and scalar sharing need not
+preserve the budget threshold of a different emitted program. They grant
+neither same-artifact metering changes nor permission to classify malformed
+domain/codec inputs as resource exhaustion. Completeness is conditional on the
+selected program's resources; exact metering equivalence and native execution
+correspondence remain separate obligations.
 
 The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
 `algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads

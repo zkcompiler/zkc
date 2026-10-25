@@ -2,6 +2,7 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -126,7 +127,7 @@ normalizeUnit(ModuleOp unit, uint64_t &remaining,
     return {};
   for (auto &op : normalized.front().without_terminator())
     if (!mathematical::isTotal(&op) || isa<func::CallOp>(op) ||
-        op.getName().getDialectNamespace() == "poly")
+        poly::isPolynomialNormalizationOperation(&op))
       return {};
 
   // Clone each selected standard declaration once, retaining unit/function

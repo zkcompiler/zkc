@@ -48,9 +48,9 @@ To use names without activating notation, import selected names:
 the selected bindings with their original identities. A qualified function
 reference alone does not activate operators.
 
-The same rules cover matrix `*` applied to a vector, group `point * scalar`
-and formal polynomial `+`/`*`. These keep their existing operand kinds and
-body modes. A symbol does not make an ordered vector operation valid in
+The same rules cover matrix `*` applied to a vector, group `point * scalar`,
+formal polynomial `+`/`*`, and quotient-ring `+`/`-`/`*`. These keep their existing operand
+kinds and body modes. A symbol does not make an ordered vector operation valid in
 total `math fn` code.
 
 ## Declare a callable spelling

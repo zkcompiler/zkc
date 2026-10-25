@@ -158,6 +158,14 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
   const auto &output = decl.outputs.front().type;
   if (intrinsic.domain == MathematicalIntrinsic::Domain::Collection)
     return std::vector<Type>{input};
+  if (intrinsic.domain == MathematicalIntrinsic::Domain::Quotient) {
+    const auto &anchor =
+        intrinsic.identity == I::QuotientProject ? output : input;
+    if (anchor.kind != K::Formal || anchor.domain != "quotient" ||
+        anchor.arguments.size() != 2)
+      return refuse();
+    return anchor.arguments;
+  }
   if (intrinsic.scalar)
     return std::vector<Type>{input};
   const Type *anchor = &input;

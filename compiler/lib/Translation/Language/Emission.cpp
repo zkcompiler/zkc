@@ -90,6 +90,11 @@ class Emitter {
         return {};
       }
       remaining -= leaf.cost();
+      if (const auto *quotient = leaf.quotient()) {
+        result.push_back(poly::QuotientType::get(&context, quotient->modulus,
+                                                 quotient->degree));
+        continue;
+      }
       if (const auto *polynomial = leaf.polynomial()) {
         std::string diagnostics;
         mlir::ScopedDiagnosticHandler handler(
@@ -518,6 +523,21 @@ class Emitter {
         default: {
           StringRef name;
           switch (math->identity) {
+          case MathematicalIdentity::QuotientProject:
+            name = "poly.quotient_project";
+            break;
+          case MathematicalIdentity::QuotientCoefficients:
+            name = "poly.quotient_coefficients";
+            break;
+          case MathematicalIdentity::QuotientAdd:
+            name = "poly.quotient_add";
+            break;
+          case MathematicalIdentity::QuotientSubtract:
+            name = "poly.quotient_subtract";
+            break;
+          case MathematicalIdentity::QuotientMultiply:
+            name = "poly.quotient_multiply";
+            break;
           case MathematicalIdentity::ContainerAt:
             name = "data.bounded_at";
             break;

@@ -16,6 +16,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -144,8 +145,9 @@ class Recipe : public ConversionPattern {
   BindingSymbols &symbols;
 
 public:
-  Recipe(MLIRContext *context, BindingSymbols &symbols)
-      : ConversionPattern(MatchAnyOpTypeTag(), 1, context), symbols(symbols) {}
+  Recipe(TypeConverter &types, MLIRContext *context, BindingSymbols &symbols)
+      : ConversionPattern(types, MatchAnyOpTypeTag(), 1, context),
+        symbols(symbols) {}
   LogicalResult
   matchAndRewrite(Operation *op, ArrayRef<Value> inputs,
                   ConversionPatternRewriter &rewriter) const override {
@@ -160,6 +162,53 @@ public:
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!site)
       return rewriter.notifyMatchFailure(op, "missing generated occurrence");
+    if (isa<poly::ProjectQuotientOp, poly::ObserveQuotientOp,
+            poly::AddQuotientOp, poly::SubtractQuotientOp,
+            poly::MultiplyQuotientOp>(op)) {
+      if (isa<poly::ObserveQuotientOp>(op)) {
+        rewriter.replaceOp(op, inputs[0]);
+        return success();
+      }
+      bool project = isa<poly::ProjectQuotientOp>(op);
+      auto type = cast<poly::QuotientType>(op->getResult(0).getType());
+      StringRef contract = project                        ? "quotient.project"
+                           : isa<poly::AddQuotientOp>(op) ? "quotient.add"
+                           : isa<poly::SubtractQuotientOp>(op)
+                               ? "quotient.subtract"
+                               : "quotient.multiply";
+      if (protocol::boundOperationName(contract).empty() ||
+          protocol::boundOperationName("index.constant").empty())
+        return failure();
+      auto emit = [&](StringRef name, ValueRange operands, Type result,
+                      ArrayRef<std::string> parameters, bool root) {
+        OperationState state(op->getLoc(), protocol::boundOperationName(name));
+        state.addOperands(operands);
+        state.addTypes(result);
+        auto occurrence =
+            root ? site.getValue().str()
+                 : symbols.freshSite(op->getParentOfType<func::FuncOp>(),
+                                     site.getValue());
+        state.addAttribute("site", rewriter.getStringAttr(occurrence));
+        SmallVector<Attribute> attrs;
+        for (const auto &value : parameters)
+          attrs.push_back(rewriter.getStringAttr(value));
+        state.addAttribute("parameters", rewriter.getArrayAttr(attrs));
+        state.addAttribute("binding", symbols.get({name.str(), {}, {}},
+                                                  op->getLoc(), rewriter));
+        return rewriter.create(state)->getResult(0);
+      };
+      auto index = protocol::decodeBoundType(
+          op->getContext(), cantFail(protocol::parseBoundType("index", false)));
+      SmallVector<Value> operands(inputs);
+      operands.push_back(emit("index.constant", {}, index,
+                              {std::to_string(type.getModulus())}, false));
+      if (project)
+        operands.push_back(emit("index.constant", {}, index,
+                                {std::to_string(type.getDegree())}, false));
+      auto output = algebra::IndicesType::get(op->getContext());
+      rewriter.replaceOp(op, emit(contract, operands, output, {}, true));
+      return success();
+    }
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op)) {
       auto collection = collectionRealization(inputs[0].getType());
       if (!collection || !collection->get)
@@ -633,7 +682,12 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
   target.markUnknownOpDynamicallyLegal(
       [&](Operation *op) { return !isTotal(op); });
   RewritePatternSet patterns(entry.getContext());
-  patterns.add<Recipe>(entry.getContext(), symbols);
+  TypeConverter types;
+  types.addConversion([](Type type) { return type; });
+  types.addConversion([](poly::QuotientType type) -> Type {
+    return algebra::IndicesType::get(type.getContext());
+  });
+  patterns.add<Recipe>(types, entry.getContext(), symbols);
   ConversionConfig config;
   // Lowering schedules explicit recipes. Mathematical folding belongs to
   // preparation/simplification, where generated constants have no sites yet.
@@ -671,7 +725,7 @@ recipeCandidate(ModuleOp source, StringRef callSite, func::FuncOp &function,
   unsigned ordinal = 0;
   for (auto &op : function.front().without_terminator()) {
     if (!isTotal(&op) || op.getNumRegions() || isa<func::CallOp>(op) ||
-        op.getName().getDialectNamespace() == "poly")
+        poly::isPolynomialNormalizationOperation(&op))
       return {};
     auto site =
         protocol::algorithmSite({{callSite.str(), "kernel"}},

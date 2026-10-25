@@ -8,7 +8,7 @@ your source uses directly; public facades retain concise source names.
 |---|---|
 | [Primitive collections](primitives/collections/zkc.toml) | `primitives::{vector,indices,bytes}`, `sequence`, `matrix`, `field_array` |
 | [Primitive algebra](primitives/algebra/zkc.toml) | `primitives::{curve,scalar}`, `pairing` |
-| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::{coset,quotient}`, `polynomial`, `symbolic` |
+| [Primitive polynomials](primitives/polynomial/zkc.toml) | `primitives::{coset,quotient}`, `polynomial`, `symbolic`, `quotient_math` |
 | [Primitive cryptography](primitives/cryptography/zkc.toml) | `primitives::hash`, `encoding`, `oracle`, `permutation`, `shake128`, `transcript` |
 | [Traversal](traversal/zkc.toml) | `accumulation`, `finite_domain`, `finite`, `finite_math` |
 | [Collections](collections/zkc.toml) | `vector`, `indices` |
@@ -411,3 +411,9 @@ over an explicit word provider.
 modulus and nonempty degree, canonical residues and exact integer norm semantics.
 The [lattice arithmetic helper](../relations/lattice/README.md) composes these
 operations into a short-preimage predicate.
+
+The separate mathematical `quotient_math::Element<Q,N>` retains the same ring
+identity as a formal Poly value. `project` totally reduces arbitrary coefficients;
+`coefficients` exposes canonical storage after mathematical arithmetic. It has
+no native wire type. This differs from the checked `quotient::Polynomial<Q,N>`
+constructor, which rejects a noncanonical representation at a reached source guard.

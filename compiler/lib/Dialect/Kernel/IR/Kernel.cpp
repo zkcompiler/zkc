@@ -90,7 +90,7 @@ LogicalResult ModuleOp::verifyRegions() {
   mathematical::NativeTypePolicies types(*this);
   auto port = [&](Type type) {
     auto policy = types.get(type);
-    return !isa<poly::PolynomialType>(type) && policy && policy->total &&
+    return !mathematical::isFormalType(type) && policy && policy->total &&
            !policy->affine;
   };
   if (!llvm::all_of(entry.getArgumentTypes(), port) ||

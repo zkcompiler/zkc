@@ -121,3 +121,28 @@ own view. Lowered native operations retain the explicit modulus operand and
 validate actual coefficient arrays. A serialized native program cannot assert
 the source invariant merely by naming a record. No evaluation-form or NTT
 representation crosses this API.
+
+## Mathematical values and realization
+
+The source [`zkc::quotient_math`](../../../libraries/core/primitives/polynomial/quotient_math.zkc)
+exposes `Element<Q,N> = formal("quotient",Q,N)` and total mathematical
+projection, canonical observation, addition, subtraction and multiplication.
+`project` reduces any finite unsigned sequence; it does not assert that its
+input is canonical. This differs from the checked `Polynomial<Q,N>` constructor
+above, which rejects noncanonical storage. Both views have this page's exact
+ring meaning. Formal values can cross transparent mathematical helper calls,
+but executable signatures, messages and source relation-data leaves exclude them.
+
+[Poly IR](../ir/mathematics.md) retains modulus and degree until realization.
+The coefficient recipe projects inputs, schedules the selected ring operations
+and erases canonical observations to their actual coefficient SSA value. An
+independent reader checks the original operations against actual contracts,
+modulus/degree constants, ordered operands, outputs, bindings and occurrence
+association; it does not rerun the emitter. A same-typed arithmetic substitution
+is still a source correspondence failure.
+
+Mathematical totality does not make installed calls infallible. The current
+native path retains reached admission and work/storage/publication failures.
+A different algorithm must state its resource and observation relation before
+it can replace this realization. These compiler checks and arithmetic tests do
+not establish a native execution or cryptographic theorem.

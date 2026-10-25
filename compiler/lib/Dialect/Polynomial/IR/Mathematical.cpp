@@ -83,6 +83,25 @@ PolynomialType::verify(llvm::function_ref<InFlightDiagnostic()> emit,
         "expected an installed field and arity at most 32");
   return success();
 }
+LogicalResult
+QuotientType::verify(llvm::function_ref<InFlightDiagnostic()> emit,
+                     uint64_t modulus, uint64_t degree) {
+  if (modulus < 2 || degree == 0)
+    return diagnostics::emit(
+        emit(), "quotient-formation",
+        "expected modulus at least two and positive degree");
+  return success();
+}
+static LogicalResult quotientBinary(Operation *op) {
+  if (op->getOperand(0).getType() != op->getOperand(1).getType() ||
+      op->getOperand(0).getType() != op->getResult(0).getType())
+    return refuse(op,
+                  "quotient operands and result must share modulus and degree");
+  return success();
+}
+LogicalResult AddQuotientOp::verify() { return quotientBinary(*this); }
+LogicalResult SubtractQuotientOp::verify() { return quotientBinary(*this); }
+LogicalResult MultiplyQuotientOp::verify() { return quotientBinary(*this); }
 LogicalResult ConstantPolynomialOp::verify() { return sameField(*this); }
 LogicalResult CoefficientPolynomialOp::verify() {
   if (failed(sameField(*this)))
@@ -229,15 +248,19 @@ LogicalResult deriveDegrees(Block &body, Degrees &result,
   return success();
 }
 
+bool isPolynomialNormalizationOperation(Operation *op) {
+  return isa<ConstantPolynomialOp, CoefficientPolynomialOp,
+             MultilinearPolynomialOp, AddPolynomialOp, MultiplyPolynomialOp,
+             FixPolynomialOp, SumPolynomialOp, InterpolateDomainOp,
+             EvaluatePolynomialOp, PolynomialCoefficientsOp, EvaluateDomainOp,
+             FixTableOp>(op);
+}
+
 void eraseUnusedPolynomials(Block &body, Degrees &degrees) {
   for (auto &op : llvm::make_early_inc_range(llvm::reverse(body))) {
     if (op.getNumResults() != 1 || !op.use_empty())
       continue;
-    if (!isa<ConstantPolynomialOp, CoefficientPolynomialOp,
-             MultilinearPolynomialOp, AddPolynomialOp, MultiplyPolynomialOp,
-             FixPolynomialOp, SumPolynomialOp, InterpolateDomainOp,
-             EvaluatePolynomialOp, PolynomialCoefficientsOp, EvaluateDomainOp,
-             FixTableOp>(op))
+    if (!isPolynomialNormalizationOperation(&op))
       continue;
     degrees.bounds.erase(op.getResult(0));
     op.erase();
@@ -263,5 +286,10 @@ POLYNOMIAL_MEANING(PolynomialCoefficientsOp, PolynomialCoefficients)
 POLYNOMIAL_MEANING(EvaluateDomainOp, PolynomialEvaluateDomain)
 POLYNOMIAL_MEANING(InterpolateDomainOp, PolynomialInterpolate)
 POLYNOMIAL_MEANING(FixTableOp, PolynomialFixTable)
+POLYNOMIAL_MEANING(ProjectQuotientOp, QuotientProject)
+POLYNOMIAL_MEANING(ObserveQuotientOp, QuotientCoefficients)
+POLYNOMIAL_MEANING(AddQuotientOp, QuotientAdd)
+POLYNOMIAL_MEANING(SubtractQuotientOp, QuotientSubtract)
+POLYNOMIAL_MEANING(MultiplyQuotientOp, QuotientMultiply)
 #undef POLYNOMIAL_MEANING
 } // namespace zkc::poly
