@@ -89,6 +89,7 @@ import Zkc.Semantics.Machine
 import Zkc.Semantics.MonadExecution
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
+import Zkc.Semantics.TableRelation
 import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
 import Zkc.Source.Common.Import
@@ -304,6 +305,7 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import Tests.TableRelation
 import ZkcExamples.Construction.ChaumPedersenProof
 import ZkcExamples.Construction.ChaumPedersenProofBodies
 import ZkcExamples.Construction.ChaumPedersenProofData
