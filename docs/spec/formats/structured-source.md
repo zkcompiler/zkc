@@ -43,6 +43,16 @@ order. There is no cross-category declaration-order field.
 | `["vector", domain]` | immutable vector over that field |
 | `["group", domain]` | nominal group |
 | `["service", contract]` | owner-local reusable service reference |
+| `["sequence", element-type]` | ordered immutable `data.sequence` |
+| `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
+
+A product retains the complete canonical JSON encoding of its native nominal
+descriptor, its single constructor label, and all flattened component types in
+order. Equal shapes do not identify different products. This represented identity
+does not replace the frontend schema that associates source fields with ports.
+Types nest at most 64 levels; a product has at most 512 components. Every nested
+domain is checked, including in dormant declarations. Nested service handles
+and multi-constructor variants are outside this profile.
 
 A domain is a native catalogue identity: field and vector types name a `Field`
 identity admitted for that logical kind, group types a `Group` identity admitted
@@ -65,14 +75,14 @@ exactly when that field has `IndexRandomness`. The exporter writes the rows of
 whatever the native catalogue admits; an importer admits only identities whose
 rows agree with its own catalogue (the
 [formal admission contract](../../../lean/docs/spec/structured-source.md#domain-catalogue)
-admits the BLS12-381 scalar field, G1 and the random service of that field).
+lists BLS12-381 and the supported KoalaBear base/extension rows and services).
 Services originate at protocol
 input roots and may be query handles or actual protocol application arguments.
 The native
 [service contract](../runtime/services.md) requires singleton ownership and
 permits same-owner root aliases; services cannot be selected, restricted,
 exchanged, returned, passed to Math/Local helpers, or bound as statement data.
-Affine resources, variants, matrices, general arrays, arbitrary kernels and other
+Affine resources, multi-constructor variants, matrices, general arrays, arbitrary kernels and other
 unlisted operations require a separately specified extension.
 
 ## Declarations
@@ -98,6 +108,10 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 ["realize", name, input-types, output-types, math-helper]
 ["map", name, input-types, output-types, math-helper, rowwise]
 ```
+
+Finite domains select an exact field-vector or sequence input. `elements`
+retains its ordered elements and `indices` enumerates its ordered positions.
+Both check length representability before iteration, including empty bodies.
 
 A domain body consists of exactly one supported constructor and its matching
 yield. Additional constructors are refused, including unused ones. The selected
@@ -238,15 +252,14 @@ checked, including unused ones.
 A realization has exactly the helper's full ordered input/output ABI, including
 unused inputs and zero or multiple results. Its derived Local meaning is one
 ordinary invocation of that helper. The original declaration remains distinct
-from the derived body. Initially the entire transitive helper closure must have
-empty preconditions and use only the admitted pure field/group/Boolean/index
-operations, select, Math calls and return. Finite operations and bounded reads
-are refused in this closure even when the native realization is valid. Other
-Math functions retain their existing finite profile.
-Native formation requires call-site evidence for nested helper premises, even
-on dead calls. It can accept a premise discharged by a finite index callback
-below an unconditional realization root. Such a structured negative also hits
-the finite-work exclusion; it does not isolate the transitive-premise check.
+from the derived body. The transitive Math computation may contain admitted pure
+field/group/Boolean/index operations, selection, nominal product operations,
+Math calls, finite folds, checked reads and returns. The root has no external
+preconditions. Ordinary formation discharges internal call and callback bounds,
+including dead calls; both fold callbacks belong to structural admission even
+for empty domains. Admission does not establish unconditional return: reached
+finite domains retain their length check and possible exhaustion. The Lean
+immediate-return theorem uses a separate narrower checked fragment.
 
 A map root takes scalars of one field identity and returns exactly one such scalar.
 `rowwise` is a Boolean array with exactly one entry per input and at least one
@@ -263,8 +276,8 @@ Native formation owns the map ABI, mask, helper identity and transitive ring
 fragment rules, including dead operations. Each structured reader repeats these
 checks, but malformed-map controls through these tools observe the native
 formation refusal first; they do not isolate the redundant structured closure
-checks. The structured Fr-only restriction and structural capacity limits remain
-independently observable. Native formation accepts a wider realization fragment
+checks. The independent C++ observer's Fr-only restriction and structural capacity
+limits remain independently observable. Native formation accepts a wider realization fragment
 than the conservative structured closure above.
 
 Preparation declarations are invoked only by `local.apply` in a Local function.
@@ -327,12 +340,14 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["bool.and" / "bool.or" / "bool.xor" / "bool.equal" / "bool.not_equal"]` | two Booleans to Boolean |
 | `["select", type]` | Boolean and two equal-typed values to that type |
 | `["bounded_at", domain]` | vector and index to field, with exact bound obligation |
+| `["product.make", constructor]` | ordered components to the exact declared product |
+| `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
 | `["apply", name]` | Local function, finite, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
 | `["protocol_repeat", carried, maximum, roles, carried_roles]` | Retained protocol repetition with one isolated optional-state callback |
-| `["fold", domain, step, predicate]` | total Algebra fold |
+| `["fold", domain, step, predicate]` | ordered finite Math fold |
 | `["if"]` | Local conditional over closed captures |
 | `["for"]` / `["for_condition"]` | Local counted control |
 | `["guard", participant]` | Protocol guard with exact owner; false rejects |
@@ -362,7 +377,7 @@ Ownership is checked independently of operand types:
 | Body kind | Admitted instructions |
 |---|---|
 | Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
-| Math | Pure index constant/equality and field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
+| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The current

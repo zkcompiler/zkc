@@ -94,7 +94,7 @@ with case("multiple verifier setups are current public inputs"):
 
 with case("unused PCS entry operands still require setup authorization"):
     src, policy = OUT / "unused-key.mlir", OUT / "unused-key.policy"
-    src.write_text('''!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
+    src.write_text('''!pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%key:!pk,%accepted:i1):
    "protocol.return"(%accepted) : (i1)->()
@@ -135,6 +135,30 @@ with case("source checking preserves the terminal acceptance dependency"):
     candidate.write_text(changed)
     commands.run([compiler, "protocol-check-proof", src, policy, candidate],
                  refuses="native-proof-correspondence")
+
+for operand, label in [(1, "commitment"), (3, "claimed value"), (4, "proof")]:
+    with case(f"source checking preserves the actual opening {label}"):
+        src, policy = OUT / "product_0.mlir", OUT / "product_0.policy"
+        original = commands.run([compiler, "protocol-construct-proof", src, policy])
+        calls = list(re.finditer(
+            r'local\.call @check\(([^)]+)\) \{site = "[^"\n]*open_[TU]_check"\}',
+            original,
+        ))
+        assert len(calls) == 2
+        earlier = calls[0][1].split(", ")
+        later = calls[1][1].split(", ")
+        assert len(earlier) == len(later) == 5
+        assert earlier[operand] != later[operand]
+        later[operand] = earlier[operand]
+        changed = (original[:calls[1].start(1)] + ", ".join(later)
+                   + original[calls[1].end(1):])
+        # All replacements dominate and have the same type. The old action
+        # records, operation kinds and final formula are still present.
+        commands.verified(changed)
+        candidate = OUT / f"substituted-opening-{operand}.mlir"
+        candidate.write_text(changed)
+        commands.run([compiler, "protocol-check-proof", src, policy, candidate],
+                     refuses="native-proof-correspondence")
 
 with case("unknown policy tag refuses before private PCS admission"):
     selected = json.loads((OUT / "unused-key.policy").read_text())

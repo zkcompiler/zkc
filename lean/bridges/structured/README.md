@@ -9,6 +9,20 @@ group and owner-local random-service values. See the
 [formal contract](../../docs/spec/structured-source.md) and
 [protocol targets](../../docs/design/structured-native-import.md).
 
+`aggregates.py` separately checks actual native exports of ordered sequences
+and nominal products with the independent Lean reader and evaluator. It covers
+empty and duplicate inputs, component order, nominal identity and dormant
+invalid types. It does not use the scalar-only C++ reference or claim native
+execution correspondence. Run it with `--report PATH`, like the suites below.
+
+`tables.py` retains the complete `CheckMembership` and `CheckRead` library
+subjects, including their original realizations and formula contracts. It
+checks the current native catalogue rows, finite computation admission,
+selection masks, duplicate rows/queries, coordinates and callback read bounds.
+Its participant replay uses the existing scalar test model only for equality
+of canonical KoalaBear values; installed execution is checked separately by
+`common/tests/protocol/test_table_relations.py`.
+
 ## Reproduce
 
 From the repository root in the pinned development environment:
@@ -144,6 +158,13 @@ scripted replies, full request/reply/stop records, stop site and consumed reply
 index. Missing replies stop `incomplete`; mismatches stop `refused` without
 consuming the mismatching reply; valid scripted stops consume their reply.
 Unused script suffixes remain unconsumed.
+Aggregate inputs retain every ordered product component and sequence element.
+The execution tool's preliminary capacity analysis joins corresponding product
+components and equal-length sequence elements when a branch is unknown. An
+unknown branch producing different sequence lengths yields an unknown bound
+and may cause tool refusal. This conservative execution-tool policy does not
+change the source model's branch or finite-fold semantics. Nested aggregate
+storage and output serialization contribute to the tool's capacity accounting.
 An oversized received vector is an observer capacity error; a malformed reply
 shape or element type remains an unconsumed semantic refusal. Requests are
 limited to 1 MiB; snapshot admission limits belong to the

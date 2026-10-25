@@ -102,6 +102,16 @@ def IntrinsicPolynomialEvaluateDomain : ZKC_MathematicalIntrinsic<"poly.evaluate
 def IntrinsicPolynomialInterpolate : ZKC_MathematicalIntrinsic<"poly.interpolate", MathPolynomialInterpolate, "Field", 29, 0, 1>;
 def IntrinsicPolynomialFixTable : ZKC_MathematicalIntrinsic<"poly.fix_table", MathPolynomialFixTable, "Field", 30, 2>;
 
+def MathQuotientProject : ZKC_MathematicalIdentity<"QuotientProject", 38>;
+def MathQuotientCoefficients : ZKC_MathematicalIdentity<"QuotientCoefficients", 39>;
+def MathQuotientAdd : ZKC_MathematicalIdentity<"QuotientAdd", 40>;
+def MathQuotientSubtract : ZKC_MathematicalIdentity<"QuotientSubtract", 41>;
+def MathQuotientMultiply : ZKC_MathematicalIdentity<"QuotientMultiply", 42>;
+def IntrinsicQuotientProject : ZKC_MathematicalIntrinsic<"quotient.value.project", MathQuotientProject, "Quotient", 33, 2>;
+def IntrinsicQuotientCoefficients : ZKC_MathematicalIntrinsic<"quotient.value.coefficients", MathQuotientCoefficients, "Quotient", 34, 2>;
+def IntrinsicQuotientAdd : ZKC_MathematicalIntrinsic<"quotient.value.add", MathQuotientAdd, "Quotient", 35, 2>;
+def IntrinsicQuotientSubtract : ZKC_MathematicalIntrinsic<"quotient.value.subtract", MathQuotientSubtract, "Quotient", 36, 2>;
+def IntrinsicQuotientMultiply : ZKC_MathematicalIntrinsic<"quotient.value.multiply", MathQuotientMultiply, "Quotient", 37, 2>;
 // Append-only source catalogue meanings.
 def MathVectorLength : ZKC_MathematicalIdentity<"VectorLength", 36>;
 def MathIndexPowerOfTwo : ZKC_MathematicalIdentity<"IndexPowerOfTwo", 37>;

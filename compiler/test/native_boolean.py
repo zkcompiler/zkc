@@ -43,7 +43,7 @@ for optimize in (False, True):
     passes = ["--zkc-project-protocol"]
     if optimize: passes += ["--zkc-simplify-participant"]
     logical = commands.verified(source, None, *passes, "--zkc-lower-math")
-    assert "kernel.module" in logical and "kernel.call" in logical
+    assert "exec.computation" in logical and "kernel.call" in logical
     assert "algebra.exec.bool_and" not in logical
     bound = commands.verified(logical, None, "--zkc-lower-kernels")
     assert "arith." not in bound and "local.bool_constant" in bound

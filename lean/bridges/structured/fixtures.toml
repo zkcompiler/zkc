@@ -104,6 +104,18 @@ subject = "map_examples::RealizeValues"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "RealizationValues"
 
+[table-membership]
+suite = "tables"
+subject = "table_relation::CheckMembership<example::F>"
+project = "examples/projects/table"
+data = "TableMembership"
+
+[table-indexed-read]
+suite = "tables"
+subject = "table_relation::CheckRead<example::F>"
+project = "examples/projects/table"
+data = "TableIndexedRead"
+
 [application]
 suite = "applications"
 subject = "sample::Run"

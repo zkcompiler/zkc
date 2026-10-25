@@ -2,6 +2,7 @@
 #include "../Verification.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
@@ -58,7 +59,7 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
         (void)refuse(op, "physical profile requires expanded local requests");
         return WalkResult::interrupt();
       }
-      if (isa<kernel::ModuleOp, kernel::CallOp>(op)) {
+      if (isa<mlir::ModuleOp, kernel::CallOp>(op)) {
         (void)diagnostics::emit(
             op->emitOpError(), "kernel-profile",
             "physical profile requires realized Kernel units and calls");
@@ -82,7 +83,7 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
         return false;
       type = selected.getLogical();
     }
-    return !isa<poly::PolynomialType>(type) && bool(types.get(type));
+    return !mathematical::isFormalType(type) && bool(types.get(type));
   };
   unsigned remaining = 100000;
   for (auto &op : unit->getRegion(0).front()) {
@@ -182,7 +183,7 @@ LogicalResult verifyNativeExecution(Operation *unit,
         return WalkResult::interrupt();
       }
       for (auto type : op->getResultTypes())
-        if (!logical(type) || isa<poly::PolynomialType>(logical(type)) ||
+        if (!logical(type) || mathematical::isFormalType(logical(type)) ||
             !types.get(logical(type))) {
           (void)refuse(op, "unsupported native endpoint value");
           return WalkResult::interrupt();

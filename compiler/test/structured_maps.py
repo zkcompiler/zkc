@@ -213,6 +213,7 @@ for label, operation in {
     'equality': '%bad = "algebra.field_equal"(%a,%b) : (!F,!F)->i1',
     'index': '%bad = "data.index"() {value="0"} : ()->ui64',
     'other-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"bn254.fr">',
+    'other-lean-admitted-field': '%bad = "algebra.constant"() {value="1"} : ()->!algebra.field<"koala-bear">',
     'select': '%yes = arith.constant true\n%bad = arith.select %yes,%a,%b : !F',
 }.items():
     with case('dead-map-formula-' + label):
@@ -220,15 +221,33 @@ for label, operation in {
         export(source, refusal='structured-source-original')
         run(source, [], refusal='structured-reference-source')
 
-with case('native-valid-finite-realization-outside-total-profile'):
+with case('finite-realization-admission-preserves-original-declaration'):
     source = (fixtures / 'realization-finite.mlir').read_text()
     commands.verified(source)
-    export(source, refusal='structured-source-realization')
-    run(source, [], refusal='structured-reference-realization')
+    export(source)
+    assert run(source, []) == returned([])
     # The same finite Math remains supported outside a realization closure.
     source = source.replace(' local.realize @realized = @sum : (!V)->!F\n', '')
     export(source)
     assert run(source, []) == returned([])
+
+with case('finite-realization-executes-empty-and-ordered-domains'):
+    source = (fixtures / 'realization-finite.mlir').read_text()
+    source = source.replace(empty_main.replace('\n{sym_name', '\n {sym_name'), '''local.func @work(%xs:!V)->!F attributes {logical_origin=["finite-sum",[]]} {
+   %result = local.apply @realized(%xs) {site="calculate"} : (!V)->!F
+   local.return %result : !F
+ }
+ "protocol.func"() ({
+ ^entry(%xs:!V):
+   %result = "protocol.local_call"(%xs) {callee=@work,role="P",site="work"} : (!V)->!F
+   "protocol.return"(%result) : (!F)->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()''')
+    # The fixture indents its header; match the same declaration independently
+    # of that leading whitespace without changing any body or realization.
+    assert 'local.func @work' in source
+    export(source)
+    for rows in [[], [1], [2, 5, 2], [modulus - 1, 2]]:
+        assert run(source, [[str(value) for value in rows]]) == returned([str(sum(rows) % modulus)])
 
 with case('dormant-realization-transitive-profile-and-dead-calls'):
     source = (fixtures / 'realization-finite.mlir').read_text()
@@ -239,8 +258,8 @@ with case('dormant-realization-transitive-profile-and-dead-calls'):
  }
  local.realize @realized = @projection : (!V)->!V''')
     commands.verified(source)
-    export(source, refusal='structured-source-realization')
-    run(source, [], refusal='structured-reference-realization')
+    export(source)
+    assert run(source, []) == returned([])
 
 with case('nested-realization-premise-needs-native-call-evidence'):
     source = realized.replace(' func.func private @value', '''
@@ -266,11 +285,10 @@ with case('native-valid-nested-realization-premise-via-finite-index-evidence'):
     source = source.replace('"algebra.field_add"(%acc,%x)', '"algebra.field_add"(%acc,%acc)')
     assert source.count('data.preconditions=') == 1
     commands.verified(source)
-    # Native accepts the discharged callback premise below an unconditional
-    # realization root. The structured total profile also excludes finite
-    # work, so this does not isolate its transitive premise check.
-    export(source, refusal='structured-source-realization')
-    run(source, [], refusal='structured-reference-realization')
+    # Internal callback premises are discharged at the finite binder.
+    # This admits the computation without asserting unconditional return.
+    export(source)
+    assert run(source, []) == returned([])
 
 with case('numeric-native-mask-syntax-is-a-typed-boolean'):
     original, numeric = '[true, true, true, false]', '[true, true, 1, false]'

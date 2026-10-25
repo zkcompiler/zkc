@@ -5,8 +5,10 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -81,7 +83,7 @@ class Outliner {
         if (!remaining--)
           return diagnostics::emit(participant.emitError(),
                                    "kernel-frontier-limit");
-        bool formal = isa<poly::PolynomialType>(value.getType());
+        bool formal = mathematical::isFormalType(value.getType());
         if (!formal && realized.contains(value)) {
           if (!computed.contains(value))
             return diagnostics::emit(
@@ -132,7 +134,7 @@ class Outliner {
             return diagnostics::emit(cut->emitError(), "kernel-frontier-limit");
           if (demanded.contains(&op))
             for (auto value : op.getResults())
-              if (!isa<poly::PolynomialType>(value.getType()) &&
+              if (!mathematical::isFormalType(value.getType()) &&
                   !realized.contains(value))
                 pending.push_back(value);
         }
@@ -154,7 +156,7 @@ class Outliner {
           if (!needed.count(value.getDefiningOp()))
             captures.insert(value);
         for (auto value : op->getResults()) {
-          if (isa<poly::PolynomialType>(value.getType()))
+          if (mathematical::isFormalType(value.getType()))
             continue;
           // A native dependency may escape only through a reconstructed formal
           // descriptor. Follow descriptor uses transitively, never concrete
@@ -173,7 +175,7 @@ class Outliner {
               if (!needed.contains(user) && (!guard || user != cut))
                 escapes = true;
               for (auto result : user->getResults())
-                if (isa<poly::PolynomialType>(result.getType()))
+                if (mathematical::isFormalType(result.getType()))
                   pending.push_back(result);
             }
           }
@@ -352,8 +354,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<local::LocalDialect, algebra::AlgebraDialect,
-                    kernel::KernelDialect, func::FuncDialect>();
+    registry
+        .insert<local::LocalDialect, algebra::AlgebraDialect,
+                kernel::KernelDialect, exec::ExecDialect, func::FuncDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-math"; }
   StringRef getDescription() const final {

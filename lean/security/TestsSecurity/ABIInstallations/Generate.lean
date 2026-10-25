@@ -88,6 +88,14 @@ run_cmd do
     else
       sources := sources ++ [(modulePrefix ++ "Completeness", ← require <| SigmaCompleteness.source input)]
     if label == "NoData" then
+      -- An unused aggregate port must not be mistaken for a service and
+      -- silently removed from the source ABI by the scalar-only generator.
+      for type in [Ty.sequence .boolean, Ty.product "query" "Query" (.cons .boolean .nil)] do
+        let aggregate : SubjectABI.Metadata := { metadata with
+          types := [type], producerPositions := some [], publicPositions := [], targetPositions := .ok [] }
+        match SubjectABI.source aggregate { moduleName := "AggregateRefusal", subjectModule } with
+        | .error "subject-abi-aggregate-type" => pure ()
+        | _ => Lean.throwError "subject ABI silently discarded an unsupported aggregate input"
       let empty : SubjectABI.Metadata := { metadata with
         types := [], producerPositions := some [], publicPositions := [], targetPositions := .ok [] }
       sources := sources ++ [("EmptySourceTemplate", ← require <| SubjectABI.source empty {

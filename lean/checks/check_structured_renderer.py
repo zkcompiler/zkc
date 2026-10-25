@@ -131,6 +131,54 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     | _ => none) = some {points} := by decide +kernel
 '''
     modules.append(source)
+    # Aggregate names remain escaped data, including inside recursive types.
+    # Inspect codepoints and typed components independently in the kernel.
+    aggregate_identity = 'query_증명"\\\n'
+    constructor = 'make_α"\\\n'
+    sequence = ["sequence", field]
+    product = ["product", aggregate_identity, constructor, [["bool"], sequence]]
+    nested = ["sequence", product]
+    make = ["function", "make", "math", "private", [["bool"], sequence], [product], [], [], [],
+            ["block", [[["product.make", constructor], [0, 1], [product], [], ""]], ["return", [0]]]]
+    get = ["function", "get", "math", "private", [product], [sequence], [], [], [],
+           ["block", [[["product.get", 1], [0], [sequence], [], ""]], ["return", [0]]]]
+    entry = ["function", "main", "protocol", "public", [nested], [nested],
+             ["protocol", ["P"], [["P"]], [["P"]]], [], [], ["block", [], ["return", [0]]]]
+    aggregate_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
+                      "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS]
+    source = renderer.render(aggregate_data, "RenderedAggregates").replace("module\n\n", "", 1)
+    identity_points = str([ord(char) for char in aggregate_identity])
+    constructor_points = str([ord(char) for char in constructor])
+    source += f'''
+open Zkc.Source.Structured in
+example : (RenderedAggregates.snapshot.definitions[2]?.bind fun definition =>
+    match definition.inputs with
+    | [.sequence (.product identity constructor fields)] =>
+      some (identity.toList.map Char.toNat, constructor.toList.map Char.toNat, fields.toList)
+    | _ => none) = some ({identity_points}, {constructor_points},
+      [.boolean, .sequence (.field "bls12-381.fr")]) := by decide +kernel
+example : (Zkc.Source.Structured.check RenderedAggregates.snapshot).isOk = true := by
+  decide +kernel
+'''
+    modules.append(source)
+    malformed_aggregates = [
+        (renderer.ty, ["sequence"]), (renderer.ty, ["sequence", field, field]),
+        (renderer.ty, ["product", "id", "make", None]),
+        (renderer.ty, ["product", "id", "make", [field] * 513]),
+        (renderer.descriptor, ["product.make", constructor, "extra"]),
+        (renderer.descriptor, ["product.get", True]),
+        (renderer.descriptor, ["product.get", 512]),
+    ]
+    too_deep = field
+    for _ in range(64):
+        too_deep = ["sequence", too_deep]
+    malformed_aggregates.append((renderer.ty, too_deep))
+    for render, invalid in malformed_aggregates:
+        try:
+            render(invalid)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a malformed aggregate")
     # Contract strings go through the same injection-resistant boundary as
     # executable names. Check exact directions, ports, roles and formula links
     # with Lean rather than comparing the renderer with itself.
@@ -401,6 +449,7 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
               "open_metadata_kernel_cases": 3,
+              "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),
               "contract_metadata_kernel_cases": 2,
               "contract_metadata_refusal_cases": len(malformed_contracts),
               "primitive_metadata_kernel_cases": 4, "obsolete_envelope_refusal_cases": 2,

@@ -23,6 +23,9 @@ namespace Zkc.Source.Structured
 /-- The value of a total calculation: the same cases as `Evaluation.operationOn`. -/
 def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
     Values model.Value op.arguments → Values model.Value op.results
+  | .makeProduct _ _ fields, _, arguments => .cons (fields.pack arguments) .nil
+  | .getProduct _ _ fields _ field, _, .cons value .nil =>
+      .cons ((fields.unpack value).get field) .nil
   | .indexConstant value, _, .nil => .cons value .nil
   | .indexEqual, _, .cons a (.cons b .nil) => .cons (decide (a = b)) .nil
   | .indexLess, _, .cons a (.cons b .nil) => .cons (decide (a < b)) .nil
@@ -289,6 +292,7 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .vector _, _ => none
   | .group _, _ => none
   | .service _, _ => none
+  | .sequence _, _ | .product .., _ => none
 
 /-- The arguments a law covers: each argument pinned to an input is that
 input's present value, and each argument pinned to a literal is that literal. A

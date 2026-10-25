@@ -33,6 +33,17 @@ compact installed kernels inside local bodies. Unknown bounds refuse the
 selected lowering. [Compiler limits](../spec/ir/limits.md) and recipe-specific
 bounds remain separate from runtime capacity.
 
+## Quotient rings
+
+Poly also owns `!poly.quotient<q,n>` for `(Z/qZ)[X]/(X^n+1)`. Formal projection,
+ring arithmetic and canonical coefficient observation retain exact modulus and
+degree through source checking and mathematical helpers. The type admits
+composite coefficient moduli and zero divisors, without field cancellation or
+implicit transform capabilities. The current coefficient realization is read
+independently before its native execution; altered parameters, operands or
+output association refuse. See the [quotient contract](../spec/domains/quotient-rings.md)
+for the source views, canonical admission and separate transform basis.
+
 ## Containers and changing shapes
 
 Nominal Algebra types carry field/group vectors, indices, field matrices and

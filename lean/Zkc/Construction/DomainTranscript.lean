@@ -41,7 +41,7 @@ def ofValue : (ty : Structured.Ty) → carriers.Value ty → Option (Payload car
   | .field domain, value => some (.field domain value)
   | .vector domain, value => some (.vector domain value)
   | .group domain, value => some (.group domain value)
-  | .service _, _ => none
+  | .service _, _ | .sequence _, _ | .product .., _ => none
 
 /-- Decode only at the exact nominal sort. The equality transports the value's
 type; an equality of host carrier types alone cannot authorize decoding. -/

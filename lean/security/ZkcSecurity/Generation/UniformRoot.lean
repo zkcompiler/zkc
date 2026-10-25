@@ -16,13 +16,14 @@ structure Output extends RootCompleteness.Output where
   groupType : String
   sampling : String
 
-def carrier : Ty → String
-  | .boolean => "Bool"
-  | .index => "Nat"
-  | .field _ => "Scalar"
-  | .vector _ => "List Scalar"
-  | .group _ => "Group"
-  | .service _ => "Option Nat"
+def carrier : Ty → Except String String
+  | .boolean => pure "Bool"
+  | .index => pure "Nat"
+  | .field _ => pure "Scalar"
+  | .vector _ => pure "List Scalar"
+  | .group _ => pure "Group"
+  | .service _ => pure "Option Nat"
+  | .sequence _ | .product .. => throw "uniform-root-aggregate-type"
 
 def declarations (output : Output) : String :=
   "abbrev Scalar := " ++ output.fieldType ++ "\nabbrev Group := " ++ output.groupType ++ "\n" ++
@@ -37,7 +38,7 @@ def presentation (metadata : SubjectABI.Metadata) (output : Output) (relation : 
   let validatorNames := metadata.publicPositions.map SubjectABI.inputName
   let mut text := ""
   for (ty, name) in metadata.types.zip (SubjectABI.names metadata.types) do
-    text := text ++ "  change " ++ carrier ty ++ " at " ++ name ++ "\n"
+    text := text ++ "  change " ++ (← carrier ty) ++ " at " ++ name ++ "\n"
   pure (text ++ "  change " ++ relation ++ " _\n" ++
     "    (Domain.participant (ringModel Scalar Group) _ _ " ++ output.producerModule ++ ".artifact " ++
       SubjectABI.call "producerInputs" producerNames ++ ")\n" ++

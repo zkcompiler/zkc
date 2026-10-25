@@ -328,12 +328,15 @@ noncomputable def adaptiveResolved (binding : ApplicationBinding) (symbol : bind
   defined := rfl
   arguments := .ok (adaptiveRequest binding)
   elaborated := by
+    have relationChecked : checkDefaultRelation
+        ZkcSecurity.Examples.Subjects.Schnorr.compiled.imported.program.payload.definitions
+        ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained.formula.definition.helper =
+          .ok () := by decide +kernel
     simp [soundnessProperty, soundnessArguments, adaptiveWire, idealData, wire, Subject.check,
       subject, Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkCapabilities,
+      soundnessParameters, decodeSoundnessParameters, requireExactSoundness, relationChecked,
       resolveModel, models, Registry.lookup, modelSchema, modelSchemaWith, named, checkArguments, reference,
-      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel,
-      soundnessParameters, decodeSoundnessParameters, requireExactSoundness]
-    rfl
+      ModelContext.resolveApplication, symbol, adaptiveRequest, adaptiveModel]
 noncomputable def adaptiveMeaning (binding : ApplicationBinding) (symbol : binding.symbol = "application") :
     Evaluated (adaptiveResolved (F := F) (G := G) binding symbol) := ⟨(adaptiveRequest binding).meaning, rfl⟩
 theorem adaptiveBound (binding : ApplicationBinding) : (adaptiveRequest (F := F) (G := G) binding).meaning := by

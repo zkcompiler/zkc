@@ -287,6 +287,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 bytes,
             )?;
             r.pure_family(
+                crate::operations::quotient::IMPLEMENTATIONS,
+                Signature::Custom(crate::operations::quotient::signature),
+                quotient,
+            )?;
+            r.pure_family(
                 crate::operations::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::operations::indices::signature),
                 indices,
@@ -603,6 +608,14 @@ fn bytes(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Ve
         &i.binding.declaration().contract,
         args,
         i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+    )
+}
+fn quotient(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::operations::quotient::apply(
+        &i.binding.declaration().contract,
+        args,
         &b.core.policy,
         i.max_output_bytes,
     )

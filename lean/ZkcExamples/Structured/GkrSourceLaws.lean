@@ -371,7 +371,7 @@ theorem linePoint_equation (start finish : List F) (t : F) (sameLength : finish.
 state `(accumulated, power)` and the point as its capture. -/
 abbrev powerFold : FoldSpec :=
   ⟨⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain",
-    [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩,
+    [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩,
     [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"],
     "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩
 

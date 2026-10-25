@@ -1,6 +1,7 @@
 module
 
 public import ZkcTools.StructuredSource.Bounds
+public import ZkcTools.StructuredSource.WireTypes
 public import Zkc.Source.Structured.DomainTransfer
 public import Mathlib.Data.ZMod.Basic
 
@@ -24,41 +25,73 @@ def scalar (json : Json) : Except String Scalar := do
   if value ≥ scalarModulus then throw "structured-input-field-canonical"
   return (value : Scalar)
 
-def input : (type : Ty) → Json → Except String (assignment Scalar Scalar type)
-  | .boolean, json => do
-    let [.str "bool", .bool value] ← Format.array json | throw "structured-input-type"
-    return value
-  | .index, json => do
-    let [.str "index", value] ← Format.array json | throw "structured-input-type"
-    Structured.Format.natural value (indexLimit - 1)
-  | .field domain, json => do
-    let [.str "field", .str actual, value] ← Format.array json | throw "structured-input-type"
-    if actual != domain then throw "structured-input-domain"
-    scalar value
-  | .vector domain, json => do
-    let [.str "vector", .str actual, values] ← Format.array json | throw "structured-input-type"
-    if actual != domain then throw "structured-input-domain"
-    (← Format.array values 4096).mapM scalar
-  | .group domain, json => do
-    let [.str "group", .str actual, value] ← Format.array json | throw "structured-input-type"
-    if actual != domain then throw "structured-input-domain"
-    scalar value
-  | .service _, _ => throw "structured-open-profile"
+mutual
+  def input : (type : Ty) → Json → Except String (assignment Scalar Scalar type)
+    | .boolean, json => do
+      let [.str "bool", .bool value] ← Format.array json | throw "structured-input-type"
+      return value
+    | .index, json => do
+      let [.str "index", value] ← Format.array json | throw "structured-input-type"
+      Structured.Format.natural value (indexLimit - 1)
+    | .field domain, json => do
+      let [.str "field", .str actual, value] ← Format.array json | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      scalar value
+    | .vector domain, json => do
+      let [.str "vector", .str actual, values] ← Format.array json | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      (← Format.array values 4096).mapM scalar
+    | .group domain, json => do
+      let [.str "group", .str actual, value] ← Format.array json | throw "structured-input-type"
+      if actual != domain then throw "structured-input-domain"
+      scalar value
+    | .service _, _ => throw "structured-open-profile"
+    | .sequence element, json => do
+      let [.str "sequence", elementType, values] ← Format.array json | throw "structured-input-type"
+      if (← Structured.Format.type elementType) != element then throw "structured-input-domain"
+      (← Format.array values 4096).mapM (input element)
+    | .product identity constructor fields, json => do
+      let [.str "product", .str actual, .str alternative, values] ← Format.array json
+        | throw "structured-input-type"
+      if actual != identity || alternative != constructor then throw "structured-input-domain"
+      inputProduct fields (← Format.array values)
+
+  def inputProduct : (fields : ProductFields) → List Json →
+      Except String ((uniformCarriers Scalar Scalar).ProductValue fields)
+    | .nil, [] => return ()
+    | .cons type rest, value :: values => return (← input type value, ← inputProduct rest values)
+    | _, _ => throw "structured-input-count"
+end
 
 def inputs : (types : List Ty) → List Json → Except String (Values (assignment Scalar Scalar) types)
   | [], [] => return .nil
   | type :: types, value :: values => return .cons (← input type value) (← inputs types values)
   | _, _ => throw "structured-input-count"
 
-def output : (type : Ty) → assignment Scalar Scalar type → Except String Json
-  | .boolean, value => .ok (.arr #[.str "bool", .bool value])
-  | .index, value => .ok (.arr #[.str "index", toJson value])
-  | .field domain, value => .ok (.arr #[.str "field", .str domain, .str (toString value.val)])
-  | .vector domain, values =>
-      .ok (.arr #[.str "vector", .str domain,
-        .arr (values.map (fun value => .str (toString value.val))).toArray])
-  | .group domain, value => .ok (.arr #[.str "group", .str domain, .str (toString value.val)])
-  | .service _, _ => .error "structured-open-profile"
+def scalarJson (value : Scalar) : Json := .str (toString value.val)
+
+mutual
+  def output : (type : Ty) → assignment Scalar Scalar type → Except String Json
+    | .boolean, value => .ok (.arr #[.str "bool", .bool value])
+    | .index, value => .ok (.arr #[.str "index", toJson value])
+    | .field domain, value => .ok (.arr #[.str "field", .str domain, scalarJson value])
+    | .vector domain, values =>
+        .ok (.arr #[.str "vector", .str domain,
+          .arr ((show List Scalar from values).map scalarJson).toArray])
+    | .group domain, value => .ok (.arr #[.str "group", .str domain, scalarJson value])
+    | .service _, _ => .error "structured-open-profile"
+    | .sequence element, values => do
+        return .arr #[.str "sequence", wireType element, .arr (← values.mapM (output element)).toArray]
+    | .product identity constructor fields, value => do
+        return .arr #[.str "product", .str identity, .str constructor,
+          .arr (← outputProduct fields value).toArray]
+
+  def outputProduct : (fields : ProductFields) →
+      (uniformCarriers Scalar Scalar).ProductValue fields → Except String (List Json)
+    | .nil, () => return []
+    | .cons type rest, (value, values) =>
+      return (← output type value) :: (← outputProduct rest values)
+end
 
 def outputs {types : List Ty} : Values (assignment Scalar Scalar) types → Except String (List Json)
   | .nil => .ok []

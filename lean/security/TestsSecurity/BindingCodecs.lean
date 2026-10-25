@@ -1,4 +1,5 @@
 import ZkcSecurity.FiatShamir.Binding
+import ZkcSecurity.Endpoint.Binding
 
 /-! Controls for binding codecs and the typed public-value binding event.
 
@@ -29,6 +30,23 @@ structure RawStatement (F : Type) where
   count : ℕ
 
 variable {F : Type}
+
+-- Aggregate binding is a typed logical encoding, independent of whether an
+-- installed security construction supports transmitting aggregate operands.
+private def queryType : Zkc.Source.Structured.Ty :=
+  .product "table.query" "Query" (.cons .boolean (.cons (.field "scalar") .nil))
+
+example {G : Type} (first second : List (Bool × (F × Unit)))
+    (same : ZkcSecurity.Endpoint.publicValue (F := F) (G := G) (.sequence queryType) first =
+      ZkcSecurity.Endpoint.publicValue (.sequence queryType) second) : first = second :=
+  ZkcSecurity.Endpoint.publicValue_injective (.sequence queryType) same
+
+example {G : Type} (first second : F) (different : first ≠ second) :
+    ZkcSecurity.Endpoint.publicValue (F := F) (G := G) queryType (false, (first, ())) ≠
+      ZkcSecurity.Endpoint.publicValue queryType (false, (second, ())) := by
+  intro same
+  exact different (congrArg (fun value : Bool × (F × Unit) => value.2.1)
+    (ZkcSecurity.Endpoint.publicValue_injective queryType same))
 
 /-- The canonical row: the table, the claim and the round count, in input order. -/
 def row (statement : RawStatement F) : Row F :=

@@ -11,9 +11,9 @@ A host binds a policy statement before the first request. The policy-derived
 codec (`policyCodec`) binds it as one typed public-value binding event
 (`Zkc.Construction.Event.publicBinding`): the application context and a row with
 one entry per published input, in policy order, labelled by its position and
-holding the input's typed public value (`publicValue`): a scalar for a field,
-group or Boolean value, a vector whose length is part of the value for a
-vector, and a count for an index. The row is injective on every statement of
+holding the input's typed public value (`publicValue`): scalars, vectors,
+counts, ordered sequences and nominal products. Aggregate components preserve
+their types recursively; product identity and constructor are retained. The row is injective on every statement of
 the published types, malformed ones included (`policyRow_injective`), and every
 statement's history has one event, so the codec is injective and prefix-free and
 discharges statement determination (`ZkcSecurity.FiatShamir.BindingCodec.determined`).
@@ -32,24 +32,55 @@ open ZkcSecurity.FiatShamir
 
 variable {F G : Type}
 
-/-- The typed public value of one published input. -/
-def publicValue : (ty : Ty) → assignment F G ty → PublicValue (Payload F G)
-  | .boolean, value => .scalar (.boolean value)
-  | .index, value => .count value
-  | .field domain, value => .scalar (.field domain value)
-  | .vector domain, values => .vector (values.map (.field domain))
-  | .group domain, value => .scalar (.group domain value)
-  | .service _, handle => .count handle
+/- The typed public value of one published input. -/
+mutual
+  def publicValue : (ty : Ty) → assignment F G ty → PublicValue (Payload F G)
+    | .boolean, value => .scalar (.boolean value)
+    | .index, value => .count value
+    | .field domain, value => .scalar (.field domain value)
+    | .vector domain, values => .vector (values.map (.field domain))
+    | .group domain, value => .scalar (.group domain value)
+    | .service _, handle => .count handle
 
-theorem publicValue_injective : ∀ ty : Ty, Function.Injective (publicValue (F := F) (G := G) ty)
-  | .boolean, _, _, same => by simpa [publicValue] using same
-  | .index, _, _, same => by simpa [publicValue] using same
-  | .field _, _, _, same => by simpa [publicValue] using same
-  | .vector _, first, second, same => by
-      simp only [publicValue, PublicValue.vector.injEq] at same
-      exact List.map_injective_iff.mpr (fun _ _ equal => by cases equal; rfl) same
-  | .group _, _, _, same => by simpa [publicValue] using same
-  | .service _, _, _, same => by simpa [publicValue] using same
+    | .sequence element, values => .sequence (PublicValues.ofList (values.map (publicValue element)))
+    | .product identity constructor fields, value =>
+      .product identity constructor (publicFields fields value)
+
+  def publicFields : (fields : ProductFields) → (uniformCarriers F G).ProductValue fields → PublicValues (Payload F G)
+    | .nil, () => .nil
+    | .cons type rest, (value, values) => .cons (publicValue type value) (publicFields rest values)
+end
+
+mutual
+  theorem publicValue_injective : ∀ ty : Ty,
+      Function.Injective (publicValue (F := F) (G := G) ty)
+    | .boolean, _, _, same => by simpa [publicValue] using same
+    | .index, _, _, same => by simpa [publicValue] using same
+    | .field _, _, _, same => by simpa [publicValue] using same
+    | .vector _, _, _, same => by
+        simp only [publicValue, PublicValue.vector.injEq] at same
+        exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
+    | .group _, _, _, same => by simpa [publicValue] using same
+    | .service _, _, _, same => by simpa [publicValue] using same
+
+    | .sequence element, _, _, same => by
+        simp only [publicValue, PublicValue.sequence.injEq] at same
+        exact (List.map_inj_right (fun _ _ equal => publicValue_injective element equal)).mp (PublicValues.ofList_injective same)
+    | .product _ _ fields, _, _, same => by
+        simp only [publicValue, PublicValue.product.injEq, true_and] at same
+        exact publicFields_injective fields same
+
+  theorem publicFields_injective : ∀ fields : ProductFields,
+      Function.Injective (publicFields (F := F) (G := G) fields)
+    | .nil, (), (), _ => rfl
+    | .cons type rest, (value, values), (other, others), same => by
+        have components := PublicValues.cons.inj same
+        have head := publicValue_injective type components.1
+        have tail := publicFields_injective rest components.2
+        cases head
+        cases tail
+        rfl
+end
 
 /-- The row of a statement's published values from a position on, each labelled
 by its position. -/

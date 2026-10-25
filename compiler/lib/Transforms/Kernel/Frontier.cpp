@@ -440,7 +440,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     auto raw = resolve(call, symbols);
     if (!raw)
       return {};
-    auto unit = cast<ModuleOp>(raw->getParentOp());
+    auto unit = cast<mlir::ModuleOp>(raw->getParentOp());
     llvm::DenseSet<Operation *> generated;
     auto normalized = normalizeUnit(unit, remaining, generated, capacity);
     if (!normalized)
@@ -473,7 +473,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
       cast<mlir::ModuleOp>(proposal->getOperation()->clone(normalizedMapping)));
   SmallVector<FrontierNormalizationOrigin> origins;
   for (const auto &rewrite : rewrites) {
-    auto entry = getEntry(rewrite.normalizedUnit);
+    auto entry = mathematical::getComputationEntry(rewrite.normalizedUnit);
     FrontierNormalizationOrigin origin{
         cast<func::FuncOp>(normalizedMapping.lookup(entry.getOperation())), {}};
     for (auto &op : entry.front().without_terminator())

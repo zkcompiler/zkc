@@ -18,7 +18,24 @@ from bridges.common.lean_render import optional, record  # noqa: E402
 text = partial(lean_render.text, limit=512)
 nat = lean_render.nat
 seq = lean_render.seq
-ty = lean_render.ty
+
+
+def ty(value, depth=0):
+    """Render only the admitted aggregate grammar, retaining nominal identity."""
+    if depth >= 64 or not isinstance(value, list) or not value:
+        raise ValueError("invalid structured type")
+    if value[0] == "sequence":
+        _, element = record(value, 2)
+        return f".sequence ({ty(element, depth + 1)})"
+    if value[0] == "product":
+        _, identity, constructor, fields = record(value, 4)
+        if not isinstance(fields, list) or len(fields) > 512:
+            raise ValueError("invalid product fields")
+        components = ".nil"
+        for field in reversed(fields):
+            components = f".cons ({ty(field, depth + 1)}) ({components})"
+        return f".product {text(identity)} {text(constructor)} ({components})"
+    return lean_render.ty(value)
 
 
 def descriptor(value):
@@ -41,6 +58,12 @@ def descriptor(value):
     if tag == "index.constant":
         record(args, 1)
         return f".indexConstant {text(args[0])}"
+    if tag == "product.make":
+        record(args, 1)
+        return f".makeProduct {text(args[0])}"
+    if tag == "product.get":
+        record(args, 1)
+        return f".getProduct {nat(args[0], 511)}"
     if tag == "field.embed":
         extension, base = record(args, 2)
         return f".fieldEmbed {text(extension)} {text(base)}"

@@ -45,6 +45,10 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     | cons condition rest => cases rest with
       | cons yes rest => cases rest with
         | cons no rest => cases rest; cases bodies; exact ⟨_, rfl⟩
+  | makeProduct => cases bodies; exact ⟨_, rfl⟩
+  | getProduct =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; exact ⟨_, rfl⟩
   | invoke helper =>
     cases bodies
     exact helpers helper (by simp only [Op.helpers, List.mem_singleton]) args
@@ -280,16 +284,17 @@ private theorem unit_invoke_body (payload : UnitPayload) (definition : CheckedDe
   simp only [split, List.foldl_append]
   exact (invoke_foldl_other observations _ (definition :: after) helper stable).symm
 
-/-- Totality of an actual retained realization in an imported whole unit.
-Admission supplies selected-root evidence. Membership and exact checked raw
-derivation identify a body in that same payload with the declaration's derived
-body; the conclusion invokes that checked definition's own helper identity.
-No caller supplies a callee-return, selected-set, or per-check premise. -/
-theorem imported_realization_returns {snapshot : Snapshot} (imported : Imported snapshot)
+/-- Immediate return of an actual retained realization whose exact Math root
+belongs to the narrow total fragment. General finite-computation admission is
+insufficient: its reached domain checks may stop. The selected-fragment premise
+is structural; no caller supplies a semantic callee-return assumption. -/
+theorem imported_immediate_realization_returns {snapshot : Snapshot} (imported : Imported snapshot)
     (declaration : RealizationDeclaration)
-    (declared : Definition.realization declaration ∈ snapshot.definitions)
+    (_declared : Definition.realization declaration ∈ snapshot.definitions)
     (definition : CheckedDefinition) (member : definition ∈ imported.program.payload.definitions)
     (derived : definition.raw = declaration.raw)
+    (selected : declaration.helperSpec ∈
+      preparationHelpers .realization imported.program.payload.definitions)
     (args : Values (assignment F G) definition.inputs) :
     Returns (invoke
       (imported.program.payload.definitions.foldl (extendMeanings observations) [])
@@ -298,7 +303,7 @@ theorem imported_realization_returns {snapshot : Snapshot} (imported : Imported 
   apply definition.body.returns_of_total
   apply region_total_of_invoke_return observations _ declaration.helperSpec
     (admitted_realization_helper_returns observations imported.program.payload declaration.helperSpec
-      (imported.realizationRootSelected declared))
+      selected)
     definition.body (List.range declaration.inputs.length) (List.range declaration.outputs.length)
   rw [definition.exactBody, derived]
   rfl

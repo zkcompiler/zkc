@@ -1021,7 +1021,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
       continue;
     }
     if (isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, local::FuncOp,
-            kernel::ModuleOp, local::OperationBindingOp>(declaration))
+            mlir::ModuleOp, local::OperationBindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;

@@ -1,6 +1,7 @@
 "format" = "zkc.project/0"
 
 ["modules"]
+"zkc::quotient" = "quotient.zkc"
 "zkc::bilinear_restriction" = "bilinear_restriction.zkc"
 "zkc::coset" = "coset.zkc"
 "zkc::multilinear" = "multilinear.zkc"

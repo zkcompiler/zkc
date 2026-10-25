@@ -155,6 +155,6 @@ theorem valuesRealization_derived :
 
 theorem valuesRealization_root_selected : valuesRealizationDeclaration.helperSpec ∈
     preparationHelpers .realization unit.definitions :=
-  imported.realizationRootSelected valuesRealization_retained
+  by decide +kernel
 
 end ZkcExamples.Structured.SumcheckSourceLaws

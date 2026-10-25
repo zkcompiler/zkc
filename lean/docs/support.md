@@ -2,11 +2,11 @@
 
 The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate
-and empty cases. These evaluator laws are independent of the native VM and of
-cryptographic lookup arguments; source-formula adequacy remains an explicit
-connection obligation. The current structured-source profile refuses the
-native examples' aggregate query type and finite-fold realization; the
-[model specification](spec/table-relations.md) records that import boundary.
+and empty cases. Exact body equations and `FormulaLaw` proofs connect the
+retained library formulas to these predicates under explicit reached length
+bounds, preserving exhaustion elsewhere. The [model specification](spec/table-relations.md)
+records this source-model boundary separately from native VM correspondence and
+cryptographic lookup arguments.
 
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
@@ -250,6 +250,24 @@ uses the participant denotation that erases marks. No observed Shape/Table/Halve
 site equation is asserted here. Typed body views retain the original marks, and
 generic interpretation/closed-projection laws remain available.
 
+## Retained table relations
+
+`TableMembershipViews` and `TableIndexedReadViews` admit the complete original
+library subjects, including the nominal active/value query, finite callbacks,
+checked-read premises and Local realizations. Their exact body laws in
+`TableMembershipLaws` and `TableIndexedReadLaws` preserve the full Boolean result
+and exhausted outcomes. Membership needs a representable query length and,
+when queries are nonempty, a representable table length. An inactive query still
+reaches the inner scan. Indexed read needs a representable table length and
+allows any mathematical natural position.
+
+`TableContractBindings.membership_formula_law` and `read_formula_law` discharge
+the actual selected clauses' formula obligations against exact finite membership
+and coordinate read. These are source-model laws using a uniform scalar carrier;
+no native arithmetic, codec or execution correspondence follows. See the
+[table specification](spec/table-relations.md) for theorem owners and the bounded
+replay versus native-execution boundary.
+
 ## Retained preparation subjects
 
 The complete original `map-callers.zkc` captures are retained as `MapFirstData`,
@@ -283,12 +301,13 @@ using `ListRestriction`'s independent contiguous-half and ordered-fold laws.
 These statements establish most-significant-bit-first table restriction in the
 independent model.
 
-`imported_realization_returns` proves that the checked region-free Math closure
-of every retained realization in an imported unit returns over its complete
+`imported_immediate_realization_returns` proves that a retained realization whose
+Math root belongs to the checked region-free closure returns over its complete
 ABI, including vector projections, empty results and multiple results. It
-requires checked-definition membership and exact equality to the retained
-declaration's derived raw body, and it has no caller-supplied execution or
-callee-totality premise. `MapLaws` proves the specified map behavior: all row
+requires that narrow selected-fragment evidence, checked-definition membership
+and exact equality to the retained declaration's derived raw body. General
+finite-computation admission alone does not imply immediate return. The proof
+has no caller-supplied execution or callee-totality premise. `MapLaws` proves the specified map behavior: all row
 shapes are checked in source order before any row is invoked, scalar broadcast
 positions are retained, and helper effects and stopped prefixes are preserved.
 

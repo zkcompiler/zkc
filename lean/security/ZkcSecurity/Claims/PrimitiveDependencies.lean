@@ -19,7 +19,8 @@ def defaultRelationOperation : Op → Bool
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. |
     .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
-    .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .invoke .. |
+    .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
+    .makeProduct .. | .getProduct .. | .invoke .. |
     .fold .. | .map .. | .branch .. | .loop .. | .loopCondition .. | .guard => true
   | .exec .. | .mark .. => false
 

@@ -47,7 +47,7 @@ def main() -> None:
         result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
         log = result.stdout + result.stderr
         (logs / (name + ".log")).write_text(log)
-        passed = result.returncode != 0 if failure else result.returncode == 0
+        passed = result.returncode > 0 if failure else result.returncode == 0
         if failure:
             passed = passed and failure in log
         # Lean may recover with an admitted placeholder to continue diagnostics;

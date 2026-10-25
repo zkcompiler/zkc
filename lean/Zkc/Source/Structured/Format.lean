@@ -45,15 +45,23 @@ def group (json : Json) : Except String String := string json
 
 def service (json : Json) : Except String String := string json
 
-def type (json : Json) : Except String Ty := do
-  match ← array json with
-  | [.str "bool"] => return .boolean
-  | [.str "index"] => return .index
-  | [.str "field", name] => return .field (← field name)
-  | [.str "vector", name] => return .vector (← field name)
-  | [.str "group", name] => return .group (← group name)
-  | [.str "service", name] => return .service (← service name)
-  | _ => throw "structured-type-unsupported"
+def typeAt : Nat → Json → Except String Ty
+  | 0, _ => .error "structured-type-depth"
+  | depth + 1, json => do
+    match ← array json with
+    | [.str "bool"] => return .boolean
+    | [.str "index"] => return .index
+    | [.str "field", name] => return .field (← field name)
+    | [.str "vector", name] => return .vector (← field name)
+    | [.str "group", name] => return .group (← group name)
+    | [.str "service", name] => return .service (← service name)
+    | [.str "sequence", element] => return .sequence (← typeAt depth element)
+    | [.str "product", identity, constructor, fields] =>
+      let fields ← (← array fields).mapM (typeAt depth)
+      return .product (← string identity) (← string constructor) (ProductFields.ofList fields)
+    | _ => throw "structured-type-unsupported"
+
+def type (json : Json) : Except String Ty := typeAt 64 json
 
 def types (json : Json) : Except String (List Ty) := do
   (← array json).mapM type
@@ -114,6 +122,8 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "bool.not_equal"] => return .booleanNotEqual
   | [.str "select", ty] => return .select (← type ty)
   | [.str "bounded_at", d] => return .boundedAt (← field d)
+  | [.str "product.make", constructor] => return .makeProduct (← string constructor)
+  | [.str "product.get", index] => return .getProduct (← natural index 511)
   | [.str "call", name] => return .call (← string name)
   | [.str "apply", name] => return .apply (← string name)
   | [.str "protocol_apply", name, roles] => return .protocolApply (← string name) (← strings roles 16)

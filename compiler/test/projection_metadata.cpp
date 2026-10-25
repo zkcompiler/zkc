@@ -227,7 +227,7 @@ void changeLocalOperand(ModuleOp module) {
   unsigned mutations = 0;
   module.walk([&](Operation *op) {
     if (mutations || !(op->getParentOfType<local::FuncOp>() ||
-                       op->getParentOfType<kernel::ModuleOp>()))
+                       op->getParentOfType<mlir::ModuleOp>()))
       return;
     if (op->getNumOperands() == 2 && op->getOperand(0) != op->getOperand(1) &&
         op->getOperand(0).getType() == op->getOperand(1).getType()) {

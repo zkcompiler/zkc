@@ -45,7 +45,7 @@ def declaration (path : String) (selected : CheckedDefinition) : String :=
 
 def foldText (spec : FoldSpec) : String :=
   "⟨⟨" ++ ", ".intercalate [quoted spec.domain.name, typesText spec.domain.inputs,
-    quoted spec.domain.field, positionText spec.domain.container.index, boolText spec.domain.indices] ++
+    collectionText spec.domain.collection, positionText spec.domain.container.index, boolText spec.domain.indices] ++
     "⟩, " ++ ", ".intercalate [typesText spec.state, typesText spec.captures, quoted spec.step,
     quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"
 

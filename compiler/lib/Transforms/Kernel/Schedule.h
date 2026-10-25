@@ -44,7 +44,7 @@ verifyScheduleLowering(mlir::ModuleOp schedule, mlir::ModuleOp local,
 // through the finite reader's candidate-control adapter. No schedule producer
 // or scheduled-to-Local conversion is invoked by this checker.
 mlir::LogicalResult
-verifyEntrySchedule(ModuleOp source, mlir::ModuleOp schedule,
+verifyEntrySchedule(mlir::ModuleOp source, mlir::ModuleOp schedule,
                     llvm::StringRef callSite,
                     MathematicalSelectionPolicy policy = {},
                     finite::VerificationLimits limits = {},

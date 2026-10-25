@@ -22,9 +22,9 @@ protocol_ir::ProtocolModuleOp owner(mlir::ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
 }
 func::FuncOp entry(mlir::ModuleOp module, StringRef name) {
-  auto unit = SymbolTable(owner(module)).lookup<kernel::ModuleOp>(name);
+  auto unit = SymbolTable(owner(module)).lookup<mlir::ModuleOp>(name);
   require(bool(unit), "missing fixture unit");
-  auto result = kernel::getEntry(unit);
+  auto result = mathematical::getComputationEntry(unit);
   require(bool(result), "missing fixture entry");
   return result;
 }
@@ -118,7 +118,7 @@ kernel::KernelNormalizationRewrite rewrite(mlir::ModuleOp source,
                                            mlir::ModuleOp candidate) {
   auto sourceCall = inner(source, "second");
   auto call = inner(candidate, "second");
-  auto unit = cast<kernel::ModuleOp>(
+  auto unit = cast<mlir::ModuleOp>(
       entry(candidate, "second_unit")->getParentOp()->clone());
   Builder builder(candidate.getContext());
   unit->setAttr("sym_name", builder.getStringAttr("normalized_unit"));
@@ -539,7 +539,7 @@ int main() {
     auto before = fixture(context, "frontier-before.mlir");
     auto after = fixture(context, "frontier-before.mlir");
     auto record = rewrite(*before, *after);
-    kernel::getEntry(record.normalizedUnit)
+    mathematical::getComputationEntry(record.normalizedUnit)
         ->setAttr("changed_contract", UnitAttr::get(&context));
     uint64_t remaining = 100000;
     rejects(*after, [&] {

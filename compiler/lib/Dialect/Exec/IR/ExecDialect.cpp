@@ -1,4 +1,5 @@
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -21,6 +22,18 @@ void zkc::exec::ExecDialect::initialize() {
       >();
 }
 namespace zkc::exec {
+LogicalResult ExecDialect::verifyOperationAttribute(Operation *op,
+                                                    NamedAttribute attribute) {
+  if (attribute.getName() != "exec.computation" || !isa<mlir::ModuleOp>(op) ||
+      !isa<UnitAttr>(attribute.getValue()) ||
+      !op->getAttrOfType<StringAttr>("sym_name"))
+    return diagnostics::emit(
+        op->emitOpError(), "computation-profile",
+        "expected a unit marker on a named builtin.module");
+  // This hook runs before child-region invariants. Closed-profile admission is
+  // owned by the enclosing stage and must inspect every retained declaration.
+  return success();
+}
 namespace {
 LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "execution-formation", reason);

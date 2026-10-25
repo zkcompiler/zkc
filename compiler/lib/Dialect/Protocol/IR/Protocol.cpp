@@ -1,5 +1,6 @@
 #include "../../Verification.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"
@@ -205,6 +206,9 @@ LogicalResult zkc::protocol_ir::ProtocolEntryOp::verifySymbolUses(
 } // namespace zkc
 
 mlir::LogicalResult zkc::protocol_ir::ProtocolModuleOp::verifyRegions() {
+  for (auto unit : getBody().front().getOps<mlir::ModuleOp>())
+    if (failed(mathematical::verifyComputationUnit(unit)))
+      return failure();
   if (isMathematicalProfile(getProfile()))
     return mathematical::verifyModule(*this);
   mathematical::NativeTypePolicies types(*this);

@@ -32,14 +32,14 @@ func::FuncOp function(mlir::ModuleOp module, StringRef name) {
   require(bool(result), "missing normalization helper");
   return result;
 }
-OwningOpRef<kernel::ModuleOp> makeKernelUnit(mlir::ModuleOp module,
-                                             StringRef entryName,
-                                             ArrayRef<StringRef> dependencies) {
+OwningOpRef<mlir::ModuleOp> makeKernelUnit(mlir::ModuleOp module,
+                                           StringRef entryName,
+                                           ArrayRef<StringRef> dependencies) {
   OpBuilder builder(module.getContext());
-  OwningOpRef<kernel::ModuleOp> result(
-      kernel::ModuleOp::create(builder, module.getLoc(), "numerical"));
-  result->getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&result->getBody().front());
+  OwningOpRef<mlir::ModuleOp> result(
+      mlir::ModuleOp::create(builder, module.getLoc(), "numerical"));
+  result->getOperation()->setAttr("exec.computation", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(result->getBody());
   SymbolTable declarations(unit(module));
   for (auto name : dependencies) {
     auto *dependency = declarations.lookup(name);
@@ -92,15 +92,18 @@ int main() {
   cases.run("owned Kernel normalization preserves metadata and origins", [&] {
     auto module = fixture(context, "provenance");
     auto source = makeKernelUnit(*module, "mixed_raw", {"mixed_leaf"});
-    auto entry = kernel::getEntry(*source);
+    auto entry = mathematical::getComputationEntry(*source);
     auto helper = SymbolTable(*source).lookup<func::FuncOp>("mixed_leaf");
-    require(succeeded(verify(*source)), "Kernel source is malformed");
+    require(succeeded(verify(*source)) &&
+                succeeded(mathematical::verifyComputationUnit(*source)),
+            "computation source is malformed");
     uint64_t remaining = 1000000;
     llvm::DenseSet<Operation *> generated;
     auto candidate = kernel::normalizeUnit(*source, remaining, generated);
-    require(bool(candidate) && succeeded(verify(*candidate)),
+    require(bool(candidate) && succeeded(verify(*candidate)) &&
+                succeeded(mathematical::verifyComputationUnit(*candidate)),
             "owned Kernel normalization refused");
-    auto normalized = kernel::getEntry(*candidate);
+    auto normalized = mathematical::getComputationEntry(*candidate);
     require((*source)->getAttrDictionary() ==
                     (*candidate)->getAttrDictionary() &&
                 entry->getAttrDictionary() == normalized->getAttrDictionary(),
@@ -135,11 +138,14 @@ int main() {
       "owned Kernel normalization retains finite dependency identities", [&] {
         auto module = fixture(context, "callback");
         auto source = makeKernelUnit(*module, "fold", {"items", "step"});
-        require(succeeded(verify(*source)), "Kernel source is malformed");
+        require(succeeded(verify(*source)) &&
+                    succeeded(mathematical::verifyComputationUnit(*source)),
+                "computation source is malformed");
         uint64_t remaining = 1000000;
         llvm::DenseSet<Operation *> generated;
         auto candidate = kernel::normalizeUnit(*source, remaining, generated);
-        require(bool(candidate) && succeeded(verify(*candidate)),
+        require(bool(candidate) && succeeded(verify(*candidate)) &&
+                    succeeded(mathematical::verifyComputationUnit(*candidate)),
                 "finite Kernel normalization refused");
         SymbolTable original(*source), normalized(*candidate);
         auto *domain = normalized.lookup("items");
@@ -154,9 +160,9 @@ int main() {
         for (auto &op : step.front().without_terminator())
           require(op.getName().getDialectNamespace() != "poly",
                   "finite callback was not normalized");
-        auto entry = kernel::getEntry(*candidate);
+        auto entry = mathematical::getComputationEntry(*candidate);
         require(entry.front().front().getAttrDictionary() ==
-                        kernel::getEntry(*source)
+                        mathematical::getComputationEntry(*source)
                             .front()
                             .front()
                             .getAttrDictionary() &&

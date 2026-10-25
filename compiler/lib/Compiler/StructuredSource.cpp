@@ -3,9 +3,11 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Operations.h"
@@ -117,7 +119,10 @@ json::Value contractValue(Attribute attr) {
 // logical kinds; services name installed random services. The exported
 // catalogue carries the rows of every identity used, so Lean resolves each
 // sort against rows rather than against fixed spellings.
-Expected<json::Value> encodeSort(Type type, UsedIdentities &used) {
+Expected<json::Value> encodeSort(Type type, UsedIdentities &used,
+                                 unsigned depth = 0) {
+  if (depth >= depthLimit)
+    return error("structured-source-type-depth");
   const auto &catalog = installedDomains();
   auto nominal = [&](StringRef kind, StringRef sort,
                      StringRef identity) -> Expected<json::Value> {
@@ -137,7 +142,38 @@ Expected<json::Value> encodeSort(Type type, UsedIdentities &used) {
     return nominal("vector", "Field", vector.getDomain());
   if (auto group = dyn_cast<algebra::GroupType>(type))
     return nominal("group", "Group", group.getDomain());
+  if (auto sequence = dyn_cast<data::SequenceType>(type)) {
+    auto element = encodeSort(sequence.getElementType(), used, depth + 1);
+    if (!element)
+      return element.takeError();
+    return json::Array{"sequence", std::move(*element)};
+  }
+  if (auto product = dyn_cast<local::VariantType>(type)) {
+    auto descriptor = decodeVariant(product.getDescriptor());
+    if (!descriptor || descriptor->alternatives.size() != 1)
+      return error("structured-source-product");
+    const auto &constructor = descriptor->alternatives.front();
+    std::string identity = printJson(descriptor->nominal);
+    if (identity.size() > 512 || constructor.label.size() > 512 ||
+        constructor.payload.size() > signatureLimit)
+      return error("structured-source-limit");
+    json::Array fields;
+    for (const auto &spelling : constructor.payload) {
+      auto bound = parseBoundType(spelling, false);
+      if (!bound)
+        return bound.takeError();
+      auto component = encodeSort(decodeBoundType(type.getContext(), *bound),
+                                  used, depth + 1);
+      if (!component)
+        return component.takeError();
+      fields.push_back(std::move(*component));
+    }
+    return json::Array{"product", std::move(identity), constructor.label,
+                       std::move(fields)};
+  }
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
+    if (depth)
+      return error("structured-source-service");
     StringRef sampled = randomServiceField(service.getContract());
     if (sampled.empty())
       return error("structured-source-type");
@@ -605,6 +641,20 @@ class Exporter {
         return type.takeError();
       return json::Array{"select", std::move(*type)};
     }
+    if (auto make = dyn_cast<data::MakeOp>(op)) {
+      if (auto e = attributes(op, {"alternative"}))
+        return std::move(e);
+      if (owner != "math")
+        return error("structured-source-operation");
+      return json::Array{"product.make", make.getAlternative()};
+    }
+    if (auto get = dyn_cast<data::GetOp>(op)) {
+      if (auto e = attributes(op, {"index"}))
+        return std::move(e);
+      if (owner != "math")
+        return error("structured-source-operation");
+      return json::Array{"product.get", get.getIndex()};
+    }
     if (isa<data::BoundedAtOp>(op)) {
       if (auto e = attributes(op, {}))
         return std::move(e);
@@ -864,18 +914,20 @@ class Exporter {
     if (auto e = attributes(yield, {}))
       return std::move(e);
     auto arg = dyn_cast<BlockArgument>(constructor.getOperand(0));
-    auto vector =
-        dyn_cast<algebra::FieldVectorType>(constructor.getOperand(0).getType());
-    if (!arg || arg.getOwner() != &body || !vector ||
+    Type container = constructor.getOperand(0).getType();
+    auto vector = dyn_cast<algebra::FieldVectorType>(container);
+    auto sequence = dyn_cast<data::SequenceType>(container);
+    if (!arg || arg.getOwner() != &body || (!vector && !sequence) ||
         (indices &&
          constructor.getAttrOfType<IntegerAttr>("axis").getInt() != 0))
       return error("structured-source-domain");
     auto items = cast<data::DomainType>(constructor.getResult(0).getType())
                      .getItemTypes();
-    Type item = indices ? Type(IntegerType::get(unit.getContext(), 64,
-                                                IntegerType::Unsigned))
-                        : Type(algebra::FieldType::get(unit.getContext(),
-                                                       vector.getDomain()));
+    Type item = indices  ? Type(IntegerType::get(unit.getContext(), 64,
+                                                 IntegerType::Unsigned))
+                : vector ? Type(algebra::FieldType::get(unit.getContext(),
+                                                        vector.getDomain()))
+                         : sequence.getElementType();
     if (items.size() != 1 || items[0] != item)
       return error("structured-source-domain");
     auto inputs = sorts(signature(*op).getInputs());
@@ -955,13 +1007,14 @@ class Exporter {
   // cycle/depth checks. These two memoized profiles additionally constrain
   // every transitive instruction, including unused calls and discarded results.
   Error preparationProfiles() {
-    llvm::DenseSet<Operation *> totalChecked;
+    llvm::DenseSet<Operation *> computationChecked;
     llvm::DenseMap<Operation *, Type> ringChecked;
     // A ring closure is checked against the one field its map lifts.
     std::function<Error(Operation *, Type)> check = [&](Operation *op,
                                                         Type field) -> Error {
       bool ring = static_cast<bool>(field);
-      if (ring ? ringChecked.lookup(op) == field : totalChecked.contains(op))
+      if (ring ? ringChecked.lookup(op) == field
+               : computationChecked.contains(op))
         return Error::success();
       StringRef code =
           ring ? "structured-source-map" : "structured-source-realization";
@@ -969,11 +1022,11 @@ class Exporter {
       if (!helper || helper.isExternal() || !helper.isPrivate() ||
           helper->getParentOp() != unit.getOperation())
         return error(code, "private Math closure required");
-      if (auto premises =
-              helper->getAttrOfType<ArrayAttr>("data.preconditions");
-          premises && !premises.empty())
-        return error(code, "helper preconditions");
       if (ring) {
+        if (auto premises =
+                helper->getAttrOfType<ArrayAttr>("data.preconditions");
+            premises && !premises.empty())
+          return error(code, "helper preconditions");
         if (ringChecked.contains(op))
           return error(code, "scalar closure ABI");
         auto type = helper.getFunctionType();
@@ -988,6 +1041,18 @@ class Exporter {
             return e;
           continue;
         }
+        if (!ring && isa<algebra::FiniteFoldOp>(instruction)) {
+          // Ordinary formation discharges callback bounds at each call edge.
+          // Both callbacks belong to admission even for an empty domain.
+          for (StringRef attribute : {"step", "predicate"}) {
+            auto reference =
+                instruction.getAttrOfType<FlatSymbolRefAttr>(attribute);
+            if (reference)
+              if (auto e = check(symbols.lookup(reference.getValue()), field))
+                return e;
+          }
+          continue;
+        }
         bool allowed = isa<algebra::ConstantFieldOp, algebra::FieldAddOp,
                            algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
                            func::ReturnOp>(instruction);
@@ -996,16 +1061,17 @@ class Exporter {
               isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
                   algebra::GroupAddOp, algebra::GroupScaleOp,
                   algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
-                  data::LessOp, data::PowerOfTwoOp, data::DimOp,
-                  arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
-                  arith::CmpIOp, arith::SelectOp>(instruction);
+                  data::LessOp, data::PowerOfTwoOp, data::DimOp, data::MakeOp,
+                  data::GetOp, data::BoundedAtOp, arith::ConstantOp,
+                  arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp,
+                  arith::SelectOp>(instruction);
         if (!allowed || instruction.getNumRegions())
           return error(code, instruction.getName().getStringRef());
       }
       if (ring)
         ringChecked[op] = field;
       else
-        totalChecked.insert(op);
+        computationChecked.insert(op);
       return Error::success();
     };
     for (Operation &op : unit.getBody().front()) {
@@ -1022,10 +1088,18 @@ class Exporter {
           return error("structured-source-map", "scalar closure ABI");
         field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
       }
-      if (auto e = check(
-              symbols.lookup(
-                  op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue()),
-              field))
+      Operation *root = symbols.lookup(
+          op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue());
+      // A preparation has no caller-supplied premise. Internal helper premises
+      // remain lawful when discharged by ordinary calls or finite binders.
+      if (root)
+        if (auto premises =
+                root->getAttrOfType<ArrayAttr>("data.preconditions");
+            premises && !premises.empty())
+          return error(field ? "structured-source-map"
+                             : "structured-source-realization",
+                       "root preconditions");
+      if (auto e = check(root, field))
         return e;
     }
     return Error::success();

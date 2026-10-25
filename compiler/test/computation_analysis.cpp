@@ -47,7 +47,7 @@ std::string numericalAdditionFixture(StringRef name, StringRef output,
   auto helper = text.find(" local.func private @step");
   require(helper != std::string::npos, "missing Local step");
   text.insert(helper, R"mlir(
- kernel.module @numbers {
+ module @numbers attributes {exec.computation} {
    func.func private @add(%a:!F,%b:!F) -> !F {
      %sum = algebra.field_add %a,%b : (!F,!F)->!F
      func.return %sum : !F
@@ -316,12 +316,12 @@ int main() {
   cases.run(
       "standard substitution retains result coordinates and dead work", [&] {
         auto text = numericalAdditionFixture("sum", "%next", "%state,%item");
-        auto begin = text.find(" kernel.module @numbers");
+        auto begin = text.find(" module @numbers");
         auto end = text.find(" local.func private @step", begin);
         require(begin != std::string::npos && end != std::string::npos,
                 "missing numerical unit");
         text.replace(begin, end - begin, R"mlir(
- kernel.module @numbers {
+ module @numbers attributes {exec.computation} {
    func.func @entry(%a:!F,%b:!F) -> (!F,!F,!F) {
      %dead = algebra.field_add %a,%b : (!F,!F)->!F
      func.return %b,%a,%b : !F,!F,!F

@@ -98,11 +98,11 @@ int main() {
     require(bool(entry) && entry.getNumArguments() == 2 &&
                 isa<arith::AndIOp>(entry.front().front()),
             "split fixture mathematical body");
-    auto closure = cast<kernel::ModuleOp>(entry->getParentOp());
+    auto closure = cast<mlir::ModuleOp>(entry->getParentOp());
     OpBuilder builder(function);
-    auto prefixUnit = cast<kernel::ModuleOp>(builder.clone(*closure));
+    auto prefixUnit = cast<mlir::ModuleOp>(builder.clone(*closure));
     prefixUnit.setSymName("split_prefix_kernel");
-    auto prefixEntry = kernel::getEntry(prefixUnit);
+    auto prefixEntry = mathematical::getComputationEntry(prefixUnit);
     auto &prefixBody = prefixEntry.front();
     auto &first = prefixBody.front();
     prefixBody.back().setOperands(first.getResults());
@@ -117,7 +117,7 @@ int main() {
     auto prefixInvocation =
         cast<kernel::CallOp>(prefix.getBody().front().front());
     prefixInvocation.setCalleeAttr(SymbolRefAttr::get(
-        &context, prefixUnit.getSymName(),
+        SymbolTable::getSymbolName(prefixUnit),
         {FlatSymbolRefAttr::get(&context, prefixEntry.getSymName())}));
     builder.setInsertionPoint(call);
     auto prefixCall = local::CallOp::create(
@@ -155,7 +155,7 @@ int main() {
     auto candidate = copy(*logical);
     bool changed = false;
     candidate->walk([&](arith::AndIOp op) {
-      if (!changed && op->getParentOfType<kernel::ModuleOp>() &&
+      if (!changed && op->getParentOfType<mlir::ModuleOp>() &&
           op.getLhs() != op.getRhs()) {
         op->setOperand(1, op.getLhs());
         changed = true;

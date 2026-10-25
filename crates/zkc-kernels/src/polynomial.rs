@@ -1,4 +1,5 @@
 //! Dense coefficient polynomial arithmetic, independent of physical values.
+pub mod quotient;
 use crate::field::Coefficient;
 /// Evaluate coefficients in ascending degree order with Horner's rule.
 pub fn evaluate<S: Coefficient>(coefficients: &[S], x: S) -> S {

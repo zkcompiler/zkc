@@ -166,6 +166,7 @@ theorem verdict_eq (position : Nat) (result : PIR.Outcome (List (Value F G)) × 
           | vector => cases unread <;> simp [verdict]
           | transcript => cases unread <;> simp [verdict]
           | indices => cases unread <;> simp [verdict]
+          | unsupported => cases unread <;> simp [verdict]
 
 /-- Complete acceptance is acceptance of the outcome. -/
 theorem accepted_of_verdict {result : PIR.Outcome (Option Bool) × Proof F G}

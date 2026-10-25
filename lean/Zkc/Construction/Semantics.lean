@@ -43,12 +43,15 @@ inductive Value (F G : Type) where
   | vector (domain : String) (values : List F)
   | transcript (history : History F G)
   | indices (coordinates : List Nat)
+  /-- Outside the selected construction value profile; decoding always refuses. -/
+  | unsupported
 
 deriving instance DecidableEq for Value
 
-/-- Types whose values exported programs carry: everything except services. -/
+/-- Types whose values this construction profile carries. Aggregate transcript
+encoding requires its own construction rule; admitting a source type is not one. -/
 def dataType : Structured.Ty → Bool
-  | .service _ => false
+  | .service _ | .sequence _ | .product .. => false
   | _ => true
 
 namespace Value
@@ -61,6 +64,7 @@ def encode : (ty : Structured.Ty) → Structured.assignment F G ty → Value F G
   | .index, value => .index value
   | .vector domain, values => .vector domain values
   | .service _, handle => .index handle
+  | .sequence _, _ | .product .., _ => .unsupported
 
 /-- Read an exported value at a structured type; services never decode. -/
 def decode : (ty : Structured.Ty) → Value F G → Option (Structured.assignment F G ty)
@@ -130,7 +134,7 @@ def evaluate : (calculation : Calculation) → Values (Structured.assignment F G
   | .select _, .cons condition (.cons yes (.cons no .nil)) =>
       .returned (.cons (if condition then yes else no) .nil)
   | .boundedAt _, .cons container (.cons index .nil) =>
-      match container[index]? with
+      match (show List F from container)[index]? with
       | some value => .returned (.cons value .nil)
       | none => .stopped .refused
 
@@ -145,11 +149,11 @@ theorem operation_eq {I : PIR.Signature} (observations : Structured.SiteObservat
   cases calculation <;> cases bodies
   case boundedAt domain =>
     rcases arguments with _ | ⟨container, _ | ⟨index, _ | _⟩⟩
-    change (match container[index]? with
+    change (match (show List F from container)[index]? with
       | some value => PIR.Process.done (Values.cons (Value := Structured.assignment F G)
           (ty := .field domain) value Values.nil)
       | none => PIR.Process.halt PIR.Stop.refused) =
-        ofOutcome (match container[index]? with
+        ofOutcome (match (show List F from container)[index]? with
           | some value => PIR.Outcome.returned (Values.cons (Value := Structured.assignment F G)
               (ty := .field domain) value Values.nil)
           | none => PIR.Outcome.stopped PIR.Stop.refused)

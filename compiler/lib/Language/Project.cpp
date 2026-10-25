@@ -886,7 +886,9 @@ std::string installedCatalogIdentity() {
          intrinsic.domainPoints ? "domain" : "none",
          intrinsic.domain == MathematicalIntrinsic::Domain::Boolean ? "bool"
          : intrinsic.domain == MathematicalIntrinsic::Domain::Group ? "group"
-                                                                    : "field",
+         : intrinsic.domain == MathematicalIntrinsic::Domain::Quotient
+             ? "quotient"
+             : "field",
          intrinsic.scalar ? "scalar" : "intrinsic"});
   for (const auto &kernel : protocol::operationShapes()) {
     std::string value;

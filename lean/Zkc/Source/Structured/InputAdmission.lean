@@ -12,13 +12,26 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured
 open Zkc.Source
 
-/-- An absent slot carries no value to represent. A service handle is logical
-input metadata, not an executable index, and has no machine range condition. -/
-def inputRepresentable {carriers : Carriers} : (type : Ty) →
-    Component carriers.Value type → Prop
-  | .index, some value => value < indexLimit
-  | .vector _, some values => values.length < indexLimit
-  | _, _ => True
+mutual
+  /-- An absent slot carries no value to represent. A service handle is logical
+  input metadata, not an executable index, and has no machine range condition.
+  Products and sequences retain the bounds of every nested member. This is a
+  representation premise, not admission of a generated or native ABI. -/
+  def inputRepresentable {carriers : Carriers} : (type : Ty) →
+      Component carriers.Value type → Prop
+    | .index, some value => value < indexLimit
+    | .vector _, some values => values.length < indexLimit
+    | .sequence element, some values => values.length < indexLimit ∧
+        ∀ value ∈ values, inputRepresentable element (some value)
+    | .product _ _ fields, some value => productRepresentable fields value
+    | _, _ => True
+
+  def productRepresentable {carriers : Carriers} : (fields : ProductFields) →
+      carriers.ProductValue fields → Prop
+    | .nil, _ => True
+    | .cons type fields, (value, rest) =>
+        inputRepresentable type (some value) ∧ productRepresentable fields rest
+end
 
 /-- The ordered source input tuple fixes the bounds, independently of evidence
 and of a protocol-specific shape predicate. -/
@@ -27,11 +40,11 @@ def inputsRepresentable {carriers : Carriers} : {types : List Ty} →
   | [], .nil => True
   | type :: _, .cons value rest => inputRepresentable type value ∧ inputsRepresentable rest
 
--- Materialize the shared equations at their definition owner. Otherwise each
--- ABI client can generate different private matcher proofs under the same
--- equation name. The scoped attribute adds no global simplifier rules.
+-- Materialize shared equation proofs at their definition's owner. Independent
+-- clients must not realize different private matcher proofs under the same
+-- public equation name. The scoped attribute exports no global simp rule.
 section
-attribute [local simp] inputRepresentable inputsRepresentable
+attribute [local simp] inputRepresentable productRepresentable inputsRepresentable
 end
 
 @[simp] theorem inputsRepresentable_nil {carriers : Carriers} :

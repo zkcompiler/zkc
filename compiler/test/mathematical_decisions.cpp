@@ -331,15 +331,15 @@ int main() {
           kernelRecipeSource(unit(*source), "total", "calculation");
       // Force allocation of a different working name in the nested case.
       if (nested) {
-        auto reserved =
-            cast<func::FuncOp>(kernel::getEntry(*numerical)->clone());
+        auto reserved = cast<func::FuncOp>(
+            mathematical::getComputationEntry(*numerical)->clone());
         reserved.setSymName("_recipe_entry");
         reserved.setPrivate();
-        numerical->getBody().front().push_back(reserved);
+        numerical->getBody()->push_back(reserved);
       }
       auto original = copy(*source);
-      OwningOpRef<kernel::ModuleOp> before(
-          cast<kernel::ModuleOp>(numerical->clone()));
+      OwningOpRef<mlir::ModuleOp> before(
+          cast<mlir::ModuleOp>(numerical->clone()));
       RealizationTrace trace;
       RealizationWork work, controlWork, orderedWork;
       auto ordered = realizeKernelEntry(*numerical, "calculation",

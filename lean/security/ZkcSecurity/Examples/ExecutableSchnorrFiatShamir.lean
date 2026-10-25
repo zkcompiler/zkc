@@ -90,6 +90,7 @@ theorem accepted_eq (result : PIR.Outcome (List (Value F G)) × Proof F G) :
           | vector => cases unread <;> simp [accepted]
           | transcript => cases unread <;> simp [accepted]
           | indices => cases unread <;> simp [accepted]
+          | unsupported => cases unread <;> simp [accepted]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem value_group {payload : Payload F G} {domain : String} {value : G}

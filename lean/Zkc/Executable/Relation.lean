@@ -402,6 +402,7 @@ theorem dataSort_sorted {value : Value F G} {sort : ValueSort} (reported : dataS
       exact ⟨values, rfl⟩
   | transcript => simp [dataSort?] at reported
   | indices => simp [dataSort?] at reported
+  | unsupported => simp [dataSort?] at reported
 
 /-- Encoded values have the sorts of their types. -/
 theorem encodeValues_sorted :
@@ -528,5 +529,6 @@ theorem custody_of_read [DecidableEq F] [DecidableEq G] {data : List (Value F G)
               | index => rfl
               | vector => rfl
               | indices => rfl
+              | unsupported => rfl
 
 end Zkc.Executable

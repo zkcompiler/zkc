@@ -24,12 +24,15 @@ int main() {
   static_assert(
       unsigned(I::FieldAdd) == 0 && unsigned(I::FieldConstant) == 20 &&
       unsigned(I::PolynomialFixTable) == 35 &&
-      unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37);
-  require(zkc::mathematicalIntrinsics().size() == 33 &&
+      unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37 &&
+      unsigned(I::QuotientMultiply) == 42);
+  require(zkc::mathematicalIntrinsics().size() == 38 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
               zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
               zkc::mathematicalIntrinsics()[31].name == "vector.length" &&
               zkc::mathematicalIntrinsics()[32].name == "index.power_of_two" &&
+              zkc::mathematicalIntrinsics()[37].name ==
+                  "quotient.value.multiply" &&
               zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
                   "PolynomialMultiply",
           "mathematical source catalog identities changed");

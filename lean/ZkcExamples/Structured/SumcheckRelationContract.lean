@@ -48,7 +48,7 @@ abbrev valuesHelper : Helper :=
     .math, [vector, .index, .index], [vector]⟩
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"finite_" ++ totalHelper.name ++ "_s1_domain", [vector], "bls12-381.fr", .here, false⟩,
+  ⟨⟨"finite_" ++ totalHelper.name ++ "_s1_domain", [vector], (.vector "bls12-381.fr"), .here, false⟩,
     [scalar], [], "finite_" ++ totalHelper.name ++ "_s1_body", "", .math⟩
 
 def addBody : Region dialect addHelper.inputs addHelper.outputs :=
@@ -155,7 +155,9 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
     PIR.Process.bind, Environment.prepend, Environment.push, Nat.cast_zero]
   have admitted : (foldSpec.domain.denote (Values.cons xs
       (Values.nil : Values (assignment F G) []))).admit = .returned xs := by
-    simp [foldSpec, DomainSpec.denote, Finite.Domain.admit, Values.get, bounded]
+    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
+      (.elements xs)).admit = _
+    simp [Finite.Domain.admit, bounded]
   have folded := Evaluation.denoteFold_reference (closedMeanings (F := F) (G := G) definitions) foldSpec
     (.cons xs .nil) (.cons (0 : F) .nil) .nil xs admitted
     (fun (state : Values (assignment F G) [scalar]) (x : F) => Values.cons (state.get .here + x) .nil) (fun _ => True) trivial (by

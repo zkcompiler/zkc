@@ -1,5 +1,6 @@
 #include "Kernel/Support.h"
 #include "MathematicalSupport.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -106,7 +107,7 @@ class LoweringVerifier {
             return refuse(target, "lowering comparison work limit exceeded");
           if (demanded.contains(&op))
             for (auto value : op.getResults())
-              if (!isa<poly::PolynomialType>(value.getType()) &&
+              if (!mathematical::isFormalType(value.getType()) &&
                   !realized.contains(value))
                 pending.push_back(value);
         }
@@ -120,7 +121,7 @@ class LoweringVerifier {
           return refuse(target, "lowering comparison work limit exceeded");
         auto *definition = value.getDefiningOp();
         if (!definition || !isTotal(definition) ||
-            (!isa<poly::PolynomialType>(value.getType()) &&
+            (!mathematical::isFormalType(value.getType()) &&
              realized.contains(value)) ||
             !visited.insert(definition).second)
           continue;
@@ -172,10 +173,10 @@ class LoweringVerifier {
           auto kernelCall = dyn_cast<kernel::CallOp>(instruction);
           auto entry = kernelCall ? kernel::resolve(kernelCall, kernelSymbols)
                                   : func::FuncOp();
-          auto unit = entry ? dyn_cast<kernel::ModuleOp>(entry->getParentOp())
-                            : kernel::ModuleOp();
+          auto unit = entry ? dyn_cast<mlir::ModuleOp>(entry->getParentOp())
+                            : mlir::ModuleOp();
           if (!unit || !generatedKernels.insert(unit).second ||
-              sourceSymbols.lookup(unit.getSymName()) ||
+              sourceSymbols.lookup(SymbolTable::getSymbolName(unit)) ||
               kernelCall.getInputs() != function.getArguments() ||
               failed(kernel::verifyDependencies(before, unit)))
             return refuse(call, "missing or changed actual numerical closure");
@@ -218,7 +219,7 @@ class LoweringVerifier {
             for (auto [source, actual] :
                  zip(op->getResults(), mathematics->getResults())) {
               localValues[source] = actual;
-              if (!isa<poly::PolynomialType>(source.getType()))
+              if (!mathematical::isFormalType(source.getType()))
                 realized.insert(source);
             }
             mathematics = mathematics->getNextNode();
@@ -261,7 +262,7 @@ class LoweringVerifier {
         llvm::DenseMap<Value, Value> results;
         for (auto *op : needed)
           for (Value result : op->getResults())
-            if (!isa<poly::PolynomialType>(result.getType()))
+            if (!mathematical::isFormalType(result.getType()))
               results[localValues.lookup(result)] = result;
         llvm::DenseSet<Value> exported;
         for (auto [value, output] :

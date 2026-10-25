@@ -14,15 +14,6 @@ namespace Zkc.Source.Structured
 def closedInterface : PIR.Signature := ⟨Empty, fun value => nomatch value⟩
 abbrev Closed (A : Type) := PIR.Process closedInterface A
 
-/-- Nominal domain interpretation. Services retain their actual handle. -/
-abbrev assignment (F G : Type) : Ty → Type
-  | .boolean => Bool
-  | .index => Nat
-  | .field _ => F
-  | .vector _ => List F
-  | .group _ => G
-  | .service _ => Nat
-
 /-! Domain carriers. Domain identities are the native catalogue strings that
 exported sorts name. Carriers interpret identities as types and nothing else, so
 the value interpretation needs no instance arguments; the structures operations
@@ -38,19 +29,64 @@ abbrev uniformCarriers (F G : Type) : Carriers where
   Field := fun _ => F
   Group := fun _ => G
 
-/-- Values of each sort under the carriers. Services retain their actual handle.
-The case analysis is the one of `assignment` in this module, so that the uniform
-carriers have the same values by reducible definitional unfolding. -/
-abbrev Carriers.Value (carriers : Carriers) : Ty → Type
-  | .boolean => Bool
-  | .index => Nat
-  | .field domain => carriers.Field domain
-  | .vector domain => List (carriers.Field domain)
-  | .group domain => carriers.Group domain
-  | .service _ => Nat
+/- Products and sequences retain the domain interpretation of each member.
+Services are values only at admitted direct ports; aggregate admission refuses
+nested service handles. -/
+mutual
+  @[reducible] def Carriers.Value (carriers : Carriers) : Ty → Type
+    | .boolean => Bool
+    | .index => Nat
+    | .field domain => carriers.Field domain
+    | .vector domain => List (carriers.Field domain)
+    | .group domain => carriers.Group domain
+    | .service _ => Nat
+    | .sequence element => List (carriers.Value element)
+    | .product _ _ fields => carriers.ProductValue fields
+  @[reducible] def Carriers.ProductValue (carriers : Carriers) : ProductFields → Type
+    | .nil => Unit
+    | .cons type rest => carriers.Value type × carriers.ProductValue rest
+end
 
-theorem assignment_eq_value (F G : Type) : assignment F G = (uniformCarriers F G).Value := by
-  with_reducible rfl
+/-- Uniform carriers are a specialization of the same aggregate interpretation. -/
+abbrev assignment (F G : Type) := (uniformCarriers F G).Value
+
+theorem assignment_eq_value (F G : Type) : assignment F G = (uniformCarriers F G).Value := rfl
+
+def ProductFields.pack {carriers : Carriers} : (fields : ProductFields) →
+    Values carriers.Value fields.toList → carriers.ProductValue fields
+  | .nil, .nil => ()
+  | .cons _ fields, .cons value rest => (value, fields.pack rest)
+
+def ProductFields.unpack {carriers : Carriers} : (fields : ProductFields) →
+    carriers.ProductValue fields → Values carriers.Value fields.toList
+  | .nil, () => .nil
+  | .cons _ fields, (value, rest) => .cons value (fields.unpack rest)
+
+@[simp] theorem ProductFields.unpack_pack {carriers : Carriers} (fields : ProductFields)
+    (values : Values carriers.Value fields.toList) :
+    fields.unpack (fields.pack values) = values := by
+  cases fields with
+  | nil => cases values; rfl
+  | cons type rest =>
+    cases values with
+    | cons value values =>
+      exact congrArg (Values.cons value) (ProductFields.unpack_pack rest values)
+termination_by fields
+
+@[simp] theorem ProductFields.pack_unpack {carriers : Carriers} (fields : ProductFields)
+    (value : carriers.ProductValue fields) :
+    fields.pack (fields.unpack value) = value := by
+  cases fields with
+  | nil => cases value; rfl
+  | cons type rest =>
+    rcases value with ⟨value, values⟩
+    exact congrArg (Prod.mk value) (ProductFields.pack_unpack rest values)
+termination_by fields
+
+def Collection.values {carriers : Carriers} : (collection : Collection) →
+    carriers.Value collection.type → List (carriers.Value collection.element)
+  | .vector _, values => values
+  | .sequence _, values => values
 
 /-- Site observations are the only configurable effects of mathematical bodies.
 Group operations themselves use the lawful module instances directly. -/

@@ -72,7 +72,7 @@ Operation *product(ModuleOp module) {
   Operation *result = nullptr;
   module.walk([&](Operation *op) {
     auto *meaning = finite::semantics(op);
-    if (!result && op->getParentOfType<kernel::ModuleOp>() && meaning &&
+    if (!result && op->getParentOfType<mlir::ModuleOp>() && meaning &&
         meaning->identity == MathematicalIdentity::FieldMultiply)
       result = op;
   });
@@ -100,9 +100,9 @@ unsigned matvecs(ModuleOp module) {
 // Return a scalar through a nonzero result coordinate and retain another exact
 // coordinate. No numerical normalization or additional scalar work is involved.
 func::CallOp outlineProduct(Operation *operation) {
-  auto unit = operation->getParentOfType<kernel::ModuleOp>();
+  auto unit = operation->getParentOfType<mlir::ModuleOp>();
   OpBuilder builder(unit.getContext());
-  builder.setInsertionPointToEnd(&unit.getBody().front());
+  builder.setInsertionPointToEnd(unit.getBody());
   Type field = operation->getResult(0).getType();
   auto helper = func::FuncOp::create(
       builder, operation->getLoc(), "coordinate_helper",
@@ -125,8 +125,10 @@ func::CallOp outlineProduct(Operation *operation) {
 }
 void inlineEntries(ModuleOp module) {
   unsigned remaining = 10000;
-  module.walk([&](kernel::ModuleOp unit) {
-    auto entry = kernel::getEntry(unit);
+  module.walk([&](mlir::ModuleOp unit) {
+    if (!mathematical::isComputationUnit(unit))
+      return;
+    auto entry = mathematical::getComputationEntry(unit);
     require(bool(entry), "missing raw Kernel entry");
     for (auto iterator = entry.front().begin();
          iterator != entry.front().end();) {
@@ -192,13 +194,9 @@ void routeOuterInputs(ModuleOp module) {
   helper.walk([&](local::ApplyOp call) { inner = call; });
   require(bool(inner), "missing nested call for input routing");
   OpBuilder builder(helper);
-  OperationState unitState(helper.getLoc(),
-                           kernel::ModuleOp::getOperationName());
-  unitState.addAttribute("sym_name", builder.getStringAttr("routing"));
-  unitState.addRegion();
-  auto unit = cast<kernel::ModuleOp>(builder.create(unitState));
-  unit.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&unit.getBody().front());
+  auto unit = mlir::ModuleOp::create(builder, helper.getLoc(), "routing");
+  unit->setAttr("exec.computation", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(unit.getBody());
   SmallVector<Type> types(inner->getOperandTypes());
   auto entry = func::FuncOp::create(builder, helper.getLoc(), "entry",
                                     builder.getFunctionType(types, types));
@@ -296,7 +294,7 @@ int main() {
               unsigned retained = 0, rawCalls = 0;
               prepared->walk([&](kernel::CallOp) { ++retained; });
               prepared->walk([&](func::CallOp op) {
-                rawCalls += bool(op->getParentOfType<kernel::ModuleOp>());
+                rawCalls += bool(op->getParentOfType<mlir::ModuleOp>());
               });
               require(!mathematics || (retained && rawCalls),
                       "source test no longer exercises retained helper "

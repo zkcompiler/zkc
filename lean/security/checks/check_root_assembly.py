@@ -45,7 +45,7 @@ def main(argv=None):
             generation.compile(module, source, source_root=sources)
         except RuntimeError:
             log = Path(generation.commands[-1]["log"]).read_text()
-            if not refused or "Type mismatch" not in log:
+            if not refused or generation.commands[-1]["returncode"] <= 0 or "Type mismatch" not in log:
                 raise
         else:
             if refused:

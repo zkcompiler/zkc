@@ -49,18 +49,33 @@ the closed wire profile. Application identity, setup, public inputs and prepared
 computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
-Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
-ordered Local invocations. Preparation and participant demand lowering form
+Logical [numerical units](spec/ir/kernel.md) use named `builtin.module` with
+`exec.computation` and standard functions. Stage admission checks every retained
+definition; the marker alone is not admission evidence. `kernel.call` retains
+ordered Local invocation. Preparation and participant demand lowering form
 units; the physical plan retains those units alongside the selected Local
 candidate until independent numerical and physical checks permit publication.
 Export receives the resulting physical program without Kernel operations.
-Normalization and numerical recipe checking consume Kernel-owned standard
+Normalization and numerical recipe checking consume these standard
 functions directly, with separate structural facts and call-specific selection
 restrictions.
 Existing installed backends execute the resulting operations. The checked physical
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
 standard SCF loops and are independently checked before Local lowering.
+Retained pointwise maps and selected sums now use a private
+[Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
+with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
+readback and execution through the current native handlers. General tensor
+transforms and writable-buffer ownership are outside this profile.
+Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
+negacyclic arithmetic, exact centered norms and natural-order transforms through
+ordered native contracts. Coefficient and evaluation values have distinct kernel
+APIs; evaluation operations retain the exact basis. These arithmetic capabilities
+do not provide a complete signature verifier. Formal `!poly.quotient<q,n>` values
+and source intrinsics retain exact modulus/degree until checked coefficient
+realization; helpers may carry them, executable ports and messages may not.
+
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and
@@ -273,10 +288,12 @@ reader checks actual edges, carried values and terminal propagation. The
 finite membership and indexed-read consumers through the current VM, including
 masks and duplicate/empty cases. Its AIR reciprocal control is a verifier-equation
 comparison, not a new lookup proof system. The independent Lean evaluator laws
-do not establish a native correspondence theorem. The current structured Lean
-import profile refuses the aggregate query type and finite-fold realization;
-the [formal scope](../lean/docs/spec/table-relations.md) records the missing
-source connection separately from native execution support.
+do not establish a native correspondence theorem. The structured Lean
+import admits the complete table subjects, including nominal queries and
+finite-fold realizations. Exact retained formula laws state the full Boolean
+result under reached length bounds and exhaustion otherwise; the
+[formal scope](../lean/docs/spec/table-relations.md) separates these source-model
+laws from native execution correspondence.
 
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.

@@ -12,6 +12,11 @@ namespace zkc::poly {
 inline constexpr uint64_t MaximumPolynomialArity = 32;
 inline constexpr uint64_t MaximumDomainLength = 64;
 
+// Closed free-polynomial family consumed by coefficient/evaluation expansion.
+// Dialect ownership alone does not make quotient or executable operations part
+// of this normalization family.
+bool isPolynomialNormalizationOperation(mlir::Operation *operation);
+
 mlir::LogicalResult verifyDomain(mlir::Operation *owner, llvm::StringRef field,
                                  mlir::ArrayAttr points);
 

@@ -2,6 +2,7 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -109,11 +110,11 @@ OwningOpRef<func::FuncOp> exactReadback(func::FuncOp source, Operation *owner,
 }
 // Normalization is an explicit checked edge, separate from exact substitution.
 // The original unit and all of its dependency/source roots stay immutable.
-OwningOpRef<ModuleOp>
-normalizeUnit(ModuleOp unit, uint64_t &remaining,
+OwningOpRef<mlir::ModuleOp>
+normalizeUnit(mlir::ModuleOp unit, uint64_t &remaining,
               llvm::DenseSet<Operation *> &polynomialGenerated,
               std::optional<CapacityCause> *capacity) {
-  auto entry = getEntry(unit);
+  auto entry = mathematical::getComputationEntry(unit);
   if (!entry || !entry.getBody().hasOneBlock())
     return {};
   if (!chargeCopy(unit, remaining, capacity))
@@ -126,18 +127,19 @@ normalizeUnit(ModuleOp unit, uint64_t &remaining,
     return {};
   for (auto &op : normalized.front().without_terminator())
     if (!mathematical::isTotal(&op) || isa<func::CallOp>(op) ||
-        op.getName().getDialectNamespace() == "poly")
+        poly::isPolynomialNormalizationOperation(&op))
       return {};
 
   // Clone each selected standard declaration once, retaining unit/function
   // attributes, positional ports and dependency symbols in their original
   // owner. Only the helper cache proposes and checks normalized bodies.
-  OwningOpRef<ModuleOp> scratch(cast<ModuleOp>(unit->cloneWithoutRegions()));
-  scratch->getBody().emplaceBlock();
+  OwningOpRef<mlir::ModuleOp> scratch(
+      cast<mlir::ModuleOp>(unit->cloneWithoutRegions()));
+  scratch->getBodyRegion().emplaceBlock();
   OpBuilder builder(unit.getContext());
-  builder.setInsertionPointToEnd(&scratch->getBody().front());
+  builder.setInsertionPointToEnd(scratch->getBody());
   IRMapping mapping;
-  for (auto &declaration : unit.getBody().front()) {
+  for (auto &declaration : *unit.getBody()) {
     auto checked = helpers.lookup(&declaration);
     auto *selected = checked ? checked.getOperation() : &declaration;
     if (!chargeCopy(selected, remaining, capacity))

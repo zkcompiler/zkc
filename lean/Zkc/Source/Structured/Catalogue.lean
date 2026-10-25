@@ -276,12 +276,12 @@ and its octic extension. Carrier cardinalities belong to the selected model. -/
 def koalaBearCatalogue : Catalogue where
   nominals := [
     { identity := "koala-bear", sort := .field, members := [],
-      capabilities := ["TwoAdicField", "Field", "CommRing", "PrimeField", "CharacteristicNotTwo"],
+      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"],
       modulus := some 2130706433 },
     { identity := "koala-bear.ext8-binomial3", sort := .field,
       members := [("BaseField", "koala-bear")],
-      capabilities := ["IndexRandomness", "ExtensionField", "TwoAdicField", "Field",
-        "CommRing", "CharacteristicNotTwo"], modulus := some 2130706433 }]
+      capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
+        "ExtensionField", "IndexRandomness"], modulus := some 2130706433 }]
   services := [{ contract := "random.koala-bear.ext8-binomial3/0",
                  sampled := "koala-bear.ext8-binomial3", methods := ["draw", "index"] }]
   types := [("field", "koala-bear"), ("vector", "koala-bear"),

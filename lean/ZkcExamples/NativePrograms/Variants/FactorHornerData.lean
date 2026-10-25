@@ -14,7 +14,7 @@ namespace ZkcExamples.NativePrograms.Variants.FactorHornerData
 open Zkc.Source.Common.Native
 
 def snapshot : Snapshot where
-  source := "sha256:4729504d0cfb211423c48553fe44539d2ceca3f13a036ba4d308f26d0773c853"
+  source := "sha256:59e644f4a15ecf7d346d345ebfb0b8bd68787527617309c0cd538e641423e836"
   symbol := "s15h666163746f725f6f70656e696e677314h486f726e657250726f746f636f6c"
   roles := ["role00000000", "role00000001"]
   inputs := [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]

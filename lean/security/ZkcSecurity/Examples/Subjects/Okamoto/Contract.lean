@@ -101,6 +101,9 @@ theorem holds_iff (firstBase secondBase point : G) (witnesses : F × F) :
     (.cons (decide (point = witnesses.1 • firstBase + witnesses.2 • secondBase)) .nil :
       Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
+  change decide (point = witnesses.1 • firstBase + witnesses.2 • secondBase) = true ↔
+    point = witnesses.1 • firstBase + witnesses.2 • secondBase
+  simp only [decide_eq_true_eq]
 
 /-- Only private producer coordinates are used by the generic reader. -/
 def embed (witnesses : F × F) : retained.Witness F G :=

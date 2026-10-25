@@ -73,7 +73,7 @@ for mode, options, families in (
     assert no_fields != ir
     reject_both(f"{mode}: empty property schema", no_fields, "empty properties")
 
-for operation in ("poly.exec.fold", "pcs.exec.commit", "oracle.exec.commit", "relation.r1cs"):
+for operation in ("poly.exec.fold", "commitment.exec.polynomial_commit", "commitment.exec.vector_commit", "relation.r1cs"):
     malformed = (f'module {{ "{operation}"() '
                  '<{surprise = "must-not-disappear"}> : () -> () }')
     reject_both(f"{operation}: conversion precedes verification", malformed)

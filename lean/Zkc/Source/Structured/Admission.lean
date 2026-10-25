@@ -19,9 +19,16 @@ abbrev Facts := List (Nat × Nat)
 
 def validString (value : String) (empty : Bool := false) : Bool :=
   value.utf8ByteSize ≤ 512 && (empty || !value.isEmpty)
-def Ty.isService : Ty → Bool
-  | .service _ => true
-  | _ => false
+mutual
+  def Ty.isService : Ty → Bool
+    | .service _ => true
+    | .sequence element => element.isService
+    | .product _ _ fields => fields.hasService
+    | _ => false
+  def ProductFields.hasService : ProductFields → Bool
+    | .nil => false
+    | .cons type rest => type.isService || rest.hasService
+end
 
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
 def validPreparationName (name : String) : Bool :=
@@ -43,23 +50,39 @@ def validProtocolIdentifier (name : String) : Bool :=
 catalogue rows by `Snapshot.checkCatalogue`. -/
 def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries
 
-/-- An admitted sort instance: the exported rows give its identity the right
+/- An admitted sort instance: the exported rows give its identity the right
 sort, and the environment admits that instance. -/
-def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
-  | .boolean | .index => pure ()
-  | .field d => do
-    discard <| exported.expect d .field
-    if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
-  | .vector d => do
-    discard <| exported.expect d .field
-    if !environment.types.contains ("vector", d) then throw "structured-type-unadmitted"
-  | .group g => do
-    discard <| exported.expect g .group
-    if !environment.types.contains ("group", g) then throw "structured-type-unadmitted"
-  | .service c => do
-    let service ← exported.findService c
-    discard <| exported.expect service.sampled .field
-    if !(environment.services.map (·.contract)).contains c then throw "structured-type-unadmitted"
+mutual
+  def Catalogue.checkType (exported environment : Catalogue) : Ty → Except String Unit
+    | .boolean | .index => pure ()
+    | .field d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("field", d) then throw "structured-type-unadmitted"
+    | .vector d => do
+      discard <| exported.expect d .field
+      if !environment.types.contains ("vector", d) then throw "structured-type-unadmitted"
+    | .group g => do
+      discard <| exported.expect g .group
+      if !environment.types.contains ("group", g) then throw "structured-type-unadmitted"
+    | .service c => do
+      let service ← exported.findService c
+      discard <| exported.expect service.sampled .field
+      if !(environment.services.map (·.contract)).contains c then throw "structured-type-unadmitted"
+    | .sequence element => do
+      if element.isService then throw "structured-aggregate-service"
+      exported.checkType environment element
+    | .product identity constructor fields => do
+      if !validString identity || !validString constructor || fields.toList.length > 512 then
+        throw "structured-product"
+      if fields.hasService then throw "structured-aggregate-service"
+      exported.checkProductFields environment fields
+  def Catalogue.checkProductFields (exported environment : Catalogue) :
+      ProductFields → Except String Unit
+    | .nil => pure ()
+    | .cons type rest => do
+      exported.checkType environment type
+      exported.checkProductFields environment rest
+end
 
 def validRefs (refs : List Nat) : Bool := refs.length ≤ Limits.listEntries && refs.all (· ≤ Limits.instructions)
 
@@ -127,10 +150,13 @@ def Domain.resolve (domain : Domain) : Except String DomainSpec := do
     | .elements index => pure (index, false)
     | .indices index 0 => pure (index, true)
     | .indices _ _ => throw "structured-domain-axis"
-  let some (.vector field) := domain.inputs[index]? | throw "structured-domain-container"
-  let container ← decodeVariable domain.inputs (.vector field) index |>.mapError
+  let collection ← match domain.inputs[index]? with
+    | some (.vector field) => pure (Collection.vector field)
+    | some (.sequence element) => pure (Collection.sequence element)
+    | _ => throw "structured-domain-container"
+  let container ← decodeVariable domain.inputs collection.type index |>.mapError
     fun _ => "structured-domain-container"
-  return ⟨domain.name, domain.inputs, field, container, indices⟩
+  return ⟨domain.name, domain.inputs, collection, container, indices⟩
 
 def Bound.valid (inputs : List Ty) (bound : Bound) : Bool :=
   bound.axis == 0 && inputs[bound.index]? == some .index &&
@@ -262,7 +288,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
-  | .boundedAt .. => kind == .math
+  | .boundedAt .. | .makeProduct .. | .getProduct .. => kind == .math
   | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
@@ -384,6 +410,15 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .select type =>
     if type.isService then throw "structured-type-unsupported"
     return .select type
+  | .makeProduct constructor =>
+    let [.product identity actual fields] := results | throw "structured-product-result"
+    if constructor != actual then throw "structured-product-constructor"
+    return .makeProduct identity actual fields
+  | .getProduct index =>
+    let [.product identity constructor fields] := argumentTypes | throw "structured-product-operand"
+    let some type := fields.toList[index]? | throw "structured-product-index"
+    let field ← decodeVariable fields.toList type index |>.mapError fun _ => "structured-product-index"
+    return .getProduct identity constructor fields type field
   | .boundedAt d =>
     discard <| catalogue.expect d .field
     match factOperands with

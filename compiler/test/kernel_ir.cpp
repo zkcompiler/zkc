@@ -18,7 +18,7 @@ constexpr llvm::StringLiteral aliases = R"mlir(
 !P = !poly.polynomial<"bls12-381.fr", 1>
 )mlir";
 constexpr llvm::StringLiteral numbers = R"mlir(
- kernel.module @numbers {
+ module @numbers attributes {exec.computation} {
    func.func private @twice(%x:!F) -> !F {
      %v = algebra.field_add %x, %x : (!F,!F)->!F
      func.return %v : !F
@@ -44,9 +44,20 @@ OwningOpRef<mlir::ModuleOp> parse(StringRef text, MLIRContext &context) {
   require(bool(result), "test input did not parse");
   return result;
 }
+LogicalResult admit(mlir::ModuleOp module) {
+  if (failed(verify(module)))
+    return failure();
+  auto result = module.walk([](mlir::ModuleOp unit) {
+    if (mathematical::isComputationUnit(unit) &&
+        failed(mathematical::verifyComputationUnit(unit)))
+      return WalkResult::interrupt();
+    return WalkResult::advance();
+  });
+  return failure(result.wasInterrupted());
+}
 void accepts(StringRef text, MLIRContext &context) {
   auto module = parse(text, context);
-  require(succeeded(verify(*module)), "valid Kernel IR was refused");
+  require(succeeded(admit(*module)), "valid Kernel IR was refused");
 }
 void rejects(StringRef text, StringRef code, MLIRContext &context) {
   auto module = parse(text, context);
@@ -55,7 +66,7 @@ void rejects(StringRef text, StringRef code, MLIRContext &context) {
     diagnostic += value.str();
     return success();
   });
-  require(failed(verify(*module)), "malformed Kernel IR was admitted");
+  require(failed(admit(*module)), "malformed Kernel IR was admitted");
   require(namesIdentifier(diagnostic, code),
           "unexpected refusal: " + diagnostic);
 }
@@ -128,9 +139,9 @@ int main() {
   Cases cases;
   cases.run("closed standalone unit, nested linkage and ordered call", [&] {
     auto module = parse(standalone(numbers.str() + work.str()), context);
-    require(succeeded(verify(*module)), "standalone numerical unit refused");
-    auto unit = *module->getOps<kernel::ModuleOp>().begin();
-    auto entry = kernel::getEntry(unit);
+    require(succeeded(admit(*module)), "standalone numerical unit refused");
+    auto unit = *module->getOps<mlir::ModuleOp>().begin();
+    auto entry = mathematical::getComputationEntry(unit);
     require(entry && entry.getSymName() == "entry", "wrong public entry");
     auto function = *module->getOps<local::FuncOp>().begin();
     auto call = cast<kernel::CallOp>(function.getBody().front().front());
@@ -148,6 +159,30 @@ int main() {
     llvm::raw_string_ostream stream(printed);
     module->print(stream);
     accepts(printed, context);
+  });
+  cases.run("profile marker is required even on an unused nested module", [&] {
+    auto text = replace(profileUnit("exec"), " local.func @work",
+                        " module @unclassified {func.func @entry() "
+                        "{func.return}} local.func @work");
+    rejects(text, "computation-profile", context);
+  });
+  cases.run("profile marker does not admit an unused external helper", [&] {
+    auto text = replace(profileUnit("exec"), " local.func @work",
+                        " module @unused attributes {exec.computation} {"
+                        "func.func @entry() {func.return} func.func private "
+                        "@external()} local.func @work");
+    rejects(text, "mathematical-formation", context);
+  });
+  cases.run("computation marker has an exact type", [&] {
+    rejects(standalone("module @unit attributes {exec.computation=true} {"
+                       "func.func @entry() {func.return}}"),
+            "computation-profile", context);
+  });
+  cases.run("computation marker cannot decorate a function", [&] {
+    rejects(
+        standalone(
+            "func.func @entry() attributes {exec.computation} {func.return}"),
+        "computation-profile", context);
   });
   for (StringRef profile : {"protocol", "participant", "exec"})
     cases.run("logical Kernel admission in " + profile,
@@ -171,7 +206,7 @@ int main() {
                            replace(work, "site=\"numerical\"",
                                    ("site=\"numerical\"," + evidence).str())),
                 context);
-      require(succeeded(verify(*module)), "optional Kernel evidence refused");
+      require(succeeded(admit(*module)), "optional Kernel evidence refused");
       auto function = *module->getOps<local::FuncOp>().begin();
       auto call = cast<kernel::CallOp>(function.getBody().front().front());
       require(!isMemoryEffectFree(call) && !isSpeculatable(call),
@@ -183,7 +218,7 @@ int main() {
     });
   cases.run("return-only numerical entry", [&] {
     accepts(standalone(R"mlir(
-      kernel.module @empty { func.func @entry() {func.return} }
+      module @empty attributes {exec.computation} { func.func @entry() {func.return} }
       local.func @work() {
         kernel.call @empty::@entry() {site="empty"} : ()->()
         local.return
@@ -218,7 +253,7 @@ int main() {
                   work, "site=\"numerical\"",
                   ("site=\"numerical\"," + attribute + "=\"invalid\"").str())),
           ParserConfig(&context, false));
-      require(!module || failed(verify(*module)),
+      require(!module || failed(admit(*module)),
               "non-array Kernel evidence was admitted");
       require(diagnostic.find(attribute.str()) != std::string::npos,
               "unexpected attribute type refusal: " + diagnostic);
@@ -232,15 +267,14 @@ int main() {
                      replace(work, "site=\"numerical\"",
                              "site=\"numerical\",policy=[true,false,false]")),
           context);
-      auto unit = *module->getOps<kernel::ModuleOp>().begin();
-      auto entry = kernel::getEntry(unit);
+      auto unit = *module->getOps<mlir::ModuleOp>().begin();
+      auto entry = mathematical::getComputationEntry(unit);
       auto function = *module->getOps<local::FuncOp>().begin();
       auto call = cast<kernel::CallOp>(function.getBody().front().front());
       if (mutation == "entry visibility" || mutation == "helper visibility") {
-        auto target =
-            mutation == "entry visibility"
-                ? entry
-                : *unit.getBody().front().getOps<func::FuncOp>().begin();
+        auto target = mutation == "entry visibility"
+                          ? entry
+                          : *unit.getBody()->getOps<func::FuncOp>().begin();
         target->setAttr("sym_visibility", StringAttr::get(&context, "invalid"));
       } else if (mutation == "entry signature") {
         entry->setAttr("function_type",
@@ -265,7 +299,7 @@ int main() {
     });
   cases.run("physical refuses a dormant logical unit", [&] {
     rejects(R"mlir(module {
-      "protocol.module"() ({ kernel.module @unused {
+      "protocol.module"() ({ module @unused attributes {exec.computation} {
         func.func @entry() { func.return }
       } }) {profile=#protocol.profile<physical>} : ()->()
     })mlir",
@@ -274,7 +308,7 @@ int main() {
   cases.run(
       "public execution reader refuses unresolved Kernel publication", [&] {
         auto module = parse(profileUnit("exec"), context);
-        require(succeeded(verify(*module)), "logical Exec control refused");
+        require(succeeded(admit(*module)), "logical Exec control refused");
         refuses(protocol::readExecutionModel(*module), "kernel-profile");
       });
   cases.run("internal realization names cannot collide with authored locals",
@@ -320,59 +354,73 @@ int main() {
   });
   for (const auto &test : {
            std::tuple<StringRef, StringRef, StringRef>{
-               "missing entry", "kernel.module @unit {}", "kernel-entry"},
+               "missing entry", "module @unit attributes {exec.computation} {}",
+               "computation-entry"},
            {"two entries",
-            "kernel.module @unit { func.func @a() {func.return} func.func @b() "
+            "module @unit attributes {exec.computation} { func.func @a() "
+            "{func.return} func.func @b() "
             "{func.return} }",
-            "kernel-entry"},
+            "computation-entry"},
            {"no public entry",
-            "kernel.module @unit {func.func private @a() {func.return}}",
-            "kernel-entry"},
-           {"external entry", "kernel.module @unit {func.func @a()}",
+            "module @unit attributes {exec.computation} {func.func private "
+            "@a() {func.return}}",
+            "computation-entry"},
+           {"external entry",
+            "module @unit attributes {exec.computation} {func.func @a()}",
             "func.func"},
            {"external dormant helper",
-            "kernel.module @unit {func.func @a() {func.return} func.func "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "{func.return} func.func "
             "private @unused()}",
             "mathematical-formation"},
            {"unsupported declaration",
-            "kernel.module @unit {func.func @a() {func.return} local.func "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "{func.return} local.func "
             "@unused() {local.return}}",
-            "kernel-formation"},
+            "computation-formation"},
            {"unit attribute",
-            "kernel.module @unit attributes {assume=true} {func.func @a() "
+            "module @unit attributes {exec.computation, test.assume=true} "
+            "{func.func @a() "
             "{func.return}}",
-            "kernel-formation"},
+            "computation-formation"},
            {"entry attribute",
-            "kernel.module @unit {func.func @a() attributes {assume=true} "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "attributes {assume=true} "
             "{func.return}}",
             "mathematical-formation"},
            {"polynomial port",
-            "kernel.module @unit {func.func @a(%p:!P) -> !P {func.return "
+            "module @unit attributes {exec.computation} {func.func @a(%p:!P) "
+            "-> !P {func.return "
             "%p:!P}}",
-            "kernel-entry"},
+            "computation-entry"},
            {"affine port",
-            "kernel.module @unit {func.func "
+            "module @unit attributes {exec.computation} {func.func "
             "@a(%r:!local.capability<\"rng:bls12-381.fr\">) {func.return}}",
-            "kernel-entry"},
+            "computation-entry"},
            {"dormant resource helper",
-            "kernel.module @unit {func.func @a() {func.return} func.func "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "{func.return} func.func "
             "private @r(%r:!local.capability<\"rng:bls12-381.fr\">) "
             "{func.return}}",
             "mathematical-formation"},
            {"entry preconditions",
-            "kernel.module @unit {func.func @a(%x:!A,%i:ui64) attributes "
+            "module @unit attributes {exec.computation} {func.func "
+            "@a(%x:!A,%i:ui64) attributes "
             "{data.preconditions=[#data.index_bound<1,0,0>]} {func.return}}",
-            "kernel-entry"},
+            "computation-entry"},
            {"dormant recursive helper",
-            "kernel.module @unit {func.func @a() {func.return} func.func "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "{func.return} func.func "
             "private @r() {func.call @r():()->() func.return}}",
             "mathematical-formation"},
            {"dormant unsupported body",
-            "kernel.module @unit {func.func @a() {func.return} func.func "
+            "module @unit attributes {exec.computation} {func.func @a() "
+            "{func.return} func.func "
             "private @r() {%v=arith.constant 1:i32 func.return}}",
             "mathematical-dependencies"},
            {"discardable mathematical attribute",
-            "kernel.module @unit {func.func @a(%x:!F)->!F "
+            "module @unit attributes {exec.computation} {func.func "
+            "@a(%x:!F)->!F "
             "{%v=algebra.field_add %x,%x {assume=true}:(!F,!F)->!F func.return "
             "%v:!F}}",
             "mathematical-formation"},
@@ -408,7 +456,7 @@ int main() {
                    replace(work, "site=\"numerical\"",
                            "site=\"numerical\",arg_attrs=[{}],res_attrs=[{}]"));
     auto module = parse(source, context);
-    require(bool(module) && succeeded(verify(*module)),
+    require(bool(module) && succeeded(admit(*module)),
             "empty standard port dictionaries should be admitted");
     rejects(replace(source, "arg_attrs=[{}]", "arg_attrs=[{assume=true}]"),
             "kernel-call-attribute", context);
@@ -422,7 +470,7 @@ int main() {
   });
   cases.run("Kernel calls cannot occur at module scope", [&] {
     rejects(standalone(R"mlir(
-      kernel.module @unit { func.func @entry() {func.return} }
+      module @unit attributes {exec.computation} { func.func @entry() {func.return} }
       kernel.call @unit::@entry() {site="call"} : ()->()
     )mlir"),
             "kernel-call-context", context);
@@ -439,7 +487,7 @@ int main() {
   cases.run("dormant helper cannot escape its owning symbol table", [&] {
     rejects(standalone(R"mlir(
       func.func private @outside(%x:!F) -> !F {func.return %x:!F}
-      kernel.module @unit {
+      module @unit attributes {exec.computation} {
         func.func @entry() {func.return}
         func.func private @unused(%x:!F) -> !F {
           %v = func.call @outside(%x) : (!F)->!F
@@ -454,7 +502,7 @@ int main() {
                     : "helper premise refused at actual call",
               [&] {
                 std::string text = standalone(R"mlir(
-        kernel.module @bounded {
+        module @bounded attributes {exec.computation} {
           func.func private @at(%xs:!A,%i:ui64) -> !F
               attributes {data.preconditions=[#data.index_bound<1,0,0>]} {
             %v = "data.bounded_at"(%xs,%i) : (!A,ui64)->!F
@@ -478,7 +526,7 @@ int main() {
                     : "generic summary cannot hide an overflowing observation",
               [&] {
                 std::string text = standalone(R"mlir(
-        kernel.module @polynomial {
+        module @polynomial attributes {exec.computation} {
           func.func private @observe(%p:!P) -> !A {
             %v = "poly.coefficients"(%p) : (!P)->!A
             func.return %v : !A
@@ -500,7 +548,7 @@ int main() {
   cases.run("closed finite mathematics retains its owned domain and premises",
             [&] {
               accepts(standalone(R"mlir(
-      kernel.module @sum {
+      module @sum attributes {exec.computation} {
         "data.domain"() ({
         ^entry(%xs:!A):
           %d = "data.domain_indices"(%xs) {axis=0:i64} : (!A)->!data.domain<ui64>
@@ -522,7 +570,7 @@ int main() {
             });
   cases.run("unused domain dependencies still verify their constructors", [&] {
     rejects(standalone(R"mlir(
-      kernel.module @unit {
+      module @unit attributes {exec.computation} {
         func.func @entry() {func.return}
         "data.domain"() ({
         ^entry(%xs:!A):

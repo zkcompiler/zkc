@@ -23,9 +23,10 @@ bool charge(Operation *op, uint64_t &remaining) {
   return !walk.wasInterrupted();
 }
 } // namespace
-LogicalResult verifyDependencies(Operation *sourceOwner, ModuleOp candidate) {
+LogicalResult verifyDependencies(Operation *sourceOwner,
+                                 mlir::ModuleOp candidate) {
   SymbolTable source(sourceOwner), target(candidate);
-  auto entry = getEntry(candidate);
+  auto entry = mathematical::getComputationEntry(candidate);
   if (!entry)
     return refuse(candidate, "missing public entry");
   uint64_t remaining = 1000000;
@@ -64,15 +65,15 @@ LogicalResult verifyDependencies(Operation *sourceOwner, ModuleOp candidate) {
             original, current, OperationEquivalence::IgnoreLocations))
       return refuse(current, "actual helper computation differs");
   }
-  for (auto &definition : candidate.getBody().front())
+  for (auto &definition : *candidate.getBody())
     if (!reachable.contains(&definition))
       return refuse(&definition, "unit contains an unrelated dependency");
   return success();
 }
 LogicalResult verifyKernelClosure(Operation *sourceOwner,
                                   func::FuncOp sourceEntry,
-                                  ModuleOp candidate) {
-  auto target = getEntry(candidate);
+                                  mlir::ModuleOp candidate) {
+  auto target = mathematical::getComputationEntry(candidate);
   if (!target || !sourceEntry ||
       sourceEntry.getFunctionType() != target.getFunctionType())
     return refuse(candidate, "entry interface changed");

@@ -38,10 +38,18 @@ def stopText : PIR.Stop → String
   | .reject => ".reject" | .abort => ".abort" | .exhausted => ".exhausted"
   | .incomplete => ".incomplete" | .refused => ".refused"
 def boolText (value : Bool) : String := if value then "true" else "false"
-def tyText : Ty → String
-  | .boolean => ".boolean" | .index => ".index"
-  | .field d => app ".field" [quoted d] | .vector d => app ".vector" [quoted d]
-  | .group d => app ".group" [quoted d] | .service d => app ".service" [quoted d]
+mutual
+  def tyText : Ty → String
+    | .boolean => ".boolean" | .index => ".index"
+    | .field d => app ".field" [quoted d] | .vector d => app ".vector" [quoted d]
+    | .group d => app ".group" [quoted d] | .service d => app ".service" [quoted d]
+    | .sequence element => app ".sequence" [tyText element]
+    | .product identity constructor fields =>
+      app ".product" [quoted identity, quoted constructor, fieldsText fields]
+  def fieldsText : ProductFields → String
+    | .nil => ".nil"
+    | .cons type rest => app ".cons" [tyText type, fieldsText rest]
+end
 def typesText (types : List Ty) : String := listText (types.map tyText)
 def natsText (values : List Nat) : String := listText (values.map toString)
 def scopesText (scopes : List (List Nat)) : String := listText (scopes.map natsText)
@@ -65,6 +73,10 @@ def primitiveText : Primitive → String
   | .vectorAppend d => app ".vectorAppend" [quoted d] | .vectorEqual d => app ".vectorEqual" [quoted d]
   | .fieldEqual d => app ".fieldEqual" [quoted d]
 
+def collectionText : Collection → String
+  | .vector field => app ".vector" [quoted field]
+  | .sequence element => app ".sequence" [tyText element]
+
 /-- Syntax serialization only: callback regions are retained, never executed here. -/
 def opText : Op → String
   | .exec primitive => app ".exec" [primitiveText primitive]
@@ -81,12 +93,17 @@ def opText : Op → String
   | .booleanAnd => ".booleanAnd" | .booleanOr => ".booleanOr" | .booleanXor => ".booleanXor"
   | .booleanEqual => ".booleanEqual" | .booleanNotEqual => ".booleanNotEqual"
   | .select ty => app ".select" [tyText ty] | .boundedAt d => app ".boundedAt" [quoted d]
+  | .makeProduct identity constructor fields =>
+    app ".makeProduct" [quoted identity, quoted constructor, fieldsText fields]
+  | .getProduct identity constructor fields type field =>
+    app ".getProduct" [quoted identity, quoted constructor, fieldsText fields, tyText type,
+      positionText field.index]
   | .invoke helper => app ".invoke" [helperText helper]
   | .map spec => app ".map" ["⟨" ++ ", ".intercalate [quoted spec.helperName, quoted spec.field,
       listText (spec.rowwise.map boolText)] ++ "⟩"]
   | .fold spec =>
     let domain := "⟨" ++ ", ".intercalate [quoted spec.domain.name, typesText spec.domain.inputs,
-      quoted spec.domain.field, positionText spec.domain.container.index, boolText spec.domain.indices] ++ "⟩"
+      collectionText spec.domain.collection, positionText spec.domain.container.index, boolText spec.domain.indices] ++ "⟩"
     app ".fold" ["⟨" ++ ", ".intercalate [domain, typesText spec.state, typesText spec.captures,
       quoted spec.step, quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"]
   | .branch captures outputs => app ".branch" [typesText captures, typesText outputs]
@@ -222,6 +239,7 @@ def Carriers.valueType (carriers : Carriers) (ty : Ty) : String :=
   | .domain model, .field d => paren model ++ ".Field " ++ quoted d
   | .domain model, .vector d => app "List" [paren (paren model ++ ".Field " ++ quoted d)]
   | .domain model, .group d => paren model ++ ".Group " ++ quoted d
+  | _, .sequence _ | _, .product .. => app carriers.value [tyText ty]
 
 def emptyLabels : (Δ : Scope) → Values (fun _ => Option String) Δ
   | [] => .nil | _ :: rest => .cons none (emptyLabels rest)

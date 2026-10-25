@@ -311,8 +311,8 @@ public:
     }
     auto next = candidate.getBody().front().begin();
     for (auto &op : original.getBody().front()) {
-      if (isa<ModuleOp>(op) || (maps && (isa<algebra::MapRealizeOp>(op) ||
-                                         consumedHelpers.contains(&op))))
+      if (isa<mlir::ModuleOp>(op) || (maps && (isa<algebra::MapRealizeOp>(op) ||
+                                               consumedHelpers.contains(&op))))
         continue;
       while (next != candidate.getBody().front().end()) {
         auto binding = dyn_cast<local::OperationBindingOp>(*next);
@@ -352,7 +352,7 @@ public:
     for (auto &op : candidate.getBody().front()) {
       auto name = SymbolTable::getSymbolName(&op);
       auto *source = name ? sourceSymbols.lookup(name) : nullptr;
-      if (isa<ModuleOp>(op) ||
+      if (isa<mlir::ModuleOp>(op) ||
           (maps && (isa<algebra::MapRealizeOp>(op) ||
                     (source && consumedHelpers.contains(source)))))
         return refuse(candidate, "residual numerical declaration");
@@ -405,7 +405,9 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
     source = *pinned;
   }
   bool hasKernels = false;
-  source.walk([&](Operation *op) { hasKernels |= isa<ModuleOp, CallOp>(op); });
+  source.walk([&](Operation *op) {
+    hasKernels |= (mathematical::isComputationUnit(op) || isa<CallOp>(op));
+  });
   if (hasKernels) {
     // Reconstruct and check mathematical normalization/frontier only. No
     // executable emitter, selected menu or producer receipt enters this edge.

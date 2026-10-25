@@ -128,6 +128,30 @@ theorem additionalSpecialization_refused :
         [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩])) = some (.binding "_kernel_binding_4") := by
   decide +kernel
 
+/-- Retain the actual operation and implementation, but substitute its payload layout. -/
+def foreignPayloadLayout : Validator :=
+  { actual with bindings := actual.bindings.map fun binding =>
+      if binding.symbol = "_transcript_0" then
+        { binding with physicalArguments :=
+          [⟨.data (.group "bls12-381.g1"), "foreign.g1/0"⟩] }
+      else binding }
+
+theorem foreignPayloadLayout_refused :
+    refusal (checkLowering installed constructed foreignPayloadLayout) =
+      some (.binding "_transcript_0") := by decide +kernel
+
+/-- The field layout is installed for field absorption, not group absorption. -/
+def crossedPayloadLayout : Validator :=
+  { actual with bindings := actual.bindings.map fun binding =>
+      if binding.symbol = "_transcript_0" then
+        { binding with physicalArguments :=
+          [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩] }
+      else binding }
+
+theorem crossedPayloadLayout_refused :
+    refusal (checkLowering installed constructed crossedPayloadLayout) =
+      some (.binding "_transcript_0") := by decide +kernel
+
 /-- The commitment is received at a representation the vocabulary does not admit. -/
 def uncheckedRepresentation : Validator :=
   withAction actual 0 (.receive "label_636f6d6d69746d656e74_0" "label_636f6d6d69746d656e74_0"

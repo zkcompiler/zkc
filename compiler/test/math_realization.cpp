@@ -59,7 +59,9 @@ int main(int argc, char **argv) {
     require(isa<kernel::CallOp>(realized(*expanded).getBody().front().front()),
             "preparation bypassed logical Kernel IR");
     bool retainedPolynomial = false;
-    expanded->walk([&](kernel::ModuleOp unit) {
+    expanded->walk([&](mlir::ModuleOp unit) {
+      if (!mathematical::isComputationUnit(unit))
+        return;
       unit.walk([&](poly::MultiplyPolynomialOp) { retainedPolynomial = true; });
     });
     require(retainedPolynomial, "preparation erased the raw polynomial DAG");
@@ -161,7 +163,7 @@ int main(int argc, char **argv) {
     auto owner =
         cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
     auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
-    auto function = kernel::getEntry(*numerical);
+    auto function = mathematical::getComputationEntry(*numerical);
     auto &block = function.front();
     while (!block.empty())
       block.back().erase();
@@ -264,7 +266,7 @@ int main(int argc, char **argv) {
     auto owner =
         cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
     auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
-    auto function = kernel::getEntry(*numerical);
+    auto function = mathematical::getComputationEntry(*numerical);
     auto &block = function.front();
     while (!block.empty())
       block.back().erase();
@@ -393,7 +395,9 @@ int main(int argc, char **argv) {
   mutation("realized polynomial evaluation operand changed",
            [&](ModuleOp module) {
              bool changed = false;
-             module.walk([&](kernel::ModuleOp unit) {
+             module.walk([&](mlir::ModuleOp unit) {
+               if (!mathematical::isComputationUnit(unit))
+                 return;
                unit.walk([&](Operation *op) {
                  if (!changed && isa<poly::EvaluatePolynomialOp>(op)) {
                    auto entry = op->getParentOfType<func::FuncOp>();

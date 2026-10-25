@@ -65,6 +65,8 @@ theorem relation_iff (base key : G) (witness : F) :
     (.cons (decide (key = witness • base)) .nil : Values (assignment F G) [.boolean]) =
       .done (.cons true .nil)) ↔ _
   simp
+  change decide (key = witness • base) = true ↔ key = witness • base
+  simp only [decide_eq_true_eq]
 
 theorem relation_eq (base key : G) (witness : F) :
     Relation base key witness ↔ decide (witness • base = key) = true := by

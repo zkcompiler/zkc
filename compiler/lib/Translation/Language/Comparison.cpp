@@ -194,6 +194,13 @@ class Comparator {
     for (unsigned i = 0; i < actual.size(); ++i) {
       if (!charge(expected[i].cost()))
         return false;
+      if (const auto *quotient = expected[i].quotient()) {
+        auto type = mlir::dyn_cast<poly::QuotientType>(actual[i]);
+        if (!type || type.getModulus() != quotient->modulus ||
+            type.getDegree() != quotient->degree)
+          return fail("formal quotient layout differs");
+        continue;
+      }
       if (const auto *polynomial = expected[i].polynomial()) {
         auto type = mlir::dyn_cast<poly::PolynomialType>(actual[i]);
         if (!type || type.getDomain() != polynomial->field ||

@@ -38,15 +38,15 @@ def baseNominal : Nominal where
   identity := baseIdentity
   sort := .field
   members := []
-  capabilities := ["TwoAdicField", "Field", "CommRing", "PrimeField", "CharacteristicNotTwo"]
+  capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo", "PrimeField"]
   modulus := some q
 
 def octicNominal : Nominal where
   identity := octicIdentity
   sort := .field
   members := [("BaseField", baseIdentity)]
-  capabilities := ["IndexRandomness", "ExtensionField", "TwoAdicField", "Field",
-    "CommRing", "CharacteristicNotTwo"]
+  capabilities := ["TwoAdicField", "Field", "CommRing", "CharacteristicNotTwo",
+    "ExtensionField", "IndexRandomness"]
   modulus := some q
 
 /-- Only these two field rows and the octic random service are selected. -/
