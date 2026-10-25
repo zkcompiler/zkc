@@ -13,7 +13,7 @@ namespace ZkcExamples.Executable.DeferredRoundsProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:64563af6306230e9bba7c76d3ae612a34574b991a0146148ddcfd197f3d417e4"
+def program : String := "sha256:439b6b921393f3f2caf100197061e625a41b939246ce80abe9a6b60ca23409e3"
 
 /-- The local function `_calculation_1`. -/
 def function0 : Function :=
@@ -87,11 +87,11 @@ def validator : Validator where
     .ret ["v38", "v37"]]
   functions := [function0, function1, function2, function3, function4, function5, function6]
   bindings := [
-    ⟨"_kernel_binding_1", "field.equal", ["bls12-381.fr"], "arkworks/field.equal"⟩,
-    ⟨"_kernel_binding_2", "field.add", ["bls12-381.fr"], "arkworks/field.add"⟩,
-    ⟨"_kernel_binding_0", "field.mul", ["bls12-381.fr"], "arkworks/field.mul"⟩,
-    ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge"⟩,
-    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty"⟩,
-    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data"⟩]
+    ⟨"_kernel_binding_1", "field.equal", ["bls12-381.fr"], "arkworks/field.equal", []⟩,
+    ⟨"_kernel_binding_2", "field.add", ["bls12-381.fr"], "arkworks/field.add", []⟩,
+    ⟨"_kernel_binding_0", "field.mul", ["bls12-381.fr"], "arkworks/field.mul", []⟩,
+    ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge", []⟩,
+    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty", []⟩,
+    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data", [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]⟩]
 
 end ZkcExamples.Executable.DeferredRoundsProgramData

@@ -19,6 +19,8 @@ every operation binding those functions use. Names, sites, schemas and physical
 types are kept as the artifact spells them; a physical type is a value sort with
 a representation, such as G1 at `arkworks.g1/0`. An occurrence template carried
 by a transcript operation is decoded; other parameters stay text.
+Bindings retain the complete list of physical specialization arguments from the
+five-field native binding record. The bridge never erases that list.
 
 Participant instructions are typed receives, local calls, counted loops, the
 yield that ends a loop body and the final return. A loop names its count, which
@@ -48,7 +50,8 @@ instruction budget.
   the receive's physical type stops it after charging the receive. A decoded
   value of another sort is a contract failure.
 - Operations. A binding resolves through a `Vocabulary`: each row assigns a
-  meaning to an exact contract, static arguments and installed implementation,
+  meaning to an exact contract, static arguments, installed implementation and
+  physical specialization,
   and each representation row admits a sort at a representation. Meanings are
   those of `Zkc.Construction`: structured calculations
   (`Zkc.Construction.calculate`), the structured index and vector primitives
@@ -99,6 +102,10 @@ read. `installed` is the vocabulary of the native BLS12-381 deployments: the
 arkworks scalar-field, G1, scalar-vector and numerical expression kernels, the
 native index kernels and the Merlin transcript kernels of
 `merlin3.bls12-381.fr64be/0`.
+Its observation rows require the exact arkworks field or group specialization;
+an absent, different or additional physical argument has no installed meaning.
+Other installed rows require an empty specialization list. Native implementation
+correctness remains an assumption; matching a row is not a proof of a kernel.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the

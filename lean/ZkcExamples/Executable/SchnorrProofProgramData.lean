@@ -13,7 +13,7 @@ namespace ZkcExamples.Executable.SchnorrProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"
+def program : String := "sha256:e4e3ceccb896909a93fbf4711b60481a2f89ccea7a5c26ecc244e10c1f59efd5"
 
 /-- The local function `_calculation_2`. -/
 def function0 : Function :=
@@ -69,12 +69,12 @@ def validator : Validator where
     .ret ["v39", "v38"]]
   functions := [function0, function1, function2, function3, function4]
   bindings := [
-    ⟨"_kernel_binding_3", "curve.equal", ["bls12-381.g1"], "arkworks/curve.equal"⟩,
-    ⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "arkworks/curve.add"⟩,
-    ⟨"_kernel_binding_0", "curve.scale", ["bls12-381.g1"], "arkworks/curve.scale"⟩,
-    ⟨"_transcript_5", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data"⟩,
-    ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge"⟩,
-    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty"⟩,
-    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "group:bls12-381.g1"], "arkworks/transcript.native.indexed.observe.data"⟩]
+    ⟨"_kernel_binding_3", "curve.equal", ["bls12-381.g1"], "arkworks/curve.equal", []⟩,
+    ⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "arkworks/curve.add", []⟩,
+    ⟨"_kernel_binding_0", "curve.scale", ["bls12-381.g1"], "arkworks/curve.scale", []⟩,
+    ⟨"_transcript_5", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data", [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]⟩,
+    ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge", []⟩,
+    ⟨"_transcript_2", "indices.empty", [], "native/indices.empty", []⟩,
+    ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "group:bls12-381.g1"], "arkworks/transcript.native.indexed.observe.data", [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩]⟩]
 
 end ZkcExamples.Executable.SchnorrProofProgramData

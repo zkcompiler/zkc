@@ -81,13 +81,14 @@ inductive Action where
   | unsupported (name : String)
   deriving Repr
 
-/-- A declared operation binding: contract, static arguments and the installed
-implementation. -/
+/-- A declared operation binding, including the physical specialization of its
+installed implementation. -/
 structure Binding where
   symbol : String
   contract : String
   arguments : List String
   implementation : String
+  physicalArguments : List PhysicalType
   deriving DecidableEq, Repr
 
 /-- The validator participant selected by a deployment, with the functions and
