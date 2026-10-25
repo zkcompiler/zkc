@@ -112,19 +112,30 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     require(export["entry"] == entry, "source claims name another Entry")
     admission = export["admission"]
     require(isinstance(admission, dict), "source claims omit admission")
+    require(set(admission) == {"format", "original_sha256", "interface_sha256", "protocol_symbol",
+                               "capture", "installation"},
+            "unexpected source-claim admission fields")
+    for field in ("capture", "installation"):
+        require(isinstance(admission[field], str), f"source-claim {field} must be a string")
     require(admission.get("original_sha256") == digest(source), "source claims bind another original")
-    require(admission.get("original_identity") == digest(source).removeprefix("sha256:"),
-            "source claims carry another original identity")
     # The CLI appends one record terminator; exportSourceClaims hashes the
     # interface payload, before that terminator. Preserve all other bytes.
     require(admission.get("interface_sha256") == digest(interface_text.removesuffix("\n").encode()),
             "source claims bind another native interface")
+    interface = decode(interface_text)
+    require(isinstance(interface, dict) and interface.get("format") == "zkc.language-interface/0",
+            "source claims lack a native entry interface")
+    require(interface.get("entry") == entry, "native interface names another Entry")
+    require(interface.get("original") == admission["original_sha256"].removeprefix("sha256:"),
+            "native interface binds another original")
     original = decode(original_text)
     require(isinstance(original, list) and len(original) >= 4, "malformed admitted snapshot export")
     require(admission.get("format") == original[0] == "zkc.structured-source/0",
             "source claims bind another snapshot format")
     require(original[2] == admission["original_sha256"], "admitted snapshot binds another original")
     require(original[3] == admission.get("protocol_symbol"), "source claims bind another protocol")
+    require(interface.get("protocol") == original[3],
+            "native interface maps Entry to another protocol")
     require(isinstance(export["claims"], list), "source claims must be an array")
     results = []
     attachments = set()
@@ -149,7 +160,10 @@ def bind_export(export, *, entry, source, interface_text, original_text,
         if stage == "executable-bytes":
             require(program is not None, "byte request lacks its executable program")
             artifacts.append({"role": "verifier-program", "digest": digest(program)})
-        request["subject"] = {"unit": digest(original_text.encode()), "entry": entry,
+        # A source proof alias names a configured deployment. The admitted IR
+        # names its protocol by a symbol. Keep the alias for author-facing scope,
+        # and resolve the semantic subject through the exact checked interface.
+        request["subject"] = {"unit": digest(original_text.encode()), "entry": original[3],
                               "stage": stage, "artifacts": artifacts}
         attachment = deepcopy(item["attachment"])
         require(isinstance(attachment, dict), "claim attachment must be an object")
@@ -157,10 +171,15 @@ def bind_export(export, *, entry, source, interface_text, original_text,
         require(key not in attachments, "duplicate claim source node")
         attachments.add(key)
         results.append({"request": request, "request_digest": digest(canonical(request)),
+                        "source_entry": entry,
+                        "entry_association": {"source_entry": entry, "protocol": original[3],
+                            "interface_digest": admission["interface_sha256"],
+                            "attribution": "trusted-frontend-checked-interface"},
                         "attachment": attachment, "method": deepcopy(item["method"]),
                         "site_bindings": deepcopy(item["site_bindings"]),
                         "resolution": "pending-lean", "source_scope": "ir-relative"})
     return {"format": "zkc.bound-source-claims/0", "entry": entry,
             "native_export_digest": digest(canonical(export)), "claims": results,
-            "checked_links": ["native-original", "native-interface", "snapshot-source", "stage-artifacts"],
+            "checked_links": ["native-original", "native-interface", "source-entry-association",
+                              "snapshot-source", "stage-artifacts"],
             "required_links": ["typed-request-resolution", "source.correspondence"]}

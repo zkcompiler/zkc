@@ -253,6 +253,33 @@ class RecipeReader {
                                                         : "sequence.length",
                   inputs, {spelling});
     }
+    if (isa<data::PowerOfTwoOp>(source)) {
+      // Read each constant and SSA edge independently of recipe production.
+      // Doubling stays within ui64 through the final representable power.
+      Value result;
+      uint64_t power = 1;
+      for (unsigned exponent = 0; exponent < 64; ++exponent) {
+        auto exponentText = std::to_string(exponent);
+        auto powerText = std::to_string(power);
+        auto r = take("index.constant", {}, {}, {exponentText});
+        auto n = take("index.constant", {}, {}, {powerText});
+        if (!r || !n)
+          return {};
+        auto equalR = take("index.equal", {inputs[1], r});
+        auto equalN = take("index.equal", {inputs[0], n});
+        if (!equalR || !equalN)
+          return {};
+        auto current = take("bool.and", {equalR, equalN});
+        if (!current)
+          return {};
+        result = exponent == 0 ? current : take("bool.or", {result, current});
+        if (!result)
+          return {};
+        if (exponent < 63)
+          power *= 2;
+      }
+      return result;
+    }
     if (auto dim = dyn_cast<data::DimOp>(source)) {
       auto collection = cast<CollectionTypeInterface>(dim.getInput().getType());
       auto axis = dim.getAxisAttr().getInt();

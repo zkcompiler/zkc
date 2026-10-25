@@ -11,7 +11,7 @@ namespace Tests.StructuredApplicationAdmission
 private def protocol (name : String) (roles : List String) (inputs outputs : List Ty)
     (inputScopes outputScopes : List (List String)) (body : Block) : Definition :=
   .function ⟨name, .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨name, []⟩), body⟩
 
 private def unit (definitions : List Definition) (entry : String := "main") : Snapshot :=
   (let contractDefinitions : List Definition := definitions
@@ -118,7 +118,7 @@ private def helperNamespace := unit [
   protocol "main" ["P"] [.boolean] [] [["P"]] []
     (.block [.instruction (.guard "P") [0] [] [] "shared",
       .instruction (.localCall "helper" "P") [] [] [] "invoke"] (.ret [])),
-  .function ⟨"helper", .local, .privateDef, [], [], none, [], some ("helper", []),
+  .function ⟨"helper", .local, .privateDef, [], [], none, [], some (.local "helper" []),
     .block [] (.stop .reject "shared")⟩]
 
 private def render (parent : Option String) (leaf : String)
@@ -197,7 +197,7 @@ theorem serviceOrder_protocol_permutation :
 theorem application_without_headers_refused :
     checkProtocol (unit [caller, child]) [] []
       ⟨"main", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-        some ⟨["P", "V", "W"], [["P"], ["V"]], [["P"]]⟩, [], none,
+        some ⟨["P", "V", "W"], [["P"], ["V"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
         .block [.instruction (.protocolApply "child" ["P", "V"]) [0, 1] [.boolean] [] "call"] (.ret [0])⟩ =
       .error "structured-protocol-header" := rfl
 
@@ -230,7 +230,7 @@ def run : IO Unit := do
     ("wrong original Math edge", !accepted (unit [empty "main" [call "math" "a"],
       .function ⟨"math", .math, .privateDef, [], [], none, [], none, .block [] (.ret [])⟩])),
     ("wrong original Local edge", !accepted (unit [empty "main" [call "local" "a"],
-      .function ⟨"local", .local, .privateDef, [], [], none, [], some ("local", []), .block [] (.ret [])⟩])),
+      .function ⟨"local", .local, .privateDef, [], [], none, [], some (.local "local" []), .block [] (.ret [])⟩])),
     ("Math invocation of protocol", !accepted (unit [empty "main"
       [.instruction (.call "child") [] [] [] ""], empty "child"])),
     ("service aliases legal", accepted (unit [serviceCaller [0, 0], serviceChild])),
@@ -288,7 +288,8 @@ def run : IO Unit := do
     ("wrong lexical input after shift", !accepted (unit [protocol "main" ["P"] [service] [] [["P"]] []
       (.block [.instruction (.booleanConstant true) [] [.boolean] [] "",
         .instruction (.protocolApply "serviceChild" ["P"]) [0, 1] [] [] "call"] (.ret [])), serviceChild])),
-    ("nonidentifier protocol name", !accepted (unit [empty "main", empty "bad-name"])),
+    ("nonidentifier protocol name", !accepted (unit [empty "main",
+      changedFunction (empty "badName") fun f => { f with name := "bad-name" }])),
     ("private Math symbol grammar independent", accepted (unit [empty "main",
       .function ⟨"private.math-name", .math, .privateDef, [], [], none, [], none, .block [] (.ret [])⟩])),
     ("nonidentifier roster", !accepted (unit [protocol "main" ["P-x"] [] [] [] [] (.block [] (.ret []))])),

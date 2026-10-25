@@ -140,6 +140,16 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
+`just test-lean-security` also runs the Lean-backed receipt reporting controls
+in `lean/security/checks/test_receipt_reporting.py`. They exercise the actual
+kernel classifier and exported declarations, so they belong to this prepared
+formal lane; `just test-harness` requires no Lean installation. To run only these
+controls after preparing the packages, use
+`uv run --no-sync --locked pytest lean/security/checks/test_receipt_reporting.py`.
+Generated constructed-view and structured-binding controls run in the core
+Lean lane through `lake env`. Local-service export/admission controls require
+the compiler and run in the `lean-native` bridges stage with its selected build.
+
 `just test-lean-native` prepares the native compiler, the runtime CLI, the main Lean package and the ArkLib integration, then
 runs independent scalar and structured SSA/Lean comparisons, including primitive
 bindings and unchanged table helpers, the source/property

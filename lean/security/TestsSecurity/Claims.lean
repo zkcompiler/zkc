@@ -85,7 +85,7 @@ private noncomputable def resolved (endpoint : Semantics) : Resolved (registry (
   elaborated := by
     cases endpoint <;>
       simp [knowledgeProperty, knowledgeArguments, wire, subject, modelRegistry, resolveModel,
-        models, modelSchema, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.cardinality,
+        models, modelSchema, modelSchemaWith, responseDifference, ExtractionProfile.registry, named, checkArguments, reference, Numeric.natural, Numeric.naturalWith, Numeric.cardinality,
         Registry.lookup, Subject.check, Subject.targetReference, Subject.acceptance,
         Wire.TargetRef.matches, model, knowledge, checkCapabilities,
         show ZkcSecurity.Examples.Subjects.Schnorr.artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl] <;> rfl
@@ -224,7 +224,8 @@ example : knowledgeArguments (modelRegistry .idealMeaning)
     (subject (F := F) (G := G) .idealMeaning) =
       .ok (.error ⟨["exact field challenge cardinality"]⟩) := by
   simp [knowledgeArguments, wire, subject, Subject.check, checkCapabilities,
-    Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkArguments, named, Numeric.natural]
+    Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkArguments, named,
+    Numeric.natural, Numeric.naturalWith, knowledgeParameters, emptyParameters]
 
 -- A witness of one request cannot fill a receipt for a different meaning.
 #check_failure (show False from (endpointReceipt (F := F) (G := G) .idealMeaning).proof)

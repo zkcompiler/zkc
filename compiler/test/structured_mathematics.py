@@ -204,7 +204,7 @@ def single_math(length, arity, body):
         %p = "poly.mle"(%T) : ({array}) -> {polynomial}
         {body}
         "protocol.return"(%value) : ({field}) -> ()
-      }}) {{sym_name="main", function_type=({array}, {field}) -> {field},
+      }}) {{sym_name="main",origin=["main",[]], function_type=({array}, {field}) -> {field},
           roles=["Solo"], input_roles=[["Solo"],["Solo"]], output_roles=[["Solo"]]}} : () -> ()
     }}) {{profile=#protocol.profile<protocol>}} : () -> () }}"""
 

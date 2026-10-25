@@ -29,6 +29,9 @@ The following flat operations are total on their verified types:
 | Operation | Signature and judgment |
 |---|---|
 | `algebra.group_identity` | No operands; identity of the nominal result group with scalar action |
+| `data.index_less` | Two `ui64` indices to their strict order comparison |
+| `data.index_power_of_two` | Indices `(n,r)` to `n = 2^r` over naturals; false for every `r >= 64` on the native index domain |
+| `data.dim` on a field vector, axis zero | Field vector to its length as an index |
 | `algebra.constant` | Canonical field literal string to scalar |
 | `algebra.field_subtract` | Two scalars in one field to their difference |
 | `algebra.array_from_elements` | Exactly `N` ordered operands of field `F` to `!algebra.field_array<"F", N>`; empty construction is allowed |
@@ -84,6 +87,15 @@ installed `field.constant` contract to validate canonical literals; a separate
 domain literal contract is not part of this implementation.
 
 ## Realization
+
+`data.index_power_of_two` uses a fixed 64-case circuit of existing
+`index.constant`, `index.equal`, `bool.and` and `bool.or` executable contracts.
+Only compile-time shifts with exponents 0 through 63 construct constants.
+The independent recipe reader checks every constant, contract and SSA edge.
+This realizes `r < 64 && n == (1 << r)` without an oversized shift or a giant
+natural power. Vector length and index comparison reuse their existing
+executable contracts. These Math additions do not extend the executable
+operation catalogue.
 
 The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
 `algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads

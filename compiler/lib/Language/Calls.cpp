@@ -438,10 +438,12 @@ std::optional<ValueId> BodyChecker::call(const Expression &expr,
   };
   // Ordered protocol calls retain the participant-owned call boundary. In
   // local code, primitive functions use exactly the registered operation.
-  if (callee.primitive &&
-      primitiveCallIsInline(body.mode, callee.primitive->identity)) {
+  if (callee.primitive && primitiveCallIsInline(body.mode, callee.kind,
+                                                callee.primitive->identity)) {
     const auto &primitive = *callee.primitive;
-    const auto *mathematical = mathematicalIntrinsic(primitive.identity);
+    const auto *mathematical = callee.kind == Declaration::Kind::Math
+                                   ? mathematicalIntrinsic(primitive.identity)
+                                   : nullptr;
     std::vector<Type> roots;
     for (const auto &root : primitive.arguments) {
       auto value = checker.types.substitute(root, subst, expr.span);

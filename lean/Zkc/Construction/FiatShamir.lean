@@ -112,6 +112,13 @@ def decimalDigit : Nat → String
   | 0 => "0" | 1 => "1" | 2 => "2" | 3 => "3" | 4 => "4"
   | 5 => "5" | 6 => "6" | 7 => "7" | 8 => "8" | _ => "9"
 
+-- Materialize shared equation proofs at the definition's owner. Otherwise
+-- independent clients can realize different private matcher proofs under the
+-- same public equation name. The scoped attribute exports no global simp rule.
+section
+attribute [local simp] decimalDigit
+end
+
 /-- The canonical decimal spelling of an index below `10000`, as used in native
 service port names. It is built from literals so that kernel evaluation reduces
 it. -/

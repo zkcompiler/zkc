@@ -94,9 +94,9 @@ private def snapshot (defs : List Definition) : Snapshot := (let contractDefinit
 private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (List String))
     (body : Block) : Definition :=
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨"main", []⟩), body⟩
 private def localHelper (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
-  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (name, []), body⟩
+  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (.local name []), body⟩
 private def runSnapshot (source : Snapshot) (req : Json) : Except String Json := do
   evaluateOpen (← check source) req
 private def expect (label : String) (actual : Except String Json) (expected : Json) : IO Unit := do
@@ -292,13 +292,13 @@ def run : IO Unit := do
   refuse "trace byte capacity" "structured-open-record-limit"
     (stopResult { remaining := [], recordBytes := 1024 * 1024 } .abort)
   let closed := snapshot [.function ⟨"main", .protocol, .publicDef,
-    [.boolean], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+    [.boolean], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [] (.ret [0])⟩]
   expect "legacy closed output" (do
     evaluate (← check closed) (arr [arr [.str "bool", .bool true]]))
     (arr [.str "returned", arr [arr [.str "bool", .bool true]]])
   let closedGroup := snapshot [.function ⟨"main", .protocol, .publicDef,
-    [.group groupDomain], [.group groupDomain], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+    [.group groupDomain], [.group groupDomain], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [] (.ret [0])⟩]
   expect "closed explicit additive group" (do
     evaluate (← check closedGroup) (arr [arr [.str "group", .str groupDomain, .str "7"]]))

@@ -185,6 +185,11 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluateOn model.toFieldModel args)
   | .indexConstant value, .nil, .nil => .done (.cons value .nil)
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
+  | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
+  | .fieldEmbed extension base, .cons value .nil, .nil =>
+      .done (.cons (model.embed extension base value) .nil)
   | .fieldConstant domain value, .nil, .nil => .done (.cons (value : model.Field domain) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
@@ -224,6 +229,28 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
 -- Generate the dependent equation lemmas in their defining module. Otherwise
 -- separate public clients can export competing lazily generated declarations.
 attribute [local simp] operationOn
+
+theorem operationOn_indexLess (model : DomainModel) {interface : PIR.Signature}
+    (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
+    (a b : Nat) :
+    operationOn model observations table .indexLess (.cons a (.cons b .nil)) .nil =
+      .done (.cons (decide (a < b)) .nil) := rfl
+
+theorem operationOn_vectorLength (model : DomainModel) {interface : PIR.Signature}
+    (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
+    (domain : String) (values : List (model.Field domain)) :
+    operationOn model observations table (.vectorLength domain) (.cons values .nil) .nil =
+      .done (.cons values.length .nil) := rfl
+
+theorem operationOn_indexPowerOfTwo (model : DomainModel) {interface : PIR.Signature}
+    (observations : SiteObservations interface) (table : MeaningsOn model.toCarriers interface)
+    (n r : Nat) :
+    operationOn model observations table .indexPowerOfTwo (.cons n (.cons r .nil)) .nil =
+      .done (.cons (decide (n = 2 ^ r)) .nil) := by
+  change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
+    PIR.Process interface (Values model.Value [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  rfl
 
 /-- Keep the values visible to dependent clients; operation evaluation remains a
 named definition with its own laws. -/

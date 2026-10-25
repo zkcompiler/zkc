@@ -2203,6 +2203,7 @@ theorem specStep_bind {A B : Type} (f : A → PIR.Process (Actions F G) B) :
         specStep context handle table instruction env fun final => (next final).bind f
   | ⟨operation, operands, results, body⟩, env, next => by
       cases operation with
+      | localService port request template coordinates => rfl
       | loop site maximum yielded =>
         match operands with
         | [] => rfl

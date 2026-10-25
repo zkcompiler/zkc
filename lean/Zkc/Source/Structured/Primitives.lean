@@ -43,6 +43,7 @@ def bindingRoot : String → Option (Option String)
     "index.mul" | "index.sub" | "index.div" | "index.mod" => some none
   | "vector.empty" | "vector.length" | "vector.sum" | "vector.split" |
     "vector.append" | "field.equal" => some (some "Field")
+  | "field.embed" => some (some "ExtensionField")
   | "vector.equal" => some (some "CommRing")
   | _ => none
 
@@ -67,6 +68,10 @@ def Binding.resolveRoot (catalogue : Catalogue) (binding : Binding) : Except Str
   | some none, [] => .ok ""
   | some (some capability), [root] => do
     catalogue.require root .field capability
+    if binding.contract == "field.embed" then
+      let nominal ← catalogue.expect root .field
+      let some base := nominal.member "BaseField" | throw "structured-domain-member"
+      catalogue.requireEmbedding root base
     return root
   | _, _ => .error "structured-binding"
 

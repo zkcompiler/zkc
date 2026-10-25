@@ -24,7 +24,7 @@ example : Common.Native.Format.decimal (.str "1") = .ok 1 := rfl
 private def constantSnapshot : Snapshot :=
   (let contractDefinitions : List Definition := [
     .function ⟨"main", .protocol, .publicDef, [], [.field scalarDomain],
-      some ⟨["P"], [], [["P"]]⟩, [], none,
+      some ⟨["P"], [], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
       .block [.instruction (.fieldConstant scalarDomain "123") []
         [.field scalarDomain] [] ""] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,

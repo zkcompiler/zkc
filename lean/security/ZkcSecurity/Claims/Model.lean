@@ -47,25 +47,34 @@ noncomputable def Bound.value : Bound → Nat → ENNReal
 
 /-- Elaboration selects only supported finite arithmetic, never arbitrary Lean
 functions printed by a generator. -/
-def Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol : String) :
+def Bound.elaborateWith (cardinality : String → Except Incomplete Nat) (budgetSymbol : String) :
     Wire.Expr → Except Incomplete Bound
   | .natural value => .ok (.constant value)
   | .reference name =>
       if name = budgetSymbol then .ok .queryBudget else do
-        return .constant (← Numeric.nonnegative F snapshot (.reference name))
-  | .binary .add left right => do return .add (← elaborate F snapshot budgetSymbol left) (← elaborate F snapshot budgetSymbol right)
-  | .binary .sub left right => do return .sub (← elaborate F snapshot budgetSymbol left) (← elaborate F snapshot budgetSymbol right)
-  | .binary .mul left right => do return .mul (← elaborate F snapshot budgetSymbol left) (← elaborate F snapshot budgetSymbol right)
+        return .constant (← Numeric.nonnegativeWith cardinality (.reference name))
+  | .binary .add left right => do return .add (← elaborateWith cardinality budgetSymbol left) (← elaborateWith cardinality budgetSymbol right)
+  | .binary .sub left right => do return .sub (← elaborateWith cardinality budgetSymbol left) (← elaborateWith cardinality budgetSymbol right)
+  | .binary .mul left right => do return .mul (← elaborateWith cardinality budgetSymbol left) (← elaborateWith cardinality budgetSymbol right)
   | .binary .div left right => do
-      let denominator ← Numeric.nonnegative F snapshot right
+      let denominator ← Numeric.nonnegativeWith cardinality right
       if denominator = 0 then .error ⟨["nonzero denominator"]⟩
-      else return .div (← elaborate F snapshot budgetSymbol left) denominator
+      else return .div (← elaborateWith cardinality budgetSymbol left) denominator
   | .binary .pow base exponent => do
-      return .pow (← elaborate F snapshot budgetSymbol base) (← Numeric.natural F snapshot exponent)
+      return .pow (← elaborateWith cardinality budgetSymbol base) (← Numeric.naturalWith cardinality exponent)
   | .application name version arguments => do
-      return .constant (← Numeric.nonnegative F snapshot (.application name version arguments))
+      return .constant (← Numeric.nonnegativeWith cardinality (.application name version arguments))
   | .neg _ => .error ⟨["negative bound expression"]⟩
   | .list _ => .error ⟨["scalar bound expression"]⟩
+
+@[simp] theorem Bound.elaborateWith_natural (cardinality : String → Except Incomplete Nat)
+    (budgetSymbol : String) (value : Nat) :
+    Bound.elaborateWith cardinality budgetSymbol (.natural value) = .ok (.constant value) := rfl
+
+/-- Uniform-model specialization. Mixed-domain models select the cardinality
+of each actual carrier through `Numeric.cardinalityOn`. -/
+abbrev Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol : String) :=
+  elaborateWith (Numeric.cardinality F snapshot) budgetSymbol
 
 @[simp] theorem Bound.elaborate_natural (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol : String) (value : Nat) :
     Bound.elaborate F snapshot budgetSymbol (.natural value) = .ok (.constant value) := rfl
@@ -99,6 +108,13 @@ def Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol :
   rw [← ENNReal.coe_nnratCast]
   simp
 
+/-- Rational reciprocals agree with extended-real reciprocals only for a
+nonzero denominator. Keep this premise explicit: the two inverses differ at zero. -/
+@[simp] theorem ennreal_nnrat_inv (value : ℚ≥0) (nonzero : value ≠ 0) :
+    ((value⁻¹ : ℚ≥0) : ENNReal) = (value : ENNReal)⁻¹ := by
+  rw [← ENNReal.coe_nnratCast, ← ENNReal.coe_nnratCast]
+  simp [ENNReal.coe_inv, nonzero]
+
 @[simp] theorem Bound.value_natural (value queries : Nat) :
     (Bound.constant (value : ℚ≥0)).value queries = (value : ENNReal) := by
   simp [Bound.value]
@@ -107,7 +123,7 @@ def Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol :
     (budgetSymbol identity : String) (admitted : snapshot.catalogue.identitySort identity = some .field) :
     Bound.elaborate F snapshot budgetSymbol (.application "cardinality" none [(none, .reference identity)]) =
       .ok (.constant (Fintype.card F : ℚ≥0)) := by
-  simp [elaborate, admitted]
+  simp [elaborate, elaborateWith, Numeric.cardinality_field _ _ _ admitted]
 
 @[simp] theorem Bound.elaborate_div_cardinality (F : Type) [Fintype F] [Nonempty F] (snapshot : Snapshot)
     (budgetSymbol identity : String) (numerator : Wire.Expr)
@@ -115,7 +131,7 @@ def Bound.elaborate (F : Type) [Fintype F] (snapshot : Snapshot) (budgetSymbol :
     Bound.elaborate F snapshot budgetSymbol
       (.binary .div numerator (.application "cardinality" none [(none, .reference identity)])) =
       (do return .div (← Bound.elaborate F snapshot budgetSymbol numerator) (Fintype.card F : ℚ≥0)) := by
-  simp [elaborate, admitted, Fintype.card_ne_zero]
+  simp [elaborate, elaborateWith, Numeric.cardinality_field _ _ _ admitted, Fintype.card_ne_zero]
 
 inductive QueryLimit where
   | fixed (queries : Nat)

@@ -48,12 +48,16 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     (agree : ∀ helper ∈ op.helpers, invoke left helper = invoke right helper) :
     operation observations left op = operation observations right op := by
   cases op with
+  | fieldEmbed | vectorLength =>
+    funext arguments callbacks
+    cases arguments with
+    | cons value rest => cases rest; cases callbacks; rfl
   | indexConstant | fieldConstant | booleanConstant | groupIdentity | mark =>
     funext arguments callbacks
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with

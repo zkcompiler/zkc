@@ -1,0 +1,83 @@
+module
+
+public import ZkcExamples.Structured.Generated.Original.SmallSumcheck
+public import ZkcExamples.Structured.OriginalSumcheckProducerCalls
+
+@[expose] public section
+set_option autoImplicit false
+set_option maxRecDepth 50000
+set_option maxHeartbeats 8000000
+set_option backward.isDefEq.respectTransparency false
+set_option linter.unusedVariables false
+set_option linter.unusedSimpArgs false
+noncomputable section
+namespace ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource
+open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
+open OriginalSumcheckLibrary SumcheckVerifierBodies
+open ZkcExamples.Structured.OriginalSumcheckProducerCalls
+open ZkcExamples.Structured.OriginalSumcheckCalls
+open ZkcExamples.Structured.Generated.Original.SmallSumcheck
+variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+
+theorem root_lookup_self (self : Nat) (args : Values (Component (assignment F G)) root.inputs) :
+    invokeProtocol (Occurrence.table (ringModel F G) payload) root.signature {} self args =
+      root.denoteWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn protocolPrefix1 Occurrence.iterations {} self args := by
+  unfold Occurrence.table
+  rw [← helpers_on, protocols_eq]
+  simp only [List.foldl_cons, List.foldl_nil, extendProtocolTableOn]
+  rw [invokeProtocol_cons_same]
+  rfl
+
+abbrev step0 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input0 : (Option (List F))) (input2 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), .index, .index]) :=
+  (Participant.owned 0 0 (invoke tables.closed sourceHelper8.helper) (.cons (input0) (.cons (input2) (.cons ((some (1))) .nil))))
+abbrev step1 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), .index, .index])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_726564756365" [0, 1]) 0 (.cons ((out0).get .here) (.cons ((out0).get (.there .here)) (.cons ((out0).get (.there (.there .here))) (.cons (input1) (.cons (input2) (.cons (input3) .nil)))))))
+abbrev step1Realized (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), .index, .index])) := (realizeProducerCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_726564756365" [0, 1]) sourceProtocol0.outputScopes (.cons ((out0).get .here) (.cons ((out0).get (.there .here)) (.cons ((out0).get (.there (.there .here))) (.cons (input1) (.cons (input2) (.cons (input3) .nil)))))))
+theorem step1_binding (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), .index, .index])) :
+  (step1 protocolPrefix1 input1 input2 input3 out0) = (step1Realized (G := G) input1 input2 input3 out0) := by
+  unfold step1 protocolPrefix1 protocolPrefix0 extendProtocolTableOn
+  rw [invokeProtocol_cons_same]
+  unfold CheckedProtocol.denoteWithOn
+  rw [sourceProtocol0_body]
+  rfl
+
+def process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
+    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
+  (step0 tables input0 input2).bind fun out0 =>
+  (step1 protocols input1 input2 input3 out0).bind fun out1 =>
+  .done (.cons (none) .nil)
+
+theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
+    (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) :
+    sourceBody.denote (participantMeaningWithOn (ringModel F G) (.silent _) actions tables.toOn 0 protocols {} Occurrence.iterations)
+      ((.cons input0 (.cons input1 (.cons input2 (.cons input3 .nil)))) : Values (Component (assignment F G)) root.inputs).get = process tables protocols input0 input1 input2 input3 := by
+  derive_process
+
+abbrev realized (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
+  let tables := helpers (F := F) (G := G) payload
+  (step0 tables input0 input2).bind fun out0 =>
+  (step1Realized (G := G) input1 input2 input3 out0).bind fun out1 =>
+  .done (.cons (none) .nil)
+
+theorem realization_binding (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) :
+    process (helpers (F := F) (G := G) payload) protocolPrefix1 input0 input1 input2 input3 = realized (G := G) input0 input1 input2 input3 := by
+  simp only [process, realized, singleton_eta, PIR.Process.bind_done]
+  apply congrArg₂ PIR.Process.bind
+  · rfl
+  · funext out0
+    apply congrArg₂ PIR.Process.bind
+    · exact (step1_binding (G := G) input1 input2 input3 out0)
+    · funext out1
+      rfl
+
+theorem participant_binding (input0 : (Option (List F))) (input2 : (Option Nat)) :
+    Occurrence.participant (ringModel F G) imported.program 0 ((.cons input0 (.cons none (.cons input2 (.cons none .nil))))) =
+      (realized (G := G) input0 none input2 none).bind (fun out => .done (maskValues 0 root.outputScopes out)) := by
+  change invokeProtocol (Occurrence.table (ringModel F G) payload) root.signature {} 0 ((.cons input0 (.cons none (.cons input2 (.cons none .nil))))) = _
+  rw [root_lookup_self (F := F) (G := G)]
+  unfold CheckedProtocol.denoteWithOn
+  change (root.body.denote (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn 0 protocolPrefix1 {} Occurrence.iterations)
+    ((.cons input0 (.cons none (.cons input2 (.cons none .nil)))) : Values (Component (assignment F G)) root.inputs).get).bind _ = _
+  rw [root_body, body_binding, realization_binding, ProtocolContext.mapScopes_root]
+
+end ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource

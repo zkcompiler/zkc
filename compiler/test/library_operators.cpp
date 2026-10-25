@@ -275,11 +275,40 @@ int main() {
                     decl(project, "m::add").parameters[1].atom,
                 "extra or reordered generic parameter became a primitive root");
       });
+  cases.run(
+      "scalar primitive mode selects executable checks or total Math", [&] {
+        auto project = take(check(field + R"(
+fn checked(a:F,b:F)->F=primitive("field.add");
+math fn total(a:F,b:F)->F=primitive("field.add");
+fn useChecked(a:F,b:F)->F{return checked(a,b);}
+fn useTotal(a:F,b:F)->F effects(){return total(a,b);}
+)"));
+        for (StringRef name : {"m::checked", "m::useChecked"}) {
+          require(localAction(decl(project, name)) == "field.add" &&
+                      decl(project, name).body->effects.fixed.mayStop,
+                  "local scalar primitive lost executable checks");
+          const auto &action = std::get<LocalPrimitive>(
+              decl(project, name).body->operations.back().action);
+          require(action.bindingArguments &&
+                      action.bindingArguments->size() == 1,
+                  "local scalar primitive lost installed roots");
+        }
+        require(localAction(decl(project, "m::useTotal")) == "field.add" &&
+                    decl(project, "m::useTotal").body->effects ==
+                        EffectSummary{},
+                "scalar Math call lost its total inline behavior");
+        require(
+            !std::get<LocalPrimitive>(
+                 decl(project, "m::useTotal").body->operations.back().action)
+                 .bindingArguments,
+            "scalar Math call acquired executable roots");
+      });
   for (const auto &[source, code] :
        std::vector<std::pair<std::string, std::string>>{
            {"math fn f(a:F,b:F)->bool=primitive(\"field.add\");",
             "source.primitive"},
-           {"fn f(a:F,b:F)->F=primitive(\"field.add\");", "source.primitive"},
+           {"fn f(a:F,b:F)->F effects()=primitive(\"field.add\");",
+            "source.effect"},
            {"math fn f(a:F,b:F)->F=primitive(\"unknown.operation\");",
             "source.primitive"},
            {"math fn f(a:F,b:F)=primitive(\"field.add\");", "source.primitive"},
@@ -294,7 +323,7 @@ int main() {
            {"type V=builtin(\"vector\",F);fn f(a:V,b:V)->V effects() = "
             "primitive(\"vector.add\");",
             "source.effect"},
-           {"fn f()->index=primitive(\"index.constant\");", "source.primitive"},
+           {"fn f()->index=primitive(\"index.constant\");", "source.kernel"},
            {"operator + = f;fn f(a:F,b:F){return a;}", "source.operator"},
            {"operator == = f;fn f(a:F,b:F)->F{return a;}", "source.operator"},
            {"fn f(a:F,b:F)->F{let x=a;operator + = f;return a;}",

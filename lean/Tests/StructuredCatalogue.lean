@@ -158,7 +158,7 @@ example : code ((rows [fieldRow blsScalar (modulus := some blsModulus)]).agrees
 
 private def unit (type : Ty) (catalogue : Catalogue) : Snapshot :=
   ⟨digest, "main", [], [], [], [.function ⟨"main", .protocol, .publicDef, [type], [type],
-    some ⟨["P"], [["P"]], [["P"]]⟩, [], none, .block [] (.ret [0])⟩], [⟨"main", []⟩], catalogue⟩
+    some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩], [⟨"main", []⟩], catalogue⟩
 
 example : code (check (unit (.field blsScalar) blsRows)) = "" := by decide +kernel
 -- The binary unit is well formed; the environment does not list its rows.
@@ -176,7 +176,7 @@ example : code (check (unit (.group blsGroupTwo) blsRows)) = "structured-type-un
 -- A field constant is below the modulus of its field's row.
 private def constantUnit (text : String) : Snapshot :=
   ⟨digest, "main", [], [], [], [.function ⟨"main", .protocol, .publicDef, [], [.field blsScalar],
-    some ⟨["P"], [], [["P"]]⟩, [], none,
+    some ⟨["P"], [], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.fieldConstant blsScalar text) [] [.field blsScalar] [] ""] (.ret [0])⟩],
     [⟨"main", []⟩], blsRows⟩
 

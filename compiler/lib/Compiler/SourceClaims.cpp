@@ -24,7 +24,6 @@ Expected<std::string> exportSourceClaims(const CheckedOriginal &original,
       {"format", "zkc.structured-source/0"},
       {"original_sha256", sha256(original.bytes())},
       {"protocol_symbol", original.entry().protocol().symbol},
-      {"original_identity", original.identity()},
       {"interface_sha256", sha256(original.interfaceJson())},
       {"capture", original.entry().project().capture().identity()},
       {"installation", original.entry().project().installationIdentity()}};

@@ -116,11 +116,11 @@ The candidate is normalized independently and admitted once in the kernel. -/
 private def source : Snapshot :=
   (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none,
+      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], some (.protocol ⟨"Main", []⟩),
       .block [.instruction (.protocolApply "First" ["A"]) [0, 1] [.boolean] [] "call"]
         (.ret [0])⟩,
     .function ⟨"First", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none, .block [] (.ret [0])⟩]
+      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], some (.protocol ⟨"First", []⟩), .block [] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
       if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)

@@ -1,0 +1,27 @@
+module example;
+domain F = field("bls12-381.fr");
+
+relation Equal(statement value: F, witness expected: F) {
+  return value == expected;
+}
+
+protocol SampledAbort roles(P,V)
+    (value: F @(P,V), expected: F @P,
+     nonces: Random<F> @P, challenges: Random<F> @V)
+    -> (accepted: bool @V)
+    where () spec {
+      target equality = Equal(in.value@V, in.expected) accept out.accepted;
+    } {
+  let sampled = nonces.draw();
+  require @P !(sampled == 0);
+  #[site(commitment)] let message = send P -> V(value);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let delivered = send V -> P(challenge);
+  return (accepted = true);
+}
+
+proof Proof = SampledAbort {
+  prover P; verifier V; public {value};
+  accept accepted; target equality;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

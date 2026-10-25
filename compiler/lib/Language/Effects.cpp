@@ -195,13 +195,16 @@ std::optional<EffectSummary> inferEffects(Semantics &types,
                 // Explicit kernels retain their ordered boundary. Source
                 // constants and mathematical primitives have narrower effects,
                 // independently of a backend implementation's failure modes.
+                // Executable roots retain checks even when a mathematical
+                // intrinsic shares the public name.
                 result.fixed.mayStop |=
                     action.origin == LocalPrimitive::Origin::Kernel ||
                     (action.contract != "index.equal" &&
                      action.contract != "field.constant" &&
                      action.contract != "bool.constant" &&
                      action.contract != "index.constant" &&
-                     !mathematicalIntrinsic(action.contract));
+                     (action.bindingArguments ||
+                      !mathematicalIntrinsic(action.contract)));
                 return true;
               } else if constexpr (std::is_same_v<Action, HostInvocation> ||
                                    std::is_same_v<Action, Require> ||

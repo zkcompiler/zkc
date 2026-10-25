@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.NormalForm.Normalize
+public import Zkc.Source.Structured.Bindings.Selection
 public import ZkcTools.StructuredSource.OpenValues
 
 @[expose] public section
@@ -31,10 +32,14 @@ def stopJson : PIR.Stop → Json
 def opJson : Op → Json
   | .indexConstant value => .arr #[.str "indexConstant", nat value]
   | .indexEqual => .arr #[.str "indexEqual"]
+  | .indexLess => .arr #[.str "indexLess"]
+  | .indexPowerOfTwo => .arr #[.str "indexPowerOfTwo"]
+  | .vectorLength domain => .arr #[.str "vectorLength", .str domain]
   | .fieldConstant domain value => .arr #[.str "fieldConstant", .str domain, nat value]
   | .fieldAdd domain => .arr #[.str "fieldAdd", .str domain]
   | .fieldSubtract domain => .arr #[.str "fieldSubtract", .str domain]
   | .fieldMultiply domain => .arr #[.str "fieldMultiply", .str domain]
+  | .fieldEmbed extension base => .arr #[.str "fieldEmbed", .str extension, .str base]
   | .fieldEqual domain => .arr #[.str "fieldEqual", .str domain]
   | .groupIdentity domain => .arr #[.str "groupIdentity", .str domain]
   | .groupAdd domain => .arr #[.str "groupAdd", .str domain]
@@ -88,6 +93,7 @@ def equalityJson {ty : Ty} : Equality ty → Json
   | .field domain => .arr #[.str "field", .str domain]
   | .group domain => .arr #[.str "group", .str domain]
   | .index => .arr #[.str "index"]
+  | .boolean => .arr #[.str "boolean"]
 
 def formJson {callees : List CalleeKey} {out : List Ty} : {Δ : Scope} → Form laws callees Δ out → Json
   | _, .done values => .arr #[.str "done", .arr (compsJson values).toArray]
@@ -104,6 +110,8 @@ def formJson {callees : List CalleeKey} {out : List Ty} : {Δ : Scope} → Form 
   | _, .strict helper args next =>
     .arr #[.str "strict", .str helper.name, .arr (termsJson args).toArray, formJson next]
   | _, .compute op _ args next => .arr #[.str "compute", opJson op, .arr (termsJson args).toArray, formJson next]
+  | _, .math helper args next =>
+    .arr #[.str "math", .str helper.name, .arr (compsJson args).toArray, formJson next]
   | _, .byLaw entry helper next => .arr #[.str "byLaw", nat entry.val, .str helper.name, formJson next]
   | _, .owned owner helper args next =>
     .arr #[.str "owned", nat owner, .str helper.name, .arr (compsJson args).toArray, formJson next]
@@ -172,18 +180,6 @@ def decodeLaw (definitions : List CheckedDefinition) (json : Json) : Except Stri
 /-- A protocol body, or the callback of one of its repeats. -/
 abbrev Body := Σ inputs outputs, Region protocolDialect inputs outputs
 
-def findRepeat (site : String) : {Γ out : List Ty} → Region protocolDialect Γ out → Option Body
-  | _, _, .ret _ => none
-  | _, _, .stop _ => none
-  | _, _, .bind body next => (findRepeat site body).orElse fun _ => findRepeat site next
-  | _, _, .letOp op _ bodies next =>
-    let inner : Option Body :=
-      match op, bodies with
-      | .repeat _ repeatSite, .cons callback .nil =>
-        if repeatSite == site then some ⟨_, _, callback⟩ else findRepeat site callback
-      | _, _ => none
-    inner.orElse fun _ => findRepeat site next
-
 /-- Whether every law use presents a call of the law's own helper, and every
 application is of its callee's signature. -/
 def callsMatch {laws : List LawKey} {callees : List CalleeKey} {Δ : Scope} {out : List Ty}
@@ -219,7 +215,7 @@ def run (program : Program) (request : Json) : Except String Json := do
   let some definition := program.payload.protocols.find? (·.name == protocolName)
     | throw "normal-form-protocol"
   let body : Body ← match repeatSite with
-    | .str site => match findRepeat site definition.body with
+    | .str site => match Zkc.Source.Structured.Bindings.findRepeat site definition.body with
       | some found => pure found
       | none => throw "normal-form-repeat"
     | _ => pure ⟨_, _, definition.body⟩

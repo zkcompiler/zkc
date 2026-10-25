@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.RegionDecoding
 public import Zkc.Source.Structured.Catalogue
+public import Zkc.Source.Structured.Origin
 
 @[expose] public section
 
@@ -63,10 +64,14 @@ inductive Descriptor where
   | exec (operation binding : String) (parameters : List String)
   | indexConstant (decimal : String)
   | indexEqual
+  | indexLess
+  | indexPowerOfTwo
+  | vectorLength (domain : String)
   | fieldConstant (domain decimal : String)
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
   | fieldMultiply (domain : String)
+  | fieldEmbed (extension base : String)
   | fieldEqual (domain : String)
   | groupIdentity (group : String)
   | groupAdd (group : String)
@@ -149,7 +154,7 @@ structure Function where
   outputs : List Ty
   interface : Option ProtocolInterface
   preconditions : List Bound
-  origin : Option (String × List (String × String))
+  origin : Option FunctionOrigin
   body : Block
   deriving Repr
 

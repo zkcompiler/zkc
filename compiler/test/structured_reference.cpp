@@ -79,6 +79,9 @@ enum class Kind {
   Exec,
   IndexConstant,
   IndexEqual,
+  IndexLess,
+  IndexPowerOfTwo,
+  VectorLength,
   FieldConstant,
   Add,
   Subtract,
@@ -203,6 +206,9 @@ Kind kind(Operation &op) {
   return llvm::StringSwitch<Kind>(op.getName().getStringRef())
       .Case("data.index", Kind::IndexConstant)
       .Case("data.index_equal", Kind::IndexEqual)
+      .Case("data.index_less", Kind::IndexLess)
+      .Case("data.index_power_of_two", Kind::IndexPowerOfTwo)
+      .Case("data.dim", Kind::VectorLength)
       .Case("algebra.constant", Kind::FieldConstant)
       .Case("algebra.field_add", Kind::Add)
       .Case("algebra.field_subtract", Kind::Subtract)
@@ -492,11 +498,12 @@ class Admission {
               operation == Kind::Return;
           if (!mapped)
             allowed |= llvm::is_contained(
-                ArrayRef<Kind>{Kind::Equal, Kind::GroupIdentity, Kind::GroupAdd,
-                               Kind::GroupScale, Kind::GroupEqual,
-                               Kind::IndexConstant, Kind::IndexEqual,
-                               Kind::BoolConstant, Kind::And, Kind::Or,
-                               Kind::Xor, Kind::Compare, Kind::Select},
+                ArrayRef<Kind>{
+                    Kind::Equal, Kind::GroupIdentity, Kind::GroupAdd,
+                    Kind::GroupScale, Kind::GroupEqual, Kind::IndexConstant,
+                    Kind::IndexEqual, Kind::IndexLess, Kind::IndexPowerOfTwo,
+                    Kind::VectorLength, Kind::BoolConstant, Kind::And, Kind::Or,
+                    Kind::Xor, Kind::Compare, Kind::Select},
                 operation);
           if (!allowed || op.getNumRegions())
             return error(code, op.getName().getStringRef());
@@ -553,6 +560,8 @@ class Admission {
     case Kind::Exec:
       return execution(op, owner);
     case Kind::IndexConstant:
+    case Kind::IndexLess:
+    case Kind::IndexPowerOfTwo:
     case Kind::IndexEqual: {
       bool constant = code == Kind::IndexConstant;
       if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
@@ -569,6 +578,14 @@ class Admission {
           return parsed.takeError();
       }
       break;
+    }
+    case Kind::VectorLength: {
+      auto dim = cast<data::DimOp>(op);
+      if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
+          dim.getAxis() != 0 || !primitivePorts(op.getOperandTypes(), "v") ||
+          !primitivePorts(op.getResultTypes(), "i"))
+        return error("structured-reference-signature", "vector length");
+      return attributes(op, {"axis"});
     }
     case Kind::FieldConstant: {
       if (auto failure = attributes(op, {"value"}))
@@ -1031,7 +1048,7 @@ public:
           return error("structured-reference-capacity", "contract clauses");
         if (auto failure = attributes(
                 op, {"sym_name", "sym_visibility", "function_type", "roles",
-                     "input_roles", "output_roles", "contracts"}))
+                     "input_roles", "output_roles", "contracts", "origin"}))
           return failure;
         if (protocol.getRoles().empty() || protocol.getRoles().size() > 16)
           return error("structured-reference-unsupported", "role count");
@@ -1831,6 +1848,20 @@ class Reference {
       result.values.emplace_back(parsed->getZExtValue());
       break;
     }
+    case Kind::IndexLess:
+      result.values.emplace_back(std::get<uint64_t>(args[0]) <
+                                 std::get<uint64_t>(args[1]));
+      break;
+    case Kind::IndexPowerOfTwo: {
+      auto exponent = std::get<uint64_t>(args[1]);
+      result.values.emplace_back(exponent < 64 &&
+                                 std::get<uint64_t>(args[0]) ==
+                                     (uint64_t(1) << exponent));
+      break;
+    }
+    case Kind::VectorLength:
+      result.values.emplace_back(uint64_t(std::get<Vector>(args[0])->size()));
+      break;
     case Kind::IndexEqual:
       result.values.emplace_back(std::get<uint64_t>(args[0]) ==
                                  std::get<uint64_t>(args[1]));

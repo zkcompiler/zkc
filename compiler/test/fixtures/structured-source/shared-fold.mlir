@@ -15,5 +15,5 @@ module { "protocol.module"() ({
    %r:2 = "algebra.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)
    %q:2 = "algebra.finite_fold"(%xs,%r#1,%r#0) {domain=@items,step=@step} : (!V,!F,!F)->(!F,!F)
    "protocol.return"(%q#0,%q#1) : (!F,!F)->()
- }) {sym_name="main",function_type=(!V,!F,!F)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F,!F)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

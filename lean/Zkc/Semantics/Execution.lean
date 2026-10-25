@@ -213,20 +213,4 @@ theorem related_observer {V : Type} (R : S → T → Prop)
     (b.outcome, stateRight b.state, observeEvents right b.events) := by
   rw [hr.outcome, compatible _ _ hr.state, hr.events]
 
-/-- A semantic contract describes the actual whole result, including failure post-state. -/
-structure Contract (S E A : Type) where
-  pre : S → Prop
-  post : S → Execution S E A → Prop
-
-def Satisfies (c : Contract S E A) (f : S → Execution S E A) : Prop :=
-  ∀ s, c.pre s → c.post s (f s)
-
-/-- Facts are interpreted predicates on state, separate from syntax-level summaries. -/
-theorem frame_transfer {Fact : Type} (means : Fact → S → Prop)
-    (c : Contract S E A) (f : S → Execution S E A) (law : Satisfies c f)
-    (kept : Fact → Prop)
-    (frame : ∀ s r, c.post s r → ∀ fact, kept fact → means fact s → means fact r.state)
-    (s : S) (legal : c.pre s) (fact : Fact) (keep : kept fact) (old : means fact s) :
-    means fact (f s).state := frame s (f s) (law s legal) fact keep old
-
 end PIR

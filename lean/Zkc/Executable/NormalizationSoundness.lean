@@ -842,6 +842,7 @@ theorem anchor_continues {operation : Operation} {results : List ValueSort} {arg
       fun env' _ => ∃ appended, env' = arguments ++ appended ∧
         SortedValues appended (Instruction.resultSorts ⟨operation, [], results, []⟩) := by
   cases operation with
+  | localService => exact stopped_always _ _
   | loop site maximum yielded => exact absurd rfl (notLoop site maximum yielded)
   | calculate calculation =>
       refine Continues.calculate context helpers ?_

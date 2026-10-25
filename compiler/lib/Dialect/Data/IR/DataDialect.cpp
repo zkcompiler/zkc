@@ -103,6 +103,21 @@ std::optional<MathematicalIdentity> LessOp::getMathematicalIdentity() {
 SmallVector<unsigned> LessOp::getOperandDependencies(unsigned result) {
   return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
 }
+std::optional<MathematicalIdentity> PowerOfTwoOp::getMathematicalIdentity() {
+  return MathematicalIdentity::IndexPowerOfTwo;
+}
+SmallVector<unsigned> PowerOfTwoOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0, 1} : SmallVector<unsigned>{};
+}
+LogicalResult PowerOfTwoOp::verify() { return success(); }
+std::optional<MathematicalIdentity> DimOp::getMathematicalIdentity() {
+  if (getAxis() == 0 && isa<algebra::FieldVectorType>(getInput().getType()))
+    return MathematicalIdentity::VectorLength;
+  return std::nullopt;
+}
+SmallVector<unsigned> DimOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? SmallVector<unsigned>{0} : SmallVector<unsigned>{};
+}
 LogicalResult EqualOp::verify() { return success(); }
 LogicalResult LessOp::verify() { return success(); }
 LogicalResult MakeOp::verify() {

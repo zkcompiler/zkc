@@ -90,6 +90,9 @@ def descriptor (json : Json) : Except String Descriptor := do
       let _ ← indexDecimal text
       return .indexConstant text
   | [.str "index.equal"] => return .indexEqual
+  | [.str "index.less"] => return .indexLess
+  | [.str "index.power_of_two"] => return .indexPowerOfTwo
+  | [.str "vector.length", d] => return .vectorLength (← field d)
   | [.str "field.constant", d, n] =>
       let text ← string n
       let _ ← decimal text
@@ -97,6 +100,7 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "field.add", d] => return .fieldAdd (← field d)
   | [.str "field.subtract", d] => return .fieldSubtract (← field d)
   | [.str "field.multiply", d] => return .fieldMultiply (← field d)
+  | [.str "field.embed", extension, base] => return .fieldEmbed (← field extension) (← field base)
   | [.str "field.equal", d] => return .fieldEqual (← field d)
   | [.str "group.identity", g] => return .groupIdentity (← group g)
   | [.str "group.add", g] => return .groupAdd (← group g)
@@ -188,16 +192,13 @@ def bound (json : Json) : Except String Bound := do
       return ⟨← natural index, ← natural container, ← natural axis 0⟩
   | _ => throw "structured-precondition"
 
-def origin (json : Json) : Except String (Option (String × List (String × String))) := do
-  match ← array json with
-  | [] => return none
-  | [name, bindings] =>
-    let bindings ← (← array bindings Limits.originBindings).mapM fun binding => do
-      match ← array binding with
-      | [key, value] => return (← string key, ← string value)
-      | _ => throw "structured-origin-binding"
-    return some (← string name, bindings)
-  | _ => throw "structured-origin"
+def origin (mode : Kind) (json : Json) : Except String (Option FunctionOrigin) := do
+  match mode with
+  | .protocol => return some (.protocol (← OriginFormat.protocol json))
+  | .local => return some (← OriginFormat.localOrigin json)
+  | .math =>
+    unless (← array json).isEmpty do throw "structured-origin-kind"
+    return none
 
 def purpose : Json → Except String String
   | .str "parameter" => .ok "parameter"
@@ -262,9 +263,10 @@ def binding (json : Json) : Except String Binding := do
 def definition (json : Json) : Except String Definition := do
   match ← array json with
   | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
-    return .function ⟨← string name, ← kind mode, ← visibility visible,
+    let mode ← kind mode
+    return .function ⟨← string name, mode, ← visibility visible,
       ← types inputs, ← types outputs, ← interface ports, ← (← array premises).mapM bound,
-      ← origin source, ← block Limits.nesting body⟩
+      ← origin mode source, ← block Limits.nesting body⟩
   | [.str "finite", name, visible, inputs, outputs, domain, step, predicate] =>
     return .finite ⟨← string name, ← visibility visible, ← types inputs, ← types outputs,
       ← string domain, ← string step, ← string predicate true⟩
@@ -323,7 +325,43 @@ def snapshot (json : Json) : Except String Snapshot := do
       ← (← array contracts Limits.tableEntries).mapM protocolContract, ← catalogue rows⟩
   | _ => throw "structured-envelope"
 
-/-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/
+/-- Count arrays, including empty child lists, with the root at depth one. -/
+def lexicalDepthWithin : Nat → Json → Bool
+  | 0, .arr _ => false
+  | remaining + 1, .arr values => values.all (lexicalDepthWithin remaining)
+  | _, _ => true
+
+def checkLexicalDepth (remaining : Nat) (json : Json) : Except String Unit := do
+  unless lexicalDepthWithin remaining json do throw "depth-limit"
+
+/-- Only the exact protocol-function row has a typed-origin exemption. Decode
+that slot strictly before excluding it from ordinary lexical depth. -/
+def checkDefinitionDepth (json : Json) : Except String Unit := do
+  match json with
+  | .arr fields =>
+    match fields.toList with
+    | [.str "function", _, .str "protocol", _, _, _, _, _, source, _] =>
+      let _ ← OriginFormat.protocol source
+      checkLexicalDepth (Limits.nesting - 2) (.arr (fields.set! 8 .null))
+    | _ => checkLexicalDepth (Limits.nesting - 2) json
+  | _ => checkLexicalDepth (Limits.nesting - 2) json
+
+/-- Recognize origins only in the definitions table of the exact current
+envelope. Wrong envelope tags or arities and standalone fragments get no
+exemption. Other schema validation remains the snapshot decoder's job. -/
+def checkSourceDepth (json : Json) : Except String Unit := do
+  match json with
+  | .arr slots =>
+    match slots.toList with
+    | [.str "zkc.structured-source/0", .str "original", _, _, _, _, _, .arr definitions, _, _] =>
+      checkLexicalDepth Limits.nesting (.arr (slots.set! 7 .null))
+      definitions.toList.forM checkDefinitionDepth
+    | _ => checkLexicalDepth Limits.nesting json
+  | _ => checkLexicalDepth Limits.nesting json
+
+/-- Guard arbitrary nesting before the recursive parser, then enforce ordinary
+lexical depth everywhere except exact, strictly decoded protocol-origin slots,
+including in unused declarations. -/
 def parse (text : String) (byteLimit : Nat := Limits.parsedBytes) : Except String Json := do
   if text.utf8ByteSize > byteLimit then throw "byte-limit"
   let mut depth := 0
@@ -339,8 +377,10 @@ def parse (text : String) (byteLimit : Nat := Limits.parsedBytes) : Except Strin
     else if char == '{' || char == '}' then throw "invalid-shape"
     else if char == '[' then
       depth := depth + 1
-      if depth > Limits.nesting then throw "depth-limit"
+      if depth > Limits.parsedNesting then throw "depth-limit"
     else if char == ']' then depth := depth - 1
-  Source.Format.parse byteLimit text |>.mapError Source.Format.Error.code
+  let json ← Source.Format.parse byteLimit text |>.mapError Source.Format.Error.code
+  checkSourceDepth json
+  return json
 
 end Zkc.Source.Structured.Format

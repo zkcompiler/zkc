@@ -416,8 +416,10 @@ int main() {
     require(value.getAsObject()->getString("format") == "zkc.source-claims/0",
             "format");
     auto *admission = value.getAsObject()->getObject("admission");
-    require(admission->getString("original_identity") == original.identity(),
-            "original identity");
+    require(!admission->get("original_identity") &&
+                admission->getString("original_sha256") ==
+                    ("sha256:" + original.identity()).str(),
+            "canonical original hash");
     require(admission->getString("protocol_symbol") == entry.protocol().symbol,
             "protocol symbol");
     auto r = request(value);
@@ -897,7 +899,7 @@ int main() {
                     item->getObject("subject")->getString("kind") ==
                         "protocol" &&
                     *item->getObject("subject")->getArray("arguments") ==
-                        json::Array{"field<bls12-381.fr>"},
+                        json::Array{json::Array{"field", "bls12-381.fr"}},
                 "inventory lost the normalized closed subject");
         require(*item->getObject("node") == *a.getAsObject()
                                                  ->getArray("claims")

@@ -18,8 +18,17 @@ abbrev tableEntries : Nat := 128
 /-- Bytes of a native preparation identifier. -/
 abbrev preparationNameBytes : Nat := 128
 
-/-- Origin key/value pairs of one Local helper. -/
+/-- Named arguments of one protocol origin or bindings of one Local origin. -/
 abbrev originBindings : Nat := 128
+
+/-- UTF-8 bytes of a protocol template or nominal type path. -/
+abbrev originPathBytes : Nat := 2048
+
+/-- UTF-8 bytes of origin parameter names, identities and decimal strings. -/
+abbrev originStringBytes : Nat := 512
+
+/-- Total typed terms across the named arguments of one protocol origin. -/
+abbrev originTerms : Nat := 4096
 
 /-- Types in one signature list and operand references of one instruction. -/
 abbrev listEntries : Nat := 512
@@ -32,8 +41,14 @@ abbrev instructions : Nat := 4096
 abbrev siteBytes : Nat := 4096
 
 /-- Depth of stored blocks, helper and protocol references, applications and
-repeats, and of JSON brackets in parsed text. -/
+repeats; ordinary lexical JSON depth and the independent typed origin depth. -/
 abbrev nesting : Nat := 64
+
+/-- Pre-parser bracket capacity for a full typed protocol origin: three arrays
+for snapshot/definitions/function, three for origin/arguments/binding, and at
+most two per term level (constructor and children). Ordinary JSON still has
+depth `nesting`, checked after parsing outside strictly decoded origin slots. -/
+abbrev parsedNesting : Nat := 6 + 2 * nesting
 
 /-- Visits of the application-metadata traversal over all roots. -/
 abbrev applicationVisits : Nat := 100000

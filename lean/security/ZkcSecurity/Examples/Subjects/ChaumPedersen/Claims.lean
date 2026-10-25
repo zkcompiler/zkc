@@ -18,7 +18,7 @@ set_option maxHeartbeats 2000000
 /-- Exact source request; attachment and method are separate. -/
 def request0Data : Wire.Request :=
 {
-  subject := ⟨"sha256:ef66cde675242086d335705bc59d7a70c4ae41771627cc6e4575a7134651aa6a", "example::EqualityProof", .compiledIdeal, [⟨"constructed-participant", "sha256:7c1df18bce4910202863fd815d03737a2e1b3e289d637564882d5b19399a2f10"⟩]⟩
+  subject := ⟨"sha256:6365ec039c6a69c630fec6a233b7f0e19519d12c8bf2766daddf1ffbc20b429b", "zkl_171308863f7ffea0edd6d7c73a76733c4d6cae9ba8a58405e8c7862fb91df111", .compiledIdeal, [⟨"constructed-participant", "sha256:9a304847881b4459693e6e4a3e0789a9ec306f2ae729e4310c4efcacedf58f22"⟩]⟩
   property := ⟨"knowledge", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q"))]⟩

@@ -18,7 +18,7 @@ set_option maxHeartbeats 2000000
 /-- Exact source request; attachment and method are separate. -/
 def request0Data : Wire.Request :=
 {
-  subject := ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", .executableBytes, [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩, ⟨"verifier-program", "sha256:e4e3ceccb896909a93fbf4711b60481a2f89ccea7a5c26ecc244e10c1f59efd5"⟩]⟩
+  subject := ⟨"sha256:96e7911cc0127e0d751223fec8d3d4fb6f2b6f518f1fd884290251e35893be4a", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .executableBytes, [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩, ⟨"verifier-program", "sha256:e4e3ceccb896909a93fbf4711b60481a2f89ccea7a5c26ecc244e10c1f59efd5"⟩]⟩
   property := ⟨"knowledge", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.bytes")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q"))]⟩
@@ -35,7 +35,7 @@ claim_request request0Data using Registration.library method request0Method
 /-- Exact source request; attachment and method are separate. -/
 def request1Data : Wire.Request :=
 {
-  subject := ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", .compiledIdeal, [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]⟩
+  subject := ⟨"sha256:96e7911cc0127e0d751223fec8d3d4fb6f2b6f518f1fd884290251e35893be4a", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .compiledIdeal, [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩]⟩
   property := ⟨"knowledge", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q"))]⟩
@@ -52,7 +52,7 @@ claim_request request1Data using Registration.library method request1Method
 /-- Exact source request; attachment and method are separate. -/
 def request2Data : Wire.Request :=
 {
-  subject := ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", .compiledIdeal, [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]⟩
+  subject := ⟨"sha256:96e7911cc0127e0d751223fec8d3d4fb6f2b6f518f1fd884290251e35893be4a", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .compiledIdeal, [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩]⟩
   property := ⟨"user.view_equal", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q"))]⟩
@@ -69,7 +69,7 @@ claim_request request2Data using Registration.library method request2Method
 /-- Exact source request; attachment and method are separate. -/
 def request3Data : Wire.Request :=
 {
-  subject := ⟨"sha256:7c4214ba8b6291c17f70289eda113d07b9d5a25c95aa1e3e9e1986189559364e", "example::Proof", .compiledIdeal, [⟨"constructed-participant", "sha256:36dccac628aefe119573db7e210b1f3a367e5eb7b86cc9718bfb742d7302662d"⟩]⟩
+  subject := ⟨"sha256:96e7911cc0127e0d751223fec8d3d4fb6f2b6f518f1fd884290251e35893be4a", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .compiledIdeal, [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩]⟩
   property := ⟨"user.view_equal", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q"))]⟩
@@ -86,7 +86,7 @@ claim_request request3Data using Registration.library method request3Method
 /-- Exact source request; attachment and method are separate. -/
 def request4Data : Wire.Request :=
 {
-  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
+  subject := ⟨"sha256:21d6dd8665904f0b0b0faf43f057f61c2fae5b5b12f0191e40fd88bda8b72c2e", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .interactive, []⟩
   property := ⟨"completeness", 0⟩
   parameters := none
   model := ⟨⟨"models.interactive", 0⟩, []⟩
@@ -103,7 +103,7 @@ claim_request request4Data using Registration.library method request4Method
 /-- Exact source request; attachment and method are separate. -/
 def request5Data : Wire.Request :=
 {
-  subject := ⟨"sha256:f2c94c4ba120d711b25be07006417f56ca1f933eac20612b1551162a98c3d0bc", "schnorr::Schnorr::run_412d98bf3e90929028ee7f3d81dd5f4f39dbad1a68dc1f3abf34b5db43dee23a", .interactive, []⟩
+  subject := ⟨"sha256:21d6dd8665904f0b0b0faf43f057f61c2fae5b5b12f0191e40fd88bda8b72c2e", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", .interactive, []⟩
   property := ⟨"special_soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.interactive", 0⟩, []⟩

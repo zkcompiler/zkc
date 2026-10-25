@@ -17,3 +17,20 @@ entry fn Interactive(inputs: TwoSums<F,4>::Inputs) {
 entry fn Reduction(inputs: sums::Reduction<F,4>::Inputs) {
   return sums::Reduction<F,4>::run(inputs);
 }
+
+spec ProofClaims for Proof {
+  ideal_sound: soundness@0(target.public_sums,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=8/cardinality(F),application=application),
+    accept=out.accepted,stage=compiled_ideal,error=(Q+8)/cardinality(F));
+  charged: soundness@0(target.public_sums,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=8/cardinality(F),application=application),
+    accept=out.accepted,stage=compiled_ideal,
+    charge=[per_site(sites.left.challenge,1/cardinality(F)),
+      per_site(sites.right.challenge,1/cardinality(F))]);
+}
+verify ProofClaims.ideal_sound=fs.keyed_soundness@0();
+verify ProofClaims.charged=fs.keyed_charged@0();

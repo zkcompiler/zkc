@@ -1,0 +1,36 @@
+module example;
+use sigma::{SchnorrAnd, DLogPair};
+domain G = group("bls12-381.g1");
+domain Fr = field("bls12-381.fr");
+
+// Both borrowed arguments intentionally name the same private service root.
+protocol Borrowed roles(P,V)(left: Random<Fr> @P, right: Random<Fr> @P)
+    -> (value: Fr @P) {
+  let first = left.draw();
+  let second = right.draw();
+  return (value = first + second);
+}
+
+protocol AliasedAnd roles(P,V)
+    (first_base: G @(P,V), first_point: G @(P,V),
+     second_base: G @(P,V), second_point: G @(P,V),
+     first_scalar: Fr @P, second_scalar: Fr @P,
+     nonces: Random<Fr> @P, challenges: Random<Fr> @V)
+    -> (accepted: bool @V)
+    where () spec {
+      target knowledge = DLogPair<G>(in.first_base@V, in.first_point@V,
+        in.second_base@V, in.second_point@V, in.first_scalar, in.second_scalar)
+        accept out.accepted;
+    } {
+  let (unused) = Borrowed roles(P,V)(nonces, nonces);
+  let (accepted) = SchnorrAnd<G> roles(P,V)(first_base, first_point,
+    second_base, second_point, first_scalar, second_scalar, nonces, challenges);
+  return (accepted = accepted);
+}
+
+proof Proof = AliasedAnd {
+  prover P; verifier V;
+  public {first_base, first_point, second_base, second_point};
+  accept accepted; target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

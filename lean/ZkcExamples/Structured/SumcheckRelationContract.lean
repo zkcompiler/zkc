@@ -5,7 +5,7 @@ public import Zkc.Source.RegionDerivation
 
 @[expose] public section
 
-/-! Total-sum source formulas used by the maintained Sumcheck library.
+/-! Pure input-shape and total-sum source formulas used by the maintained Sumcheck library.
 The bodies are checked against actual retained definitions by `BodyIn` clients.
 Finite-domain capacity remains an explicit premise of Boolean adequacy. -/
 namespace ZkcExamples.Structured.SumcheckRelationContract
@@ -14,6 +14,22 @@ open Zkc.Source Zkc.Source.Structured
 
 abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
+
+/-- The exact bounded shape formula retained for the public Sumcheck input clause.
+Its total Math operations carry no execution or security correspondence claim. -/
+abbrev shapeHelper : Helper :=
+  ⟨"zkf_9ca6c98faa0d00ed80eb608a89db1544ad71443a8944af6ac99e6fd78cb3660b",
+    .math, [vector, .index], [.boolean]⟩
+
+def shapeBody : Region dialect shapeHelper.inputs shapeHelper.outputs :=
+  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
+  .letOp .indexPowerOfTwo (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
+  .letOp (.indexConstant 2) .nil .nil <|
+  .letOp .indexLess (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
+  .letOp (.booleanConstant false) .nil .nil <|
+  .letOp .booleanEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
+  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil
+    (.ret (.cons .here .nil))
 
 abbrev addHelper : Helper :=
   ⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005",
@@ -73,6 +89,20 @@ structure Bodies (definitions : List CheckedDefinition) : Prop where
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
+
+/-- The exact pure input-shape formula, with no execution or capacity premise. -/
+theorem shape_equation (table : Meanings F G) (raw : List F) (rounds : Nat) :
+    shapeBody.denote (meaning F G table) (Values.cons raw (.cons rounds .nil)).get =
+      .done (.cons (decide (raw.length = 2 ^ rounds ∧ rounds ≤ 2)) .nil) := by
+  change (PIR.Process.done (Values.cons
+    (naturalPowerOfTwo raw.length rounds && (decide (2 < rounds) == false)) .nil) :
+      Closed (Values (assignment F G) [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  by_cases bound : rounds ≤ 2
+  · have upper : ¬ 2 < rounds := by omega
+    simp [bound, upper]
+  · have upper : 2 < rounds := by omega
+    simp [bound, upper]
 
 private abbrev identityEffect : PIR.OperationInterpretation closedInterface closedInterface :=
   fun op => .call op .done

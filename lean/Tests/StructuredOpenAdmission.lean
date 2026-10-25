@@ -8,11 +8,11 @@ set_option smartUnfolding false
 private def math (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
   .function ⟨name, .math, .privateDef, inputs, outputs, none, [], none, body⟩
 private def localHelper (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
-  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (name, []), body⟩
+  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (.local name []), body⟩
 private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (List String))
     (body : Block) (roles : List String := ["P", "V"]) : Definition :=
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨"main", []⟩), body⟩
 private def unit (definitions : List Definition) (relations : List Relation := []) : Snapshot :=
   (let contractDefinitions : List Definition := definitions
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], contractDefinitions,

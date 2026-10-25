@@ -17,12 +17,13 @@ Canonical decimals use the shared bounded ASCII-digit fold, which reduces in
 the Lean kernel. JSON parsing and the match between an export digest and its
 MLIR are executable steps outside kernel reduction.
 
-Admission accepts at most 16 MiB of source text. Strings have at most 512 UTF-8
+Admission accepts at most 16 MiB of source text. Protocol template paths have
+at most 2048 UTF-8 bytes; other strings have at most 512 UTF-8
 bytes; binding and preparation names have the stricter limits stated with their
 rows. A unit has at most 128 domains, 128 relations, 128 bindings and 128
 definitions. A signature has at most 512 types, and source instructions and
-references are limited to 4096. JSON nesting, region nesting and helper
-dependency depth are each limited to 64. Stored internal marks add no source
+references are limited to 4096. Ordinary lexical JSON nesting, region nesting
+and helper dependency depth are each limited to 64. Stored internal marks add no source
 instructions. Admission refuses operations outside the vocabulary specified on
 this page, including conditional completion and construction-start, even in
 dormant declarations.
@@ -49,8 +50,48 @@ projection; the clause also fixes the decision participant. Without a name,
 a standalone statement has no exact selected-Entry evidence. When targets are
 present, its projection must still match a retained target. A statement evaluates
 no relation and does not identify different participants' acceptance values.
-Logical-origin binding values are opaque metadata;
-Lean checks their shape, size, nonemptiness and key uniqueness.
+`Function.origin` is an optional `FunctionOrigin`, with separate `local` and
+`protocol` constructors. A Local function requires its existing ordered string
+bindings, with nonempty bounded keys and values and unique keys. Math requires
+no origin. Every protocol requires a `ProtocolOrigin`: a qualified template path
+and declaration-ordered named `OriginTerm` arguments, including an empty list
+for a nongeneric protocol. Missing origins and mismatches with the function kind
+are refused. There is no reader for a legacy absent protocol origin.
+
+`OriginTerm` retains naturals as canonical decimal strings, field and group
+identities, domain and asset sort/identity pairs, Boolean/index/unit types,
+tuples, arrays, four distinct nominal kinds, and closed builtin and formal
+constructors. Runtime `Ty` and display strings do not replace these trees.
+The decoder checks exact array arities and tags. Decoder and raw-record header
+admission both check canonical decimals, string bounds, qualified path and
+parameter syntax, exact key uniqueness, 128 named arguments, 512 children per
+recursive list, 64 term levels and 4096 total terms across the arguments.
+Before JSON parsing, arbitrary bracket nesting is capped at 134: six enclosing
+arrays (snapshot, definitions, function, origin, arguments, binding) plus at most
+two arrays per each of 64 term levels. After parsing, ordinary lexical array
+depth is capped at 64. Only slot 8 of an exact ten-slot protocol-function row in
+the definitions table of the exact current original-stage envelope is exempt;
+that slot must pass the strict origin decoder. Standalone origins, wrong envelope
+tags or arities, and other slots receive no exemption. Other schema fields remain
+subject to snapshot decoding. Empty child lists count toward
+bracket depth. Typed term depth, total-node and list limits remain independent.
+
+The pinned Lean string libraries provide no NFC checker used by this reader.
+Unicode NFC is the native frontend admission contract. Lean neither checks nor
+normalizes it: keys and paths compare as exact UTF-8 strings, including for
+hand-constructed records. Thus Lean shape admission alone is not evidence of
+native NFC admission. Local binding values remain opaque metadata; Lean does
+not reproduce the native static-identity registry.
+
+Generated source aliases retain the Local/protocol distinction. Their names
+hex-encode canonical tagged JSON arrays, preserving every constructor, nominal
+kind and argument position without using `Repr` as identity. Protocol selectors
+come from the actual admitted `UnitPayload.protocols` dependency order, and
+generated associations select `imported.program.payload.protocols`; Local
+selectors continue to use the checked helper table. The generated symbol and
+raw-origin equations establish metadata association only. The source body's
+bottom-up correspondence against checked callee associations remains a separate
+proof obligation; no name, hash or matching origin discharges it.
 
 The contract table contains exactly one row per protocol, including protocols
 with no clauses. Missing, duplicate and non-protocol owners are refused.
@@ -197,14 +238,14 @@ prime field and for an extension alike. No rule assumes a characteristic: a
 characteristic-two prime field and an extension field without `PrimeField` are
 well-formed rows.
 
-`Catalogue.agrees` requires every exported row to equal the environment's row
-for its identity. The importer's environment is `admittedCatalogue`: the
-BLS12-381 scalar field `bls12-381.fr` with its pairing groups `bls12-381.g1`,
-`bls12-381.g2` and `bls12-381.gt`, and the service `random.bls12-381.fr/0`. The
-environment also lists the admitted sort instances: field and vector over
-`bls12-381.fr`, group over `bls12-381.g1` and that service. Every stored type,
-in all signatures, results, selected types and region signatures including
-dormant bodies, names exported rows of its sort and is an admitted instance.
+`Catalogue.agrees` requires every exported row to equal the installed row for
+its identity. `admittedCatalogue` combines `blsCatalogue` and
+`koalaBearCatalogue`: BLS12-381 scalar/group/service rows, KoalaBear, and its
+`koala-bear.ext8-binomial3` extension and random service. The installed instances
+include BLS scalar/vector/G1 and KoalaBear base/extension scalar/vector types.
+Every stored type, including dormant signatures and region results, must name
+an exported row of its sort and an installed instance. Installing a row does
+not prove its arithmetic, sampler or native implementation correct.
 
 Operations require facts of their rows. Field arithmetic, constants and
 equality require `Field`, and a constant is below the field's modulus. Group
@@ -224,7 +265,7 @@ services.
 
 `Catalogue.Justified` states the data facts that meanings rely on: the modulus
 of a field row is prime, and the modulus of a `CharacteristicNotTwo` row is not
-two. `blsCatalogue_justified` proves it for the environment, with the
+two. `blsCatalogue_justified` proves it for the BLS subcatalogue, with the
 BLS12-381 scalar modulus prime by a Lucas certificate whose modular powers the
 kernel evaluates (`blsModulus_prime`).
 
@@ -278,7 +319,17 @@ catalogue rows that admission checks.
 The evaluator over models (`Primitive.evaluateOn`, `Evaluation.operationOn`,
 `Evaluation.meaningOn`) gives each field operation the ring of its own field
 identity, each group operation the group of its own group identity and scaling
-the model's action of the named field on the named group. Helper tables,
+the model's action of the named field on the named group. The nominal operation
+`Op.fieldEmbed extension base` takes `[.field base]` to `[.field extension]`
+and applies `model.embed extension base`. Its direct descriptor is
+`["field.embed", extension, base]`. Admission calls `Catalogue.requireEmbedding`:
+the extension must have `ExtensionField` and `Field`, the base must have `Field`,
+the extension's `BaseField` member must name that exact base, and both rows must
+carry the same present modulus. Algebraic embedding laws remain separate from
+these checks. The operation is total in the operational model; normal forms
+retain its application even to a literal, without assuming a law about `embed`.
+The uniform model interprets the operation by the identity of `F`, as specified
+by its own embedding function. Helper tables,
 component tables (`ComponentTablesOn`), the participant interface and site
 observations (`participantInterfaceOn`, `ObservedActionOn`), protocol
 operations, retained repeats, protocol tables and participant views
@@ -364,6 +415,21 @@ for `vector.equal`.
 | `vector_append` | `vector.append` | V, F | V |
 | `vector_equal` | `vector.equal` | V, V | B |
 | `field_equal` | `field.equal` | F, F | B |
+| `field_embed` | `field.embed` | field:base | field:extension |
+
+For `field.embed`, the sole binding argument is the extension identity. Its
+`BaseField` member selects the base, and `Catalogue.requireEmbedding` validates
+the pair, including for unused bindings. The Local `exec` descriptor lowers to
+`Op.fieldEmbed`, preserving the source observation site through the usual
+lowering. No additional primitive interpreter or wire record is introduced.
+`Construction.Calculation.fieldEmbed` maps to this same operation; constructed
+participant rendering recognizes the exact `algebra.exec.field_embed` binding
+and ordered base/extension ports. Its implementation field must be the empty
+string: an explicit implementation or a malformed field refuses the export,
+rather than being erased into the mathematical embedding.
+Constructed attribute decoding validates every tagged payload before rendering;
+bound operations require a symbol binding, a string-array parameter list and a
+string site, including when a diagnostic site is omitted from the meaning.
 
 Index values are `Nat` with explicit `value < 2^64` conditions. Exec checks
 both index operands, including comparisons. Add/multiply overflow, subtraction
@@ -749,12 +815,23 @@ relation binding or security assumption.
 body by symbolic evaluation under the participant rules above. A form lists the
 role's ordered sends, receives and queries; presence splits on an optional
 input or on a component of a returned tuple, where an operation first needs it;
-guards on decided equalities; kept helper invocations and helper laws; repeats
+guards on equalities, including arbitrary Boolean conditions compared with
+`true`; exact Math invocations on optional components; kept helper invocations
+and helper laws; repeats
 of callback regions; and callee applications at child contexts. It ends in
 returned components or a stop. Every step is structural, and a body outside the
 fragment is refused with a named reason. A form is indexed by a signature: the
 helper laws it may use, keyed by the helper's sorts and pinned to inputs or
 literals, and the callee forms it may apply, keyed by callee signature and role.
+
+A Math call can use a checked passing law on components. Otherwise `Form.math`
+invokes the exact component helper table and binds its optional output tuple.
+It neither sequences all operands before the call nor infers a law from the
+helper's name. A closed returning or stopping law is insufficient to replace
+this component invocation. Absent inputs, ignored inputs, stops and events
+therefore follow the existing component meaning. An arbitrary present Boolean
+guard uses `Equality.boolean`; false rejects and an absent condition stops as
+incomplete. No premise asserts that a helper result or received Boolean is true.
 
 `NormalForm.normalize_sound` states that when normalization returns a form
 whose law uses call their laws' own helpers (`CallsMatch`), the body's

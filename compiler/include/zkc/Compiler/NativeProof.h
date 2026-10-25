@@ -54,16 +54,28 @@ llvm::Error
 checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,
                  MathematicalSelectionPolicy mathematicalSelection = {});
+enum class ConstructedParticipantRole { Producer, Validator };
 /// Check the supplied candidate as `checkNativeProof` does, then export its
-/// validator participant as a flat `zkc.constructed-participant/0` record.
-/// Local helper calls are inlined at their actual operands; every remaining
+/// explicitly selected policy role as a flat `zkc.constructed-participant/0`
+/// record. The default preserves validator-only callers.
+/// Construction-inserted helper calls are inlined at their actual operands;
+/// original helper calls retain their callee. Every remaining
 /// operation keeps its name, attributes, operation binding and result types.
 /// Exporter correctness and the meaning of each primitive remain explicit
 /// boundaries of the formal consumer.
 llvm::Expected<llvm::json::Value> exportConstructedParticipant(
     mlir::ModuleOp source, mlir::ModuleOp candidate,
     llvm::StringRef sourceBytes, const NativeProofPolicy &policy,
-    MathematicalSelectionPolicy mathematicalSelection = {});
+    MathematicalSelectionPolicy mathematicalSelection = {},
+    ConstructedParticipantRole role = ConstructedParticipantRole::Validator);
+/// Check once, then export both actual candidate participants in policy order
+/// as `["zkc.constructed-pair/0", producer, validator]`. Child records retain
+/// exactly the same source/candidate identities and full policy.
+llvm::Expected<llvm::json::Value>
+exportConstructedPair(mlir::ModuleOp source, mlir::ModuleOp candidate,
+                      llvm::StringRef sourceBytes,
+                      const NativeProofPolicy &policy,
+                      MathematicalSelectionPolicy mathematicalSelection = {});
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {

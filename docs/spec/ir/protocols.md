@@ -24,6 +24,15 @@ Different roles may hold different values. Availability asserts neither public
 agreement nor secrecy. A role's participant retains every advertised input even
 when its executable result does not depend on that input.
 
+Source-emitted protocols also carry `origin`, the logical qualified NFC
+template path and declaration-ordered named static arguments in the public
+[typed term grammar](../formats/structured-source.md#definition-origins).
+General native IR may omit this attribute; structured export requires it on
+every protocol definition. A present origin is verified independently of the
+body. Language correspondence recomputes it from the checked declaration.
+Binding a callee through its origin and proving its body equal are separate
+obligations.
+
 Mathematical operations use ordinary logical types and SSA edges. Interface
 attributes and explicit `protocol.restrict_roles` operations retain declared role
 boundaries. Intermediate availability is derived, never supplied as a trusted

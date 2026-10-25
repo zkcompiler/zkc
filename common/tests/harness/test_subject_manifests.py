@@ -30,7 +30,7 @@ def test_old_semantic_tables_are_rejected(table):
 
 
 def test_targetless_unclaimed_subjects_have_no_generated_source_authority():
-    for subject in manifests().load_all(["gkr", "composed-sumcheck", "deferred-rounds"]):
+    for subject in manifests().load_all(["gkr", "deferred-rounds"]):
         assert subject.generated("claims") is None
         assert subject.get("lean", "namespace") is None
 

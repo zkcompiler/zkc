@@ -9,6 +9,10 @@ transports that contract to a property's conclusion under its stated assumptions
 a proved preservation law. Property conjunction combines conclusions and their
 assumptions; it never invents independent randomness or multiplies error bounds.
 
+The [checked component architecture](spec/components.md) connects generated full-process
+bindings to both honest completeness and adversarial reductions. Its canonical
+claim authority fixes the experiment before either proof method is selected.
+
 ## Package boundaries
 
 `Zkc.Semantics` defines effects, execution, refinement and continuation laws.
@@ -125,6 +129,15 @@ classify dependencies independently of declaration namespaces.
 | Clean adapter | Core, deterministic families, Clean |
 | Subject evidence/examples | Their upstream libraries and other subjects |
 | Tests/tooling | Any repository layer |
+
+`ZkcSecurity.Realizations` owns reusable laws for concrete source implementations.
+For example, its Sumcheck helper laws accept checked body-membership evidence
+for any admitted program containing the installed library bodies. These are
+source-bound realizations, so the dependency audit assigns them the same
+boundary as subject evidence; general security and family mathematics cannot
+import them. Moving them out of `Examples` introduces no new allowed edge or
+exception. Existing underlying source-library templates remain in `ZkcExamples`
+until their separately planned migration.
 
 Mathlib/Lean foundations are available throughout; VCVio and PolyFun
 belong to generic security, ArkLib to its optional package, Clean to the Clean

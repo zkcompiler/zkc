@@ -2,6 +2,7 @@ import Tests.StructuredSumcheckVerifierExecution
 import Tests.StructuredSumcheckVerifierMutations
 import ZkcExamples.Structured.SumcheckReduceVerifier
 import ZkcExamples.Structured.SumcheckSourceVerifier
+import ZkcExamples.Structured.SumcheckContractRequests
 
 /-! Kernel consumers of the actual source equations. Executable controls above
 exercise complete originals and independently re-admitted source mutants. -/
@@ -149,5 +150,79 @@ theorem terminal_raw_overflow_after_small_point (raw point : List F) (claim : F)
       (some raw) (some point) (some claim) = .halt .exhausted := by
   rw [SumcheckVerifierTerminal.terminal_decision]
   simp only [representable, small, Nat.not_lt.mpr overflow, ↓reduceIte]
+
+open SumcheckContractBindings SumcheckContractInterpretations SumcheckContractRequests
+
+variable (environment : RelationEnvironment SumcheckSourceViews.imported (ZMod 5) (ZMod 5))
+
+/-- The extra input clause must not become the public request's selected target. -/
+theorem public_request_selects_named_target :
+    (publicSelection (sourceEnvironment := environment)).selection =
+      .subject (publicOwner.namedClause "public_sum") ∧
+      publicOwner.namedClause "public_sum" = ⟨1, by decide⟩ := ⟨rfl, rfl⟩
+
+theorem child_request_uses_actual_formula :
+    childFormula.original.name = SumcheckRelationContract.tableSumHelper.name ∧
+      childFormula.original.kind = .math := ⟨rfl, rfl⟩
+
+/-- An input formula has no acceptance selector, even on a returned boundary. -/
+theorem shape_clause_cannot_accept
+    (boundary : BoundaryValuation (assignment (ZMod 5) (ZMod 5))
+      publicOwner.protocol.inputs publicOwner.protocol.outputs) :
+    ¬ (publicContract (sourceEnvironment := environment)).Accepts {}
+      (publicOwner.namedClause "shape") boundary := by
+  rintro ⟨selector, selected, _⟩
+  change none = some selector at selected
+  cases selected
+
+/-- A true sum does not imply the independent input-shape clause. The target
+translation remains available without assuming honest input shape. -/
+theorem true_sum_with_false_shape :
+    PublicTruth (G := ZMod 5) ([0] : List (ZMod 5)) 0 ∧
+      inputShapeFormula.invokeRelation (F := ZMod 5) (G := ZMod 5)
+        (.cons [0] (.cons 1 .nil)) = .done (.cons false .nil) := by
+  constructor
+  · exact (public_truth_iff _ _ (by decide)).mpr (by decide)
+  · rw [input_shape_formula_equation]
+    rfl
+
+/-- False-claim refutation is still available on the same malformed shape. -/
+theorem public_refutation_without_honest_shape :
+    (publicRefutation (sourceEnvironment := environment)
+      ([0] : List (ZMod 5)) 1 1 0).Meaning := by
+  intro holds
+  have translation := public_translation (sourceEnvironment := environment)
+    ([0] : List (ZMod 5)) 1 1 0 (.stopped .incomplete) (by decide)
+  have equality := ((publicUse (sourceEnvironment := environment)
+    ([0] : List (ZMod 5)) 1 1 0 (.stopped .incomplete)).equivalence translation).mp holds
+  exact (by decide : (1 : ZMod 5) ≠ ([0] : List (ZMod 5)).sum) equality
+
+theorem zero_round_shape_accepts_singleton :
+    inputShapeFormula.invokeRelation (F := ZMod 5) (G := ZMod 5)
+      (.cons [3] (.cons 0 .nil)) = .done (.cons true .nil) := by
+  rw [input_shape_formula_equation]
+  rfl
+
+/-- Reading both parameter coordinates from the actual boundary preserves an
+absent count instead of shifting another input into that coordinate. -/
+theorem missing_shape_count_is_unavailable :
+    let input : ComponentInput publicOwner (ZMod 5) (ZMod 5) :=
+      ⟨{}, 1, SumcheckSourceVerifier.sourceRootInputs (some [0]) (some 0) none none⟩
+    let boundary := input.boundary (.stopped .incomplete)
+    inputShapeApplication.read {} boundary
+      (⟨fun _ selector => selector.read {} boundary, fun _ _ => none⟩ :
+        LogicalAssignments (assignment (ZMod 5) (ZMod 5)) publicOwner rootInvocation) = none := rfl
+
+/-- The formula's power test is mathematical even beyond machine dimensions. -/
+theorem power_test_has_no_machine_cutoff (rounds : Nat) :
+    naturalPowerOfTwo (2 ^ rounds) rounds = true :=
+  (naturalPowerOfTwo_eq_true _ _).mpr rfl
+
+/-- Reject an excessive mathematical dimension without an index-admission premise. -/
+theorem shape_excess_is_false (raw : List F) (rounds : Nat) (excess : 2 < rounds) :
+    inputShapeFormula.invokeRelation (F := F) (G := G)
+      (.cons raw (.cons rounds .nil)) = .done (.cons false .nil) := by
+  rw [input_shape_formula_equation]
+  simp only [Nat.not_le_of_lt excess, and_false, decide_false]
 
 end Tests.StructuredSumcheckVerifier

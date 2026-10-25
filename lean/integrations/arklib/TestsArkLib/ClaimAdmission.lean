@@ -63,11 +63,12 @@ private theorem elaborated (endpoint : Semantics) (application : String) :
     soundnessArguments (modelRegistry endpoint application) (wire (F := F) (G := G) endpoint)
       (subject (F := F) (G := G) endpoint) = .ok (.ok (request endpoint application)) := by
   cases endpoint <;>
-    simp [soundnessArguments, wire, subject, modelRegistry, resolveModel, models, modelSchema,
+    simp [soundnessArguments, wire, subject, modelRegistry, resolveModel, models, modelSchema, modelSchemaWith,
       named, checkArguments, reference, Subject.check, Subject.targetReference, Subject.acceptance,
       Wire.TargetRef.matches, cardinality, request, model, checkCapabilities,
       show artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl,
-      Registry.lookup, ModelContext.parameter, ModelContext.resolveApplication]
+      Registry.lookup, ModelContext.parameter, ModelContext.resolveApplication,
+      soundnessParameters, decodeSoundnessParameters, requireExactSoundness] <;> rfl
 
 private noncomputable def registry (endpoint : Semantics) (application : String) :=
   properties (F := F) (G := G) (art := artifacts) (endpoint := endpoint) (modelRegistry endpoint application)

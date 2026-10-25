@@ -1,4 +1,4 @@
-# Constructed validator export
+# Constructed participant and pair exports
 
 `zkc-compile protocol-constructed-participant SOURCE.mlir POLICY CANDIDATE.mlir`
 exports the validator participant of a supplied native proof candidate. It first
@@ -7,6 +7,21 @@ runs the same check as `protocol-check-proof`: the candidate must equal the
 [deployment policy](proof.md#deployment-policy-and-descriptor), including every
 inserted transcript helper. A refused candidate produces no export. The command
 accepts the same mathematical-selection options as `protocol-check-proof`.
+The optional `--role=producer` selects the policy producer instead;
+`--role=validator` selects the default explicitly. Roles are policy selections,
+not arbitrary source participants. Conflicting or repeated role options refuse.
+
+`zkc-compile protocol-constructed-pair SOURCE.mlir POLICY CANDIDATE.mlir` checks
+the candidate once and exports both actual participants in the exact array:
+
+```text
+["zkc.constructed-pair/0", producer-record, validator-record]
+```
+
+Each child uses the participant envelope below, with identical source identity,
+candidate identity and full policy. Neither command reconstructs an interactive
+source producer as the exported producer. The pair command accepts mathematical
+selection options, and refuses a role option because both roles are required.
 
 The export is the input of the formal
 [transcript-construction](../../../lean/docs/spec/fiat-shamir.md) and
@@ -19,7 +34,7 @@ The format is an exact tagged array, `zkc.constructed-participant/0`:
 
 ```text
 [format, source-sha256, candidate-sha256, policy, participant,
- inputs, outputs, instructions, returned]
+ inputs, outputs, instructions, returned, service-ports]
 ```
 
 `source-sha256` hashes the exact supplied source bytes. `candidate-sha256` hashes
@@ -27,8 +42,17 @@ the candidate module's generic operation print, without locations. Both are
 `sha256:` followed by 64 lowercase hexadecimal digits; they identify bytes and
 are not authority. `policy` is the canonical policy array. `participant` is the
 symbol of the participant whose instance is the policy entry and whose role is
-the policy validator; exactly one must exist. `inputs` and `outputs` are the
+the selected policy producer or validator; exactly one must exist. `inputs` and `outputs` are the
 printed MLIR types of its signature, in order.
+
+`service-ports` is the complete retained native service interface, separate
+from those data and transcript inputs, including ports with no queries. Each
+row is `[name, owner, root-input, role-input, contract]`. The two indices are
+canonical decimal strings: `root-input` is the original entry's global input
+index; `role-input` is the native port position in the role's complete input
+interface after construction removes the selected validator services. The
+port's state identity is the original entry and root input, not its name or a
+query site. Borrowed aliases of one root therefore share state.
 
 ## Instructions
 
@@ -42,6 +66,22 @@ arguments, since the induction index has no result. Each instruction is:
 ```text
 [operation, attributes, binding, operands, result-types, regions]
 ```
+
+Only `protocol.service_query` has a seventh field:
+
+```text
+[operation, attributes, binding, operands, result-types, [],
+ [origin-template-hex, repeat-coordinate-references]]
+```
+
+Its native attributes remain exactly `port`, `method` and `site`; source
+annotations are separate from that dictionary. The origin uses the canonical
+`zkc.native-origin-template/0` encoding and retains its source application and
+repeat path and the source query event, including local service input,
+contract, method and transported owner. Coordinate references name enclosing
+loop induction values, outermost first. They are occurrence metadata, not
+ordinary request operands. A field draw has no data operands and one nominal
+field result. Local draws neither consume nor produce transcript state.
 
 `operation` is the MLIR operation name. `attributes` lists the operation's
 attribute dictionary in its sorted order as `[name, value]` pairs; a value is
@@ -74,7 +114,12 @@ Any other operation, any other region, a successor or a missing reference
 refuses the export with a `constructed-participant-*` diagnostic.
 
 Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
-2048 exported instructions in total and 1 MiB of printed JSON.
+2048 exported instructions in total and 1 MiB of printed JSON per participant.
+The pair container applies these limits independently to its two children.
+Readers require the exact current shapes, including an empty service interface
+and the query annotation where applicable, with no compatibility reader.
+The format remains `/0` under the
+repository's pre-stabilization version policy.
 
 ## Boundary
 
@@ -89,3 +134,19 @@ native construction, whose check reconstructs the whole candidate from the
 source; the export does not establish it. The [formal
 bridge](../../../lean/bridges/construction/README.md) regenerates its retained
 data from this export and checks the exact bytes.
+
+The independent pair reader in `lean/bridges/construction/pair.py` also checks
+the exact paired envelope and shared identities/policy. The formal
+`Zkc.Construction.AuthoredPair` selection fixes the complete participant trees,
+source helper dependencies, input contract, role maps and retained target before
+admission. Its producer structural check and whole-artifact equality do not
+establish original-source-to-constructed-producer correspondence. That theorem,
+export/read-back correspondence and domain interpretation remain separate
+obligations; a native check or a matching digest is not their proof.
+
+Local-service admission additionally compares the complete interface with the
+original input scopes and contracts, resolves each request through source
+applications, restrictions and repeat captures to its original root, and
+checks exact owner, request, nominal result and static/dynamic occurrence.
+Only the installed field `draw` is admitted. Unsupported methods refuse.
+The existing validator construction rule continues to refuse local requests.
