@@ -1,6 +1,5 @@
 #include "ControlCursor.h"
 #include "ExecutionDefinitions.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
@@ -10,8 +9,8 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Refusal.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/StringMap.h"
 #include <map>
 
 using namespace mlir;
@@ -44,7 +43,8 @@ class BodyComparison {
   func::FuncOp function;
   Value scope;
   exec::detail::ControlCursor control;
-  llvm::DenseMap<Value, std::string> names;
+  llvm::DenseSet<Value> bound;
+  llvm::StringMap<Value> names;
   bool enter(Block *block) { return control.enter(block); }
   Operation *take() { return control.take(); }
   bool end() const { return control.atEnd(); }
@@ -55,9 +55,7 @@ class BodyComparison {
                 Block *failed = nullptr) {
     return control.dispatch(value, payload, failed);
   }
-  bool region(runtime::EnterScopeOp enter, StringRef kind, StringRef site,
-              StringRef selection, const program::Body &body,
-              ArrayRef<std::string> arguments, SmallVectorImpl<Value> &results);
+  std::optional<SmallVector<Value>> values(ArrayRef<std::string>) const;
   bool conditional(const program::Instruction &, const program::Conditional &);
   bool match(const program::Instruction &, const program::Match &);
   bool loop(const program::Instruction &, const program::For &);
@@ -154,274 +152,83 @@ public:
   }
   bool run(const program::LocalDefinitions &expected, bool mixed = false);
 };
+std::optional<SmallVector<Value>>
+BodyComparison::values(ArrayRef<std::string> expected) const {
+  SmallVector<Value> result;
+  for (const auto &name : expected) {
+    auto found = names.find(name);
+    if (found == names.end())
+      return std::nullopt;
+    result.push_back(found->second);
+  }
+  return result;
+}
 bool BodyComparison::inputs(ValueRange actual,
                             ArrayRef<std::string> expected) const {
-  if (actual.size() != expected.size())
-    return false;
-  for (auto [value, name] : zip(actual, expected)) {
-    auto found = names.find(value);
-    if (found == names.end() || found->second != name)
-      return false;
-  }
-  return true;
+  auto selected = values(expected);
+  return selected && actual == ValueRange(*selected);
 }
 bool BodyComparison::bind(ValueRange actual, ArrayRef<std::string> expected) {
   if (actual.size() != expected.size())
     return false;
   for (auto [value, name] : zip(actual, expected))
-    if (!owner.type(value.getType()) || !names.try_emplace(value, name).second)
+    if (!owner.type(value.getType()) || !bound.insert(value).second ||
+        !names.try_emplace(name, value).second)
       return false;
   return true;
-}
-bool BodyComparison::region(runtime::EnterScopeOp entry, StringRef kind,
-                            StringRef site, StringRef selection,
-                            const program::Body &body,
-                            ArrayRef<std::string> arguments,
-                            SmallVectorImpl<Value> &results) {
-  if (!entry || entry.getParent() != scope || entry.getKind() != kind ||
-      entry.getSite() != site ||
-      entry.getSelection().value_or("") != selection ||
-      !attrs(entry, {"kind", "site", "selection", "operandSegmentSizes"}) ||
-      !inputs(entry.getInputs(), arguments))
-    return false;
-  SmallVector<Value> acquired;
-  if (!dispatch(entry.getOutcome(), acquired) || acquired.size() != 1)
-    return false;
-  auto call = dyn_cast_or_null<func::CallOp>(take());
-  SmallVector<Value> operands{acquired.front()};
-  append_range(operands, entry.getInputs());
-  if (!call || !attrs(call, {"callee"}) || call.getOperands() != operands ||
-      call.getNumResults() != 1 || !owner.call(call, body, arguments))
-    return false;
-  auto leave = dyn_cast_or_null<runtime::ExitScopeOp>(take());
-  SmallVector<Value> held;
-  if (!leave || !attrs(leave) || leave.getScope() != acquired.front() ||
-      leave.getBody() != call.getResult(0) ||
-      !dispatch(leave.getOutcome(), held) || held.size() != 1)
-    return false;
-  auto accept = dyn_cast_or_null<runtime::AcceptTransferOp>(take());
-  return accept && attrs(accept) && accept.getParent() == scope &&
-         accept.getTransfer() == held.front() &&
-         dispatch(accept.getOutcome(), results);
 }
 bool BodyComparison::conditional(const program::Instruction &instruction,
                                  const program::Conditional &record) {
-  auto test = dyn_cast_or_null<exec::TestOp>(take());
-  SmallVector<Value> decision;
-  if (!test || !attrs(test, {"site"}) || test.getScope() != scope ||
-      test.getSite() != instruction.site ||
-      !inputs(test.getCondition(), {record.condition}) ||
-      !dispatch(test.getOutcome(), decision))
-    return false;
-  auto branch = dyn_cast_or_null<cf::CondBranchOp>(take());
-  if (!branch || !branch->getDiscardableAttrDictionary().empty() ||
-      branch.getBranchWeights() || branch.getCondition() != decision.front() ||
-      !branch.getTrueDestOperands().empty() ||
-      !branch.getFalseDestOperands().empty() || !end())
-    return false;
-  Block *join = nullptr;
-  for (unsigned i = 0; i < 2; ++i) {
-    if (!enter(i ? branch.getFalseDest() : branch.getTrueDest()))
-      return false;
-    auto entry = dyn_cast_or_null<runtime::EnterScopeOp>(take());
-    SmallVector<Value> values;
-    if (!region(entry, "conditional", instruction.site, i ? "else" : "then",
-                i ? record.elseBody : record.thenBody, record.captures, values))
-      return false;
-    auto edge = dyn_cast_or_null<cf::BranchOp>(take());
-    if (!edge || !attrs(edge) || edge.getDestOperands() != values || !end() ||
-        (join && join != edge.getDest()))
-      return false;
-    join = edge.getDest();
-  }
-  return enter(join) &&
-         bind(control.currentBlock()->getArguments(), record.outputs);
+  auto condition = values({record.condition}),
+       captures = values(record.captures);
+  SmallVector<Value> outputs;
+  return condition && captures &&
+         control.conditional(
+             condition->front(), *captures, instruction.site,
+             [&](func::CallOp call, unsigned arm) {
+               return owner.call(call, arm ? record.elseBody : record.thenBody,
+                                 record.captures);
+             },
+             outputs) &&
+         bind(outputs, record.outputs);
 }
 bool BodyComparison::match(const program::Instruction &instruction,
                            const program::Match &record) {
-  auto match = dyn_cast_or_null<exec::MatchOp>(take());
-  if (!match || !attrs(match, {"site", "alternatives"}) ||
-      match.getScope() != scope || match.getSite() != instruction.site ||
-      !end() || !stop(match.getStopped()) ||
-      !inputs(match.getInput(), {record.input}) ||
-      !inputs(match.getCaptures(), record.captures) ||
-      match.getArms().size() != record.arms.size())
-    return false;
-  Block *join = nullptr;
-  for (auto [i, recordArm] : enumerate(record.arms)) {
-    auto *arm = match.getArms()[i];
-    program::Names arguments = recordArm.payload;
-    append_range(arguments, record.captures);
-    if (cast<StringAttr>(match.getAlternatives()[i]).getValue() !=
-            recordArm.alternative ||
-        !enter(arm) || !bind(arm->getArguments(), arguments))
-      return false;
-    auto entry = dyn_cast_or_null<runtime::EnterScopeOp>(take());
-    SmallVector<Value> values;
-    if (!entry || entry.getInputs() != arm->getArguments() ||
-        !region(entry, "match", instruction.site, recordArm.alternative,
-                recordArm.body, arguments, values))
-      return false;
-    auto edge = dyn_cast_or_null<cf::BranchOp>(take());
-    if (!edge || !attrs(edge) || edge.getDestOperands() != values || !end() ||
-        (join && join != edge.getDest()))
-      return false;
-    join = edge.getDest();
-    for (Value argument : arm->getArguments())
-      names.erase(argument);
-  }
-  return enter(join) &&
-         bind(control.currentBlock()->getArguments(), record.outputs);
+  auto input = values({record.input}), captures = values(record.captures);
+  SmallVector<std::string> alternatives;
+  for (const auto &arm : record.arms)
+    alternatives.push_back(arm.alternative);
+  SmallVector<Value> outputs;
+  return input && captures &&
+         control.match(
+             input->front(), *captures, alternatives, instruction.site,
+             [&](func::CallOp call, unsigned arm) {
+               program::Names arguments = record.arms[arm].payload;
+               append_range(arguments, record.captures);
+               return owner.call(call, record.arms[arm].body, arguments);
+             },
+             outputs) &&
+         bind(outputs, record.outputs);
 }
 bool BodyComparison::loop(const program::Instruction &instruction,
                           const program::For &record) {
-  auto range = dyn_cast_or_null<exec::RangeOp>(take());
-  SmallVector<Value> bounds;
-  if (!range || !attrs(range, {"site"}) || range.getScope() != scope ||
-      range.getSite() != instruction.site ||
-      !inputs({range.getLower(), range.getUpper()},
-              {record.lower, record.upper}) ||
-      !dispatch(range.getOutcome(), bounds))
-    return false;
-  program::Names seeds, bodyArguments{record.induction};
+  program::Names seedNames, arguments{record.induction};
   for (const auto &[name, seed] : record.carried) {
-    seeds.push_back(seed);
-    bodyArguments.push_back(name);
+    seedNames.push_back(seed);
+    arguments.push_back(name);
   }
-  auto initial = dyn_cast_or_null<runtime::BorrowTransferOp>(take());
-  auto initialEdge = dyn_cast_or_null<cf::BranchOp>(take());
-  if (!initial || !attrs(initial) || initial.getParent() != scope ||
-      !inputs(initial.getInputs(), seeds) || !initialEdge ||
-      !attrs(initialEdge) ||
-      initialEdge.getDestOperands() !=
-          ValueRange{bounds[0], initial.getTransfer()} ||
-      !end() || !enter(initialEdge.getDest()) ||
-      control.currentBlock()->getNumArguments() != 2)
-    return false;
-  auto *header = control.currentBlock();
-  Value coordinate = header->getArgument(0), previous = header->getArgument(1);
-  auto compare = dyn_cast_or_null<arith::CmpIOp>(take());
-  auto edge = dyn_cast_or_null<cf::CondBranchOp>(take());
-  if (!compare || !attrs(compare, {"predicate"}) ||
-      compare.getPredicate() != arith::CmpIPredicate::ult ||
-      compare.getLhs() != coordinate || compare.getRhs() != bounds[1] ||
-      !edge || !edge->getDiscardableAttrDictionary().empty() ||
-      edge.getBranchWeights() || edge.getCondition() != compare.getResult() ||
-      !edge.getTrueDestOperands().empty() ||
-      edge.getFalseDestOperands() != ValueRange{previous} || !end() ||
-      !enter(edge.getTrueDest()))
-    return false;
-  Block *finish = edge.getFalseDest();
-  auto iteration = dyn_cast_or_null<runtime::IterationOp>(take());
-  if (!iteration || !attrs(iteration, {"site"}) ||
-      iteration.getParent() != scope ||
-      iteration.getCoordinate() != coordinate ||
-      iteration.getSite() != instruction.site)
-    return false;
-  auto iterationEdge = dyn_cast_or_null<exec::DispatchOp>(control.peek());
-  if (!iterationEdge)
-    return false;
-  Block *cleanup = iterationEdge.getStopped();
-  if (!cleanup || cleanup == control.currentBlock() ||
-      !control.inspect(cleanup) || cleanup->getNumArguments() != 1 ||
-      cleanup->getOperations().size() != 2 || !owner.charge() ||
-      !owner.charge())
-    return false;
-  auto release = dyn_cast<runtime::ReleaseTransferOp>(cleanup->front());
-  auto propagate = dyn_cast<cf::BranchOp>(cleanup->back());
-  if (!release || !attrs(release) || release.getTransfer() != previous ||
-      !propagate || !attrs(propagate) ||
-      propagate.getDestOperands() != cleanup->getArguments() ||
-      !stop(propagate.getDest()))
-    return false;
-  SmallVector<Value> index;
-  if (!dispatch(iteration.getOutcome(), index, cleanup) ||
-      !bind(index, {record.induction}) ||
-      index.front().getType() != range.getLower().getType())
-    return false;
-  auto peek = dyn_cast_or_null<runtime::TransferValuesOp>(take());
-  if (!peek || !attrs(peek) || peek.getTransfer() != previous ||
-      !bind(peek.getValues(), ArrayRef(bodyArguments).drop_front()))
-    return false;
-  append_range(bodyArguments, record.captures);
-  auto entry = dyn_cast_or_null<runtime::EnterScopeOp>(take());
-  if (!entry || !attrs(entry, {"kind", "site", "operandSegmentSizes"}) ||
-      entry.getParent() != scope || entry.getKind() != "iteration" ||
-      entry.getCoordinate() != coordinate ||
-      entry.getSite() != instruction.site ||
-      !inputs(entry.getInputs(), bodyArguments))
-    return false;
-  // This mapping is exact even if the body does not read its induction or
-  // carry.
-  SmallVector<Value> prefix(index);
-  append_range(prefix, peek.getValues());
-  if (entry.getInputs().take_front(prefix.size()) != ValueRange(prefix))
-    return false;
-  SmallVector<Value> acquired;
-  if (!dispatch(entry.getOutcome(), acquired, cleanup) || acquired.size() != 1)
-    return false;
-  SmallVector<Value> arguments{acquired.front()};
-  append_range(arguments, entry.getInputs());
-  auto call = dyn_cast_or_null<func::CallOp>(take());
-  if (!call || !attrs(call, {"callee"}) || call.getOperands() != arguments ||
-      call.getNumResults() != 1 ||
-      !owner.call(call, record.body, bodyArguments))
-    return false;
-  auto leave = dyn_cast_or_null<runtime::ExitScopeOp>(take());
-  SmallVector<Value> held;
-  if (!leave || !attrs(leave) || leave.getScope() != acquired.front() ||
-      leave.getBody() != call.getResult(0) ||
-      !dispatch(leave.getOutcome(), held, cleanup) || held.size() != 1)
-    return false;
-  auto old = dyn_cast_or_null<runtime::ReleaseTransferOp>(take());
-  if (!old || !attrs(old) || old.getTransfer() != previous)
-    return false;
-  Block *increment = nullptr;
-  if (record.conditional) {
-    auto test = dyn_cast_or_null<runtime::TakeConditionOp>(take());
-    SmallVector<Value> selected;
-    if (!test || !attrs(test) || test.getTransfer() != held.front() ||
-        !dispatch(test.getOutcome(), selected))
-      return false;
-    auto branch = dyn_cast_or_null<cf::CondBranchOp>(take());
-    if (!branch || !branch->getDiscardableAttrDictionary().empty() ||
-        branch.getBranchWeights() || branch.getCondition() != selected[0] ||
-        branch.getFalseDest() != finish ||
-        branch.getTrueDestOperands() != ValueRange{selected[1]} ||
-        branch.getFalseDestOperands() != ValueRange{selected[1]} || !end())
-      return false;
-    increment = branch.getTrueDest();
-  } else {
-    auto branch = dyn_cast_or_null<cf::BranchOp>(take());
-    if (!branch || !attrs(branch) || branch.getDestOperands() != held || !end())
-      return false;
-    increment = branch.getDest();
-  }
-  if (!enter(increment) || increment->getNumArguments() != 1)
-    return false;
-  auto one = dyn_cast_or_null<arith::ConstantIntOp>(take());
-  auto advance = dyn_cast_or_null<arith::AddIOp>(take());
-  auto back = dyn_cast_or_null<cf::BranchOp>(take());
-  if (!one || !attrs(one, {"value"}) || one.value() != 1 ||
-      !one.getType().isSignlessInteger(64) || !advance ||
-      !attrs(advance, {"overflowFlags"}) ||
-      advance.getOverflowFlags() != arith::IntegerOverflowFlags::none ||
-      advance.getLhs() != coordinate || advance.getRhs() != one.getResult() ||
-      !back || !attrs(back) || back.getDest() != header ||
-      back.getDestOperands() !=
-          ValueRange{advance.getResult(), increment->getArgument(0)} ||
-      !end() || !enter(finish) || finish->getNumArguments() != 1)
-    return false;
-  auto accept = dyn_cast_or_null<runtime::AcceptTransferOp>(take());
+  append_range(arguments, record.captures);
+  auto bounds = values({record.lower, record.upper}), seeds = values(seedNames),
+       captures = values(record.captures);
   SmallVector<Value> outputs;
-  if (!accept || !attrs(accept) || accept.getParent() != scope ||
-      accept.getTransfer() != finish->getArgument(0) ||
-      !dispatch(accept.getOutcome(), outputs) || !bind(outputs, record.outputs))
-    return false;
-  names.erase(index.front());
-  for (Value value : peek.getValues())
-    names.erase(value);
-  return true;
+  return bounds && seeds && captures &&
+         control.loop((*bounds)[0], (*bounds)[1], *seeds, *captures,
+                      record.conditional, instruction.site,
+                      [&](func::CallOp call, unsigned) {
+                        return owner.call(call, record.body, arguments);
+                      },
+                      outputs) &&
+         bind(outputs, record.outputs);
 }
 bool BodyComparison::run(const program::Body &expected,
                          ArrayRef<std::string> arguments) {
