@@ -433,7 +433,7 @@ theorem simulateQ_lazyJoint_liftHash (width : ℕ) {α : Type} (computation : Or
     simulateQ (lazyJoint (E := E) (Shape := Shape) width)
         (liftHash (fun _ : E => Fin width → S) Shape computation) =
       simulateQ (fun call => onSecond (rowImpl call)) computation := by
-  rw [liftHash, ZkcSecurity.Oracle.simulateQ_simulateQ]
+  rw [liftHash, ← QueryImpl.simulateQ_compose]
   refine congrArg (fun impl => simulateQ impl computation) (funext fun query => ?_)
   exact simulateQ_spec_query (impl := lazyJoint (E := E) (Shape := Shape) width) (Sum.inr query)
 

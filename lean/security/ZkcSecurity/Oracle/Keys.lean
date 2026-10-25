@@ -48,22 +48,6 @@ set_option autoImplicit false
 namespace ZkcSecurity.Oracle
 open OracleComp OracleSpec OracleComp.ProgramLogic.Relational
 
-section Simulate
-variable {ι ι' α : Type} {spec : OracleSpec ι} {spec' : OracleSpec ι'} {m : Type → Type} [Monad m]
-  [LawfulMonad m]
-
-/-- Simulating a simulated computation is simulating with the composed
-implementation. -/
-theorem simulateQ_simulateQ (implementation : QueryImpl spec' m)
-    (inner : QueryImpl spec (OracleComp spec')) (computation : OracleComp spec α) :
-    simulateQ implementation (simulateQ inner computation) =
-      simulateQ (fun query => simulateQ implementation (inner query)) computation := by
-  induction computation using OracleComp.inductionOn with
-  | pure value => simp
-  | query_bind query next ih => simp [ih]
-
-end Simulate
-
 /-- A renaming of oracle cells from source keys `D` with answers `R` to target
 keys `D'` with answers `R'`: each source key's target cell, or `none` for a key
 answered locally; how an answer of the target cell reads as a source answer; and,
@@ -274,18 +258,6 @@ section Law
 variable [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
   [∀ target, SampleableType (R' target)]
 
-omit [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
-  [∀ target, SampleableType (R' target)] in
-/-- A uniform sample read through an equivalence is a uniform sample. -/
-theorem evalDistEq_uniform_equiv {X Y : Type} [SampleableType X] [SampleableType Y] (read : X ≃ Y) :
-    (read <$> ($ᵗ X : ProbComp X)) =ᵈ ($ᵗ Y : ProbComp Y) := by
-  let : MeasurableSpace X := ⊤
-  let : MeasurableSpace Y := ⊤
-  refine _root_.EvalDistEq.of_evalDist_eq ?_
-  rw [evalDist_map_of_discrete, SampleableType.evalDist_uniformSample,
-    SampleableType.evalDist_uniformSample]
-  exact ProbabilityTheory.map_uniformOn_univ_of_bijective Measurable.of_discrete read.bijective
-
 /-- The source cache and the target cache agree through the renaming: a source
 key with a target cell holds that cell's answer read back, and target cells no
 source key reaches are empty. -/
@@ -367,7 +339,7 @@ theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R
                     pure (keys.read key cell hit value, target.cacheQuery cell value)) := by
                   rw [bind_map_left]
                   simp only [Equiv.apply_symm_apply]; rfl
-              _ =ᵈ _ := (evalDistEq_uniform_equiv (keys.read key cell hit).symm).bind_left _
+              _ =ᵈ _ := (SampleableType.map_uniformSample_evalDistEq_of_bijective (keys.read key cell hit).symm.bijective).bind_left _
           · refine relTriple_bind relTriple_uniformSample_refl fun answer other same => ?_
             cases same
             have stays := related_cacheQuery keys related hit ((keys.read key cell hit).symm answer)
@@ -396,7 +368,7 @@ theorem evalDistEq_translate (keys : Renaming R R') (adversary : OracleComp (Ora
     (fun key => simulateQ randomOracle (keys.ask key)) keys.Related adversary
     (fun key source target related => keys.query_step key source target related) ∅ ∅
     keys.related_empty
-  rw [translate, simulateQ_simulateQ]
+  rw [translate, ← QueryImpl.simulateQ_compose]
   symm
   refine evalDistEq_of_relTriple_eqRel ?_
   simp only [StateT.run'_eq]
@@ -417,14 +389,6 @@ end Renaming
 section Pairs
 variable {E : Type} (Raw : E → Type)
 open ZkcSecurity.FiatShamir.Typed
-
-omit Raw in
-theorem dropLast_append_of_getLast? {list : List E} {last : E} (found : list.getLast? = some last) :
-    list.dropLast ++ [last] = list := by
-  have nonempty : list ≠ [] := by rintro rfl; simp at found
-  rw [List.getLast?_eq_some_getLast nonempty] at found
-  rw [← Option.some.inj found]
-  exact List.dropLast_concat_getLast nonempty
 
 /-- Pair keys rename into the terminated histories: `(preceding, occurrence)` is
 the history `preceding ++ [occurrence]`, whose answer reads in the occurrence's
@@ -450,7 +414,7 @@ def historyToPair : Renaming (ByLast Raw) (fun key : List E × E => Raw key.2) w
     obtain ⟨last', secondLast, secondPair⟩ := Option.map_eq_some_iff.mp other
     rw [← secondPair] at firstPair
     obtain ⟨prefixes, rfl⟩ := Prod.mk.inj firstPair
-    rw [← dropLast_append_of_getLast? firstLast, ← dropLast_append_of_getLast? secondLast, prefixes]
+    rw [← List.dropLast_append_getLast? _ firstLast, ← List.dropLast_append_getLast? _ secondLast, prefixes]
   read key target found := Equiv.cast (by
     obtain ⟨last, found', rfl⟩ := Option.map_eq_some_iff.mp found
     simp [ByLast, OfLast, found'])

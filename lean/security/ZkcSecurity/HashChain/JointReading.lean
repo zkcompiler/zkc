@@ -202,7 +202,7 @@ theorem simulateQ_chainRead :
           unfold chainRead
           split
           · simp only [simulateQ_bind]
-            rw [ZkcSecurity.Oracle.simulateQ_simulateQ]
+            rw [← QueryImpl.simulateQ_compose]
             refine bind_congr fun authenticated => ?_
             cases authenticated.1 with
             | false => simp

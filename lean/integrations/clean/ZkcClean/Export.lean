@@ -41,9 +41,9 @@ inductive Refusal where
 /-- Export results are compared exactly, including the refusal reason. -/
 instance : DecidableEq (Except Refusal Artifact)
   | .ok a, .ok b =>
-      if h : a = b then .isTrue (h ▸ rfl) else .isFalse (by intro e; cases e; exact h rfl)
+      decidable_of_iff (a = b) (by simp)
   | .error a, .error b =>
-      if h : a = b then .isTrue (h ▸ rfl) else .isFalse (by intro e; cases e; exact h rfl)
+      decidable_of_iff (a = b) (by simp)
   | .ok _, .error _ => .isFalse (by intro e; cases e)
   | .error _, .ok _ => .isFalse (by intro e; cases e)
 

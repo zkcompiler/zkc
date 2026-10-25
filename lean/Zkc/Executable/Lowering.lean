@@ -160,14 +160,11 @@ inductive Plan where
 mutual
 def Plan.decide : (left right : Plan) → Decidable (left = right)
   | .receive type, .receive type' =>
-      if same : type = type' then isTrue (by rw [same])
-      else isFalse (by intro equal; cases equal; exact same rfl)
+      decidable_of_iff (type = type') (by simp only [Plan.receive.injEq])
   | .loop count maximum body, .loop count' maximum' body' =>
-      if same : count = count' ∧ maximum = maximum' then
-        match Plan.decideList body body' with
-        | isTrue bodies => isTrue (by obtain ⟨rfl, rfl⟩ := same; rw [bodies])
-        | isFalse bodies => isFalse (by intro equal; cases equal; exact bodies rfl)
-      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl⟩)
+      letI := Plan.decideList body body'
+      decidable_of_iff (count = count' ∧ maximum = maximum' ∧ body = body')
+        (by simp only [Plan.loop.injEq])
   | .receive _, .loop _ _ _ => isFalse (by intro equal; cases equal)
   | .loop _ _ _, .receive _ => isFalse (by intro equal; cases equal)
 
@@ -176,10 +173,10 @@ def Plan.decideList : (left right : List Plan) → Decidable (left = right)
   | [], _ :: _ => isFalse (by simp)
   | _ :: _, [] => isFalse (by simp)
   | head :: tail, head' :: tail' =>
-      match Plan.decide head head', Plan.decideList tail tail' with
-      | isTrue heads, isTrue tails => isTrue (by rw [heads, tails])
-      | isFalse heads, _ => isFalse (by intro equal; cases equal; exact heads rfl)
-      | _, isFalse tails => isFalse (by intro equal; cases equal; exact tails rfl)
+      letI := Plan.decide head head'
+      letI := Plan.decideList tail tail'
+      decidable_of_iff (head = head' ∧ tail = tail') (by simp only [List.cons.injEq])
+
 end
 
 instance : DecidableEq Plan := Plan.decide
