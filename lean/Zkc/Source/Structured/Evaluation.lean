@@ -13,12 +13,12 @@ namespace Zkc.Source.Structured
 
 def DomainSpec.denote {F G : Type} : (domain : DomainSpec) →
     Values (assignment F G) domain.inputs → Finite.Domain (assignment F G domain.item)
-  | ⟨_, _, _, container, true⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .exhausted
-        (.elements (List.range (arguments.get container).length))
-  | ⟨_, _, _, container, false⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .exhausted
-        (.elements (arguments.get container))
+  | ⟨_, _, collection, container, true⟩, arguments =>
+      let values := collection.values (arguments.get container)
+      .check (values.length < indexLimit) .exhausted (.elements (List.range values.length))
+  | ⟨_, _, collection, container, false⟩, arguments =>
+      let values := collection.values (arguments.get container)
+      .check (values.length < indexLimit) .exhausted (.elements values)
 
 namespace Evaluation
 
@@ -110,8 +110,11 @@ def operation {F G : Type} {interface : PIR.Signature}
   | .booleanNotEqual, .cons a (.cons b .nil), .nil => .done (.cons (a != b) .nil)
   | .select _, .cons condition (.cons yes (.cons no .nil)), .nil =>
       .done (.cons (if condition then yes else no) .nil)
+  | .makeProduct _ _ fields, args, .nil => .done (.cons (fields.pack args) .nil)
+  | .getProduct _ _ fields _ field, .cons value .nil, .nil =>
+      .done (.cons ((fields.unpack value).get field) .nil)
   | .boundedAt _, .cons container (.cons index .nil), .nil =>
-      match container[index]? with
+      match (show List F from container)[index]? with
       | some value => .done (.cons value .nil)
       | none => .halt .refused
   | .invoke helper, args, .nil => invoke table helper args

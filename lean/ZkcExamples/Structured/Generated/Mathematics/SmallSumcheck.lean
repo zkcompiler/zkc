@@ -30,10 +30,10 @@ theorem public_sum.association : BodyIn imported.program.payload.definitions pub
 
 abbrev public_sum.callee.helper : Helper := (⟨"zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e", .math, [(.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)
 def public_sum.callee.body : Region dialect public_sum.callee.helper.inputs public_sum.callee.helper.outputs :=
-  (.letOp (.fieldConstant "bls12-381.fr" 0) .nil .nil (.letOp (.fold ⟨⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain", [(.vector "bls12-381.fr")], "bls12-381.fr", .here, false⟩, [(.field "bls12-381.fr")], [], "finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", "", .math⟩) (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))
+  (.letOp (.fieldConstant "bls12-381.fr" 0) .nil .nil (.letOp (.fold ⟨⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain", [(.vector "bls12-381.fr")], (.vector "bls12-381.fr"), .here, false⟩, [(.field "bls12-381.fr")], [], "finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", "", .math⟩) (.cons (.there .here) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))
 theorem public_sum.callee.association : BodyIn imported.program.payload.definitions public_sum.callee.helper public_sum.callee.body := by bind_structured_bodies
 
-def public_sum.callee.fold : FoldSpec := ⟨⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain", [(.vector "bls12-381.fr")], "bls12-381.fr", .here, false⟩, [(.field "bls12-381.fr")], [], "finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", "", .math⟩
+def public_sum.callee.fold : FoldSpec := ⟨⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_domain", [(.vector "bls12-381.fr")], (.vector "bls12-381.fr"), .here, false⟩, [(.field "bls12-381.fr")], [], "finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", "", .math⟩
 theorem public_sum.callee.fold_selected : MathematicsAliases.folds public_sum.callee.body.erase = [public_sum.callee.fold] := by kernel_rfl
 
 abbrev public_sum.callee.foldStep.helper : Helper := (⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", .math, [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.vector "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)

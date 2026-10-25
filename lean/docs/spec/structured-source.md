@@ -233,6 +233,13 @@ kernel evaluates (`blsModulus_prime`).
 `assignment F G` maps Boolean/index/field/vector/group/service sorts to
 `Bool`, `Nat`, `F`, `List F`, `G`, and `Nat`. Admission resolves the nominal
 identities of these sorts against the [domain catalogue](#domain-catalogue).
+Sequences interpret as ordered lists of their element interpretation. Nominal
+products interpret as heterogeneous products of their ordered component types.
+`ProductFields.pack` and `unpack` are inverse; construction and projection are
+total and use that same representation in the uniform and per-domain models.
+`Collection` selects a field vector or sequence for a finite domain. Elements
+and indices preserve exact container identity, order and the u64 length check.
+Only field-vector bounded reads are currently admitted.
 The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
 `Module F G` and decidable equality laws. Group scaling is scalar action with
 group operand first in the source. No arbitrary group is silently equated to
@@ -259,7 +266,11 @@ conditional completion. The logical semantics has no depth fuel. Finite theorem
 families use the same explicit `F,G` assignment and evaluator.
 `SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
 There is no separate scalar arithmetic or unsupported-sort fallback.
-Selection is interpreted for every admitted type, including vectors and indices.
+Selection is interpreted for every admitted type, including products and sequences.
+The Common scalar effect adapter refuses aggregate messages. Construction
+transcript payload profiles also refuse aggregates until a separate encoding
+rule admits them. The logical public-value binding representation retains
+products and sequences injectively; this establishes no canonical byte encoding.
 
 ### Domain carriers and models
 
@@ -444,8 +455,8 @@ Realization requires the declaration's complete input and output ABIs to match
 those of its helper, including vector projections and zero or multiple results.
 Its transitive Math fragment is
 region-free: admitted Fr arithmetic/equality, G1 operations/equality, pure index
-constant/equality, Boolean operations, supported selection, Math calls and
-positional returns. No finite operation, bounded read, exec, Local control or
+constant/equality, Boolean operations, supported selection, nominal product
+construction/projection, Math calls and positional returns. No finite operation, bounded read, exec, Local control or
 helper precondition is admitted in that closure. Totality is a separate semantic
 theorem about the actual checked closure; neither this operation list nor a
 native effect annotation proves it.
@@ -759,7 +770,7 @@ one through generic operation, Region and table-fold interpretation laws.
 
 `CommonAdapter` embeds the Common effect fragment and proves that
 projection after embedding preserves the entire process. Projection of extra
-index/vector messages refuses explicitly. Concrete contract use must establish
+index/vector/product/sequence messages refuses explicitly. Concrete contract use must establish
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
 

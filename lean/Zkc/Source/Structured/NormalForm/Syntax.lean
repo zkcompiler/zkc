@@ -40,6 +40,7 @@ group arithmetic, comparisons, Boolean connectives and selection. Primitive
 executions, bounded reads, helper calls, folds and maps can stop or depend on
 helper bodies and are excluded. -/
 def Op.total : Op → Bool
+  | .makeProduct .. | .getProduct .. => true
   | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
   | .fieldMultiply .. | .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
   | .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor

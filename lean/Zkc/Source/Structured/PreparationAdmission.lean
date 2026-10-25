@@ -99,6 +99,7 @@ def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
   | .indexConstant n => profile == .realization && n < indexLimit
   | .indexEqual | .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
+  | .makeProduct .. | .getProduct .. => profile == .realization
   | .select type => profile == .realization && profile.typeAllowed type
   | _ => false
 

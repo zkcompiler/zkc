@@ -1,4 +1,7 @@
 import ZkcSecurity.Generation.Roots.Catalogue
+import ZkcSecurity.Generation.SigmaCompleteness
+import ZkcSecurity.Generation.SubjectABI
+import ZkcSecurity.Generation.SumcheckViews
 
 /-! Controls for generation refusals; no root configuration is owned by tests. -/
 namespace TestsSecurity.GenerateRootControls
@@ -12,6 +15,11 @@ private meta def refuses {α : Type} (code : String) (result : Except String α)
   | .ok _ => Lean.throwError m!"generation accepted invalid input: {code}"
 
 run_cmd do
+  for ty in [Ty.sequence .boolean, Ty.product "query" "Query" (.cons .boolean .nil)] do
+    refuses "uniform-root-aggregate-type" (ZkcSecurity.Generation.UniformRoot.carrier ty)
+    refuses "sigma-completeness-aggregate-type" (ZkcSecurity.Generation.SigmaCompleteness.zeroInput ty)
+    refuses "subject-abi-aggregate-type" (ZkcSecurity.Generation.SubjectABI.encoded ty "value")
+    refuses "component-view-aggregate-input" (ZkcSecurity.Generation.SumcheckViews.inputType (.data ty))
   let [first, _] ← evaluateSelections | Lean.throwError "expected two production roots"
   let some definition := first.snapshot.definitions.find? (fun
     | .function function => function.kind == .local

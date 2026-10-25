@@ -43,6 +43,16 @@ order. There is no cross-category declaration-order field.
 | `["vector", domain]` | immutable vector over that field |
 | `["group", domain]` | nominal group |
 | `["service", contract]` | owner-local reusable service reference |
+| `["sequence", element-type]` | ordered immutable `data.sequence` |
+| `["product", identity, constructor, component-types]` | one-constructor packed product, with ordered components |
+
+A product retains the complete canonical JSON encoding of its native nominal
+descriptor, its single constructor label, and all flattened component types in
+order. Equal shapes do not identify different products. This represented identity
+does not replace the frontend schema that associates source fields with ports.
+Types nest at most 64 levels; a product has at most 512 components. Every nested
+domain is checked, including in dormant declarations. Nested service handles
+and multi-constructor variants are outside this profile.
 
 A domain is a native catalogue identity: field and vector types name a `Field`
 identity admitted for that logical kind, group types a `Group` identity admitted
@@ -72,7 +82,7 @@ The native
 [service contract](../runtime/services.md) requires singleton ownership and
 permits same-owner root aliases; services cannot be selected, restricted,
 exchanged, returned, passed to Math/Local helpers, or bound as statement data.
-Affine resources, variants, matrices, general arrays, arbitrary kernels and other
+Affine resources, multi-constructor variants, matrices, general arrays, arbitrary kernels and other
 unlisted operations require a separately specified extension.
 
 ## Declarations
@@ -98,6 +108,10 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 ["realize", name, input-types, output-types, math-helper]
 ["map", name, input-types, output-types, math-helper, rowwise]
 ```
+
+Finite domains select an exact field-vector or sequence input. `elements`
+retains its ordered elements and `indices` enumerates its ordered positions.
+Both check length representability before iteration, including empty bodies.
 
 A domain body consists of exactly one supported constructor and its matching
 yield. Additional constructors are refused, including unused ones. The selected
@@ -296,6 +310,8 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["bool.and" / "bool.or" / "bool.xor" / "bool.equal" / "bool.not_equal"]` | two Booleans to Boolean |
 | `["select", type]` | Boolean and two equal-typed values to that type |
 | `["bounded_at", domain]` | vector and index to field, with exact bound obligation |
+| `["product.make", constructor]` | ordered components to the exact declared product |
+| `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
 | `["apply", name]` | Local function, finite, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
@@ -331,7 +347,7 @@ Ownership is checked independently of operand types:
 | Body kind | Admitted instructions |
 |---|---|
 | Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
-| Math | Pure index constant/equality and field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
+| Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The current

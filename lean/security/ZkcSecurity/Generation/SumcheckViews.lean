@@ -30,6 +30,7 @@ def inputType : ValueSort → Except String String
   | .data (.vector _) => .ok "List F"
   | .data (.group _) => .ok "G"
   | .data (.service _) => .error "component-view-service-input"
+  | .data (.sequence _) | .data (.product ..) => .error "component-view-aggregate-input"
   | .transcript _ => .ok "Domain.History (uniformCarriers F G)"
   | .indices => .ok "List Nat"
 

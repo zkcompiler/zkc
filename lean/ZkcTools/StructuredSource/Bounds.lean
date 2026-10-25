@@ -38,6 +38,8 @@ inductive Value where
   | index (bounds : Interval)
   | vector (length : Interval)
   | optional (present : Value)
+  | product (components : List Value)
+  | sequence (elements : List Value)
   deriving BEq, Repr, Inhabited
 
 /-- Ordered arguments, results and carried state retain the list ABI. -/
@@ -83,27 +85,33 @@ def chargeRepeated (amount count : Nat) : Analysis Unit := do
 
 def visit : Analysis Unit := do tick; charge
 
-def Value.join : Value → Value → Analysis Value
-  | a, b => do
-    tick
-    match a, b with
-    | .absent, .absent => pure .absent
-    | .absent, .optional b | .optional b, .absent => pure (.optional b)
-    | .absent, b | b, .absent => pure (.optional b)
-    | .optional a, .optional b | .optional a, b | a, .optional b =>
-        return .optional (← a.join b)
-    | .atom, .atom => pure .atom
-    | .boolean a, .boolean b => pure (.boolean (if a == b then a else none))
-    | .index a, .index b => pure (.index (a.join b))
-    | .vector a, .vector b => pure (.vector (a.join b))
-    | _, _ => throw .unknown
-
-def join : Env → Env → Analysis Env
-  | [], [] => pure []
-  | a :: as, b :: bs => do
+/- Aggregate joins retain ordered components. Sequences with different lengths
+are conservatively refused by this tool policy; the logical semantics is unchanged. -/
+mutual
+  def Value.join : Value → Value → Analysis Value
+    | a, b => do
       tick
-      return (← a.join b) :: (← join as bs)
-  | _, _ => throw .unknown
+      match a, b with
+      | .absent, .absent => pure .absent
+      | .absent, .optional b | .optional b, .absent => pure (.optional b)
+      | .absent, b | b, .absent => pure (.optional b)
+      | .optional a, .optional b | .optional a, b | a, .optional b =>
+          return .optional (← a.join b)
+      | .atom, .atom => pure .atom
+      | .boolean a, .boolean b => pure (.boolean (if a == b then a else none))
+      | .index a, .index b => pure (.index (a.join b))
+      | .vector a, .vector b => pure (.vector (a.join b))
+      | .product a, .product b => return .product (← join a b)
+      | .sequence a, .sequence b => return .sequence (← join a b)
+      | _, _ => throw .unknown
+
+  def join : Env → Env → Analysis Env
+    | [], [] => pure []
+    | a :: as, b :: bs => do
+        tick
+        return (← a.join b) :: (← join as bs)
+    | _, _ => throw .unknown
+end
 
 def joinResult : Result → Result → Analysis Result
   | none, b | b, none => pure b
@@ -167,11 +175,20 @@ def region {O : Type} (transfer : O → Env → RawRegions Ty O → Analysis Res
   tick
   regionIn transfer body (← context args)
 
-def value {F G : Type} : (type : Ty) → assignment F G type → Value
-  | .boolean, b => .boolean (some b)
-  | .index, n => .index (exact n)
-  | .vector _, xs => .vector (exact xs.length)
-  | _, _ => .atom
+mutual
+  def value {F G : Type} : (type : Ty) → assignment F G type → Value
+    | .boolean, b => .boolean (some b)
+    | .index, n => .index (exact n)
+    | .vector _, xs => .vector (exact xs.length)
+    | .sequence element, xs => .sequence (xs.map (value element))
+    | .product _ _ fields, x => .product (productValue fields x)
+    | _, _ => .atom
+
+  def productValue {F G : Type} : (fields : ProductFields) →
+      (uniformCarriers F G).ProductValue fields → List Value
+    | .nil, () => []
+    | .cons type rest, (x, xs) => value type x :: productValue rest xs
+end
 
 def values {F G : Type} {types : List Ty} : Values (assignment F G) types → Env
   | .nil => []
@@ -183,6 +200,7 @@ def length (n : Interval) : Analysis Value := do
 
 def asLength : Value → Analysis Interval
   | .vector n => pure n
+  | .sequence elements => pure (exact elements.length)
   | _ => throw .unknown
 
 def vectorWork (n : Interval) : Analysis Unit := do
@@ -191,11 +209,23 @@ def vectorWork (n : Interval) : Analysis Unit := do
   -- well as building results. Other vector primitives use this same envelope.
   charge (1 + 8 * n.upper)
 
-/-- Output aliases still require separate serialization traversals. -/
-def outputWork : Value → Analysis Unit
-  | .optional v => outputWork v
-  | .vector n => vectorWork n
-  | _ => charge
+/- Output aliases still require separate serialization traversals. -/
+mutual
+  def outputWork : Value → Analysis Unit
+    | .optional v => outputWork v
+    | .vector n => vectorWork n
+    | .product components => do
+      charge (components.length + 1)
+      outputWorks components
+    | .sequence elements => do
+      vectorWork (exact elements.length)
+      outputWorks elements
+    | _ => charge
+
+  def outputWorks : List Value → Analysis Unit
+    | [] => pure ()
+    | value :: values => do outputWork value; outputWorks values
+end
 
 def checkedRange (lo hi : Nat) : Analysis Result :=
   if lo ≥ indexLimit then pure none
@@ -272,9 +302,18 @@ def iterate (step : Nat → Env → Analysis Result) : Nat → Nat → Env → A
 already establishes unique names and acyclic exact-signature linkage. -/
 abbrev Helpers := Std.HashMap String CheckedDefinition
 
-def typeWork : Ty → Nat
-  | .field name | .vector name | .group name | .service name => 1 + name.utf8ByteSize
-  | _ => 1
+mutual
+  def typeWork : Ty → Nat
+    | .field name | .vector name | .group name | .service name => 1 + name.utf8ByteSize
+    | .sequence element => 1 + typeWork element
+    | .product identity constructor fields =>
+      1 + identity.utf8ByteSize + constructor.utf8ByteSize + fieldsWork fields
+    | _ => 1
+
+  def fieldsWork : ProductFields → Nat
+    | .nil => 1
+    | .cons type rest => 1 + typeWork type + fieldsWork rest
+end
 
 def signatureWork (helper : Helper) : Nat :=
   1 + helper.name.utf8ByteSize +
@@ -387,6 +426,11 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
         | none => return if n.lower == 0 then some [.vector (exact 0)] else none
         | _ => throw .unknown
     | .exec p, _, .nil => primitive p args
+    | .makeProduct .., _, .nil =>
+        charge args.length
+        return some [.product args]
+    | .getProduct _ _ _ _ field, [.product components], .nil =>
+        return some [← argument components field.index]
     | .indexConstant n, [], .nil => return some [.index (exact n)]
     | .indexEqual, [.index a, .index b], .nil => return some [compareIndices false a b]
     | .booleanConstant b, [], .nil => return some [.boolean (some b)]
@@ -434,11 +478,16 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
         let rest := args.drop spec.domain.inputs.length
         let initial := rest.take spec.state.length
         let captures := rest.drop spec.state.length
-        let n ← asLength (← argument domainArgs spec.domain.container.index)
+        let container ← argument domainArgs spec.domain.container.index
+        let n ← asLength container
         vectorWork n
         charge (2 * n.upper)
         let result ← iterate (fun index current => do
-          let item := if spec.domain.indices then Value.index (exact index) else .atom
+          let item ← if spec.domain.indices then pure (Value.index (exact index))
+            else match container with
+              | .vector _ => pure .atom
+              | .sequence elements => argument elements index
+              | _ => throw .unknown
           let callbackArgs := item :: (← prepend domainArgs captures)
           if !spec.predicate.isEmpty then
             let predicate ← operation definitions (.invoke spec.predicateHelper) callbackArgs .nil
@@ -456,16 +505,29 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
     | .fieldEqual .., _, .nil | .groupEqual .., _, .nil => return some [.boolean none]
     | _, _, _ => throw .unknown
 
-def checkValue : Value → Analysis Unit
-  | .optional v => checkValue v
-  | .vector n => do
-      tick (n.upper + 1)
-      if n.lower > n.upper then throw .unknown
-      if n.upper > vectorLimit then throw .value
-  | .index n => do
-      tick
-      if n.lower > n.upper || n.upper ≥ indexLimit then throw .unknown
-  | _ => tick
+mutual
+  def checkValue : Value → Analysis Unit
+    | .optional v => checkValue v
+    | .vector n => do
+        tick (n.upper + 1)
+        if n.lower > n.upper then throw .unknown
+        if n.upper > vectorLimit then throw .value
+    | .product components => do
+        tick (components.length + 1)
+        checkValues components
+    | .sequence elements => do
+        tick (elements.length + 1)
+        if elements.length > vectorLimit then throw .value
+        checkValues elements
+    | .index n => do
+        tick
+        if n.lower > n.upper || n.upper ≥ indexLimit then throw .unknown
+    | _ => tick
+
+  def checkValues : List Value → Analysis Unit
+    | [] => pure ()
+    | value :: values => do checkValue value; checkValues values
+end
 
 def closed (payload : Payload) (args : Env) : Except Failure (Result × Meter) :=
   (do

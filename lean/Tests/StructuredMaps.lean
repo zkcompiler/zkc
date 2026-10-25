@@ -1,6 +1,7 @@
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Component
 import Zkc.Source.Structured.MapLaws
+import ZkcTools.StructuredSource.WireTypes
 import Mathlib.Data.ZMod.Basic
 
 /-! Independent retained-declaration controls. Authored constructor subjects
@@ -40,13 +41,7 @@ private def mapDeclaration : MapDeclaration :=
 private def realization : RealizationDeclaration :=
   ⟨"realized", [scalar, scalar], [scalar], "scalar"⟩
 private def arr (values : List Json) : Json := .arr values.toArray
-private def typeWire : Ty → Json
-  | .boolean => arr [.str "bool"]
-  | .index => arr [.str "index"]
-  | .field domain => arr [.str "field", .str domain]
-  | .vector domain => arr [.str "vector", .str domain]
-  | .group domain => arr [.str "group", .str domain]
-  | .service contract => arr [.str "service", .str contract]
+private abbrev typeWire := ZkcTools.StructuredSource.wireType
 private def mapWire (mask : List Json) : Json := arr [
   .str "map", .str "mapped", arr (mapDeclaration.inputs.map typeWire),
   arr (mapDeclaration.outputs.map typeWire), .str "scalar", arr mask]

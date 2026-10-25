@@ -33,15 +33,30 @@ def MapSpec.arguments (spec : MapSpec) : List Ty :=
 def MapSpec.helper (spec : MapSpec) : Helper :=
   ⟨spec.helperName, .math, spec.scalarInputs, [.field spec.field]⟩
 
+/-- Collection kinds retain distinct native identities while sharing ordered
+finite traversal. A numerical field vector is not a generic source sequence. -/
+inductive Collection where
+  | vector (field : String)
+  | sequence (element : Ty)
+  deriving DecidableEq, Repr
+
+def Collection.type : Collection → Ty
+  | .vector field => .vector field
+  | .sequence element => .sequence element
+
+def Collection.element : Collection → Ty
+  | .vector field => .field field
+  | .sequence element => element
+
 structure DomainSpec where
   name : String
   inputs : List Ty
-  field : String
-  container : Var inputs (.vector field)
+  collection : Collection
+  container : Var inputs collection.type
   indices : Bool
 
 def DomainSpec.item (domain : DomainSpec) : Ty :=
-  if domain.indices then .index else .field domain.field
+  if domain.indices then .index else domain.collection.element
 
 structure FoldSpec where
   domain : DomainSpec
@@ -74,6 +89,9 @@ inductive Op where
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Ty)
   | boundedAt (domain : String)
+  | makeProduct (identity constructor : String) (fields : ProductFields)
+  | getProduct (identity constructor : String) (fields : ProductFields)
+      (type : Ty) (field : Var fields.toList type)
   | invoke (helper : Helper)
   | fold (spec : FoldSpec)
   | map (spec : MapSpec)
@@ -96,6 +114,8 @@ def Op.arguments : Op → List Ty
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => [.boolean, .boolean]
   | .select ty => [.boolean, ty, ty]
   | .boundedAt d => [.vector d, .index]
+  | .makeProduct _ _ fields => fields.toList
+  | .getProduct identity constructor fields _ _ => [.product identity constructor fields]
   | .invoke helper => helper.inputs
   | .fold spec => spec.arguments
   | .map spec => spec.arguments
@@ -113,6 +133,8 @@ def Op.results : Op → List Ty
   | .fieldEqual _ | .booleanConstant _ | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .groupEqual _ => [.boolean]
   | .select ty => [ty]
+  | .makeProduct identity constructor fields => [.product identity constructor fields]
+  | .getProduct _ _ _ type _ => [type]
   | .invoke helper => helper.outputs
   | .fold spec => spec.state
   | .map spec => [.vector spec.field]
@@ -136,7 +158,7 @@ def Op.helpers : Op → List Helper
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
-    .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
+    .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => []
 

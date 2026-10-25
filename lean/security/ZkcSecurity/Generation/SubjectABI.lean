@@ -53,6 +53,7 @@ def encoded (ty : Ty) (name : String) : Except String String := do
     | .vector domain => pure (".vector " ++ literal domain ++ " " ++ name)
     | .group domain => pure (".group " ++ literal domain ++ " " ++ name)
     | .service _ => throw "subject-abi-service-projection"
+    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
   pure (".data (" ++ payload ++ ")")
 
 def atPositions (types : List Ty) (positions : List Nat) : Except String (List Ty) :=
@@ -121,6 +122,10 @@ def metadata {model : DomainModel} {original : Snapshot} {imported : Imported or
 
 def source (metadata : Metadata) (output : Output) : Except String String := do
   let types := metadata.types
+  for type in types do
+    match type with
+    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
+    | _ => pure ()
   let some producerPositions := metadata.producerPositions | throw "subject-abi-source-interface"
   let publicPositions := metadata.publicPositions
   let publicTypes ← atPositions types publicPositions

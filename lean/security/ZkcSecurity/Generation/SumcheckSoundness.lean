@@ -46,8 +46,9 @@ def source (input : Input) : Except String String := do
   if validator.inputs != publicTypes.map ValueSort.data ++ [.transcript metadata.suite] then
     throw "soundness-assembly-validator-interface-mismatch"
   let publicNames := metadata.publicPositions.map SubjectABI.inputName
-  let binders := String.join ((publicTypes.zip publicNames).map fun (ty, name) =>
-    " (" ++ name ++ " : " ++ UniformRoot.carrier ty ++ ")")
+  let binders ← (publicTypes.zip publicNames).mapM fun (ty, name) => do
+    pure (" (" ++ name ++ " : " ++ (← UniformRoot.carrier ty) ++ ")")
+  let binders := String.join binders
   let arguments := " ".intercalate publicNames
   let budget := toString ((rounds.map (·.validator.maximum)).sum)
   let view := output.validatorViewModule

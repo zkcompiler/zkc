@@ -587,7 +587,7 @@ theorem exchange_projects (ctx : ProtocolContext) (n : Nat) (ty : Ty) (sender re
             rw [siteEq]
             rfl
           cases ty
-          case index | vector | service => simp [scalarType] at scalar
+          case index | vector | service | sequence | product => simp [scalarType] at scalar
           all_goals
             cases v <;> simp [Value.decode] at decoded
             rename_i payload
@@ -632,7 +632,7 @@ theorem exchange_projects (ctx : ProtocolContext) (n : Nat) (ty : Ty) (sender re
         obtain ⟨extra, extraLength, skipEq⟩ := next_spec context handle (helperTable program F G) next cenv
         rw [skipEq, fromProducer]
         cases ty
-        case index | vector | service => simp [scalarType] at scalar
+        case index | vector | service | sequence | product => simp [scalarType] at scalar
         all_goals
           simp only [specK, specStep, scalarType, PIR.Process.interpret, CommonAdapter.project,
             PIR.Process.bind]

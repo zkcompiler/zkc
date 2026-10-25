@@ -353,6 +353,7 @@ import Tests.SourceDeliverySchedule
 import Tests.SourceIterationObservations
 import Tests.SourceMathematicsAliases
 import Tests.SourceOccurrences
+import Tests.StructuredAggregates
 import Tests.StructuredApplicationAdmission
 import Tests.StructuredApplicationBounds
 import Tests.StructuredApplicationMetadata
@@ -763,5 +764,6 @@ import ZkcTools.StructuredSource.OpenValues
 import ZkcTools.StructuredSource.OriginalRoot
 import ZkcTools.StructuredSource.Presentation
 import ZkcTools.StructuredSource.Root
+import ZkcTools.StructuredSource.WireTypes
 import ZkcTools.ConstructionBindings.Analysis
 import ZkcTools.ConstructionBindings.Source

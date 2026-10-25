@@ -18,7 +18,7 @@ abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"items", [vector], "bls12-381.fr", .here, false⟩,
+  ⟨⟨"items", [vector], (.vector "bls12-381.fr"), .here, false⟩,
     [], [.boolean], "step", "predicate", .local⟩
 
 def stepBody : Region dialect [scalar, vector, .boolean] [] :=
@@ -199,7 +199,10 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
   have domainAdmitted :
       (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
         .returned xs := by
-    simp [foldSpec, DomainSpec.denote, Finite.Domain.admit, Values.get, lengthValid]
+    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
+      (.elements xs)).admit = _
+    simp [Finite.Domain.admit, lengthValid]
+    rfl
   simp only [Finite.execute, domainAdmitted, Finite.admitThen]
   cases enabled with
   | false =>
@@ -222,8 +225,13 @@ theorem process_exhausted (xs : List F) (enabled : Bool)
     ((Values.cons xs Values.nil).append
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [Evaluation.denoteFold_pack]
-  simp [Finite.execute, DomainSpec.denote, foldSpec, Values.get, Finite.Domain.admit,
-    lengthInvalid, Finite.admitThen, PIR.Process.bind]
+  have refused : (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
+      .stopped .exhausted := by
+    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
+      (.elements xs)).admit = _
+    simp [Finite.Domain.admit, lengthInvalid]
+    rfl
+  simp [Finite.execute, refused, Finite.admitThen, PIR.Process.bind]
 
 theorem process_eq_checked_reference (xs : List F) (enabled : Bool) :
     process (G := G) xs enabled =

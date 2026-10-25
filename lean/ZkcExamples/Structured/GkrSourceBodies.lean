@@ -175,7 +175,7 @@ def helper11Body : Region dialect [.vector "bls12-381.fr", .index, .index, .fiel
 abbrev helper12Helper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩
 
 def helper12Body : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.fold ⟨⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.vector "bls12-381.fr", .index, .index], [], "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.vector "bls12-381.fr", .index, .index], [], "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev helper13Helper : Helper := ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
@@ -297,7 +297,7 @@ def helper22Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"
 abbrev helper23Helper : Helper := ⟨"finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index], [.vector "bls12-381.fr"]⟩
 
 def helper23Body : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .index] [.vector "bls12-381.fr"] :=
-  .letOp (.fold ⟨⟨"finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.vector "bls12-381.fr"], [.index], "finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.vector "bls12-381.fr"], [.index], "finite_zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
 abbrev helper24Helper : Helper := ⟨"zkl_33e26704899171b0d3e366f86377dfc6602b55f53021ce20930f7ae9e8061294", .local, [.vector "bls12-381.fr", .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
@@ -333,7 +333,7 @@ def helper27Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"
 abbrev helper28Helper : Helper := ⟨"finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
 
 def helper28Body : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr"] [.vector "bls12-381.fr"] :=
-  .letOp (.fold ⟨⟨"finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.vector "bls12-381.fr"], [], "finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) .nil)) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.vector "bls12-381.fr"], [], "finite_zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) .nil)) .nil <|
   .ret (.cons .here .nil)
 
 abbrev helper29Helper : Helper := ⟨"zkl_5939bc7a1ddcd11f8e2153f23b3ed89c16434b9b99db1512543ee10e7b59b248", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
@@ -602,7 +602,7 @@ def helper50Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"
 abbrev helper51Helper : Helper := ⟨"finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index], [.vector "bls12-381.fr"]⟩
 
 def helper51Body : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .index] [.vector "bls12-381.fr"] :=
-  .letOp (.fold ⟨⟨"finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.vector "bls12-381.fr"], [.index], "finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.vector "bls12-381.fr"], [.index], "finite_zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
 abbrev helper52Helper : Helper := ⟨"zkl_a746a0d46b63db09f05e685a16e7d9cfdc6a78a249031577993dd2aeeff20b35", .local, [.vector "bls12-381.fr", .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
@@ -637,7 +637,7 @@ def helper54Body : Region dialect [.field "bls12-381.fr", .index, .field "bls12-
 abbrev helper55Helper : Helper := ⟨"finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index, .index], [.field "bls12-381.fr", .index]⟩
 
 def helper55Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr", .index, .index] [.field "bls12-381.fr", .index] :=
-  .letOp (.fold ⟨⟨"finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.field "bls12-381.fr", .index], [.index], "finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.field "bls12-381.fr", .index], [.index], "finite_zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) .nil))
 
 abbrev helper56Helper : Helper := ⟨"zkl_4d05c370830a894df2470c3859782e53b3322378b124acf8f383759935b54a45", .local, [.field "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.field "bls12-381.fr", .index]⟩
@@ -716,7 +716,7 @@ def helper63Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"
 abbrev helper64Helper : Helper := ⟨"finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .field "bls12-381.fr", .index]⟩
 
 def helper64Body : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .field "bls12-381.fr", .index] :=
-  .letOp (.fold ⟨⟨"finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.index], "finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.index], "finite_zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
 abbrev helper65Helper : Helper := ⟨"zkl_b09f44c87195c8e3d60f4dede007ee713df6eb6126ac95620f16b0ca8ac2c403", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .field "bls12-381.fr", .index]⟩
@@ -882,7 +882,7 @@ def helper78Body : Region dialect [.field "bls12-381.fr", .field "bls12-381.fr",
 abbrev helper79Helper : Helper := ⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"]⟩
 
 def helper79Body : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"] [.field "bls12-381.fr", .field "bls12-381.fr"] :=
-  .letOp (.fold ⟨⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain", [.vector "bls12-381.fr"], "bls12-381.fr", .here, false⟩, [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"], "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
+  .letOp (.fold ⟨⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩, [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"], "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) .nil))
 
 abbrev helper80Helper : Helper := ⟨"zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d", .local, [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"]⟩

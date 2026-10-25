@@ -99,6 +99,7 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
   simp only [decide_eq_true_eq] at equation
   exact actual.trans equation
 
+set_option maxHeartbeats 400000 in
 /-- Exact source composition, before imposing any representation or shape premise. -/
 theorem process_expansion (xs : List F) (dimension columns : Nat) :
     program.denote F G (inputs xs dimension columns) =

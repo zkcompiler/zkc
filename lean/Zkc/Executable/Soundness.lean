@@ -82,6 +82,7 @@ theorem Simulates.indices (sim : Simulates data R s env) {index : Nat}
     ∃ coordinates, env[index]? = some (.indices coordinates) := by
   obtain ⟨value, found, sorted⟩ := sim.value sortEq
   cases value with
+  | unsupported => cases sorted
   | indices coordinates => exact ⟨coordinates, found⟩
   | data => cases sorted
   | index => cases sorted

@@ -21,17 +21,18 @@ structure Input where
   Without one, generation proposes the usual all-default witness. -/
   nonvacuityLaw : Option String := none
 
-def zeroInput : Ty → String
-  | .boolean => "false"
-  | .index | .field _ | .group _ => "0"
-  | .vector _ => "[]"
-  | .service _ => "none"
+def zeroInput : Ty → Except String String
+  | .boolean => pure "false"
+  | .index | .field _ | .group _ => pure "0"
+  | .vector _ => pure "[]"
+  | .service _ => pure "none"
+  | .sequence _ | .product .. => throw "sigma-completeness-aggregate-type"
 
 def source (input : Input) : Except String String := do
   let metadata := input.metadata
   let output := input.output
   let names := SubjectABI.names metadata.types
-  let zeros := metadata.types.map zeroInput
+  let zeros ← metadata.types.mapM zeroInput
   let presentation ← UniformRoot.presentation metadata output "SampledReadback (SampledReadback.Allowed subject)"
   RootCompleteness.source metadata output.toOutput {
     imports := ["ZkcSecurity.FiatShamir.SampledReadbackCompleteness"] ++ input.imports

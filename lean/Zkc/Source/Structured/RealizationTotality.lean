@@ -45,6 +45,10 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     | cons condition rest => cases rest with
       | cons yes rest => cases rest with
         | cons no rest => cases rest; cases bodies; exact ⟨_, rfl⟩
+  | makeProduct => cases bodies; exact ⟨_, rfl⟩
+  | getProduct =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; exact ⟨_, rfl⟩
   | invoke helper =>
     cases bodies
     exact helpers helper (by simp only [Op.helpers, List.mem_singleton]) args

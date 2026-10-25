@@ -38,6 +38,7 @@ LEAN = ROOT / "lean"
 PRINTER = r'''
 import Zkc.Source.RegionView
 import Zkc.Source.Structured.ClosedProfile
+import ZkcTools.StructuredSource.Presentation
 import {data}
 
 set_option maxRecDepth 20000
@@ -53,12 +54,7 @@ open Zkc.Source Zkc.Source.Structured
 
 def program : Program := (check {data}.snapshot).toOption.get (by decide +kernel)
 
-def showTy : Ty → String
-  | .boolean => ".boolean" | .index => ".index"
-  | .field d => s!"(.field \"{{d}}\")" | .vector d => s!"(.vector \"{{d}}\")"
-  | .group d => s!"(.group \"{{d}}\")" | .service c => s!"(.service \"{{c}}\")"
-
-def showTys (types : List Ty) : String := "[" ++ ", ".intercalate (types.map showTy) ++ "]"
+abbrev showTys := ZkcTools.StructuredSource.Presentation.typesText
 
 def showRoles (roles : List String) : String :=
   "[" ++ ", ".intercalate (roles.map fun role => "\"" ++ role ++ "\"") ++ "]"

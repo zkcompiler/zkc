@@ -165,6 +165,8 @@ theorem relation_iff (base key : G) (witness : F) :
   change (PIR.Process.done (I := closedInterface) (.cons (decide (key = witness • base)) .nil :
     Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _
   simp
+  change decide (key = witness • base) = true ↔ key = witness • base
+  simp only [decide_eq_true_eq]
 
 /-- The subject's only relation is this formula. -/
 def environment : RelationEnvironment imported F G where

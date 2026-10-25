@@ -201,20 +201,22 @@ do not select the items. -/
 theorem indices_admit (name : String) (types : List Ty) (field : String)
     (container : Var types (.vector field)) (arguments : Values (assignment F G) types)
     (representable : (arguments.get container).length < indexLimit) :
-    ((⟨name, types, field, container, true⟩ : DomainSpec).denote arguments).admit =
+    ((⟨name, types, .vector field, container, true⟩ : DomainSpec).denote arguments).admit =
       .returned (List.range (arguments.get container).length) := by
   change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
     (Finite.Domain.elements _)).admit = _
-  simp [Finite.Domain.admit, representable]
+  simp [Finite.Domain.admit, representable, Collection.values]
+  rfl
 
 theorem elements_admit (name : String) (types : List Ty) (field : String)
     (container : Var types (.vector field)) (arguments : Values (assignment F G) types)
     (representable : (arguments.get container).length < indexLimit) :
-    ((⟨name, types, field, container, false⟩ : DomainSpec).denote arguments).admit =
+    ((⟨name, types, .vector field, container, false⟩ : DomainSpec).denote arguments).admit =
       .returned (arguments.get container) := by
   change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
     (Finite.Domain.elements _)).admit = _
-  simp [Finite.Domain.admit, representable]
+  simp [Finite.Domain.admit, representable, Collection.values]
+  rfl
 
 theorem stopped_bypasses_suffix {A B : Type} (reason : PIR.Stop) (next : A → PIR.Process interface B) :
     (PIR.Process.halt reason : PIR.Process interface A).bind next = .halt reason := rfl

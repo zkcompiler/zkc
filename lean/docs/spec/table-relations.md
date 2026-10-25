@@ -21,14 +21,14 @@ argument. Existing structured-source relation/application bindings retain
 actual formula references, roles and selectors; importing those records does
 not prove evaluator adequacy automatically.
 
-The current structured-source export profile accepts its existing scalar and
-field-vector sorts. It refuses `Sequence<Query<F>>` with
-`structured-source-type`, and a Local realization of the indexed scan with
+The current structured-source export profile accepts ordered sequences of
+nominal products, including the represented `Query<F>` shape. It refuses a
+Local realization containing a finite fold, including the indexed scan, with
 `structured-source-realization` because finite folds are outside that
 realization profile. The native examples therefore do not yet have a
-structured-source import into this model. Extending that boundary requires
-sort/aggregate interpretation and finite computation with explicit admission
-and stop behavior, followed by an actual source-formula law. This restriction
+structured-source import into this model. Completing that boundary requires
+finite computation admission distinct from unconditional immediate return,
+followed by an actual source-formula law with explicit domain bounds. This restriction
 does not change the mathematical predicate or the native evaluator's support.
 
 The Exec outcome contract uses the existing `PIR.Outcome`, `PIR.Execution` and

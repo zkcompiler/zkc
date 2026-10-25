@@ -4,8 +4,8 @@ The [explicit-table model](spec/table-relations.md) proves complete Boolean
 laws for finite masked membership and exact indexed reads, including duplicate
 and empty cases. These evaluator laws are independent of the native VM and of
 cryptographic lookup arguments; source-formula adequacy remains an explicit
-connection obligation. The current structured-source profile refuses the
-native examples' aggregate query type and finite-fold realization; the
+connection obligation. The current structured-source profile admits the
+aggregate query type but still refuses its finite-fold realization; the
 [model specification](spec/table-relations.md) records that import boundary.
 
 All results below concern stated mathematical models and exact selected imports.
