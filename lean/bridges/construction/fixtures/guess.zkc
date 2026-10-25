@@ -21,3 +21,20 @@ proof Proof = Guess<Fr> {
   accept accepted;
   construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
 }
+
+spec ProofClaims for Proof {
+  sound: soundness@0(imported_language(languages.guess@0()),
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=1/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,error=(Q+1)/cardinality(Fr));
+  charged: soundness@0(imported_language(languages.guess@0()),
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=1/cardinality(Fr),application=application),
+    accept=out.accepted,stage=compiled_ideal,
+    charge=per_site(sites.challenge,1/cardinality(Fr)));
+}
+verify ProofClaims.sound=fs.keyed_soundness@0();
+
+verify ProofClaims.charged=fs.keyed_charged@0();

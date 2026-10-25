@@ -69,7 +69,7 @@ def Interpretation.regionTranslation (meaning : Interpretation language interfac
     cases op with
     | ordinary op =>
       cases bodies
-      simp only [Interpretation.regionMeaning, Interpretation.translate, PIR.Proc.interpret_bind]
+      simp only [Interpretation.regionMeaning, Interpretation.translate, PIR.Process.interpret_bind]
       rfl
     | branch captures result =>
       cases args with
@@ -87,7 +87,7 @@ def Interpretation.regionTranslation (meaning : Interpretation language interfac
         | cons body rest =>
           cases rest
           simp only [Interpretation.regionMeaning, RegionFunctions.translate,
-            PIR.Proc.interpret_bind, interpret_repeat]
+            PIR.Process.interpret_bind, interpret_repeat]
           rfl
 
 /-- The reference syntax lowers into the sole canonical region carrier. -/
@@ -118,7 +118,7 @@ theorem Program.denote_toRegion (meaning : Interpretation language interface) {Î
         (fun values => next.toRegion.denote meaning.regionMeaning (env.prepend values)) =
           ((meaning.operation op (Operands.eval env arguments)).bind
             (fun value => next.denote meaning (env.push value))).bind _
-      simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_singleton]
+      simp only [PIR.Process.bind_assoc, PIR.Process.bind, Environment.prepend_singleton]
       congr 1
       funext value
       exact ih _
@@ -132,9 +132,9 @@ theorem Program.denote_toRegion (meaning : Interpretation language interface) {Î
             else no.denote meaning env).bind _
       simp only [Operands.get_eval_identity]
       split
-      Â· rw [yesIH, PIR.Proc.bind_assoc]
+      Â· rw [yesIH, PIR.Process.bind_assoc]
         rfl
-      Â· rw [noIH, PIR.Proc.bind_assoc]
+      Â· rw [noIH, PIR.Process.bind_assoc]
         rfl
   | iterate count initial body next bodyIH nextIH =>
       change ((PIR.repeatN count
@@ -151,9 +151,9 @@ theorem Program.denote_toRegion (meaning : Interpretation language interface) {Î
             (fun values => .done (values.get .here))) =
           (fun value => body.denote meaning (env.push value)) := by
         funext value
-        rw [bodyIH, PIR.Proc.bind_assoc]
-        simp only [PIR.Proc.bind, Values.get_singleton, PIR.Proc.bind_done]
-      rw [bodySame, PIR.Proc.bind_assoc, PIR.Proc.bind_assoc]
+        rw [bodyIH, PIR.Process.bind_assoc]
+        simp only [PIR.Process.bind, Values.get_singleton, PIR.Process.bind_done]
+      rw [bodySame, PIR.Process.bind_assoc, PIR.Process.bind_assoc]
       congr 1
       funext value
       exact nextIH _

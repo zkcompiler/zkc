@@ -20,6 +20,10 @@ pub fn concat(left: Indices, right: Indices) -> Indices effects(stop) where () {
 
 pub fn less(left: index, right: index) -> bool effects(stop) where () { return kernel("index.less", left, right); }
 
+// Total over natural indices, including every exponent outside the carrier.
+pub math fn power_of_two(value: index, exponent: index) -> bool
+  = primitive("index.power_of_two");
+
 pub fn maximum(left: index, right: index) -> index effects(stop) where () { return if less(left, right) { right } else { left }; }
 // Powers of two in [2, 2^LogMaximum], within the unsigned index carrier.
 

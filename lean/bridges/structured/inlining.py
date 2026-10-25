@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -49,13 +49,14 @@ def retained_subject(suite, stem, module, stage, source, symbol):
 def subject_cases(suite, stem, module, proof):
     source = FIXTURES / f"{stem}.zkc"
     suite.sources.append({"authored": str(source.relative_to(ROOT)), "sha256": digest(source)})
-    flags = ["--source-format=zkc", f"--module={module}={source}", f"--entry={module}::Run"]
-    original_text, interface = native_run(
+    flags = ["--source-format=zkc", f"--module={module}={source}", f"--subject={fixture_table()[stem]['subject']}"]
+    original_text, interface_text, interface = native_subject(
         lambda command: suite.command(f"{stem}:frontend", command), suite.tools["compiler"], flags)
-    write_json(suite.directory / f"{stem}-interface.json", interface)
+    (suite.directory / f"{stem}-interface.json").write_text(interface_text, encoding="utf-8")
     symbol = interface["protocol"]
     original = retained_subject(suite, stem, proof, "Original", original_text, symbol)
-    assert interface["original"] == digest(original[0]), "frontend interface identifies different bytes"
+    if not (interface["original"] == digest(original[0])):
+        raise AssertionError("frontend interface identifies different bytes")
     prepared = suite.directory / f"{stem}-prepared.mlir"
     suite.command(f"{stem}:prepare", [suite.tools["optimizer"],
         "--zkc-prepare-protocol=simplify=false optimize-finite=false", original[0], "-o", prepared])
@@ -65,8 +66,10 @@ def subject_cases(suite, stem, module, proof):
     # the whole module: preparation may retain dormant helper definitions.
     before = definition(original[2], symbol)[9][1]
     after = definition(candidate[2], symbol)[9][1]
-    assert any(instruction[0][0] == "call" for instruction in before)
-    assert all(instruction[0][0] != "call" for instruction in after)
+    if not (any(instruction[0][0] == "call" for instruction in before)):
+        raise AssertionError('bridges/structured/inlining.py:68: any(instruction[0][0] == "call" for instruction in before)')
+    if not (all(instruction[0][0] != "call" for instruction in after)):
+        raise AssertionError('bridges/structured/inlining.py:69: all(instruction[0][0] != "call" for instruction in after)')
     cases = [(0, 0, 0), (1, 1, 1), (2, 3, 5), (MODULUS - 1, MODULUS - 2, MODULUS - 3)]
     cases += [tuple(suite.rng.randrange(MODULUS) for _ in range(3)) for _ in range(suite.args.cases)]
     for index, values in enumerate(cases):
@@ -78,7 +81,8 @@ def subject_cases(suite, stem, module, proof):
     if proof == "SchnorrResponse":
         # Change just the first addition, in the prepared entry. The helper
         # definition stays untouched. Native formation and Lean admission pass.
-        assert candidate_text.count("algebra.field_add") == 2
+        if not (candidate_text.count("algebra.field_add") == 2):
+            raise AssertionError('bridges/structured/inlining.py:81: candidate_text.count("algebra.field_add") == 2')
         mutated = retained_subject(suite, stem, proof, "Mutated",
             candidate_text.replace("algebra.field_add", "algebra.field_subtract", 1), symbol)
         suite.compare(mutated, "admitted-arithmetic-mutation", ["2", "3", "5"],
@@ -88,7 +92,7 @@ def subject_cases(suite, stem, module, proof):
     suite.command(f"{stem}:build-proof", [suite.args.lake, "--dir", ROOT / "lean",
         "build", f"ZkcExamples.Structured.{proof}"], timeout=LAKE_TIMEOUT)
     suite.command(f"{stem}:kernel-proof", [suite.args.lake, "--dir", ROOT / "lean",
-        "env", "lean", EXAMPLES / f"{proof}.lean"], timeout=LAKE_TIMEOUT)
+        "lean", EXAMPLES / f"{proof}.lean"], timeout=LAKE_TIMEOUT)
     suite.sources.append({"proof": str((EXAMPLES / f"{proof}.lean").relative_to(ROOT)),
                           "sha256": digest(EXAMPLES / f"{proof}.lean")})
 

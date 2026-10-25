@@ -107,7 +107,7 @@ theorem stopped_effects_and_state :
         ⟨.stopped .reject, 12, [0, 1]⟩ := rfl
 
 theorem zero_retains_earlier_effect :
-    ((PIR.Proc.call (I := signals) 42 (fun _ => denoteRepeat emptySpec {} 0 (some 0)
+    ((PIR.Process.call (I := signals) 42 (fun _ => denoteRepeat emptySpec {} 0 (some 0)
       .nil (.cons none .nil) alwaysStop))).run signalHandler 10 =
         ⟨.returned .nil, 11, [42]⟩ := rfl
 
@@ -186,9 +186,9 @@ private def serviceBody : Region protocolDialect [.index, service, service] [] :
   .letOp (.draw 0 "bls12-381.fr" "first") (.cons (.there .here) .nil) .nil
     (.letOp (.draw 0 "bls12-381.fr" "second")
       (.cons (.there (.there (.there .here))) .nil) .nil (.ret .nil))
-private def queryProcess (site : String) (handle : Nat) : PIR.Proc (participantInterface Int Int) Int :=
+private def queryProcess (site : String) (handle : Nat) : PIR.Process (participantInterface Int Int) Int :=
   .call (.query site "bls12-381.fr" (.cons handle .nil)) .done
-private def aliasProcess (first second : Nat) : PIR.Proc (participantInterface Int Int) Unit :=
+private def aliasProcess (first second : Nat) : PIR.Process (participantInterface Int Int) Unit :=
   (queryProcess "prelude" first).bind fun _ =>
     ((denoteRepeat serviceSpec {} 0 (some 2) .nil (.cons (some first) (.cons (some second) .nil))
       (fun args => serviceBody.denote
@@ -226,7 +226,7 @@ private def transportSpec (maximum : Nat) : RepeatSpec :=
 private def embeddedState (value : Nat) :
     Values (Component (assignment Int Int)) [.index, .index] :=
   .cons (some value) (.cons none .nil)
-private def replyStep (value : Nat) : PIR.Proc replySignals Nat :=
+private def replyStep (value : Nat) : PIR.Process replySignals Nat :=
   .call value fun reply => if reply = 0 then .halt .reject else .done (value + reply)
 private def replyBody : RegionFunction (Component (assignment Int Int)) replySignals
     ([.index, .index, .index], [.index, .index]) := fun args =>
@@ -247,11 +247,11 @@ theorem embedded_shifted_effects (maximum start count initial : Nat) :
       Repeat.step (transportSpec maximum) {} 0 .nil replyBody (embeddedState value) index =
         (replyStep value).bind (fun result => .done (embeddedState result)) := by
     intro value index
-    change (PIR.Proc.call (I := replySignals)
+    change (PIR.Process.call (I := replySignals)
       (A := Values (Component (assignment Int Int)) [.index, .index]) value (fun reply =>
         if reply = 0 then .halt .reject else
           .done (.cons (some (value + reply)) (.cons (some 999) .nil)))).bind _ = _
-    simp only [PIR.Proc.bind, replyStep]
+    simp only [PIR.Process.bind, replyStep]
     congr 1
     funext reply
     split <;> rfl
@@ -316,7 +316,7 @@ theorem phase_preservation_requires_valid_phase (index : Nat) :
   have wrong : index + 1 + 1 = index + 1 := (preserved ()).2
   omega
 
-private def immediateStop {A : Type} : PIR.Proc signals A → Option PIR.Stop
+private def immediateStop {A : Type} : PIR.Process signals A → Option PIR.Stop
   | .halt reason => some reason
   | _ => none
 

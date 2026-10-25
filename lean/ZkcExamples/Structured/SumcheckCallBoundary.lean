@@ -20,7 +20,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 
 def terminal (raw : List F)
     (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
   SumcheckVerifierTerminal.actualOwnedCheck (G := G) SumcheckSourceViews.unit 1 (some raw)
     (outputs.get (.there (.there (.there (.there .here)))))
     (outputs.get (.there (.there (.there (.there (.there .here))))))

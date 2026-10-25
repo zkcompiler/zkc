@@ -25,6 +25,12 @@ def descriptor(value):
     if not isinstance(value, list) or not value:
         raise ValueError("invalid descriptor")
     tag, *args = value
+    if tag in ("index.less", "index.power_of_two"):
+        record(args, 0)
+        return ".indexLess" if tag == "index.less" else ".indexPowerOfTwo"
+    if tag == "vector.length":
+        record(args, 1)
+        return f".vectorLength {text(args[0])}"
     unary, nullary = lean_render.UNARY_OPERATIONS, lean_render.NULLARY_OPERATIONS
     if tag in unary:
         record(args, 1)
@@ -35,6 +41,9 @@ def descriptor(value):
     if tag == "index.constant":
         record(args, 1)
         return f".indexConstant {text(args[0])}"
+    if tag == "field.embed":
+        extension, base = record(args, 2)
+        return f".fieldEmbed {text(extension)} {text(base)}"
     if tag == "exec":
         operation, binding_name, parameters = record(args, 3)
         return f".exec {text(operation)} {text(binding_name)} {seq(parameters, text)}"
@@ -172,6 +181,104 @@ def primitive_binding(value):
             f"{text(implementation)}⟩")
 
 
+def origin_string(value, limit=512):
+    """Preserve exact bytes; NFC is checked by native frontend admission."""
+    rendered = lean_render.text(value, limit=limit)
+    if not value or "\0" in value:
+        raise ValueError("empty origin string")
+    return rendered
+
+
+def origin_decimal(value):
+    rendered = origin_string(value)
+    if re.fullmatch(r"0|[1-9][0-9]*", value) is None:
+        raise ValueError("noncanonical origin decimal")
+    return rendered
+
+
+def origin_path(value, limit=512):
+    rendered = origin_string(value, limit)
+    def initial(char):
+        return ord(char) >= 128 or "a" <= char <= "z" or "A" <= char <= "Z" or char == "_"
+    if not all(part and initial(part[0]) and all(initial(c) or "0" <= c <= "9" for c in part)
+               for part in value.split("::")):
+        raise ValueError("invalid origin path")
+    return rendered
+
+
+def origin_term(value, depth=0, remaining=None):
+    if remaining is None:
+        remaining = [4096]
+    if remaining[0] == 0:
+        raise ValueError("origin term count limit")
+    remaining[0] -= 1
+    if depth >= 64:
+        raise ValueError("origin nesting limit")
+    record(value)
+    if not value:
+        raise ValueError("empty origin term")
+    tag, *args = value
+    if tag == "nat":
+        record(args, 1)
+        return f"(.natural {origin_decimal(args[0])})"
+    if tag in ("field", "group"):
+        record(args, 1)
+        return f"(.{tag} {origin_string(args[0])})"
+    if tag in ("domain", "asset"):
+        sort, identity = record(args, 2)
+        return f"(.{tag} {origin_string(sort)} {origin_string(identity)})"
+    if tag in ("bool", "index", "unit"):
+        record(args, 0)
+        return ".boolean" if tag == "bool" else f".{tag}"
+    def child(term):
+        return origin_term(term, depth + 1, remaining)
+    if tag == "tuple":
+        record(args, 1)
+        return f"(.tuple {seq(args[0], child, limit=512)})"
+    if tag == "array":
+        element, length = record(args, 2)
+        return f"(.array {child(element)} {origin_decimal(length)})"
+    if tag == "nominal":
+        kind, path, arguments = record(args, 3)
+        if kind not in ("record", "variant", "associated", "module"):
+            raise ValueError("invalid origin nominal kind")
+        constructor = "moduleType" if kind == "module" else kind
+        return (f"(.nominal .{constructor} {origin_path(path)} "
+                f"{seq(arguments, child, limit=512)})")
+    if tag in ("builtin", "formal"):
+        name, arguments = record(args, 2)
+        return f"(.{tag} {origin_string(name)} {seq(arguments, child, limit=512)})"
+    raise ValueError("unknown origin term")
+
+
+def function_origin(kind, value):
+    if kind == "math":
+        record(value, 0)
+        return "none"
+    if kind not in ("local", "protocol"):
+        raise ValueError("invalid origin function kind")
+    name, arguments = record(value, 2)
+    keys = set()
+    remaining = [4096]
+
+    def argument(pair):
+        key, term = record(pair, 2)
+        rendered_key = origin_path(key) if kind == "protocol" else origin_string(key)
+        if kind == "protocol" and "::" in key:
+            raise ValueError("qualified origin parameter")
+        if key in keys:
+            raise ValueError("duplicate origin parameter")
+        keys.add(key)
+        rendered = origin_term(term, remaining=remaining) if kind == "protocol" else origin_string(term)
+        return f"({rendered_key}, {rendered})"
+
+    name = origin_path(name, 2048) if kind == "protocol" else origin_string(name)
+    arguments = seq(arguments, argument, limit=128)
+    if kind == "protocol":
+        return f"some (.protocol ⟨{name}, {arguments}⟩)"
+    return f"some (.local {name} {arguments})"
+
+
 def definition(value):
     if value[0] == "realize":
         _, name, inputs, outputs, helper = record(value, 5)
@@ -194,14 +301,7 @@ def definition(value):
     tag, name, kind, visibility, inputs, outputs, interface, premises, origin, body = record(value, 10)
     if tag != "function" or kind not in ("protocol", "math", "local") or visibility not in ("public", "private"):
         raise ValueError("invalid function header")
-    if origin == []:
-        origin_text = "none"
-    else:
-        origin_name, bindings = record(origin, 2)
-        def binding(pair):
-            key, value = record(pair, 2)
-            return f"({text(key)}, {text(value)})"
-        origin_text = f"some ({text(origin_name)}, {seq(bindings, binding)})"
+    origin_text = function_origin(kind, origin)
     return (f".function ⟨{text(name)}, .{kind}, .{visibility}Def, {seq(inputs, ty)}, "
             f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
 

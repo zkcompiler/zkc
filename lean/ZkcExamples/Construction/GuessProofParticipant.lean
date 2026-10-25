@@ -12,7 +12,7 @@ namespace ZkcExamples.Construction.GuessProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:2a66bcd3e1853a64e66fcf12081dc9ae4591b042bf87968b1e0fd5c499badbf6"
+  source := "sha256:47426e0ec48a7f3e826564a8911d4c7bba1490c409676401cb20557cc2a94c6e"
   candidate := "sha256:3639c24732b7fce2def043d3a7b7d4433bc27f6ab4bc8ffb58e401ac717e0180"
   policy := ⟨"zkl_0b54718f8917b00c23a9aa21bf26256a990c3ad40b71cda5b44d6ecd85e5e748", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [2], [0], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"

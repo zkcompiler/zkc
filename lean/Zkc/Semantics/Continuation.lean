@@ -9,27 +9,27 @@ namespace PIR.Continuation
 variable {I : Signature} {A B S E Key : Type}
 
 /-- This value is supplied by a verifier interpretation, not inferred from
-    Proc.done or from a successful host-language call. -/
+    Process.done or from a successful host-language call. -/
 inductive Terminal (A : Type) where
   | accepted : A → Terminal A
   | rejected
   deriving DecidableEq, Repr
 
-def after (p : Proc I (Terminal A)) (arm : A → Proc I B) : Proc I B :=
+def after (p : Process I (Terminal A)) (arm : A → Process I B) : Process I B :=
   p.bind (fun | .accepted a => arm a | .rejected => .halt .reject)
 
-theorem rejected_no_arm (p : Proc I (Terminal A)) (arm : A → Proc I B)
+theorem rejected_no_arm (p : Process I (Terminal A)) (arm : A → Process I B)
     (h : Handler I S E) (s : S) (no : (p.run h s).outcome = .returned .rejected) :
     (after p arm).run h s = ⟨.stopped .reject,(p.run h s).state,(p.run h s).events⟩ := by
-  simp [after,run_bind,Execution.follow,no,Proc.run]
+  simp [after,run_bind,Execution.follow,no,Process.run]
 
-theorem stopped_no_arm (p : Proc I (Terminal A)) (arm : A → Proc I B)
+theorem stopped_no_arm (p : Process I (Terminal A)) (arm : A → Process I B)
     (h : Handler I S E) (s : S) (why : Stop)
     (no : (p.run h s).outcome = .stopped why) :
     (after p arm).run h s = ⟨.stopped why,(p.run h s).state,(p.run h s).events⟩ := by
   simp [after,run_bind,Execution.follow,no]
 
-theorem accepted_retains_prefix (p : Proc I (Terminal A)) (arm : A → Proc I B)
+theorem accepted_retains_prefix (p : Process I (Terminal A)) (arm : A → Process I B)
     (h : Handler I S E) (s : S) (a : A)
     (yes : (p.run h s).outcome = .returned (.accepted a)) :
     (after p arm).run h s =
@@ -39,7 +39,7 @@ theorem accepted_retains_prefix (p : Proc I (Terminal A)) (arm : A → Proc I B)
   simp [after,run_bind,Execution.follow,yes]
 
 /-- Acceptance alone does not erase the continuation's interaction obligations. -/
-theorem formed (P : Interaction I) (p : Proc I (Terminal A)) (arm : A → Proc I B)
+theorem formed (P : Interaction I) (p : Process I (Terminal A)) (arm : A → Process I B)
     (post : Terminal A → P.Phase → Prop) (phase : P.Phase)
     (hp : Conforms P p phase) (exits : Boundary.Returns P post p phase)
     (ha : ∀ a phase, post (.accepted a) phase → Conforms P (arm a) phase) :

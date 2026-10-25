@@ -142,7 +142,7 @@ def MathematicalOp : Op<ProtocolDialect, "func",
   let arguments = (ins SymbolNameAttr:$sym_name,
     TypeAttrOf<FunctionType>:$function_type, ArrayAttr:$roles,
     ArrayAttr:$input_roles, ArrayAttr:$output_roles,
-    OptionalAttr<ArrayAttr>:$contracts);
+    OptionalAttr<ArrayAttr>:$contracts, OptionalAttr<ArrayAttr>:$origin);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }

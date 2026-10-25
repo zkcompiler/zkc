@@ -107,5 +107,5 @@ local.func @top(%x:i1) -> i1 attributes {logical_origin=["top",[]]} {
 "protocol.func"() ({ ^entry(%flag:i1):
   %r = "protocol.local_call"(%flag) {callee=@top,role="P",site="call"} : (i1)->i1
   "protocol.return"(%r) : (i1)->()
-}) {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {sym_name="main",origin=["main",[]],function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

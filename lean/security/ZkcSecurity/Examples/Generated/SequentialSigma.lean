@@ -1,0 +1,39 @@
+module
+
+public import ZkcExamples.Structured.Generated.Bindings.SequentialSigmaInputs
+public import ZkcExamples.Construction.Generated.SequentialSigmaPair
+public import ZkcSecurity.Domains.PrimeField
+public import ZkcSecurity.Tools.PairConstruction
+public import ZkcSecurity.Claims.SourceChargeSites
+
+@[expose] public section
+
+/-! Generated fixed request data and checked Subject assembly. -/
+namespace ZkcSecurity.Examples.Generated.SequentialSigma
+open Zkc.Source.Structured
+set_option maxRecDepth 50000
+set_option maxHeartbeats 16000000
+noncomputable section
+
+abbrev original : Snapshot := ZkcExamples.Structured.Generated.Bindings.SequentialSigmaData.snapshot
+abbrev imported : Imported original := ZkcExamples.Structured.Generated.Bindings.SequentialSigmaInputs.imported
+abbrev artifacts := ZkcExamples.Construction.Generated.SequentialSigmaPair.artifacts
+
+def selected : Zkc.Construction.AuthoredPair.Selection original :=
+  (Zkc.Construction.AuthoredPair.select original artifacts "equality").toOption.get (by decide +kernel)
+
+def subject : ZkcSecurity.Claims.HonestPair.Subject
+    (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
+  bind_authored_subject "equality"
+    exports "sha256:e9ff8c20566b330bb1b5df00ba30126efd31a093520c4cc720f1dc40ce5b0c9c", "sha256:e4e3beed98682a971c15f97407915cebf4d62767d16c23fd29e5d701437a5938", "sha256:eb7eecc515344a520e0fca3ee28e0554145ddeb936ffe3edca5409c98eead3cf"
+
+abbrev validatorArtifacts := subject.validatorArtifacts
+abbrev validatorCompiled := subject.validatorCompiled
+
+def validatorSites : List (ZkcSecurity.Claims.Domain.ChargeSite validatorCompiled) :=
+  []
+
+def validatorSubject := subject.validatorSubject validatorSites
+
+end
+end ZkcSecurity.Examples.Generated.SequentialSigma

@@ -1,0 +1,16 @@
+module sample;
+domain F = field("bls12-381.fr");
+protocol Draw roles(V)(coins:Random<F>@V)->(value:F@V) {
+  #[site(challenge)] let value = coins.draw();
+  return(value=value);
+}
+protocol Run roles(V)(n:index@V,coins:Random<F>@V)->(total:F@V) {
+  let mut total:F@V = 0;
+  for _ in 0..n roles(V) max 2 {
+    #[site(first)] let a = Draw roles(V)(coins);
+    #[site(second)] let b = Draw roles(V)(coins);
+    total = total + a + b;
+  }
+  return(total=total);
+}
+entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }

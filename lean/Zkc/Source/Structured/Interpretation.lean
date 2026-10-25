@@ -29,10 +29,10 @@ theorem Region.component_translate {dialect : Dialect} {I J : PIR.Signature}
   | ret => rfl
   | stop => rfl
   | letOp op args bodies next _ nextIH =>
-    simp only [Region.component, PIR.Proc.interpret_bind,
+    simp only [Region.component, PIR.Process.interpret_bind,
       Regions.denote_translate meaning operations translation bodies, commutes, nextIH]
   | bind body next bodyIH nextIH =>
-    simp only [Region.component, PIR.Proc.interpret_bind, bodyIH, nextIH]
+    simp only [Region.component, PIR.Process.interpret_bind, bodyIH, nextIH]
   | nil => trivial
   | cons => trivial
 
@@ -66,7 +66,7 @@ theorem HelperTable.Interprets.cons {Value : Ty → Type}
   · by_cases signature : helper = called
     · subst called
       simpa only [invoke, List.find?_cons, beq_self_eq_true, ↓reduceIte, ↓reduceDIte] using bodies args
-    · simp [invoke, name, signature, PIR.Proc.interpret]
+    · simp [invoke, name, signature, PIR.Process.interpret]
   · rw [invoke_cons_other left ⟨helper, leftBody⟩ called name,
       invoke_cons_other right ⟨helper, rightBody⟩ called name]
     exact tables called args
@@ -101,11 +101,11 @@ theorem foldTransition_interpret (operations : PIR.OperationInterpretation I J)
       foldTransition right spec arguments captures state item := by
   unfold foldTransition
   dsimp only [FoldSpec.predicateHelper, FoldSpec.stepHelper]
-  rw [PIR.Proc.interpret_bind]
+  rw [PIR.Process.interpret_bind]
   have enabled :
-      ((if spec.predicate.isEmpty then PIR.Proc.done (Values.cons true Values.nil)
+      ((if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
         else invoke left spec.predicateHelper (.cons item (arguments.append captures))).interpret operations) =
-      (if spec.predicate.isEmpty then PIR.Proc.done (Values.cons true Values.nil)
+      (if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
         else invoke right spec.predicateHelper (.cons item (arguments.append captures))) := by
     dsimp only [FoldSpec.predicateHelper]
     by_cases present : spec.predicate.isEmpty = true
@@ -135,15 +135,15 @@ theorem mapRow_interpret (operations : PIR.OperationInterpretation I J)
   cases selected : mapRowArguments spec.field spec.rowwise args index with
   | none => rfl
   | some values =>
-    simp only [PIR.Proc.interpret_bind, tables spec.helper values, PIR.Proc.interpret]
+    simp only [PIR.Process.interpret_bind, tables spec.helper values, PIR.Process.interpret]
 
 theorem denoteMap_interpret (operations : PIR.OperationInterpretation I J)
     {left : Meanings F G I} {right : Meanings F G J}
     (tables : HelperTable.Interprets operations left right) (spec : MapSpec)
     (args : Values (assignment F G) spec.arguments) :
     (denoteMap left spec args).interpret operations = denoteMap right spec args := by
-  simp only [denoteMap, Finite.interpret_admitThen, PIR.Proc.interpret_bind,
-    mapRows_interpret, mapRow_interpret operations tables, PIR.Proc.interpret]
+  simp only [denoteMap, Finite.interpret_admitThen, PIR.Process.interpret_bind,
+    mapRows_interpret, mapRow_interpret operations tables, PIR.Process.interpret]
 
 theorem denoteLoop_interpret (operations : PIR.OperationInterpretation I J)
     (state captures : List Ty)
@@ -152,8 +152,8 @@ theorem denoteLoop_interpret (operations : PIR.OperationInterpretation I J)
     (captured : Values (assignment F G) captures) :
     (denoteLoop state captures body lower upper initial captured).interpret operations =
       denoteLoop state captures (fun args => (body args).interpret operations) lower upper initial captured := by
-  simp only [denoteLoop, Finite.interpret_execute, invokeCallback, PIR.Proc.interpret_bind,
-    PIR.Proc.interpret]
+  simp only [denoteLoop, Finite.interpret_execute, invokeCallback, PIR.Process.interpret_bind,
+    PIR.Process.interpret]
 
 theorem denoteConditionalLoop_interpret (operations : PIR.OperationInterpretation I J)
     (state captures : List Ty)
@@ -164,12 +164,12 @@ theorem denoteConditionalLoop_interpret (operations : PIR.OperationInterpretatio
     (denoteConditionalLoop state captures body lower upper initial captured).interpret operations =
       denoteConditionalLoop state captures (fun args => (body args).interpret operations)
         lower upper initial captured := by
-  simp only [denoteConditionalLoop, PIR.Proc.interpret_bind, Finite.interpret_execute,
-    PIR.Proc.interpret, invokeCallback]
+  simp only [denoteConditionalLoop, PIR.Process.interpret_bind, Finite.interpret_execute,
+    PIR.Process.interpret, invokeCallback]
   congr 2
   funext current index
   split
-  · rw [PIR.Proc.interpret_bind]
+  · rw [PIR.Process.interpret_bind]
     congr 1
     funext results
     cases results
@@ -189,13 +189,16 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     (operation leftSites left op args bodies).interpret operations =
       operation rightSites right op args (RegionFunctions.translate (dialect := dialect) operations bodies) := by
   cases op with
+  | fieldEmbed | vectorLength =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; rfl
   | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
   | mark site =>
     cases args; cases bodies
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values (assignment F G) []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
-    simp only [PIR.Proc.interpret_bind, sites site, PIR.Proc.interpret]
-  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+    simp only [PIR.Process.interpret_bind, sites site, PIR.Process.interpret]
+  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with
@@ -206,7 +209,7 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
       | cons index rest =>
         cases rest; cases bodies
         change (match container[index]? with
-          | some value => (PIR.Proc.done (.cons value .nil) : PIR.Proc I (Values (assignment F G) [.field domain]))
+          | some value => (PIR.Process.done (.cons value .nil) : PIR.Process I (Values (assignment F G) [.field domain]))
           | none => .halt .refused).interpret operations =
           (match container[index]? with
           | some value => .done (.cons value .nil)
@@ -311,8 +314,8 @@ theorem strictComponent_interpret (operations : PIR.OperationInterpretation I J)
   cases sequenced : RoleFamily.sequence args with
   | none => rfl
   | some values =>
-    simp only [meaning, PIR.Proc.interpret_bind, operation_interpret operations sites tables,
-      PIR.Proc.interpret]
+    simp only [meaning, PIR.Process.interpret_bind, operation_interpret operations sites tables,
+      PIR.Process.interpret]
 
 theorem componentOperation_interpret (operations : PIR.OperationInterpretation I J)
     {leftSites : SiteObservations I} {rightSites : SiteObservations J}
@@ -331,7 +334,7 @@ theorem componentOperation_interpret (operations : PIR.OperationInterpretation I
     | none => rfl
     | some values =>
       simp only []
-      rw [PIR.Proc.interpret_bind]
+      rw [PIR.Process.interpret_bind]
       have lift : (primitiveOutcome (primitive.evaluate values)).interpret operations =
           primitiveOutcome (primitive.evaluate values) := by
         cases primitive.evaluate values <;> rfl
@@ -344,8 +347,8 @@ theorem componentOperation_interpret (operations : PIR.OperationInterpretation I
     cases present : RoleFamily.sequence args with
     | none => rfl
     | some values =>
-      simp only [PIR.Proc.interpret_bind, denoteMap_interpret operations tables.closed,
-        PIR.Proc.interpret]
+      simp only [PIR.Process.interpret_bind, denoteMap_interpret operations tables.closed,
+        PIR.Process.interpret]
   case invoke helper =>
     cases bodies
     by_cases math : helper.kind = .math

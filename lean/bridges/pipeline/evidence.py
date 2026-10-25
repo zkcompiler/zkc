@@ -1,20 +1,7 @@
-"""Render a subject's generated modules in the security integration.
+"""Generate artifact facts and source-bound typed Lean request clients.
 
-For a manifest with a `[claims]` namespace, two modules are generated there:
-
-- the artifacts module: the subject's `Artifacts` (the original export, the
-  constructed validator, the published input types read from the export, and
-  the executable validator when the subject has one), its `Compiled` facts and,
-  for an executable subject, its `LoweringEvidence`, every field one of the
-  generated per-Entry facts the kernel checked;
-- the claims module: the evidence of the claim, built by the subject's family
-  constructor, and the claim itself, the registered endpoint applied to that
-  evidence and stated at the subject's artifacts, its contract and its regime,
-  so that the kernel checks that the evidence has the type the manifest claims.
-
-The family constructor, the contract and the model equations are hand-written
-in the subject's `Evidence` and `Contract` modules; nothing here is trusted:
-every value becomes a statement the kernel checks when the modules are built.
+Manifest configuration controls physical output/imports only. Property meanings
+are computed by Lean registries; proof methods cannot change a request.
 """
 
 from pathlib import Path
@@ -23,56 +10,14 @@ import textwrap
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import Refused, require, text  # noqa: E402
-
-SECURITY = Path("lean/integrations/arklib")
-
-# The registered endpoint of each claim: its theorem's short name, the property
-# definition it proves and the contract declaration the property is stated at.
-ENDPOINTS = {
-    ("ideal-meaning", "soundness", "fixed"): ("fixed_soundness", "FixedSoundness"),
-    ("ideal-meaning", "soundness", "adaptive"): ("adaptive_soundness", "AdaptiveSoundness"),
-    ("executable-bytes", "soundness", "fixed"): ("fixed_soundness_bytes", "FixedSoundnessBytes"),
-    ("executable-bytes", "soundness", "adaptive"): ("adaptive_soundness_bytes", "AdaptiveSoundnessBytes"),
-    ("ideal-meaning", "knowledge-soundness", "fixed"): ("knowledge_soundness", "KnowledgeSoundness"),
-    ("executable-bytes", "knowledge-soundness", "fixed"): ("knowledge_soundness_bytes", "KnowledgeSoundnessBytes"),
-}
-CONTRACTS = {"soundness": "falseStatement", "knowledge-soundness": "holds"}
-REGIMES = {"exact-uniform challenges": "Regime.exact F"}
-SEMANTICS = {"ideal-meaning": ".idealMeaning", "executable-bytes": ".executableBytes"}
-# The section variables of a claims module: the instances the endpoints of each
-# property take, and no others, so that no claim carries an unused premise.
-VARIABLES = {
-    "soundness": "variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]\n"
-                 "  [AddCommGroup G] [Module F G] [DecidableEq G]",
-    "knowledge-soundness": "variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F] "
-                           "[SampleableType F]\n  [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]",
-}
+from bridges.pipeline import claim_render, source_claims  # noqa: E402
 
 
-def names(manifest):
-    """The declarations a subject's claim consists of, all derived from its claims
-    namespace, so the generated application and the report name the same
-    declarations."""
-    claims = manifest.get("claims") or {}
-    namespace = claims.get("namespace")
-    if namespace is None:
-        return {}
-    properties = claims.get("properties") or []
-    prop = properties[0] if len(properties) == 1 else None
-    endpoint = ENDPOINTS.get((claims.get("endpoint"), prop, claims.get("statement")))
-    return {"namespace": namespace,
-            "artifacts": f"{namespace}.artifacts",
-            "contract": f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}",
-            "instance": f"{namespace}.evidence",
-            "application": f"{namespace}.{endpoint[0]}" if endpoint else None}
-
-
-def module_path(namespace, leaf):
-    return SECURITY.joinpath(*namespace.split("."), f"{leaf}.lean")
-
-
-def module_name(namespace, leaf):
-    return f"{namespace}.{leaf}"
+def module_name(subject, leaf):
+    """Companion module next to the generated Claims module; namespace may differ."""
+    module = subject.module_name("claims")
+    require(module is not None, f"{subject.name}: no generated claims module")
+    return module.rsplit(".", 1)[0] + "." + leaf
 
 
 def paragraphs(*parts):
@@ -112,11 +57,11 @@ HEADER = """module
 """
 
 
-def artifacts_module(subject, entry, glue_namespace, executable_namespace):
+def artifacts_module(subject, entry, glue_namespace, executable_namespace, artifacts):
     """The subject's artifacts, compiled facts and lowering evidence."""
-    namespace = subject.get("claims", "namespace")
+    namespace = subject.get("lean", "namespace")
     glue_module = subject.module_name("glue")
-    imports = ["ZkcSecurity.Endpoint.Evidence", glue_module]
+    imports = ["ZkcSecurity.Claims.Subject", glue_module]
     if executable_namespace:
         imports.append(executable_namespace)
     entry_name = subject.get("entries", "proof")
@@ -169,108 +114,71 @@ def lowering : LoweringEvidence artifacts compiled F G where
     match statement with
     | {pattern} => exact {executable_namespace}.admitted {' '.join(variables)}
 """
+    source += f'''
+/-- Fresh physical attribution, checked against pipeline bytes by reporting.
+Digest attribution is distinct from the kernel checked compiled facts above. -/
+def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
+  ⟨{text(source_claims.digest(artifacts['original_text'].encode()))}, {text(artifacts['original'][3])}, stage,
+    match stage with
+    | .interactive => []
+    | .compiledIdeal => [⟨"constructed-participant", {text(source_claims.digest(artifacts['export_text'].encode()))}⟩]
+    | .executableBytes => [⟨"constructed-participant", {text(source_claims.digest(artifacts['export_text'].encode()))}⟩'''
+    if artifacts.get("program") is not None:
+        source += f', ⟨"verifier-program", {text(source_claims.digest(artifacts["program"]))}⟩'
+    source += "]⟩\n"
+    if artifacts.get("interactive") is not None:
+        interactive = artifacts["interactive"]
+        source += f'''
+/-- Independently bound bytes for the separately admitted interactive protocol subject. -/
+def interactiveReference : Zkc.Claims.SubjectRef :=
+  ⟨{text(source_claims.digest(interactive['export_text'].encode()))},
+    {text(interactive["snapshot"][3])}, .interactive, []⟩
+'''
+    sites = {}
+    for claim in artifacts["source_claims"]["claims"]:
+        for site in claim.get("resolved_sites", []):
+            require(site["site"] not in sites or sites[site["site"]] == site,
+                    "inconsistent source site attribution")
+            sites[site["site"]] = site
+    site_terms = []
+    for site in sites.values():
+        site_terms.append(f'''{{ label := {text(site['site'])}, native := {text(site['native'])},
+      delivery := {text(site['delivery'])}, selected := by decide +kernel,
+      request := compiled.context.request.getD (.draw ""), requestSelected := by decide +kernel }}''')
+    source += "\n/-- Actual full construction occurrences selected by native source paths. -/\n"
+    source += "def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=\n  [" + ",\n   ".join(site_terms) + "]\n"
     source += f"\nend {namespace}\n"
     return source
 
 
-def application_text(subject, prop, endpoint, statement, evidence_name, regime, claimed):
-    """One application: the evidence the family constructor builds at an endpoint
-    and a statement form, and the registered endpoint applied to it."""
-    theorem, property_name = ENDPOINTS[(endpoint, prop, statement)]
-    construction = subject.get("family", "construction")
-    executable = endpoint == "executable-bytes"
-    lowering = "lowering" if executable else "PUnit.unit"
-    stated = ["(art := artifacts)"]
-    adaptive = statement == "adaptive"
-    if prop == "soundness":
-        stated += ["(claim := Contract.falseStatement)", f"(regime := {regime})"]
-        binding = "⟨application⟩" if adaptive else "PUnit.unit"
-        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} .{statement} {binding} {lowering}"
-        description = (f"ordinary soundness of {'program bytes' if executable else 'the ideal meaning'} for "
-                       f"{statement} statements")
-    else:
-        stated += ["(holds := Contract.holds)"]
-        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} {lowering}"
-        description = f"knowledge soundness of {'program bytes' if executable else 'the ideal meaning'} for fixed statements"
-    parameter = " (application : String)" if adaptive else ""
-    argument = " application" if adaptive else ""
-    evidence_doc = textwrap.fill(f"The evidence of {description}{' in an application context' if adaptive else ''}.",
-                                 width=76)
-    lead = "The claim" if claimed else "Also covered"
-    claim_doc = textwrap.fill(f"{lead}: {description}, at the subject's artifacts and contract.", width=76)
-    return description, f"""/-- {evidence_doc} -/
-noncomputable def {evidence_name}{parameter} :=
-  {value}
+def request_commands(namespace, bound, library="Registration.library"):
+    """Serialize fixed requests and invoke Lean's checked receipt constructor.
 
-/-- {claim_doc} -/
-theorem {theorem}{parameter} :
-    {property_name} {' '.join(stated)}
-      ({evidence_name} (F := F) (G := G){argument}) :=
-  ZkcSecurity.Endpoint.{theorem} ({evidence_name}{argument})
-"""
-
-
-def evidence_name(endpoint, statement, prop):
-    """The name of the evidence of an endpoint and statement form other than the
-    manifest's claim."""
-    form = "fixed" if prop == "soundness" and statement == "fixed" else (
-        "adaptive" if prop == "soundness" else "")
-    semantics = "Bytes" if endpoint == "executable-bytes" else "Ideal"
-    name = f"{form}{semantics}Evidence"
-    return name[0].lower() + name[1:]
-
-
-def claims_module(subject):
-    """The evidence of the claim and the claim: the registered endpoint applied to
-    the evidence, at the subject's artifacts, contract and regime. The family
-    constructor's evidence at every other endpoint and statement form the
-    subject covers is applied too: the ideal meaning, program bytes when the
-    subject has an executable program, and both statement forms for ordinary
-    soundness."""
-    claims = subject.table("claims")
-    namespace = claims["namespace"]
-    properties = claims.get("properties") or []
-    require(len(properties) == 1, f"{subject.name}: a claims namespace needs exactly one property")
-    prop = properties[0]
-    endpoint, statement = claims.get("endpoint"), claims.get("statement")
-    key = (endpoint, prop, statement)
-    require(key in ENDPOINTS, f"{subject.name}: no registered endpoint for {key}")
-    require(subject.get("family", "construction"), f"{subject.name}: the manifest names no family construction")
-    require(prop == "soundness" or statement == "fixed",
-            f"{subject.name}: knowledge soundness is registered for fixed statements only")
-    regime = None
-    if prop == "soundness":
-        regime = REGIMES.get(claims.get("regime"))
-        require(regime is not None, f"{subject.name}: unsupported regime {claims.get('regime')!r}")
-    adaptive = statement == "adaptive"
-    description, claimed = application_text(subject, prop, endpoint, statement, "evidence", regime, True)
-    endpoints = ["ideal-meaning"] + (["executable-bytes"] if subject.get("profiles", "executable") else [])
-    forms = ["fixed", "adaptive"] if prop == "soundness" else ["fixed"]
-    covered = [application_text(subject, prop, other, form, evidence_name(other, form, prop), regime, False)[1]
-               for other in endpoints for form in forms if (other, form) != (endpoint, statement)]
-    contract = "Contract.falseStatement" if prop == "soundness" else "Contract.holds"
-    doc = paragraphs(
-        f"Generated claims of the subject `{subject.name}`. Regenerate with `lean/bridges/subject.py --write`.",
-        f"The manifest claims {description}. The claim is the registered endpoint applied to the subject's "
-        "evidence" + (" in every bound application context" if adaptive else "")
-        + f", stated at the subject's artifacts, its contract (`{contract}`)"
-        + (" and its regime" if prop == "soundness" else "")
-        + ": the kernel checks that the evidence has that type.",
-        "The family constructor's evidence at every other endpoint and statement form the subject covers is "
-        "applied below the claim, at the same artifacts"
-        + (", contract and regime." if prop == "soundness" else " and contract."))
-    imports = ["ZkcSecurity.Endpoint.Soundness" if prop == "soundness" else "ZkcSecurity.Endpoint.Knowledge",
-               module_name(namespace, "Evidence")]
-    source = HEADER.format(imports="\n".join(f"public import {name}" for name in imports), doc=doc)
-    source += f"""namespace {namespace}
-open ZkcSecurity.Endpoint
-
-set_option linter.unusedSectionVars false
-
-{VARIABLES[prop]}
-
-{claimed}"""
-    if covered:
-        source += "\n/-! ## Other covered endpoints and statement forms -/\n\n" + "\n".join(covered)
-    source += f"\nend {namespace}\n"
+    The registration can be generated by Lean or supplied by an author. This
+    renderer has no property, theorem-specialization or arithmetic logic.
+    """
+    source = f"namespace {namespace}\nopen Zkc.Claims ZkcSecurity.Tools.ClaimConstruction\n\n"
+    source += "set_option maxRecDepth 8192\nset_option maxHeartbeats 2000000\n\n"
+    for index, claim in enumerate(bound["claims"]):
+        prefix = f"request{index}"
+        source += f"/-- Exact source request; attachment and method are separate. -/\ndef {prefix}Data : Wire.Request :=\n"
+        source += claim_render.request(claim["request"]) + "\n\n"
+        method = "none" if claim["method"] is None else "some " + claim_render.application(claim["method"])
+        source += f"def {prefix}Method : Option Wire.Application := {method}\n\n"
+        source += f"claim_request {prefix}Data using {library} method {prefix}Method\n\n"
+    source += f"end {namespace}\n"
     return source
+
+
+def claims_module(subject, bound):
+    """Only data and generic Lean construction calls; never print a Prop."""
+    namespace = subject.get("lean", "namespace")
+    require(namespace, f"{subject.name}: source receipts need lean.namespace")
+    imports = ["ZkcSecurity.Tools.ClaimConstruction", module_name(subject, "Endpoints"),
+               *subject.get("lean", "imports", [])]
+    source = HEADER.format(imports="\n".join(f"public import {name}" for name in dict.fromkeys(imports))
+                           + "\n" + "\n".join(f"public meta import {name}" for name in subject.get("lean", "imports", [])),
+                           doc="Generated source requests and typed receipts. Regenerate with "
+                               "`lean/bridges/subject.py --write`. Maintained Endpoints are independent "
+                               "regression clients, never source claim authority.")
+    return source + request_commands(namespace, bound)

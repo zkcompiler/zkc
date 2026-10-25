@@ -8,7 +8,7 @@ public import Std.Data.HashMap.Basic
 
 /-! Executable capacity policy over the retained checked raw carrier. This is
 abstract size analysis, not a second concrete evaluator or a soundness theorem.
-Only the tools use these budgets; Source.Region and PIR.Proc remain fuel-free. -/
+Only the tools use these budgets; Source.Region and PIR.Process remain fuel-free. -/
 
 namespace ZkcTools.StructuredSource
 open Zkc.Source Zkc.Source.Structured
@@ -449,7 +449,7 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
           operation definitions (.invoke spec.stepHelper) (← prepend current callbackArgs) .nil)
           n.upper 0 initial
         return some result
-    | .fieldConstant .., _, .nil | .fieldAdd .., _, .nil
+    | .fieldEmbed .., _, .nil | .fieldConstant .., _, .nil | .fieldAdd .., _, .nil
     | .fieldSubtract .., _, .nil | .fieldMultiply .., _, .nil
     | .groupIdentity .., _, .nil | .groupAdd .., _, .nil | .groupScale .., _, .nil =>
         return some [.atom]

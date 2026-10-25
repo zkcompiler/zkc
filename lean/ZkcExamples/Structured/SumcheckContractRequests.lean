@@ -56,7 +56,7 @@ theorem public_agrees (raw : List F) (claim : F) (count handle : Nat) (outcome) 
   public_assignment_agrees raw {} _ (public_table_read raw claim count handle outcome)
 
 def publicSelection : SelectedApplication publicOwner F G sourceEnvironment :=
-  publicContract.select (.subject ⟨0, by decide⟩)
+  publicContract.select (.subject (publicOwner.namedClause "public_sum"))
 
 def publicUse (raw : List F) (claim : F) (count handle : Nat) (outcome) :
     ApplicationUse (publicSelection (sourceEnvironment := sourceEnvironment)) {}
@@ -93,7 +93,7 @@ theorem public_false_sum (raw : List F) (claim : F) (count handle : Nat)
 
 theorem public_accepts (raw : List F) (claim : F) (count handle : Nat) (outcome) :
     (publicInput (G := G) raw claim count handle).returnedEvent
-      ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {} ⟨0, by decide⟩) outcome ↔
+      ((publicContract (sourceEnvironment := sourceEnvironment)).Accepts {} (publicOwner.namedClause "public_sum")) outcome ↔
     BoundaryValuation.ReturnedSatisfies (fun outputs => outputs.get .here = some true) outcome := by
   cases outcome with
   | stopped reason => rfl
@@ -191,22 +191,10 @@ theorem residual_terminal_iff {snapshot : Snapshot} {imported : Imported snapsho
       rw [decoded]
       exact truth
 
-/-- Reduce's initial_sum formula in the very snapshot called by public Sumcheck. -/
-def originalChildFormula : Function :=
-  (SumcheckSourceData.snapshot.definitions.filterMap fun
-    | .function definition => some definition | _ => none).get ⟨10, by decide +kernel⟩
+def childFormula : FormulaBinding SumcheckSourceViews.imported childInput.relation := by bind_contract
 
-def childFormula : FormulaBinding SumcheckSourceViews.imported childInput.relation where
-  original := originalChildFormula
-  original_mem := by structured_mem
-  formula_kind := rfl
-  formula_eq := rfl
-  math_kind := rfl
-  inputs_eq := rfl
-  outputs_eq := rfl
-  helperIndex := ⟨SumcheckSourceViews.unit.definitions.findIdx (fun d => d.helper == tableSumHelper),
-    by decide +kernel⟩
-  signature_eq := rfl
+/-- Reduce's initial_sum formula in the very snapshot called by public Sumcheck. -/
+def originalChildFormula : Function := childFormula.original
 
 def childSelection : SelectedApplication childOwner F G sourceEnvironment where
   selection := .subject ⟨0, by decide⟩
@@ -262,7 +250,7 @@ theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted 
     SumcheckSourceVerifier.childContext 1 rfl (by decide)]
   simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count ([], claim)]
-  exact PIR.Proc.bind_assoc _ _ _
+  exact PIR.Process.bind_assoc _ _ _
 
 /-- For the complete public-table experiment, dimension comes from V's actual
 count input. Missing count remains unavailable; width is explicitly scalar. -/

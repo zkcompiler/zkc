@@ -162,6 +162,11 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
     return std::vector<Type>{input};
   const Type *anchor = &input;
   switch (intrinsic.identity) {
+  case I::VectorLength:
+    if (input.kind != K::Builtin || input.domain != "vector" ||
+        input.arguments.size() != 1)
+      return refuse();
+    return std::vector<Type>{input.arguments.front()};
   case I::PolynomialConstant:
   case I::PolynomialMLE:
   case I::PolynomialCoefficients:
@@ -200,22 +205,28 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
 }
 } // namespace
 
-bool primitiveCallIsInline(Body::Mode mode, StringRef identity) {
+bool primitiveCallIsInline(Body::Mode mode, Declaration::Kind kind,
+                           StringRef identity) {
+  if (kind == Declaration::Kind::Local)
+    return mode == Body::Mode::Local;
+  if (kind != Declaration::Kind::Math)
+    return false;
   const auto *math = mathematicalIntrinsic(identity);
-  return math ? mode != Body::Mode::Local || math->scalar
-              : mode == Body::Mode::Local;
+  return math && (mode != Body::Mode::Local || math->scalar);
 }
 
 bool Checker::primitiveBody(Declaration &decl, Body &body) {
   const auto &identity = *sources[decl.id.index]->primitive;
-  const auto *mathematical = mathematicalIntrinsic(identity);
+  const auto *mathematical = decl.kind == Declaration::Kind::Math
+                                 ? mathematicalIntrinsic(identity)
+                                 : nullptr;
   if (decl.outputs.size() != 1 || !decl.services.empty() ||
       (decl.kind != Declaration::Kind::Math &&
        decl.kind != Declaration::Kind::Local))
     return types.fail("source.primitive",
                       "primitive requires an ordinary function signature",
                       decl.span);
-  if ((decl.kind == Declaration::Kind::Math) != (mathematical != nullptr))
+  if (decl.kind == Declaration::Kind::Math && !mathematical)
     return types.fail(
         "source.primitive",
         "primitive declaration mode differs from its installed identity",

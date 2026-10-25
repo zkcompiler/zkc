@@ -25,10 +25,10 @@ structure Signature where
 /-- A well-founded effect tree; not the serialized source grammar.
 Each execution path terminates, but reply branching need not be finite and no
 uniform bound on the number of calls follows from this type alone. -/
-inductive Proc (I : Signature) (A : Type) where
-  | done : A → Proc I A
-  | halt : Stop → Proc I A
-  | call : (o : I.Op) → (I.Reply o → Proc I A) → Proc I A
+inductive Process (I : Signature) (A : Type) where
+  | done : A → Process I A
+  | halt : Stop → Process I A
+  | call : (o : I.Op) → (I.Reply o → Process I A) → Process I A
 
 structure Execution (S E A : Type) where
   outcome : Outcome A
@@ -49,7 +49,7 @@ def Execution.follow (r : Execution S E A) (k : A → S → Execution S E B) :
     let tail := k a r.state
     ⟨tail.outcome, tail.state, r.events ++ tail.events⟩
 
-def Proc.run (h : Handler I S E) : Proc I A → S → Execution S E A
+def Process.run (h : Handler I S E) : Process I A → S → Execution S E A
   | .done a, s => ⟨.returned a, s, []⟩
   | .halt why, s => ⟨.stopped why, s, []⟩
   | .call o k, s => (h o s).follow (fun a => (k a).run h)
@@ -75,11 +75,47 @@ theorem Execution.follow_rebase (first : Execution S E A)
           simp only [Execution.follow]
           rw [same]
 
-def Proc.bind (p : Proc I A) (k : A → Proc I B) : Proc I B :=
+def Process.bind (p : Process I A) (k : A → Process I B) : Process I B :=
   match p with
   | .done a => k a
   | .halt why => .halt why
   | .call o next => .call o (fun a => (next a).bind k)
+
+namespace Process
+
+theorem bind_assoc {C : Type} (source : Process I A) (next : A → Process I B)
+    (last : B → Process I C) :
+    (source.bind next).bind last = source.bind (fun value => (next value).bind last) := by
+  induction source with
+  | done value => rfl
+  | halt why => rfl
+  | call op tail ih =>
+    simp only [bind]
+    congr 1
+    funext reply
+    exact ih reply
+
+@[simp] theorem bind_done (source : Process I A) : source.bind .done = source := by
+  induction source with
+  | done value => rfl
+  | halt why => rfl
+  | call op tail ih =>
+    simp only [bind]
+    congr 1
+    funext reply
+    exact ih reply
+
+/-- Standard `do` notation uses the same effect tree and stopping behavior. -/
+instance : Monad (Process I) where
+  pure := .done
+  bind := Process.bind
+
+instance : LawfulMonad (Process I) := LawfulMonad.mk' _
+  (fun process => bind_done process)
+  (fun _ _ => rfl)
+  (fun process next last => bind_assoc process next last)
+
+end Process
 
 theorem follow_assoc {C : Type} (r : Execution S E A)
     (f : A → S → Execution S E B) (g : B → S → Execution S E C) :
@@ -92,20 +128,20 @@ theorem follow_assoc {C : Type} (r : Execution S E A)
     | mk result t fs =>
       cases result <;> simp [Execution.follow, hf, List.append_assoc]
 
-theorem run_bind (h : Handler I S E) (p : Proc I A) (k : A → Proc I B) (s : S) :
+theorem run_bind (h : Handler I S E) (p : Process I A) (k : A → Process I B) (s : S) :
     (p.bind k).run h s = (p.run h s).follow (fun a => (k a).run h) := by
   induction p generalizing s with
-  | done a => simp [Proc.bind, Proc.run, Execution.follow]
+  | done a => simp [Process.bind, Process.run, Execution.follow]
   | halt why => rfl
   | call o next ih =>
-    simp only [Proc.bind, Proc.run]
+    simp only [Process.bind, Process.run]
     rw [follow_assoc]
     congr 1
     funext a t
     exact ih a t
 
-theorem replacement_then (h : Handler I S E) (p q : Proc I A) (s : S)
-    (same : p.run h s = q.run h s) (k : A → Proc I B) :
+theorem replacement_then (h : Handler I S E) (p q : Process I A) (s : S)
+    (same : p.run h s = q.run h s) (k : A → Process I B) :
     (p.bind k).run h s = (q.bind k).run h s := by
   rw [run_bind,run_bind,same]
 
@@ -159,7 +195,7 @@ def HandlerRelated (R : S → T → Prop) (left : E → List O) (right : F → L
 theorem run_related (R : S → T → Prop) (left : E → List O) (right : F → List O)
     (h : Handler I S E) (g : Handler I T F)
     (law : HandlerRelated R left right h g)
-    (p : Proc I A) (s : S) (t : T) (initial : R s t) :
+    (p : Process I A) (s : S) (t : T) (initial : R s t) :
     Related R left right (p.run h s) (p.run g t) := by
   induction p generalizing s t with
   | done a => exact ⟨rfl,initial,rfl⟩
@@ -176,21 +212,5 @@ theorem related_observer {V : Type} (R : S → T → Prop)
     (a.outcome, stateLeft a.state, observeEvents left a.events) =
     (b.outcome, stateRight b.state, observeEvents right b.events) := by
   rw [hr.outcome, compatible _ _ hr.state, hr.events]
-
-/-- A semantic contract describes the actual whole result, including failure post-state. -/
-structure Contract (S E A : Type) where
-  pre : S → Prop
-  post : S → Execution S E A → Prop
-
-def Satisfies (c : Contract S E A) (f : S → Execution S E A) : Prop :=
-  ∀ s, c.pre s → c.post s (f s)
-
-/-- Facts are interpreted predicates on state, separate from syntax-level summaries. -/
-theorem frame_transfer {Fact : Type} (means : Fact → S → Prop)
-    (c : Contract S E A) (f : S → Execution S E A) (law : Satisfies c f)
-    (kept : Fact → Prop)
-    (frame : ∀ s r, c.post s r → ∀ fact, kept fact → means fact s → means fact r.state)
-    (s : S) (legal : c.pre s) (fact : Fact) (keep : kept fact) (old : means fact s) :
-    means fact (f s).state := frame s (f s) (law s legal) fact keep old
 
 end PIR

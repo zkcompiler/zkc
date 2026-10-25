@@ -26,6 +26,27 @@ theorem original_reduction_maximum_four :
     rfl
   exact congrArg Region.erase same
 
+/-- Admission includes the new Math input formula alongside every original helper. -/
+theorem original_input_shape :
+    SumcheckSourceViews.inputShapeDefinition.helper = SumcheckRelationContract.shapeHelper ∧
+      SumcheckSourceViews.inputShapeDefinition.raw = SumcheckRelationContract.shapeBody.erase ∧
+      SumcheckSourceViews.unit.definitions.length = 28 :=
+  ⟨rfl, SumcheckSourceViews.inputShape_raw, rfl⟩
+
+/-- Keeping the power equation while dropping the maximum changes the actual formula. -/
+def shapeWithoutMaximum : Region dialect SumcheckRelationContract.shapeHelper.inputs
+    SumcheckRelationContract.shapeHelper.outputs :=
+  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
+  .letOp .indexPowerOfTwo (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
+  .ret (.cons .here .nil)
+
+theorem omitted_maximum_breaks_shape_association :
+    SumcheckSourceViews.inputShapeDefinition.raw ≠ shapeWithoutMaximum.erase := by
+  intro same
+  have lengths := congrArg (fun body => body.operations.length) same
+  change 7 = 2 at lengths
+  contradiction
+
 theorem original_return_order :
     (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
 

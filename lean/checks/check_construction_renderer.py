@@ -65,7 +65,7 @@ def export(inputs, instructions, returned):
               "merlin3.bls12-381.fr64be/0", ["9"], [str(index) for index in range(len(inputs) - 1)], [],
               "zkc.framed/0", ""]
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "1" * 64, policy, "_math_1",
-            inputs, ["i1", TRANSCRIPT], instructions, returned]
+            inputs, ["i1", TRANSCRIPT], instructions, returned, []]
 
 
 def check(output, lake):
@@ -84,6 +84,20 @@ example : RenderedConjunction.participant.instructions =
     captured = renderer.render(export([FIELD, "ui64", TRANSCRIPT], CAPTURING, [4, 3]), "RenderedCaptures")
     captured = captured.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
     source += captured.replace("@[expose] public section\n", "")
+    base, extension = '!algebra.field<"base">', '!algebra.field<"extension">'
+    embedding_attrs = [["binding", ["symbol", "embed"]], ["parameters", ["strings", []]],
+                       ["site", ["string", "embedding"]]]
+    embedding = ["algebra.exec.field_embed", embedding_attrs,
+                 ["field.embed", ["extension"], ""], [0], [extension], []]
+    embedded = renderer.render(export([base, TRANSCRIPT], [embedding], [2, 1]), "RenderedEmbedding")
+    embedded = embedded.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
+    source += embedded.replace("@[expose] public section\n", "")
+    source += '''
+open Zkc.Construction in
+example : RenderedEmbedding.participant.instructions =
+    [⟨.calculate (.fieldEmbed "extension" "base"), [0], [.data (.field "extension")], []⟩] := by
+  decide +kernel
+'''
     source += '''
 open Zkc.Construction in
 example : RenderedCaptures.participant.instructions =
@@ -98,8 +112,8 @@ example : RenderedCaptures.participant.instructions =
   decide +kernel
 '''
     path = output / "Rendered.lean"
-    path.write_text("import Zkc.Construction.Participant\n" + source, encoding="utf-8")
-    run = subprocess.run([lake, "env", "lean", path], cwd=HERE,
+    path.write_text("module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n" + source, encoding="utf-8")
+    run = subprocess.run([lake, "lean", path], cwd=HERE,
                          capture_output=True, encoding="utf-8", timeout=120)
     (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
     if run.returncode:
@@ -136,8 +150,47 @@ example : RenderedCaptures.participant.instructions =
                 raise AssertionError(f"renderer refused a malformed capture for another reason: {error}")
             continue
         raise AssertionError(f"renderer accepted a loop expected to refuse with {diagnostic}")
-    report = {"status": "pass", "kernel_cases": 2,
-              "refusal_cases": len(malformed) + len(capture_refusals), "unsupported_cases": 1,
+    embedding_refusals = [
+        ("field embedding ports", embedding_attrs, ["field.embed", ["extension"], ""], [], [extension]),
+        ("field embedding ports", embedding_attrs, ["field.embed", ["extension"], ""], [0], ["i1"]),
+        ("field embedding binding", embedding_attrs, ["field.embed", ["base"], ""], [0], [extension]),
+        ("field embedding binding", embedding_attrs, ["field.equal", ["extension"], ""], [0], [extension]),
+        ("field embedding attributes", embedding_attrs[:-1], ["field.embed", ["extension"], ""], [0], [extension]),
+        ("field embedding attributes", [embedding_attrs[0], ["parameters", ["strings", ["extra"]]],
+                                        embedding_attrs[2]], ["field.embed", ["extension"], ""], [0], [extension]),
+    ]
+    # An explicit implementation is outside this mathematical profile. Retain
+    # the exact binding boundary instead of erasing a third field of any type.
+    embedding_refusals.extend(
+        ("field embedding binding", embedding_attrs,
+         ["field.embed", ["extension"], implementation], [0], [extension])
+        for implementation in ("unregistered/field.embed", None, False, 0, [], {}))
+    # Valid tagged payloads still need the operation's exact attribute roles.
+    for position, attribute in ((0, ["string", "embed"]), (0, ["bool", True]),
+                                (2, ["symbol", "embedding"]), (2, ["bool", False])):
+        attrs = list(embedding_attrs)
+        attrs[position] = [attrs[position][0], attribute]
+        embedding_refusals.append(("field embedding attributes", attrs,
+                                   ["field.embed", ["extension"], ""], [0], [extension]))
+    # Check the common tagged-value decoder before a diagnostic-only attribute
+    # can be dropped. In particular, bool is not an integer payload.
+    for kind, payload in (("string", {}), ("symbol", 0), ("bool", 1),
+                          ("integer", 1), ("integer", "1.5"), ("strings", "x"),
+                          ("strings", [1]), ("text", [])):
+        attrs = [*embedding_attrs[:2], ["site", [kind, payload]]]
+        embedding_refusals.append(("invalid attribute payload", attrs,
+                                   ["field.embed", ["extension"], ""], [0], [extension]))
+    for diagnostic, attrs, binding, operands, results in embedding_refusals:
+        try:
+            renderer.render(export([base, TRANSCRIPT],
+                [["algebra.exec.field_embed", attrs, binding, operands, results, []]], [0, 1]), "RejectedEmbedding")
+        except ValueError as error:
+            if diagnostic not in str(error):
+                raise AssertionError(f"renderer refused a malformed embedding for another reason: {error}")
+            continue
+        raise AssertionError(f"renderer accepted an embedding expected to refuse with {diagnostic}")
+    report = {"status": "pass", "kernel_cases": 3,
+              "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals), "unsupported_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
     (output / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

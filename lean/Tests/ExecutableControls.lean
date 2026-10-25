@@ -105,6 +105,29 @@ theorem uninstalled_refused :
     refusal (checkLowering installed constructed uninstalled) = some (.binding "_kernel_binding_4") := by
   decide +kernel
 
+/-- Physical specialization is part of the installed binding's identity. -/
+def withPhysicalArguments (validator : Validator) (symbol : String)
+    (arguments : List PhysicalType) : Validator :=
+  { validator with bindings := validator.bindings.map fun binding =>
+      if binding.symbol = symbol then { binding with physicalArguments := arguments } else binding }
+
+theorem missingSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_transcript_0" [])) = some (.binding "_transcript_0") := by
+  decide +kernel
+
+theorem wrongSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_transcript_0"
+        [⟨.data (.group "bls12-381.g1"), "other.g1/0"⟩])) = some (.binding "_transcript_0") := by
+  decide +kernel
+
+theorem additionalSpecialization_refused :
+    refusal (checkLowering installed constructed
+      (withPhysicalArguments actual "_kernel_binding_4"
+        [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩])) = some (.binding "_kernel_binding_4") := by
+  decide +kernel
+
 /-- The commitment is received at a representation the vocabulary does not admit. -/
 def uncheckedRepresentation : Validator :=
   withAction actual 0 (.receive "label_636f6d6d69746d656e74_0" "label_636f6d6d69746d656e74_0"
@@ -153,7 +176,7 @@ theorem functionDuplicated_refused :
 /-- A second binding under the addition's symbol. -/
 def bindingDuplicated : Validator :=
   { actual with bindings := actual.bindings ++
-      [⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "fast/curve.add"⟩] }
+      [⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "fast/curve.add", []⟩] }
 
 theorem bindingDuplicated_refused :
     refusal (checkLowering installed constructed bindingDuplicated) = some (.duplicate "binding") := by

@@ -48,14 +48,14 @@ def mapRowArguments {F G : Type} (field : String) : (mask : List Bool) →
 /-- One reached row calls the exact computed Math signature in the shared table. -/
 def mapRow {F G : Type} {I : PIR.Signature}
     (table : HelperTable (assignment F G) I) (spec : MapSpec)
-    (args : Values (assignment F G) spec.arguments) (index : Nat) : PIR.Proc I F :=
+    (args : Values (assignment F G) spec.arguments) (index : Nat) : PIR.Process I F :=
   match mapRowArguments spec.field spec.rowwise args index with
   | none => .halt .refused
   | some values => (invoke table spec.helper values).bind fun result => .done (result.get .here)
 
 /-- Ordered traversal uses ordinary process bind, preserving every effect prefix. -/
-def mapRows {I : PIR.Signature} {F : Type} (row : Nat → PIR.Proc I F) :
-    List Nat → PIR.Proc I (List F)
+def mapRows {I : PIR.Signature} {F : Type} (row : Nat → PIR.Process I F) :
+    List Nat → PIR.Process I (List F)
   | [] => .done []
   | index :: rest => (row index).bind fun value =>
       (mapRows row rest).bind fun values => .done (value :: values)
@@ -63,7 +63,7 @@ def mapRows {I : PIR.Signature} {F : Type} (row : Nat → PIR.Proc I F) :
 def denoteMap {F G : Type} {I : PIR.Signature}
     (table : HelperTable (assignment F G) I) (spec : MapSpec)
     (args : Values (assignment F G) spec.arguments) :
-    PIR.Proc I (Values (assignment F G) [.vector spec.field]) :=
+    PIR.Process I (Values (assignment F G) [.vector spec.field]) :=
   Finite.admitThen (mapShape (mapLengths spec.field spec.rowwise args)) fun length =>
     (mapRows (mapRow table spec args) (List.range length)).bind fun values =>
       .done (.cons values .nil)

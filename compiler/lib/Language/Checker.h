@@ -85,6 +85,8 @@ public:
   std::map<unsigned, std::vector<SpecificationSelector>> inlineBindings;
   bool relationIdentities();
   bool specifications(Declaration &);
+  bool sourceClaims();
+  bool sourceClaimDomains(const Declaration &, ClaimExpression &);
 
   std::optional<SpecificationSelector> selector(const Declaration &,
                                                 const SyntaxSelector &);
@@ -176,6 +178,7 @@ private:
 bool resolveBindings(Checker &, Declaration &, SyntaxDeclaration &);
 bool elaborateExpressions(Checker &, SyntaxDeclaration &);
 /// Source depth accounting follows whether the call retains a helper boundary.
-bool primitiveCallIsInline(Body::Mode, llvm::StringRef identity);
+bool primitiveCallIsInline(Body::Mode, Declaration::Kind,
+                           llvm::StringRef identity);
 } // namespace zkc::language::detail
 #endif

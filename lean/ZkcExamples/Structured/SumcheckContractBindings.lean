@@ -54,15 +54,22 @@ def reductionCall : CheckedApplication reductionOwner
     exact ApplicationOccurrence.here _
   substitution := by unfold ValidSubstitution; decide +kernel
 
+def inputShapeClause : ContractClause := publicOwner.clause (publicOwner.namedClause "shape")
+
 def publicClause : ContractClause := publicOwner.clause (publicOwner.namedClause "public_sum")
 def reductionClause : ContractClause := reductionOwner.clause (reductionOwner.namedClause "initial_sum")
 
-theorem public_inventory : publicOwner.contract.clauses = [publicClause] := rfl
+theorem public_inventory : publicOwner.contract.clauses = [inputShapeClause, publicClause] := rfl
 theorem reduction_inventory : reductionOwner.contract.clauses = [reductionClause] := rfl
+theorem input_shape_kind : inputShapeClause.kind = .input := rfl
+theorem input_shape_has_no_decision : inputShapeClause.decision = none := rfl
+theorem input_shape_has_no_residual : inputShapeClause.residual = none := rfl
 theorem public_kind : publicClause.kind = .target := rfl
 theorem reduction_kind : reductionClause.kind = .input := rfl
 theorem reduction_has_no_decision : reductionClause.decision = none := rfl
 theorem reduction_has_no_source_residual : reductionClause.residual = none := rfl
+
+def inputShapeApplication : ApplicationBinding publicOwner inputShapeClause.subject := by bind_contract
 
 def publicApplication : ApplicationBinding publicOwner publicClause.subject := by bind_contract
 
@@ -89,6 +96,8 @@ def reductionPoint : BoundarySelector reductionOwner.protocol.signature vector :
   ⟨.output (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
 def reductionValue : BoundarySelector reductionOwner.protocol.signature scalar :=
   ⟨.output (.there (.there (.there (.there (.there .here))))), ⟨1, by decide⟩, by decide⟩
+
+def inputShapeFormula : FormulaBinding SumcheckSourceViews.imported inputShapeApplication.relation := by bind_contract
 
 def publicFormula : FormulaBinding SumcheckSourceViews.imported publicApplication.relation := by bind_contract
 
@@ -168,6 +177,13 @@ theorem public_accepts_iff (outputs : Values (Component (assignment F G)) public
 
 variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
+/-- The pure input formula is total over the independent natural/list model. -/
+theorem input_shape_formula_equation (raw : List F) (rounds : Nat) :
+    inputShapeFormula.invokeRelation (F := F) (G := G) (.cons raw (.cons rounds .nil)) =
+      .done (.cons (decide (raw.length = 2 ^ rounds ∧ rounds ≤ 2)) .nil) := by
+  exact (inputShapeFormula.invokeRelation_body_view shapeBody (by kernel_rfl)
+    (.cons raw (.cons rounds .nil))).trans (shape_equation _ raw rounds)
+
 /-- No existential table is introduced by interpreting the formula. -/
 def PublicTruth (raw : List F) (claim : F) : Prop :=
   publicFormula.invokeRelation (F := F) (G := G) (.cons raw (.cons claim .nil)) =
@@ -218,6 +234,13 @@ def publicTarget : InterpretedApplication publicOwner publicClause.subject F G s
     (fun args => (args.get .here).length < indexLimit)
     (fun args => args.get (.there .here) = (args.get .here).sum) inferInstance
 
+/-- The new input clause retains its exact shape and repeat-bound predicate. -/
+def inputShape : InterpretedApplication publicOwner inputShapeClause.subject F G sourceEnvironment where
+  binding := inputShapeApplication
+  interpretation := .formula inputShapeFormula rfl (fun _ => True)
+    (fun args => (args.get .here).length = 2 ^ (args.get (.there .here)) ∧
+      args.get (.there .here) ≤ 2) inferInstance
+
 def reductionInput : InterpretedApplication reductionOwner reductionClause.subject F G reductionEnvironment where
   binding := reductionApplication
   interpretation := .formula reductionFormula rfl
@@ -230,6 +253,14 @@ theorem public_formula_law : (publicTarget (F := F) (G := G) (sourceEnvironment 
   cases rest with | cons claim rest => ?_
   cases rest
   exact public_formula_equation raw claim bounded
+
+theorem input_shape_formula_law :
+    (inputShape (F := F) (G := G) (sourceEnvironment := sourceEnvironment)).interpretation.FormulaLaw := by
+  intro args _
+  cases args with | cons raw rest => ?_
+  cases rest with | cons rounds rest => ?_
+  cases rest
+  exact input_shape_formula_equation raw rounds
 
 theorem reduction_formula_law : (reductionInput (F := F) (G := G) (reductionEnvironment := reductionEnvironment)).interpretation.FormulaLaw := by
   intro args bounded
@@ -269,7 +300,7 @@ theorem public_truth_iff (raw : List F) (claim : F) (bounded : raw.length < inde
   rw [public_formula_equation raw claim bounded]
   constructor
   · intro equality
-    have output := congrArg (fun values => values.get .here) (PIR.Proc.done.inj equality)
+    have output := congrArg (fun values => values.get .here) (PIR.Process.done.inj equality)
     exact of_decide_eq_true output
   · intro equality
     simp [equality]
@@ -281,7 +312,7 @@ theorem reduction_truth_iff (raw : List F) (dimension : Nat) (claim : F)
   rw [reduction_formula_equation raw dimension 1 claim bounded]
   constructor
   · intro equality
-    have output := congrArg (fun values => values.get .here) (PIR.Proc.done.inj equality)
+    have output := congrArg (fun values => values.get .here) (PIR.Process.done.inj equality)
     exact of_decide_eq_true output
   · intro equality
     simp [equality]

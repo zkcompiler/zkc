@@ -16,7 +16,7 @@ private def protocol (name : String) (inputs outputs : List Ty)
     (inputScopes outputScopes : List (List String)) (body : Block)
     (roles : List String := ["P", "V", "W"]) : Definition :=
   .function ⟨name, .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨name, []⟩), body⟩
 
 private def unit (definitions : List Definition) : Snapshot :=
   (let contractDefinitions : List Definition := definitions

@@ -10,7 +10,7 @@ namespace Tests.StructuredPrimitives
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def root : Definition := .function ⟨"main", .protocol, .publicDef, [], [],
-  some ⟨["P"], [], []⟩, [], none, .block [] (.ret [])⟩
+  some ⟨["P"], [], []⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [])⟩
 private def snapshot (bindings : List Binding) (defs : List Definition := [root]) : Snapshot :=
   (let contractDefinitions : List Definition := defs
    ⟨digest, "main", [], [], bindings, contractDefinitions,
@@ -21,7 +21,7 @@ private def binding (contract : String) (arguments : List String := []) : Bindin
 private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : String := "exec")
     (regions : List WireRegion := []) (kind : Kind := .local) : Definition :=
   .function ⟨"work", kind, .privateDef, inputs, outputs, none, [],
-    if kind == .local then some ("work", []) else none,
+    if kind == .local then some (.local "work" []) else none,
     .block [.instruction op (List.range inputs.length) outputs regions site]
       (.ret (List.range outputs.length))⟩
 private def refusedWith {α : Type} (result : Except String α) (code : String) : Bool :=
@@ -166,11 +166,11 @@ private def run : IO Unit := do
   test "pure-math" (admits [] [root, localHelper (.indexConstant "1") [] [.index] "" [] .math])
   test "pure-site" (!admits [] [root, localHelper .indexEqual [.index, .index] [.boolean] "site" [] .math])
   let mixed : Definition := .function ⟨"main", .protocol, .publicDef,
-    [.index, .index], [], some ⟨["P", "V"], [["P"], ["V"]], []⟩, [], none,
+    [.index, .index], [], some ⟨["P", "V"], [["P"], ["V"]], []⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction .indexEqual [0, 1] [.boolean] [] ""] (.ret [])⟩
   test "unused-mixed-index-requirement" (!admits [] [mixed])
   let publicConstant : Definition := .function ⟨"main", .protocol, .publicDef,
-    [], [.index], some ⟨["P", "V"], [], [["P", "V"]]⟩, [], none,
+    [], [.index], some ⟨["P", "V"], [], [["P", "V"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.indexConstant "18446744073709551615") [] [.index] [] ""] (.ret [0])⟩
   test "public-pure-constant" (admits [] [publicConstant])
   let max := indexLimit - 1

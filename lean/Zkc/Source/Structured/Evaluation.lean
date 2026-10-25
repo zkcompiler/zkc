@@ -33,9 +33,9 @@ def foldTransition {F G : Type} {interface : PIR.Signature}
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item) : PIR.Proc interface (Values (assignment F G) spec.state) :=
+    (item : assignment F G spec.domain.item) : PIR.Process interface (Values (assignment F G) spec.state) :=
   let callbackArguments := Values.cons item (arguments.append captures)
-  let enabled : PIR.Proc interface (Values (assignment F G) [.boolean]) :=
+  let enabled : PIR.Process interface (Values (assignment F G) [.boolean]) :=
     if spec.predicate.isEmpty then .done (.cons true .nil)
     else invoke table spec.predicateHelper callbackArguments
   enabled.bind fun result =>
@@ -45,7 +45,7 @@ def foldTransition {F G : Type} {interface : PIR.Signature}
 def denoteFold {F G : Type} {interface : PIR.Signature}
     (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (values : Values (assignment F G) spec.arguments) :
-    PIR.Proc interface (Values (assignment F G) spec.state) :=
+    PIR.Process interface (Values (assignment F G) spec.state) :=
   let (arguments, rest) := values.split spec.domain.inputs
   let (initial, captures) := rest.split spec.state
   Finite.execute (spec.domain.denote arguments) (foldTransition table spec arguments captures) initial
@@ -55,13 +55,13 @@ values and stopping, and never inspects callback process constructors. -/
 def invokeCallback {F G : Type} {interface : PIR.Signature} {inputs outputs : List Ty}
     (callback : RegionFunction (assignment F G) interface (inputs, outputs))
     (arguments : Values (assignment F G) inputs) :
-    PIR.Proc interface (Values (assignment F G) outputs) := callback arguments
+    PIR.Process interface (Values (assignment F G) outputs) := callback arguments
 
 def denoteLoop {F G : Type} {interface : PIR.Signature} (state captures : List Ty)
     (body : RegionFunction (assignment F G) interface
       (.index :: (state ++ captures), state ++ captures))
     (lower upper : Nat) (initial : Values (assignment F G) state)
-    (captured : Values (assignment F G) captures) : PIR.Proc interface (Values (assignment F G) state) :=
+    (captured : Values (assignment F G) captures) : PIR.Process interface (Values (assignment F G) state) :=
   Finite.execute (.elements (List.range' lower (upper - lower)))
     (fun current index =>
       (invokeCallback body (.cons index (current.append captured))).bind fun results =>
@@ -71,7 +71,7 @@ def denoteConditionalLoop {F G : Type} {interface : PIR.Signature} (state captur
     (body : RegionFunction (assignment F G) interface
       (.index :: (state ++ captures), .boolean :: (state ++ captures)))
     (lower upper : Nat) (initial : Values (assignment F G) state)
-    (captured : Values (assignment F G) captures) : PIR.Proc interface (Values (assignment F G) state) :=
+    (captured : Values (assignment F G) captures) : PIR.Process interface (Values (assignment F G) state) :=
   (Finite.execute (.elements (List.range' lower (upper - lower)))
     (fun (current : Bool × Values (assignment F G) state) index =>
       if current.1 then
@@ -85,14 +85,18 @@ def operation {F G : Type} {interface : PIR.Signature}
     (observations : SiteObservations interface) (table : Meanings F G interface) :
     (op : Op) → Values (assignment F G) op.arguments →
     Values (RegionFunction (assignment F G) interface) op.regions →
-    PIR.Proc interface (Values (assignment F G) op.results)
+    PIR.Process interface (Values (assignment F G) op.results)
   | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluate args)
   | .indexConstant value, .nil, .nil => .done (.cons value .nil)
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
+  | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
+  | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
   | .fieldMultiply _, .cons a (.cons b .nil), .nil => .done (.cons (a * b) .nil)
+  | .fieldEmbed _ _, .cons value .nil, .nil => .done (.cons value .nil)
   | .fieldEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .groupIdentity _, .nil, .nil =>
       .done (.cons 0 .nil)
@@ -129,6 +133,31 @@ def operation {F G : Type} {interface : PIR.Signature}
 -- Generate the dependent equation lemmas in their defining module. Otherwise
 -- separate public clients can export competing lazily generated declarations.
 attribute [local simp] operation
+
+theorem operation_indexLess {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (a b : Nat) :
+    operation observations table .indexLess (.cons a (.cons b .nil)) .nil =
+      .done (.cons (decide (a < b)) .nil) := rfl
+
+/-- Pure length returns on every list, without a representability premise. -/
+theorem operation_vectorLength {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface)
+    (domain : String) (values : List F) :
+    operation observations table (.vectorLength domain) (.cons values .nil) .nil =
+      .done (.cons values.length .nil) := rfl
+
+/-- The efficient evaluator has the exact unbounded natural meaning. -/
+theorem operation_indexPowerOfTwo {F G : Type} {interface : PIR.Signature}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (observations : SiteObservations interface) (table : Meanings F G interface) (n r : Nat) :
+    operation observations table .indexPowerOfTwo (.cons n (.cons r .nil)) .nil =
+      .done (.cons (decide (n = 2 ^ r)) .nil) := by
+  change (PIR.Process.done (.cons (naturalPowerOfTwo n r) .nil) :
+    PIR.Process interface (Values (assignment F G) [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  rfl
 
 /-- Keep the value assignment visible to dependent clients; operation evaluation
 remains a named definition with its own laws. -/

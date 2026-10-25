@@ -12,7 +12,7 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured
 
 def closedInterface : PIR.Signature := ⟨Empty, fun value => nomatch value⟩
-abbrev Closed (A : Type) := PIR.Proc closedInterface A
+abbrev Closed (A : Type) := PIR.Process closedInterface A
 
 /-- Nominal domain interpretation. Services retain their actual handle. -/
 abbrev assignment (F G : Type) : Ty → Type
@@ -55,7 +55,7 @@ theorem assignment_eq_value (F G : Type) : assignment F G = (uniformCarriers F G
 /-- Site observations are the only configurable effects of mathematical bodies.
 Group operations themselves use the lawful module instances directly. -/
 structure SiteObservations (interface : PIR.Signature) where
-  mark : String → PIR.Proc interface Unit
+  mark : String → PIR.Process interface Unit
 
 /-- Ignore site labels while retaining the chosen effect interface. -/
 def SiteObservations.silent (interface : PIR.Signature) : SiteObservations interface where

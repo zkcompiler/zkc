@@ -42,5 +42,5 @@ allowNonModules = true
 
 [[lean_lib]]
 name = "CleanExamples"
-roots = ["CleanExamples"]
+roots = ["CleanExamples", "CleanExamplesAudit"]
 allowNonModules = true

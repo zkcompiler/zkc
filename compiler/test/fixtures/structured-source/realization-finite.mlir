@@ -17,5 +17,5 @@ module { "protocol.module"() ({
  }
  local.realize @realized = @sum : (!V)->!F
  "protocol.func"() ({ "protocol.return"() : ()->() })
- {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+ {sym_name="main",origin=["main",[]],function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

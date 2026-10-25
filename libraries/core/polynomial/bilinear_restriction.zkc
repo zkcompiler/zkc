@@ -1,0 +1,27 @@
+module zkc::bilinear_restriction;
+
+// Coefficients of c00 + c10*x + c01*y + c11*x*y, not Boolean evaluations.
+pub struct Bilinear<F: Field> {
+  pub c00: F,
+  pub c10: F,
+  pub c01: F,
+  pub c11: F
+}
+
+pub struct Affine<F: Field> {
+  pub constant: F,
+  pub linear: F
+}
+
+// Fix x and retain both coefficients needed at every future y.
+// The fixed ABI needs no dynamic support allocation or shape guard.
+pub math fn restrict_first<F: Field>(input: Bilinear<F>, challenge: F) -> Affine<F> where () {
+  return Affine<F> {
+    constant: input.c00 + input.c10 * challenge,
+    linear: input.c01 + input.c11 * challenge
+  };
+}
+
+pub math fn evaluate<F: Field>(input: Affine<F>, challenge: F) -> F where () {
+  return input.constant + input.linear * challenge;
+}

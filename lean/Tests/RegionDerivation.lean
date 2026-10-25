@@ -89,37 +89,37 @@ def lower : OperationInterpretation interface interface
         if challenge == 0 then .halt .exhausted else .done challenge
   | action => .call action .done
 
-def receive (site : Nat) : Proc interface Scalars :=
+def receive (site : Nat) : Process interface Scalars :=
   .call (.receive site) fun n => .done vals[n]
 
-def draw : Proc interface Scalars :=
+def draw : Process interface Scalars :=
   (lower .draw).bind fun n => .done vals[n]
 
-def send (n : Nat) : Proc interface (Values Value []) :=
+def send (n : Nat) : Process interface (Values Value []) :=
   .call (.send n) fun _ => .done .nil
 
-def check (commitment challenge response : Nat) : Proc interface (Values Value [Ty.boolean]) :=
+def check (commitment challenge response : Nat) : Process interface (Values Value [Ty.boolean]) :=
   .done vals[response == commitment + challenge]
 
-def guard (claim low high : Nat) : Proc interface (Values Value []) :=
+def guard (claim low high : Nat) : Process interface (Values Value []) :=
   if low + high == claim then .done .nil else .halt .reject
 
-def update (low high challenge : Nat) : Proc interface Scalars :=
+def update (low high challenge : Nat) : Process interface Scalars :=
   .done vals[low + challenge * high]
 
-def choose (selected : Bool) (yes no : Scalars → Proc interface Scalars)
-    (args : Scalars) : Proc interface Scalars :=
+def choose (selected : Bool) (yes no : Scalars → Process interface Scalars)
+    (args : Scalars) : Process interface Scalars :=
   if selected then yes args else no args
 
 /-- The only induction needed for the repeat operation's semantic law.
 The callback can be effectful, input-dependent, and stopping. -/
-theorem interpret_repeat {A : Type} (count : Nat) (body : A → Proc interface A) (a : A) :
+theorem interpret_repeat {A : Type} (count : Nat) (body : A → Process interface A) (a : A) :
     (repeatN count body a).interpret lower =
       repeatN count (fun x => (body x).interpret lower) a := by
   induction count generalizing a with
   | zero => rfl
   | succ count ih =>
-      simp only [repeatN, Proc.interpret_bind]
+      simp only [repeatN, Process.interpret_bind]
       congr 1
       funext value
       exact ih value
@@ -196,7 +196,7 @@ def schnorr (selected : Bool) : Region dialect [] [Ty.boolean] :=
             (.letOp .check vals[.there (.there .here), .there .here, .here] .nil
               (.ret vals[.here]))))))
 
-def schnorrProcess (selected : Bool) : Proc interface (Values Value [Ty.boolean]) :=
+def schnorrProcess (selected : Bool) : Process interface (Values Value [Ty.boolean]) :=
   ((receive 0).bind fun commitment => .done vals[commitment.get .here]).bind fun commitment =>
     (choose selected (fun args => .done vals[args.get .here]) (fun _ => .halt .abort)
       vals[commitment.get .here]).bind fun kept =>
@@ -243,7 +243,7 @@ def round : Region dialect [Ty.scalar] [Ty.scalar] :=
           (.letOp .update vals[.there (.there .here), .there .here, .here] .nil
             (.ret vals[.here])))))
 
-def roundProcess (claim : Scalars) : Proc interface Scalars :=
+def roundProcess (claim : Scalars) : Process interface Scalars :=
   (receive 2).bind fun low =>
     (receive 3).bind fun high =>
       (guard (claim.get .here) (low.get .here) (high.get .here)).bind fun _ =>
@@ -273,7 +273,7 @@ theorem round_derive (claim : Scalars) : Derives round claim.get (roundProcess c
 def sumcheck (count : Nat) : Region dialect [Ty.scalar] [Ty.scalar] :=
   .letOp (.repeat count) vals[.here] (.cons round .nil) (.ret vals[.here])
 
-def sumcheckProcess (count claim : Nat) : Proc interface Scalars :=
+def sumcheckProcess (count claim : Nat) : Process interface Scalars :=
   (repeatN count roundProcess vals[claim]).bind fun result => .done vals[result.get .here]
 
 theorem sumcheck_derive (count claim : Nat) :
@@ -298,9 +298,9 @@ def twoUpdates : Region dialect [Ty.scalar, Ty.scalar, Ty.scalar] [Ty.scalar, Ty
     (.letOp .update vals[.there .here, .there (.there .here), .there (.there (.there .here))] .nil
       (.ret vals[.there .here, .here]))
 
-def twoUpdateProcesses (a b x : Nat) : Proc interface (Values Value [Ty.scalar, Ty.scalar]) :=
-  (Proc.done (vals[b * x + a] : Scalars)).bind fun first =>
-    (Proc.done (vals[a + x * b] : Scalars)).bind fun second =>
+def twoUpdateProcesses (a b x : Nat) : Process interface (Values Value [Ty.scalar, Ty.scalar]) :=
+  (Process.done (vals[b * x + a] : Scalars)).bind fun first =>
+    (Process.done (vals[a + x * b] : Scalars)).bind fun second =>
       .done vals[first.get .here, second.get .here]
 
 theorem occurrence_local_rewrites (a b x : Nat) :
@@ -309,7 +309,7 @@ theorem occurrence_local_rewrites (a b x : Nat) :
   unfold twoUpdates twoUpdateProcesses
   refine Region.Derivation.letOp (meaning := source) (operations := lower) .update _ .nil ?_ ?_
   · apply RegionMeaning.OperationLaw.ofTranslation translation
-    change (Proc.done (vals[a + x * b] : Scalars) : Proc interface Scalars) = .done vals[b * x + a]
+    change (Process.done (vals[a + x * b] : Scalars) : Process interface Scalars) = .done vals[b * x + a]
     rw [Nat.mul_comm x b, Nat.add_comm a (b * x)]
   · apply singleton_cases; intro first
     refine Region.Derivation.letOp (meaning := source) (operations := lower)

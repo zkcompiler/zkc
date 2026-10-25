@@ -33,14 +33,16 @@ def main():
         (directory / 'library.zkc').write_text(source)
         command = [sys.executable, str(HERE / 'verify.py'), '--spec', str(directory / 'spec.json'),
             '--module=example=' + str(ROOT / 'examples/projects/schnorr/main.zkc'),
-            '--module=schnorr=' + str(directory / 'library.zkc'), '--entry=example::Interactive',
+            '--module=schnorr=' + str(directory / 'library.zkc'), '--subject=schnorr::Schnorr<example::G>',
             '--compiler', str(compiler), '--output', str(directory)]
         run = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
         (directory / 'driver.log').write_text(run.stdout)
         receipt = read_json(directory / 'receipt.json')
         result = receipt['obligations'][0]['code'] if receipt['obligations'] else receipt['status']
-        assert result == expected, (name, result, expected, directory)
-        assert (run.returncode == 0) == (result == 'verified-in-model'), name
+        if not (result == expected):
+            raise AssertionError((name, result, expected, directory))
+        if not ((run.returncode == 0) == (result == 'verified-in-model')):
+            raise AssertionError(name)
         rows.append({'case': name, 'result': result})
         print(json.dumps(rows[-1]), flush=True)
         return receipt, directory
@@ -51,7 +53,8 @@ def main():
     simulation['experiment'] = 'interactive.honest-verifier-view/0'
     invoke('authored-dlog-simulation', simulation, original, 'verified-in-model')
     false_relation = original.replace('return point == base * scalar;', 'return true;')
-    assert false_relation != original
+    if not (false_relation != original):
+        raise AssertionError('bridges/common/intent_tests.py:54: false_relation != original')
     _, negative = invoke('true-is-not-dlog', spec, false_relation, 'correspondence-unproved')
     bad = copy.deepcopy(spec)
     bad['target']['clause'] = 'unknown'
@@ -70,7 +73,8 @@ def main():
     invoke('unknown-prover', bad, original, 'intent-prover')
     swapped = original.replace('DLog<G>(in.base@V, in.point@V, in.scalar)',
                                'DLog<G>(in.point@V, in.base@V, in.scalar)')
-    assert swapped != original
+    if not (swapped != original):
+        raise AssertionError('bridges/common/intent_tests.py:73: swapped != original')
     invoke('swapped-target-operands', spec, swapped, 'intent-relation-bindings')
     # Corrupt the untrusted relation candidate while retaining the requested subject.
     data, request = read_json(negative / 'source.json'), read_json(negative / 'request.json')
@@ -79,9 +83,11 @@ def main():
     intent.relation_candidate = lambda _data, req: generator(correct, req)
     try:
         receipt = verify(data, request, output / 'wrong-relation-subject', relation=wrong)
-        assert receipt['status'] == 'unresolved'
+        if not (receipt['status'] == 'unresolved'):
+            raise AssertionError("bridges/common/intent_tests.py:82: receipt['status'] == 'unresolved'")
         log = (output / 'wrong-relation-subject/lean.log').read_text()
-        assert 'PROOF-REQUEST-BOUNDARY-PASS' in log and 'error:' in log
+        if not ('PROOF-REQUEST-BOUNDARY-PASS' in log and 'error:' in log):
+            raise AssertionError("bridges/common/intent_tests.py:84: 'PROOF-REQUEST-BOUNDARY-PASS' in log and 'error:' in log")
         rows.append({'case': 'wrong-relation-subject', 'result': 'refused'})
     finally:
         intent.relation_candidate = generator
@@ -92,8 +98,10 @@ def main():
     try:
         original_relation = copy.deepcopy(wrong)
         receipt = verify(data, request, output / 'changed-relation-input', relation=wrong)
-        assert receipt['status'] == 'unresolved'
-        assert wrong == original_relation
+        if not (receipt['status'] == 'unresolved'):
+            raise AssertionError("bridges/common/intent_tests.py:95: receipt['status'] == 'unresolved'")
+        if not (wrong == original_relation):
+            raise AssertionError('bridges/common/intent_tests.py:96: wrong == original_relation')
         rows.append({'case': 'changed-relation-input', 'result': 'refused'})
     finally:
         intent.relation_candidate = generator
@@ -105,7 +113,8 @@ def main():
             name = 'external-' + family + (form or '-original')
             receipt = verify(read_json(ROOT / 'lean/ZkcExamples/NativePrograms/fixtures' / (family + form + '.json')),
                              request, output / name)
-            assert receipt['status'] == 'verified-in-model', (name, receipt)
+            if not (receipt['status'] == 'verified-in-model'):
+                raise AssertionError((name, receipt))
             rows.append({'case': name, 'result': receipt['status']})
             print(json.dumps(rows[-1]), flush=True)
     (output / 'result.json').write_text(json.dumps({'status': 'pass', 'cases': rows}, indent=2) + '\n')

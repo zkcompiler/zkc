@@ -4,13 +4,21 @@ Each `<name>.toml` here describes one verification subject: the sources it is
 compiled from, its Entries, which profiles apply, which Lean modules the
 pipeline generates for it, and the data later stages consume. The subject
 driver, `python3 lean/bridges/subject.py`, reads only these manifests: adding a
-subject is adding a manifest (and its family mathematics in Lean), with no
+subject is adding physical configuration and typed Lean exports, with no
 Python edit. `lean/bridges/pipeline/manifest.py` loads and validates them.
+
+The composed-Sumcheck manifest route has been retired. The same source project
+is the `TwoSums` selection in `ZkcSecurity.Generation.Roots.Catalogue`; its
+generated subject, soundness requests and completeness receipt are checked by
+`python3 lean/checks/check_subject_roots.py --exports DIRECTORY`. Use that root's
+exact requests and receipts, rather than the former manifest's unresolved
+report. Historical reports remain historical. The old construction modules
+remain audited regression clients until their separate retirement.
 
 The line between data and code is deliberate. Python holds the pipeline and
 the generic mutation kinds; it names no subject. A manifest holds per-subject
 data: paths, Entry names, profile switches, which mutation kinds apply, the
-names of theorems a receipt checks and the assumption identifiers the author
+names of maintained regression theorems and the assumption identifiers the author
 requests. Nothing in a manifest is Lean source except a model term in
 `[construction] model`, which the generated glue states as a definitional
 equation that the kernel checks.
@@ -28,23 +36,19 @@ root.
 | `source` | `project` | project directory; its `zkc.toml` and dependencies supply modules and assets |
 | `source` | `compiler_options` | extra options for every compiler command |
 | `entries` | `proof` | the compiled Proof Entry |
-| `entries` | `interactive` | the structured interactive Entry |
+| `entries` | `interactive` | the explicitly selected closed interactive protocol |
 | `entries` | `instantiation` | the static instantiation, recorded for reports |
-| `profiles` | `structured` | export, Data, Bodies and Views of the interactive Entry |
+| `profiles` | `structured` | export, Data, Bodies and Views of the interactive protocol |
 | `profiles` | `construction` | original Data, constructed participant, generated glue, kernel checks |
 | `profiles` | `executable` | program data, executable facts, Lean lowering rule, runtime differential |
 | `profiles` | `scalar` | the scalar common-source contract in `[scalar]` |
 | `generated` | `data`, `bodies`, `participant`, `glue`, `program`, `facts` | generated modules of the Proof Entry |
-| `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive Entry |
-| `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive Entry |
+| `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
+| `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
-| `generated` | `artifacts`, `claims` | the claim's modules in the security integration: the artifacts with their compiled facts and lowering evidence, and the evidence with its applications |
+| `generated` | `artifacts`, `claims` | physical generated modules: artifact/compilation facts and exact source Wire.Request data with typed Lean resolution, evaluation and receipts |
 | `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check` |
-| `family` | `module`, `kind` | family package; `sigma`, `certificate` or `upstream` |
-| `family` | `construction` | the subject's evidence constructor in its claims namespace |
-| `claims` | `endpoint` | `ideal-meaning` or `executable-bytes` |
-| `claims` | `properties`, `statement`, `regime` | claimed properties, `fixed` or `adaptive`, expected parameter regime |
-| `claims` | `namespace` | namespace of the claim's modules in the security integration; the claim's declarations are its `artifacts`, `Contract.falseStatement` or `Contract.holds`, `evidence`, and the endpoint theorem's name, all in this namespace |
+| `lean` | `namespace`, `imports` | generated declaration namespace and maintained Lean registration imports; physical configuration only |
 | `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |
 | `executable` | `threshold` | `"derived"`: the acceptance threshold comes from the Lean charge |
@@ -58,18 +62,63 @@ Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured
 suite also produces must agree byte for byte.
 
-A subject with a claims namespace `N` has two hand-written modules there:
-`N.Contract`, the application's claim recovered from the admitted original's
-retained contract (`falseStatement` for ordinary soundness, `holds` for
-knowledge soundness), and `N.Evidence`, the family package applied to the
-subject (the model relation or Sigma family, the model equation and the coverage
-of the contract), ending in the constructor `[family] construction` names. The
-driver generates `N.Artifacts` and `N.Claims`: the evidence the constructor
-builds and the registered endpoint applied to it at the subject's artifacts,
-contract and regime, for the manifest's claim and for every other endpoint and
-statement form the subject covers. The kernel checks the claims when the driver
-builds them; the [assurance report](../docs/spec/assurance-report.md) is
-established only through the manifest's application.
+`[claims]` and `[family]` are rejected, including empty tables. A manifest
+cannot request a property, choose a model, set a bound or authorize a receipt.
+Source `spec` fixes requests; source `verify` proposes a separately versioned
+method. A source with no claims has no source receipt, even if maintained
+endpoint theorems exist. The separate scalar bridge remains selected by
+`scalar.properties`; it does not authorize source requests.
+
+For a configured Lean namespace, `Artifacts.lean` contains the freshly exported
+original, participant and optional program, plus checked compilation/lowering
+facts. `Contract.lean` pins the actual retained application or an explicit
+registered imported language. `Registration.lean` supplies typed subjects,
+property/model registries and small author-library proof exports. Python emits
+only Wire.Request and method data and generic Lean construction calls in
+`Claims.lean`; it never prints a proposition. Lean computes the meaning before
+applying any method, and every receipt proves that computed proposition.
+Each generated receipt is an `AdmittedReceipt`: it also carries the exact
+subject check and an actual model-resolution witness for the selected typed
+model registry. Method consumers use its enclosed generic receipt.
+
+`Endpoints.lean` maintains the prior endpoint theorem APIs as independent
+regression clients. Generated Claims imports it for API continuity. Those
+statements are not rebuilt from source labels and never authorize source
+receipts. The six split modules are Schnorr, ChaumPedersen, SchnorrAnd, Okamoto
+in the generic security package and Sumcheck, Guess in optional ArkLib. Their
+declaration namespaces remain `ZkcSecurity.Examples.Subjects.*`.
+
+Each source node enters `evidence.source_claims` and `claim_receipts`, including
+incomplete meanings and unsupported attempts. A successful physical module
+check records the exact request and receipt declaration and generated bytes.
+Reports audit actual declaration indices, proof dependencies, assumptions and
+fixed stage obligations; provenance strings and receipt status are insufficient.
+Full native site paths are walked through the actual original call tree and
+matched against the constructed policy; Lean checks actual site membership.
+Digest and source-site attribution remain frontend links, with explicit
+`source.correspondence` and IR-relative scope. Interpreted program-byte proofs
+remain distinct from native runtime/provider correspondence.
+
+Reports select whole compiled subjects. The default scope is the proof Entry;
+`--claim-entry 'sigma::Schnorr<example::G>' --subject schnorr` runs the genuine
+interactive trial independently. Both runs generate the same declarations.
+Requests and actual declaration associations for other compiled Entries remain
+visible in `source_claim_trials`. Schnorr's interactive completeness and special
+soundness meanings are registered incomplete; their separate report remains
+incomplete while the supported proof Entry has its own report.
+
+`source_claim_inventory` lists every source claim node in the checked project,
+including claims on subjects that this run did not select. Its `selection` is
+`selected` or `unselected-subject`; it is diagnostic inventory, not a request or
+proof. Structured-only subjects retain the inventory too. Explicitly selecting
+an Entry without matching source claims leaves the report unresolved, even when
+another selected Entry has a valid receipt.
+
+Physical Lean file checks use `lake lean`, which applies package options and
+builds imported modules. No-build exporters and the already-built Clean control
+use `lake env lean` with the same `autoImplicit=false` and `warningAsError=true`
+options explicitly. Generated proof-view checks retain the module header and
+public exposure used by the installed generated modules.
 
 ### Optional extensions
 

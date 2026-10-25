@@ -46,6 +46,7 @@ add_zkc_component(Contracts
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
+  lib/Contracts/SourceTerms.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
 )
@@ -60,6 +61,7 @@ add_zkc_component(Language
   lib/Language/Inspection.cpp
   lib/Language/NotationInspection.cpp
   lib/Language/NotationRecords.cpp
+  lib/Language/SourceTerms.cpp
   lib/Language/Types.cpp
   lib/Language/Assets.cpp
   lib/Language/AssetProperties.cpp
@@ -84,6 +86,7 @@ add_zkc_component(Language
   lib/Language/TypeCheck.cpp
   lib/Language/Signatures.cpp
   lib/Language/Specifications.cpp
+  lib/Language/SourceClaims.cpp
   lib/Language/RelationABI.cpp
   lib/Language/Entries.cpp
   lib/Language/Constructions.cpp
@@ -142,6 +145,7 @@ add_zkc_component(Language
 )
 target_link_libraries(ZkcLanguage PUBLIC ZkcContracts)
 target_link_libraries(ZkcLanguage PRIVATE utf8proc::utf8proc)
+target_link_libraries(ZkcContracts PRIVATE utf8proc::utf8proc)
 add_dependencies(ZkcLanguage ZkcSourceNameDataGen)
 add_zkc_component(Relation
   lib/Relation/R1CS.cpp
@@ -202,6 +206,7 @@ add_zkc_component(IR
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
   lib/Dialect/Protocol/IR/Mathematical.cpp
+  lib/Dialect/Protocol/IR/Origins.cpp
   lib/Dialect/Protocol/IR/Contracts.cpp
   lib/Dialect/Protocol/IR/ResourceOrigins.cpp
   lib/Dialect/Protocol/IR/Applications.cpp
@@ -308,6 +313,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInterfaceComparison.cpp
   lib/Compiler/LanguageInspection.cpp
   lib/Compiler/Observation.cpp
+  lib/Compiler/SourceClaims.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
   lib/Compiler/StructuredSource.cpp

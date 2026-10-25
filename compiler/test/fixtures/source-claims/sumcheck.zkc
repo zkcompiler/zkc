@@ -1,0 +1,29 @@
+module claims;
+domain Fr=field("bls12-381.fr");
+relation PolynomialSum(statement claimed:Fr,witness actual:Fr){return claimed==actual;}
+protocol Sumcheck roles(P,V)(claimed:Fr@(P,V),actual:Fr@P,
+  challenges:Random<Fr>@V)->(accepted:bool@V)
+  spec{target sum=PolynomialSum(in.claimed@V,in.actual) accept out.accepted;}
+{
+  let message=send P->V(actual);
+  #[site(round_challenge)] let challenge=challenges.draw();
+  let accepted@V=message+challenge==claimed+challenge;
+  return(accepted=accepted);
+}
+proof Demo=Sumcheck{
+  prover P;verifier V;public{claimed};accept accepted;target sum;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);
+}
+spec SumClaims for Demo {
+  sound: soundness@0(target.sum,
+    model=models.fiat_shamir@0(level=levels.bytes,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,validator_cost=1),
+    accept=out.accepted,stage=executable_bytes,
+    charge=[per_site(sites.round_challenge,2/cardinality(Fr))],
+    capabilities=[capabilities.charged_reduction@0()]);
+  extension: user.view_equal@7(target.sum,
+    model=user.observer@3(level=levels.ideal),accept=out.accepted,
+    stage=compiled_ideal,error=0,parameters=user.observation@2(view=views.verifier));
+}
+verify SumClaims.sound=fs.keyed_soundness@0();
+verify SumClaims.extension=user.prove_view@11();

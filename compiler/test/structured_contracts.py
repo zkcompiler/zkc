@@ -38,14 +38,14 @@ relation = '''relation.declare @Equal {kind="zkc.language.formula/0", key="Equal
 child = '''"protocol.func"() ({ ^entry(%x:i1,%y:i1,%n:ui64):
   %yes = arith.constant true
   "protocol.return"(%x,%y,%yes) : (i1,i1,i1)->()
-}) {sym_name="child", function_type=(i1,i1,ui64)->(i1,i1,i1),
+}) {sym_name="child",origin=["child",[]], function_type=(i1,i1,ui64)->(i1,i1,i1),
   roles=["P","Q"], input_roles=[["P"],["Q"],["Q"]],
   output_roles=[["P"],["Q"],["Q"]], contracts=''' + inventory + '''} : ()->()'''
 caller = '''"protocol.func"() ({ ^entry(%x:i1,%y:i1,%n:ui64):
   %a:3 = protocol.apply @child(%x,%y,%n) {roles=["A","B"],site="call"}
     : (i1,i1,ui64)->(i1,i1,i1)
   "protocol.return"(%a#0,%a#1,%a#2) : (i1,i1,i1)->()
-}) {sym_name="main", function_type=(i1,i1,ui64)->(i1,i1,i1),
+}) {sym_name="main",origin=["main",[]], function_type=(i1,i1,ui64)->(i1,i1,i1),
   roles=["A","B"], input_roles=[["A"],["B"],["B"]],
   output_roles=[["A"],["B"],["B"]]} : ()->()'''
 

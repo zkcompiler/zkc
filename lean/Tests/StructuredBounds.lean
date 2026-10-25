@@ -34,13 +34,13 @@ private def labelBlock : Nat → String → Block → Block
         .instruction op args outputs (regions.zipIdx.map fun (.region inputs outputs body, j) =>
           .region inputs outputs (labelBlock depth (site ++ "." ++ toString j) body)) site) terminal
 private def helper (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
-  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (name, []),
+  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (.local name []),
     labelBlock 32 name body⟩
 private def program (bindings : List Binding) (inputs outputs : List Ty) (body : Block)
     (helpers : List Definition := []) : Snapshot :=
   (let contractDefinitions : List Definition := helpers ++ [helper "work" inputs outputs body,
       .function ⟨"main", .protocol, .publicDef, inputs, outputs,
-        some ⟨["P"], inputs.map (fun _ => ["P"]), outputs.map (fun _ => ["P"])⟩, [], none,
+        some ⟨["P"], inputs.map (fun _ => ["P"]), outputs.map (fun _ => ["P"])⟩, [], some (.protocol ⟨"main", []⟩),
         .block [.instruction (.localCall "work" "P") (List.range inputs.length) outputs [] "work"]
           (.ret (List.range outputs.length))⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], bindings, contractDefinitions,
@@ -266,7 +266,7 @@ def run : IO Unit := do
   let reply (request value : Json) := arr [.str "reply", request, arr [.str "value", value]]
   let receivedLoop : Snapshot := (let contractDefinitions : List Definition := [helper "work" [.index] [.index] (.block [constant 0, emptyLoop 0 1] (.ret [1])),
      .function ⟨"main", .protocol, .publicDef, [.index], [.index],
-       some ⟨["P", "V"], [["V"]], [["P"]]⟩, [], none,
+       some ⟨["P", "V"], [["V"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
        .block [.instruction (.exchange "V" "P") [0] [.index] [] "bound",
          .instruction (.localCall "work" "P") [0] [.index] [] "work"] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'),
@@ -286,7 +286,7 @@ def run : IO Unit := do
   let receivedAppend : Snapshot := (let contractDefinitions : List Definition := [helper "work" [vectorTy, fieldTy] [vectorTy]
        (.block [exec "vector_append" "append" [0, 1] [vectorTy]] (.ret [0])),
      .function ⟨"main", .protocol, .publicDef, [vectorTy, fieldTy], [vectorTy],
-       some ⟨["P", "V"], [["V"], ["P"]], [["P"]]⟩, [], none,
+       some ⟨["P", "V"], [["V"], ["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
        .block [.instruction (.exchange "V" "P") [0] [vectorTy] [] "vector",
          .instruction (.localCall "work" "P") [0, 2] [vectorTy] [] "work"] (.ret [0])⟩]
    ⟨receivedLoop.source, "main", [], [],
@@ -304,7 +304,7 @@ def run : IO Unit := do
        .block [.instruction (.indexConstant (toString n)) [] [.index] [] ""] (.ret [0])⟩,
      helper "work" [.index] [] (.block [constant 0, emptyLoop 0 1] (.ret [])),
      .function ⟨"main", .protocol, .publicDef, [.index], [],
-       some ⟨["P"], [["P"]], []⟩, [], none,
+       some ⟨["P"], [["P"]], []⟩, [], some (.protocol ⟨"main", []⟩),
        .block [.instruction (.call "ignored") [0] [.index] [] "",
          .instruction (.localCall "work" "P") [0] [] [] "work"] (.ret [])⟩]
    ⟨receivedLoop.source, "main", [], [], constants, contractDefinitions,

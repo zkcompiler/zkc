@@ -92,16 +92,16 @@ theorem response_component_equation (nonce challenge secret : F) :
         .done (.cons (some (nonce + challenge * secret)) .nil) := rfl
 
 def helpersProcess (base key : G) (service : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (helpersProgram.participant F G 1 (SchnorrInteractive.verifierInputs base key service)).bind
     fun values => .done (values.get .here)
 
 def reorderedProcess (base key : G) (service : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (reorderedProgram.participant F G 1 (SchnorrInteractive.verifierInputs base key service)).bind
     fun values => .done (values.get .here)
 
-def process : Form → G → G → Nat → PIR.Proc (participantInterface F G) (Option Bool)
+def process : Form → G → G → Nat → PIR.Process (participantInterface F G) (Option Bool)
   | .original => SchnorrInteractive.process
   | .helpers => helpersProcess
   | .reordered => reorderedProcess
@@ -113,18 +113,18 @@ theorem helpers_equation (base key : G) (service : Nat) :
 theorem reordered_equation (base key : G) (service : Nat) :
     process (F := F) .reordered base key service =
       (Zkc.Protocols.Schnorr.Common.experiment wiring base key service).interpret CommonAdapter.embed := by
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro commitment
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro challenge
   change F at challenge
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro acknowledgement
-  apply PIR.Proc.call_congr
+  apply PIR.Process.call_congr
   intro answer
   change F at answer
-  change PIR.Proc.done (some (decide (answer • base = challenge • key + commitment))) =
-    PIR.Proc.done (some (decide (answer • base = commitment + challenge • key)))
+  change PIR.Process.done (some (decide (answer • base = challenge • key + commitment))) =
+    PIR.Process.done (some (decide (answer • base = commitment + challenge • key)))
   rw [add_comm (challenge • key) commitment]
 
 def verifier (form : Form) : Zkc.Protocols.Schnorr.Common.Verifier F G := fun base key service =>
@@ -159,7 +159,7 @@ theorem special_soundness (form : Form) (base key : G) (service : Nat)
   (contract form).special_soundness base key service prover first second distinct acceptFirst acceptSecond
 
 def earlyVerifier (base key : G) (service : Nat) :
-    PIR.Proc (CommonAdapter.commonInterface F G) (Option Bool) :=
+    PIR.Process (CommonAdapter.commonInterface F G) (Option Bool) :=
   ((earlyProgram.participant F G 1 (SchnorrInteractive.verifierInputs base key service)).bind
     fun values => .done (values.get .here)).interpret CommonAdapter.project
 
@@ -172,7 +172,7 @@ theorem early_equation (base key : G) (service : Nat) :
       .call (.receive (.field scalarDomain) wiring.responseSite 0) fun (answer : F) =>
       .done (some (decide (answer • base = commitment + challenge • key))) := rfl
 
-private def beginsWithReceive {A : Type} : PIR.Proc (CommonAdapter.commonInterface F G) A → Bool
+private def beginsWithReceive {A : Type} : PIR.Process (CommonAdapter.commonInterface F G) A → Bool
   | .call (.receive ..) _ => true
   | _ => false
 

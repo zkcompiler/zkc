@@ -196,8 +196,8 @@ theorem reduction_complete_counts :
       SumcheckReduceViews.unit.protocols.length = 2 := by decide +kernel
 
 theorem sumcheck_complete_counts :
-    SumcheckSourceData.snapshot.definitions.length = 29 ∧
-      SumcheckSourceViews.unit.definitions.length = 27 ∧
+    SumcheckSourceData.snapshot.definitions.length = 30 ∧
+      SumcheckSourceViews.unit.definitions.length = 28 ∧
       SumcheckSourceViews.unit.protocols.length = 2 := by decide +kernel
 
 /-- A same-signature original-body mutation cannot reuse the old checked tree.

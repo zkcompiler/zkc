@@ -8,8 +8,8 @@ trees. The model is a transcription of the library verifier, related line by
 line to the source; it makes no claim about the compiled library, its proof
 Entry or native execution. Before [committed words](#committed-words) it reads
 every commitment as the vector it commits to. The modules are
-`ZkcSecurity.ArkLib.Fri.*`, `ZkcSecurity.Examples.FriFiatShamir` and
-`ZkcSecurity.Examples.CommittedFri` in the
+`ZkcSecurity.ArkLib.Fri.*`, `ZkcArkLib.Examples.FriFiatShamir` and
+`ZkcArkLib.Examples.CommittedFri` in the
 [security integration](../../integrations/arklib/README.md).
 
 ## Subject
@@ -41,7 +41,7 @@ model's words have their expected sizes and the verifier reads committed values.
 ## Source correspondence
 
 Line numbers refer to `libraries/protocols/polynomial/fri/lib.zkc`. Each model definition is in
-`ZkcSecurity.ArkLib.Fri.Protocol` unless the table names another module.
+`ZkcArkLib.Fri.Protocol` unless the table names another module.
 
 | Source (lines) | Model | Relation to ArkLib |
 |---|---|---|
@@ -70,7 +70,7 @@ coefficients satisfy the bound.
 
 ## Completeness
 
-The honest prover (`honest`, in `ZkcSecurity.ArkLib.Fri.Completeness`) commits
+The honest prover (`honest`, in `ZkcArkLib.Fri.Completeness`) commits
 ArkLib's fold of the current word with each challenge and, after the last fold,
 sends the coefficients of the folded word's interpolant. On a codeword of degree
 below `2^(t + R)`, each fold is a codeword of half the degree on the next coset
@@ -128,11 +128,11 @@ the parameters of `examples/projects/fri` and the authored STARK tables
 (`n = 5`, `t = 0`, `R = 3`, `s = 8`, rate `1/4`, `θ = 3/8`), on the coset of any
 primitive 32nd root of unity, the interactive acceptance bound, with commitments read as the committed words,
 is `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8` with no remaining premise
-(`example_bound` in `TestsSecurity.FriSecurity`).
+(`example_bound` in `TestsArkLib.FriSecurity`).
 
 ## Cube-root radius instance
 
-`ZkcSecurity.ArkLib.Fri.GeneralizedJohnson` discharges the folding obligations
+`ZkcArkLib.Fri.GeneralizedJohnson` discharges the folding obligations
 up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, strictly inside the
 Johnson radius `1 - ρ^(1/2)`, with the powers-generator bound of Bordage,
 Chiesa, Guan and Manzur, *All Polynomial Generators Preserve Distance with
@@ -156,11 +156,11 @@ tends to zero, the radius exceeds the unique-decoding radius exactly when
 `ρ < ((√5 - 1) / 2)^3 ≈ 0.236`, so at rates up to `1/8`. At rate `1/8`
 (`n = 6`, `t = 0`, `R = 3`, `s = 8`) with `η = 1/100`, the radius `12/25` exceeds
 the unique-decoding radius `7/16`, with no remaining premise (`lowRate_bound` in
-`TestsSecurity.FriSecurity`).
+`TestsArkLib.FriSecurity`).
 
 ## Certificate over verifier residuals
 
-`ZkcSecurity.ArkLib.Fri.Certificate` states the certificate over the residual
+`ZkcArkLib.Fri.Certificate` states the certificate over the residual
 processes of the verifier after the first commitment, the form a Fiat–Shamir
 transfer consumes. The verifier is a process over four operations
 (`Operation`): a folding challenge, one field element; a committed word, read as
@@ -198,7 +198,7 @@ site's error by that factor.
 
 ## Fiat–Shamir transfer
 
-`ZkcSecurity.Examples.FriFiatShamir` presents the verifier after the first
+`ZkcArkLib.Examples.FriFiatShamir` presents the verifier after the first
 commitment through a [typed transcript interface](fiat-shamir-security.md#typed-query-sites)
 (`absorb`) and turns the certificate above into a typed certificate
 (`typedCertificate`):
@@ -237,7 +237,7 @@ probability over the raw answer.
 
 ## Committed words
 
-`ZkcSecurity.Examples.CommittedFri` replaces the word events of the transfer by
+`ZkcArkLib.Examples.CommittedFri` replaces the word events of the transfer by
 commitments, as a [verifier with committed tables](fiat-shamir-security.md#verifiers-with-committed-tables):
 
 - Verifier: `verifier` receives the root of the next word after the folding

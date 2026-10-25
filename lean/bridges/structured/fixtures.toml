@@ -1,7 +1,7 @@
 # Retained subjects of the structured differential suites.
 #
 # Each table names one retained export: the suite that regenerates and compares
-# it, the Entry it exports, its sources and the Lean data module of the retained
+# it, the closed protocol subject it exports, its sources and the Lean data module of the retained
 # snapshot (`ZkcExamples.Structured.<data>Data`). Sources are a module map
 # (`modules`), a project manifest (`project`), or an explicit fixture manifest
 # (`manifest`) selecting its library closure. The suites read this file;
@@ -10,168 +10,170 @@
 
 [schnorr-interactive]
 suite = "open_protocol"
-entry = "example::Interactive"
+subject = "schnorr::Schnorr<example::G>"
 modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/protocols/sigma/schnorr/lib.zkc" }
 data = "SchnorrInteractive"
 
 [schnorr-helpers]
 suite = "open_protocol"
-entry = "schnorr_forms::Helpers"
+subject = "schnorr_forms::HelpersProtocol"
 modules = { schnorr_forms = "lean/bridges/common/fixtures/schnorr-forms.zkc" }
 data = "SchnorrHelpers"
 
 [schnorr-reordered]
 suite = "open_protocol"
-entry = "schnorr_forms::Reordered"
+subject = "schnorr_forms::ReorderedProtocol"
 modules = { schnorr_forms = "lean/bridges/common/fixtures/schnorr-forms.zkc" }
 data = "SchnorrReordered"
 
 [schnorr-early-challenge]
 suite = "open_protocol"
-entry = "schnorr_forms::EarlyChallenge"
+subject = "schnorr_forms::EarlyChallengeProtocol"
 modules = { schnorr_forms = "lean/bridges/common/fixtures/schnorr-forms.zkc" }
 data = "SchnorrEarlyChallenge"
 
 [schnorr-and]
 suite = "open_protocol"
-entry = "example::AndInteractive"
+subject = "sigma::SchnorrAnd<example::G>"
 modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/protocols/sigma/compositions/lib.zkc" }
 data = "SchnorrAnd"
 
 [chaum-pedersen]
 suite = "open_protocol"
-entry = "example::EqualityInteractive"
+subject = "sigma::ChaumPedersen<example::G>"
 modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/protocols/sigma/compositions/lib.zkc" }
 data = "ChaumPedersen"
 
 [primitive-shape]
 suite = "primitives"
-entry = "primitive_examples::ShapeEntry"
+subject = "primitive_examples::Shape"
 manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveShape"
 
 [primitive-table]
 suite = "primitives"
-entry = "primitive_examples::TableEntry"
+subject = "primitive_examples::MakeTable"
 manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveTable"
 
 [primitive-halves]
 suite = "primitives"
-entry = "primitive_examples::HalvesEntry"
+subject = "primitive_examples::TableHalves"
 manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveHalves"
 
 [primitive-sequence]
 suite = "primitives"
-entry = "primitive_examples::SequenceEntry"
+subject = "primitive_examples::Sequence"
 manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveSequence"
 
 [primitive-pure-index]
 suite = "primitives"
-entry = "primitive_examples::PureIndexEntry"
+subject = "primitive_examples::PureIndex"
 manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitivePureIndex"
 
 [map-first]
 suite = "maps"
-entry = "map_examples::FirstEntry"
+subject = "map_examples::First"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapFirst"
 
 [map-prefix]
 suite = "maps"
-entry = "map_examples::PrefixEntry"
+subject = "map_examples::Prefix"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapPrefix"
 
 [map-combination]
 suite = "maps"
-entry = "map_examples::LinearCombinationEntry"
+subject = "map_examples::LinearCombination"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapCombination"
 
 [map-constant]
 suite = "maps"
-entry = "map_examples::ConstantRowsEntry"
+subject = "map_examples::ConstantRows"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapConstant"
 
 [realization-values]
 suite = "maps"
-entry = "map_examples::RealizeValuesEntry"
+subject = "map_examples::RealizeValues"
 manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "RealizationValues"
 
 [application]
 suite = "applications"
-entry = "sample::Demo"
+subject = "sample::Run"
 modules = { sample = "compiler/test/fixtures/language/application.zkc" }
 data = "Application"
 
 [application-wrapper]
 suite = "applications"
-entry = "sample::Demo"
+subject = "sample::Outer"
 modules = { sample = "compiler/test/fixtures/structured-source/application-wrapper.zkc" }
 data = "ApplicationWrapper"
 
 [service-order]
 suite = "applications"
-entry = "sample::Demo"
+subject = "sample::Run"
 modules = { sample = "compiler/test/fixtures/language/service_order.zkc" }
 data = "ServiceOrder"
 
 [repeat]
 suite = "repeats"
-entry = "sample::Demo"
+subject = "sample::Run<4>"
 modules = { sample = "compiler/test/fixtures/language/repeat.zkc" }
 data = "Repeat"
 
 [repeat-nested]
 suite = "repeats"
-entry = "sample::Demo"
+subject = "sample::Run"
 modules = { sample = "compiler/test/fixtures/language/repeat_nested.zkc" }
 data = "RepeatNested"
 
 [repeat-service]
 suite = "repeats"
-entry = "sample::Demo"
+subject = "sample::Run"
 modules = { sample = "compiler/test/fixtures/structured-source/repeat-service-order.zkc" }
 data = "RepeatService"
 
 [repeat-service-wrapper]
 suite = "repeats"
-entry = "sample::Nested"
+subject = "sample::Outer"
 modules = { sample = "compiler/test/fixtures/structured-source/repeat-service-order.zkc" }
 data = "RepeatServiceWrapper"
 
 [sumcheck-reduce]
 suite = "repeats"
-entry = "example::Reduction"
+subject = "sums::Reduction<example::F,4>"
 project = "examples/projects/sumcheck/composed"
 data = "SumcheckReduce"
 
 [sumcheck-source]
 suite = "repeats"
-entry = "example::Interactive"
+subject = "sumcheck::Sumcheck<example::Fr,2>"
 project = "examples/projects/sumcheck"
 data = "SumcheckSource"
 
 [sumcheck-repacked]
 suite = "repeats"
-entry = "example::Reduction"
+subject = "sums::Reduction<example::F,4>"
 project = "lean/bridges/structured/fixtures/sumcheck-repacked"
 data = "SumcheckRepacked"
 
 # The inlining suite exports an original and a prepared candidate of each
-# fixture's `Run` Entry; `data` prefixes their `Original` and `Candidate` data.
+# fixture's closed protocol; `data` prefixes their `Original` and `Candidate` data.
 [schnorr-response]
+subject = "schnorr_response::Response"
 suite = "inlining"
 module = "schnorr_response"
 data = "SchnorrResponse"
 
 [sumcheck-claim]
+subject = "sumcheck_claim::Claim"
 suite = "inlining"
 module = "sumcheck_claim"
 data = "SumcheckClaim"

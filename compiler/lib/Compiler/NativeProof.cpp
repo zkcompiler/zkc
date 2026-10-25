@@ -96,7 +96,14 @@ struct Origin {
 // Borrowed services pass through isolated repeat captures without acquiring a
 // new authority. Return the argument in its original mathematical definition.
 BlockArgument sourcePort(Value value) {
-  while (auto argument = dyn_cast<BlockArgument>(value)) {
+  while (value) {
+    if (auto restriction = value.getDefiningOp<pir::RestrictRolesOp>()) {
+      value = restriction.getInput();
+      continue;
+    }
+    auto argument = dyn_cast<BlockArgument>(value);
+    if (!argument)
+      return {};
     auto repeat = dyn_cast<pir::RepeatOp>(argument.getOwner()->getParentOp());
     if (!repeat)
       return argument;
@@ -1698,7 +1705,10 @@ json::Value attributeValue(Attribute value) {
 // original source remain calls.
 class ParticipantExporter {
   SymbolTable symbols, sourceSymbols;
+  const StringMap<Origin> &sourceOrigins;
   llvm::DenseMap<Value, unsigned> references;
+  SmallVector<unsigned> coordinates;
+  std::string entryName;
   unsigned next = 0, work = 0, exported = 0;
 
   Expected<unsigned> reference(Value value) {
@@ -1767,17 +1777,35 @@ class ParticipantExporter {
     auto arguments = operands(op);
     if (!arguments)
       return arguments.takeError();
-    out.push_back(json::Array{op.getName().getStringRef().str(), attributes(op),
-                              std::move(*declaration), std::move(*arguments),
-                              printedTypes(op.getResultTypes()),
-                              std::move(regions)});
+    json::Array instruction{
+        op.getName().getStringRef().str(), attributes(op),
+        std::move(*declaration),           std::move(*arguments),
+        printedTypes(op.getResultTypes()), std::move(regions)};
+    if (op.getName().getStringRef() == "protocol.service_query") {
+      auto site = op.getAttrOfType<StringAttr>("site");
+      auto found =
+          site ? sourceOrigins.find(site.getValue()) : sourceOrigins.end();
+      if (found == sourceOrigins.end() || found->second.event.empty() ||
+          found->second.event.front() != "query")
+        return error("constructed-participant-service-origin");
+      auto origin = protocol::encodeNativeOriginTemplate(
+          entryName, found->second.steps, found->second.event);
+      if (!origin)
+        return origin.takeError();
+      json::Array indices;
+      for (unsigned coordinate : coordinates)
+        indices.push_back(coordinate);
+      instruction.push_back(json::Array{*origin, std::move(indices)});
+    }
+    out.push_back(std::move(instruction));
     return Error::success();
   }
 
 public:
   ParticipantExporter(pir::ProtocolModuleOp module,
-                      pir::ProtocolModuleOp source)
-      : symbols(module), sourceSymbols(source) {}
+                      pir::ProtocolModuleOp source,
+                      const StringMap<Origin> &sourceOrigins)
+      : symbols(module), sourceSymbols(source), sourceOrigins(sourceOrigins) {}
 
   // Exports one block into `out`. `terminator` names the operation that must
   // end it; its operand references are returned.
@@ -1837,8 +1865,10 @@ public:
         unsigned outer = next;
         for (BlockArgument argument : loop.getArguments())
           references[argument] = next++;
+        coordinates.push_back(outer);
         json::Array nested;
         auto yielded = body(loop, "protocol.yield", depth + 1, nested);
+        coordinates.pop_back();
         if (!yielded)
           return yielded.takeError();
         next = outer;
@@ -1873,6 +1903,7 @@ public:
                             StringRef candidate,
                             const NativeProofPolicy &policy) {
     Block &entry = participant.getBody().front();
+    entryName = policy.entry;
     auto type = participant.getFunctionType();
     if (entry.getNumArguments() > 512 || type.getNumResults() > 512)
       return error("constructed-participant-limit");
@@ -1885,42 +1916,116 @@ public:
     json::Array results;
     for (unsigned index : *returned)
       results.push_back(index);
+    json::Array services;
+    auto original = sourceSymbols.lookup<pir::MathematicalOp>(policy.entry);
+    if (!original)
+      return error("constructed-participant-service-interface");
+    SmallVector<unsigned> roots;
+    for (auto [index, roles] : enumerate(original.getInputRoles()))
+      if (owns(cast<ArrayAttr>(roles), participant.getRole()) &&
+          !(participant.getRole() == policy.validator &&
+            is_contained(policy.services, index)))
+        roots.push_back(index);
+    if (auto ports = participant->getAttrOfType<ArrayAttr>("service_ports"))
+      for (Attribute attribute : ports) {
+        auto row = dyn_cast<ArrayAttr>(attribute);
+        if (!row || row.size() != 3)
+          return error("constructed-participant-service-interface");
+        auto port = dyn_cast<StringAttr>(row[0]);
+        auto contract = dyn_cast<StringAttr>(row[1]);
+        auto input = dyn_cast<IntegerAttr>(row[2]);
+        if (!port || !contract || !input || input.getInt() < 0 ||
+            uint64_t(input.getInt()) >= roots.size())
+          return error("constructed-participant-service-interface");
+        unsigned root = roots[input.getInt()];
+        auto service = dyn_cast<pir::ServiceReferenceType>(
+            original.getFunctionType().getInput(root));
+        if (!service || service.getContract() != contract.getValue())
+          return error("constructed-participant-service-interface");
+        services.push_back(
+            json::Array{port.getValue().str(), participant.getRole().str(),
+                        std::to_string(root), std::to_string(input.getInt()),
+                        contract.getValue().str()});
+      }
     json::Value record(json::Array{
         "zkc.constructed-participant/0", sha256Identity(source),
         sha256Identity(candidate), encodeNativeProofPolicy(policy),
         participant.getSymName().str(), printedTypes(type.getInputs()),
         printedTypes(type.getResults()), std::move(instructions),
-        std::move(results)});
+        std::move(results), std::move(services)});
     if (printJson(record).size() > 1024 * 1024)
       return error("constructed-participant-limit");
     return record;
   }
 };
-} // namespace
-
-Expected<json::Value> exportConstructedParticipant(
-    ModuleOp source, ModuleOp candidate, StringRef sourceBytes,
-    const NativeProofPolicy &policy,
-    MathematicalSelectionPolicy mathematicalSelection) {
-  if (auto e =
-          checkNativeProof(source, candidate, policy, mathematicalSelection))
-    return std::move(e);
+Expected<json::Value>
+exportCheckedParticipant(ModuleOp source, ModuleOp candidate,
+                         StringRef sourceBytes, const NativeProofPolicy &policy,
+                         const StringMap<Origin> &sourceOrigins,
+                         ConstructedParticipantRole role) {
   auto module = unit(candidate);
   auto original = unit(source);
   if (!module || !original)
     return error("constructed-participant-module");
   pir::ParticipantOp selected;
+  StringRef selectedRole = role == ConstructedParticipantRole::Producer
+                               ? policy.producer
+                               : policy.validator;
+  StringRef refusal = role == ConstructedParticipantRole::Producer
+                          ? "constructed-participant-producer"
+                          : "constructed-participant-validator";
   for (auto participant : module.getBody().front().getOps<pir::ParticipantOp>())
     if (participant.getInstance() == policy.entry &&
-        participant.getRole() == policy.validator) {
+        participant.getRole() == selectedRole) {
       if (selected)
-        return error("constructed-participant-validator");
+        return error(refusal);
       selected = participant;
     }
   if (!selected)
-    return error("constructed-participant-validator");
-  return ParticipantExporter(module, original)
+    return error(refusal);
+  return ParticipantExporter(module, original, sourceOrigins)
       .run(selected, sourceBytes, printedText(candidate.getOperation()),
            policy);
+}
+} // namespace
+
+Expected<json::Value>
+exportConstructedParticipant(ModuleOp source, ModuleOp candidate,
+                             StringRef sourceBytes,
+                             const NativeProofPolicy &policy,
+                             MathematicalSelectionPolicy mathematicalSelection,
+                             ConstructedParticipantRole role) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  auto prepared = prepareProof(source, policy, mathematicalSelection);
+  if (!prepared)
+    return prepared.takeError();
+  return exportCheckedParticipant(source, candidate, sourceBytes, policy,
+                                  prepared->origins, role);
+}
+
+Expected<json::Value>
+exportConstructedPair(ModuleOp source, ModuleOp candidate,
+                      StringRef sourceBytes, const NativeProofPolicy &policy,
+                      MathematicalSelectionPolicy mathematicalSelection) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  auto prepared = prepareProof(source, policy, mathematicalSelection);
+  if (!prepared)
+    return prepared.takeError();
+  auto producer = exportCheckedParticipant(
+      source, candidate, sourceBytes, policy, prepared->origins,
+      ConstructedParticipantRole::Producer);
+  if (!producer)
+    return producer.takeError();
+  auto validator = exportCheckedParticipant(
+      source, candidate, sourceBytes, policy, prepared->origins,
+      ConstructedParticipantRole::Validator);
+  if (!validator)
+    return validator.takeError();
+  return json::Array{"zkc.constructed-pair/0", std::move(*producer),
+                     std::move(*validator)};
 }
 } // namespace zkc

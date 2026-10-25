@@ -11,7 +11,7 @@ composition need separate correspondence results when a claim includes them.
 
 The structured path retains contracts on original protocol declarations and
 formula links on relation declarations. One typed `Region` denotes the program
-in `PIR.Proc`. Proof construction uses that body, its actual calls and its
+in `PIR.Process`. Proof construction uses that body, its actual calls and its
 actual returned observations. It does not introduce a second executable model.
 The bounded scalar request generator described later is a separate client.
 
@@ -201,7 +201,7 @@ child satisfying that same bound can reuse the caller theorem unchanged.
 An honest-prover property can take its messages from the actual checked prover
 process instead of a handwritten strategy. For Interactive Schnorr,
 `SchnorrHonestProver.replyHandler` runs the prover's participant process with
-`PIR.Proc.run`. It answers the nonce query and the challenge receive with fixed
+`PIR.Process.run`. It answers the nonce query and the challenge receive with fixed
 replies, acknowledges the commitment and response sends, checks the domain,
 site, peer and service handle of every action, refuses any other action, and
 logs each action in order. The handler is deterministic for its fixed inputs:
@@ -242,6 +242,116 @@ A mismatched type, site or endpoint refuses. Both participants receive the same
 inputs as explicit arguments, and completeness is an equation for the run of the
 actual roots for every tape that supplies the rounds; the
 [support matrix](../support.md#honest-sumcheck-prover) lists its premises.
+
+## Source claim requests
+
+A source claim explicitly selects a property/version, model and arguments,
+retained target or registered imported language, typed acceptance selector,
+stage, quantity and capability requirements. The frontend exports constructor
+data; the Lean property/model registry fixes its interpretation before a proof
+route is chosen. Attachments and proposed methods do not determine the meaning.
+
+`Zkc.Claims.Resolved` records checked registry lookup, subject association and
+elaboration. `Evaluated` records that the registered meaning evaluates to its
+proposition. A `Receipt` proves exactly that proposition; endpoint, theorem and
+derivation routes share the same type. Every kernel-checked proof of that fixed
+meaning is evidence. Final assurance-report status depends on exact admission,
+remaining statement binders, standard axioms and every request-owned required
+link, rather than internal proof use. The core `Receipt.status` only checks
+whether its registered links have proofs; `.certified` there is not final report
+certification. It cannot check security-layer admission or independently recover
+mandatory stage links. Charged soundness additionally requires
+the charged reduction at the requested prices. A successful scalar bound does
+not imply that capability. Registry-owned obligations determine required links;
+provenance cannot remove them.
+
+The [assurance report](assurance-report.md) compares actual emitted typed indices
+and wire data against each bound source request and the pipeline's artifact
+bytes. Only structured registered-but-undefined interpretations are incomplete;
+resolution refusal and normalization/resource failure remain open regardless of
+diagnostic text. The selected canonical property and model elaborator are
+compared after lookup, allowing unrelated appended exports. Capabilities require
+a recognized checked consumer; a matching argument type is insufficient.
+Parameter application coverage requires the actual interpreted application to
+equal the designated free request binder. Fixed models retain concrete scope.
+Missing proofs or required
+stage links are open, and only checked requested claims can be
+certified. Failed attempts remain separate. All source claims are reported,
+including unsupported interactive models. Reports remain IR-relative with an
+explicit `source.correspondence` premise; interpreted executable-byte claims
+never establish native executable conformance by themselves.
+
+For compiled ideal, the actual subject's construction check, selection and
+public schema discharge `construction.checked`. Interpreted bytes also require
+`lowering.interpreted_bytes`, pinning that subject's actual program, checked
+lowering, helper interpretation and public admission. Reporting reconstructs
+these goals from the typed subject and compares them with each registered
+obligation and its proof. Direct lower-stage proofs can certify that interpreted
+endpoint while native closure stays open; native realization is a separate
+claim. A matching label or a different subject's link cannot supply these proofs.
+
+Security receipt reporting also checks the exact subject's target/acceptance
+and actual full model elaboration. `ZkcSecurity.Claims.AdmittedReceipt` (module `Claims.ReceiptAdmission`)
+provides a typed association between a selected model registry and the exact
+request/subject/evaluated receipt, including manually authored extensions. The
+extractor recomputes these admission operations. A blocked symbolic model
+computation can use the typed certificate's actual witness and a kernel-checked
+equation for the exact reconstructed call; concrete refusal and undefined
+results remain failures. A property elaborator that
+ignores the model cannot establish admission. Internal Evidence notes and method
+provenance are best-effort attribution only; missing or failed attribution can
+report `unattributed` without leaving a proved receipt open. Provenance strings
+cannot add assumptions. Claims endpoint adapters require every legacy Evidence
+hypothesis to carry `.proved` by type (`HypothesesProved`); an `.assumed` note
+cannot pass that boundary. The legacy manifest audit keeps its strict Evidence
+shape and hypothesis checks. Actual remaining binders and registry-owned links
+supply obligations. Declaration provenance and axiom closure use
+checked stored ConstantInfo bodies, including opaque proofs, rather than
+imported axiom caches. These checks do not add native correspondence premises.
+
+The version-zero knowledge request fixes the extraction algorithm through the
+admitted subject's typed extractor registry. The standard entry is
+`extractors.response_difference@0`. Its profile fixes the actual retained target,
+private scalar input coordinates, scalar/product response carrier, transcript
+reader and encoder, and an admitted challenge draw. Coordinates are unique,
+cover exactly the relation's scalar witness inputs, and use the challenge's
+nominal field. Repeated uses of one input share its value. The retained-target
+support proof checks private producer roles and excludes public/output witness
+selectors. The registry is part of the semantic environment; its reviewed
+transcript reader is not selected by an evidence value.
+
+A request stores a checked availability proof and obtains that one profile
+directly from the subject's registry. Recovery is componentwise
+`(z₁ - z₂) / (c₁ - c₂)`; unusable forks use the fixed full scalar/product sampler.
+Witness embedding is derived from the coordinate layout. The adversary receives
+all actual subject publications and the initial history. Acceptance uses the
+actual compiled verifier, or actual host validation at the byte stage. Canonical
+replay runs the compiled verifier against the recorded routed oracle cache;
+unrecorded queries reject. The meaning is the forking inequality for that
+concrete experiment. It contains no existential family, recovery callback,
+witness embedding, or evidence-selected adversary key.
+
+`SigmaJustification` is one proof method. It supplies the original-verifier
+equation, retained-relation correspondence, special soundness, and equalities of
+its transcript shape and recovery function with the registered profile. The
+generic `Extraction.replay_eq` proves operational equality with VCVio replay
+without a special-soundness assumption. `SigmaJustification.extract_eq` applies
+that equality; `knowledgeEndpoint` additionally uses actual-proof acceptance
+pruning and byte decoding/pruning. A malformed raw proof can reject while its
+canonical reading accepts; these are deliberately separate obligations.
+
+The earlier existential `ReplayClass` meaning was too weak: a statement-indexed
+Sigma family could recover witnesses by search or choice, despite using a fixed
+outer replay wrapper. Fixing the relation alone did not prevent this. The new
+meaning fixes recovery independently of proof evidence. Any kernel-checked
+proof of that same meaning remains valid; classical reasoning is not prohibited.
+The registered `prover_runs(2)` form still states a probability inequality,
+not a formal running-time bound or a general polynomial-time proof of knowledge.
+
+Public reports retain the selected whole-Entry scope and separately audit other
+compiled Entry trials. Undefined interactive meanings remain visible as
+incomplete trials; missing trial records remain unaudited/open. Neither changes
+the outcome of the explicitly selected Entry scope.
 
 ## Bounded scalar requests
 

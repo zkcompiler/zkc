@@ -34,7 +34,7 @@ private def stopped (reason site : String) (replies : List (Json × Json) := [])
 private def receiveBool : Json := arr [.str "receive", .str "delivery", .str "P", .str "V",
   wireType .boolean]
 private def receiveProcess (localValue : Bool) :
-    PIR.Proc (observedInterface Scalar Scalar) (OptionalValues [.boolean]) :=
+    PIR.Process (observedInterface Scalar Scalar) (OptionalValues [.boolean]) :=
   ((Participant.exchange (services := services) (Value := OpenValue)
     1 0 1 "delivery" (some localValue)).interpret observeAction).bind fun result =>
       .done (.cons result .nil)
@@ -46,7 +46,7 @@ theorem independent_receive (localValue : Bool) :
         (fun received => .done (.cons (some received) .nil)) := by
   rfl
 
-private def markedStop : PIR.Proc (observedInterface Scalar Scalar) (OptionalValues []) :=
+private def markedStop : PIR.Process (observedInterface Scalar Scalar) (OptionalValues []) :=
   .call (.mark "outer") fun _ => .call (.mark "inner.stop") fun _ => .halt .abort
 
 /-- Trace serialization is executable; this equation checks the mark transition
@@ -71,7 +71,7 @@ theorem wrong_typed_response_refused :
   rfl
 
 private def localStop (_ : Values OpenValue [.boolean]) :
-    PIR.Proc (observedInterface Scalar Scalar) (Values OpenValue []) :=
+    PIR.Process (observedInterface Scalar Scalar) (Values OpenValue []) :=
   .call (.mark "local.stop") fun _ => .halt .abort
 
 theorem owned_zero_result_stop_keeps_mark (state : ReplayState) :
@@ -94,9 +94,9 @@ private def snapshot (defs : List Definition) : Snapshot := (let contractDefinit
 private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (List String))
     (body : Block) : Definition :=
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
-    some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
+    some ⟨roles, inputScopes, outputScopes⟩, [], some (.protocol ⟨"main", []⟩), body⟩
 private def localHelper (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
-  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (name, []), body⟩
+  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (.local name []), body⟩
 private def runSnapshot (source : Snapshot) (req : Json) : Except String Json := do
   evaluateOpen (← check source) req
 private def expect (label : String) (actual : Except String Json) (expected : Json) : IO Unit := do
@@ -292,13 +292,13 @@ def run : IO Unit := do
   refuse "trace byte capacity" "structured-open-record-limit"
     (stopResult { remaining := [], recordBytes := 1024 * 1024 } .abort)
   let closed := snapshot [.function ⟨"main", .protocol, .publicDef,
-    [.boolean], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+    [.boolean], [.boolean], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [] (.ret [0])⟩]
   expect "legacy closed output" (do
     evaluate (← check closed) (arr [arr [.str "bool", .bool true]]))
     (arr [.str "returned", arr [arr [.str "bool", .bool true]]])
   let closedGroup := snapshot [.function ⟨"main", .protocol, .publicDef,
-    [.group groupDomain], [.group groupDomain], some ⟨["P"], [["P"]], [["P"]]⟩, [], none,
+    [.group groupDomain], [.group groupDomain], some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [] (.ret [0])⟩]
   expect "closed explicit additive group" (do
     evaluate (← check closedGroup) (arr [arr [.str "group", .str groupDomain, .str "7"]]))

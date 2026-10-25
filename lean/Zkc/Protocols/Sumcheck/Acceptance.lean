@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Protocols.Sumcheck.Security
+public import Zkc.Protocols.Sumcheck.Honest
 public import Zkc.Realization.Acceptance
 
 @[expose] public section

@@ -136,6 +136,21 @@ let
       "lean/Tests"
       "lean/ZkcExamples"
       "lean/ZkcTools"
+      "lean/checks/DeclarationRecords.lean"
+    ];
+    security.paths = [
+      "lean/security"
+      "lean/checks/check_clients.py"
+      "lean/clients"
+      "lean/support/lake.py"
+      "lean/support/evidence.py"
+      "lean/support/compatibility.py"
+      "lean/support/packages.py"
+      "lean/support/dependencies.py"
+      "lean/support/lean_headers.py"
+      "lean/checks/check_library.py"
+      "lean/checks/check_package_ownership.py"
+      "lean/checks/audit_imports.py"
     ];
     arklib.paths = [
       "lean/integrations/arklib"
@@ -144,6 +159,12 @@ let
       "lean/support/lake.py"
       "lean/support/evidence.py"
       "lean/support/compatibility.py"
+      "lean/support/packages.py"
+      "lean/support/dependencies.py"
+      "lean/support/lean_headers.py"
+      "lean/checks/check_library.py"
+      "lean/checks/check_package_ownership.py"
+      "lean/checks/audit_imports.py"
     ];
     leanChecks.paths = [
       "lean"

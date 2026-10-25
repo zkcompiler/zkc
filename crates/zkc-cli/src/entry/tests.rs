@@ -792,6 +792,7 @@ fn source_inspection_preparation_and_execution_share_checked_metadata() {
     std::fs::write(root.join("package.json"), boolean_package(false)).unwrap();
     let check = json!({"format":"zkc.source-check/0","status":"checked","phase":"complete",
         "scope":"definitions","capture":metadata["capture"],"installation":metadata["toolchain"],
+        "source_claim_inventory":[],
         "entries":[{"name":"sample::Main","kind":"function"},{"name":"sample::Proof","kind":"proof"}]});
     std::fs::write(root.join("check.json"), check.to_string()).unwrap();
     let source = root.join("main.zkc");

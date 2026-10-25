@@ -58,6 +58,27 @@ guards, loops with their bodies, and unsupported operations retained by name.
 Values are structured data (Booleans, field and group elements, indices and
 field vectors), transcript histories and coordinates.
 
+The same carrier also retains the actual producer's owner-local service
+interface in `Participant.servicePorts`, separate from ordinary SSA inputs.
+`Operation.localService port request template coordinates` retains the admitted
+entry input root, role-local port position, owner and contract; the typed
+request carries its method, data operand references and nominal result.
+Coordinates separately reference the enclosing induction values. The only
+admitted local request is a zero-operand field `draw`, with one field result;
+unused replies and unused ports remain retained. It consumes no transcript
+capability and does not identify a public challenge.
+
+`AuthoredPair.selectionValid` checks the complete native port interface against
+the original source. `SourceOccurrences.localValid` follows exact source
+application and repeat steps, carries service aliases through restrictions and
+captures, and checks source owner, root, contract, method, result and site.
+The producer rule checks dynamic coordinates against its enclosing induction
+references, preserving one root across repeated invocations. This is structural
+admission; freshness, joint honest sampling, native service realization and
+source-to-producer execution correspondence are separate obligations. The
+validator construction rule continues to refuse local requests, preserving
+the scope of its transform and adversarial meanings.
+
 A template keeps the native path (application and repeat steps) and event. Its
 model occurrence, the origin the transform absorbs, names a message by its
 qualified site and its sender and receiver, and a selected challenge by its

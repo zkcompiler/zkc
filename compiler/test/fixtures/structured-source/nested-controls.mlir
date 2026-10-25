@@ -31,5 +31,5 @@ module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%xs:!V,%a:!F,%b:!F,%enabled:i1):
    %r:2 = "protocol.local_call"(%xs,%a,%b,%enabled) {callee=@work,role="P",site="work"} : (!V,!F,!F,i1)->(!F,!F)
    "protocol.return"(%r#0,%r#1) : (!F,!F)->()
- }) {sym_name="main",function_type=(!V,!F,!F,i1)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F,!F,i1)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

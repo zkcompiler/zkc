@@ -623,3 +623,11 @@ manifest consumer tests and bounded captured-input compilation reuse are
 implemented. The optional MLIR LSP uses the upstream server with installed zkc
 dialects. Source editing, persistent query caching and automatic policy search
 remain separate work. See [tooling](compiler/tooling.md) for supported boundaries.
+
+The native structured exporter retains protocol template origins as bounded,
+kind-preserving static term trees, shared with source-claim subject arguments.
+It exports total index comparison, vector length and the natural power-of-two
+predicate. Sumcheck and composed TwoSums retain exact verifier-side table shape
+and repeat-bound input clauses. Native syntax, source comparison and executable
+recipe checks are separate from Lean reader admission, ABI-relative clause
+identification, callee binding and body equality proofs.

@@ -30,7 +30,7 @@ def payloadMeanings (observations : SiteObservations interface) (payload : Paylo
 
 def payloadDenote (observations : SiteObservations interface) (payload : Payload)
     (inputs : Values (assignment F G) payload.entry.inputs) :
-    PIR.Proc interface (Values (assignment F G) payload.entry.outputs) :=
+    PIR.Process interface (Values (assignment F G) payload.entry.outputs) :=
   payload.entry.body.denote (meaning observations (payloadMeanings observations payload)) inputs.get
 
 end Evaluation

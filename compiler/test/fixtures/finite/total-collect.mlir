@@ -13,5 +13,5 @@ module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%xs:!V,%factor:!F):
    %r = "algebra.finite_collect"(%xs,%factor) {domain=@items,body=@body} : (!V,!F)->!V
    "protocol.return"(%r) : (!V)->()
- }) {sym_name="main",function_type=(!V,!F)->!V,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F)->!V,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

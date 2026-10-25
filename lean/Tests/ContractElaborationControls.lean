@@ -14,9 +14,9 @@ private def predicate (changed : Bool) : Function :=
       [0, 1] [.boolean] [] ""] (.ret [0])⟩
 private def root : Function :=
   ⟨"main", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], none,
+    some ⟨["P", "V"], [["P", "V"], ["P", "V"]], [["V"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [] (.ret [0])⟩
-private def other : Function := { root with name := "other" }
+private def other : Function := { root with name := "other", origin := some (.protocol ⟨"other", []⟩) }
 private def spare : Function :=
   { predicate false with name := "spare", body := .block [] (.ret [0]) }
 private def relation : Relation :=

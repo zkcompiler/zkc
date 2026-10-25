@@ -43,7 +43,7 @@ theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw
         simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
           Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
           Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
-          PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, checkedIndices,
+          PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices,
           first, second, rowResult, boolResult, indexResult, HasShape, positive, nonzero,
           dimensionSmall, divisible, lengthBound, columnsBound, modBound, divBound, rowBound,
           Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel,
@@ -51,13 +51,13 @@ theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw
     · simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
         Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
         Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
-        PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, first, second, boolResult,
+        PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, second, boolResult,
         HasShape, positive, dimensionSmall, Evaluation.invokeCallback,
         show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
   · simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
       Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
       Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
-      PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, first, boolResult,
+      PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, boolResult,
       HasShape, positive, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
 
@@ -72,7 +72,7 @@ theorem shape_zero_columns (table : Meanings F G) (less : LessLaw table)
   simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     Environment.prepend, Environment.push, inputs, SiteObservations.closed,
-    SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
     first, boolResult, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
 /-- The high-dimension guard also precedes every length, division and loop. -/
@@ -89,7 +89,7 @@ theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
   simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     Environment.prepend, Environment.push, inputs, SiteObservations.closed,
-    SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
     first, second, boolResult, positive, large, Evaluation.invokeCallback,
     show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
@@ -106,7 +106,7 @@ theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
   simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     Environment.prepend, Environment.push, inputs, SiteObservations.closed,
-    SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
+    SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
     first, second, boolResult, positive, dimensionSmall, lengthInvalid, Evaluation.invokeCallback,
     show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
@@ -122,7 +122,7 @@ theorem table_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
     simp [vector, scalarDomain, PrimitiveTableViews.tableBody, Region.denote, meaning,
       Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
       Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-      SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+      SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
       shape, boolResult, Evaluation.invokeCallback]
 
 /-- Halves checks positive dimension before executing the two-result split.
@@ -143,14 +143,14 @@ theorem halves_body (table : Meanings F G) (less : LessLaw table)
       simp [vector, scalarDomain, PrimitiveHalvesViews.halvesBody, Region.denote, meaning,
         Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
         Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-        SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+        SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
         Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive, divisible,
         Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
     all_goals rfl
   · simp [vector, scalarDomain, PrimitiveHalvesViews.halvesBody, Region.denote, meaning,
       Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
       Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-      SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+      SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
       Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive,
       Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
@@ -164,7 +164,7 @@ theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table
   have comparison := less 0 dimension
   simp only [show 0 < indexLimit by decide +kernel, true_and, invalid, ite_false] at comparison
   simp only [Primitive.evaluate, show 0 < indexLimit by decide +kernel, ite_true,
-    primitiveOutcome, PIR.Proc.bind, Values.get_cons, Values.get, Environment.push,
+    primitiveOutcome, PIR.Process.bind, Values.get_cons, Values.get, Environment.push,
     comparison]
 
 /-- No raw table triple is excluded; width is unused and vector split has its own guard. -/

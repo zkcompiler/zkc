@@ -37,7 +37,7 @@ theorems = [
 subject = "Interactive Schnorr"
 result = '''
 Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation'''
-owners = [["Schnorr subject", "docs/support.md#interactive-schnorr"], ["security integration", "integrations/arklib/README.md"]]
+owners = [["Schnorr subject", "docs/support.md#interactive-schnorr"], ["reusable security", "security/README.md"]]
 theorems = [
   "ZkcExamples.Structured.SchnorrInteractive.perfect_completeness",
   "ZkcExamples.Structured.SchnorrInteractive.special_soundness",
@@ -85,7 +85,7 @@ subjects = ["sumcheck", "deferred-rounds"]
 [[proved]]
 subject = "Compiled Sumcheck proofs"
 result = '''
-The same composed rules accept the actual compiled validators of the Sumcheck example, with a protocol application and a repeat, and of its composed variant, with two applications; the ideal interpretation of each is the Fiat–Shamir transform of the original verifier, for the first the source rounds followed by the multilinear check. Composed with the multi-round bound, the first's ideal interpretation accepts a false claim with probability at most `(Q + n) / \|F\|` in the random-oracle model for a fixed well-formed statement, attained on a concrete instance, and adaptively chosen statements are bounded under the typed public-value binding of the table values, claim and round count, which establishes statement determination only (native absorption of the encoded rows remains assumed); the composed variant has no security theorem'''
+The same composed rules accept the actual compiled validators of the Sumcheck example, with a protocol application and a repeat, and of its composed variant, with two applications; the ideal interpretation of each is the Fiat–Shamir transform of the original verifier, for the first the source rounds followed by the multilinear check. Composed with the multi-round bound, the first's ideal interpretation accepts a false claim with probability at most `(Q + n) / \|F\|` in the random-oracle model for a fixed well-formed statement, attained on a concrete instance, and adaptively chosen statements are bounded under the typed public-value binding of the table values, claim and round count, which establishes statement determination only (native absorption of the encoded rows remains assumed); these legacy construction modules do not supply a composed security theorem; the same composed source now has separate generated TwoSums root receipts, documented in the subject routes'''
 owners = [["Participant projection", "docs/spec/participant-projection.md#the-compiled-sumcheck-proof-entry"], ["multi-round security", "docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcExamples.Construction.SumcheckProof.compiled_transform",
@@ -93,7 +93,7 @@ theorems = [
   "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.soundness",
   "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness",
 ]
-subjects = ["sumcheck", "composed-sumcheck"]
+subjects = ["sumcheck"]
 
 [[proved]]
 subject = "GKR"

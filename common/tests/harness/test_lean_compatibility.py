@@ -153,3 +153,21 @@ def test_fresh_reproduction_records_clean_wrapper_and_patch():
                  'TestsClean/NativeClients.lean', 'ZkcClean/NativeExport.lean']:
         path = root / 'lean/integrations/clean' / name
         assert inputs['integrations/clean/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_clean_control_runs_with_package_options_before_its_filename(tmp_path, monkeypatch):
+    reproduce = load('lean_reproduce', 'lean/reproduce.py')
+    expected = tmp_path / 'expected.mlir'
+    expected.write_bytes(b'control\n')
+    commands = []
+
+    def run(command, **kwargs):
+        from types import SimpleNamespace
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout=expected.read_bytes())
+
+    monkeypatch.setattr(reproduce.subprocess, 'run', run)
+    result = reproduce.clean_control('lake', tmp_path, expected, tmp_path / 'control.log', {})
+    assert result['status'] == 'pass'
+    assert commands == [['lake', 'env', 'lean', '-DautoImplicit=false', '-DwarningAsError=true',
+                         '--run', 'TestsClean/Control.lean']]

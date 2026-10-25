@@ -95,7 +95,7 @@ theorem VerifierArithmetic.standard_eq (arithmetic : VerifierArithmetic F)
     rfl
 
 def experimentWith (wiring : Wiring) (arithmetic : VerifierArithmetic F) (coefficients : Coefficients F) (claim : F) (service : Nat) :
-    PIR.Proc (actions (F := F)) (Option Bool) :=
+    PIR.Process (actions (F := F)) (Option Bool) :=
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.1 wiring.prover) fun a =>
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.2.1 wiring.prover) fun b =>
   .call (.receive (.field wiring.fieldDomain) wiring.firstSites.2.2 wiring.prover) fun c =>
@@ -113,7 +113,7 @@ def experimentWith (wiring : Wiring) (arithmetic : VerifierArithmetic F) (coeffi
   else .halt .reject
 
 def experiment (wiring : Wiring) (coefficients : Coefficients F) (claim : F) (service : Nat) :
-    PIR.Proc (actions (F := F)) (Option Bool) :=
+    PIR.Process (actions (F := F)) (Option Bool) :=
   experimentWith wiring standardArithmetic coefficients claim service
 
 /-- Pure arithmetic obligations suffice; all effects, guards and continuations
@@ -128,7 +128,7 @@ theorem experimentWith_eq (wiring : Wiring) (arithmetic : VerifierArithmetic F)
   rfl
 
 abbrev Verifier (F : Type) [Field F] :=
-  Coefficients F → F → Nat → PIR.Proc (actions (F := F)) (Option Bool)
+  Coefficients F → F → Nat → PIR.Process (actions (F := F)) (Option Bool)
 
 structure VerifierContract (wiring : Wiring) (program : Verifier F) : Prop where
   realizes : ∀ coefficients claim service,

@@ -243,6 +243,7 @@ theorem idealStep_congr {R : Type} :
         idealStep context challenge table instruction env proof next'
   | ⟨operation, operands, results, body⟩, env, proof, nextAlways, next, next', holds, continues => by
       cases operation with
+      | localService => rfl
       | loop site maximum yielded =>
           cases operands with
           | nil => rfl

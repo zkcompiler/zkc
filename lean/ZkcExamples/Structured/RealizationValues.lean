@@ -162,7 +162,7 @@ theorem realization_optional_missing
     | none => .done (.cons none .nil)
     | some values => (invoke (program.payload.componentTables F G).closed
         realizationHelper values).bind (fun result => .done result.present)) =
-      (PIR.Proc.done (.cons none .nil) :
+      (PIR.Process.done (.cons none .nil) :
         Closed (Values (Component (assignment F G)) valueTypes))
   rw [missing]
 

@@ -213,6 +213,7 @@ def Form.finishes {out : List Ty} (spec : Values (fun _ => Carried) out) : {Δ :
   | _, .guard _ _ _ next => next.finishes spec
   | _, .strict _ _ next => next.finishes spec
   | _, .compute _ _ _ next => next.finishes spec
+  | _, .math _ _ next => next.finishes spec
   | _, .byLaw _ _ next => next.finishes spec
   | _, .owned _ _ _ next => next.finishes spec
   | _, .repeat _ _ _ _ _ _ next => next.finishes spec
@@ -225,7 +226,7 @@ variable (model) (tables : Tables model) (results : LawResults model laws) (cont
 /-- A returned tuple, presented. -/
 def finishLeaf {out : List Ty} (spec : Values (fun _ => Carried) out) {Δ : Scope}
     (values : Values (Comp laws Δ) out) (binders : Binders model Δ) :
-    PIR.Proc (Interface model) (Tuple model.Value (carried spec)) :=
+    PIR.Process (Interface model) (Tuple model.Value (carried spec)) :=
   match presented results spec values binders with
   | some presentedValues => .done (Tuple.ofValues presentedValues)
   | none => .halt .refused
@@ -239,17 +240,17 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
           fun tuple => .done (embed model.Value spec (Tuple.toValues tuple))
   | _, .done values, finishes, binders => by
     obtain ⟨presentedValues, found, same⟩ := presented_embed results binders spec values finishes
-    simp only [Form.denote, Form.denoteWith, finishLeaf, found, PIR.Proc.bind, Tuple.toValues_ofValues, same]
+    simp only [Form.denote, Form.denoteWith, finishLeaf, found, PIR.Process.bind, Tuple.toValues_ofValues, same]
   | _, .halt _, _, _ => rfl
   | _, .send ty site peer value next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind]
-    exact congrArg (PIR.Proc.call _) (funext fun _ => denote_finish spec next finishes binders)
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    exact congrArg (PIR.Process.call _) (funext fun _ => denote_finish spec next finishes binders)
   | _, .receive ty site peer next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind]
-    exact congrArg (PIR.Proc.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
   | _, .query site request args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind]
-    exact congrArg (PIR.Proc.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind]
+    exact congrArg (PIR.Process.call _) (funext fun reply => denote_finish spec next finishes (.cons reply binders))
   | _, .split subject absent present, finishes, binders => by
     simp only [Form.finishes, Bool.and_eq_true] at finishes
     simp only [Form.denote, Form.denoteWith]
@@ -262,25 +263,26 @@ theorem denote_finish {out : List Ty} (spec : Values (fun _ => Carried) out) :
     · exact denote_finish spec next finishes binders
     · rfl
   | _, .strict helper args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
-    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
-  | _, .compute op allowed args next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
-    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+  | _, .compute op allowed args next, finishes, binders
+  | _, .math _ _ next, finishes, binders => by
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .byLaw _ _ next, finishes, binders => denote_finish spec next finishes binders
   | _, .owned _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
-    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .repeat _ _ _ _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
-    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
   | _, .apply _ _ _ _ _ next, finishes, binders => by
-    simp only [Form.denote, Form.denoteWith, PIR.Proc.bind_assoc]
-    exact congrArg (PIR.Proc.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
+    simp only [Form.denote, Form.denoteWith, PIR.Process.bind_assoc]
+    exact congrArg (PIR.Process.bind _) (funext fun values => denote_finish spec next finishes (.cons values binders))
 
 /-- Two ways of running repeats that agree on every repeat give the same process. -/
 theorem denoteWith_runs {out : List Ty} {A : Type}
-    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Proc (Interface model) A)
+    (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Process (Interface model) A)
     (first second : Runs model)
     (agree : ∀ (spec : RepeatSpec) (region : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
       (count : Option Nat) (state : Values (Component model.Value) spec.state)
@@ -294,14 +296,14 @@ theorem denoteWith_runs {out : List Ty} {A : Type}
   | _, .halt _, _ => rfl
   | _, .send _ _ _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.call _) (funext fun _ => denoteWith_runs leaf first second agree next binders)
+    exact congrArg (PIR.Process.call _) (funext fun _ => denoteWith_runs leaf first second agree next binders)
   | _, .receive _ _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.call _) (funext fun reply =>
+    exact congrArg (PIR.Process.call _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .query _ _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.call _) (funext fun reply =>
+    exact congrArg (PIR.Process.call _) (funext fun reply =>
       denoteWith_runs leaf first second agree next (.cons reply binders))
   | _, .split subject absent present, binders => by
     simp only [Form.denoteWith]
@@ -313,25 +315,26 @@ theorem denoteWith_runs {out : List Ty} {A : Type}
     rw [denoteWith_runs leaf first second agree next binders]
   | _, .strict _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+    exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
-  | _, .compute _ _ _ next, binders => by
+  | _, .compute _ _ _ next, binders
+  | _, .math _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+    exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .byLaw _ _ next, binders => denoteWith_runs leaf first second agree next binders
   | _, .owned _ _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+    exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .repeat spec _ callback _ _ _ next, binders => by
     simp only [Form.denoteWith]
     rw [agree spec callback]
-    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+    exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
   | _, .apply _ _ _ _ _ next, binders => by
     simp only [Form.denoteWith]
-    exact congrArg (PIR.Proc.bind _) (funext fun values =>
+    exact congrArg (PIR.Process.bind _) (funext fun values =>
       denoteWith_runs leaf first second agree next (.cons values binders))
 
 end Finish

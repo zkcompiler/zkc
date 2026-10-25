@@ -52,7 +52,7 @@ theorem run_body_view (context : ProtocolContext) (self : Nat)
 
 /-- A literal expected trace expression, retaining every lowered source mark. -/
 def verifierObserved (parent : Option String) (go : Bool) (first second : Nat) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) resultTypes) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) resultTypes) :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s3"))
   .call (.mark (site "s0")) <| fun _ =>
@@ -78,7 +78,7 @@ def verifierObserved (parent : Option String) (go : Bool) (first second : Nat) :
 
 /-- The receiver's reply is independent of the sender's arithmetic and services. -/
 def receiverObserved (parent : Option String) :
-    PIR.Proc (observedInterface F G) (Values (Component (assignment F G)) resultTypes) :=
+    PIR.Process (observedInterface F G) (Values (Component (assignment F G)) resultTypes) :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s3"))
   .call (.mark (site "s0")) <| fun _ =>
@@ -98,7 +98,7 @@ def receiverObserved (parent : Option String) :
 
 /-- Ordered actions after erasing internal marks; qualified action sites remain. -/
 def verifierProcess (parent : Option String) (go : Bool) (first second : Nat) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) resultTypes) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) resultTypes) :=
   let site := qualifyProtocolSite parent
   let child := qualifyProtocolSite (some (site "s3"))
   .call (.query (site "s0") "bls12-381.fr" (.cons first .nil)) <| fun (before : F) =>
@@ -132,7 +132,7 @@ theorem contextual_verifier (parent : Option String) (go : Bool) (first second :
   simp only [servicesInput] at draw_view
   rw [run_body_view]
   simp only [runBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, inputs, draw_view]
   cases parent <;> cases go <;> rfl
 
@@ -145,7 +145,7 @@ theorem contextual_receiver (parent : Option String) (go : Option Bool)
   simp only [servicesInput] at draw_view
   rw [run_body_view]
   simp only [runBody, Region.denote, participantMeaning, participantMeaningWith,
-    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Proc.bind,
+    protocolOperationWith, Operands.eval, Regions.denote, observedSites, PIR.Process.bind,
     Environment.prepend, inputs, draw_view]
   cases parent <;> rfl
 

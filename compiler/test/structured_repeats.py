@@ -153,7 +153,7 @@ def protocol(name, body='', roles=('P', 'Q'), inputs=(('n', 'ui64', ('P',)), ('x
     return f'''"protocol.func"() ({{ ^entry({args}):
       {body}
       "protocol.return"({','.join(returns)}) : ({outs})->()
-    }}) {{sym_name="{name}",function_type=({ins})->({outs}),roles={json.dumps(roles)},
+    }}) {{sym_name="{name}",origin=["{name}",[]],function_type=({ins})->({outs}),roles={json.dumps(roles)},
       input_roles={json.dumps([s for _, _, s in inputs])},
       output_roles={json.dumps([s for _, s in outputs])}}} : ()->()'''
 
@@ -584,6 +584,31 @@ with case('dormant-supported-repeat-is-admitted-with-repeat-free-selected-root')
                     protocol('dormant', body, inputs=(), outputs=(), returns=()))
     export(source)
     assert run(source, []) == returned([])
+
+with case('same-labelled-component-at-two-repeat-sites'):
+    source, symbol, snapshot = frontend(root / 'compiler/test/fixtures/structured-source/repeated-draw.zkc')
+    definitions = {row[1]: row for row in snapshot[7] if row[0] == 'function'}
+    owner = definitions[symbol]
+    loop, = [i for i in owner[9][1] if i[0][0] == 'protocol_repeat']
+    calls = [i for i in loop[3][0][2][1] if i[0][0] == 'protocol_apply']
+    assert len(calls) == 2 and calls[0][0][1] == calls[1][0][1]
+    assert calls[0][4] != calls[1][4]
+    component = definitions[calls[0][0][1]]
+    assert component[8] == ['sample::Draw', []]
+    draw, = [i for i in component[9][1] if i[0][0] == 'draw']
+    assert draw[4].startswith('label_')
+    role = owner[6][1][0]
+    actions = [['draw', qualified(call[4], draw[4]),
+                role, service, '0', 'bls12-381.fr'] for call in calls]
+    assert actions[0] != actions[1]
+    replies = [reply(action, str(value)) for action, value in
+               zip(actions * 2, [1, 2, 3, 4])]
+    assert run(source, ['2', '0'], role, replies, symbol) == returned(['10'], replies)
+    assert run(source, ['0', '0'], role, replies, symbol) == returned(['0'])
+    stop = reply(actions[1], stop='abort')
+    assert run(source, ['2', '0'], role, [replies[0], stop, *replies[2:]], symbol) == stopped(
+        'abort', actions[1][1], [replies[0], stop])
+    native(source, 'same-labelled-component')
 
 commands.save()
 print(f'{counted()} structured repeat cases; evidence: {commands.directory}')

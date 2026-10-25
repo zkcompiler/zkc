@@ -28,7 +28,7 @@ HEADER_ROOTS = {
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
         "Compilation", "Diagnostics", "Observation", "Host", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
-        "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
+        "LanguagePackage", "LanguageInspection", "SourceClaims", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
     "ZkcIR": ["Dialect", "Interfaces", "Analysis"],
@@ -131,6 +131,7 @@ def main():
     extra_includes, extra_libraries, extra_private = extra.includes, extra.libraries, extra.private
     extra_namespaces = {item.split("/")[0] for item in extra_includes}
     extra_libraries["ZkcLanguage"].add("utf8proc::utf8proc")
+    extra_libraries["ZkcContracts"].add("utf8proc::utf8proc")
     targets = {}
     owners = {}
     for line in manifest.read_text().splitlines():

@@ -13,7 +13,7 @@ private abbrev scalar : Ty := .field scalarDomain
 private abbrev vector : Ty := .vector scalarDomain
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def root : Definition := .function ⟨"main", .protocol, .publicDef, [], [],
-  some ⟨["P"], [], []⟩, [], none, .block [] (.ret [])⟩
+  some ⟨["P"], [], []⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [])⟩
 private def snapshot (definitions : List Definition) : Snapshot :=
   (let contractDefinitions : List Definition := root :: definitions
    ⟨digest, "main", [], [], [], contractDefinitions,
@@ -53,13 +53,13 @@ private def mapWire (mask : List Json) : Json := arr [
 private def invokeInstruction (name : String) (inputs : List Nat) (outputs : List Ty) : Instruction :=
   .instruction (.call name) inputs outputs [] ""
 private def localApply (name target : String) (inputs outputs : List Ty) : Definition :=
-  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (name, []),
+  .function ⟨name, .local, .privateDef, inputs, outputs, none, [], some (.local name []),
     .block [.instruction (.apply target) (List.range inputs.length) outputs [] "apply"]
       (.ret (List.range outputs.length))⟩
 private def localCall (target : String) (inputs outputs : List Ty) : Definition :=
   .function ⟨"other", .protocol, .publicDef, inputs, outputs,
     some ⟨["P"], inputs.map (fun _ => ["P"]), outputs.map (fun _ => ["P"])⟩,
-    [], none, .block [.instruction (.localCall target "P")
+    [], some (.protocol ⟨"other", []⟩), .block [.instruction (.localCall target "P")
       (List.range inputs.length) outputs [] "call"] (.ret (List.range outputs.length))⟩
 
 private abbrev F := ZMod 97
@@ -99,7 +99,7 @@ private def wrongIdentity : Meanings F F := [⟨{spec.helper with name := "other
 example : Evaluation.denoteMap wrongIdentity spec (.cons [1] (.cons (8 : F) .nil)) = .halt .refused := rfl
 
 private def rowInterface : PIR.Signature := ⟨Nat, fun _ => Unit⟩
-private def effectfulRow (index : Nat) : PIR.Proc rowInterface Nat :=
+private def effectfulRow (index : Nat) : PIR.Process rowInterface Nat :=
   .call index (fun _ => if index = 1 then .halt .reject else .done index)
 example : Evaluation.mapRows effectfulRow [0, 1, 2] =
     .call (0 : Nat) (fun _ => .call (1 : Nat) (fun _ => .halt .reject)) := rfl

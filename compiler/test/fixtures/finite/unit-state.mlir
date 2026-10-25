@@ -21,5 +21,5 @@ module { "protocol.module"() ({
  ^entry(%xs:!V,%enabled:i1):
    %r = "protocol.local_call"(%xs,%enabled) {callee=@work,role="P",site="work"} : (!V,i1)->i1
    "protocol.return"(%r) : (i1)->()
- }) {sym_name="main",function_type=(!V,i1)->i1,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,i1)->i1,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

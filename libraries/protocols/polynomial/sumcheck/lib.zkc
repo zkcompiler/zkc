@@ -14,6 +14,14 @@ math fn total<F: Field>(values: Vector<F>) -> F {
     fn(current, value) => current + value);
 }
 
+// Exact cube shape and repeat bound, evaluated at the verifier's input copy.
+// Carrier representability and agreement between role copies belong to ABI admission.
+pub relation TableShape<F: Field, Max: nat>(parameter values: Vector<F>,
+    parameter rounds: index) {
+  return zkc::indices::power_of_two(intrinsic<F>("vector.length", values), rounds)
+    && !intrinsic("index.less", index<Max>(), rounds);
+}
+
 // The parameter is one fixed table selected by the property consumer. Purpose
 // labels alone neither choose its authority nor existentially quantify it.
 pub relation Sum<F: Field>(parameter values: Vector<F>, statement claim: F) {
@@ -76,7 +84,10 @@ pub fn check<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool eff
 pub protocol Sumcheck<F: Field, Max: nat> roles(P,V)
     (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)
-    where () spec { target public_sum = Sum<F>(in.values@V, in.claim) accept out.accepted; }
+    where () spec {
+      input shape = TableShape<F, Max>(in.values@V, in.rounds@V);
+      target public_sum = Sum<F>(in.values@V, in.claim) accept out.accepted;
+    }
 {
   let table @P = multilinear::table(values, rounds, 1);
   #[site(reduce)] let (point, residual, evaluation) =

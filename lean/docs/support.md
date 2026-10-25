@@ -11,15 +11,24 @@ native examples' aggregate query type and finite-fold realization; the
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
 
+The [component installation](spec/components.md) also checks a sequential
+Schnorr/Chaum–Pedersen producer with private draws interleaved with public
+challenges, through generated whole-process views and a canonical compiled-ideal
+completeness receipt. Reusable sampled readback composes over actual returned
+values, service state and transcript histories. This adds honest completeness
+coverage, under the installed returning-service model; it adds no knowledge,
+zero-knowledge or native-realization claim. Input-clause interpretations and
+nonvacuity evidence remain checked against the fixed subject.
+
 | Surface | Maintained claim | Explicit boundary |
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
-| [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers, each checked root and helper traced to its retained source declaration; explicit scalar/group interpretation, also over per-identity carriers and domain models with equations to the uniform interpretation; domain identities resolved against exported catalogue rows that agree with a BLS12-381 environment proved justified (prime scalar modulus); owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections; process equations for the actual [finite fold fixtures](#finite-fold-subjects) | Only the BLS12-381 rows are admitted, at field, vector, G1 and service types; no general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
+| [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers, each checked root and helper traced to its retained source declaration; explicit scalar/group interpretation, also over per-identity carriers and domain models with equations to the uniform interpretation; domain identities resolved against exported rows that agree with the installed catalogue; BLS and KoalaBear model capabilities supply their actual algebra, characteristic and cardinality laws; owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections; process equations for the actual [finite fold fixtures](#finite-fold-subjects) | Installed BLS12-381 and KoalaBear base/octic rows are admitted at their listed sorts; no general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
-| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcSecurity.Examples.CausalSumcheck.LogicalResidual`) |
+| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcArkLib.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
-| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings, normal forms of roots that apply other protocols (the callee's generated normal form substituted at the application's child context), each role's invocation at any caller context, and named positions of carried repeat slots; each generated normal-form equation is an instance of one soundness theorem of the verified normalizer (`Zkc.Source.Structured.NormalForm.normalize_sound`), whose form the compiled normalizer (`structured-source normal-form`) prints and the kernel checks by evaluation, and the Σ root equations are checked by `kernel_rfl` alone | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
+| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; the Lean `structured-source component-bindings` printer generates checked source views, whole-process equations and occurrence-indexed obligations; retained older clients also use `bridges/structured/normal_forms.py` for participant normal forms, positional builders, embeddings and contract bindings, normal forms of roots that apply other protocols (the callee's generated normal form substituted at the application's child context), each role's invocation at any caller context, and named positions of carried repeat slots; each generated normal-form equation is an instance of one soundness theorem of the verified normalizer (`Zkc.Source.Structured.NormalForm.normalize_sound`), whose form the compiled normalizer (`structured-source normal-form`) prints and the kernel checks by evaluation, and the Σ root equations are checked by `kernel_rfl` alone | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
 | [Structured primitives](#library-primitive-subjects) | Conditional u64 index arithmetic, list length/sum/split/append/equality laws and strict exec sequencing; complete library Shape/Table/Halves wrappers, an arithmetic/vector Sequence caller and a two-role pure-index caller | Library equations state their representation premises; logical lists, without host allocation or native resource correspondence; no observed Shape/Table/Halves site law |
 | [Retained protocol applications](#protocol-application-subjects) | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
@@ -79,7 +88,7 @@ admitted native programs. The structured model's vector and index selection
 controls exercise selections that the native exporter does not emit in
 mathematical code.
 
-The optional security package invokes ArkLib's
+The optional ArkLib package invokes ArkLib's
 `Sumcheck.Interaction.Native.execute_soundness`. Its adapter constructs degree-
 bounded messages and the public polynomial oracle, proves all evaluation/domain
 laws and equality of accepted-event computations. The quadratic adapter connects
@@ -93,7 +102,7 @@ owned claimed results are audited separately and must use only Lean's standard
 three axioms. A build of all upstream sources is not asserted.
 
 For precise APIs read the theorem statements in `Zkc`, `ZkcExamples`, and
-`integrations/arklib/ZkcSecurity`; [architecture](architecture.md) explains their
+`security/ZkcSecurity` and `integrations/arklib/ZkcArkLib`; [architecture](architecture.md) explains their
 roles. [Bridge commands](../bridges/common/README.md) reproduce finite checks.
 The scalar bridge's Z/97 comparisons do not establish BLS12-381 arithmetic.
 The [structured bridge](../bridges/structured/README.md) separately compares
@@ -101,23 +110,76 @@ full-size BLS12-381 scalar values with direct SSA execution and selected product
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
 
+## Original-component construction transport
+
+The SmallSumcheck and TwoSums canonical typed-history roots bind the admitted
+Sumcheck `Reduce` implementation, then use separate original-to-artifact
+certificates for the producer and validator. Their scalar and charged soundness
+and honest completeness receipts use that route. The full charged presentation
+retains the actual result and runtime state; accepting-event agreement alone is
+insufficient. Soundness covers all typed statements, including malformed table
+shapes and counts. Shape and capacity premises restrict only the fixed honest
+experiment. The existing query budgets remain two and eight.
+
+One production catalogue emits the source call equations, typed artifact output
+coordinates, role simulations, source presentations, ABI installations and
+endpoint wrappers. Source dependency aliases remove ordinal helper names from
+the authored mathematical clients. The installed generator supports one or two
+sequential `Reduce`/check calls with the selected field and message interface;
+other families require checked library realizations. Boolean, nonlinear
+polynomial, stopped-prefix and shifted-layout clients exercise the shared
+construction interfaces, not complete security endpoints for those protocols.
+
+Pure table execution belongs to `Families.Sumcheck.TableComponent.Execution`;
+source/artifact adapters belong to `Realizations.Sumcheck`. The retained
+compiled-round recognizer remains a regression client and is not the canonical
+roots' binding authority. The existing interpreted executable-bytes Sumcheck
+leaf remains necessary until a separate stage-transport theorem replaces it.
+Verifier-side source input clauses now own the table shape and maximum-round
+conditions. Honest input admission also requires source-sort representability
+and preparation of the pair; the target relation is a separate premise.
+The selected model is `models.honest@0(producer=producers.compiled@0())`, with
+one shared transcript cache and fresh private uniform draws on the admitted
+arithmetic vocabulary. Source/target/artifact and model changes require receipt
+reissuance; an old request digest is not preservation evidence for the new one.
+General cryptographic realization-role models remain outside this installation.
+
+Final source-claim status is selected in Lean from freshly extracted declaration
+types, binder and axiom audits, and required links. Python joins and renders the
+exported decision and refuses missing or corrupt envelopes. See
+[components](spec/components.md) and [assurance reports](spec/assurance-report.md)
+for the responsibility and trust boundaries.
+
 ## Compiled subjects
 
-One row per subject manifest, from its generated [assurance report](spec/assurance-report.md).
+The composed-Sumcheck manifest report is retired. The same source is covered
+by the generated `TwoSums` root, with exact scalar and charged soundness
+requests and a compiled-ideal completeness receipt; see the
+[subject routes](../subjects/README.md). The following table covers the
+remaining manifest pipeline and does not duplicate that root.
+
+One row per selected canonical security claim, or per subject with no selected
+security claim, from its generated [assurance report](spec/assurance-report.md).
+Author claims remain separate in that report. A certified row establishes
+the requested interpreted claim under its recorded assumptions; native execution
+correspondence remains open. Other Entry trials stay visible in the full report.
 
 <!-- BEGIN GENERATED subject-rows: lean/checks/check_records.py --write -->
 | Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
 |---|---|---|---|---|---|---|
-| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| composed-sumcheck | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
-| deferred-rounds | `example::Proof` |  |  |  |  | unresolved: the manifest claims no property |
-| gkr | `example::Proof` | ideal-meaning | soundness | fixed | `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | unresolved: the manifest names no application declaration |
-| guess | `example::Proof` | ideal-meaning | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| okamoto-proof | `example::Proof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| okamoto | `` |  |  |  |  | unresolved: the manifest claims no property |
-| schnorr-and | `example::AndProof` | ideal-meaning | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `exporter.checked-candidate`, `transport.canonical-decoding`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| schnorr | `example::Proof` | executable-bytes | knowledge-soundness | fixed | `budget.selected-queries`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
-| sumcheck | `example::Proof` | executable-bytes | soundness | adaptive | `budget.weighted-cost`, `exporter.structured-denotation`, `runtime.program-reader`, `runtime.acceptance-inclusion`, `runtime.installed-kernels`, `runtime.codec-function`, `transcript.encoding-injective`, `binding.native-absorption` | established |
+| chaum-pedersen | `example::EqualityProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| deferred-rounds | `example::Proof` |  |  |  |  | no-claim |
+| gkr | `example::Proof` |  |  |  |  | no-claim |
+| guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| guess | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| okamoto-proof | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| okamoto | `` |  |  |  |  | open: no bound source claim export was produced |
+| schnorr-and | `example::AndProof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | interpreted-executable-bytes | knowledge |  | `source.correspondence` | certified |
+| schnorr | `example::Proof` | ideal-meaning | knowledge |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | interpreted-executable-bytes | soundness |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
+| sumcheck | `example::Proof` | ideal-meaning | soundness |  | `source.correspondence` | certified |
 <!-- END GENERATED subject-rows -->
 
 ## Finite fold subjects
@@ -770,7 +832,7 @@ proof terms; no native decision axiom is used.
 
 ## Multilinear security validation
 
-`TestsSecurity.MultilinearSumcheck` exercises endpoint/coefficient distinction,
+`TestsArkLib.MultilinearSumcheck` exercises endpoint/coefficient distinction,
 characteristic two, MSB coordinate order, residual versus full evaluation,
 zero rounds, arbitrary effectful strategies and abort preservation. It reuses
 the core F97 early-challenge attack through the polynomial adapter. A separate
@@ -791,7 +853,7 @@ so it cannot satisfy even the reachable full-distribution contract. A literal
 fresh-HIGH-only sample has mass one half in this control. The bijective sampler
 r ↦ 1-r satisfies the law on the reached false flag and composes through two
 queries; an unreachable constant-provider flag violates the specified law.
-Effectful determined values and Proc-level conservative checker contracts are
+Effectful determined values and Process-level conservative checker contracts are
 also exercised.
 
 The exhaustive optional audit covers every owned declaration and its transitive
@@ -852,7 +914,7 @@ The axiom closures of the `knowledge_soundness` theorems of
 `StructuredSchnorrFiatShamir`, `SchnorrAndSigma` and `ChaumPedersenSigma` are
 `propext`, `Classical.choice` and `Quot.sound`.
 
-`TestsSecurity.SumcheckFiatShamir` instantiates the imported Sumcheck theorems
+`TestsArkLib.SumcheckFiatShamir` instantiates the imported Sumcheck theorems
 over `ZMod 5` with one round, the raw vector `[2, 1]` and the false claim `0`:
 the raw-vector decoding, false-claim and query-bound premises hold together and
 the fixed-statement bound is `1 / 5`. Kernel evaluations of the transform under
@@ -894,7 +956,7 @@ are kernel-checked lemmas, and the benchmark block factor
 `(1 + 2097151 / 2130706433) ^ 100 ≤ 1.104` is checked by exact rational
 arithmetic.
 
-`TestsSecurity.UpstreamImports` imports two ArkLib protocols through
+`TestsArkLib.UpstreamImports` imports two ArkLib protocols through
 `ofWorstCase`. For a two-round guessing protocol over `Fin 4` with a pure
 verifier, the bound is `(Q + 1) / 4` for fixed and adaptively chosen inputs, and
 the query-free prover that sends a guess is computed to be accepted with
@@ -921,15 +983,15 @@ chain model, with the byte hash as a random oracle
 named for the duplex suites; that the compiled transcript handlers and the
 installed Keccak-256 kernels implement the chain model remains an obligation. `zkc-compile language-emit` on the project
 `examples/projects/sumcheck/zkc.toml` with `--entry=example::Proof` and with
-`--entry=example::Interactive` gives byte-identical original-stage exports
-(`sha256:2b935a82be29b83007c44c878ae03535b2da6dd707c7d8a9899e1a2a16c36c6c`, entry
+`--subject=sumcheck::Sumcheck<example::Fr,2>` gives byte-identical original-stage exports
+(`sha256:f4609c05db74ba30cca03242479a9d5a879b580ba9dd9d2db3af6cf512375769`, entry
 `zkl_ba110e6c…`), the export of `SumcheckSourceData.snapshot` and the structured
 bridge fixture. The construction bridge pins this for `example::Proof`: its
 `sumcheck` subject requires the Entry's fresh original export to render to the
 committed `SumcheckSourceData` (check
 `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
 
-`TestsSecurity.CompiledSumcheckFiatShamir` instantiates the compiled Entry's
+`TestsArkLib.CompiledSumcheckFiatShamir` instantiates the compiled Entry's
 theorems on the same instance. The premises of `soundness` hold together with
 bound `1 / 5`. The compiled program, evaluated in the kernel through its ideal
 meaning without the construction equation, accepts the cheating proof exactly at
@@ -973,9 +1035,9 @@ and of the Sumcheck instance's `soundness`, `imported_soundness`,
 `evalSPMF_uniformSample_map_comp_injective` and ArkLib
 `MultivariateRound.uniform_successor_soundness`.
 
-The FRI transfer `ZkcSecurity.Examples.FriFiatShamir` has no control of its own:
+The FRI transfer `ZkcArkLib.Examples.FriFiatShamir` has no control of its own:
 its premises are those of the FRI certificate, instantiated by
-`TestsSecurity.FriSecurity`, and of the typed engine, instantiated by
+`TestsArkLib.FriSecurity`, and of the typed engine, instantiated by
 `TestsSecurity.FiatShamirTyped`; no control instantiates them together. The
 axiom closures of its `typedCertificate`, `fiatShamir_soundness`,
 `fiatShamir_soundness_uniqueDecoding`, `fiatShamir_soundness_koalaBear` and
@@ -1091,7 +1153,7 @@ registered knowledge endpoints apply): the module's routing, routed prover,
 compiled verifier and experiment are those of the Schnorr family package
 (`route_eq_shape`, `reduce_eq_shape`, `verify_eq_evidence`,
 `acceptance_eq_endpoint`), so its statement is unchanged and its proof is the
-evidence's. `TestsSecurity.Endpoints` relates the evidence to the other earlier
+evidence's. `TestsArkLib.Endpoints` relates the evidence to the other earlier
 compiled theorems and holds the Lean controls:
 
 - **Guessing Entry.** The generated fixed-statement application gives back the
@@ -1161,7 +1223,7 @@ format or the scope of a claim.
 | Averaged round-by-round certificate at import | Import format | `Imports.averaged_escape`, `escape_after_one` | `perPrefix_fails` (`Typed.Step`) |
 | Statement input not observed at start (attack) | Adaptive soundness | existing `SumcheckFiatShamir.weak_acceptance`: probability `4 / 5` with one query, above the adaptive bound `3 / 5` (`unbound_violates_bound`); probability one is not reached | `unbound_not_determined` (`Determined`) |
 
-The statement-input row reuses `TestsSecurity.SumcheckFiatShamir`'s unbound
+The statement-input row reuses `TestsArkLib.SumcheckFiatShamir`'s unbound
 binding. A different asset body under an unchanged reference is a native check:
 the Entry package refuses the substitution with `ring-asset-identity`
 (`common/tests/protocol/test_expression_sumcheck.py`,
@@ -1180,7 +1242,7 @@ The declaration audit covers `ZkcSecurity.FiatShamir.{Obligations,ProviderSimula
 `TestsSecurity.ProviderSimulation`, and also
 `ZkcSecurity.FiatShamir.{Laws,Lifting,Binding}`, `TestsSecurity.LawRecords` and
 `TestsSecurity.BindingCodecs`.
-`TestsSecurity.CommitmentBridge` audits the commitment bridge's modules with the
+`TestsArkLib.CommitmentBridge` audits the commitment bridge's modules with the
 dependency rules: `ZkcSecurity.Commitment.soundness_weighted` and `soundness`
 with the lemmas of their proof, the extractor laws of `MerkleTrees` and
 `LeafHashing`, `CommittedOpening.intendedBound`, `CommittedOpeningBridge.soundness`,

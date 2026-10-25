@@ -1,0 +1,65 @@
+module service_control;
+use schnorr::{Schnorr, DLog};
+domain G = group("bls12-381.g1");
+domain Fr = field("bls12-381.fr");
+
+// Both parameters may borrow the same root; neither reply is used by the caller.
+protocol Borrowed roles(P,V)(left: Random<Fr> @P, right: Random<Fr> @P)
+    -> (value: Fr @P) {
+  let first = left.draw();
+  let second = right.draw();
+  return (value = first + second);
+}
+
+protocol Twice roles(P,V)(base: G @(P,V), point: G @(P,V), scalar: Fr @P,
+    nonces: Random<Fr> @P, unused: Random<Fr> @P, spare: Random<Fr> @P,
+    unused_verifier: Random<Fr> @V, challenges: Random<Fr> @V) -> (accepted: bool @V)
+    where () spec {
+      target knowledge = DLog<G>(in.base@V, in.point@V, in.scalar) accept out.accepted;
+    } {
+  let unused_draw = unused.draw();
+  let (discarded) = Borrowed roles(P,V)(nonces,nonces);
+  let (first) = Schnorr<G> roles(P,V)(base,point,scalar,nonces,challenges);
+  let (second) = Schnorr<G> roles(P,V)(base,point,scalar,nonces,challenges);
+  return (accepted = first && second);
+}
+
+protocol Repeated roles(P,V)(base: G @(P,V), point: G @(P,V), scalar: Fr @P,
+    nonces: Random<Fr> @P, challenges: Random<Fr> @V) -> (accepted: bool @V)
+    where () spec {
+      target knowledge = DLog<G>(in.base@V, in.point@V, in.scalar) accept out.accepted;
+    } {
+  let mut accepted: bool @V = true;
+  for _ in 0..2 roles(P,V) max 2 {
+    let unused_draw = nonces.draw();
+    let (result) = Schnorr<G> roles(P,V)(base,point,scalar,nonces,challenges);
+    accepted = accepted && result;
+  }
+  return (accepted = accepted);
+}
+
+// A loop invisible to the validator still retains every producer-local draw.
+protocol LocalRepeated roles(P,V)(base: G @(P,V), point: G @(P,V), scalar: Fr @P,
+    nonces: Random<Fr> @P, challenges: Random<Fr> @V) -> (accepted: bool @V)
+    where () spec {
+      target knowledge = DLog<G>(in.base@V, in.point@V, in.scalar) accept out.accepted;
+    } {
+  for _ in 0..2 roles(P) max 2 {
+    let unused_local_draw = nonces.draw();
+  }
+  let (result) = Schnorr<G> roles(P,V)(base,point,scalar,nonces,challenges);
+  return (accepted = result);
+}
+
+proof AliasProof = Twice {
+  prover P; verifier V; public {base,point}; accept accepted; target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+proof RepeatProof = Repeated {
+  prover P; verifier V; public {base,point}; accept accepted; target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+proof LocalRepeatProof = LocalRepeated {
+  prover P; verifier V; public {base,point}; accept accepted; target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

@@ -11,7 +11,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 /-- Each named helper captures its checked prefix. Protocols have their own
-context-parametric table, with the same Region/Proc interpretation. -/
+context-parametric table, with the same Region/Process interpretation. -/
 def UnitPayload.tables (payload : UnitPayload) (F G : Type)
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] : OpenTables F G :=
   payload.definitions.foldl (Evaluation.ComponentTables.extend (observedSites F G)) ⟨[], []⟩
@@ -41,7 +41,7 @@ theorem UnitPayload.protocolTable_forgetSites (payload : UnitPayload) :
 def Program.observed (program : Program) (F G : Type)
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (self : Nat) (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
-    PIR.Proc (observedInterface F G)
+    PIR.Process (observedInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   invokeProtocol (program.payload.protocolTable F G) program.payload.entry.signature {} self inputs
 
@@ -50,7 +50,7 @@ validates role references; callers choose a valid self (the CLI checks it). -/
 def Program.participant (program : Program) (F G : Type)
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (self : Nat) (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
-    PIR.Proc (participantInterface F G)
+    PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) program.payload.entry.outputs) :=
   (program.observed F G self inputs).interpret forgetSites
 

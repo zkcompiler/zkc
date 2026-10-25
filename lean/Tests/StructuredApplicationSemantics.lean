@@ -88,7 +88,7 @@ private def query : CheckedProtocol := checked querySignature
   (.letOp (.draw 0 "bls12-381.fr" "C") (.cons .here .nil) .nil (.ret (.cons .here .nil)))
 
 private def firstSite {IValue : Ty → Type} {A : Type} :
-    PIR.Proc (Participant.interface Nat Ty services IValue) A → Option String
+    PIR.Process (Participant.interface Nat Ty services IValue) A → Option String
   | .call (.query site _ _) _ => some site
   | .call (.send site _ _) _ => some site
   | .call (.receive _ site _) _ => some site
@@ -234,7 +234,7 @@ private def stoppingProvider : PIR.Handler (observedInterface F G) Nat String
 
 /-- The zero-output child retains prefix events and provider state; suffix is absent. -/
 theorem zero_result_provider_stop_prefix :
-    (PIR.Proc.call (I := observedInterface F G) (.mark "before") (fun _ =>
+    (PIR.Process.call (I := observedInterface F G) (.mark "before") (fun _ =>
       (protocolOperation (F := F) (G := G) ⟨[], []⟩ 0
         (.protocolApply zeroQuerySignature [0] "A") (.cons (some 8) .nil) .nil
         (extendProtocolTable (observedSites F G) observeAction ⟨[], []⟩ [] zeroQuery)).bind
@@ -327,7 +327,7 @@ private def markedZeroQuery : CheckedProtocol := checked zeroQuerySignature
 /-- Generic execution propagation is usable with marks and a successful request
 before the child's halt, for an arbitrary caller continuation. -/
 theorem marked_child_apply_run_stops {A : Type} (initial : Nat)
-    (next : Values (Component (assignment F G)) [] → PIR.Proc (observedInterface F G) A) :
+    (next : Values (Component (assignment F G)) [] → PIR.Process (observedInterface F G) A) :
     ((protocolOperation (F := F) (G := G) ⟨[], []⟩ 0
       (.protocolApply zeroQuerySignature [0] "A") (.cons (some 8) .nil) .nil
       (extendProtocolTable (observedSites F G) observeAction ⟨[], []⟩ [] markedZeroQuery)).bind
@@ -343,7 +343,7 @@ theorem marked_child_apply_run_stops {A : Type} (initial : Nat)
 /-- A provider stop retains both the preceding mark and its own event; the
 child's later stop mark and every caller suffix are absent. -/
 theorem marked_child_provider_run_stops {A : Type} (initial : Nat)
-    (next : Values (Component (assignment F G)) [] → PIR.Proc (observedInterface F G) A) :
+    (next : Values (Component (assignment F G)) [] → PIR.Process (observedInterface F G) A) :
     ((protocolOperation (F := F) (G := G) ⟨[], []⟩ 0
       (.protocolApply zeroQuerySignature [0] "A") (.cons (some 8) .nil) .nil
       (extendProtocolTable (observedSites F G) observeAction ⟨[], []⟩ [] markedZeroQuery)).bind
@@ -397,9 +397,9 @@ private def dormantBody : Region protocolDialect [] [] :=
 private def dormant : CheckedProtocol := checked dormantSignature dormantBody
 private def snapshot : Snapshot :=
   (let contractDefinitions : List Definition := [
-    .function ⟨"Dormant", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
+    .function ⟨"Dormant", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], some (.protocol ⟨"Dormant", []⟩),
       .block [.instruction (.protocolApply "Flat" ["A"]) [] [] [] "call"] (.ret [])⟩,
-    .function ⟨"Flat", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
+    .function ⟨"Flat", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], some (.protocol ⟨"Flat", []⟩),
       .block [] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Flat", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>

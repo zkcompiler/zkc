@@ -28,7 +28,10 @@ def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Bl
   .function ⟨name, kind, if kind == .protocol then .publicDef else .privateDef, inputs, outputs,
     if kind == .protocol then some ⟨["P"], inputs.map (fun _ => ["P"]),
       outputs.map (fun _ => ["P"])⟩ else none, premises,
-    if kind == .local then some (name, []) else none, body⟩
+    match kind with
+    | .math => none
+    | .local => some (.local name [])
+    | .protocol => some (.protocol ⟨name, []⟩), body⟩
 
 def snapshot (definitions : List Definition) (domains : List Domain := []) : Snapshot :=
   (let contractDefinitions : List Definition := definitions
@@ -350,7 +353,7 @@ def run : IO Unit := do
     function "main" .protocol [] [] (.block [] (.ret []))]) "structured-header")
   for bindings in [[("N", "7"), ("N", "8")], [("N", "")]] do
     test "invalid-origin-bindings-refused" (refused (snapshot [
-      .function ⟨"helper", .local, .privateDef, [], [], none, [], some ("template", bindings),
+      .function ⟨"helper", .local, .privateDef, [], [], none, [], some (.local "template" bindings),
         .block [] (.ret [])⟩,
       function "main" .protocol [] [] (.block [] (.ret []))]) "structured-header")
   test "duplicate-symbol" (refused {total with definitions := total.definitions ++ [totalRoot]}
@@ -465,11 +468,11 @@ def run : IO Unit := do
   test "extra-domain-op" (!(Structured.Format.domain (.arr #[.str "domain", .str "items",
     .arr #[.arr #[.str "vector", .str scalarDomain]],
     .arr #[.str "elements", toJson (0 : Nat), .str "extra"]])).isOk)
-  test "origin-bindings-retained" (match Structured.Format.origin
+  test "origin-bindings-retained" (match Structured.Format.origin .local
       (.arr #[.str "template", .arr #[.arr #[.str "N", .str "7"], .arr #[.str "F", .str scalarDomain]]]) with
-    | .ok value => value == some ("template", [("N", "7"), ("F", scalarDomain)])
+    | .ok value => value == some (.local "template" [("N", "7"), ("F", scalarDomain)])
     | _ => false)
-  test "origin-string-path-refused" (!(Structured.Format.origin
+  test "origin-string-path-refused" (!(Structured.Format.origin .local
     (.arr #[.str "template", .arr #[.str "legacy-path"]])).isOk)
   test "unknown-domain-decoded" ((Structured.Format.type (.arr #[.str "field", .str "F97"])).isOk)
   test "unknown-domain-refused" (refused (snapshot [function "main" .protocol [.field "F97"] []

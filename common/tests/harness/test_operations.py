@@ -71,17 +71,20 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
             developer.main()
     assert calls[0] == ([sys.executable, str(tmp_path / "lean/checks/check_library.py"),
                          "--integration", "clean"], None)
-    # The records of what is proved are checked with the Clean package before
-    # its committed control is compared.
-    assert calls[1] == ([sys.executable, str(tmp_path / "lean/checks/check_records.py"),
-                         "--integration", "clean"], None)
-    assert calls[2] == (["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
+    # Check actual package providers and exhaustive import coverage before
+    # records and the retained native control.
+    assert calls[1:4] == [([sys.executable, str(tmp_path / f"lean/checks/{name}"),
+                            "--integration", "clean"], None)
+                          for name in ("check_package_ownership.py", "audit_imports.py", "check_records.py")]
+    assert calls[4] == (["lake", "env", "lean", "-DautoImplicit=false", "-DwarningAsError=true",
+                         "--run", "TestsClean/Control.lean"],
                         tmp_path / "lean/integrations/clean")
     if current:
-        assert calls[3][0][:5] == ["lake", "env", "lean", "--run", "CleanExamples.lean"]
-        assert calls[4][0][1:3] == [str(tmp_path / "compiler/adapters/clean/regenerate.py"), "check"]
-        assert calls[3][0][5] == calls[4][0][3]
-    assert len(calls) == (5 if current else 3)
+        assert calls[5][0][:7] == ["lake", "env", "lean", "-DautoImplicit=false",
+                                   "-DwarningAsError=true", "--run", "CleanExamples.lean"]
+        assert calls[6][0][1:3] == [str(tmp_path / "compiler/adapters/clean/regenerate.py"), "check"]
+        assert calls[5][0][7] == calls[6][0][3]
+    assert len(calls) == (7 if current else 5)
     root, = (tmp_path / "reports/runs").iterdir()
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")
 
@@ -126,6 +129,10 @@ def test_native_lean_checks_subjects_then_requests_then_records(monkeypatch, tmp
                        "--integration", "arklib", "--evidence", str(output / "evidence")]
     assert not any("construction/check.py" in part or "executable/check.py" in part
                    for call in calls for part in call)
+    services, = [call for call in calls if any(part.endswith("check_local_service_admission.py") for part in call)]
+    assert services == [sys.executable, str(tmp_path / "lean/checks/check_local_service_admission.py"),
+                        "--compiler", str(tmp_path / "compiler/zkc-compile"),
+                        "--output", str(output.parent / "local-services")]
 
 
 @pytest.mark.parametrize("explicit", [False, True])
@@ -204,7 +211,7 @@ def test_install_refuses_existing_prefix_without_running_commands(kind, monkeypa
     assert os.path.lexists(prefix)
 
 
-@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint"])
+@pytest.mark.parametrize("scope", ["integration", "harness", "sdk", "style", "lint", "lean-security"])
 def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     runner = load("runner", "common/tests/run.py")
     calls = []
@@ -215,6 +222,8 @@ def test_uv_test_and_lint_commands_never_sync(scope, monkeypatch, tmp_path):
     assert len(uv) == 1
     assert uv[0][:5] == ["uv", "run", "--no-sync", "--locked", "ruff" if scope in {"style", "lint"} else "pytest"]
     assert not any("sync" in args or "fetch" in args for args in calls)
+    if scope == "lean-security":
+        assert "lean/security/checks/test_receipt_reporting.py" in uv[0]
 
 
 @pytest.mark.parametrize("driver,operation,child", [
@@ -283,3 +292,25 @@ def test_unknown_scope_is_rejected(tmp_path):
     result = subprocess.run([sys.executable, str(ROOT / "common/tests/run.py"), "invalid-scope"],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 2 and "invalid choice" in result.stderr
+
+
+def test_current_lean_checks_do_not_run_snapshot_tools():
+    developer = load("test_runner_snapshot_selection", "common/tests/run.py")
+    selected = {path.name for path in developer.lean_checks()}
+    assert {"audit_imports.py", "check_package_ownership.py", "check_records.py"} <= selected
+    assert not selected.intersection({"check_migration.py", "source_responsibility.py",
+                                      "check_local_service_admission.py"})
+
+
+def test_generated_view_controls_use_the_prepared_lean_environment(monkeypatch, tmp_path):
+    runner = load("test_view_control_environment", "common/tests/run.py")
+    calls = []
+    monkeypatch.setattr(runner, "run", lambda args, **kwargs: calls.append((list(map(str, args)), kwargs)))
+    monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path))
+    runner.execute("lean", SimpleNamespace())
+    for name in ("check_constructed_views", "check_structured_bindings"):
+        (command, options), = [(args, opts) for args, opts in calls
+                              if str(ROOT / f"lean/checks/{name}.py") in args]
+        assert command == ["lake", "env", sys.executable, str(ROOT / f"lean/checks/{name}.py"),
+                           "--records", str(tmp_path / "lean" / name)]
+        assert options["cwd"] == ROOT / "lean"

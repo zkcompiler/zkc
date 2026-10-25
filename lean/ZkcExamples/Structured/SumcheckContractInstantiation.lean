@@ -32,7 +32,7 @@ def childValue : BoundarySelector childOwner.protocol.signature scalar :=
   ⟨.output (.there (.there (.there (.there (.there .here))))), ⟨1, by decide⟩, by decide⟩
 
 def childInput : ApplicationBinding childOwner (childOwner.clause ⟨0, by decide⟩).subject where
-  relation := ⟨⟨1, by decide⟩, rfl⟩
+  relation := ⟨⟨2, by decide⟩, rfl⟩
   selectors := .cons childTable (.cons childDimension (.cons childWidth (.cons childClaim .nil)))
   exactSelectors := rfl
 

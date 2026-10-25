@@ -63,7 +63,7 @@ theorem less_body (table : Meanings F G) (a b : Nat)
       .done (boolResult (decide (a < b))) := by
   simp [lessBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-    SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate, primitiveOutcome, checkedIndices, aBound, bBound, boolResult]
 
 /-- This assumption is discharged from the retained declaration, not its name. -/
@@ -88,15 +88,15 @@ theorem rows_body (table : Meanings F G) (less : LessLaw table) (dimension : Nat
   have comparison := less dimension 64 dimensionBound (by decide +kernel)
   simp only [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push, indexResult,
-    SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
+    SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate, primitiveOutcome]
   simp only [show 64 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
-    show 0 < indexLimit by decide +kernel, ite_true, primitiveOutcome, PIR.Proc.bind,
+    show 0 < indexLimit by decide +kernel, ite_true, primitiveOutcome, PIR.Process.bind,
     comparison, boolResult, decide_eq_true bound, Evaluation.invokeCallback, Values.get_cons, Values.get,
     Environment.prepend, Environment.push, Operands.eval, Values.split, Values.append]
   simp only [Evaluation.denoteLoop, Evaluation.invokeCallback, Finite.execute,
     Finite.Domain.admit, Finite.admitThen, Nat.sub_zero, Values.split, Values.append,
-    PIR.Proc.bind]
+    PIR.Process.bind]
   have folded := Finite.fold_range_state
     (I := closedInterface)
     (fun (current : Values (assignment F G) [.index]) (_ : Nat) =>
@@ -112,9 +112,9 @@ theorem rows_body (table : Meanings F G) (less : LessLaw table) (dimension : Nat
         power_bound i iBound, show 2 < indexLimit by decide +kernel, multiplyBound,
         primitiveOutcome, Nat.pow_succ])
   simp only [indexResult, Values.get_cons, Values.get, show 2 < indexLimit by decide +kernel,
-    primitiveOutcome, PIR.Proc.bind, Nat.pow_zero, Environment.prepend, Environment.push,
+    primitiveOutcome, PIR.Process.bind, Nat.pow_zero, Environment.prepend, Environment.push,
     Values.get_cons, Values.append, Values.split, Primitive.evaluate, checkedIndices,
-    singleton_prepend, singleton_eta, singleton_append, singleton_split, PIR.Proc.bind_done, ite_true, and_true, Nat.zero_add] at folded ⊢
+    singleton_prepend, singleton_eta, singleton_append, singleton_split, PIR.Process.bind_done, ite_true, and_true, Nat.zero_add] at folded ⊢
   refine Eq.trans ?_ folded
   congr 1
 
@@ -129,7 +129,7 @@ theorem rows_rejected (table : Meanings F G) (less : LessLaw table) (dimension :
   simp [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
     Environment.push, indexResult, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, comparison, boolResult, large,
+    PIR.Process.bind, Primitive.evaluate, primitiveOutcome, comparison, boolResult, large,
     Evaluation.invokeCallback, show 64 < indexLimit by decide +kernel]
 
 def RowsLaw (table : Meanings F G) : Prop :=
@@ -201,7 +201,7 @@ theorem less_generic_body_all (table : Meanings F G) (a b : Nat) :
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Values.get, Environment.prepend, Environment.push,
     SiteObservations.closed, SiteObservations.silent, Primitive.evaluate, checkedIndices,
-    PIR.Proc.bind]
+    PIR.Process.bind]
   split <;> rfl
 
 def LessAllLaw (table : Meanings F G) : Prop :=
