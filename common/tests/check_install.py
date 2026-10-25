@@ -33,6 +33,8 @@ def check(binary, compiler, output):
     invoke("version", "--version")
     checked = json.loads(invoke("check", "inspect", "--project=zkc.toml", "--view=placement"))
     assert checked["status"] == "inspected" and 'entry' not in checked["checked"]
+    assert any(item["declaration"] == "example::ProofClaims" and item["label"] == "knowledge"
+               for item in checked["checked"]["source_claim_inventory"])
     assert any(d["name"] == "schnorr::Schnorr" for d in checked["checked"]["declarations"])
     # The source catalog is part of the installed package, consumed explicitly
     # from this external directory without the checkout's manifests or sources.

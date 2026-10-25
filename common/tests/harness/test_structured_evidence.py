@@ -78,6 +78,7 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
         "lean/ZkcTools/StructuredSource.lean": "import ZkcTools.StructuredSource.OpenEvaluation\n",
         "lean/ZkcTools/CommonSource.lean": "-- other executable root\n",
         "lean/ZkcTools/ImportHeaders.lean": "-- import auditing executable\n",
+        "lean/checks/DeclarationRecords.lean": "-- declaration capture executable\n",
         "lean/ZkcTools/StructuredSource/OpenEvaluation.lean":
             "import ZkcTools.StructuredSource.Bounds\nimport ZkcTools.JsonSupport\n",
         "lean/ZkcTools/StructuredSource/Bounds.lean": "def bound := 1\n",

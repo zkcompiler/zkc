@@ -10,7 +10,7 @@ experiment assumptions and theorem application tied together?
 
 Retain contracts at the original-PIR boundary and derive behavioral proofs from
 the typed `Region`. The region denotes one role-local open process in
-`PIR.Proc`. Relation interpretation and property-specific library adapters use
+`PIR.Process`. Relation interpretation and property-specific library adapters use
 that same subject. The [verification specification](../spec/verification.md#structured-contracts)
 owns the detailed interfaces; [support](../support.md) states theorem scope.
 

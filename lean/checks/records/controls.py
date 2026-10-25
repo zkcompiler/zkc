@@ -41,7 +41,7 @@ CONTRACT = "Sample.Examples.Contract.falseStatement"
 REGIME = "ZkcSecurity.Endpoint.Regime.exact"
 SCHEMA = "Sample.Links.AcceptanceInclusion"
 TYPES = [{"binder": "implicit", "premise": False, "type_head": "sort"},
-         {"binder": "instance", "premise": False, "type_head": "Field"}]
+         {"binder": "instance", "premise": False, "type_head": "Field", "model_instance": True}]
 
 
 def arguments(*names):
@@ -162,7 +162,7 @@ def subject(directory, *, endpoint="executable-bytes", recorded=None, evidence_d
 
 def report(directory, data, **options):
     manifest, folder = subject(directory, **options)
-    return reports.build(manifest, data, evidence_directory=folder)
+    return reports.endpoint_audit_report(manifest, data, evidence_directory=folder)
 
 
 def mentions(report_value, text):
@@ -279,7 +279,7 @@ def run():
         expect("report-application-elsewhere", elsewhere["outcome"] == "unresolved" and
                mentions(elsewhere, "is declared in Sample.Elsewhere"), elsewhere)
         manifest, folder = subject(fresh("reused"))
-        reused = reports.build(manifest, records(), evidence_directory=folder, reused_records="saved-records")
+        reused = reports.endpoint_audit_report(manifest, records(), evidence_directory=folder, reused_records="saved-records")
         row = reports.render_subjects([reused]).splitlines()[-1]
         expect("report-reused-records", reused["outcome"] == "unresolved" and reused["claims"] and
                all(item["outcome"] == "unresolved" and
@@ -306,6 +306,18 @@ EMITTED_APPLICATIONS = {
     "TestsSecurity.ReportControls.instance_premise": "instance",
 }
 
+# Real evidence records, so binder-dependence classification is tested through
+# the Lean emitter rather than through synthetic JSON alone.
+EMITTED_HYPOTHESES = {
+    "TestsSecurity.ReportControls.proved_binding": "proof",
+    "TestsSecurity.ReportControls.assumed_binding": "premise",
+    "TestsSecurity.ReportControls.unused_assumption_binding": "proof",
+    "TestsSecurity.ReportControls.fact_binding": "premise",
+    "TestsSecurity.ReportControls.inhabited_false_binding": "premise",
+    "TestsSecurity.ReportControls.inhabited_proof_binding": "premise",
+    "TestsSecurity.ReportControls.lifted_proof_binding": "premise",
+}
+
 
 def run_emitted(data):
     """The report's audit of an application's own telescope, on declarations Lean
@@ -330,6 +342,25 @@ def run_emitted(data):
             rows.append(label)
         else:
             failures.append(f"records control {label} failed: {reasons}")
+    for name, expected in EMITTED_HYPOTHESES.items():
+        record = data.get(name)
+        hypotheses = (record or {}).get("detail", {}).get("hypotheses")
+        actual = [item.get("status", {}).get("kind") for item in hypotheses or []]
+        label = "emitted-" + name.rsplit(".", 1)[1].replace("_", "-")
+        if actual == [expected]:
+            rows.append(label)
+        else:
+            failures.append(f"records control {label} failed: expected {[expected]}, got {actual}")
+    # Exercise the downstream report too: a status-string control alone cannot
+    # show that a proof-carrying instance is refused as an unregistered context.
+    for short in ("inhabited_false_binding", "inhabited_proof_binding", "lifted_proof_binding"):
+        name = "TestsSecurity.ReportControls." + short
+        record = data.get(name)
+        reasons = reports.binder_reasons(record or {}, "evidence")
+        if not any(reason.startswith("hidden parameter:") for reason in reasons):
+            failures.append(f"records control hidden-{short} failed: {reasons}")
+        else:
+            rows.append("hidden-" + short)
     return rows, failures
 
 
@@ -367,3 +398,162 @@ def run_ledger_controls(rows, expect):
         expect("document-stale-name", checked == 2 and len(findings) == 1 and "Zkc.Sample.renamed" in findings[0],
                findings)
     return rows
+
+
+EMITTED_RECEIPTS = {
+    "Tests.ClaimReporting.clean": None,
+    "Tests.ClaimReporting.explicitFalse": "omitted premise",
+    "Tests.ClaimReporting.implicitFalse": "omitted premise",
+    "Tests.ClaimReporting.inhabitedFalse": "hidden parameter",
+    "Tests.ClaimReporting.liftedFalse": "hidden parameter",
+    "Tests.ClaimReporting.forgedDischarger": None,
+    "Tests.ClaimReporting.forgedDependency": None,
+    "Tests.ClaimReporting.forgedRoute": None,
+    "Tests.ClaimReporting.omittedLink": "unproved registered obligation",
+    "Tests.ClaimReporting.provedLink": None,
+    "Tests.ClaimReporting.wrongType": "proof type mismatch",
+}
+
+EMITTED_STAGE_RECEIPTS = {
+    "ProjectedCarrier.directReceipt": ("manualData", None),
+    "ProjectedCarrier.carrierReceipt": ("manualData", None),
+    "ProjectedCarrier.opaqueReceipt": ("manualData", None),
+    "ProjectedCarrier.positiveReceipt": ("manualData", None),
+    "ProjectedCarrier.blockedReceipt": ("manualData", None),
+    "HigherOrder.directReceipt": ("idealData", None),
+    "HigherOrder.wrappedReceipt": ("idealData", None),
+    "HigherOrder.positiveReceipt": ("idealData", None),
+    "HigherOrder.unprovedNoteReceipt": ("manualData", None),
+    "HigherOrder.unattributedReceipt": ("idealData", None),
+    "HigherOrder.extraPremiseReceipt": ("idealData", "omitted premise"),
+    "HigherOrder.symbolicProvenanceReceipt": ("idealData", None),
+    "HigherOrder.optionalNotesReceipt": ("idealData", None),
+    "manualReceipt": ("manualData", None),
+    "appliedEvidenceReceipt": ("idealData", None),
+    "manualBareReceipt": ("manualData", "missing typed security model admission"),
+    "wrongTargetReceipt": ("wrongTargetData", "Subject.check did not admit"),
+    "wrongAcceptanceReceipt": ("wrongAcceptanceData", "Subject.check did not admit"),
+    "undefinedModelReceipt": ("undefinedModelData", "model resolution is registered-undefined"),
+    "malformedModelReceipt": ("malformedModelData", "model resolution is refused"),
+    "wrongModelVersionReceipt": ("wrongModelVersionData", "model resolution is refused"),
+    "idealReceipt": ("idealData", None),
+    "bytesReceipt": ("bytesData", None),
+    "extendedReceipt": ("idealData", None),
+    "bothExtendedReceipt": ("idealData", None),
+    "replacedReceipt": ("idealData", "unrecognized property/model registry"),
+    "replacedModelReceipt": ("idealData", "unrecognized property/model registry"),
+    "chargedExtensionReceipt": ("chargedExtensionData", "no recognized checked consumer"),
+    "parameterReceipt": ("applicationData", None),
+    "prefixReceipt": ("applicationData", "application coverage"),
+    "constantReceipt": ("applicationData", "application coverage"),
+    "unrelatedReceipt": ("applicationData", "application coverage"),
+    "fixedReceipt": ("applicationData", None),
+    "falselyFixedReceipt": ("applicationData", "application coverage"),
+    "omittedReceipt": ("idealData", "missing required interpreted-stage link"),
+    "bytesOmittedReceipt": ("bytesData", "missing required interpreted-stage link"),
+    "trueReceipt": ("extensionIdealData", "wrong actual subject or goal"),
+    "foreignReceipt": ("extensionIdealData", "wrong actual subject or goal"),
+    "otherArtifactsReceipt": ("extensionIdealData", "wrong actual subject or goal"),
+    "nativeSchemaReceipt": ("extensionIdealData", "wrong actual subject or goal"),
+    "constructionOnlyReceipt": ("extensionBytesData", "missing required interpreted-stage link"),
+    "conditionalReceipt": ("idealData", "omitted premise"),
+    "explicitFalse": ("idealData", "omitted premise"),
+    "implicitFalse": ("idealData", "omitted premise"),
+    "factFalse": ("idealData", "omitted premise"),
+    "inhabitedFalse": ("idealData", "hidden parameter"),
+    "liftedFalse": ("idealData", "hidden parameter"),
+}
+
+
+def run_emitted_stage_receipts(data):
+    """Actual admitted interpreted endpoints must pass before refusals count."""
+    registry = reports.Registry(*data.registry())
+    rows, failures = [], []
+    for short, (request_short, diagnostic) in EMITTED_STAGE_RECEIPTS.items():
+        name = "TestsSecurity.ClaimReporting." + short
+        record = data.get(name)
+        request = data.get("TestsSecurity.ClaimReporting." + request_short)
+        wire = (((request or {}).get("detail") or {}).get("claim_data") or {}).get("wire_request")
+        if not record or not wire:
+            failures.append(f"interpreted receipt control {name}: missing fresh request/receipt extraction")
+            continue
+        audited, assumptions, _, reasons = reports.audit_receipt(record, request, wire, registry, data, [])
+        passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
+        extracted = ((record.get("detail") or {}).get("claim_data") or {}).get("receipt") or {}
+        if short in {"manualReceipt", "appliedEvidenceReceipt"}:
+            admission = extracted.get("admission") or {}
+            passed = passed and admission.get("association") == "typed-certificate" and admission.get("model_status") == "admitted" and admission.get("certificate_checked") is True
+        if short in {"HigherOrder.unattributedReceipt", "HigherOrder.unprovedNoteReceipt"}:
+            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+            expected = ({"invoke", "positiveProof"} if short.endswith("unattributedReceipt") else
+                        {"notedEvidence", "assumedNote", "notedProof"})
+            prefix = "TestsSecurity.ClaimReporting.HigherOrder."
+            passed = passed and {prefix + name for name in expected} <= names
+            passed = passed and [row["id"] for row in assumptions] == ["source.correspondence"]
+        if short in {"HigherOrder.unattributedReceipt", "HigherOrder.symbolicProvenanceReceipt"}:
+            passed = passed and audited.get("root_route") == "unattributed" and bool(audited.get("attribution_diagnostics"))
+        if short == "HigherOrder.symbolicProvenanceReceipt":
+            passed = passed and bool(extracted.get("provenance_error"))
+        if short == "HigherOrder.optionalNotesReceipt":
+            helper = data.get("TestsSecurity.ClaimReporting.HigherOrder.withNotes") or {}
+            detail = helper.get("detail") or {}
+            names = {row.get("name") for row in extracted.get("proof_dependencies") or []}
+            passed = passed and helper.get("name") in names
+            passed = passed and "hypotheses" in detail and detail["hypotheses"] is None
+            passed = passed and "unresolved list" in (detail.get("hypotheses_error") or "")
+            _, _, legacy_reasons = reports.hypotheses(helper, registry)
+            passed = passed and any("were not recorded" in reason for reason in legacy_reasons)
+            passed = passed and [row["id"] for row in assumptions] == ["source.correspondence"]
+        if short in {"wrongTargetReceipt", "wrongAcceptanceReceipt"}:
+            passed = passed and (extracted.get("admission") or {}).get("subject_checked") is False
+        if short == "chargedExtensionReceipt":
+            passed = passed and extracted.get("quantity_kind") == "charged" and not extracted.get("exported_capabilities")
+        if short == "parameterReceipt":
+            coverage = extracted.get("application_coverage") or {}
+            passed = passed and coverage.get("value_is_binder") is True and coverage.get("designated_binder", {}).get("name") == "application"
+        if short == "fixedReceipt":
+            coverage = extracted.get("application_coverage") or {}
+            passed = passed and coverage.get("mode") == "fixed" and coverage.get("fixed_value") == "deployment-a"
+        if passed:
+            rows.append("emitted-interpreted-" + short)
+        else:
+            failures.append(f"interpreted receipt control {name}: {reasons}")
+    return rows, failures
+
+
+def run_emitted_receipts(data):
+    """Exercise the downstream reader on kernel-emitted request/receipt values."""
+    entries, endpoints = data.registry()
+    registry = reports.Registry(entries, endpoints)
+    request = data.get("Tests.ClaimReporting.request0Data")
+    wire = ((request or {}).get("detail", {}).get("claim_data") or {}).get("wire_request")
+    rows, failures = [], []
+    if not wire:
+        return [], ["receipt controls: actual Wire.Request was not emitted"]
+    imported = ((data.get("Tests.ClaimReporting.importedData") or {}).get("detail", {}).get("claim_data") or {})
+    expected_target = {"protocol": "test", "language": {"kind": "application",
+        "name": "languages.reporting_control", "version": 3,
+        "arguments": [{"label": "parameter", "value": {"kind": "natural", "value": "7"}}]}}
+    if (imported.get("wire_request") or {}).get("target") == expected_target:
+        rows.append("emitted-request-imported-language")
+    else:
+        failures.append("receipt controls: imported-language protocol/application was not preserved")
+    for name, diagnostic in EMITTED_RECEIPTS.items():
+        record = data.get(name)
+        if record is None:
+            failures.append(f"receipt control {name} was not emitted")
+            continue
+        audited, _, _, reasons = reports.audit_receipt(record, request, wire, registry, data)
+        passed = not reasons if diagnostic is None else any(diagnostic in reason for reason in reasons)
+        if name.rsplit(".", 1)[-1].startswith("forged"):
+            passed = passed and audited.get("root_route") == "unattributed" and bool(audited.get("attribution_diagnostics"))
+        label = "emitted-receipt-" + name.rsplit(".", 1)[1]
+        if passed:
+            rows.append(label)
+        else:
+            failures.append(f"receipt control {label} failed: {reasons}")
+    if "security" in data.packages():
+        stage_rows, stage_failures = run_emitted_stage_receipts(data)
+        rows += stage_rows
+        failures += stage_failures
+    return rows, failures

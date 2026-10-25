@@ -120,7 +120,7 @@ theorem slots_refused : refusal interpolation 2 = some .slots := by decide +kern
 /-! ## Resolution -/
 
 def mapBinding (mask : String) : Binding :=
-  ⟨"numerical", "numerical.map", [scalarField, mask], "arkworks/numerical.map"⟩
+  ⟨"numerical", "numerical.map", [scalarField, mask], "arkworks/numerical.map", []⟩
 
 /-- One installed row resolves every admissible mask. -/
 theorem interpolation_resolves :
@@ -131,7 +131,7 @@ theorem interpolation_resolves :
 
 /-- The same row resolves a sum over another mask. -/
 theorem sum_resolves :
-    installed.resolve ⟨"numerical", "numerical.sum", [scalarField, "1"], "arkworks/numerical.sum"⟩
+    installed.resolve ⟨"numerical", "numerical.sum", [scalarField, "1"], "arkworks/numerical.sum", []⟩
         [.text "[\"zkc.ring/0\",[\"bls12-381.fr\"],[[\"input\",0]],[0]]"] =
       some (.compute (.numerical .sum scalarField [true] (.input 0))) := by
   decide +kernel
@@ -151,7 +151,7 @@ theorem mask_bound (text : String) (long : Numerical.slotLimit < text.toList.len
 
 /-- A binding without its mask names no installed row. -/
 theorem unmasked_uninstalled :
-    installed.installed? ⟨"numerical", "numerical.map", [scalarField], "arkworks/numerical.map"⟩ = none := by
+    installed.installed? ⟨"numerical", "numerical.map", [scalarField], "arkworks/numerical.map", []⟩ = none := by
   decide +kernel
 
 /-- A refused payload has no meaning. -/

@@ -317,7 +317,7 @@ uniform model over the BLS12-381 scalar field with its computable inverse.
 between lookup and body denotation for every actual argument tuple. It applies
 to the shared scalar/group evaluator, any effect interface and site observations.
 Binding retains ordered helper results above the caller environment. Equality
-concerns the complete `PIR.Proc`: a stopping body bypasses the suffix, and a
+concerns the complete `PIR.Process`: a stopping body bypasses the suffix, and a
 returning body runs that same suffix, including its stops. Empty result lists
 are supported. The premise is a process equation, not a totality assumption.
 The closed `Structured.inline_invoke` wrapper and `Payload.inline_body_view`
@@ -452,7 +452,7 @@ Math call or return. Nested Math helpers may return zero or multiple Fr scalars;
 the one-result condition applies only to the map root. Equality, selection,
 index/group operations and other fields are excluded even when unused.
 
-Both preparations use the typed `Source.Region`, `PIR.Proc` and the Math
+Both preparations use the typed `Source.Region`, `PIR.Process` and the Math
 helper table. A realization derives one `Op.invoke` with positional operands,
 followed by positional returns. A map derives one typed `Op.map` and return of
 its sole result. `MapSpec` retains the helper name, field and ordered mask; its
@@ -678,7 +678,7 @@ handler state reached at that stop; later iterations and the outer suffix do
 not execute. Zero results do not erase callback effects or stopping. Shifted
 residual iteration uses `List.range' start count` after the original count has
 been admitted, with no reset of the induction index or renewed count check.
-Interpretation and framing use the finite execution and `PIR.Proc`
+Interpretation and framing use the finite execution and `PIR.Process`
 laws. Erasing internal marks preserves the process equation while action labels
 remain externally visible.
 

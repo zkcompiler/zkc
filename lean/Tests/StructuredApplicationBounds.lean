@@ -350,7 +350,7 @@ def run : IO Unit := do
     (match evaluateOpen program (wireRequest 1) with
       | .error "structured-open-capacity" => true
       | _ => false)
-  let receiveProcess : PIR.Proc (observedInterface Scalar Scalar) (OptionalValues [vectorType]) :=
+  let receiveProcess : PIR.Process (observedInterface Scalar Scalar) (OptionalValues [vectorType]) :=
     .call (.action (.receive vectorType "unrelated" 0)) fun received =>
       .done (.cons (some received) .nil)
   test "oversized reply retains concrete observer value-limit refusal"

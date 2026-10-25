@@ -13,3 +13,38 @@ proof Proof = Schnorr<G> {
 entry fn Interactive(inputs: Schnorr<G>::Inputs) {
   return Schnorr<G>::run(inputs);
 }
+
+spec ProofClaims for Proof {
+  knowledge: knowledge@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.bytes,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=executable_bytes,
+    guarantee=guarantees.forking@0(challenges=cardinality(G.Scalar),
+      cost=prover_runs(2)));
+  ideal_knowledge: knowledge@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,
+    guarantee=guarantees.forking@0(challenges=cardinality(G.Scalar),
+      cost=prover_runs(2)));
+  view: user.view_equal@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,error=0);
+  derived_view: user.view_equal@0(target.knowledge,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.fixed,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q),
+    accept=out.accepted,stage=compiled_ideal,error=0);
+}
+verify ProofClaims.view=user.view_theorem@0();
+verify ProofClaims.derived_view=user.view_derivation@0();
+verify ProofClaims.knowledge=fs.forking@0();
+verify ProofClaims.ideal_knowledge=fs.forking@0();
+
+spec InteractiveClaims for Schnorr<G> {
+  complete: completeness@0(target.knowledge,model=models.interactive@0(),
+    accept=out.accepted,stage=interactive,guarantee=guarantees.perfect@0());
+  special: special_soundness@0(target.knowledge,model=models.interactive@0(),
+    accept=out.accepted,stage=interactive,
+    guarantee=guarantees.special_soundness@0(challenges=cardinality(G.Scalar)));
+}

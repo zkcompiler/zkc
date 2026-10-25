@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 
 from check import FIELD, MODULUS, ROOT, Suite, definition, fixture, write_json
-from bridges.common.native_entry import native_run
+from bridges.common.native_entry import native_subject
 import snapshot as constructors
 
 GROUP = "bls12-381.g1"
@@ -56,16 +56,18 @@ class OpenSuite(Suite):
             [self.tools["reference"], "open", original, data[3], request]))
         formal = json.loads(self.command(label + ":lean",
             [self.tools["lean"], "open", exported, request]))
-        assert native == expected, {"reference": native, "expected": expected}
-        assert formal == expected, {"formal": formal, "expected": expected}
+        if not (native == expected):
+            raise AssertionError({"reference": native, "expected": expected})
+        if not (formal == expected):
+            raise AssertionError({"formal": formal, "expected": expected})
 
-    def authored(self, label, entry, modules, retained=None):
-        flags = ["--source-format=zkc", "--entry=" + entry,
+    def authored(self, label, selected_subject, modules, retained=None):
+        flags = ["--source-format=zkc", "--subject=" + selected_subject,
                  *[f"--module={name}={source}" for name, source in modules.items()]]
-        source, interface = native_run(
+        source, interface_text, interface = native_subject(
             lambda command: self.command(label + ":frontend", command), self.tools["compiler"], flags)
         subject = self.export(label, source, interface["protocol"])
-        write_json(subject[1].parent / "interface.json", interface)
+        (subject[1].parent / "interface.json").write_text(interface_text, encoding="utf-8")
         if retained is not None:
             stem, module = retained
             targets = [
@@ -79,7 +81,8 @@ class OpenSuite(Suite):
             for generated, maintained in targets:
                 if self.args.write_fixtures:
                     maintained.write_bytes(generated.read_bytes())
-                assert generated.read_bytes() == maintained.read_bytes(), f"retained subject differs: {maintained}"
+                if not (generated.read_bytes() == maintained.read_bytes()):
+                    raise AssertionError(f"retained subject differs: {maintained}")
         return subject
 
 
@@ -223,7 +226,8 @@ module { "protocol.module"() ({
         ]:
             output = suite.command("vector-capacity-" + label, argv, success=False)
             error = Path(suite.commands[-1]["output"]).with_suffix(".stderr").read_text(encoding="utf-8")
-            assert diagnostic in output + error, (label, output, error)
+            if diagnostic not in output + error:
+                raise AssertionError((label, output, error))
 
     suite.case("vector-receive-over-capacity-is-observer-error", capacity_error)
 
@@ -257,7 +261,8 @@ def schnorr_cases(suite):
     instructions = root[9][1]
     draws = [row for row in instructions if row[0][0] == "draw"]
     exchanges = [row for row in instructions if row[0][0] == "exchange"]
-    assert len(draws) == 2 and len(exchanges) == 3
+    if not (len(draws) == 2 and len(exchanges) == 3):
+        raise AssertionError('bridges/structured/open_protocol.py:260: len(draws) == 2 and len(exchanges) == 3')
     commitment, delivery, response = [row[4] for row in exchanges]
     nonce, challenge = [row[4] for row in draws]
     actions = [
@@ -290,8 +295,10 @@ def schnorr_cases(suite):
         subject, "independent-challenge", prover, ["2", "6", "3", "17", None], prover_script,
         returned([None], prover_script)))
     # Relation metadata and its dormant mathematical declaration are retained.
-    assert len(subject[2][5]) == 1
-    assert any(row[0] == "function" and row[2] == "math" for row in subject[2][7])
+    if not (len(subject[2][5]) == 1):
+        raise AssertionError('bridges/structured/open_protocol.py:293: len(subject[2][5]) == 1')
+    if not (any(row[0] == "function" and row[2] == "math" for row in subject[2][7])):
+        raise AssertionError('bridges/structured/open_protocol.py:294: any(row[0] == "function" and row[2] == "math" for row in subject[2][7])')
 
 
 def schnorr_variant_cases(suite):
@@ -331,7 +338,8 @@ def sigma_subject(suite, stem):
 
 def schnorr_and_cases(suite):
     subject, prover, verifier, draws, exchanges = sigma_subject(suite, "schnorr-and")
-    assert len(draws) == 3 and len(exchanges) == 5
+    if not (len(draws) == 3 and len(exchanges) == 5):
+        raise AssertionError('bridges/structured/open_protocol.py:334: len(draws) == 3 and len(exchanges) == 5')
     first_nonce, second_nonce, challenge = draws
     first_commitment, second_commitment, delivery, first_response, second_response = exchanges
     actions = [
@@ -369,12 +377,14 @@ def schnorr_and_cases(suite):
     suite.case("and-prover", lambda: suite.compare_open(
         subject, "and-prover", prover, ["2", "6", "5", "20", "3", "4", "17", None], prover_script,
         returned([None], prover_script)))
-    assert len(subject[2][5]) == 1
+    if not (len(subject[2][5]) == 1):
+        raise AssertionError('bridges/structured/open_protocol.py:372: len(subject[2][5]) == 1')
 
 
 def chaum_pedersen_cases(suite):
     subject, prover, verifier, draws, exchanges = sigma_subject(suite, "chaum-pedersen")
-    assert len(draws) == 2 and len(exchanges) == 4
+    if not (len(draws) == 2 and len(exchanges) == 4):
+        raise AssertionError('bridges/structured/open_protocol.py:377: len(draws) == 2 and len(exchanges) == 4')
     nonce, challenge = draws
     first_commitment, second_commitment, delivery, response = exchanges
     actions = [
@@ -409,7 +419,8 @@ def chaum_pedersen_cases(suite):
     suite.case("equality-prover", lambda: suite.compare_open(
         subject, "equality-prover", prover, ["2", "6", "5", "15", "3", "17", None], prover_script,
         returned([None], prover_script)))
-    assert len(subject[2][5]) == 1
+    if not (len(subject[2][5]) == 1):
+        raise AssertionError('bridges/structured/open_protocol.py:412: len(subject[2][5]) == 1')
 
 
 def run_cases(suite):

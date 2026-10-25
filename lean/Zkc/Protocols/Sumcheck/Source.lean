@@ -88,7 +88,7 @@ def program (count : Nat) : Program language [.accumulator, .polynomial] .boolea
   .iterate count .here roundBody
     (.letOp .terminal (.cons (.there (.there .here)) (.cons .here .nil)) (.ret .here))
 
-def rounds : Nat → Accumulator F → Proc (AlgebraicRounds.interface F) (Accumulator F)
+def rounds : Nat → Accumulator F → Process (AlgebraicRounds.interface F) (Accumulator F)
   | 0, accumulator => .done accumulator
   | count + 1, accumulator => .call .message fun message =>
       if message.boundary = accumulator.claim then .call .challenge fun r =>
@@ -100,7 +100,7 @@ theorem roundBody_denote {Γ : List Ty} (env : Environment (Value F n) (.accumul
       .call .message (fun message => if message.boundary = (env .here).claim then
         .call .challenge (fun r => .done (advance message r (env .here)))
         else .call .reject (fun _ => .halt .reject)) := by
-  simp [roundBody, Program.denote, Operands.eval, Environment.push, meaning, Proc.bind, result]
+  simp [roundBody, Program.denote, Operands.eval, Environment.push, meaning, Process.bind, result]
 
 theorem repeat_rounds (count : Nat) (accumulator : Accumulator F) :
     repeatN (I := AlgebraicRounds.interface F) count (fun current =>
@@ -110,11 +110,11 @@ theorem repeat_rounds (count : Nat) (accumulator : Accumulator F) :
   induction count generalizing accumulator with
   | zero => rfl
   | succ count ih =>
-      simp only [repeatN, rounds, Proc.bind]
+      simp only [repeatN, rounds, Process.bind]
       congr 1
       funext message
       split
-      · simp only [Proc.bind]
+      · simp only [Process.bind]
         congr 1
         funext r
         exact ih _
@@ -125,7 +125,7 @@ theorem program_denote (count : Nat) (env : Environment (Value F n) [.accumulato
       (rounds count (env .here)).bind (fun accumulator =>
         .done (terminal (env (.there .here)) accumulator)) := by
   simp only [program, Program.denote, roundBody_denote (n := n), Environment.push,
-    Operands.eval, meaning, Proc.bind]
+    Operands.eval, meaning, Process.bind]
   rw [repeat_rounds]
   rfl
 
@@ -141,7 +141,7 @@ theorem structuredProgram_denote (count : Nat)
     (structuredProgram count).denote meaning.regionMeaning env =
       (rounds count (env .here)).bind (fun accumulator =>
         .done (Values.singleton (terminal (env (.there .here)) accumulator))) := by
-  rw [structuredProgram, Program.denote_toRegion, program_denote, Proc.bind_assoc]
+  rw [structuredProgram, Program.denote_toRegion, program_denote, Process.bind_assoc]
   rfl
 
 end Zkc.Protocols.Sumcheck.Source

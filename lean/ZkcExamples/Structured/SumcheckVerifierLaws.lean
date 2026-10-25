@@ -64,7 +64,7 @@ theorem round_optional (U : UnitPayload) (bodies : Bodies U.definitions)
   unfold Repeat.step
   rw [mask_embedV ctx self verifier maximum pc]
   rw [round_body_optional U bodies ctx self verifier separate]
-  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, mask_embedV ctx self verifier maximum]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, mask_embedV ctx self verifier maximum]
 
 /-- Arbitrary finite residual count and starting index, without re-admission. -/
 theorem loop_optional (U : UnitPayload) (bodies : Bodies U.definitions)

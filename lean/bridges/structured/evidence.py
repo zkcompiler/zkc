@@ -149,9 +149,11 @@ def archive_sources(root, destination, *, inventory=None, scope=None):
     with tarfile.open(archive) as retained:
         for name, entry in files.items():
             if "symlink" in entry:
-                assert retained.getmember(name).linkname == entry["symlink"]
+                if not (retained.getmember(name).linkname == entry["symlink"]):
+                    raise AssertionError('bridges/structured/evidence.py:152: retained.getmember(name).linkname == entry["symlink"]')
             else:
-                assert hashlib.sha256(retained.extractfile(name).read()).hexdigest() == entry["sha256"]
+                if not (hashlib.sha256(retained.extractfile(name).read()).hexdigest() == entry["sha256"]):
+                    raise AssertionError('bridges/structured/evidence.py:154: hashlib.sha256(retained.extractfile(name).read()).hexdigest() == entry["sha256"]')
     manifest = destination.with_suffix(".json")
     atomic_json(manifest, {"files": files, "deletedTrackedPaths": deleted})
     return {"path": str(archive), "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),

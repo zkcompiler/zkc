@@ -9,7 +9,7 @@ open PIR
 
 abbrev interaction : Signature := ⟨Unit, fun _ => Bool⟩
 
-def verifier : Proc interaction Bool :=
+def verifier : Process interaction Bool :=
   .call () fun accepted =>
     if accepted then .call () fun _ => .done false
     else .halt .reject

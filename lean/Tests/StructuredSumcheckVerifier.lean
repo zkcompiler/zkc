@@ -99,7 +99,7 @@ theorem source_uses_actual_challenge :
       (fun (values : Values (Component (assignment (ZMod 5) (ZMod 5))) [.boolean]) =>
         .done (values.get .here))).run handler
         ⟨[.value 0, .value 1, .value 1, .ack], 0⟩ = _
-  rw [PIR.Proc.bind_assoc, PIR.run_bind]
+  rw [PIR.Process.bind_assoc, PIR.run_bind]
   have rounds :
       (SumcheckVerifierPrelude.admittedRounds (F := ZMod 5) (G := ZMod 5)
         2 SumcheckSourceVerifier.childContext (some 1) (some 7) (some 1)).run handler

@@ -20,7 +20,7 @@ def handler (P : Interaction I) (h : Handler I S E) :
 
 /-- The audit is semantic instrumentation: its original-event/state projection
     is exactly the uninstrumented interpreter, including terminal failure. -/
-theorem erasure (P : Interaction I) (h : Handler I S E) (p : Proc I A)
+theorem erasure (P : Interaction I) (h : Handler I S E) (p : Process I A)
     (phase : P.Phase) (s : S) :
     let out := p.run (handler P h) (phase,s)
     (⟨out.outcome,out.state.2,out.events.filterMap (fun
@@ -29,7 +29,7 @@ theorem erasure (P : Interaction I) (h : Handler I S E) (p : Proc I A)
   | done a => rfl
   | halt why => rfl
   | call o k ih =>
-    simp only [Proc.run,handler]
+    simp only [Process.run,handler]
     cases hx : h o s with
     | mk outcome t es =>
       cases outcome with
@@ -45,15 +45,15 @@ theorem erasure (P : Interaction I) (h : Handler I S E) (p : Proc I A)
 
 /-- Conformance applies to actual returned replies of any handler. No success,
     total-progress, honest-payload or provider-distribution premise is added. -/
-theorem calls_permitted (P : Interaction I) (h : Handler I S E) (p : Proc I A)
+theorem calls_permitted (P : Interaction I) (h : Handler I S E) (p : Process I A)
     (phase : P.Phase) (s : S) (formed : Conforms P p phase) :
     ∀ before o, Sum.inl (before,o) ∈ (p.run (handler P h) (phase,s)).events →
       P.enabled before o := by
   induction p generalizing phase s with
-  | done a => simp [Proc.run]
-  | halt why => simp [Proc.run]
+  | done a => simp [Process.run]
+  | halt why => simp [Process.run]
   | call op k ih =>
-    simp only [Proc.run,handler]
+    simp only [Process.run,handler]
     cases hx : h op s with
     | mk outcome t es =>
       cases outcome with
@@ -78,18 +78,18 @@ variable {I : Signature} {S E A : Type}
     and does not measure the handler's internal work. See
     lean/docs/spec/core/execution.md, "the bound counts reached handler
     invocations, including the stopping invocation". -/
-theorem calls_bounded (P : Interaction I) (h : Handler I S E) (p : Proc I A)
+theorem calls_bounded (P : Interaction I) (h : Handler I S E) (p : Process I A)
     (n : Nat) (phase : P.Phase) (s : S) (bounded : Within n p) :
     ((p.run (handler P h) (phase,s)).events.filterMap (fun
       | .inl call => some call | .inr _ => none)).length ≤ n := by
   induction p generalizing n phase s with
-  | done a => simp [Proc.run]
-  | halt why => simp [Proc.run]
+  | done a => simp [Process.run]
+  | halt why => simp [Process.run]
   | call op k ih =>
     cases n with
     | zero => exact False.elim bounded
     | succ n =>
-      simp only [Proc.run,handler]
+      simp only [Process.run,handler]
       cases hx : h op s with
       | mk outcome t events =>
         have erased : events.filterMap (fun _ => (none : Option (P.Phase × I.Op))) = [] := by
@@ -105,13 +105,13 @@ theorem calls_bounded (P : Interaction I) (h : Handler I S E) (p : Proc I A)
     when a handler stops. This law does not reconstruct a lost state afterward. -/
 theorem run_recorded (log : S → List E) (h : Handler I S E)
     (records : ∀ o s, log (h o s).state = log s ++ (h o s).events)
-    (p : Proc I A) (s : S) : log (p.run h s).state = log s ++ (p.run h s).events := by
+    (p : Process I A) (s : S) : log (p.run h s).state = log s ++ (p.run h s).events := by
   induction p generalizing s with
-  | done a => simp [Proc.run]
-  | halt why => simp [Proc.run]
+  | done a => simp [Process.run]
+  | halt why => simp [Process.run]
   | call o k ih =>
     have step := records o s
-    simp only [Proc.run]
+    simp only [Process.run]
     cases hx : h o s with
     | mk outcome t events =>
       simp only [hx] at step

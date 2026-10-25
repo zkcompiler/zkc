@@ -16,9 +16,6 @@ bodies = "lean/ZkcExamples/Construction/ComposedSumcheckProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/ComposedSumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/ComposedSumcheckProof.lean"
 
-[claims]
-endpoint = "ideal-meaning"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
              "transport.canonical-decoding"]

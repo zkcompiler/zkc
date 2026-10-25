@@ -252,7 +252,7 @@ def nested : Block Role language [(), ()] () :=
     (.letOp .add vals[.here, .there (.there .here)] (.ret .here))
 
 def projected (block : Block Role language [(), ()] ())
-    (condition : Option Nat → Bool) (role : Role) : Proc calls (Values (fun _ : Unit => Option Nat) [()]) :=
+    (condition : Option Nat → Bool) (role : Role) : Process calls (Values (fun _ : Unit => Option Nat) [()]) :=
   (block.project role).denote (meaning.projected condition) (RoleFamily.project inputs.get role)
 
 -- All assertions compare the complete canonical process and singleton tuple.

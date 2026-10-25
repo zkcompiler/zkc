@@ -1,0 +1,628 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "zkc source claims version 0",
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "zkc.source-claims/0"
+    },
+    "registry_resolution": {
+      "const": "deferred-to-lean"
+    },
+    "entry": {
+      "type": "string"
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/claim"
+      }
+    },
+    "admission": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "const": "zkc.structured-source/0"
+        },
+        "original_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "protocol_symbol": {
+          "type": "string"
+        },
+        "original_identity": {
+          "type": "string"
+        },
+        "interface_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "installation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "original_sha256",
+        "protocol_symbol",
+        "original_identity",
+        "interface_sha256",
+        "capture",
+        "installation"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "format",
+    "registry_resolution",
+    "entry",
+    "claims"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "source": {
+      "type": "object",
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "begin": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "module",
+        "begin",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "expression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "natural"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "reference"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "application"
+            },
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "arguments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "value": {
+                    "$ref": "#/$defs/expression"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "version",
+            "arguments"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "binary"
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "/",
+                "^"
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expression"
+            },
+            "right": {
+              "$ref": "#/$defs/expression"
+            }
+          },
+          "required": [
+            "kind",
+            "operator",
+            "left",
+            "right"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "unary"
+            },
+            "operator": {
+              "const": "-"
+            },
+            "operand": {
+              "$ref": "#/$defs/expression"
+            }
+          },
+          "required": [
+            "kind",
+            "operator",
+            "operand"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "items"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "registry_application": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "application"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "value": {
+                "$ref": "#/$defs/expression"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "version",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    "quantity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "scalar"
+            },
+            "expression": {
+              "$ref": "#/$defs/expression"
+            }
+          },
+          "required": [
+            "kind",
+            "expression"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "guarantee"
+            },
+            "form": {
+              "$ref": "#/$defs/registry_application"
+            }
+          },
+          "required": [
+            "kind",
+            "form"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "charged"
+            },
+            "charges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string"
+                  },
+                  "expression": {
+                    "$ref": "#/$defs/expression"
+                  }
+                },
+                "required": [
+                  "site",
+                  "expression"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "charges"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "type": "string"
+            },
+            "stage": {
+              "enum": [
+                "interactive",
+                "compiled-ideal",
+                "executable-bytes"
+              ]
+            }
+          },
+          "required": [
+            "entry",
+            "stage"
+          ],
+          "additionalProperties": false
+        },
+        "property": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "parameters": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/expression"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "parameters"
+          ],
+          "additionalProperties": false
+        },
+        "model": {
+          "$ref": "#/$defs/registry_application"
+        },
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "type": "string"
+                },
+                "clause": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "protocol",
+                "clause",
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "protocol": {
+                  "type": "string"
+                },
+                "language": {
+                  "$ref": "#/$defs/registry_application"
+                }
+              },
+              "required": [
+                "protocol",
+                "language"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "accept": {
+          "type": "object",
+          "properties": {
+            "output": {
+              "const": true
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "role": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            }
+          },
+          "required": [
+            "output",
+            "port",
+            "role",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "quantity": {
+          "$ref": "#/$defs/quantity"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/registry_application"
+          }
+        }
+      },
+      "required": [
+        "subject",
+        "property",
+        "model",
+        "target",
+        "accept",
+        "quantity",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "properties": {
+        "attachment": {
+          "type": "object",
+          "properties": {
+            "module": {
+              "type": "string"
+            },
+            "declaration": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "node": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "source-claim"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "block": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                "claim": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                }
+              },
+              "required": [
+                "kind",
+                "owner",
+                "block",
+                "claim"
+              ],
+              "additionalProperties": false
+            },
+            "source": {
+              "$ref": "#/$defs/source"
+            }
+          },
+          "required": [
+            "module",
+            "declaration",
+            "label",
+            "node",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "method": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/registry_application"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "site_bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "site": {
+                "type": "string"
+              },
+              "source": {
+                "$ref": "#/$defs/source"
+              },
+              "native_path": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "site",
+              "source",
+              "native_path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "attachment",
+        "request",
+        "method",
+        "site_bindings"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

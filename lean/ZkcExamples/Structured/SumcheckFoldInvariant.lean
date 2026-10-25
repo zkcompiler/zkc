@@ -172,7 +172,7 @@ theorem roundHonest_received (ctx : ProtocolContext) (raw : List F) (count : Nat
       (roundHonest ctx raw count point) point := by
   unfold roundHonest
   by_cases remaining : point.length < count
-  · simp only [remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Proc.bind,
+  · simp only [remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Process.bind,
       PIR.Boundary.Returns]
     intro _ _ cp
     simp only [receivedChallenges, ↓reduceIte, honestState, List.length_append,
@@ -240,7 +240,7 @@ theorem prover_messages (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies
     (Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_restrict raw table decoded point
       (Nat.le_of_lt remaining)) remaining
   rw [step_honest U bodies ctx self prover separate maximum service raw count shape bound point index]
-  simp only [roundHonest, remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Proc.bind,
+  simp only [roundHonest, remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Process.bind,
     honestState]
   rw [← endpoints.1, ← endpoints.2]
 

@@ -1,7 +1,7 @@
 {
   lib,
   stdenvNoCC,
-  lean,
+  security,
   source,
   leanToolchain,
   git,
@@ -19,7 +19,7 @@ stdenvNoCC.mkDerivation {
     python3
   ];
   buildPhase = ''
-    cp -R ${lean.library}/share/zkc/lean lean
+    cp -R ${security}/share/zkc/lean lean
     chmod -R u+w lean
     cp -R ${source}/lean/. lean/
     chmod -R u+w lean
@@ -27,7 +27,9 @@ stdenvNoCC.mkDerivation {
     mkdir -p integrations/arklib/.lake/packages
     for dependency in ${lakeSources}/*; do
       name=$(basename "$dependency")
-      if [ -d ".lake/packages/$name" ]; then
+      if [ -d "security/.lake/packages/$name" ]; then
+        ln -s "$PWD/security/.lake/packages/$name" "integrations/arklib/.lake/packages/$name"
+      elif [ -d ".lake/packages/$name" ]; then
         ln -s "$PWD/.lake/packages/$name" "integrations/arklib/.lake/packages/$name"
       else
         cp -R "$dependency/" "integrations/arklib/.lake/packages/$name"
@@ -43,6 +45,9 @@ stdenvNoCC.mkDerivation {
   '';
   doCheck = true;
   checkPhase = ''
+    python3 checks/check_library.py --integration arklib
+    python3 checks/check_package_ownership.py --integration arklib
+    python3 checks/audit_imports.py --integration arklib
     python3 checks/check_clients.py --with-arklib --output "$TMPDIR/clients-arklib"
   '';
   installPhase = ''
@@ -52,7 +57,11 @@ stdenvNoCC.mkDerivation {
       if [ -L "$dependency" ]; then
         name=$(basename "$dependency")
         rm "$dependency"
-        ln -s "../../../../.lake/packages/$name" "$dependency"
+        if [ -d "security/.lake/packages/$name" ]; then
+          ln -s "../../../../security/.lake/packages/$name" "$dependency"
+        else
+          ln -s "../../../../.lake/packages/$name" "$dependency"
+        fi
       fi
     done
     cp -a . "$out/share/zkc/lean/"

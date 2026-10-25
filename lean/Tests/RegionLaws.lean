@@ -31,7 +31,7 @@ abbrev value (_ : Unit) := Nat
 def singleton (n : Nat) : Values value [()] := .cons n .nil
 
 /-- Both meanings deliberately inspect the callback process shape. -/
-def observed {I : Signature} (process : Proc I (Values value [()])) : Proc I (Values value [()]) :=
+def observed {I : Signature} (process : Process I (Values value [()])) : Process I (Values value [()]) :=
   match process with
   | .call _ _ => .done (singleton 1)
   | _ => .done (singleton 0)

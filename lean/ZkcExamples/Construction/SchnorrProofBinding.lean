@@ -61,7 +61,7 @@ theorem relation_iff (base key : G) (witness : F) :
     Relation base key witness ↔ key = witness • base := by
   unfold Relation
   rw [formula_process]
-  change (PIR.Proc.done (I := closedInterface)
+  change (PIR.Process.done (I := closedInterface)
     (.cons (decide (key = witness • base)) .nil : Values (assignment F G) [.boolean]) =
       .done (.cons true .nil)) ↔ _
   simp

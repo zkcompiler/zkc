@@ -59,7 +59,8 @@ def check(output, lake):
             environment = dict(os.environ, LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
             subprocess.run([sys.executable, renderer.__file__, snapshot_path, rendered_path,
                             "--namespace", namespace], env=environment, check=True, timeout=30)
-            assert rendered_path.read_bytes() == renderer.render(data, namespace).encode("utf-8")
+            if not (rendered_path.read_bytes() == renderer.render(data, namespace).encode("utf-8")):
+                raise AssertionError('checks/check_structured_renderer.py:62: rendered_path.read_bytes() == renderer.render(data, namespace).encode("utf-8")')
         source = renderer.render(data, namespace).replace("module\n\n", "", 1)
         # Numeric codepoints are an independent expectation; never render this
         # expected value through the string function being tested.
@@ -351,7 +352,8 @@ private def renderedRepeatHeaders (snapshot : Snapshot) :=
         namespace = f"ZkcExamples.Structured.{name}Data"
         rendered = renderer.render(data, namespace)
         maintained = HERE / f"ZkcExamples/Structured/{name}Data.lean"
-        assert rendered.encode("utf-8") == maintained.read_bytes(), maintained
+        if not (rendered.encode("utf-8") == maintained.read_bytes()):
+            raise AssertionError(maintained)
         roster = [f"role{i:08x}" for i in range(role_count)]
         scopes = [[roster[0]]] * (carried - 2) + [[roster[1]], [roster[1]]] if carried == 6 else [[r] for r in roster]
         source = rendered.replace("module\n\n", "", 1)
@@ -380,12 +382,12 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
         raise AssertionError("renderer accepted a malformed protocol repeat")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
-    header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
+    header = "module\n\npublic import Zkc.Source.Structured.Import\n\n@[expose] public section\nset_option maxRecDepth 4096\n"
     bodies = [source.replace("public import Zkc.Source.Structured.Import\n", "")
               .replace("@[expose] public section\n", "") for source in modules]
     path = output / "Rendered.lean"
     path.write_text(header + "\n".join(bodies), encoding="utf-8")
-    run = subprocess.run([lake, "env", "lean", path], cwd=HERE,
+    run = subprocess.run([lake, "lean", path], cwd=HERE,
                          capture_output=True, encoding="utf-8", timeout=60)
     (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
     if run.returncode:

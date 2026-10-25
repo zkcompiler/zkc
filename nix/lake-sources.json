@@ -54,6 +54,16 @@
     "hash": "sha256-BAFURGFLqKY1+tDKzaDiscZBwEEihgkt1S1CPXhoFSE=",
     "url": "https://github.com/leanprover/doc-gen4"
   },
+  "a93ee1ebbbf7b6b939ba3dd1c6115d33c92a4253": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-mVbVTBttzvxw3bWXXYiWMs8vBuS/6FBECea2ynwhquk=",
+    "url": "https://github.com/Verified-zkEVM/ArkLib.git"
+  },
+  "afa6593f15e1e79ecb3cf22fc56191cecb452bb0": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-a1DhyrNnCSd/uOMaQ9MA77g4QngM+1DjbgU+rwCZhUw=",
+    "url": "https://github.com/Verified-zkEVM/VCVio"
+  },
   "b449bf590f93e13827c3c7e747e392d6969aa380": {
     "format": "canonical-git-v0",
     "hash": "sha256-0Enp57zQZ2hIHKPs9RWX+CZjJ4W4yWsS4vQu3wSOoWk=",
@@ -63,16 +73,6 @@
     "format": "canonical-git-v0",
     "hash": "sha256-BV8l1j3RH8bTebvQoEr3IDquwjsckB1RzFmyFFOPxXA=",
     "url": "https://github.com/leanprover-community/mathlib4"
-  },
-  "d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-OUrMUZYH/2laYT9Mr9e7VRf88WEQTOIFgvTadilKtTI=",
-    "url": "https://github.com/Verified-zkEVM/VCVio"
-  },
-  "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-qfBv1gkk+14bSioZXbx9T7xq7UMEh23nwl5hVOJb6H8=",
-    "url": "https://github.com/Verified-zkEVM/ArkLib.git"
   },
   "ddf04cf3949fa556442341e87d47f9f6e6074707": {
     "format": "canonical-git-v0",

@@ -166,7 +166,7 @@ Error Checker::run() {
         !body(decl.id, 1))
       return types.takeError();
   }
-  if (!constructions() || !entries())
+  if (!constructions() || !entries() || !sourceClaims())
     return types.takeError();
   inferredContracts.clear();
   types.inferCapability = {};
@@ -338,6 +338,9 @@ bool Checker::collect() {
     decl.associatedSort = source.associatedSort;
     decl.anonymous = source.anonymous;
     decl.specificationBlock = source.specificationBlock;
+    for (const auto &block : source.sourceClaims)
+      decl.sourceClaims.push_back(block.value);
+    decl.sourceVerifications = source.sourceVerifications;
     decl.proofFormat = source.proofFormat;
     if (source.relation) {
       const auto &definition = *source.relation;

@@ -18,9 +18,6 @@ glue = "lean/ZkcExamples/Construction/DeferredRounds.lean"
 program = "lean/ZkcExamples/Executable/DeferredRoundsProgramData.lean"
 facts = "lean/ZkcExamples/Executable/DeferredRoundsFacts.lean"
 
-[claims]
-endpoint = "executable-bytes"
-
 [assumptions]
 requested = ["exporter.structured-denotation", "runtime.program-reader",
              "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function"]

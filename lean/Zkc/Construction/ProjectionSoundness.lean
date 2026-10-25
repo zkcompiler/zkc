@@ -252,7 +252,7 @@ variable (context : Context) (handle : Nat) (table : Structured.Meanings F G)
 /-- Skipped plumbing appends values without any action. -/
 theorem skip_spec : ∀ (instructions : List Instruction) (cenv : List (Value F G)),
     ∃ extra : List (Value F G), extra.length = (skip context instructions).2 ∧
-      ∀ {A : Type} (next : List (Value F G) → PIR.Proc (Actions F G) A),
+      ∀ {A : Type} (next : List (Value F G) → PIR.Process (Actions F G) A),
         specK context handle table instructions cenv next =
           specK context handle table (skip context instructions).1 (cenv ++ extra) next
   | [], cenv => ⟨[], rfl, fun next => by simp [skip]⟩
@@ -311,7 +311,7 @@ theorem skip_spec : ∀ (instructions : List Instruction) (cenv : List (Value F 
 theorem next_spec {instructions rest : List Instruction} {instruction : Instruction} {count : Nat}
     (found : next? context instructions = some (instruction, rest, count)) (cenv : List (Value F G)) :
     ∃ extra : List (Value F G), extra.length = count ∧
-      ∀ {A : Type} (next : List (Value F G) → PIR.Proc (Actions F G) A),
+      ∀ {A : Type} (next : List (Value F G) → PIR.Process (Actions F G) A),
         specK context handle table instructions cenv next =
           specK context handle table (instruction :: rest) (cenv ++ extra) next := by
   unfold next? at found
@@ -433,7 +433,7 @@ abbrev plainHelpers : Evaluation.ComponentTables F G (participantInterface F G) 
 abbrev originalOperation (ctx : ProtocolContext) (op : ProtocolOp)
     (args : Values (Component (assignment F G)) op.arguments)
     (callbacks : Values (RegionFunction (Component (assignment F G)) (participantInterface F G)) op.regions) :
-    PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) op.results) :=
+    PIR.Process (participantInterface F G) (Values (Component (assignment F G)) op.results) :=
   protocolOperationWith (.silent _) (participantActions F G) (plainHelpers program) context.validator op args
     callbacks (program.payload.plainProtocolTable F G) ctx
 
@@ -446,8 +446,8 @@ def OperationSound (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (argument
     (callbacks : Values (RegionFunction (Component (assignment F G)) (participantInterface F G)) op.regions)
     (cenv : List (Value F G)), HoldsValues handle cenv arguments args →
     arguments.length = op.arguments.length → cenv.length = n →
-    ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-      (kO : Values (Component (assignment F G)) op.results → PIR.Proc (Actions F G) A),
+    ∀ {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+      (kO : Values (Component (assignment F G)) op.results → PIR.Process (Actions F G) A),
       (∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
         specK context handle (helperTable program F G) rest cenv' kS = kO values) →
       specK context handle (helperTable program F G) instructions cenv kS =
@@ -511,7 +511,7 @@ theorem exchange_other (ctx : ProtocolContext) (ty : Ty) (sender receiver : Nat)
     originalOperation program context ctx (.exchange ty sender receiver site) (.cons value .nil) .nil =
       .done (.cons none .nil) := by
   rw [originalOperation_exchange]
-  simp [Participant.exchange, fromOther, toOther, PIR.Proc.interpret, PIR.Proc.bind]
+  simp [Participant.exchange, fromOther, toOther, PIR.Process.interpret, PIR.Process.bind]
 
 theorem exchange_receive (ctx : ProtocolContext) (ty : Ty) (sender receiver : Nat) (site : String)
     (value : Component (assignment F G) ty)
@@ -520,7 +520,7 @@ theorem exchange_receive (ctx : ProtocolContext) (ty : Ty) (sender receiver : Na
       .call (.receive ty (qualifyProtocolSite ctx.applicationPrefix site) (ctx.roles sender))
         fun received => .done (.cons (some received) .nil) := by
   rw [originalOperation_exchange]
-  simp only [Participant.exchange, fromOther, toSelf, ite_false, ite_true, PIR.Proc.interpret]
+  simp only [Participant.exchange, fromOther, toSelf, ite_false, ite_true, PIR.Process.interpret]
   rfl
 
 theorem exchange_send (ctx : ProtocolContext) (ty : Ty) (sender receiver : Nat) (site : String)
@@ -531,7 +531,7 @@ theorem exchange_send (ctx : ProtocolContext) (ty : Ty) (sender receiver : Nat) 
         fun _ => .done (.cons (some sent) .nil) := by
   subst present
   rw [originalOperation_exchange]
-  simp only [Participant.exchange, fromSelf, ite_true, PIR.Proc.interpret]
+  simp only [Participant.exchange, fromSelf, ite_true, PIR.Process.interpret]
   rfl
 
 theorem exchange_projects (ctx : ProtocolContext) (n : Nat) (ty : Ty) (sender receiver : Nat)
@@ -595,7 +595,7 @@ theorem exchange_projects (ctx : ProtocolContext) (n : Nat) (ty : Ty) (sender re
             all_goals
               obtain ⟨rfl, rfl⟩ := decoded
               simp only [specK, specStep, originEq, dataAt, readBack, sent, ↓reduceIte,
-                sendPayload, PIR.Proc.interpret, CommonAdapter.project, PIR.Proc.bind]
+                sendPayload, PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind]
               rw [siteGet]
               congr 1
               funext _
@@ -634,8 +634,8 @@ theorem exchange_projects (ctx : ProtocolContext) (n : Nat) (ty : Ty) (sender re
         cases ty
         case index | vector | service => simp [scalarType] at scalar
         all_goals
-          simp only [specK, specStep, scalarType, PIR.Proc.interpret, CommonAdapter.project,
-            PIR.Proc.bind]
+          simp only [specK, specStep, scalarType, PIR.Process.interpret, CommonAdapter.project,
+            PIR.Process.bind]
           congr 1
           funext received
           apply cont
@@ -698,7 +698,7 @@ theorem draw_projects (ctx : ProtocolContext) (n : Nat) (owner : Nat) (field sit
           simp only [Participant.query, owned, ite_true]
           rfl
         rw [original]
-        simp only [specK, specStep, originEq, siteEq, PIR.Proc.interpret, CommonAdapter.project]
+        simp only [specK, specStep, originEq, siteEq, PIR.Process.interpret, CommonAdapter.project]
         congr 1
         funext answer
         apply cont
@@ -718,7 +718,7 @@ theorem draw_projects (ctx : ProtocolContext) (n : Nat) (owner : Nat) (field sit
     have original : originalOperation program context ctx (.draw owner field site)
         (.cons service .nil) .nil = .done (.cons none .nil) := by
       rw [originalOperation_draw]
-      simp only [Participant.query, owned, ite_false, PIR.Proc.interpret]
+      simp only [Participant.query, owned, ite_false, PIR.Process.interpret]
       rfl
     rw [original]
     exact cont cenv _ (List.prefix_refl cenv) length ⟨rfl, trivial⟩
@@ -772,7 +772,7 @@ theorem guard_projects (ctx : ProtocolContext) (n : Nat) (owner : Nat) (site : S
         · simp only [specK, specStep, readBack', Participant.guard, owned, ite_true]
           rfl
         · simp only [specK, specStep, readBack', Participant.guard, owned, ite_true,
-            PIR.Proc.interpret, PIR.Proc.bind]
+            PIR.Process.interpret, PIR.Process.bind]
           exact cont _ .nil (List.prefix_append cenv extra) (by simp [length, extraLength]) trivial
     | [], _, accepted => simp at accepted
     | [.absent], _, accepted => simp at accepted
@@ -783,12 +783,12 @@ theorem guard_projects (ctx : ProtocolContext) (n : Nat) (owner : Nat) (site : S
     simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
     obtain ⟨rfl, rfl, rfl⟩ := accepted
     rw [originalOperation_guard]
-    simp only [Participant.guard, owned, ite_false, PIR.Proc.interpret, PIR.Proc.bind]
+    simp only [Participant.guard, owned, ite_false, PIR.Process.interpret, PIR.Process.bind]
     exact cont cenv .nil (List.prefix_refl cenv) length trivial
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- A process that cannot call is its outcome in every effect interface. -/
-theorem closed_interpret {I : PIR.Signature} {A : Type} (process : PIR.Proc closedInterface A) :
+theorem closed_interpret {I : PIR.Signature} {A : Type} (process : PIR.Process closedInterface A) :
     process.interpret (closedLift (I := I)) = ofOutcome (closedOutcome process) := by
   cases process with
   | done value => rfl
@@ -921,19 +921,19 @@ theorem localCall_projects (ctx : ProtocolContext) (n : Nat) (helper : Helper)
           callHelper_invoke _ helper (helperTable_lookup program helper present) readArguments values decoded]
         cases outcome : closedOutcome (invoke (helperTable program F G) helper values) with
         | returned outputs =>
-          simp only [ofOutcome, encodeValues_length, List.length_map, ite_true, PIR.Proc.bind,
-            PIR.Proc.interpret]
+          simp only [ofOutcome, encodeValues_length, List.length_map, ite_true, PIR.Process.bind,
+            PIR.Process.interpret]
           apply cont
           · exact List.prefix_append_of_prefix (List.prefix_append cenv extra)
           · simp [length, extraLength, encodeValues_length, Nat.add_assoc]
           · exact holdsValues_encoded (n + count) (cenv ++ extra) (by simp [length, extraLength]) data
               outputs
-        | stopped reason => simp [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+        | stopped reason => simp [ofOutcome, PIR.Process.bind, PIR.Process.interpret]
   · rw [ite_eq_right owned] at accepted
     simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
     obtain ⟨rfl, rfl, rfl⟩ := accepted
     rw [originalOperation_localCall]
-    simp only [Participant.owned, owned, ite_false, PIR.Proc.interpret, PIR.Proc.bind]
+    simp only [Participant.owned, owned, ite_false, PIR.Process.interpret, PIR.Process.bind]
     exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv helper.outputs)
 
 /-- Carrier calculations take the strict component path of the evaluator. -/
@@ -1122,12 +1122,12 @@ theorem absentPreserving_component {I : PIR.Signature} (observations : SiteObser
         exact List.eq_nil_of_length_eq_zero lengths
       simp only [Region.component, operands_absent absent arguments]
       rw [componentOperation_absent observations tables op strict argumentsNonempty]
-      simp only [PIR.Proc.bind]
+      simp only [PIR.Process.bind]
       exact absentPreserving_component observations tables next rest _ (prepend_absent absent _)
   | _, _, .bind body next, preserving, env, absent => by
       simp only [absentPreserving, Bool.and_eq_true] at preserving
       simp only [Region.component, absentPreserving_component observations tables body preserving.1 env absent,
-        PIR.Proc.bind]
+        PIR.Process.bind]
       exact absentPreserving_component observations tables next preserving.2 _ (prepend_absent absent _)
 
 /-- A checked helper's component meaning in the plain participant tables is its
@@ -1183,8 +1183,8 @@ theorem vocabulary_projects (n : Nat) (calculation : Calculation) (arguments : L
     (bodies : Values (RegionFunction (assignment F G) (participantInterface F G)) calculation.op.regions)
     (cenv : List (Value F G)) (argsHold : HoldsValues handle cenv arguments args)
     (argsLength : arguments.length = calculation.op.arguments.length) (length : cenv.length = n)
-    {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-    (kO : Values (Component (assignment F G)) calculation.op.results → PIR.Proc (Actions F G) A)
+    {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+    (kO : Values (Component (assignment F G)) calculation.op.results → PIR.Process (Actions F G) A)
     (cont : ∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
       specK context handle (helperTable program F G) rest cenv' kS = kO values) :
     specK context handle (helperTable program F G) instructions cenv kS =
@@ -1223,7 +1223,7 @@ theorem vocabulary_projects (n : Nat) (calculation : Calculation) (arguments : L
           simp only [specK, specStep, read_append readBack, Zkc.Construction.calculate, decoded]
           cases evaluated : calculation.evaluate values with
           | returned outputs =>
-            simp only [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+            simp only [ofOutcome, PIR.Process.bind, PIR.Process.interpret]
             apply cont
             · exact List.prefix_append_of_prefix (List.prefix_append cenv extra)
             · simp [length, extraLength, encodeValues_length, Nat.add_assoc]
@@ -1234,7 +1234,7 @@ theorem vocabulary_projects (n : Nat) (calculation : Calculation) (arguments : L
                 (by simp [single]) data
               rw [show (cenv ++ extra).length = n + count by simp [length, extraLength]] at this
               exact this
-          | stopped reason => simp [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+          | stopped reason => simp [ofOutcome, PIR.Process.bind, PIR.Process.interpret]
       · rw [ite_eq_right data] at matched
         simp at matched
     | none =>
@@ -1245,7 +1245,7 @@ theorem vocabulary_projects (n : Nat) (calculation : Calculation) (arguments : L
       obtain ⟨values, sequenced⟩ := sequence_some argsHold' argsLength notAbsent
       rw [sequenced]
       obtain ⟨outputs, evaluated⟩ := calculation.total_returns total values
-      simp only [evaluated, ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+      simp only [evaluated, ofOutcome, PIR.Process.bind, PIR.Process.interpret]
       obtain ⟨ty, single⟩ := calculation.single
       exact cont cenv _ (List.prefix_refl cenv) length
         (holdsValues_free cenv outputs (by simp [single]))
@@ -1301,8 +1301,8 @@ theorem walkHelper_sound : ∀ (fuel : Nat) {Γ out : List Ty} (slots : List Slo
     outSlots.length = out.length ∧
       ∀ (env : Environment (Component (assignment F G)) Γ) (cenv : List (Value F G)),
         Holds handle cenv slots env → cenv.length = n →
-        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-          (kO : Values (Component (assignment F G)) out → PIR.Proc (Actions F G) A),
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+          (kO : Values (Component (assignment F G)) out → PIR.Process (Actions F G) A),
           (∀ cenv' outs, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' outSlots outs →
             specK context handle (helperTable program F G) rest cenv' kS = kO outs) →
           specK context handle (helperTable program F G) instructions cenv kS =
@@ -1341,7 +1341,7 @@ theorem walkHelper_sound : ∀ (fuel : Nat) {Γ out : List Ty} (slots : List Slo
           refine ⟨outLength, ?_⟩
           intro env cenv holds length A kS kO cont
           simp only [Region.component]
-          rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+          rw [PIR.Process.interpret_bind, PIR.Process.bind_assoc]
           apply vocabulary_projects program context handle n calculation _ instructions remaining results n''
             stepped (args.eval env) _ cenv (holds.eval args) (by simp [Operands.indices_length]) length
           intro cenv' values prefix_ length' valuesHold
@@ -1393,7 +1393,7 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
               exact (Evaluation.componentOperation_math _ _ _ math _).trans
                 (invoke_absent program definition member preserving)
             rw [regions, value]
-            simp only [PIR.Proc.interpret, PIR.Proc.bind]
+            simp only [PIR.Process.interpret, PIR.Process.bind]
             exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
           · rw [ite_eq_right preserving] at accepted
             cases accepted
@@ -1427,7 +1427,7 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
             (plainHelpers program).closed) (Op.fold spec) args _ = _
           simp only [strictComponent, sequenced]
         rw [value]
-        simp only [PIR.Proc.interpret, PIR.Proc.bind]
+        simp only [PIR.Process.interpret, PIR.Process.bind]
         exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
       · rw [ite_eq_right anyAbsent] at accepted
         cases accepted
@@ -1814,8 +1814,8 @@ def WalkSound (recurse : Walker) : Prop :=
     outSlots.length = out.length ∧
       ∀ (env : Environment (Component (assignment F G)) Γ) (cenv : List (Value F G)),
         Holds handle cenv slots env → cenv.length = n →
-        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-          (kO : Values (Component (assignment F G)) out → PIR.Proc (Actions F G) A),
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+          (kO : Values (Component (assignment F G)) out → PIR.Process (Actions F G) A),
           (∀ cenv' outs, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' outSlots outs →
             specK context handle (helperTable program F G) rest cenv' kS = kO outs) →
           specK context handle (helperTable program F G) instructions cenv kS =
@@ -1832,8 +1832,8 @@ theorem iterate_projects {B : Type} (self : Nat) (scopes : List (List Nat)) (spe
     (stepSound : ∀ (index : Nat) (carried : List (Value F G))
       (state : Values (Component (assignment F G)) spec.state),
       carried.length = count → HoldsValues handle carried (carriedSlots self scopes 0 spec.state.length) state →
-      ∀ (K : List (Value F G) → PIR.Proc (Actions F G) B)
-        (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) B),
+      ∀ (K : List (Value F G) → PIR.Process (Actions F G) B)
+        (K' : Values (Component (assignment F G)) spec.state → PIR.Process (Actions F G) B),
         (∀ carried' state', carried'.length = count →
           HoldsValues handle carried' (carriedSlots self scopes 0 spec.state.length) state' →
             K carried' = K' state') →
@@ -1844,8 +1844,8 @@ theorem iterate_projects {B : Type} (self : Nat) (scopes : List (List Nat)) (spe
           ((Repeat.step spec ctx self captures callback state index).interpret CommonAdapter.project).bind K') :
     ∀ (indices : List Nat) (carried : List (Value F G)) (state : Values (Component (assignment F G)) spec.state),
       carried.length = count → HoldsValues handle carried (carriedSlots self scopes 0 spec.state.length) state →
-      ∀ (K : List (Value F G) → PIR.Proc (Actions F G) B)
-        (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) B),
+      ∀ (K : List (Value F G) → PIR.Process (Actions F G) B)
+        (K' : Values (Component (assignment F G)) spec.state → PIR.Process (Actions F G) B),
         (∀ carried' state', carried'.length = count →
           HoldsValues handle carried' (carriedSlots self scopes 0 spec.state.length) state' →
             K carried' = K' state') →
@@ -1854,11 +1854,11 @@ theorem iterate_projects {B : Type} (self : Nat) (scopes : List (List Nat)) (spe
           ((Finite.fold (Repeat.step spec ctx self captures callback) indices state).interpret
             CommonAdapter.project).bind K'
   | [], carried, state, length, holds, K, K', agree => by
-      simp only [iterate, Finite.fold, PIR.Proc.interpret, PIR.Proc.bind]
+      simp only [iterate, Finite.fold, PIR.Process.interpret, PIR.Process.bind]
       exact agree carried state length holds
   | index :: rest, carried, state, length, holds, K, K', agree => by
       simp only [iterate, Finite.fold]
-      rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+      rw [PIR.Process.interpret_bind, PIR.Process.bind_assoc]
       exact stepSound index carried state length holds _ _ (fun carried' state' length' holds' =>
         iterate_projects self scopes spec ctx env yielded loopBody count captures callback stepSound rest
           carried' state' length' holds' K K' agree)
@@ -1875,8 +1875,8 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
     results.length = op.results.length ∧
       ∀ (args : Values (Component (assignment F G)) op.arguments) (cenv : List (Value F G)),
         HoldsValues handle cenv arguments args → arguments.length = op.arguments.length → cenv.length = n →
-        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-          (kO : Values (Component (assignment F G)) op.results → PIR.Proc (Actions F G) A),
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+          (kO : Values (Component (assignment F G)) op.results → PIR.Process (Actions F G) A),
           (∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
             specK context handle (helperTable program F G) rest cenv' kS = kO values) →
           specK context handle (helperTable program F G) instructions cenv kS =
@@ -1886,8 +1886,8 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
       results.length = op.results.length ∧
       ∀ (args : Values (Component (assignment F G)) op.arguments) (cenv : List (Value F G)),
         HoldsValues handle cenv arguments args → arguments.length = op.arguments.length → cenv.length = n →
-        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-          (kO : Values (Component (assignment F G)) op.results → PIR.Proc (Actions F G) A),
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Process (Actions F G) A)
+          (kO : Values (Component (assignment F G)) op.results → PIR.Process (Actions F G) A),
           (∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
             specK context handle (helperTable program F G) rest cenv' kS = kO values) →
           specK context handle (helperTable program F G) instructions cenv kS =
@@ -1931,11 +1931,11 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                 CommonAdapter.project).bind kO
           rw [ite_eq_left contains, show invokeProtocol (program.payload.plainProtocolTable F G) definition.signature
             (ctx.enter site roles) context.validator args = _ from invoked]
-          simp only [CheckedProtocol.denoteWith, PIR.Proc.interpret_bind]
+          simp only [CheckedProtocol.denoteWith, PIR.Process.interpret_bind]
           refine (bodySound _ cenv (HoldsValues.mask context.validator _ argsHold
-            (by simpa using argsLength)).get length kS _ ?_).trans (PIR.Proc.bind_assoc _ _ _).symm
+            (by simpa using argsLength)).get length kS _ ?_).trans (PIR.Process.bind_assoc _ _ _).symm
           intro cenv' outs prefix_ length' outsHold
-          simp only [PIR.Proc.interpret, PIR.Proc.bind]
+          simp only [PIR.Process.interpret, PIR.Process.bind]
           exact cont cenv' _ prefix_ length' (HoldsValues.mask context.validator _ outsHold outputsLength)
     · simp only [contains, Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at accepted
       obtain ⟨rfl, rfl, rfl⟩ := accepted
@@ -1947,7 +1947,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
               context.validator args
           else .done (Values.absent (assignment F G) signature.outputs)).interpret CommonAdapter.project).bind kO
       rw [ite_eq_right contains]
-      simp only [PIR.Proc.interpret, PIR.Proc.bind]
+      simp only [PIR.Process.interpret, PIR.Process.bind]
       exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
   | «repeat» spec site =>
     match bodies with
@@ -2016,8 +2016,8 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                 carried.length = initial.length →
                 HoldsValues handle carried
                   (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) 0 spec.state.length) state →
-                ∀ (K : List (Value F G) → PIR.Proc (Actions F G) A)
-                  (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) A),
+                ∀ (K : List (Value F G) → PIR.Process (Actions F G) A)
+                  (K' : Values (Component (assignment F G)) spec.state → PIR.Process (Actions F G) A),
                   (∀ carried' state', carried'.length = initial.length →
                     HoldsValues handle carried'
                       (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) 0 spec.state.length) state' →
@@ -2031,7 +2031,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                       (fun vs => body.denote (plainMeaning program context ctx) vs.get) state index).interpret
                         CommonAdapter.project).bind K' := by
               intro index carried state carriedLength carriedHolds K K' agree
-              simp only [Repeat.step, PIR.Proc.interpret_bind]
+              simp only [Repeat.step, PIR.Process.interpret_bind]
               have masked : HoldsValues handle ((cenv ++ extra) ++ .index index :: carried)
                   (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) (n + skipped + 1)
                     spec.state.length)
@@ -2054,7 +2054,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                 · exact HoldsValues.append masked (carriedSlots_length _ _ _ _)
                     (captureHold.mono ((List.prefix_append cenv extra).trans (List.prefix_append _ _)))
               refine (bodySound _ ((cenv ++ extra) ++ .index index :: carried) bodyHolds.get
-                (by simp [carriedLength]; omega) _ _ ?_).trans (PIR.Proc.bind_assoc _ _ _).symm
+                (by simp [carriedLength]; omega) _ _ ?_).trans (PIR.Process.bind_assoc _ _ _).symm
               intro cenv'' outs prefix'' length'' outsHold
               obtain ⟨extra', extraLength', skipEq⟩ :=
                 skip_spec context handle (helperTable program F G) bodyRest cenv''
@@ -2067,7 +2067,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                   simp only [bodySkip] at extraLength'
                   simp [length'', extraLength']
                   omega)
-              simp only [readYielded, PIR.Proc.interpret, PIR.Proc.bind]
+              simp only [readYielded, PIR.Process.interpret, PIR.Process.bind]
               exact agree carried' _ (by rw [read_length readYielded, yieldedLength])
                 (carried_holds context.validator (List.prefix_append cenv'' extra') yielded readYielded
                   (ctx.mapScopes spec.stateScopes) 0 yieldedFound outsHold outputsLength (by simpa using yieldedEq))
@@ -2089,7 +2089,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
                   exact cont ((cenv ++ extra) ++ carried') state'
                     ((List.prefix_append cenv extra).trans (List.prefix_append _ _))
                     (by simp [length, extraLength, carriedLength']; omega) shifted)
-            · simp only [bounded, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+            · simp only [bounded, ↓reduceIte, PIR.Process.interpret, PIR.Process.bind]
           · cases accepted
           · cases accepted
         · cases accepted
@@ -2105,7 +2105,7 @@ theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) p
           (Values.split spec.state values).2
           (fun vs => body.denote (plainMeaning program context ctx) vs.get)).interpret
             CommonAdapter.project).bind kO
-      simp only [denoteRepeat, participates, Bool.false_eq_true, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+      simp only [denoteRepeat, participates, Bool.false_eq_true, ↓reduceIte, PIR.Process.interpret, PIR.Process.bind]
       exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
   | calculate => exact generic accepted
   | localCall => exact generic accepted
@@ -2147,7 +2147,7 @@ theorem walk_sound : ∀ (fuel : Nat), WalkSound (F := F) (G := G) program conte
         refine ⟨outLength, ?_⟩
         intro env cenv holds length A kS kO cont
         simp only [Region.denote]
-        rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+        rw [PIR.Process.interpret_bind, PIR.Process.bind_assoc]
         apply stepSound (args.eval env) cenv (holds.eval args) (by simp [Operands.indices_length]) length
         intro cenv' values prefix_ length' valuesHold
         exact nextSound (env.prepend values) cenv' ((holds.mono prefix_).prepend values resultsLength valuesHold)
@@ -2162,12 +2162,12 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 variable (context : Context) (handle : Nat) (table : Structured.Meanings F G)
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-theorem iterate_bind {I : PIR.Signature} {A B : Type} (f : A → PIR.Proc I B)
-    (body : ∀ {C : Type}, List (Value F G) → (List (Value F G) → PIR.Proc I C) → PIR.Proc I C)
-    (bodyBind : ∀ start (next : List (Value F G) → PIR.Proc I A),
+theorem iterate_bind {I : PIR.Signature} {A B : Type} (f : A → PIR.Process I B)
+    (body : ∀ {C : Type}, List (Value F G) → (List (Value F G) → PIR.Process I C) → PIR.Process I C)
+    (bodyBind : ∀ start (next : List (Value F G) → PIR.Process I A),
       (body start next).bind f = body start fun final => (next final).bind f)
     (env : List (Value F G)) (yielded : List Nat) :
-    ∀ (items : List Nat) (carried : List (Value F G)) (next : List (Value F G) → PIR.Proc I A),
+    ∀ (items : List Nat) (carried : List (Value F G)) (next : List (Value F G) → PIR.Process I A),
       (iterate (fun start continuation => body start continuation) env yielded items carried next).bind f =
         iterate (fun start continuation => body start continuation) env yielded items carried
           fun final => (next final).bind f
@@ -2183,9 +2183,9 @@ theorem iterate_bind {I : PIR.Signature} {A B : Type} (f : A → PIR.Proc I B)
 
 mutual
 /-- A final bind moves into the interactive reading's continuation. -/
-theorem specK_bind {A B : Type} (f : A → PIR.Proc (Actions F G) B) :
+theorem specK_bind {A B : Type} (f : A → PIR.Process (Actions F G) B) :
     ∀ (instructions : List Instruction) (env : List (Value F G))
-      (next : List (Value F G) → PIR.Proc (Actions F G) A),
+      (next : List (Value F G) → PIR.Process (Actions F G) A),
       (specK context handle table instructions env next).bind f =
         specK context handle table instructions env fun final => (next final).bind f
   | [], env, next => rfl
@@ -2196,9 +2196,9 @@ theorem specK_bind {A B : Type} (f : A → PIR.Proc (Actions F G) B) :
       funext env'
       exact specK_bind f rest env' next
 
-theorem specStep_bind {A B : Type} (f : A → PIR.Proc (Actions F G) B) :
+theorem specStep_bind {A B : Type} (f : A → PIR.Process (Actions F G) B) :
     ∀ (instruction : Instruction) (env : List (Value F G))
-      (next : List (Value F G) → PIR.Proc (Actions F G) A),
+      (next : List (Value F G) → PIR.Process (Actions F G) A),
       (specStep context handle table instruction env next).bind f =
         specStep context handle table instruction env fun final => (next final).bind f
   | ⟨operation, operands, results, body⟩, env, next => by
@@ -2219,7 +2219,7 @@ theorem specStep_bind {A B : Type} (f : A → PIR.Proc (Actions F G) B) :
         | nil =>
           simp only [specStep]
           split
-          · simp only [PIR.Proc.bind]
+          · simp only [PIR.Process.bind]
             congr 1
             funext value
             split <;> rfl
@@ -2427,7 +2427,7 @@ theorem project_sound (participant : Participant)
         obtain ⟨returnedEq, nonempty, bounded⟩ := conditions
         rw [participant_plain program context.validator inputs]
         simp only [spec, specK_bind]
-        rw [PIR.Proc.bind_assoc, PIR.Proc.interpret_bind]
+        rw [PIR.Process.bind_assoc, PIR.Process.interpret_bind]
         obtain ⟨outputsLength, walkedSound⟩ :=
           walk_sound (F := F) (G := G) program context handle projectionFuel {} _ _ _ _ _ _ _ walked
         apply walkedSound
@@ -2450,7 +2450,7 @@ theorem project_sound (participant : Participant)
           have dropped := read_dropLast readValues
           rw [returnedEq, read_append readReferences] at dropped
           simp only [Option.some.injEq] at dropped
-          simp only [readValues, PIR.Proc.bind, PIR.Proc.interpret]
+          simp only [readValues, PIR.Process.bind, PIR.Process.interpret]
           rw [← dropped, readEq]
       · cases accepted
     · cases accepted

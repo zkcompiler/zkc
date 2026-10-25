@@ -1,0 +1,17 @@
+module claims;
+domain Fr=field("bls12-381.fr");
+domain Other=field("koala-bear");
+domain G=group("bls12-381.g1");
+type Alias=Fr;
+type Scalar=G::Scalar;
+relation Equal<F:Field>(statement x:F){return x==x;}
+protocol Run<F:Field> roles(P,V)(x:F@V)->(ok:bool@V)
+  spec{target claim=Equal<F>(in.x) accept out.ok;}
+{let ok@V=true;return(ok=ok);}
+proof Demo=Run<Alias>{
+  prover P;verifier V;public{x};accept ok;target claim;construction authored;
+}
+spec Claims for Demo{
+  sound:soundness@0(target.claim,model=models.example@0(),
+    accept=out.ok,stage=executable_bytes,error=1/cardinality(Fr));
+}

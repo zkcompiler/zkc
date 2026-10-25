@@ -25,13 +25,11 @@ noncomputable def misdirected : Form [] [] verifierPattern.scope
   .receive (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 <|
   .done (.cons (.present (.calc .booleanAnd rfl (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there .here))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)
 
-/-- A literal that is not the normalizer's result is refused by the kernel. -/
-example : True := by
-  fail_if_success
-    have : normalize {} ChaumPedersenBodies.interactiveBody 1 2 verifierPattern =
-        .ok misdirected := by
-      kernel_rfl
-  trivial
+-- A literal that is not the normalizer's result is refused by type mismatch.
+/-- error: (kernel) declaration type mismatch -/
+#guard_msgs (substring := true) in
+example : normalize {} ChaumPedersenBodies.interactiveBody 1 2 verifierPattern =
+    .ok misdirected := by kernel_rfl
 
 /-- A role index outside the declared roster is refused: `RosterDistinct`
 says nothing about it. -/
@@ -65,11 +63,10 @@ noncomputable def renamedForm : Form (renamedSignature false).laws (renamedSigna
 example : normalize (renamedSignature false) SumcheckVerifierBodies.roundBody 0 1
     SumcheckRoundNormalForms.proverEmptyPattern = .ok renamedForm := by kernel_rfl
 
-/-- The law-use check refuses that form: the called helper is not the law's. -/
-example : True := by
-  fail_if_success
-    have : renamedForm.CallsMatch := by kernel_rfl
-  trivial
+-- The law-use check refuses that form: the called helper is not the law's.
+/-- error: (kernel) declaration type mismatch -/
+#guard_msgs (substring := true) in
+example : renamedForm.CallsMatch := by kernel_rfl
 
 /-- Choosing laws by name finds no law for the call. -/
 example : normalize (renamedSignature true) SumcheckVerifierBodies.roundBody 0 1

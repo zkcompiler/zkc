@@ -9,7 +9,7 @@ public import Zkc.Source.Program
 
 The grammar retains typed, ordered references and explicit role restrictions.
 Operations have a total mathematical interpretation; ordered local algorithms
-and protocol actions use the existing effectful source and `PIR.Proc` models.
+and protocol actions use the existing effectful source and `PIR.Process` models.
 This independent source profile is not a native parser or projection theorem.
 -/
 

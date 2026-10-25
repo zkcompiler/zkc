@@ -67,7 +67,7 @@ variable {dialect : Dialect} {interface : PIR.Signature}
 abbrev ComponentOperations (meaning : RegionMeaning dialect interface) :=
   (op : dialect.Op) → Values (Component meaning.Value) (dialect.arguments op) →
     Values (RegionFunction meaning.Value interface) (dialect.regions op) →
-      PIR.Proc interface (Values (Component meaning.Value) (dialect.results op))
+      PIR.Process interface (Values (Component meaning.Value) (dialect.results op))
 
 /-- Absence skips this operation; present operands preserve all effects and stops.
 This rule is appropriate for strict leaves, not dependency-precise named calls. -/
@@ -80,7 +80,7 @@ def strictComponent (meaning : RegionMeaning dialect interface) : ComponentOpera
 def Region.component (meaning : RegionMeaning dialect interface)
     (operations : ComponentOperations meaning) {Γ out} :
     Region dialect Γ out → Environment (Component meaning.Value) Γ →
-      PIR.Proc interface (Values (Component meaning.Value) out)
+      PIR.Process interface (Values (Component meaning.Value) out)
   | .ret values, env => .done (values.eval env)
   | .stop reason, _ => .halt reason
   | .letOp op args bodies next, env =>
@@ -109,15 +109,15 @@ theorem Region.component_present (meaning : RegionMeaning dialect interface)
     region.component meaning operations (fun ref => some (env ref)) =
       (region.denote meaning env).bind fun result => .done result.present := by
   induction region using Region.rec (motive_2 := fun _ _ => True) with
-  | ret values => simp only [Region.component, Region.denote, PIR.Proc.bind, Operands.eval_present]
+  | ret values => simp only [Region.component, Region.denote, PIR.Process.bind, Operands.eval_present]
   | stop reason => rfl
   | letOp op args bodies next _ nextIH =>
     have operationPresent := adequate op (args.eval env) (bodies.denote meaning)
     simp only [Region.component, Region.denote, Operands.eval_present, operationPresent,
-      PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present, nextIH]
+      PIR.Process.bind_assoc, PIR.Process.bind, Environment.prepend_present, nextIH]
   | bind body next bodyIH nextIH =>
-    simp only [Region.component, Region.denote, bodyIH, PIR.Proc.bind_assoc,
-      PIR.Proc.bind, Environment.prepend_present, nextIH]
+    simp only [Region.component, Region.denote, bodyIH, PIR.Process.bind_assoc,
+      PIR.Process.bind, Environment.prepend_present, nextIH]
   | nil => trivial
   | cons => trivial
 

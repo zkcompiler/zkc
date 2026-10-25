@@ -15,7 +15,7 @@ namespace Zkc.Source
 variable {dialect : Dialect} {interface : PIR.Signature}
 
 /-- A process returns a value without issuing an action or stopping. -/
-def Returns {A : Type} (process : PIR.Proc interface A) : Prop :=
+def Returns {A : Type} (process : PIR.Process interface A) : Prop :=
   ∃ value, process = .done value
 
 /-- All callbacks return for all of their declared inputs. -/
@@ -59,11 +59,11 @@ theorem Region.returns_of_total (meaning : RegionMeaning dialect interface) {Γ 
     obtain ⟨operation, bodyTotal, nextTotal⟩ := total
     obtain ⟨values, returned⟩ := operation (Operands.eval env args) (bodies.denote meaning)
       (bodiesIH bodyTotal)
-    simp only [Region.denote, returned, PIR.Proc.bind]
+    simp only [Region.denote, returned, PIR.Process.bind]
     exact nextIH nextTotal _
   · intro Γ mid out body next bodyIH nextIH total env
     obtain ⟨values, returned⟩ := bodyIH total.1 env
-    simp only [Region.denote, returned, PIR.Proc.bind]
+    simp only [Region.denote, returned, PIR.Process.bind]
     exact nextIH total.2 _
   · intro _ signature reference
     cases reference
@@ -78,7 +78,7 @@ theorem Region.bind_return (meaning : RegionMeaning dialect interface) {Γ mid o
     (env : Environment meaning.Value Γ) (values : Values meaning.Value mid)
     (returned : body.denote meaning env = .done values) :
     (body.bind next).denote meaning env = next.denote meaning (env.prepend values) := by
-  simp only [Region.denote, returned, PIR.Proc.bind]
+  simp only [Region.denote, returned, PIR.Process.bind]
 
 /-- A proved immediate operation result can be substituted in any suffix.
 The premise concerns its actual arguments and callbacks, not an effect flag. -/
@@ -91,7 +91,7 @@ theorem Region.letOp_return (meaning : RegionMeaning dialect interface) {Γ out}
       .done values) :
     (Region.letOp op args bodies next).denote meaning env =
       next.denote meaning (env.prepend values) := by
-  simp only [Region.denote, returned, PIR.Proc.bind]
+  simp only [Region.denote, returned, PIR.Process.bind]
 
 /-- Discarding a zero-result computation is valid only with an immediate-return
 proof at the actual input. Lack of result uses alone does not justify removal. -/

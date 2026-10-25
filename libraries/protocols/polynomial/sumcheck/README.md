@@ -97,7 +97,7 @@ provider, commitment-opening, or Fiat–Shamir correctness by themselves.
 See the [checked contract bindings](../../../../lean/ZkcExamples/Structured/SumcheckContractBindings.lean),
 [fixed-table call instantiation](../../../../lean/ZkcExamples/Structured/SumcheckContractInstantiation.lean),
 [complete clause interpretations](../../../../lean/ZkcExamples/Structured/SumcheckContractInterpretations.lean),
-and [optional source bounds](../../../../lean/integrations/arklib/ZkcSecurity/Examples/CausalSumcheck/SourceContracts.lean).
+and [optional source bounds](../../../../lean/integrations/arklib/ZkcArkLib/Examples/CausalSumcheck/SourceContracts.lean).
 They retain source-formula adequacy and fixed-table assumptions separately from
 probabilistic acceptance and residual truth.
 The public caller's proof uses the child's residual bound through a generic

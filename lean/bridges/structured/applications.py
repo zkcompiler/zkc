@@ -32,14 +32,17 @@ def applications(suite):
     source = subject[0].read_text(encoding="utf-8")
     leaf = next(row for row in subject[2][7] if row[0] == "function" and
                 any(instruction[0][0] == "field.multiply" for instruction in row[9][1]))
-    assert source.count(leaf[1]) == 2
-    assert source.count('"algebra.field_multiply"') == 1
+    if not (source.count(leaf[1]) == 2):
+        raise AssertionError('bridges/structured/applications.py:35: source.count(leaf[1]) == 2')
+    if not (source.count('"algebra.field_multiply"') == 1):
+        raise AssertionError('bridges/structured/applications.py:36: source.count(\'"algebra.field_multiply"\') == 1')
     for name, changed, value in [
         ("application-renamed", source.replace(leaf[1], "renamed_leaf"), "6"),
         ("application-mutant", source.replace('"algebra.field_multiply"', '"algebra.field_add"'), "5"),
     ]:
         variant = suite.export(name, changed, subject[2][3])
-        assert variant[2][2] != subject[2][2]
+        if not (variant[2][2] != subject[2][2]):
+            raise AssertionError('bridges/structured/applications.py:42: variant[2][2] != subject[2][2]')
         suite.case(name, lambda n=name, s=variant, v=value:
                    suite.compare_open(s, n, roles(s)[0], ["2", "3"], [], returned([v, None])))
     return subject
@@ -87,7 +90,8 @@ def service_cases(suite, nested):
         inputs = [True, "8", str(handles[1])]
         suite.case(name, lambda n=name, i=inputs, rs=responses, e=expected:
                    suite.compare_open(subject, n, owner, i, rs, e))
-        assert counters == ({8: 4, 17: 0} if alias else {8: 3, 17: 1})
+        if not (counters == ({8: 4, 17: 0} if alias else {8: 3, 17: 1})):
+            raise AssertionError('bridges/structured/applications.py:90: counters == ({8: 4, 17: 0} if alias else {8: 3, 17: 1})')
         traces.append((inputs, responses))
     inputs, responses = traces[1]
     for index, response in enumerate(responses):
@@ -289,11 +293,13 @@ module { "protocol.module"() ({
         write_json(request, ["7"])
         native = json.loads(suite.command("application-native-closed",
             [suite.tools["reference"], original, "main", request]))
-        assert native == ["returned", ["7"]], native
+        if not (native == ["returned", ["7"]]):
+            raise AssertionError(native)
         write_json(request, [["field", FIELD, "7"]])
         refusal = json.loads(suite.command("application-formal-closed-profile",
             [suite.tools["lean"], "run", snapshot, request], success=False))
-        assert refusal["status"] == "refused" and refusal["code"] == "structured-open-profile", refusal
+        if not (refusal["status"] == "refused" and refusal["code"] == "structured-open-profile"):
+            raise AssertionError(refusal)
 
     # The native closed observer supports calls; the independent formal closed
     # profile deliberately excludes them. Open observations above are paired.

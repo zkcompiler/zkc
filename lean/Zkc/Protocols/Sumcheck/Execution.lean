@@ -48,7 +48,7 @@ theorem handler_fresh (send : S → Message F × S) (react : S → F → S) :
   rcases state with ⟨prover, coins⟩
   cases op with
   | message => cases sent : send prover; simp [handler, AlgebraicRounds.Construction.fresh,
-      AlgebraicRounds.Fresh.handler, Proc.run, Execution.follow, sent]
+      AlgebraicRounds.Fresh.handler, Process.run, Execution.follow, sent]
   | challenge => cases coins <;> rfl
   | reject => rfl
 
@@ -61,19 +61,19 @@ theorem rounds_outcome (send : S → Message F × S) (react : S → F → S)
       | none => .stopped .reject
       | some claim => .returned ⟨claim, accumulator.challenges ++ tapeList count coins⟩ := by
   induction count generalizing accumulator prover with
-  | zero => simp [Source.rounds, Proc.run, strategy, finalClaim, tapeList]
+  | zero => simp [Source.rounds, Process.run, strategy, finalClaim, tapeList]
   | succ count ih =>
       rcases coins with ⟨r, tail⟩
       cases sent : send prover with
       | mk message next =>
           by_cases passes : message.boundary = accumulator.claim
-          · simp only [Source.rounds, Proc.run, handler, sent, Execution.follow, tapeList,
+          · simp only [Source.rounds, Process.run, handler, sent, Execution.follow, tapeList,
               ite_eq_left passes]
             rw [ih]
             simp only [strategy, sent, finalClaim, ite_eq_left passes]
             cases result : finalClaim (strategy send react count (react next r)) (message.evaluate r) tail <;>
               simp [Source.advance, List.append_assoc, result]
-          · simp [Source.rounds, Proc.run, handler, sent, Execution.follow, tapeList,
+          · simp [Source.rounds, Process.run, handler, sent, Execution.follow, tapeList,
               passes, strategy, finalClaim]
 
 /-- This entry uses the staged construction, not an unrelated replay function. -/
@@ -91,7 +91,7 @@ theorem source_outcome (send : S → Message F × S) (react : S → F → S)
       match finalClaim (strategy send react n prover) claim coins with
       | none => .stopped .reject
       | some result => .returned (decide (result = p.eval (tapePoint n coins))) := by
-  rw [run, Program.denote_translate, Proc.run_interpret, ← handler_fresh, Source.program_denote,
+  rw [run, Program.denote_translate, Process.run_interpret, ← handler_fresh, Source.program_denote,
     PIR.run_bind]
   simp only [Values.get, Execution.follow]
   have outcome := rounds_outcome send react n ⟨claim, []⟩ prover coins
@@ -100,7 +100,7 @@ theorem source_outcome (send : S → Message F × S) (react : S → F → S)
   cases result : finalClaim (strategy send react n prover) claim coins with
   | none => rfl
   | some value =>
-      simp [Source.terminal, Proc.run, tapeList_ofFn, coordinates_ofFn]
+      simp [Source.terminal, Process.run, tapeList_ofFn, coordinates_ofFn]
       rfl
 
 theorem accepted_iff (send : S → Message F × S) (react : S → F → S)

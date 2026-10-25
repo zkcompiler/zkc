@@ -64,7 +64,7 @@ def verifierInputs (base key : G) (challengeService : Nat) :
 /-- This is the actual checked root's participant process, with the singleton
 result unpacked. Unowned secret/service inputs are absent, never fabricated. -/
 def process (base key : G) (challengeService : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (program.participant F G 1 (verifierInputs base key challengeService)).bind fun outputs =>
     .done (outputs.get .here)
 
@@ -92,7 +92,7 @@ def proverInputs (base key : G) (secret : F) (nonceService : Nat) :
     (.cons (some nonceService) (.cons none .nil))))
 
 def proverProcess (base key : G) (secret : F) (nonceService : Nat) :
-    PIR.Proc (participantInterface F G) (Option Bool) :=
+    PIR.Process (participantInterface F G) (Option Bool) :=
   (program.participant F G 0 (proverInputs base key secret nonceService)).bind fun outputs =>
     .done (outputs.get .here)
 

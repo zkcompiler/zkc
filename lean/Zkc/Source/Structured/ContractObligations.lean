@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Source.Structured.ContractApplication
 public import Zkc.Source.Structured.ContractCalls
 
@@ -231,3 +234,9 @@ structure SelectedObligations {context : ProtocolContext} {boundary : ContractBo
   calls : CallObligations owner.protocol.body CallRequest
 
 end Zkc.Source.Structured
+
+-- Materialize shared unfolding equations in their defining module. Otherwise
+-- separate clients can generate the same public equation name with different
+-- private proof helpers, leaving its stored provider ambiguous to an audit.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.Structured.ExternalTerminal.readParameters
