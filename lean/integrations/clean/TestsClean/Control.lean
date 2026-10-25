@@ -26,7 +26,7 @@ open ZkcClean
 def presentation : PrimePresentation KoalaBear := .ofPrime "koala-bear" koalaBear
 
 def repository : String := "https://github.com/Verified-zkEVM/clean"
-def revision : String := "b449bf590f93e13827c3c7e747e392d6969aa380"
+def revision : String := "1a6c28426372bb99af79e533aa7b9a0788eff0d7"
 
 def toBitsMutations : List (String × Mutation) :=
   [("altered-constant", .constant 4 2 3),

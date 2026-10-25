@@ -13,19 +13,19 @@ path = "../.."
 [[require]]
 name = "Clean"
 git = "https://github.com/Verified-zkEVM/clean"
-rev = "b449bf590f93e13827c3c7e747e392d6969aa380"
+rev = "1a6c28426372bb99af79e533aa7b9a0788eff0d7"
 
 # Keep the shared polynomial library aligned with the ArkLib integration.
 [[require]]
 name = "CompPoly"
 git = "https://github.com/Verified-zkEVM/CompPoly"
-rev = "df591bb8c6745126d1d72f5243faae3022b0432a"
+rev = "1cb8f5cd0e22a8c9ec165000915c21d0f8e12525"
 
 # Select the main package's Mathlib revision over upstream transitive pins.
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+rev = "56a005855ea17e0b0958f73ec801ae140b0a1679"
 
 # The adapter is kept separate from protocol security and uses the shared pins.
 [[lean_lib]]

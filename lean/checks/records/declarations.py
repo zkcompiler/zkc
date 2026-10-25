@@ -20,7 +20,8 @@ FORMAT = "zkc.declarations/0"
 # `main`, are selected by their library directories.
 PACKAGES = {
     "main": (LEAN, ["Zkc", "ZkcExamples", "Tests", "ZkcTools/CommonSource/Reference.lean",
-                    "ZkcTools/JsonSupport.lean", "ZkcTools/StructuredSource",
+                    "ZkcTools/JsonSupport.lean", "ZkcTools/ProofAccount.lean",
+                    "ZkcTools/StructuredSource",
                     "ZkcTools/ConstructionBindings"]),
     "security": (LEAN / "security", ["ZkcSecurity", "TestsSecurity"]),
     "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "TestsArkLib"]),

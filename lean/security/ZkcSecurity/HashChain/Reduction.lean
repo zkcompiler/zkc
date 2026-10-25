@@ -50,8 +50,8 @@ section Persistence
 theorem traced_persists {α : Type} (computation : OracleComp (Primitive E S X) α)
     (trace : Trace E S X) (isBad : trace.bad = true) :
     ∀ result ∈ support ((simulateQ traced computation).run trace), result.2.bad = true :=
-  support_bad traced (fun trace => trace.bad = true)
-    (fun input trace isBad => traced_bad_mono input trace isBad) computation trace isBad
+  forall_mem_support_simulateQ_run_of_bad traced (fun trace => trace.bad = true)
+    (fun input trace isBad => traced_bad_mono input trace isBad) computation isBad
 
 /-- From a bad trace, a traced run is related to any computation by a
 postcondition that admits bad left results. -/
@@ -397,7 +397,7 @@ theorem concrete_le (absorb : Typed.Interface I E P (Raw E S width))
           Trace.empty)}[result.2.bad = true] := by
   have traced_le := prEvent_le_of_relTriple
     (randomOracle_coupling (experiment absorb validator initial adversary))
-    (event := event) (target := fun result => event result.1)
+    (p := event) (q := fun result => event result.1)
     fun one two (same : one = two.1) holds => by rw [← same]; exact holds
   have simulated_le := prEvent_le_add_bad (bad := fun trace : Trace E S X => trace.bad = true)
     (R := Eq) (experiment_coupling absorb validator initial nonempty adversary)

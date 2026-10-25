@@ -79,7 +79,6 @@ def producerProof : String :=
           SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite]
       try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size,
         List.getElem?_cons_zero, List.getElem?_cons_succ]
-      try dsimp only
       change Original.Simulation _ _ _ _)
     solving (first
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]

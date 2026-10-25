@@ -25,7 +25,7 @@ Two renamings relate the forms (`ZkcSecurity.Oracle.Renaming`):
   a root locally (`historyCell_nil`, `historyCell_root`), whatever the adversary asks there.
 
 Through either renaming the lazily sampled executions have the same law
-(`Renaming.evalSPMF_translate`; for the bridge's joint games `prEvent_jointToHistory`), queries
+(`Renaming.evalDistEq_translate`; for the bridge's joint games `prEvent_jointToHistory`), queries
 transport unchanged (`Renaming.translate_queryBound`), and charges transport through the weights:
 the history charge of a joint charge (`historyCharge`) weighs a pair as the joint charge does
 (`jointToHistory_weight`, `jointToHistory_costBound`), and the joint charge weighs a history as

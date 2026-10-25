@@ -289,7 +289,7 @@ theorem byteExperiment_eq {width' : ℕ}
         initial adversary)).run' ∅}[event result] =
       Pr{let result ← (simulateQ randomOracle (experiment absorb validator initial
         (classify stateBytes eventBytes adversary))).run' ∅}[event result] :=
-  ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq (evalDistEq_of_relTriple_eqRel
+  _root_.EvalDistEq.prEvent_eq (evalDistEq_of_relTriple_eqRel
     (byteExperiment_coupling stateBytes eventBytes stateLength stateInjective eventInjective small
       absorb validator initial adversary)) event
 

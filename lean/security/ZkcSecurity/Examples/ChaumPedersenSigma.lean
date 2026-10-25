@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.SigmaLogicalContexts
-public import Examples.Schnorr.SigmaProtocol
+public import VCVio.Schemes.Schnorr.SigmaProtocol
 public import VCVio.CryptoFoundations.FiatShamir.Sigma.KnowledgeExtraction
 
 @[expose] public section

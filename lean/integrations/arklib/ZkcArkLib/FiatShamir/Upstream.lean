@@ -74,22 +74,16 @@ inductive Event where
 instance [DecidableEq StmtIn] [∀ round, DecidableEq (pSpec.«Type» round)] :
     DecidableEq (Event pSpec StmtIn)
   | .statement first, .statement second =>
-      if same : first = second then isTrue (by rw [same]) else isFalse fun equal => by
-        cases equal
-        exact same rfl
+      decidable_of_iff (first = second) (by simp only [Event.statement.injEq])
   | .message round value, .message other value' =>
       if sameRound : round = other then by
         subst sameRound
-        exact if same : value = value' then isTrue (by rw [same]) else isFalse fun equal => by
-          cases equal
-          exact same rfl
+        exact decidable_of_iff (value = value') (by simp only [Event.message.injEq, heq_eq_eq, true_and])
       else isFalse fun equal => by
         cases equal
         exact sameRound rfl
   | .challenge round, .challenge other =>
-      if same : round = other then isTrue (by rw [same]) else isFalse fun equal => by
-        cases equal
-        exact same rfl
+      decidable_of_iff (round = other) (by simp only [Event.challenge.injEq])
   | .statement _, .message _ _ => isFalse nofun
   | .statement _, .challenge _ => isFalse nofun
   | .message _ _, .statement _ => isFalse nofun

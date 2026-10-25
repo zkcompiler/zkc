@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Endpoint.Knowledge
 public import Zkc.Protocols.Schnorr.Common
-public import Examples.Schnorr.SigmaProtocol
+public import VCVio.Schemes.Schnorr.SigmaProtocol
 
 @[expose] public section
 

@@ -18,7 +18,7 @@ The comparison fills a lazy state ahead (`fillAll`, `fillHistory`): the unread
 tape entries are uniform, and the unread cells of each history key with some
 read cell are a uniform row of a table indexed by the key's position among the
 read keys (`completed`). Each step then commutes with the fill
-(`ZkcSecurity.VCVio.Deferral.evalSPMF_simulateQ_fill`), because resampling one
+(`ZkcSecurity.VCVio.Deferral.evalDistEq_simulateQ_fill`), because resampling one
 cell of a uniform table with an independent uniform value keeps it uniform:
 
 - a fresh private answer is the next unread tape entry (`private_commute`);
@@ -36,7 +36,7 @@ open OracleComp OracleSpec ZkcSecurity.FiatShamir ZkcSecurity.VCVio.Deferral
 section Uniform
 
 /-- Resampling one cell of one row of a uniform table of rows keeps it uniform. -/
-theorem evalSPMF_uniform_update_row {S α : Type} [SampleableType S] {slots width : ℕ}
+theorem evalDistEq_uniform_update_row {S α : Type} [SampleableType S] {slots width : ℕ}
     (slot : Fin slots) (block : Fin width)
     (continuation : (Fin slots → Fin width → S) → ProbComp α) :
     (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
@@ -47,12 +47,12 @@ theorem evalSPMF_uniform_update_row {S α : Type} [SampleableType S] {slots widt
           continuation (Function.update rows slot (Function.update row block value))) := by
     intro value
     simpa only [Function.update_idem, Function.update_self] using
-      (evalSPMF_uniform_update slot fun rows =>
+      (evalDistEq_uniform_update slot fun rows =>
         continuation (Function.update rows slot (Function.update (rows slot) block value))).symm
   exact (EvalDistEq.bind_right ($ᵗ S) expand).trans
-    ((evalSPMF_uniform_update block fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+    ((evalDistEq_uniform_update block fun row => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
       continuation (Function.update rows slot row)).trans
-        (evalSPMF_uniform_update slot continuation))
+        (evalDistEq_uniform_update slot continuation))
 
 end Uniform
 
@@ -190,7 +190,7 @@ theorem touched_law {tables : Simulated E S X width} {key : List E}
     (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
         continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)) =ᵈ (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
         continuation value (completed (tables.recordHistory width key block value) rows)) := by
-  refine (evalSPMF_uniform_update_row ⟨_, below⟩ block fun rows =>
+  refine (evalDistEq_uniform_update_row ⟨_, below⟩ block fun rows =>
     continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)).symm.trans ?_
   refine EvalDistEq.bind_right _ fun value => EvalDistEq.bind_right _ fun rows => ?_
   rw [completed_recordHistory_touched touched fresh below, rowAt_update, ite_eq_left rfl,
@@ -211,13 +211,13 @@ theorem untouched_law {tables : Simulated E S X width} (organized : Organized ta
     continuation (rows slot block) ((completed tables rows).cacheQuery key (rows slot))
   have right : (($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
         continuation value (completed (tables.recordHistory width key block value) rows)) =ᵈ (($ᵗ (Fin slots → Fin width → S)) >>= reading) := by
-    refine EvalDistEq.trans ?_ (evalSPMF_uniform_update_row slot block reading)
+    refine EvalDistEq.trans ?_ (evalDistEq_uniform_update_row slot block reading)
     refine EvalDistEq.bind_right _ fun value => EvalDistEq.bind_right _ fun rows => ?_
     simp only [reading, Function.update_self,
       completed_recordHistory_untouched organized untouched below]
     rw [completed_update_unused tables below]
-  refine (evalSPMF_uniform_swap _).trans
-    (EvalDistEq.trans ?_ ((evalSPMF_uniform_update slot reading).trans right.symm))
+  refine (OracleComp.EvalDistEq.bind_bind_swap _ _ _).trans
+    (EvalDistEq.trans ?_ ((evalDistEq_uniform_update slot reading).trans right.symm))
   refine EvalDistEq.bind_right _ fun answer => EvalDistEq.bind_right _ fun rows => ?_
   simp only [reading, Function.update_self]
   rw [completed_update_unused tables below]
@@ -452,7 +452,7 @@ theorem answer_commute (positive : 0 < width) {slots : ℕ} (key : List E)
   let Inv : ℕ → Simulated E S X width → Prop := fun _ current =>
     Organized current ∧ (key ∉ current.touched → current.touched.length < slots) ∧
       (key ∈ current.touched → current.touched.idxOf key < slots)
-  have filled := evalSPMF_simulateQ_fill (spec := BlockSpec S width)
+  have filled := evalDistEq_simulateQ_fill (spec := BlockSpec S width)
     (fun block => historyBlock width key block) (fun block => oracleBlock key block)
     (fillHistory slots) Inv
     (fun _ block current inv => block_commute key block current inv.1 inv.2.1 inv.2.2)
@@ -521,7 +521,7 @@ theorem fillHistory_drop {slots : ℕ} (tables : Simulated E S X width) {α : Ty
     (computation : ProbComp α) :
     (fillHistory slots tables >>= fun _ => computation) =ᵈ computation := by
   simp only [fillHistory, bind_assoc, pure_bind]
-  exact evalSPMF_uniform_drop computation
+  exact OracleComp.EvalDistEq.bind_const _ computation
 
 variable {I : PIR.Signature} {P A : Type}
 
@@ -538,7 +538,7 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
           cache) =ᵈ ((Typed.transform absorb (historyAsk width) process history proof).run' tables) := by
   let Inv : ℕ → Simulated E S X width → Prop := fun remaining current =>
     Organized current ∧ current.touched.length + remaining ≤ slots
-  have filled := evalSPMF_simulateQ_fill (spec := OracleSpec.ofFn (Answer E S width))
+  have filled := evalDistEq_simulateQ_fill (spec := OracleSpec.ofFn (Answer E S width))
     (fun key => historyAnswer width key) randomOracle (fillHistory slots) Inv
     (fun _ key current inv => answer_commute positive key current inv.1 (by omega))
     (fun remaining key current inv step member => by
@@ -766,7 +766,7 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
             refine bind_congr fun answer => ?_
             rw [completedWith_cacheQuery]
           simp only [lhs]
-          refine (EvalDistEq.bind_right _ fun rows => evalSPMF_uniform_swap fun suffix answer =>
+          refine (EvalDistEq.bind_right _ fun rows => OracleComp.EvalDistEq.bind_bind_swap _ _ fun suffix answer =>
             (pure (answer ⟨block, below⟩,
               (completedWith tables suffix ((completed tables rows).cacheQuery
                 (history ++ [event]) answer),
@@ -818,10 +818,10 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
           fun _ _ => rfl
         simp only [recordAuxCompleted, completedWith_recordAux tables input tapeRoom]
         symm
-        refine (evalSPMF_uniform_swap (A := S) _).trans ?_
+        refine (OracleComp.EvalDistEq.bind_bind_swap ($ᵗ S) _ _).trans ?_
         refine EvalDistEq.bind_right _ fun rows => ?_
         simpa only [Function.update_self] using
-          (evalSPMF_uniform_update ⟨_, tapeRoom⟩ fun suffix =>
+          (evalDistEq_uniform_update ⟨_, tapeRoom⟩ fun suffix =>
             (pure (suffix ⟨_, tapeRoom⟩, (afterPrivate tables input suffix (completed tables rows)
               (suffix ⟨_, tapeRoom⟩), completed tables rows)) : ProbComp _))
 
@@ -881,7 +881,7 @@ theorem adversary_eq {slots : ℕ} {α : Type} (adversary : OracleComp (Primitiv
     (fillAll (length := length) slots tables >>= fun filled =>
         (simulateQ (flatSimulator width length) adversary).run filled) =ᵈ ((simulateQ (simulator width) adversary).run tables >>= fun result =>
         (fun filled => (result.1, filled)) <$> fillAll slots result.2) :=
-  evalSPMF_simulateQ_fill (simulator width) (flatSimulator width length) (fillAll slots)
+  evalDistEq_simulateQ_fill (simulator width) (flatSimulator width length) (fillAll slots)
     (fun remaining current => Organized current ∧ current.consumed.length + remaining ≤ length ∧
       current.touched.length + remaining ≤ slots)
     (fun _ input current inv => adversary_commute input current inv.1 (by omega) (by omega))
@@ -947,7 +947,7 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
           ((chainSimulator width calls).translate adversary tape))).run' ∅) =ᵈ ((fillAll (length := calls) slots (Simulated.empty width : Simulated E S X width) >>=
           fun state => (simulateQ (flatSimulator width calls) adversary).run state) >>= finish) := by
     simp only [right, fillAll, completed_empty, completedWith_empty, bind_assoc, pure_bind]
-    exact (evalSPMF_uniform_drop _).symm
+    exact (OracleComp.EvalDistEq.bind_const _ _).symm
   symm
   refine filled.trans (((adversary_eq adversary bounded (Simulated.empty width)
     (fun _ _ absent => absurd rfl absent) (by simp [Simulated.empty])
@@ -967,7 +967,7 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
     started.1.2 (queryBounded started.1.1) started.2 organized
     (show started.2.touched.length + queries ≤ slots by omega)
   simp only [map_bind, finish, fillAll, bind_assoc, map_pure, pure_bind]
-  refine (EvalDistEq.bind_right _ fun rows => evalSPMF_uniform_drop _).trans ?_
+  refine (EvalDistEq.bind_right _ fun rows => OracleComp.EvalDistEq.bind_const _ _).trans ?_
   have regroup : (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
       (fun outcome => (started.1.1, outcome)) <$>
         (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator started.1.1)

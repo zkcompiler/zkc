@@ -113,6 +113,9 @@ open Zkc.Source Zkc.Source.Structured
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
+-- The supplied solver deliberately fails; the retained local obligation is
+-- discharged below. Its failure is the behavior under test.
+set_option linter.unusedTactic false in
 /-- With a synthesized target, an unsupported operation remains visible and
 can be discharged interactively. No whole-program law is requested. -/
 theorem unsupported_resumed (table : Meanings F G) (a b : F) :

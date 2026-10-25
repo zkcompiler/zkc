@@ -89,7 +89,7 @@ maintained integration without changing its meaning, retain the newest
 compatible set and record the concrete constraint here. Do not suppress proof
 checks or add a second dependency manager to force an upgrade.
 
-The maintained packages use Lean 4.34.1. The owning manifests select exact
+The maintained packages use Lean 4.35.0. The owning manifests select exact
 Mathlib, ArkLib, VCVio and Clean revisions; the
 [formal dependency rationale](../../lean/docs/dependencies.md) records their
 compatibility constraints and the checked adapter boundaries. Revalidate those

@@ -62,7 +62,6 @@ theorem target_equation (left right : List F) (leftClaim rightClaim : F)
   change (PIR.Process.done (I := closedInterface)
     (Values.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum))
       .nil : Values (assignment F G) [.boolean])) = _
-  congr 3
-  simp only [Bool.decide_and, eq_comm]
+  simp only [← Bool.decide_and, eq_comm]
 
 end ZkcSecurity.Examples.Components.TwoSums

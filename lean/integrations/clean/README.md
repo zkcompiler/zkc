@@ -39,10 +39,10 @@ permitted in their transitive proof cones.
 
 | Dependency | Revision |
 |---|---|
-| Lean | `leanprover/lean4:v4.34.1` |
-| Clean | `b449bf590f93e13827c3c7e747e392d6969aa380` |
-| Mathlib | `d13f23b723b8a846827a245b89c10fc7d3f11612`, the main package's pin |
-| CompPoly | `df591bb8c6745126d1d72f5243faae3022b0432a`, the shared polynomial pin |
+| Lean | `leanprover/lean4:v4.35.0` |
+| Clean | `1a6c28426372bb99af79e533aa7b9a0788eff0d7` |
+| Mathlib | `56a005855ea17e0b0958f73ec801ae140b0a1679`, the main package's pin |
+| CompPoly | `1cb8f5cd0e22a8c9ec165000915c21d0f8e12525`, the shared polynomial pin |
 
 The remaining entries of [the manifest](lake-manifest.json) are the main
 package's revisions, overriding Clean's transitive pins. The main zkc library

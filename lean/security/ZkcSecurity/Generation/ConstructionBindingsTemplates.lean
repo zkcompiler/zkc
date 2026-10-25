@@ -130,6 +130,7 @@ def producerRoutes : String :=
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.deliverySite, Occurrence.origins, Context.message,
         Context.role, Origin.message, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     have drawSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol) (.draw "bls12-381.fr"))
         [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
@@ -143,6 +144,7 @@ def producerRoutes : String :=
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.challengeSite, Occurrence.origins, Context.query,
         Context.role, Origin.query, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     rw [messageSingleton, Option.bind_some, drawSingleton]
     rfl
   · exact Original.Routing.draw_request ($VALIDATOR_ROUTES handle index).draw

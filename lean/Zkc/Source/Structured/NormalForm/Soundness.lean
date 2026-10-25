@@ -478,7 +478,7 @@ theorem operationOn_total (model : DomainModel) {I : PIR.Signature} (observation
     Evaluation.operationOn model observations table op args bodies = .done (op.evalTotal model total args) := by
   cases op <;> simp [Op.total] at total
   all_goals
-    (rcases bodies with _ | _) <;> (rcases args with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩) <;> rfl
+    (rcases bodies with _ | _); (rcases args with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩); rfl
 
 theorem componentOperationOn_total (model : DomainModel) {I : PIR.Signature}
     (observations : SiteObservations I) (tables : Evaluation.ComponentTablesOn model.toCarriers I)

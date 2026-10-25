@@ -101,7 +101,7 @@ theorem climbs_append (log : HashLog Query Y) (index : ℕ) (sibling : Y) :
   | first :: rest, current, top, ⟨up, member, climbs⟩ => by
       obtain ⟨middle, below, last⟩ := climbs_append log (index / 2) sibling rest up top climbs
       refine ⟨middle, ⟨up, member, below⟩, ?_⟩
-      rwa [List.length_cons, pow_succ', ← Nat.div_div_eq_div_mul] at *
+      simpa only [List.length_cons, pow_succ', ← Nat.div_div_eq_div_mul] using last
 
 /-- A climb reads only as many low bits of the index as it has levels. -/
 theorem climbs_mod (log : HashLog Query Y) :

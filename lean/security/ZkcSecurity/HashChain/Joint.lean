@@ -136,7 +136,7 @@ noncomputable def simulation (positive : 0 < width) (small : width ≤ 2 ^ 64)
     refine (concrete_le_lazy encoding width absorb scheme verifier initial statementRoots small
       nonempty adversary total verifierCalls verifierBound _).trans (le_of_eq ?_)
     congr 1
-    rw [ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq (lazy_eq_translated encoding width absorb
+    rw [_root_.EvalDistEq.prEvent_eq (lazy_eq_translated encoding width absorb
       scheme verifier initial statementRoots positive adversary total queryBounded),
       translated_eq_ideal encoding width absorb scheme verifier initial statementRoots words
         (budget ()) adversary falseStatement accepts]

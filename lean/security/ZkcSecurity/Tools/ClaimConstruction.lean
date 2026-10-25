@@ -48,23 +48,25 @@ structure Library where
   receiptMethods : List (Identifier × Name) := []
   deriving Inhabited
 
-/-- Kernel checked normalization of a reflexive symbolic comparison. -/
-@[simp] theorem naturalReflexiveRec {α : Sort u} (value : Nat)
-    (no : (¬ value = value) → α) (yes : (value = value) → α) :
-    @Decidable.rec (value = value) (fun _ => α) no yes (instDecidableEqNat value value) =
-      yes rfl := by
-  cases decision : instDecidableEqNat value value with
-  | isFalse impossible => exact (impossible rfl).elim
-  | isTrue proof => rfl
+/-- Normalize a reflected decision without evaluating its carrier. The resolver
+can expose this dependent Boolean eliminator while reducing an `Except` bind;
+rewriting its discriminator alone would change the type of the reflection proof. -/
+theorem reflectedTrue {p : Prop} [Decidable p] {α : Sort u}
+    (no : ¬ p → α) (yes : p → α) (holds : p) :
+    @Bool.rec (fun b => b.Reflects p → α) no yes (decide p)
+      (Decidable.reflects_decide p) = yes holds := by
+  cases ‹Decidable p› with
+  | isFalse noProof => exact (noProof holds).elim
+  | isTrue _ => rfl
 
-/-- Reflexive Boolean comparisons can occur after reducing an `Except` bind. -/
-@[simp] theorem naturalBneRec {α : Sort u} (value : Nat)
-    (no : (¬ (value != value) = true) → α) (yes : ((value != value) = true) → α) :
-    @Decidable.rec ((value != value) = true) (fun _ => α) no yes
-      (instDecidableEqBool (value != value) true) = no (by simp) := by
-  cases decision : instDecidableEqBool (value != value) true with
-  | isFalse proof => rfl
-  | isTrue impossible => simp at impossible
+/-- The negative branch preserves the same reflection evidence. -/
+theorem reflectedFalse {p : Prop} [Decidable p] {α : Sort u}
+    (no : ¬ p → α) (yes : p → α) (fails : ¬ p) :
+    @Bool.rec (fun b => b.Reflects p → α) no yes (decide p)
+      (Decidable.reflects_decide p) = no fails := by
+  cases ‹Decidable p› with
+  | isFalse _ => rfl
+  | isTrue proof => exact (fails proof).elim
 
 /-- Admit a carrier cardinality as symbolic arithmetic before evaluating any
 finite enumeration. The selected carrier still supplies the cardinality. -/
@@ -188,7 +190,7 @@ private meta def normalizationNames : List Name :=
     ``decodeSoundnessParameters, ``requireExactSoundness,
     ``checkDefaultRelation, ``defaultRelationHelper, ``defaultRelationOperation,
     ``HonestPair.resolveHonestModel, ``HonestPair.honestModelEntry, ``HonestPair.honestModelSchema,
-    ``forking, ``naturalReflexiveRec, ``naturalBneRec, ``ModelContext.parameter, ``ModelContext.resolveApplication,
+    ``forking, ``reflectedTrue, ``reflectedFalse, ``beq_self_eq_true, ``decide_true, ``decide_false, ``ModelContext.parameter, ``ModelContext.resolveApplication,
     ``Fintype.card_ne_zero, ``NeZero.ne, ``Domain.Capabilities.cardinality, ``Bound.elaborateWith, ``Except.map]
 
 -- Lean otherwise creates shared unfolding equations lazily in each client,

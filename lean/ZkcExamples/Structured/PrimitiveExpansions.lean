@@ -110,21 +110,21 @@ theorem appendSummary_body (table : Meanings F G) (input0 : List F) (input1 : F)
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.fieldEqual "bls12-381.fr") (.cons (result8.get .here) (.cons input1 .nil))) : Closed (Values (assignment F G) [.boolean])).bind fun result10 =>
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEmpty "bls12-381.fr") .nil) : Closed (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result11 =>
     .done (.cons (result3.get .here) (.cons (result4.get .here) (.cons (result5.get .here) (.cons (result7.get .here) (.cons (result8.get .here) (.cons (result9.get .here) (.cons (result10.get .here) (.cons (result11.get .here) .nil)))))))) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  derive_process
 
 theorem shape_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveShapeViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
     (invoke table ⟨"zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", .local, [.vector "bls12-381.fr", .index, .index], [.boolean]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.boolean])).bind fun result0 =>
     .done (.cons (result0.get .here) .nil) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  derive_process
 
 theorem table_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveTableViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
     (invoke table ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  derive_process
 
 theorem halves_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveHalvesViews.entryBody.denote (meaning F G table)
@@ -132,14 +132,14 @@ theorem halves_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (in
     (invoke table ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     (invoke table ⟨"zkl_46021cb00c22207246296c081a0fe3ef9fa4e1d20f4a866fd01bfa4b37888087", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .vector "bls12-381.fr"]⟩ (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])).bind fun result1 =>
     .done (.cons (result1.get .here) (.cons (result1.get (.there .here)) .nil)) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  derive_process
 
 theorem sequence_entry (table : Meanings F G) (input0 : List F) (input1 : F) (input2 : Nat) :
     PrimitiveSequenceViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr", .index]).get =
     (invoke table ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) (.cons (result0.get (.there (.there (.there .here)))) (.cons (result0.get (.there (.there (.there (.there .here))))) (.cons (result0.get (.there (.there (.there (.there (.there .here)))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))))))) := by
-  derive_process using (exact branch_law _ _ _ _ _ _)
+  derive_process
 
 set_option backward.isDefEq.respectTransparency false in
 theorem appendSummary_body_observed {I : PIR.Signature} (sites : SiteObservations I) (table : Evaluation.Meanings F G I) (input0 : List F) (input1 : F) (input2 : Nat) :

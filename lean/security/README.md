@@ -16,7 +16,7 @@ security. Declaration namespaces and theorem names are retained across moves.
 `Examples.Subjects` contains the Schnorr, Schnorr AND, Chaum–Pedersen and Okamoto
 subjects. They and the maintained probability clients/tests are default targets.
 Libraries may not import these leaf subjects. The upstream VCVio module
-`Examples.Schnorr.SigmaProtocol` is reusable mathematics from the pinned provider.
+`VCVio.Schemes.Schnorr.SigmaProtocol` is reusable mathematics from the pinned provider.
 
 From the repository root:
 

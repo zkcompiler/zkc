@@ -91,7 +91,7 @@ case is changed by the partition.
 
 Reusable VCVio execution, Sigma composition, Schnorr-family mathematics,
 Fiat–Shamir and commitment machinery belong to security. VCVio's upstream
-`Examples.Schnorr.SigmaProtocol` and `ToMathlib` modules are classified by their
+`VCVio.Schemes.Schnorr.SigmaProtocol` and `ToMathlib` modules are classified by their
 actual provider. `ZkcSecurity.Commitment.Opening` owns the reusable one-opening
 family, with its original declaration namespace; `HashChain.JointOpening`
 imports this library module. Four Sigma subjects live under security's

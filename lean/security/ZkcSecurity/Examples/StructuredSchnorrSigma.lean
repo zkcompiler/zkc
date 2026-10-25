@@ -3,7 +3,7 @@ module
 public import ZkcExamples.Structured.SchnorrContract
 public import ZkcExamples.Structured.SchnorrCheckpoints
 public import ZkcSecurity.VCVio.Schnorr
-public import Examples.Schnorr.SigmaProtocol
+public import VCVio.Schemes.Schnorr.SigmaProtocol
 public import VCVio.OracleComp.Constructions.SampleableType.Measure
 
 @[expose] public section

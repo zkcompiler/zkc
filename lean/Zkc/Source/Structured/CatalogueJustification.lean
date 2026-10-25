@@ -30,38 +30,6 @@ def Catalogue.Justified (catalogue : Catalogue) : Prop :=
 
 /-! Primality certificates. -/
 
-/-- Modular exponentiation by squaring with explicit fuel; it reduces in the
-kernel on numerals. -/
-def powModFuel : ℕ → ℕ → ℕ → ℕ → ℕ
-  | 0, _, _, modulus => 1 % modulus
-  | fuel + 1, base, exponent, modulus =>
-    let half := powModFuel fuel base (exponent / 2) modulus
-    let square := half * half % modulus
-    if exponent % 2 = 0 then square else square * (base % modulus) % modulus
-
-theorem powModFuel_eq : ∀ (fuel base exponent modulus : ℕ), exponent < 2 ^ fuel →
-    powModFuel fuel base exponent modulus = base ^ exponent % modulus
-  | 0, base, exponent, modulus, bound => by
-    have : exponent = 0 := by simpa using bound
-    subst this
-    simp [powModFuel]
-  | fuel + 1, base, exponent, modulus, bound => by
-    have halfBound : exponent / 2 < 2 ^ fuel := by
-      rw [pow_succ] at bound
-      omega
-    have half := powModFuel_eq fuel base (exponent / 2) modulus halfBound
-    simp only [powModFuel, half]
-    split_ifs with even
-    · have halves : exponent = exponent / 2 + exponent / 2 := by omega
-      have expand : base ^ exponent = base ^ (exponent / 2) * base ^ (exponent / 2) := by
-        rw [← pow_add, ← halves]
-      rw [expand, Nat.mul_mod (base ^ (exponent / 2)) (base ^ (exponent / 2))]
-    · have halves : exponent = exponent / 2 + exponent / 2 + 1 := by omega
-      have expand : base ^ exponent = base ^ (exponent / 2) * base ^ (exponent / 2) * base := by
-        rw [← pow_add, ← pow_succ, ← halves]
-      rw [expand, Nat.mul_mod (base ^ (exponent / 2) * base ^ (exponent / 2)) base,
-        Nat.mul_mod (base ^ (exponent / 2)) (base ^ (exponent / 2))]
-
 /-- A prime dividing a product of prime powers is one of the primes. -/
 theorem prime_mem_of_dvd_prod {q : ℕ} (prime : q.Prime) :
     ∀ (factors : List (ℕ × ℕ)), (∀ factor ∈ factors, factor.1.Prime) →
@@ -81,23 +49,22 @@ theorem prime_mem_of_dvd_prod {q : ℕ} (prime : q.Prime) :
 /-- Lucas primality from a factorization of `p - 1` and a witness checked by
 kernel-evaluated modular exponentiation. -/
 theorem prime_of_certificate (p witness : ℕ) (factors : List (ℕ × ℕ)) (large : 1 < p)
-    (size : p - 1 < 2 ^ 512)
     (factorization : p - 1 = (factors.map fun factor => factor.1 ^ factor.2).prod)
     (primes : ∀ factor ∈ factors, factor.1.Prime)
-    (fermat : powModFuel 512 witness (p - 1) p = 1)
-    (order : ∀ factor ∈ factors, powModFuel 512 witness ((p - 1) / factor.1) p ≠ 1) :
+    (fermat : Nat.powMod witness (p - 1) p = 1)
+    (order : ∀ factor ∈ factors, Nat.powMod witness ((p - 1) / factor.1) p ≠ 1) :
     p.Prime := by
   have one : 1 % p = 1 := Nat.mod_eq_of_lt large
-  have cast : ∀ exponent, exponent < 2 ^ 512 →
-      ((witness : ZMod p) ^ exponent = 1 ↔ powModFuel 512 witness exponent p = 1) := by
-    intro exponent bound
-    rw [powModFuel_eq 512 witness exponent p bound, ← Nat.cast_pow, ← Nat.cast_one,
+  have cast : ∀ exponent,
+      ((witness : ZMod p) ^ exponent = 1 ↔ Nat.powMod witness exponent p = 1) := by
+    intro exponent
+    rw [Nat.powMod_def, ← Nat.cast_pow, ← Nat.cast_one,
       ZMod.natCast_eq_natCast_iff', one]
-  refine lucas_primality p witness ((cast (p - 1) size).mpr fermat) ?_
+  refine lucas_primality p witness ((cast (p - 1)).mpr fermat) ?_
   intro q prime divides
   rw [factorization] at divides
   obtain ⟨factor, member, rfl⟩ := prime_mem_of_dvd_prod prime factors primes divides
-  rw [Ne, cast _ (lt_of_le_of_lt (Nat.div_le_self _ _) size)]
+  rw [Ne, cast _]
   exact order factor member
 
 /-- The BLS12-381 scalar modulus is prime. -/
@@ -105,7 +72,7 @@ theorem blsModulus_prime : blsModulus.Prime := by
   refine prime_of_certificate blsModulus 7
     [(2, 32), (3, 1), (11, 1), (19, 1), (10177, 1), (125527, 1), (859267, 1), (906349, 2),
       (2508409, 1), (2529403, 1), (52437899, 1), (254760293, 2)]
-    (by decide +kernel) (by decide +kernel) (by decide +kernel) ?_
+    (by decide +kernel) (by decide +kernel) ?_
     (by decide +kernel) (by decide +kernel)
   simp only [List.mem_cons, List.not_mem_nil, or_false]
   rintro factor (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) <;> norm_num

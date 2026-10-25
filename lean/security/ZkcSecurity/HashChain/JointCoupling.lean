@@ -310,8 +310,8 @@ theorem split_persists {α : Type} (computation : OracleComp (ByteHash S) α)
     (state : Trace (Absorbed E Shape S) S Bytes × (Query → Option S)) (isBad : state.1.bad = true) :
     ∀ result ∈ support ((simulateQ (splitTraced encoding) computation).run state),
       result.2.1.bad = true :=
-  support_bad (splitTraced encoding) (fun state => state.1.bad = true)
-    (fun bytes state isBad => splitTraced_bad_mono encoding bytes state isBad) computation state isBad
+  forall_mem_support_simulateQ_run_of_bad (splitTraced encoding) (fun state => state.1.bad = true)
+    (fun bytes state isBad => splitTraced_bad_mono encoding bytes state isBad) computation isBad
 
 end AdversaryPhase
 
@@ -762,8 +762,8 @@ theorem concrete_le_lazy [Fintype S] (small : width ≤ 2 ^ 64)
           statementRoots adversary}[event result] +
         (((calls + verifierCalls) * (calls + verifierCalls) : ℕ) : ENNReal) / Fintype.card S := by
   have split_le := prEvent_le_of_relTriple (split_coupling encoding (concreteExperiment encoding width
-    absorb scheme verifier initial statementRoots adversary)) (event := event)
-    (target := fun result => event result.1) fun one two same holds => by rw [← same]; exact holds
+    absorb scheme verifier initial statementRoots adversary)) (p := event)
+    (q := fun result => event result.1) fun one two same holds => by rw [← same]; exact holds
   have lazy_le := prEvent_le_add_bad
     (bad := fun state : Trace (Absorbed E Shape S) S Bytes × (Query → Option S) => state.1.bad = true)
     (R := Eq) (experiment_coupling encoding width absorb scheme verifier initial statementRoots small

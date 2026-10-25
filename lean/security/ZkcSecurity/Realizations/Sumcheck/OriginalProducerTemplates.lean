@@ -106,7 +106,6 @@ def producerRound (program : Structured.Program)
   simp only [producerBody, Domain.View.sequence]
   derive_artifact_binding
     normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size, Nat.add_sub_cancel_left]
       try normalize_artifact_operations
         [sumsEq, firstEq, appendEq, origins.low, origins.high, origins.draw, origins.delivery]
         unfolding [producer, Original.queryField,
@@ -115,7 +114,6 @@ def producerRound (program : Structured.Program)
       try simp (disch := omega) only [PIR.Process.bind, List.append_assoc, List.cons_append, List.nil_append,
         List.getElem?_append_right, size, Nat.add_sub_cancel_left,
         List.getElem?_cons_zero, List.getElem?_cons_succ]
-      try dsimp only
       change Original.Simulation _ _ _ _)
     solving (first
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]

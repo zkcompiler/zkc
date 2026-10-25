@@ -173,7 +173,7 @@ private def run : IO Unit := do
   test "ambiguous protocol origin" (refusedWith "root-ambiguous-helper-origin" (sourceAliases duplicateOrigin []))
   let .ok generated := sourceAliasSource "Tests.GeneratedOriginAliases" "Tests.StructuredOriginFixture" snapshot ["helper"]
     | throw (IO.userError "alias source refused")
-  IO.FS.writeFile "../build/experiments/pre-stage3/origin-reader/GeneratedOriginAliases.lean" generated
+  test "generated aliases retain the namespace" (generated.contains "Tests.GeneratedOriginAliases")
   let errors ← failures.get
   unless errors.isEmpty do throw (IO.userError s!"origin failures: {errors.reverse}")
   IO.println s!"structured-origin: {← count.get} controls passed"

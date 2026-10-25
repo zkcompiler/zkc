@@ -38,6 +38,8 @@ def occurrenceName (index : Nat) : String := "occurrence" ++ toString index
 
 def occurrenceNames (layout : Layout) : List String := (List.range layout.calls.length).map occurrenceName
 
+/-- Symbolic routing normalization. Generated proofs finish closed UTF-8 label
+computations with `kernel_rfl`, without a native evaluator or global simp rules. -/
 def nominalSimp (layout : Layout) : String :=
   ", ".intercalate (occurrenceNames layout ++ (occurrenceNames layout).map (· ++ "_decimal") ++ ["Occurrence.low", "Occurrence.high", "Occurrence.draw",
     "Occurrence.delivery", "Occurrence.message", "Occurrence.steps", "Occurrence.protocol",
@@ -61,7 +63,7 @@ def routes (layout : Layout) (index : Nat) : String := Id.run do
     "      Occurrence.origins, OccurrenceResolution.resolve, List.cons_append, List.nil_append,\n" ++
     "      List.filter_cons, List.filter_nil, ite_eq_left rfl]\n" ++
     "    simp only [OccurrenceResolution.matchesOccurrence, " ++ ", ".intercalate valid ++ "]\n" ++
-    "    simp [" ++ nominalSimp layout ++ "]\n\n"
+    "    simp [" ++ nominalSimp layout ++ "]\n    kernel_rfl\n\n"
 
 /-- Applicability only: compare exact syntax with the installed layout before
 attempting View conversion. This uses the existing structural Instruction equality;
@@ -100,7 +102,7 @@ def originLaws (layout : Layout) (index : Nat) : String :=
   "theorem " ++ occurrenceName index ++ "_origins :\n" ++
   "    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context " ++ occurrenceName index ++ " := by\n" ++
   "  constructor <;> intro index <;>\n" ++
-  "    simp [Domain.queryOrigin, Occurrence.origins, " ++ nominalSimp layout ++ "]\n\n"
+  "    (simp [Domain.queryOrigin, Occurrence.origins, " ++ nominalSimp layout ++ "]; kernel_rfl)\n\n"
 
 def source (program : Program) (validator producer : Participant)
     (moduleName sourceModule pairModule : String)

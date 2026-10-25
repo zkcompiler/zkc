@@ -50,12 +50,12 @@ theorem occurrence1_messages : occurrence1.messages = ([{ entry := "zkl_441c117f
 theorem occurrence0_origins :
     ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context occurrence0 := by
   constructor <;> intro index <;>
-    simp [Domain.queryOrigin, Occurrence.origins, occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+    (simp [Domain.queryOrigin, Occurrence.origins, occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]; kernel_rfl)
 
 theorem occurrence1_origins :
     ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context occurrence1 := by
   constructor <;> intro index <;>
-    simp [Domain.queryOrigin, Occurrence.origins, occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+    (simp [Domain.queryOrigin, Occurrence.origins, occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]; kernel_rfl)
 
 
 abbrev routing (handle : Nat) : Original.Routing :=
@@ -73,6 +73,7 @@ theorem occurrence0_routes (handle index : Nat) :
       List.filter_cons, List.filter_nil, ite_eq_left rfl]
     simp only [OccurrenceResolution.matchesOccurrence, occurrence0_low_valid, occurrence0_high_valid, occurrence0_draw_valid, occurrence0_delivery_valid, occurrence1_low_valid, occurrence1_high_valid, occurrence1_draw_valid, occurrence1_delivery_valid]
     simp [occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+    kernel_rfl
 
 theorem occurrence1_routes (handle index : Nat) :
     Routes (routing handle) occurrence1.protocol
@@ -86,6 +87,7 @@ theorem occurrence1_routes (handle index : Nat) :
       List.filter_cons, List.filter_nil, ite_eq_left rfl]
     simp only [OccurrenceResolution.matchesOccurrence, occurrence0_low_valid, occurrence0_high_valid, occurrence0_draw_valid, occurrence0_delivery_valid, occurrence1_low_valid, occurrence1_high_valid, occurrence1_draw_valid, occurrence1_delivery_valid]
     simp [occurrence0, occurrence1, occurrence0_decimal, occurrence1_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+    kernel_rfl
 
 theorem helper_bodies : ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies program := by bind_structured_bodies
 theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=
@@ -238,6 +240,7 @@ theorem routes (handle index : Nat) :
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.deliverySite, Occurrence.origins, Context.message,
         Context.role, Origin.message, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     have drawSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol) (.draw "bls12-381.fr"))
         [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
@@ -251,6 +254,7 @@ theorem routes (handle index : Nat) :
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.challengeSite, Occurrence.origins, Context.query,
         Context.role, Origin.query, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     rw [messageSingleton, Option.bind_some, drawSingleton]
     rfl
   · exact Original.Routing.draw_request (occurrence0_routes handle index).draw
@@ -355,6 +359,7 @@ theorem routes (handle index : Nat) :
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.deliverySite, Occurrence.origins, Context.message,
         Context.role, Origin.message, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     have drawSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol) (.draw "bls12-381.fr"))
         [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
@@ -368,6 +373,7 @@ theorem routes (handle index : Nat) :
         ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
         SumcheckVerifierLaws.challengeSite, Occurrence.origins, Context.query,
         Context.role, Origin.query, Domain.atCoordinates, decimal, decimalDigit]
+      kernel_rfl
     rw [messageSingleton, Option.bind_some, drawSingleton]
     rfl
   · exact Original.Routing.draw_request (occurrence1_routes handle index).draw

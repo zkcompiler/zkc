@@ -1024,7 +1024,7 @@ and of the Sumcheck instance's `soundness`, `imported_soundness`,
 `reduced_soundness` and `construction`, are `propext`,
 `Classical.choice` and `Quot.sound`, including the consumed VCVio
 `prEvent_randomOracle_le_of_bad_queries_weighted` and
-`evalSPMF_uniformSample_map_comp_injective` and ArkLib
+`evalDist_map_table_comp_injective` and ArkLib
 `MultivariateRound.uniform_successor_soundness`.
 
 The FRI transfer `ZkcArkLib.Examples.FriFiatShamir` has no control of its own:

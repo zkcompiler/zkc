@@ -120,7 +120,7 @@ example : evaluateNatural (fun _ => none) (.binary .div (.natural 1) (.natural 2
 example : evaluate (fun _ => none) (.reference "missing") = .error ⟨["unbound parameter: missing"]⟩ := rfl
 
 -- The kernel refuses an arbitrary proof, even when the audit label agrees.
-#check_failure (show meaning.proposition from False.elim (by exact True.intro))
+#check_failure (show meaning.proposition from False.elim True.intro)
 #check_failure (show Receipt meaning from Receipt.ofTheorem True.intro provenance)
 
 end Tests.Claims

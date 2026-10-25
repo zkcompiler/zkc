@@ -58,6 +58,7 @@ import Zkc.Construction.SourceDelivery
 import Zkc.Construction.SourceOccurrences
 import Zkc.Construction.Structured
 import Zkc.Construction.TargetElaboration
+import Zkc.Construction.TransportReduction
 import Zkc.Executable.Cleanup
 import Zkc.Executable.Completeness
 import Zkc.Executable.Evaluation
@@ -151,6 +152,7 @@ import Zkc.Source.ComponentCongruence
 import Zkc.Source.Context
 import Zkc.Source.ContextDecoding
 import Zkc.Source.ContextOperations
+import Zkc.Source.Decidable
 import Zkc.Source.DenotationLaws
 import Zkc.Source.DerivationLaws
 import Zkc.Source.DeriveRegion
@@ -423,6 +425,7 @@ import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
 import Tests.TargetElaboration
+import Tests.TransportReduction
 import ZkcExamples.Construction.ChaumPedersenProof
 import ZkcExamples.Construction.ChaumPedersenProofBodies
 import ZkcExamples.Construction.ChaumPedersenProofData
@@ -749,6 +752,7 @@ import ZkcExamples.Structured.UnitStateData
 import ZkcExamples.StructuredPrograms
 import ZkcTools.CommonSource.Reference
 import ZkcTools.JsonSupport
+import ZkcTools.ProofAccount
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bindings.Callbacks
 import ZkcTools.StructuredSource.Bindings.Calls

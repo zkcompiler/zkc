@@ -355,7 +355,7 @@ theorem keccakIndex_uniform (depth : ℕ) (fits : depth ≤ 256) :
     simpa only [bind_pure] using
       (EvalDistEq.bind_right ($ᵗ (Fin (2 ^ depth))) fun index =>
         OracleComp.EvalDistEq.bind_const ($ᵗ (Fin (2 ^ (256 - depth)))) (pure index))
-  have same := ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq law predicate
+  have same := _root_.EvalDistEq.prEvent_eq law predicate
   rw [prEvent_map] at same
   exact same
 

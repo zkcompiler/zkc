@@ -427,16 +427,7 @@ theorem prEvent_uniform_prod [Fintype B₁] [Fintype B₂] (first : B₁ → Pro
     (second : B₂ → Prop) :
     Pr{let answer ← $ᵗ (B₁ × B₂)}[first answer.1 ∧ second answer.2] =
       Pr{let answer ← $ᵗ B₁}[first answer] * Pr{let answer ← $ᵗ B₂}[second answer] := by
-  classical
-  rw [SampleableType.prEvent_uniformSample, SampleableType.prEvent_uniformSample,
-    SampleableType.prEvent_uniformSample, Fintype.card_prod]
-  have product : (Finset.univ.filter fun answer : B₁ × B₂ => first answer.1 ∧ second answer.2) =
-      (Finset.univ.filter first) ×ˢ (Finset.univ.filter second) := by
-    ext answer
-    simp
-  rw [product, Finset.card_product, Nat.cast_mul, Nat.cast_mul,
-    ENNReal.mul_div_mul_comm (Or.inr (ENNReal.natCast_ne_top _))
-      (Or.inl (ENNReal.natCast_ne_top _))]
+  rw [SampleableType.prEvent_uniformSample_prod, prEvent_bind_bind_and]
 
 /-- Decoding the two coordinates of a uniform pair independently multiplies
 their point bounds. -/

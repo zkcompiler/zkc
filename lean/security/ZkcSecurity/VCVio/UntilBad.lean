@@ -1,6 +1,7 @@
 module
 
 public import VCVio.ProgramLogic.Relational.Basic
+public import VCVio.ProgramLogic.Relational.SimulateQ.UntilBad
 public import VCVio.OracleComp.SimSemantics.StateT.Basic
 
 @[expose] public section
@@ -55,38 +56,11 @@ theorem relTriple_bind_left {α γ δ : Type} {oa : OracleComp spec₁ α}
     fun a _ member => holds a member
   simpa only [pure_bind] using composed
 
-/-- A coupling whose related outputs carry an event implication bounds the
-event's probability. -/
-theorem prEvent_le_of_relTriple {α β : Type} {oa : ProbComp α} {ob : ProbComp β}
-    {R : RelPost α β} (coupled : RelTriple oa ob R) {event : α → Prop} {target : β → Prop}
-    (implies : ∀ a b, R a b → event a → target b) :
-    Pr{let result ← oa}[event result] ≤ Pr{let result ← ob}[target result] := by
-  exact OracleComp.ProgramLogic.Relational.prEvent_le_of_relTriple coupled implies
-
 end Couplings
 
 section Simulations
 variable {ι : Type} {spec : OracleSpec ι} {ι₁ ι₂ : Type} {spec₁ : OracleSpec ι₁}
   {spec₂ : OracleSpec ι₂} {σ₁ σ₂ : Type}
-
-/-- A simulation started from a bad state ends bad when no step leaves the bad
-states. -/
-theorem support_bad (impl₁ : QueryImpl spec (StateT σ₁ (OracleComp spec₁))) (bad : σ₁ → Prop)
-    (mono : ∀ query state, bad state → ∀ result ∈ support ((impl₁ query).run state), bad result.2)
-    {α : Type} (computation : OracleComp spec α) :
-    ∀ state, bad state → ∀ result ∈ support ((simulateQ impl₁ computation).run state), bad result.2 := by
-  induction computation using OracleComp.inductionOn with
-  | pure value =>
-      intro state isBad result member
-      simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at member
-      subst member
-      exact isBad
-  | query_bind query next ih =>
-      intro state isBad result member
-      simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff]
-        at member
-      obtain ⟨step, stepMember, rest⟩ := member
-      exact ih step.1 step.2 (mono query state isBad step stepMember) result rest
 
 /-- The coupling of each step, from related states that are not bad, extends to
 the whole simulations of any computation. -/
@@ -114,13 +88,13 @@ theorem relTriple_simulateQ_run [UniformAnswerMeasure spec₁] [UniformAnswerMea
       intro first second start
       by_cases isBad : bad first
       · exact relTriple_of_left fun result member _ =>
-          Or.inl (support_bad impl₁ bad mono _ first isBad result member)
+          Or.inl (forall_mem_support_simulateQ_run_of_bad impl₁ bad mono _ isBad result member)
       · have isRelated : related first second := start.resolve_left isBad
         simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind]
         refine relTriple_bind (step query first second isRelated isBad) fun one two coupled => ?_
         rcases coupled with oneBad | ⟨same, stillRelated⟩
         · exact relTriple_of_left fun result member _ =>
-            Or.inl (support_bad impl₁ bad mono _ one.2 oneBad result member)
+            Or.inl (forall_mem_support_simulateQ_run_of_bad impl₁ bad mono _ oneBad result member)
         · rw [← same]
           exact ih one.1 one.2 two.2 (Or.inr stillRelated)
 

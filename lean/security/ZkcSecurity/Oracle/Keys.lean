@@ -23,7 +23,7 @@ key reaches.
 through the renaming (`Renaming.translate`): every source query, malformed and
 empty keys included, asks its target cell and reads the answer back, or is
 answered locally. The lazily sampled executions from the empty cache have the
-same law (`Renaming.evalSPMF_translate`, `Renaming.prEvent_translate`): the
+same law (`Renaming.evalDistEq_translate`, `Renaming.prEvent_translate`): the
 proof couples the two caches query by query, the target cell of a source key
 holding the source answer read through the equivalence, and fresh answers
 related by the equivalence, under which uniform answers stay uniform. Costs
@@ -277,11 +277,11 @@ variable [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
 omit [DecidableEq D] [DecidableEq D'] [∀ key, SampleableType (R key)]
   [∀ target, SampleableType (R' target)] in
 /-- A uniform sample read through an equivalence is a uniform sample. -/
-theorem evalSPMF_uniform_equiv {X Y : Type} [SampleableType X] [SampleableType Y] (read : X ≃ Y) :
+theorem evalDistEq_uniform_equiv {X Y : Type} [SampleableType X] [SampleableType Y] (read : X ≃ Y) :
     (read <$> ($ᵗ X : ProbComp X)) =ᵈ ($ᵗ Y : ProbComp Y) := by
   let : MeasurableSpace X := ⊤
   let : MeasurableSpace Y := ⊤
-  refine ZkcSecurity.VCVio.Deferral.evalSPMF_eq_of_evalDist_eq ?_
+  refine _root_.EvalDistEq.of_evalDist_eq ?_
   rw [evalDist_map_of_discrete, SampleableType.evalDist_uniformSample,
     SampleableType.evalDist_uniformSample]
   exact ProbabilityTheory.map_uniformOn_univ_of_bijective Measurable.of_discrete read.bijective
@@ -367,7 +367,7 @@ theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R
                     pure (keys.read key cell hit value, target.cacheQuery cell value)) := by
                   rw [bind_map_left]
                   simp only [Equiv.apply_symm_apply]; rfl
-              _ =ᵈ _ := (evalSPMF_uniform_equiv (keys.read key cell hit).symm).bind_left _
+              _ =ᵈ _ := (evalDistEq_uniform_equiv (keys.read key cell hit).symm).bind_left _
           · refine relTriple_bind relTriple_uniformSample_refl fun answer other same => ?_
             cases same
             have stays := related_cacheQuery keys related hit ((keys.read key cell hit).symm answer)
@@ -390,7 +390,7 @@ theorem query_step (keys : Renaming R R') (key : D) (source : (OracleSpec.ofFn R
 
 /-- The lazily sampled execution of a translated adversary from the empty cache
 has the law of the source adversary's. -/
-theorem evalSPMF_translate (keys : Renaming R R') (adversary : OracleComp (OracleSpec.ofFn R) α) :
+theorem evalDistEq_translate (keys : Renaming R R') (adversary : OracleComp (OracleSpec.ofFn R) α) :
     ((simulateQ randomOracle (keys.translate adversary)).run' ∅) =ᵈ ((simulateQ randomOracle adversary).run' ∅) := by
   have coupled := relTriple_simulateQ_run randomOracle
     (fun key => simulateQ randomOracle (keys.ask key)) keys.Related adversary
@@ -408,7 +408,7 @@ theorem prEvent_translate (keys : Renaming R R') (adversary : OracleComp (Oracle
     (event : α → Prop) :
     Pr{let result ← (simulateQ randomOracle (keys.translate adversary)).run' ∅}[event result] =
       Pr{let result ← (simulateQ randomOracle adversary).run' ∅}[event result] :=
-  ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq (keys.evalSPMF_translate adversary) event
+  _root_.EvalDistEq.prEvent_eq (keys.evalDistEq_translate adversary) event
 
 end Law
 

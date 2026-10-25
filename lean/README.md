@@ -92,7 +92,7 @@ with independent execution and negative controls.
 ## Build and use
 
 The [toolchain](lean-toolchain) and the four owning Lake manifests pin a coherent
-Lean 4.34.1 dependency closure. See the [dependency rationale](docs/dependencies.md).
+Lean 4.35.0 dependency closure. See the [dependency rationale](docs/dependencies.md).
 From `lean/`, `lake build` builds all maintained core libraries, examples, controls,
 executables and declaration audits. The optional packages each use `lake build`
 from their own directories. [Development](../docs/development/README.md) describes
@@ -101,6 +101,22 @@ Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-security`, `jus
 
 `just test-lean-native` additionally checks the native import and authored
 specification boundary, including differential execution and negative controls.
+
+Lean 4.35 also provides independent checking of a selected theorem's exported
+dependency closure. For example, after building the core, from `lean/`:
+
+```sh
+lake env "$(lean --print-prefix)/bin/leanexport" \
+  Zkc.Source.Structured.CatalogueJustification -- \
+  Zkc.Source.Structured.blsModulus_prime propext Quot.sound Classical.choice \
+  > /tmp/zkc-primality.ndjson
+lake check --from-export=/tmp/zkc-primality.ndjson --paranoid
+```
+
+This optional check uses the bundled independent checkers in addition to Lean.
+It verifies the exported declarations, not their association with current
+source artifacts. Keep the declaration audit, statement locks and receipt
+checks, and record the source revision and export hash with the result.
 
 ### Verify an authored property
 

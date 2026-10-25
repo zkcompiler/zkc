@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.VCVio.SigmaAnd
-public import Examples.Schnorr.SigmaProtocol
+public import VCVio.Schemes.Schnorr.SigmaProtocol
 
 @[expose] public section
 
