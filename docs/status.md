@@ -67,6 +67,17 @@ inventory and the scoped helper component, not mathematical/finite requests or
 the authored-source emitter migration. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
+Typed `exec.compute` formation resolves actual private source mathematical
+helpers or sibling computation entries, checks logical ports, and borrows the
+active scope with an explicit outcome. Symbol rewriting and malformed-target
+controls cover that boundary. The finite-premise checker maps actual data
+operands separately from the scope and retains entry-argument assumptions in
+CFG bodies. Mathematical closure, invoking the premise checker and realization
+comparison remain consumer duties; the scoped readers still
+refuse unresolved mathematical requests. This operation has not yet replaced
+the default `kernel.call` path. See
+[mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,

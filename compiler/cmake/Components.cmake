@@ -175,6 +175,7 @@ add_zkc_component(IR
   lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Exec/Execution.cpp
   lib/Dialect/Exec/ExecutionComparison.cpp
+  lib/Dialect/Exec/IR/Computation.cpp
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp

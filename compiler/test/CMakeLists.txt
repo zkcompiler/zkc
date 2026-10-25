@@ -32,6 +32,9 @@ endfunction()
 add_zkc_test(kernel_ir IR kernel-ir)
 mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
 
+add_zkc_test(execution_computation IR execution-computation)
+mlir_target_link_libraries(zkc-execution_computation-test PRIVATE MLIRParser)
+
 add_zkc_test(runtime_scopes IR runtime-scopes)
 target_compile_definitions(zkc-runtime_scopes-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

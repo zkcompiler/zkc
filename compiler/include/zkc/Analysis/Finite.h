@@ -75,6 +75,10 @@ mlir::LogicalResult
 verifyDefinitionClosure(mlir::Operation *unit,
                         llvm::ArrayRef<mlir::Operation *> definitions);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
+// Requires formed call/target signatures. Mathematical execution calls resolve
+// their actual callee and use only its data operands, excluding the borrowed
+// scope. This checks premises, not whole-closure totality or source
+// association.
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);
 // Mandatory checks and comparison readers retain Capacity explicitly. The
 // caller owns this cumulative allowance; these queries never replenish it.

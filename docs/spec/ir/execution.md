@@ -120,6 +120,37 @@ parent/frame nesting, source association, reached operation identity, resource
 equivalence, or native correspondence. Those remain obligations of the complete
 executable-profile reader and its independent artifact comparison.
 
+## Typed mathematical invocation
+
+`exec.compute` borrows the containing function's first Runtime scope argument,
+takes logical mathematical operands, and returns an explicit outcome of the
+callee's mathematical results. Its nonempty `site` identifies the occurrence.
+A flat `callee` reference names an actual private mathematical `func.func` in
+the same symbol table. A single nested reference names the actual public entry
+of a sibling named builtin module with the `exec.computation` profile. An
+external signature, an outlined execution helper, or a deeper reference is not
+a mathematical body. Operands and outcome payload match the actual signature.
+
+Logical ports are total non-affine data, including retained formal polynomial
+and quotient values; represented runtime payloads and capabilities are excluded.
+An optional `policy` contains the three Boolean mathematical selection choices
+in their existing order. It does not change the equation or grant authority.
+The operation implements `SymbolUserOpInterface`. Its scope/outcome adaptation
+does not satisfy the ordinary `CallOpInterface` data signature; generic call
+inlining cannot erase that adaptation.
+
+Operation formation checks the actual target and ports. Its consuming source or
+selected-computation profile must separately admit the complete mathematical
+closure, discharge actual call preconditions, bind source equations, and compare
+the selected realization. None of those obligations follows from formation.
+The shared finite-premise checker resolves this actual target and maps its
+premise indices to data operands, excluding the scope. A CFG function's declared
+premises apply to its original entry arguments. They do not automatically apply
+to same-numbered successor arguments, reached guards or successful outcomes.
+Realization occurs in the borrowed scope without adding a helper frame. Reached
+admission, allocation and first-stop behavior remain ordered execution duties.
+The prepared native profile must refuse an unresolved mathematical invocation.
+
 ## Scoped native instruction profile
 
 The local execution writer and reconstruction reader connect a bounded Func/CF

@@ -429,12 +429,15 @@ struct MathematicalFactAnalysis::Impl {
     void formation(Operation *owner) {
       if (!owner || !analysis.contains(owner) ||
           !isa<func::FuncOp, local::FuncOp>(owner) ||
-          !owner->getRegion(0).hasOneBlock())
+          owner->getNumRegions() != 1 || owner->getRegion(0).empty())
         return;
       auto attrs = owner->getAttrOfType<ArrayAttr>("data.preconditions");
       if (!attrs)
         return;
       auto &body = owner->getRegion(0).front();
+      // Formation premises name the original function entry arguments. They
+      // remain valid in a CFG body, but do not identify successor arguments or
+      // establish facts from a reached guard or a successful outcome edge.
       auto arg = [&](unsigned i) -> Value {
         return i < body.getNumArguments() ? body.getArgument(i) : Value();
       };

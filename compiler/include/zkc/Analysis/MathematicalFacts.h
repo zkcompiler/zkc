@@ -27,6 +27,9 @@ namespace zkc {
 /// never from a callee inspected to explain its result. Reached guards and
 /// control-flow results supply no implicit assumptions; ordered admission is
 /// neither removed nor moved by any query.
+/// CFG function premises refer to entry arguments, never same-numbered
+/// successor block arguments. Pure helper-result extraction remains restricted
+/// to admitted single-block mathematical bodies.
 class MathematicalFactAnalysis {
 public:
   explicit MathematicalFactAnalysis(mlir::Operation *symbolRoot);

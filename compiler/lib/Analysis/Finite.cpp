@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Interfaces/Collection.h"
@@ -313,37 +314,47 @@ LogicalResult verifyPreconditions(Operation *helper) {
 }
 LogicalResult verifyCallPreconditions(Operation *call) {
   EvidenceWork work(call);
-  auto *helper = resolve(call, "callee");
+  Operation *helper;
+  ValueRange actuals = call->getOperands();
+  if (auto computation = dyn_cast<exec::ComputeOp>(call)) {
+    SymbolTableCollection symbols;
+    helper = computation.resolveCallee(symbols);
+    actuals = computation.getInputs();
+    if (!helper)
+      return refuse(call, "mathematical invocation has no actual callee",
+                    "finite-bound");
+  } else {
+    helper = resolve(call, "callee");
+  }
+  if (helper && failed(verifyPreconditions(helper)))
+    return failure();
   auto attrs = preconditions(helper);
   if (!attrs)
     return success();
-  if (failed(verifyPreconditions(helper)))
-    return failure();
   for (auto attr : attrs) {
     if (auto bound = dyn_cast<data::IndexBoundAttr>(attr)) {
-      if (bound.getIndexArg() >= call->getNumOperands() ||
-          bound.getContainerArg() >= call->getNumOperands())
+      if (bound.getIndexArg() >= actuals.size() ||
+          bound.getContainerArg() >= actuals.size())
         return refuse(call, "call does not discharge index bound",
-                      "finite-bound");
-      if (failed(requireEvidence(
-              call,
-              provesBoundUnder(call->getOperand(bound.getIndexArg()),
-                               call->getOperand(bound.getContainerArg()),
-                               bound.getAxis(), work),
-              "call does not discharge index bound")))
-        return failure();
-    } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
-      if (equal.getLeftArg() >= call->getNumOperands() ||
-          equal.getRightArg() >= call->getNumOperands())
-        return refuse(call, "call does not discharge equal extent",
                       "finite-bound");
       if (failed(
               requireEvidence(call,
-                              equalUnder(call->getOperand(equal.getLeftArg()),
-                                         equal.getLeftAxis(),
-                                         call->getOperand(equal.getRightArg()),
-                                         equal.getRightAxis(), work),
-                              "call does not discharge equal extent")))
+                              provesBoundUnder(actuals[bound.getIndexArg()],
+                                               actuals[bound.getContainerArg()],
+                                               bound.getAxis(), work),
+                              "call does not discharge index bound")))
+        return failure();
+    } else if (auto equal = dyn_cast<data::EqualExtentAttr>(attr)) {
+      if (equal.getLeftArg() >= actuals.size() ||
+          equal.getRightArg() >= actuals.size())
+        return refuse(call, "call does not discharge equal extent",
+                      "finite-bound");
+      if (failed(requireEvidence(call,
+                                 equalUnder(actuals[equal.getLeftArg()],
+                                            equal.getLeftAxis(),
+                                            actuals[equal.getRightArg()],
+                                            equal.getRightAxis(), work),
+                                 "call does not discharge equal extent")))
         return failure();
     }
   }
@@ -627,7 +638,7 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
         if (isa<func::FuncOp, local::FuncOp>(op) &&
             failed(verifyPreconditions(op)))
           return WalkResult::interrupt();
-        if (isa<func::CallOp, local::ApplyOp>(op) &&
+        if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op) &&
             failed(verifyCallPreconditions(op)))
           return WalkResult::interrupt();
         if (failed(verifyBoundedAccess(op)))
@@ -665,7 +676,7 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
       if (isa<func::FuncOp, local::FuncOp>(op) &&
           failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
-      if (isa<func::CallOp, local::ApplyOp>(op) &&
+      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op) &&
           failed(verifyCallPreconditions(op)))
         return WalkResult::interrupt();
       if (failed(verifyBoundedAccess(op)))
