@@ -5,12 +5,13 @@ exporter, comparator, sandbox and all bundled paranoid kernels. These tests
 require Linux/bubblewrap and the exact Lean 4.35.0 release toolchain.
 """
 
-import importlib.util
 import json
 import os
 from pathlib import Path
 
 import pytest
+
+from harness import load
 
 
 PREFIX = os.environ.get("ZKC_INDEPENDENT_TOOLCHAIN")
@@ -20,10 +21,7 @@ pytestmark = pytest.mark.skipif(not PREFIX, reason="set ZKC_INDEPENDENT_TOOLCHAI
 @pytest.fixture(scope="module")
 def exports(tmp_path_factory):
     root = tmp_path_factory.mktemp("independent-tools")
-    path = Path(__file__).resolve().parents[1] / "check_independent.py"
-    spec = importlib.util.spec_from_file_location("independent_tools", path)
-    audit = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(audit)
+    audit = load('independent_tools', 'lean/checks/check_independent.py')
     prefix = Path(PREFIX)
     # Lake 4.35 cannot forward con-leche --jobs: its default reserves about
     # 1 GiB of virtual stack per hardware thread, even for a tiny fixture.

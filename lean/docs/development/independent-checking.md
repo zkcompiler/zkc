@@ -120,7 +120,7 @@ corrupted proof. They do not build the project:
 
 ```sh
 ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean && lake env lean --print-prefix)" \
-  uv run --no-sync --locked pytest lean/checks/tests/test_independent_tools.py
+  uv run --no-sync --locked pytest common/tests/harness/test_lean_independent_tools.py
 ```
 
 If a namespace probe fails, the tests explicitly skip the sandbox-dependent
