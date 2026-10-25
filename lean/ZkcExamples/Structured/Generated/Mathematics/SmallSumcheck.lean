@@ -10,8 +10,6 @@ Synthetic paths assert no compiler origin metadata. All associations and
 selection equations are independently checked by the Lean kernel. -/
 set_option maxRecDepth 50000
 set_option maxHeartbeats 16000000
--- A dependency path can traverse the same edge kind more than once.
-set_option linter.dupNamespace false
 noncomputable section
 namespace ZkcExamples.Structured.Generated.Mathematics.SmallSumcheck
 open Zkc.Source Zkc.Source.Structured
@@ -41,12 +39,12 @@ def public_sum.callee.foldStep.body : Region dialect public_sum.callee.foldStep.
   (.letOp (.invoke (⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005", .math, [(.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)) (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil)))
 theorem public_sum.callee.foldStep.association : BodyIn imported.program.payload.definitions public_sum.callee.foldStep.helper public_sum.callee.foldStep.body := by bind_structured_bodies
 
-abbrev public_sum.callee.foldStep.callee.helper : Helper := (⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005", .math, [(.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)
-def public_sum.callee.foldStep.callee.body : Region dialect public_sum.callee.foldStep.callee.helper.inputs public_sum.callee.foldStep.callee.helper.outputs :=
+abbrev public_sum.callee.foldStep.calleeDependency0.helper : Helper := (⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005", .math, [(.field "bls12-381.fr"), (.field "bls12-381.fr")], [(.field "bls12-381.fr")]⟩ : Helper)
+def public_sum.callee.foldStep.calleeDependency0.body : Region dialect public_sum.callee.foldStep.calleeDependency0.helper.inputs public_sum.callee.foldStep.calleeDependency0.helper.outputs :=
   (.letOp (.fieldAdd "bls12-381.fr") (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil)))
-theorem public_sum.callee.foldStep.callee.association : BodyIn imported.program.payload.definitions public_sum.callee.foldStep.callee.helper public_sum.callee.foldStep.callee.body := by bind_structured_bodies
+theorem public_sum.callee.foldStep.calleeDependency0.association : BodyIn imported.program.payload.definitions public_sum.callee.foldStep.calleeDependency0.helper public_sum.callee.foldStep.calleeDependency0.body := by bind_structured_bodies
 
-theorem public_sum.callee.foldStep.calls : MathematicsAliases.calls public_sum.callee.foldStep.body.erase = [public_sum.callee.foldStep.callee.helper] := by kernel_rfl
+theorem public_sum.callee.foldStep.calls : MathematicsAliases.calls public_sum.callee.foldStep.body.erase = [public_sum.callee.foldStep.calleeDependency0.helper] := by kernel_rfl
 
 theorem public_sum.callee.fold_step : public_sum.callee.fold.stepHelper = public_sum.callee.foldStep.helper := by kernel_rfl
 

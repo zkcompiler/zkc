@@ -10,7 +10,6 @@ public import ZkcSecurity.FiatShamir.CostComposition
 presentation retains the optional Boolean and the complete construction state.
 No honest-input policy restricts this meaning or any adversarial reply. -/
 set_option autoImplicit false
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript
 open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck TableComponent

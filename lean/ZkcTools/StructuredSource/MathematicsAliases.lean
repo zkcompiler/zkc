@@ -9,7 +9,8 @@ public import ZkcTools.StructuredSource.Bindings.Inputs
 Only selected target metadata, exact bodies and dependency equations are
 emitted. Arithmetic and finite-sum proofs remain authored in ordinary modules.
 The supported graph has at most one distinct direct callee and one fold per
-body; ambiguity refuses instead of introducing ordinal or hash-based names. -/
+body; ambiguity refuses. Repeated edge names receive a deterministic unused
+suffix within the dependency path. -/
 
 namespace ZkcTools.StructuredSource.MathematicsAliases
 open Zkc.Source Zkc.Source.Structured
@@ -49,6 +50,13 @@ def foldText (spec : FoldSpec) : String :=
     "⟩, " ++ ", ".intercalate [typesText spec.state, typesText spec.captures, quoted spec.step,
     quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"
 
+/-- Avoid repeated namespace components without changing unambiguous edge names. -/
+def childPath (path edge : String) : String :=
+  let components := path.splitOn "."
+  let candidates := edge :: (List.range (components.length + 1)).map
+    (fun index => edge ++ "Dependency" ++ toString index)
+  path ++ "." ++ (candidates.find? fun candidate => !components.contains candidate).getD edge
+
 def graph (program : Program) : Nat → String → CheckedDefinition → Except String String
   | 0, _, _ => .error "source-mathematics-dependency-depth"
   | fuel + 1, path, selected => do
@@ -59,20 +67,22 @@ def graph (program : Program) : Nat → String → CheckedDefinition → Except 
     unless calls.isEmpty do
       let helper ← one "callee-ambiguity" calls
       let callee ← definition program helper
-      text := text ++ (← graph program fuel (path ++ ".callee") callee) ++
+      let calleePath := childPath path "callee"
+      text := text ++ (← graph program fuel calleePath callee) ++
         "theorem " ++ path ++ ".calls : MathematicsAliases.calls " ++ path ++ ".body.erase = [" ++
-        path ++ ".callee.helper] := by kernel_rfl\n\n"
+        calleePath ++ ".helper] := by kernel_rfl\n\n"
     let folds := Structured.MathematicsAliases.folds selected.raw
     unless folds.isEmpty do
       let spec ← one "fold-ambiguity" folds
       unless spec.predicate.isEmpty do throw "source-mathematics-filtered-fold"
       let step ← definition program spec.stepHelper
+      let stepPath := childPath path "foldStep"
       text := text ++ "def " ++ path ++ ".fold : FoldSpec := " ++ foldText spec ++ "\n" ++
         "theorem " ++ path ++ ".fold_selected : MathematicsAliases.folds " ++ path ++ ".body.erase = [" ++
         path ++ ".fold] := by kernel_rfl\n\n" ++
-        (← graph program fuel (path ++ ".foldStep") step) ++
+        (← graph program fuel stepPath step) ++
         "theorem " ++ path ++ ".fold_step : " ++ path ++ ".fold.stepHelper = " ++
-        path ++ ".foldStep.helper := by kernel_rfl\n\n"
+        stepPath ++ ".helper := by kernel_rfl\n\n"
     return text
 
 def source (program : Program) (targetName : String) (output : Output) : Except String String := do
@@ -92,8 +102,7 @@ def source (program : Program) (targetName : String) (output : Output) : Except 
     "Synthetic paths assert no compiler origin metadata. All associations and\n" ++
     "selection equations are independently checked by the Lean kernel. -/\n" ++
     "set_option maxRecDepth 50000\nset_option maxHeartbeats 16000000\n" ++
-    "-- A dependency path can traverse the same edge kind more than once.\n" ++
-    "set_option linter.dupNamespace false\nnoncomputable section\n" ++
+    "noncomputable section\n" ++
     "namespace " ++ output.moduleName ++ "\nopen Zkc.Source Zkc.Source.Structured\n" ++
     "abbrev imported := " ++ output.sourceModule ++ ".imported\n" ++
     "abbrev original := " ++ output.sourceModule ++ ".program.snapshot\n" ++

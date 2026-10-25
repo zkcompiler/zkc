@@ -49,7 +49,6 @@ theorem sums_expansion (table : Meanings F G) (xs : List F) (dimension columns :
   derive_process using (exact vectorSum_law _ _ _ _)
 
 set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 /-- The initial length can stop before the constructor or prefix. -/
 theorem checkTable_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get =
@@ -61,12 +60,12 @@ theorem checkTable_expansion (table : Meanings F G) (xs point : List F) (claim :
       else .halt .exhausted := by
   simp only [checkTableBody, checkInputs, inputs, boolResult, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-    Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
+    Values.get_cons, prepend_empty, prepend_one, prepend_three,
+    Environment.push, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
-      ite_true, Values.get_cons, Values.get, Environment.push, ← List.sum_eq_foldl]
+      ite_true, Values.get, ← List.sum_eq_foldl]
     congr 1
     funext constructed
     cases constructed with
@@ -87,7 +86,6 @@ theorem checkTable_expansion (table : Meanings F G) (xs point : List F) (claim :
   · rfl
 
 set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 /-- Actual Local.if only invokes check_table in its true callback. -/
 theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkBody.denote (meaning F G table) (checkInputs xs point claim).get =
@@ -99,20 +97,18 @@ theorem check_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
   simp only [checkBody, checkTrueBody, checkFalseBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+    prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
-      ite_true, Values.get_cons, Values.get, Environment.push, Evaluation.invokeCallback]
+      ite_true, Values.get, Evaluation.invokeCallback]
     congr 1
     funext valid
     cases valid with
     | cons b rest =>
       cases rest
       cases b <;> simp only [Bool.false_eq_true, ite_false, ite_true,
-        PIR.Process.bind, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-        singleton_eta, PIR.Process.bind_done]
+        Values.get, singleton_eta, PIR.Process.bind_done]
       rfl
   · rfl
 

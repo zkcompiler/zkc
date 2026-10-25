@@ -8,7 +8,6 @@ public import ZkcSecurity.Examples.Components.GkrCallerRealization
 @[expose] public section
 noncomputable section
 set_option autoImplicit false
-set_option linter.unusedSimpArgs false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 800000
 set_option backward.isDefEq.respectTransparency false
@@ -105,9 +104,8 @@ theorem first_left_call (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1
   have inputScopes : definition0.inputScopes = [[0], [0], [0], [0], [1], [0, 1], [1]] := by kernel_rfl
   simp only [inputScopes, protocol1Role1Callback1CallInput, mask_cons, maskValues, ProtocolContext.mapScopes,
     List.map_cons, List.map_nil, List.tail_cons, List.headD_cons, List.contains_cons, List.contains_nil, beq_self_eq_true,
-    Bool.or_false, Bool.true_or, Bool.or_true, Participant.restrict, ite_true, Option.map_some,
-    Values.get, TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.bind_assoc,
-    PIR.Process.bind, ite_self, Bool.false_or]
+    Bool.or_false, Bool.or_true, Participant.restrict, ite_true, TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.bind_assoc,
+    PIR.Process.bind, ite_self]
   rfl
 
 end ZkcSecurity.Examples.Components.GkrCallerBinding

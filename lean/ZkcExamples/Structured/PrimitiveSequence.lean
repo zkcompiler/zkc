@@ -16,7 +16,6 @@ open PrimitiveSequenceViews
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
 set_option smartUnfolding false
-set_option linter.unusedSimpArgs false
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -58,25 +57,25 @@ theorem body_equation (table : Meanings F G) (xs : List F) (x : F) (divisor : Na
   · by_cases addBound : xs.length + 1 < indexLimit
     · by_cases divisorBound : divisor < indexLimit
       · by_cases nonzero : divisor = 0 <;>
-          simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
-            Evaluation.operation, Operands.eval, Regions.denote, inputs, outputs, reference,
-            Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
+          simp [meaning, Evaluation.meaning,
+            outputs, reference,
+            Values.get, SiteObservations.closed,
             SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
             checkedIndices, lengthBound, addBound, divisorBound, nonzero, extended,
             show 1 < indexLimit by decide +kernel]
-      · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
-          Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
-          Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
+      · simp [meaning, Evaluation.meaning,
+          reference,
+          Values.get, SiteObservations.closed,
           SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
           checkedIndices, lengthBound, addBound, divisorBound, show 1 < indexLimit by decide +kernel]
-    · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
-        Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
-        Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
+    · simp [meaning, Evaluation.meaning,
+        reference,
+        Values.get, SiteObservations.closed,
         SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
         checkedIndices, lengthBound, addBound, show 1 < indexLimit by decide +kernel]
-  · simp [appendSummaryBody, Region.denote, meaning, Evaluation.meaning,
-      Evaluation.operation, Operands.eval, Regions.denote, inputs, reference,
-      Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
+  · simp [meaning, Evaluation.meaning,
+      reference,
+      Values.get, SiteObservations.closed,
       SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome, lengthBound]
 
 set_option smartUnfolding false in
@@ -130,7 +129,7 @@ theorem division_zero_sites {I : PIR.Signature} (sites : SiteObservations I)
   dsimp only [inputs]
   rw [PrimitiveExpansions.appendSummary_body_observed]
   have lengthBound : xs.length < indexLimit := by omega
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
+  simp only [PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
     checkedIndices, Values.get, lengthBound, bound,
     show 0 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
     and_self, ite_true]

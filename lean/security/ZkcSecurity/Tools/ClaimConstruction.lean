@@ -22,7 +22,7 @@ Names in `Library` locate Lean exports; they never define property meanings.
 universe u
 
 namespace ZkcSecurity.Tools.ClaimConstruction
-open Lean Meta Elab Tactic Command
+open Lean Meta Elab Tactic Command Parser.Term
 open Zkc.Claims ZkcSecurity.Claims ZkcSecurity.Endpoint
 
 meta initialize registerTraceClass `zkc.claimConstruction
@@ -662,14 +662,21 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
       return
     let endpoint ← if wire.subject.stage == .compiledIdeal then `(.idealMeaning) else `(.executableBytes)
     elabCommand (← `(section))
-    elabCommand (← `(set_option linter.unusedSectionVars false))
     let field := mkIdent `F
     let group := mkIdent `G
-    elabCommand (← `(variable {$field $group : Type} [Field $field] [Fintype $field] [DecidableEq $field]
-      [Inhabited $field] [SampleableType $field] [AddCommGroup $group] [Module $field $group]
-      [DecidableEq $group] [SampleableType $group]))
+    -- These declarations share the uniform library's complete model telescope.
+    -- State it explicitly instead of suppressing unused-section diagnostics or
+    -- guessing which instances an author-defined property might require.
+    let modelBinders : Array (TSyntax ``Parser.Term.bracketedBinder) := #[
+      ← `(bracketedBinderF| {$field $group : Type}),
+      ← `(bracketedBinderF| [Field $field]), ← `(bracketedBinderF| [Fintype $field]),
+      ← `(bracketedBinderF| [DecidableEq $field]), ← `(bracketedBinderF| [Inhabited $field]),
+      ← `(bracketedBinderF| [SampleableType $field]), ← `(bracketedBinderF| [AddCommGroup $group]),
+      ← `(bracketedBinderF| [Module $field $group]), ← `(bracketedBinderF| [DecidableEq $group]),
+      ← `(bracketedBinderF| [SampleableType $group])]
+    elabCommand (← `(variable $modelBinders*))
     let modelAdmission := name "ModelAdmission"
-    let failed ← checkedCommand (← `(theorem $modelAdmission ($application : String) :
+    let failed ← checkedCommand (← `(theorem $modelAdmission $modelBinders* ($application : String) :
         ∃ actual, modelResolution ($models $endpoint $application)
           ($subject (F := $field) (G := $group)) $data = .ok (.ok actual) := by
         claim_model normalizing [$normalization,*]))
@@ -686,7 +693,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
       elabCommand (← `(end))
       return
     let resolution := name "Resolution"
-    elabCommand (← `(theorem $resolution ($application : String) :
+    elabCommand (← `(theorem $resolution $modelBinders* ($application : String) :
       resolveRequest ($properties (F := $field) (G := $group) $endpoint $application)
         ($models $endpoint $application) ($subject (F := $field) (G := $group)) $data =
           .ok (.ok ($resolved (F := $field) (G := $group) $application)) :=
@@ -705,7 +712,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
     unless (← getEnv).contains (currentNamespace ++ selectedModel.getId) do
       elabCommand (← `(def $modelContext ($application : String) : ModelContext := by
         claim_context ($models $endpoint $application), $data))
-      let failed ← checkedCommand (← `(theorem $selectedModel ($application : String) :
+      let failed ← checkedCommand (← `(theorem $selectedModel $modelBinders* ($application : String) :
           CanonicalModelAdmission (CanonicalAuthority.ofUniformSubject ($subject (F := $field) (G := $group))) ($models $endpoint $application) ($modelContext $application)
             ($subject (F := $field) (G := $group)) ($data).model := by
           exact ⟨rfl, $modelAdmission (F := $field) (G := $group) $application⟩))
@@ -771,7 +778,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
                 "zkc.method.author-library/0", some ⟨fun supplied =>
                   if supplied.arguments.isEmpty then .ok (.proved (($receipt (F := $field) (G := $group) $application).receipt))
                   else .error (.schema "method takes no parameters")⟩⟩]⟩))
-            elabCommand (← `(theorem $executed ($application : String) :
+            elabCommand (← `(theorem $executed $modelBinders* ($application : String) :
               runMethod ($methods (F := $field) (G := $group) $application)
                 ⟨⟨$(quote plan.identifier.name), $(quote plan.identifier.version)⟩, []⟩ =
                 .ok (.proved (($receipt (F := $field) (G := $group) $application).receipt)) := rfl))

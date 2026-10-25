@@ -11,7 +11,6 @@ namespace ZkcExamples.Structured.MapPrefixLaws
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixBodies
 open Zkc.Polynomial.Multilinear (restrictValues restrictPrefixValues)
 set_option smartUnfolding true
-set_option linter.unusedSimpArgs false
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -70,7 +69,7 @@ theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
       Evaluation.denoteFold table foldSpec
         (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
   simp only [foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Environment.push, Values.get, Environment.prepend, Environment.push]
+    Operands.eval, Regions.denote, Values.get_cons, Environment.push, Environment.push]
   trans (Evaluation.denoteFold table foldSpec
     (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).bind .done
   · congr 1
@@ -154,22 +153,22 @@ theorem wrapper_body (table : Meanings F G)
   dsimp only [inputs, vector] at tableLaw
   rw [tableLaw]
   by_cases shape : HasShape xs dimension columns
-  · simp only [shape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+  · simp only [shape, ite_true, PIR.Process.bind, Values.get]
     by_cases pointBound : point.length < indexLimit
     · simp only [pointBound, ite_true]
       have prefixLaw := prefixLaw xs dimension columns point shape lengthBound pointBound
       change (invoke table prefixHelper (prefixInputs xs dimension columns point)).bind _ = _
       rw [prefixLaw]
       by_cases fits : point.length ≤ dimension
-      · simp only [fits, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+      · simp only [fits, ite_true, PIR.Process.bind]
         change (invoke table valuesRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [valuesLaw]
-        simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+        simp only [PIR.Process.bind, Values.get]
         change (invoke table variablesRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [variablesLaw]
-        simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+        simp only [PIR.Process.bind, Values.get]
         change (invoke table widthRealizationHelper
           (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)).bind _ = _
         rw [widthLaw]

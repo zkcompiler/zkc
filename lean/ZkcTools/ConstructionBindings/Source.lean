@@ -60,7 +60,7 @@ def assembly (program : Program) : Except String (List Binder × Assembly) := do
   return (binders, ← assemble program keys root.inputs binders form 0)
 
 def realizationProof (assembly : Assembly) : String := Id.run do
-  let mut text := "  simp only [process, realized, singleton_eta, PIR.Process.bind_done]\n"
+  let mut text := "  unfold process realized\n"
   let mut indent := "  "
   for (step, index) in assembly.steps.zipIdx do
     let proof := if step.callee.isSome then
@@ -86,7 +86,7 @@ def source (program : Program) (moduleName originalModule : String) : Except Str
   let mut text := "module\n\npublic import " ++ originalModule ++
     "\npublic import ZkcExamples.Structured.OriginalSumcheckProducerCalls\n\n@[expose] public section\n" ++
     "set_option autoImplicit false\nset_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\n" ++
-    "set_option backward.isDefEq.respectTransparency false\nset_option linter.unusedVariables false\nset_option linter.unusedSimpArgs false\nnoncomputable section\nnamespace " ++ moduleName ++ "\n" ++
+    "set_option backward.isDefEq.respectTransparency false\nnoncomputable section\nnamespace " ++ moduleName ++ "\n" ++
     "open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured\n" ++
     "open OriginalSumcheckLibrary SumcheckVerifierBodies\nopen ZkcExamples.Structured.OriginalSumcheckProducerCalls\n" ++
     "open ZkcExamples.Structured.OriginalSumcheckCalls\nopen " ++ originalModule ++ "\n" ++

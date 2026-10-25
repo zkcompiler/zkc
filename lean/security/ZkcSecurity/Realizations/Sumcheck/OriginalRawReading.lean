@@ -14,7 +14,6 @@ The source equations are OriginalRaw.source_step/source_reduce instead. -/
 set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck TableComponent
@@ -52,10 +51,9 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
   simp only [step, TableComponent.Execution.run, nominal,
     Zkc.Construction.Original.fold, PIR.Process.interpretState,
     Zkc.Construction.Original.operations, Zkc.Construction.Original.receive,
-    Zkc.Construction.Original.query, Zkc.Construction.Original.send,
     Zkc.Construction.Original.record, routes.mode, routes.low, routes.high,
-    routes.draw, routes.delivery, Domain.Payload.ofValue,
-    PIR.Process.bind, PIR.Process.bind_assoc]
+    Domain.Payload.ofValue,
+    PIR.Process.bind]
   constructor
   · apply DomainReduction.ReadingTo.receive (I := Nominal.signature F "bls12-381.fr")
       (.field "bls12-381.fr") _ _ _ _
@@ -92,9 +90,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
         apply DomainReduction.ReadingTo.observe
         apply DomainReduction.ReadingTo.absorbSend (I := Nominal.signature F "bls12-381.fr")
           (.deliver _ _) _ _ () rfl
-        simp only [TableComponent.Execution.run, PIR.Process.bind, PIR.Process.interpretState, Zkc.Construction.Original.operations,
-          List.getLast?_append, List.getLast?_cons, List.getLast?_nil, ↓reduceIte,
-          List.dropLast_append_of_ne_nil, List.dropLast_singleton, List.append_nil]
+        simp only [List.getLast?_append, List.getLast?_cons, List.getLast?_nil]
         simpa [unpack, nominal, TableComponent.Execution.advance, TableComponent.Execution.finalHistory,
           TableComponent.Execution.receivedHistory, advance, List.append_assoc,
           DomainReduction.fieldReply, PIR.Process.bind] using
@@ -117,13 +113,11 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
       · exact DomainReduction.drawRequest_of_request request
       · intro challenge
         apply DomainReduction.CoherentTo.observe
-        simp only [TableComponent.Execution.run, PIR.Process.bind, PIR.Process.interpretState, Zkc.Construction.Original.operations,
-          List.getLast?_append, List.getLast?_cons, List.getLast?_nil, ↓reduceIte,
-          List.dropLast_append_of_ne_nil, List.dropLast_singleton, List.append_nil]
+        simp only [List.getLast?_append, List.getLast?_cons, List.getLast?_nil]
         simp [PIR.Process.bind, List.append_assoc]
         apply DomainReduction.CoherentTo.done
         exact ⟨rfl, rfl⟩
-    · simp only [passed, ite_false, PIR.Process.interpretState, PIR.Process.bind]
+    · simp only [passed, ite_false, PIR.Process.interpretState]
       exact .halt _ .reject
 
 

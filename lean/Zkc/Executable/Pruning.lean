@@ -57,11 +57,11 @@ theorem stopped_pure {F G R : Type} {m : Type → Type} [Monad m] (stop : PIR.St
 
 section PruningIdeal
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-variable {m : Type → Type} [Monad m] [LawfulMonad m]
+variable {m : Type → Type} [Monad m]
 variable (context : Context) (challenge : History F G → m F)
   (table : Structured.Evaluation.Meanings F G Structured.closedInterface)
 
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] [LawfulMonad m] in
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem iterateM_prunes {R : Type}
     (body : List (Value F G) → Proof F G →
       (List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G)) → m (PIR.Outcome R × Proof F G))
@@ -83,7 +83,6 @@ theorem iterateM_prunes {R : Type}
       · exact iterateM_prunes body bodyPrunes env yielded rest _ _ next next' continues
       · exact .refl _
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- The ideal meaning prunes as its continuation does. -/
 theorem idealK_prunes {R : Type} :
@@ -133,7 +132,7 @@ end PruningIdeal
 
 section PruningMetered
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-variable {m : Type → Type} [Monad m] [LawfulMonad m]
+variable {m : Type → Type} [Monad m]
 variable (context : Context) (challenge : History F G → m F)
   (table : Structured.Evaluation.Meanings F G Structured.closedInterface)
   (cost : String → List (Value F G) → Nat) (budget : Nat)

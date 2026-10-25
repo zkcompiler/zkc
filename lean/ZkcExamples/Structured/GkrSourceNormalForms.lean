@@ -779,7 +779,6 @@ theorem rounds_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (
     GkrSourceViews.unit.protocols GkrSourceViews.unit.protocolsLinked GkrSourceViews.roundsDefinition
     GkrSourceViews.rounds_member (GkrRoundsNormalForms.roundsBody roundsMaximum) GkrRoundsNormalForms.roundsBody_raw ctx self args
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem left_verifierLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -795,9 +794,8 @@ theorem left_verifierLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem left_proverLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -813,14 +811,13 @@ theorem left_proverLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 1
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate, Values.get]
 
 /-- The child context of the `right` application: its sites are qualified by the
 application site and its roles map to the caller's roles [0, 1]. -/
 abbrev rightContext (ctx : ProtocolContext) : ProtocolContext :=
   ctx.enter "label_7269676874" [0, 1]
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem right_verifierLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -836,9 +833,8 @@ theorem right_verifierLayer_outputs (ctx : ProtocolContext) (separate : ctx.role
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem right_proverLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -854,7 +850,7 @@ theorem right_proverLayer_outputs (ctx : ProtocolContext) (separate : ctx.roles 
               cases values with | cons value6 values =>
                 cases values
                 simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                  Participant.restrict, Ne.symm separate, Values.get]
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def layerFn (ctx : ProtocolContext) (self : Nat) :
@@ -951,7 +947,6 @@ def verifierLayerProcess (ctx : ProtocolContext) (index : Nat) (add mul : Option
                   else
                     .halt .reject
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem rounds_verifierRounds_returned (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -966,10 +961,9 @@ theorem rounds_verifierRounds_returned (ctx : ProtocolContext) (separate : ctx.r
             cases values with | cons value5 values =>
               cases values with | cons value6 values =>
                 cases values
-                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                simp [maskValues, ProtocolContext.mapScopes,
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The `left` callee at role 1: its invocation in this unit at any child context. -/
 theorem rounds_verifierRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (claim : Option F) (rounds service : Option Nat) (input0 input1 input2 input3 : Option (List F)) :
@@ -978,7 +972,7 @@ theorem rounds_verifierRounds_invoke (ctx : ProtocolContext) (separate : ctx.rol
       (GkrRoundsNormalForms.verifierRoundsProcess ctx claim rounds service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there (.there .here)))))) (.cons (out.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))) := by
   refine (rounds_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
     (GkrRoundsNormalForms.verifierRounds_process (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (rounds := rounds) (service := service))).trans ?_
   apply congrArg (PIR.Process.bind _)
@@ -1226,7 +1220,6 @@ def proverLayerProcess (ctx : ProtocolContext) (index : Nat) (inputs add mul : O
                     (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.linePointHelper (.cons leftPoint (.cons rightPoint (.cons lineDelivery .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (linePointResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
                     .done (some (linePointResults.get .here))
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem rounds_proverRounds_returned (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -1241,10 +1234,9 @@ theorem rounds_proverRounds_returned (ctx : ProtocolContext) (separate : ctx.rol
             cases values with | cons value5 values =>
               cases values with | cons value6 values =>
                 cases values
-                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                simp [maskValues, ProtocolContext.mapScopes,
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The `left` callee at role 0: its invocation in this unit at any child context. -/
 theorem rounds_proverRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
     (add mul left right : Option (List F)) (rounds : Option Nat) (input4 : Option F) (input6 : Option Nat) :
@@ -1253,7 +1245,7 @@ theorem rounds_proverRounds_invoke (ctx : ProtocolContext) (separate : ctx.roles
       (GkrRoundsNormalForms.proverRoundsProcess ctx add mul left right rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons (out.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil)))))))) := by
   refine (rounds_view ctx (ctx.roles 0) _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
     (GkrRoundsNormalForms.proverRounds_process (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (add := add) (mul := mul) (left := left) (right := right) (rounds := rounds))).trans ?_
   apply congrArg (PIR.Process.bind _)
@@ -1558,7 +1550,6 @@ theorem verifier_process
     (verifier_environment inputs outputs add mul layers selector width service) (verifier_laws inputs outputs add mul layers selector width service) (NormalForm.noCallees_hold _ _)).trans
     (verifier_presentation ctx inputs outputs add mul layers selector width service)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem verifier_outputs (ctx : ProtocolContext)
@@ -1567,10 +1558,9 @@ theorem verifier_outputs (ctx : ProtocolContext)
       .cons (values.get .here) .nil := by
   cases values with | cons value0 values =>
     cases values
-    simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
+    simp [maskValues, ProtocolContext.mapScopes,
       Participant.restrict, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The verifier's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem verifier_invoke
@@ -1583,7 +1573,7 @@ theorem verifier_invoke
   refine (gkr_view ctx self _ (.cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil)))))))) ?_).trans ?_
   · subst self
     iterate 9 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (verifier_process (inputs := inputs) (outputs := outputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
@@ -1678,7 +1668,6 @@ theorem prover_process
     (prover_environment inputs add mul layers selector width) (prover_laws inputs add mul layers selector width) (NormalForm.noCallees_hold _ _)).trans
     (prover_presentation ctx inputs add mul layers selector width)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -1687,10 +1676,9 @@ theorem prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.r
       .cons none .nil := by
   cases values with | cons value0 values =>
     cases values
-    simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-      Participant.restrict, separate, Ne.symm separate, Values.get]
+    simp [maskValues, ProtocolContext.mapScopes,
+      Participant.restrict, Ne.symm separate]
 
-set_option linter.unusedSimpArgs false in
 /-- The prover's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem prover_invoke
@@ -1703,7 +1691,7 @@ theorem prover_invoke
   refine (gkr_view ctx self _ (.cons inputs (.cons none (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons none .nil)))))))) ?_).trans ?_
   · subst self
     iterate 9 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (prover_process (inputs := inputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (ctx := ctx) (self := ctx.roles 0) (role := rfl)

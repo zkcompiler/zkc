@@ -213,7 +213,6 @@ theorem iterateM_congr {R : Type}
           found continues
       · rfl
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- Instructions agree on continuations that agree wherever the ideal meaning
 passes on. -/

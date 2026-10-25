@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Participant
+public import ZkcTools.StructuredSource.Presentation
 public import Lean
 
 @[expose] public section
@@ -96,7 +97,8 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
     | _ => pure ()
     let (view, proof) ← (action instruction (stepName ++ "Body")).mapError
       (fun error => error ++ "; path=" ++ stepPath)
-    text := text ++ "def " ++ stepName ++ binders ++ " : View.Block model.toCarriers :=\n  " ++
+    let stepBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
+    text := text ++ "def " ++ stepName ++ stepBinders ++ " : View.Block model.toCarriers :=\n  " ++
       view ++ "\n\n" ++
       "theorem " ++ stepName ++ "_eq" ++ binders ++ " :\n" ++
       "    Correspondence.Step (program := program) (context := context)\n" ++
@@ -107,6 +109,7 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
   let proof := names.foldr (fun name rest => app "Correspondence.sequence"
     [app (name ++ "_eq") arguments, rest]) "Correspondence.empty"
   let results := instructions.map (·.results)
+  let blockBinders := Presentation.explicitParameters binders arguments ("model " ++ view)
   pure (text ++ "def " ++ name ++ "SlotInputs : List ValueSort := " ++ literal inputs ++
     "\n\ntheorem " ++ name ++ "SlotInputs_eq : " ++ name ++ "SlotInputs =\n" ++
     "    (" ++ inputPath ++ ") := by kernel_rfl\n\n" ++
@@ -120,7 +123,7 @@ def block (fuel : Nat) (instructions : List Instruction) (name path : String)
     "      (" ++ inputPath ++ ") := by\n" ++
     "  unfold " ++ name ++ "SlotSorts\n" ++
     "  rw [" ++ name ++ "SlotInputs_eq, " ++ name ++ "SlotResults_eq, List.scanl_map]\n\n" ++
-    "def " ++ name ++ binders ++ " : View.Block model.toCarriers :=\n  " ++ view ++
+    "def " ++ name ++ blockBinders ++ " : View.Block model.toCarriers :=\n  " ++ view ++
     "\n\ntheorem " ++ name ++ "_eq" ++ binders ++ " :\n" ++
     "    Correspondence.Block (program := program) (context := context)\n" ++
     "      (" ++ path ++ ") " ++ app name arguments ++ " :=\n  " ++ proof ++ "\n\n")
@@ -136,7 +139,6 @@ def source (artifact : Participant) (output : Output) : Except String String := 
     "No authored mathematical evidence is imported. Regenerate; do not hand edit. -/\n" ++
     "set_option autoImplicit false\nset_option smartUnfolding false\n" ++
     "set_option maxRecDepth 10000\nset_option maxHeartbeats 8000000\n" ++
-    "set_option linter.unusedVariables false\n" ++
     "namespace " ++ output.moduleName ++ "\nopen Zkc.Source Zkc.Construction Zkc.Construction.Domain\n\n" ++
     "abbrev artifact : Participant := " ++ output.artifactExpression ++ "\n\n" ++
     "def inputSorts : List ValueSort := " ++ literal artifact.inputs ++ "\n" ++

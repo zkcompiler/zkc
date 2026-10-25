@@ -73,7 +73,7 @@ theorem eq_of_lastEvent {history : List (Absorbed E Shape Y)} {event : E}
         rw [carries]
     | root _ _ => cases carries
   rw [entryIs] at found
-  exact (Oracle.dropLast_append_of_getLast? found).symm
+  exact (List.dropLast_append_getLast? _ found).symm
 
 /-- The answer type after an event, `Unit` without one. -/
 def EventRange : Option E → Type

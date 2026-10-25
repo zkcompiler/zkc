@@ -26,6 +26,38 @@ open Lean Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
 /-- Lean's string representation escapes quotes, backslashes and control characters. -/
 def quoted (text : String) : String := reprStr text
 
+/-- Identifier references in printer-owned expressions, excluding string literals. -/
+def expressionIdentifiers (source : String) : List String := Id.run do
+  let mut names := []
+  let mut token := ""
+  let mut inString := false
+  let mut escaped := false
+  for c in source.toList do
+    if inString then
+      if escaped then escaped := false
+      else if c == '\\' then escaped := true
+      else if c == '"' then inString := false
+    else if c.isAlphanum || c == '_' || c == '\'' then
+      token := token.push c
+    else
+      if !token.isEmpty then names := token :: names
+      token := ""
+      if c == '"' then inString := true
+  return if token.isEmpty then names else token :: names
+
+/-- Retain positional parameters while marking unused declaration binders explicitly.
+References in the telescope matter too: `(n : Nat) (x : Fin n)` must keep `n`
+even when the body ignores both values. Mask the exact printed introductions
+before collecting identifiers, leaving all type and default-value references.
+This lexical hint never supplies evidence; emitted declarations are checked. -/
+def explicitParameters (parameters : String) (names : List String) (body : String) : String :=
+  let parameterTypes := names.foldl (fun text name =>
+    text.replace ("(" ++ name ++ " :") "(:") parameters
+  let used := expressionIdentifiers (body ++ " " ++ parameterTypes)
+  names.foldl (fun text name =>
+    if used.contains name then text
+    else text.replace ("(" ++ name ++ " :") ("(_" ++ name ++ " :")) parameters
+
 def paren (text : String) : String := "(" ++ text ++ ")"
 def app (head : String) (args : List String) : String :=
   paren (" ".intercalate (head :: args))
@@ -357,20 +389,25 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
   | _, names, .receive ty site peer next, indent => do
     let name ← fresh naming
     let action := app ".receive" [tyText ty, siteExpression naming site, roleExpression naming peer]
-    return pad indent ++ ".call " ++ action ++ " fun (" ++ name ++ " : " ++ naming.carriers.valueType ty ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ ".call " ++ action ++ " fun (" ++ binder ++ " : " ++ naming.carriers.valueType ty ++ ") =>\n" ++
+      tail
   | _, names, .query site request args next, indent => do
     let name ← fresh naming
     let action := app ".query" [siteExpression naming site, quoted request, valuesText (termsText naming names args)]
-    return pad indent ++ ".call " ++ action ++ " fun (" ++ name ++ " : " ++
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ ".call " ++ action ++ " fun (" ++ binder ++ " : " ++
       naming.carriers.valueType (services.result request) ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+      tail
   | _, names, .split subject absent present, indent => do
     let name ← fresh naming
     let absent ← processText naming finish names absent (indent + 2)
     let present ← processText naming finish (name :: names) present (indent + 2)
     return pad indent ++ "match " ++ compText naming names subject ++ " with\n" ++
-      pad indent ++ "| none =>\n" ++ absent ++ "\n" ++ pad indent ++ "| some " ++ name ++ " =>\n" ++ present
+      pad indent ++ "| none =>\n" ++ absent ++ "\n" ++ pad indent ++ "| some " ++
+      (if (expressionIdentifiers present).contains name then name else "_" ++ name) ++ " =>\n" ++ present
   | _, names, .guard equality left right next, indent => do
     let left := paren (termText naming names left)
     let right := paren (termText naming names right)
@@ -383,35 +420,45 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
     let name ← fresh naming
     let process := app "invoke" [paren naming.tables ++ ".closed", helperExpression naming helper,
       valuesText (termsText naming names args)]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++ valuesType naming helper.outputs false ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming helper.outputs false ++ ") =>\n" ++
+      tail
   | _, names, .compute op _ args next, indent => do
     let name ← fresh naming
     let process := app "Evaluation.operationOn" [naming.carriers.model, "(.silent _)",
       paren naming.tables ++ ".closed", opText op, valuesText (termsText naming names args),
       app "Op.calculationRegions" [opText op, "rfl"]]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++ valuesType naming op.results false ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming op.results false ++ ") =>\n" ++
+      tail
   | _, names, .math helper args next, indent => do
     let name ← fresh naming
     let process := app "invoke" [paren naming.tables ++ ".components", helperExpression naming helper,
       valuesText (compsText naming names args)]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++ valuesType naming helper.outputs true ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming helper.outputs true ++ ") =>\n" ++
+      tail
   | _, names, .owned owner helper args next, indent => do
     let name ← fresh naming
     let process := app "Participant.owned" [roleExpression naming owner, roleExpression naming owner,
       app "invoke" [paren naming.tables ++ ".closed", helperExpression naming helper], valuesText (compsText naming names args)]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++ valuesType naming helper.outputs true ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming helper.outputs true ++ ") =>\n" ++
+      tail
   | _, names, .repeat spec _ callback count state captures next, indent => do
     let name ← fresh naming
     let callback := (naming.callback spec callback).map paren |>.getD
       (app (paren naming.runs ++ ".callback") [repeatText spec, regionText callback])
     let process := app (paren naming.runs ++ ".run") [repeatText spec, paren (compText naming names count),
       valuesText (compsText naming names state), valuesText (compsText naming names captures), callback]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++ valuesType naming spec.state true ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++ valuesType naming spec.state true ++ ") =>\n" ++
+      tail
   | _, names, .apply callee _ roles site args next, indent => do
     let name ← fresh naming
     let argsType := app "Binders" [naming.carriers.model,
@@ -423,9 +470,11 @@ def processText (naming : Naming laws callees initial) {out : List Ty} (finish :
             valuesType naming (calleeAt callees callee).signature.outputs true])
     let process := app process [app (paren naming.context ++ ".enter") [quoted site, natsText roles],
       paren ("by change " ++ argsType ++ "; exact " ++ valuesText (argumentsText naming names args))]
-    return pad indent ++ process ++ ".bind fun (" ++ name ++ " : " ++
+    let tail ← processText naming finish (name :: names) next indent
+    let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+    return pad indent ++ process ++ ".bind fun (" ++ binder ++ " : " ++
       valuesType naming (calleeAt callees callee).signature.outputs true ++ ") =>\n" ++
-      (← processText naming finish (name :: names) next indent)
+      tail
 
 structure Rendered where
   form : String
@@ -486,8 +535,10 @@ def declarations {Δ : Scope} {out : List Ty} (naming : Naming laws callees Δ) 
     | .outputs => ""
     | .presented spec => "\ntheorem " ++ decl.name ++ "_finishes : " ++ form ++ ".finishes " ++
         finishText spec ++ " = true := by\n  decide +kernel\n"
+  let processParameters := explicitParameters (decl.parameters ++ " " ++ parameters)
+    (decl.arguments ++ printed.binders) (processType naming finish ++ printed.process)
   "noncomputable def " ++ form ++ " : " ++ formTypeExpression.getD (formType laws callees Δ out) ++ " :=\n  " ++ printed.form ++
-    "\n\nset_option linter.unusedVariables false in\nnoncomputable def " ++ process ++ " " ++ decl.parameters ++ " " ++ parameters ++ " :\n    " ++
+    "\n\nnoncomputable def " ++ process ++ " " ++ processParameters ++ " :\n    " ++
     processType naming finish ++ " :=\n" ++ printed.process ++
     "\n\ntheorem " ++ decl.name ++ "_calls : " ++ form ++ ".CallsMatch := by\n  kernel_rfl\n\n" ++
     "theorem " ++ decl.name ++ "_presentation " ++ decl.parameters ++ " " ++ parameters ++ " :\n    " ++

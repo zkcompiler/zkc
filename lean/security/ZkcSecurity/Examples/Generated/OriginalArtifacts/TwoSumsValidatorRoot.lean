@@ -15,7 +15,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -77,15 +76,15 @@ def validator (input0 : List F) (input1 : List F) (input2 : F) (input3 : F) (inp
     normalizing (
       try (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨point, scalar, reached, rfl, rfl⟩ := returned; refine ⟨?_⟩)
       try (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨value, rfl, rfl⟩ := returned; refine ⟨?_⟩)
-      try simp only [ZkcExamples.Structured.Generated.Original.TwoSums.realized, ZkcExamples.Structured.Generated.Original.TwoSums.step0, ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized, ZkcExamples.Structured.Generated.Original.TwoSums.step1, ZkcExamples.Structured.Generated.Original.TwoSums.step2, ZkcExamples.Structured.Generated.Original.TwoSums.step2Realized, ZkcExamples.Structured.Generated.Original.TwoSums.step3, ZkcExamples.Structured.Generated.Original.TwoSums.step4, sourceHelper30_identity, sourceHelper31_identity, ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall, ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall, mathHelper31, mask_outputs, Values.get, Values.present, SumcheckVerifierBodies.reduceReturnValues, SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState, Original.fold_bind, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind, PIR.Process.bind_assoc]
+      try simp only [ZkcExamples.Structured.Generated.Original.TwoSums.realized, ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized, ZkcExamples.Structured.Generated.Original.TwoSums.step1, ZkcExamples.Structured.Generated.Original.TwoSums.step2Realized, ZkcExamples.Structured.Generated.Original.TwoSums.step3, ZkcExamples.Structured.Generated.Original.TwoSums.step4, ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall, mathHelper31, Values.get, SumcheckVerifierBodies.reduceReturnValues, SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState, PIR.Process.bind, PIR.Process.bind_assoc, Original.fold_bind, Zkc.Construction.ArtifactBinding.fold_done]
       try normalize_artifact_operations [ZkcSecurity.Realizations.Sumcheck.DomainHelpers.empty program ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.helper_bodies.sumcheck, boolean_and] unfolding [ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.inputSorts, ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.outputSorts, ZkcExamples.Structured.Generated.Constructed.TwoSumsValidator.returned, inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context]
       change Original.Simulation _ _ _ _)
     solving (first
-      | (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; obtain ⟨point, scalar, reached, sourceEq, frameEq⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context, List.append_assoc, List.take_append])
-      | (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; obtain ⟨value, sourceEq, frameEq⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context, List.append_assoc, List.take_append])
+      | (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; obtain ⟨point, scalar, reached, sourceEq, frameEq⟩ := returned; rw [frameEq]; rfl)
+      | (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; obtain ⟨value, sourceEq, frameEq⟩ := returned; rw [frameEq]; rfl)
       | rfl
-      | solve | simp_all [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context, List.append_assoc, List.take_append]
-      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); simp [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context, List.append_assoc, List.take_append])
-      | (unfold RootReturns ValidatorReturns; refine ⟨_, rfl, ?_⟩; simp [inputs, capture0, capture1, carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context, List.cons_append, List.nil_append]))
+      | (intro process frame equation; subst frame; rfl)
+      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); rfl)
+      | (unfold RootReturns ValidatorReturns; exact ⟨_, rfl, rfl, rfl, rfl, rfl⟩))
 
 end ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot

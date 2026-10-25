@@ -16,7 +16,6 @@ namespace ZkcExamples.Structured.PrimitiveExpansions
 open Zkc.Source Zkc.Source.Structured
 -- The two observed-site expansions reassociate abstract mark effects with
 -- `simp`; every resulting equation is still checked by the kernel.
-set_option linter.unusedSimpArgs false
 private theorem prepend_empty {Value : Ty → Type} {types : List Ty}
     (env : Environment Value types) (values : Values Value []) :
     @Eq (Environment Value types) (env.prepend values) env := by cases values; rfl
@@ -170,10 +169,8 @@ theorem appendSummary_body_observed {I : PIR.Signature} (sites : SiteObservation
     (sites.mark "s20").bind fun _ =>
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEmpty "bls12-381.fr") .nil) : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result11 =>
     .done (.cons (result3.get .here) (.cons (result4.get .here) (.cons (result5.get .here) (.cons (result7.get .here) (.cons (result8.get .here) (.cons (result9.get .here) (.cons (result10.get .here) (.cons (result11.get .here) .nil)))))))) := by
-  simp only [PrimitiveSequenceViews.appendSummaryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, PIR.Process.bind_assoc, Evaluation.invokeCallback, ite_apply]
+  simp only [PrimitiveSequenceViews.appendSummaryBody, Region.denote, Evaluation.meaning, Evaluation.operation,
+    Operands.eval, Regions.denote, Values.get_cons, prepend_empty, prepend_one, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   all_goals rfl
 
 set_option backward.isDefEq.respectTransparency false in
@@ -183,10 +180,9 @@ theorem sequence_entry_observed {I : PIR.Signature} (sites : SiteObservations I)
     (sites.mark "s0").bind fun _ =>
     (invoke table ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) (.cons (result0.get (.there (.there (.there .here)))) (.cons (result0.get (.there (.there (.there (.there .here))))) (.cons (result0.get (.there (.there (.there (.there (.there .here)))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))))))) := by
-  simp only [PrimitiveSequenceViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Process.bind, PIR.Process.bind_assoc, Evaluation.invokeCallback, ite_apply]
+  simp only [PrimitiveSequenceViews.entryBody, Region.denote, Evaluation.meaning, Evaluation.operation,
+    Operands.eval, Regions.denote, Values.get_cons, prepend_empty, prepend_eight,
+    Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   all_goals rfl
 
 end ZkcExamples.Structured.PrimitiveExpansions

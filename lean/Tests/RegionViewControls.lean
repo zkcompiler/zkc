@@ -37,6 +37,7 @@ example : True := by
       exact BodyIn.of_checked SumcheckSourceViews.sumAddDefinition (by structured_mem)
   trivial
 
+-- The unknown-constructor negative probe intentionally leaves its input unused.
 set_option linter.unusedVariables false in
 /-- View materialization fails explicitly on an unknown source constructor. -/
 example (body : Region dialect [.index] [.index]) : True := by

@@ -14,7 +14,6 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 1200000
 set_option smartUnfolding false
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSectionVars false
 namespace ZkcSecurity.Examples.Subjects.Sumcheck.Registration
 open Zkc.Construction Zkc.Claims ZkcSecurity.Claims ZkcSecurity.Endpoint ZkcSecurity.FiatShamir
 open ZkcSecurity.Tools.ClaimConstruction
@@ -77,6 +76,7 @@ noncomputable def implication (endpoint : Semantics) (application : String) :
       Bound.value_query, Bound.value_constant, ennreal_nnrat_natural]
     simp [div_eq_mul_inv, add_mul]
 
+omit [Inhabited F] in
 theorem proveScalar {endpoint : Semantics} (application : String) :
     (scalarRequest (F := F) (G := G) endpoint application).meaning := by
   cases endpoint with
@@ -97,6 +97,7 @@ def requestedSchedule : ChargeSchedule (subjectIdeal (F := F) (G := G)) where
   unique := by simp
   nativeUnique := by simp
 
+omit [Inhabited F] [SampleableType F] in
 theorem requestedCharge (queries : Nat) (history : History F G) (event : Zkc.Construction.Event F G) :
     (requestedSchedule (F := F) (G := G)).charge queries history event =
       1 / (Fintype.card F : ENNReal) := by
@@ -107,6 +108,7 @@ theorem requestedCharge (queries : Nat) (history : History F G) (event : Zkc.Con
 def chargedRequest (application : String) : SoundnessRequest (subjectIdeal (F := F) (G := G)) :=
   ⟨requestedModel (F := F) application, .charged requestedSchedule⟩
 
+omit [Inhabited F] in
 theorem proveCharged (application : String) :
     (chargedRequest (F := F) (G := G) application).meaning := by
   have same : ∀ queries, (requestedSchedule (F := F) (G := G)).charge queries =
@@ -134,6 +136,7 @@ theorem proveCharged (application : String) :
 
 @[simp] theorem admittedField : artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field := rfl
 
+omit [Field F] [DecidableEq F] [SampleableType F] in
 /-- The nominal field is admitted by this actual snapshot, not an alias table. -/
 @[simp] theorem elaborateFieldDivision (budgetSymbol : String) (numerator : Wire.Expr) :
     Bound.elaborate F artifacts.original budgetSymbol

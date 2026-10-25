@@ -13,6 +13,7 @@ set_option autoImplicit false
 set_option maxRecDepth 8192
 set_option maxHeartbeats 1200000
 set_option backward.isDefEq.respectTransparency false
+-- Keep the full model-instance telescope: these controls audit receipt binders.
 set_option linter.unusedSectionVars false
 -- Some negative coverage controls intentionally retain an unused String binder.
 set_option linter.unusedVariables false

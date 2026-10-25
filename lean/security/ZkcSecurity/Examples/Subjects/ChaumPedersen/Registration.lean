@@ -15,7 +15,6 @@ open ZkcSecurity.Tools.ClaimConstruction
 
 set_option smartUnfolding false
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSectionVars false
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
   [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]

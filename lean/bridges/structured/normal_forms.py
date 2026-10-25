@@ -2387,7 +2387,6 @@ class Module:
                         for position in range(len(function.outputs)))
         cases += "  " * len(function.outputs) + f"cases {binder}\n"
         pad = "  " * len(function.outputs)
-        out.append("set_option linter.unusedSimpArgs false in")
         out.append(self.omit_line())
         out.append(f"/-- The returned components kept at role {role}; the others are masked away. -/")
         hides = any(scope_role not in scope for scope in function.output_scopes)
@@ -2397,8 +2396,10 @@ class Module:
                    f"    maskValues (ctx.roles {role}) ({context}.mapScopes {scope_literal(function.output_scopes)}) "
                    f"{binder} =\n      {kept} := by\n"
                    f"  {cases}"
-                   f"  {pad}simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,\n"
-                   f"  {pad}  Participant.restrict{', separate, Ne.symm separate' if hides else ''}, Values.get]\n")
+                   f"  {pad}simp [maskValues, ProtocolContext.mapScopes"
+                   f"{', ProtocolContext.enter, roleSubstitution' if context != 'ctx' else ''},\n"
+                   f"  {pad}  Participant.restrict{', Ne.symm separate' if hides else ''}"
+                   f"{', Values.get' if any(scope_role in scope for scope in function.output_scopes) else ''}]\n")
         return kept, hides
 
     def callee(self, entry, function):
@@ -2696,7 +2697,6 @@ class Module:
                           parameter_names, state, slots, capture_binders, capture_components, used_pairs,
                           uses_separate, result_type)
             return
-        out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The process equation of `{process}` over the typed body. -/")
         separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
         application = f"{process} {process_arguments}".strip()
@@ -3115,7 +3115,6 @@ class Module:
             return
         default_unfold = [spec["body"]] if re.fullmatch(r"[\w.']+", spec["body"]) else []
         unfolds = " ".join([function, *spec.get("unfold", default_unfold)])
-        out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The process equation of `{process}` over the typed body. -/")
         out.append(f"theorem {theorem} {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
                    f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
@@ -3354,7 +3353,6 @@ class Module:
                                      [(term, term in unpinned) for term in declared],
                                      [n for n, _ in absent_names], premises)
         view = camel(app.definition.rsplit(".", 1)[1].removesuffix("Definition")) + "_view"
-        out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The `{app.name}` callee at role {index}: its invocation in this unit at any child context. -/")
         out.append(f"theorem {stem}_invoke {role_binders} (ctx : ProtocolContext){separate}\n"
                    f"    {binder_declarations}{premises}{' ' if premises else ''}:\n"
@@ -3364,7 +3362,7 @@ class Module:
                    f"  refine ({view} ctx (ctx.roles {index}) _ ({values_literal(masked)} : {typed}) ?_).trans ?_\n"
                    f"  · iterate {len(function.inputs) + 1} unfold maskValues\n"
                    f"    simp [ProtocolContext.mapScopes, Participant.restrict"
-                   f"{', separate, Ne.symm separate' if separate else ''}]\n"
+                   f"{', Ne.symm separate' if separate else ''}]\n"
                    f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({' '.join(theorem_arguments)})).trans ?_\n"
                    f"  apply congrArg (PIR.Process.bind _)\n"
@@ -3482,7 +3480,6 @@ class Module:
         signature = self.signature_term(protocol)
         arguments = " ".join(variable for variable, _ in used)
         separate = "(separate := separate) " if uses_separate else ""
-        out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The {name}'s invocation at any caller context: the input masks, the normal form of\n"
                    f"the body and the output masks, with this unit's protocol table. -/")
         out.append(f"theorem {name}_invoke {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
@@ -3495,7 +3492,7 @@ class Module:
                    f"  refine ({spec['declaration']}_view ctx self _ {paren(values_literal(components))} ?_).trans ?_\n"
                    f"  · subst self\n"
                    f"    iterate {len(protocol.inputs) + 1} unfold maskValues\n"
-                   f"    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]\n"
+                   f"    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]\n"
                    f"  subst self\n"
                    f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({theorem} {' '.join(named)} (ctx := ctx) (self := ctx.roles {role}) (role := rfl)\n"

@@ -107,7 +107,7 @@ def source (metadata : SubjectABI.Metadata) (output : Output) (method : Method) 
     "\nSource ABI, whole-pair equations and the canonical endpoint are kernel\nchecked. Regenerate; do not hand edit. -/\n" ++
     "set_option autoImplicit false\nset_option backward.isDefEq.respectTransparency false\n" ++
     "set_option maxRecDepth 20000\nset_option maxHeartbeats 8000000\n" ++
-    "set_option linter.unusedSimpArgs false\n" ++
+    "" ++
     "namespace " ++ output.moduleName ++ "\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Construction\n" ++
     "open ZkcSecurity.Claims.HonestPair ZkcSecurity.FiatShamir\n" ++

@@ -9,7 +9,6 @@ public import Zkc.Construction.OriginalCorrespondence
 route is checked against the original source and the fixed draw policy. -/
 set_option autoImplicit false
 set_option maxRecDepth 10000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalProducer
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured
@@ -156,7 +155,7 @@ theorem original_round (payload : UnitPayload)
   simp only [SumcheckProverLaws.roundPresent, PIR.Process.interpretState,
     Original.operations, Original.send, Original.receive, routes.mode, routes.low, routes.high,
     routes.delivery, Original.record, Domain.Payload.ofValue, Original.queryField, routes.request,
-    PIR.Process.bind, PIR.Process.bind_assoc, Original.fold, producer, ↓reduceDIte,
+    PIR.Process.bind, Original.fold, producer, ↓reduceDIte,
     List.append_assoc, List.cons_append, List.nil_append]
 
 end ZkcSecurity.Realizations.Sumcheck.OriginalProducer

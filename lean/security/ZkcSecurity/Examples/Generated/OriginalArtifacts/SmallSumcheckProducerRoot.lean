@@ -15,7 +15,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -41,7 +40,7 @@ theorem producer_source (input0 : List F) (input2 : Nat) (shape0 : PrimitiveLibr
     (.cons (some input0) (.cons (some input2) (.cons (some 1) (.cons none (.cons (some input2) (.cons none .nil))))))).bind fun _ =>
   .done (.cons none .nil) := by
   rw [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.participant_binding]
-  simp only [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.realized, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step0, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1Realized, ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall]
+  simp only [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.realized, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step0, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1Realized, ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall]
   erw [ZkcExamples.Structured.OriginalSumcheckProducerCalls.table_owned program.payload ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck input0 input2 shape0 bounded0]
   dsimp only [Values.get, PIR.Process.bind]
   simp only [PIR.Process.bind, PIR.Process.bind_assoc]
@@ -66,15 +65,14 @@ def producer (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : Primitive
   derive_artifact_binding [Original.Simulation.bind (loopRule0 )]
     normalizing (
       try (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; apply Classical.choice; obtain ⟨nextRaw, width, point, reached, rfl, rfl, nextShape, nextBound⟩ := returned; refine ⟨?_⟩)
-      try simp only [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.realized, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step0, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1Realized, sourceHelper8_identity, ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall, ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall, ZkcExamples.Structured.OriginalSumcheckProducerCalls.table_owned program.payload ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck input0 input2 shape0 bounded0, Values.get, Values.present, SumcheckVerifierBodies.reduceReturnValues, SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState, Original.fold_bind, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind, PIR.Process.bind_assoc]
+      try simp only [Original.fold_bind, Zkc.Construction.ArtifactBinding.fold_done]
       try normalize_artifact_operations [ZkcSecurity.Realizations.Sumcheck.DomainHelpers.table program ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck input0 input2 1 shape0 bounded0 countBound (by decide +kernel), ZkcSecurity.Realizations.Sumcheck.DomainHelpers.less program ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck input2 input2 countBound countBound, ZkcSecurity.Realizations.Sumcheck.DomainHelpers.empty program ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck, boolean_and] unfolding [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.inputSorts, ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.outputSorts, ZkcExamples.Structured.Generated.Constructed.SmallSumcheckProducer.returned, inputs, capture0, ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context]
-      try simp only [Nat.lt_irrefl, decide_false, Nat.sub_self, List.cons_append, List.nil_append, List.getElem?_cons_zero, List.getElem?_cons_succ, PIR.Process.bind, PIR.Process.bind_assoc]
+      try simp only [Nat.lt_irrefl, decide_false, Nat.sub_self]
       change Original.Simulation _ _ _ _)
     solving (first
-      | (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; obtain ⟨nextRaw, width, point, reached, sourceEq, frameEq, nextShape, nextBound⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context, List.append_assoc, List.take_append])
+      | (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; obtain ⟨nextRaw, width, point, reached, sourceEq, frameEq, nextShape, nextBound⟩ := returned; rw [frameEq]; rfl)
       | rfl
-      | solve | simp_all [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context, List.append_assoc, List.take_append]
-      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); simp [Zkc.Construction.ArtifactBinding.Captures, inputs, capture0, ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context, List.append_assoc, List.take_append])
-      | (unfold RootReturns ProducerReturns; simp [inputs, capture0, ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried, context, ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context, List.cons_append, List.nil_append]))
+      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); rfl)
+      | (unfold RootReturns ProducerReturns; exact ⟨rfl, rfl, rfl, rfl, rfl⟩))
 
 end ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot

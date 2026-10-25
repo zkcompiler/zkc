@@ -16,7 +16,6 @@ open ZkcSecurity.Tools.ClaimConstruction
 
 set_option smartUnfolding false
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSectionVars false
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
   [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]
@@ -91,6 +90,7 @@ def ViewEqual : Prop :=
   (returnView.denote (viewMeaning (F := F) (G := G)) viewEnvironment).interpret identityOperations =
     .done (.cons false .nil)
 
+omit [Fintype F] [Inhabited F] [SampleableType F] [SampleableType G] in
 theorem proveView (_application : String) : ViewEqual (F := F) (G := G) := ⟨rfl, rfl⟩
 
 noncomputable def viewProperty (endpoint : Semantics) (application : String) :
@@ -117,6 +117,7 @@ noncomputable def propertyRegistry (endpoint : Semantics) (application : String)
   { exports := (builtinProperties (F := F) (G := G) endpoint application).exports ++
       [⟨⟨"user.view_equal", 0⟩, "zkc.property.local-return-view/0", some (viewProperty endpoint application)⟩] }
 
+omit [Fintype F] [Inhabited F] [SampleableType F] [SampleableType G] in
 /-- Named implication consumed by the existing derivation route and proof audit. -/
 theorem viewOfReturn {proposition : Prop} (same : proposition = ViewEqual (F := F) (G := G))
     (equation : (returnView.denote (viewMeaning (F := F) (G := G)) viewEnvironment).interpret

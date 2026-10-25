@@ -9,7 +9,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured

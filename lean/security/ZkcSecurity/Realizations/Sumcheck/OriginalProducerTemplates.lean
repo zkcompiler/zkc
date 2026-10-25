@@ -9,7 +9,6 @@ outputs, shape update and captured-prefix checkpoints retained. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -121,9 +120,6 @@ def producerRound (program : Structured.Program)
          constructor
          · unfold ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns
            refine ⟨_, _, _, _, rfl, ?_⟩
-           simp (disch := omega) [producerOutputs, SumcheckProverLaws.embedP,
-             Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-             List.getElem?_append_right, size, Nat.add_sub_cancel_left,
-             List.getElem?_cons_zero, List.getElem?_cons_succ]
+           simp (disch := omega) [producerOutputs, List.getElem?_append_right, size, List.getElem?_cons_zero, List.getElem?_cons_succ]
          · exact ⟨_, rfl⟩))
 end ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates

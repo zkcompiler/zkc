@@ -14,7 +14,6 @@ source requests and typed property/model registries. -/
 namespace ZkcSecurity.Examples.Subjects.Sumcheck
 open ZkcSecurity.Endpoint
 
-set_option linter.unusedSectionVars false
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
   [AddCommGroup G] [Module F G] [DecidableEq G]

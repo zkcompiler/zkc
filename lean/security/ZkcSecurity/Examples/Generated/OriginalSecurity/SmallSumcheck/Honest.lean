@@ -7,7 +7,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Honest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -30,7 +29,7 @@ theorem source (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : Primiti
       (Original.participant (ringModel F G) ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.program (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.routing handle) 1 (.cons (some input0) (.cons (some input0.sum) (.cons (some input2) (.cons (some handle) .nil)))) ⟨[], history⟩) := by
   unfold Original.participant
   rw [ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot.producer_source input0 input2 shape0 bounded0, ZkcExamples.Structured.Generated.Original.SmallSumcheck.participant_binding]
-  simp only [ZkcExamples.Structured.Generated.Original.SmallSumcheck.realized, ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.call0_binding, verifierCall, Original.fold_bind,
+  simp only [ZkcExamples.Structured.Generated.Original.SmallSumcheck.realized, Original.fold_bind,
     PIR.Process.bind_assoc, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
   apply (OriginalHonest.reduce ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.program.payload ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck 2
     (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot.routing handle) (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.routing handle) ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol (by change 0 ≠ 1; decide)
@@ -41,7 +40,7 @@ theorem source (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : Primiti
     (by simpa only [original0] using bounded0) (by omega)
   rw [original0] at checked0
   erw [checked0]
-  simp only [honest0, decide_true, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
+  simp only [honest0, decide_true, Zkc.Construction.ArtifactBinding.fold_done]
   exact .done ⟨reached0, rfl, rfl⟩
 
 theorem readback (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input2 1) (bounded0 : input0.length < indexLimit)

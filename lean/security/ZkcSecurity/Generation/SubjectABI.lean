@@ -261,12 +261,11 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "  producerSorts := fun " ++ producerDataName ++ " => producer_sorts" ++ String.join (producerArgumentPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n" ++
     "  validatorSorts := fun " ++ validatorDataName ++ " => validator_sorts" ++ String.join (publicPositions.map (fun index => " " ++ unpacked[index]!)) ++ "\n\n" ++
     clauseDeclarations ++
-    "set_option linter.unusedSimpArgs false in\n" ++
     "set_option backward.isDefEq.respectTransparency false in\n" ++
     "theorem representable_iff" ++ dataBinders ++ " :\n" ++
     "    inputsRepresentable " ++ present ++ " ↔ (" ++ representable ++ ") := by\n" ++
     "  change inputsRepresentable " ++ presentSource ++ " ↔ _\n" ++
-    "  simp [inputsRepresentable, inputRepresentable, sourceInputs, and_assoc]\n\n" ++
+    "  simp [inputsRepresentable, inputRepresentable, sourceInputs]\n\n" ++
     "theorem honestInput_iff" ++ dataBinders ++ " :\n" ++
     "    subject.HonestInput " ++ present ++ " ↔ (" ++ honestCondition ++ ") := by\n" ++
     "  exact (abi.honest_pack_iff " ++ call "data" n ++ ").trans\n" ++

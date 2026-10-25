@@ -122,28 +122,33 @@ def callbacksSource (program : Program) (output : Output)
       let params := " ".intercalate ((pattern.scope.zip printed.binders).map fun (slot, name) =>
         "(" ++ name ++ " : " ++ slotType naming slot ++ ")")
       let applied := app (name ++ "ReadableProcess (F := F) (G := G)") ("ctx" :: printed.binders)
-      text := text ++ "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++
-        "ReadableProcess (ctx : ProtocolContext) " ++ params ++ " :\n    " ++ processType naming (.outputs (out := definition.outputs)) ++
+      let readableParameters := explicitParameters ("(ctx : ProtocolContext) " ++ params)
+        ("ctx" :: printed.binders) printed.process
+      text := text ++ "noncomputable def " ++ name ++
+        "ReadableProcess " ++ readableParameters ++ " :\n    " ++ processType naming (.outputs (out := definition.outputs)) ++
         " :=\n" ++ printed.process ++ "\n\n" ++
-        "-- Reflexivity is a fallback when simplification leaves a definitionally equal goal.\n" ++
-        "set_option linter.unusedTactic false in\n" ++
-        "set_option linter.unusedSimpArgs false in\n" ++
-        "set_option linter.unreachableTactic false in\n" ++
         "theorem " ++ name ++ "_readable (ctx : ProtocolContext)\n" ++
         "    (" ++ (if (callbacks definition.body).isEmpty then "_distinct" else "distinct") ++
         " : RosterDistinct ctx " ++ toString role ++ " " ++ toString definition.roles.length ++ ") " ++ params ++ " :\n" ++
-        "    " ++ app (name ++ "Process (F := F) (G := G)") ("ctx" :: printed.binders) ++ " = " ++ applied ++ " := by\n" ++
-        "  unfold " ++ name ++ "Process " ++ name ++ "ReadableProcess\n"
+        "    " ++ app (name ++ "Process (F := F) (G := G)") ("ctx" :: printed.binders) ++ " = " ++ applied ++ " := by\n"
       if (callbacks definition.body).isEmpty then
-        text := text ++ "  rfl\n\n"
+        text := text ++ "  unfold " ++ name ++ "Process " ++ name ++ "ReadableProcess\n  rfl\n\n"
       else
-        for (_, i) in (callbacks definition.body).zipIdx do
+        -- Rewrite a local equation so simplification never consumes the goal
+        -- before the remaining definitional equality is checked by `exact`.
+        text := text ++ "  have equation := Eq.refl " ++
+          app (name ++ "Process (F := F) (G := G)") ("ctx" :: printed.binders) ++ "\n"
+        let references := expressionIdentifiers printed.process
+        let usedCallbacks := (callbacks definition.body).zipIdx.filter fun (_, i) =>
+          references.contains (name ++ "Callback" ++ toString i ++ "Process")
+        for (_, i) in usedCallbacks do
           text := text ++ "  have callback" ++ toString i ++ " := " ++ name ++ "Callback" ++ toString i ++
             "_function (F := F) (G := G) ctx distinct\n  unfold " ++ name ++ "Callback" ++ toString i ++
             "Body at callback" ++ toString i ++ "\n"
-        let equations := ", ".intercalate ((callbacks definition.body).zipIdx.map fun (_, i) =>
+        let equations := ", ".intercalate (usedCallbacks.map fun (_, i) =>
           "callback" ++ toString i)
-        text := text ++ "  simp only [" ++ equations ++ "]\n  all_goals rfl\n\n"
+        text := text ++ "  conv_rhs at equation => unfold " ++ name ++ "Process; simp only [" ++
+          equations ++ "]\n  exact equation\n\n"
       let masked := "maskValues (ctx.roles " ++ toString role ++ ") (ctx.mapScopes " ++ definitionName index ++ ".inputScopes) input"
       let args := definition.inputs.zipIdx.map fun (_, i) => app (paren masked ++ ".get") [positionText i]
       text := text ++ "noncomputable def " ++ name ++ "ReadableView (ctx : ProtocolContext)\n" ++

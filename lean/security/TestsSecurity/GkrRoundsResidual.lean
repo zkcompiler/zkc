@@ -6,7 +6,6 @@ set_option autoImplicit false
 set_option maxRecDepth 4000
 set_option maxHeartbeats 800000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 
 namespace TestsSecurity.GkrRoundsResidual
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
@@ -82,7 +81,7 @@ theorem missing_service :
   unfold runRound round
   rw [callback_source]
   unfold callback
-  simp only [GkrRoundsBindingHelpers.owned_append (F := ℚ) (G := ℚ)]
+  simp only []
   norm_num [ReplyScript.run, receive, script,
     PIR.Process.run, PIR.Process.bind, PIR.Execution.follow, ReplyScript.handler]
 
@@ -91,7 +90,7 @@ theorem missing_claim :
   unfold runRound round
   rw [callback_source]
   unfold callback
-  simp only [GkrRoundsBindingHelpers.owned_append (F := ℚ) (G := ℚ)]
+  simp only []
   norm_num [ReplyScript.run, receive, script,
     PIR.Process.run, PIR.Process.bind, PIR.Execution.follow, ReplyScript.handler]
 

@@ -19,7 +19,6 @@ open Zkc.Polynomial.Multilinear
 
 set_option backward.isDefEq.respectTransparency false
 set_option autoImplicit false
-set_option linter.unusedSimpArgs false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 noncomputable section
@@ -86,7 +85,7 @@ theorem fix_success {n : Nat} (xs : List F) (s : Table F (n + 1))
     rw [ofList?_length xs s decoded, Nat.pow_succ, Nat.mul_comm]
   obtain ⟨low, high⟩ := restrictValues_halves_length xs shape
   rw [fix, split_success xs s decoded]
-  simp only [PIR.Process.bind, Values.get_cons, Values.get]
+  simp only [PIR.Process.bind, Values.get]
   change invoke table interpolationsHelper
     (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil))) = _
   exact map_interpolate _ _ r (by omega) (by omega)
@@ -99,8 +98,7 @@ theorem fixGates_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
   rw [fixGates_equation]
   simp only [fixGates, fix_success _ _ decoded.1 capacity,
     fix_success _ _ decoded.2.1 capacity, fix_success _ _ decoded.2.2.1 capacity,
-    fix_success _ _ decoded.2.2.2 capacity, PIR.Process.bind, Values.get_cons,
-    Values.get, Environment.push, RawState.restrict, RawState.values]
+    fix_success _ _ decoded.2.2.2 capacity, PIR.Process.bind, Values.get, RawState.restrict, RawState.values]
 
 omit [DecidableEq F] in
 /-- Flat sums are in the same MSB-first order as the mathematical Boolean sum. -/
@@ -188,7 +186,7 @@ theorem round_success {n : Nat} (raw : RawState F) (s : State F (n + 1))
     ofList?_length _ _ dl0, ofList?_length _ _ dl1,
     ofList?_length _ _ dr0, ofList?_length _ _ dr1,
     mapped, Evaluation.mapShape, Evaluation.mapShapeRemaining, capacity, ite_true,
-    Finite.admitThen, PIR.Process.bind, get_there, Values.get_cons, Values.get, Environment.push]
+    Finite.admitThen, PIR.Process.bind, Values.get]
   rw [values_sum _ _ _ _ _ _ _ _ da0 dm0 dl0 dr0,
     values_sum _ _ _ _ _ _ _ _ da1 dm1 dl1 dr1,
     quadratics_sum _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ da0 da1 dm0 dm1 dl0 dl1 dr0 dr1,

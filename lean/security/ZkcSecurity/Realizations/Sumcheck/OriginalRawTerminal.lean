@@ -9,7 +9,6 @@ public import ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers
 and raw-vector overflow occur in source order, before the scalar comparison.
 The same polynomial restriction function is shared with the table family. -/
 set_option autoImplicit false
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws

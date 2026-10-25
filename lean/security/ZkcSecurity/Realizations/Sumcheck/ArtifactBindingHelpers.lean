@@ -9,7 +9,6 @@ sides. It preserves every stopped outcome, including index exhaustion. -/
 set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 1000000
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
@@ -81,10 +80,10 @@ def terminal (program : Structured.Program)
       (Domain.View.helper (ringModel F G) program SumcheckHelperBodies.checkHelper.name
         references [.data .boolean] environment) := by
   simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence,
-    Bind.bind, Pure.pure, Option.bind, instMonadOption]
+    Bind.bind, Pure.pure, Option.bind]
   rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).closed,
     SumcheckVerifierHelpers.closed_invoke_plain]
-  simp only [SumcheckHelperLaws.checkInputs]
+  simp only []
   cases computed : invoke (closedMeanings (F := F) (G := G) program.payload.definitions)
       SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.checkInputs entries point scalar) with
   | done result =>
@@ -95,12 +94,11 @@ def terminal (program : Structured.Program)
       have nominal := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.call_return program
         SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.checkInputs entries point scalar)
         (.cons value .nil) computed _ _ rfl rfl
-      simp only [SumcheckHelperBodies.checkHelper, List.map_cons, List.map_nil] at nominal
+      simp only [List.map_cons, List.map_nil] at nominal
       simp only [Domain.View.helper, read]
       rw [nominal]
-      simp only [computed, PIR.Process.interpret, PIR.Process.bind, Values.get, Values.present,
-        Original.fold, PIR.Process.interpretState, Domain.View.helper, read, nominal,
-        Domain.View.append, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty,
+      simp only [computed, PIR.Process.interpret, PIR.Process.bind, Values.present,
+        Original.fold, PIR.Process.interpretState, Domain.View.append, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty,
         List.map_cons, List.map_nil, beq_self_eq_true, ↓reduceIte]
       exact .done ⟨value, rfl, rfl⟩
   | halt reason =>
@@ -111,11 +109,11 @@ def terminal (program : Structured.Program)
       exact List.mem_map.mpr ⟨definition, member, signature⟩
     have nominal := helper_stopped program SumcheckHelperBodies.checkHelper
       (SumcheckHelperLaws.checkInputs entries point scalar) present _ rfl reason computed
-    simp only [SumcheckHelperBodies.checkHelper, List.map_cons, List.map_nil] at nominal
+    simp only [List.map_cons, List.map_nil] at nominal
     simp only [Domain.View.helper, read]
     rw [nominal]
     simp only [computed, PIR.Process.interpret, PIR.Process.bind, Original.fold,
-      PIR.Process.interpretState, Domain.View.helper, read, nominal]
+      PIR.Process.interpretState]
     exact .halt reason
   | call operation _ => exact nomatch operation
 

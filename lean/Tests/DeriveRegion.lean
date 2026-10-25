@@ -2,6 +2,7 @@ import Zkc.Source.DeriveRegion
 import Zkc.Source.DerivationLaws
 import Zkc.Source.Structured.Meaning
 
+-- Deliberately unused input binders exercise failed and state-restored proof search.
 set_option linter.unusedVariables false
 
 namespace Tests.DeriveRegion

@@ -199,7 +199,10 @@ def spine (assembly : Assembly) (realized : Bool) : String := Id.run do
       app (step.name ++ "Realized") ("(G := G)" :: step.parameters.map (·.name))
       else app step.name (step.arguments :: step.parameters.map (·.name))
     if realized && index + 1 == assembly.steps.length && assembly.identityReturn then tail := expression
-    else tail := expression ++ ".bind fun out" ++ toString index ++ " =>\n  " ++ tail
+    else
+      let name := "out" ++ toString index
+      let binder := if (expressionIdentifiers tail).contains name then name else "_" ++ name
+      tail := expression ++ ".bind fun " ++ binder ++ " =>\n  " ++ tail
   return tail
 
 /-- Congruence follows the normalized spine without unfolding a library call.

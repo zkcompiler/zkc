@@ -7,7 +7,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Honest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -34,7 +33,7 @@ theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat)
       (Original.participant (ringModel F G) ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.program (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.routing handle) 1 (.cons (some input0) (.cons (some input1) (.cons (some input0.sum) (.cons (some input1.sum) (.cons (some input4) (.cons (some handle) .nil)))))) ⟨[], history⟩) := by
   unfold Original.participant
   rw [ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot.producer_source input0 input1 input4 shape0 bounded0 shape1 bounded1, ZkcExamples.Structured.Generated.Original.TwoSums.participant_binding]
-  simp only [ZkcExamples.Structured.Generated.Original.TwoSums.realized, ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_binding, ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call1_binding, verifierCall, Original.fold_bind,
+  simp only [ZkcExamples.Structured.Generated.Original.TwoSums.realized, Original.fold_bind,
     PIR.Process.bind_assoc, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
   apply (OriginalHonest.reduce ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.program.payload ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.helper_bodies.sumcheck 4
     (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot.routing handle) (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.routing handle) ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol (by change 0 ≠ 1; decide)
@@ -57,7 +56,7 @@ theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat)
   erw [checked1]
   simp only [honest1, decide_true, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
   rw [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.combine]
-  simp only [both, Values.get, Option.bind, Option.map, Bool.true_and, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
+  simp only [both, Values.get, Option.bind, Option.map, Bool.true_and, Zkc.Construction.ArtifactBinding.fold_done]
   exact .done ⟨reached1, rfl, rfl⟩
 
 theorem readback (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input4 1) (bounded0 : input0.length < indexLimit) (shape1 : PrimitiveLibrary.HasShape input1 input4 1) (bounded1 : input1.length < indexLimit)

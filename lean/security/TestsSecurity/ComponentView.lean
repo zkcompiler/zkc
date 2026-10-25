@@ -13,6 +13,7 @@ Proof-only input conditions stay on the theorem, not the data API. -/
 namespace TestsSecurity.ComponentViewControls
 open Zkc.Source Zkc.Construction Zkc.Transcript
 open ZkcSecurity.FiatShamir.DomainReduction
+-- Negative tactic controls deliberately supply callbacks that must remain unexecuted.
 set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 variable {carriers : Structured.Carriers} {I : PIR.Signature}
@@ -59,6 +60,7 @@ end TestsSecurity.ComponentViewControls
 namespace TestsSecurity.EncodedComponentViewControls
 open Zkc.Source Zkc.Construction Zkc.Transcript
 open ZkcSecurity.FiatShamir.DomainReduction
+-- Negative tactic controls deliberately supply callbacks that must remain unexecuted.
 set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 variable {carriers : Structured.Carriers} {I : PIR.Signature}

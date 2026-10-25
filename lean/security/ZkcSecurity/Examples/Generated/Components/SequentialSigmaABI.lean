@@ -104,12 +104,11 @@ theorem source_clauses (values : subject.Inputs) :
     ∀ index isInput, subject.inputClause values index isInput :=
   Subject.no_input_clauses subject (by decide +kernel) values
 
-set_option linter.unusedSimpArgs false in
 set_option backward.isDefEq.respectTransparency false in
 theorem representable_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) (input6 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     inputsRepresentable (inputs input0 input1 input2 input3 input4 input5 input6) ↔ (True) := by
   change inputsRepresentable (sourceInputs (some input0) (some input1) (some input2) (some input3) (some input4) input5 input6) ↔ _
-  simp [inputsRepresentable, inputRepresentable, sourceInputs, and_assoc]
+  simp [inputsRepresentable, inputRepresentable, sourceInputs]
 
 theorem honestInput_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) (input6 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.HonestInput (inputs input0 input1 input2 input3 input4 input5 input6) ↔ (True) := by

@@ -396,7 +396,6 @@ theorem iterateM_constant [LawfulMonad m] {R β : Type} (observer : PIR.Outcome 
           continues
       · simp [onStops]
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- The ideal meaning returns only stops or results of its continuation: a
 function of the result that is constant on stops and on every continuation

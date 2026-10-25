@@ -10,7 +10,6 @@ public import Zkc.Source.Structured.ClosedProjection
 from the complete checked source table, including the nested scale calls. -/
 namespace ZkcExamples.Structured.MapCombination
 open Zkc.Source Zkc.Source.Structured MapCombinationViews
-set_option linter.unusedSimpArgs false
 set_option smartUnfolding false
 
 private theorem prepend_one {Value : Ty → Type} {types : List Ty} {type : Ty}
@@ -44,8 +43,8 @@ theorem formula_expansion {I : PIR.Signature} (sites : SiteObservations I)
         (invoke table scaleHelper (.cons t (.cons b .nil))).bind fun right =>
           .done (.cons (left.get .here - right.get .here + 3) .nil) := by
   simp only [formulaBody, scalarInputs, Region.denote, Evaluation.meaning,
-    Evaluation.operation, Op.results, Op.arguments, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_one, Environment.prepend, Environment.push, PIR.Process.bind, Nat.cast_ofNat]
+    Evaluation.operation, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get,
+    prepend_one, Environment.push, PIR.Process.bind, Nat.cast_ofNat]
 
 theorem scale_equation (s a : F) :
     invoke (program.payload.tables F G).closed scaleHelper (.cons s (.cons a .nil)) =
@@ -85,7 +84,7 @@ theorem map_equation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unused
     (by intro index bound
         have boundB : index < b.length := by rw [sameB]; exact bound
         have boundUnused : index < unusedRow.length := by rw [sameUnused]; exact bound
-        simp only [inputs, mapSpec, MapSpec.arguments, Evaluation.mapRowArguments,
+        simp only [inputs, mapSpec, Evaluation.mapRowArguments,
           List.getElem?_eq_getElem bound, List.getElem?_eq_getElem boundB,
           List.getElem?_eq_getElem boundUnused, tuple, scalarInputs, Option.getD_some]
         rfl)
@@ -114,9 +113,9 @@ theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     mapBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
       Evaluation.denoteMap table mapSpec (inputs s a t b unusedRow unusedScalar) := by
-  simp only [mapBody, inputs, mapSpec, MapSpec.arguments, List.map_cons, List.map_nil, ↓reduceIte, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
-    Environment.prepend, Environment.push, PIR.Process.bind]
+  simp only [mapBody, inputs, mapSpec, Region.denote, Evaluation.meaning, Evaluation.operation,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
+    Environment.push]
   exact singleton_return _
 
 theorem map_invocation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
@@ -131,7 +130,7 @@ theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
     wrapperBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
       (sites.mark "s0").bind (fun _ => invoke table mapHelper (inputs s a t b unusedRow unusedScalar)) := by
   simp only [wrapperBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
     Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
@@ -143,7 +142,7 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
     ownerBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
       (sites.mark "s0").bind (fun _ => invoke table wrapperHelper (inputs s a t b unusedRow unusedScalar)) := by
   simp only [ownerBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
     Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
@@ -192,7 +191,7 @@ theorem observed_expansion (s : F) (a : List F) (t : F) (b unusedRow : List F) (
     owner_projection.denote_present _ program.payload.tables_adequate]
   set_option smartUnfolding true in
     rw [owner_body]
-    simp only [PIR.Process.bind_assoc, PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
+    simp only [PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
 
 
 /-- The complete retained protocol preserves both reached source marks. -/

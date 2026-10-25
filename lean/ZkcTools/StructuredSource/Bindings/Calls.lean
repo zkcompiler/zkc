@@ -24,10 +24,14 @@ def headCallSource {laws : List LawKey} {callees : List CalleeKey} {scope : Scop
   let arguments := valuesText (argumentsText naming names args)
   let continuation : String := (processText naming .outputs ("result" :: names) next 2).run' (scope.length + 1)
   let applied := " ".intercalate ("ctx" :: names)
-  return "set_option linter.unusedVariables false in\n" ++
-    "noncomputable def " ++ name ++ "CallContext (ctx : ProtocolContext) : ProtocolContext :=\n  ctx.enter " ++ quoted site ++ " " ++ natsText roles ++ "\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "CallInput (ctx : ProtocolContext) " ++ params ++ " : " ++ inputType ++ " :=\n  " ++ arguments ++ "\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "Continuation (ctx : ProtocolContext) " ++ params ++ " (result : " ++ outputType ++ ") :\n  " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
+  let inputParameters := explicitParameters ("(ctx : ProtocolContext) " ++ params)
+    ("ctx" :: names) arguments
+  let continuationParameters := explicitParameters
+    ("(ctx : ProtocolContext) " ++ params ++ " (result : " ++ outputType ++ ")")
+    ("ctx" :: "result" :: names) continuation
+  return "noncomputable def " ++ name ++ "CallContext (ctx : ProtocolContext) : ProtocolContext :=\n  ctx.enter " ++ quoted site ++ " " ++ natsText roles ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "CallInput " ++ inputParameters ++ " : " ++ inputType ++ " :=\n  " ++ arguments ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "Continuation " ++ continuationParameters ++ " :\n  " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
     "theorem " ++ name ++ "_call (ctx : ProtocolContext) " ++ params ++ " :\n  " ++ name ++ "Process (F := F) (G := G) " ++ applied ++ " =\n    (invokeProtocol (payload.plainProtocolTable F G) " ++ signatureText key.signature ++ "\n      (" ++ name ++ "CallContext ctx) ((" ++ name ++ "CallContext ctx).roles " ++ toString key.role ++ ")\n      (" ++ name ++ "CallInput " ++ applied ++ ")).bind (" ++ name ++ "Continuation " ++ applied ++ ") := by\n  kernel_rfl\n\n"
 
 /-- A printer-side cursor through a linear prefix. Branches are deliberately
@@ -82,11 +86,16 @@ def callSplitSource {laws : List LawKey} {callees : List CalleeKey} {scope : Sco
   let continuation : String := (processText naming .outputs ("result" :: frameNames) next 2).run' (cursor.scope.length + 1)
   let callInput := valuesText (argumentsText naming frameNames args)
   let applied := " ".intercalate ("ctx" :: initialNames)
+  let setupParameters := explicitParameters ("(ctx : ProtocolContext) " ++ params)
+    ("ctx" :: initialNames) prefixText
+  let continuationParameters := explicitParameters
+    ("(ctx : ProtocolContext) (frame : " ++ name ++ "SetupFrame (F := F) (G := G)) (result : " ++ valuesType naming key.signature.outputs true ++ ")")
+    ["ctx", "frame", "result"] continuation
   return "abbrev " ++ name ++ "SetupFrame := " ++ frameType ++ "\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "Setup (ctx : ProtocolContext) " ++ params ++ " : PIR.Process (participantInterface F G) (" ++ name ++ "SetupFrame (F := F) (G := G)) :=\n" ++ prefixText ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "Setup " ++ setupParameters ++ " : PIR.Process (participantInterface F G) (" ++ name ++ "SetupFrame (F := F) (G := G)) :=\n" ++ prefixText ++ "\n\n" ++
     "def " ++ name ++ "SetupInput (frame : " ++ name ++ "SetupFrame (F := F) (G := G)) : " ++ valuesType naming key.signature.inputs true ++ " :=\n  " ++ callInput ++ "\n\n" ++
     "def " ++ name ++ "SetupContext (ctx : ProtocolContext) : ProtocolContext := ctx.enter " ++ quoted found ++ " " ++ natsText roles ++ "\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "SetupContinuation (ctx : ProtocolContext) (frame : " ++ name ++ "SetupFrame (F := F) (G := G)) (result : " ++ valuesType naming key.signature.outputs true ++ ") : " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "SetupContinuation " ++ continuationParameters ++ " : " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
     "theorem " ++ name ++ "_setup_split (ctx : ProtocolContext) " ++ params ++ " :\n  " ++ name ++ "Process (F := F) (G := G) " ++ applied ++ " =\n    (" ++ name ++ "Setup " ++ applied ++ ").bind (fun frame =>\n      (invokeProtocol (payload.plainProtocolTable F G) " ++ signatureText key.signature ++ " (" ++ name ++ "SetupContext ctx) ((" ++ name ++ "SetupContext ctx).roles " ++ toString key.role ++ ") (" ++ name ++ "SetupInput frame)).bind (" ++ name ++ "SetupContinuation ctx frame)) := by\n  unfold " ++ name ++ "Process " ++ name ++ "Setup " ++ name ++ "SetupInput " ++ name ++ "SetupContinuation " ++ name ++ "SetupContext\n  simp only [PIR.Process.bind_assoc, PIR.Process.bind]\n  all_goals rfl\n\n"
 
 /-- Generate a full prefix/frame/loop/continuation equation. This is syntax
@@ -117,6 +126,11 @@ def repeatSplitSource {laws : List LawKey} {callees : List CalleeKey} {scope : S
   let capturesText := valuesText (compsText naming frameNames captures)
   let inputType := valuesType naming (.index :: (spec.state ++ spec.captures)) true
   let stateType := valuesType naming spec.state true
+  let prefixParameters := explicitParameters ("(ctx : ProtocolContext) " ++ params)
+    ("ctx" :: initialNames) prefixText
+  let afterParameters := explicitParameters
+    ("(ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (result : " ++ stateType ++ ")")
+    ["ctx", "frame", "result"] continuation
   return "abbrev " ++ name ++ "Frame := " ++ frameType ++ "\n\n" ++
     "def " ++ name ++ "MakeFrame " ++ frameParams ++ " : " ++ name ++ "Frame (F := F) (G := G) :=\n  " ++ valuesText cursor.names ++ "\n\n" ++
     "def " ++ name ++ "Count (frame : " ++ name ++ "Frame (F := F) (G := G)) : Option Nat :=\n  " ++ compText naming frameNames count ++ "\n\n" ++
@@ -124,9 +138,9 @@ def repeatSplitSource {laws : List LawKey} {callees : List CalleeKey} {scope : S
     "def " ++ name ++ "FirstInput (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) : " ++ inputType ++ " :=\n  .cons (some 0) ((maskValues (ctx.roles " ++ toString role ++ ") (ctx.mapScopes (" ++ repeatText spec ++ ").stateScopes) " ++ paren stateText ++ ").append " ++ paren capturesText ++ ")\n\n" ++
     "noncomputable def " ++ name ++ "First (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) : PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  " ++ name ++ "Callback ctx (" ++ name ++ "FirstInput ctx frame)\n\n" ++
     "noncomputable def " ++ name ++ "Resume (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (count : Nat) (result : " ++ stateType ++ ") : PIR.Process (participantInterface F G) " ++ stateType ++ " :=\n  Repeat.loop " ++ repeatText spec ++ " ctx (ctx.roles " ++ toString role ++ ") " ++ paren capturesText ++ " (" ++ name ++ "Callback ctx) 1 count (maskValues (ctx.roles " ++ toString role ++ ") (ctx.mapScopes (" ++ repeatText spec ++ ").stateScopes) result)\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "Prefix (ctx : ProtocolContext) " ++ params ++ " :\n  PIR.Process (participantInterface F G) (" ++ name ++ "Frame (F := F) (G := G)) :=\n" ++ prefixText ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "Prefix " ++ prefixParameters ++ " :\n  PIR.Process (participantInterface F G) (" ++ name ++ "Frame (F := F) (G := G)) :=\n" ++ prefixText ++ "\n\n" ++
     "noncomputable def " ++ name ++ "Loop (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) :\n  PIR.Process (participantInterface F G) (" ++ valuesType naming spec.state true ++ ") :=\n  " ++ loop ++ "\n\n" ++
-    "set_option linter.unusedVariables false in\nnoncomputable def " ++ name ++ "After (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (result : " ++ valuesType naming spec.state true ++ ") :\n  " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
+    "noncomputable def " ++ name ++ "After " ++ afterParameters ++ " :\n  " ++ processType naming (.outputs (out := outputs)) ++ " :=\n" ++ continuation ++ "\n\n" ++
     "theorem " ++ name ++ "_first (ctx : ProtocolContext) (frame : " ++ name ++ "Frame (F := F) (G := G)) (count : Nat)\n" ++
     "    (countEq : " ++ name ++ "Count (F := F) (G := G) frame = some (count + 1))\n" ++
     "    (inside : ((" ++ repeatText spec ++ ").roles.map ctx.roles).contains (ctx.roles " ++ toString role ++ ") = true)\n" ++

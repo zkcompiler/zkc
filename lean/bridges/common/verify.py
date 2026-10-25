@@ -205,6 +205,18 @@ def render_certificate(data, request, proposal):
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
     unfolds = ['sourceProcess', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
 
+    # Guard distribution is needed only when the selected role executes a guard.
+    guarded = any(op[0] == 'guard' and op[2] == request['role'] for op in data[8])
+    expansion = ["  repeat' first", '    | (apply PIR.Process.call_congr; intro reply)']
+    if guarded:
+        expansion += ['    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _',
+                      '       rw [PIR.Process.bind_ite]', '       simp only [↓reduceIte])']
+    expansion.append('    | rfl')
+    if guarded:
+        expansion.append('    | fail_if_no_progress congr 1')
+    expansion_proof = '\n'.join(expansion)
+    group_rule = '    (add safe tactic (by abel1))\n' if contract.group else ''
+
     source_data = render(data, 'GeneratedCertificate.Data').split('namespace ', 1)[1]
     external_imports = ''.join('import ' + module + '\n' for module in sorted({
         contract.properties[prop].module for prop in request['properties']
@@ -215,15 +227,12 @@ import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Abel
 import Mathlib.Tactic.FailIfNoProgress
 import Lean
+import Aesop
 
 /-! Generated candidate: source identity alone proves no semantic property. -/
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1500000
-set_option linter.unusedSimpArgs false
-set_option linter.defProp false
-set_option linter.unusedTactic false
-set_option linter.unreachableTactic false
 
 namespace {source_data}
 namespace GeneratedCertificate
@@ -265,25 +274,19 @@ theorem source_expansion {contract.binders} :
   change (imported.program.denote (scalarMeaning F {generic}) id {request['role']}
     (inputs {parameters} {contract.arguments}).get).bind PIR.Process.done = _
   rw [PIR.Process.bind_done]
-  repeat' first
-    | (apply PIR.Process.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
-       rw [PIR.Process.bind_ite]
-       simp only [↓reduceIte])
-    | rfl
-    | fail_if_no_progress congr 1
+{expansion_proof}
 
 {('omit [DecidableEq F] in' if contract.group else '')}
 theorem correspondence {contract.binders} :
     sourceProcess {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
-  dsimp +instances [{', '.join(unfolds)}]
-  {('simp only [PIR.Process.bind_ite, PIR.Process.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
-  all_goals repeat' first
-    | rfl
-    | (apply PIR.Process.call_congr; intro reply)
-    | (solve | ring1)
-    | (solve | abel1)
-    | fail_if_no_progress congr 1
+  aesop (rule_sets := [-builtin, -default]) (config := {{ enableSimp := false }})
+    (add norm tactic (by fail_if_no_progress dsimp +instances [{', '.join(unfolds)}, PIR.Process.bind{', terminal, publicChecks, value' if contract.composed else ''}]))
+    (add norm tactic (by rw [PIR.Process.bind_ite]))
+    (add safe tactic (by apply PIR.Process.call_congr; intro reply))
+    (add safe tactic (by rfl))
+    (add safe tactic (by apply funext; intro reply))
+    (add safe tactic (by ring1))
+{group_rule}    (add 50% tactic (by fail_if_no_progress congr 1))
 
 theorem contract : VerifierContract {cert_args} :=
   ⟨fun {contract.arguments} => ⟨(source_expansion {parameters} {contract.arguments}).trans
@@ -298,7 +301,7 @@ theorem contract : VerifierContract {cert_args} :=
         result += f'\n/-- Premises: {"; ".join(registered.premises)}. -/\n'
         application = (f'{registered.consumer} (contract {parameters})' if registered.consumer
                        else f'(contract {parameters}).{registered.theorem}')
-        result += f'noncomputable def {name} {context}:= {application}\n'
+        result += f'theorem {name} {context}: type_of% ({application}) := {application}\n'
     result += '\nend GeneratedCertificate\n\n'
     result += 'run_cmd do\n'
     result += '  for name in [' + ', '.join('`GeneratedCertificate.' + name for name in names) + '] do\n'
@@ -359,7 +362,7 @@ theorem approvedContract : VerifierContract wiring {('publicChecks ' if contract
         finite = item.context or ('[Fintype F] ' if item.experiment.endswith('uniform-field/0') else '')
         application = (f'{item.consumer} (approvedContract {parameters})' if item.consumer
                        else f'(approvedContract {parameters}).{item.theorem}')
-        result += f'\nnoncomputable def {name} {finite}:= {application}\n'
+        result += f'\ntheorem {name} {finite}: type_of% ({application}) := {application}\n'
     result += '\nend ExpectedRequest\n\nrun_cmd do\n'
     result += '  for name in [' + ', '.join('`ExpectedRequest.' + name for name in names) + '] do\n'
     result += '''    let _ ← Lean.getConstInfo name
