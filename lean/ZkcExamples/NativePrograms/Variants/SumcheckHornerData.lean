@@ -14,7 +14,7 @@ namespace ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 open Zkc.Source.Common.Native
 
 def snapshot : Snapshot where
-  source := "sha256:076e4559f78bcbd920152b5f8104471030e8bdb80a84e8bb9bd894e73d68a87b"
+  source := "sha256:31e509c4f77f9027aaff8172db7335841261efe34039294d30d411454afb07f8"
   symbol := "s14h73756d636865636b5f666f726d7314h486f726e657250726f746f636f6c"
   roles := ["role00000000", "role00000001"]
   inputs := [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]
