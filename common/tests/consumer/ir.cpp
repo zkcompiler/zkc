@@ -1,14 +1,21 @@
 #include "zkc/Dialect/IR.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Interfaces/Collection.h"
 int main() {
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
   if (registry.getDialectAllocator("table") ||
-      registry.getDialectAllocator("claim"))
+      registry.getDialectAllocator("claim") ||
+      registry.getDialectAllocator("entry") ||
+      !registry.getDialectAllocator("exec"))
     return 1;
   mlir::MLIRContext context(registry);
+  context.getOrLoadDialect<zkc::exec::ExecDialect>();
+  auto outcome = zkc::exec::OutcomeType::get(&context, {});
+  if (!outcome.getPayload().empty())
+    return 5;
   context.getOrLoadDialect<zkc::algebra::AlgebraDialect>();
   auto vector = zkc::algebra::FieldVectorType::get(&context, "bls12-381.fr");
   auto collection = mlir::cast<zkc::CollectionTypeInterface>(vector);

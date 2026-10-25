@@ -37,6 +37,60 @@ arithmetic value a reduction wrapper is not required. Conversely, naming an
 object a claim does not establish the correspondence between that object and
 the intended mathematical statement.
 
+## Retained subjects and owner boundaries
+
+One checked closed source subject binds bodies and static arguments, logical
+schemas, roles, source occurrences, relation declarations, actual selectors and
+selected acceptance/completion. The [source interface](formats/entry.md) keeps
+that association. A definition's name, dimensions or purpose label alone does
+not identify its actual input. Equal-typed public leaves remain ordered.
+
+Formula identity includes its transitive body closure and logical schemas.
+Applications retain the actual role-local selectors and output projection.
+Masks, scopes, natural versus field count interpretation and selected clauses
+remain inputs or parts of the selected definition. Expansion retains the
+original declaration and application mapping. Inlining, layout changes,
+mutation and specialization invalidate derived views unless an independently
+checked transformation reconstructs their correspondence to the same original.
+Cached analysis and copied attributes cannot renew that correspondence.
+
+Relation owns the predicate; Constraint owns its assignment domain, equations,
+AIR row/boundary scopes or R1CS ONE/public-prefix layout, and projections. An
+imported asset has one immutable definition and an explicit predicate
+interpretation, rather than a second handwritten formula that may drift.
+The existing [constraint contracts](domains/constraints.md) remain authoritative
+while their compiler owners are migrated.
+
+An opening claim also binds the actual commitment operand, scheme, setup,
+polynomial or table interpretation, coordinates and claimed value. Generic
+Data that describes such a claim is unverified. The actual check and final
+acceptance must remain connected. Polynomial openings and authenticated-vector
+queries have different guarantees; their [polynomial commitment](../../libraries/commitments/kzg/README.md) and
+[oracle](domains/oracles.md) contracts determine the interpretation.
+
+## Exact explicit-table predicates
+
+For a finite ordered table `T` and queries `Q` carrying Boolean `active` flags:
+
+```text
+Membership(T,Q) := forall q in Q, q.active implies q.value in T
+IndexedRead(T,i,v) := i < length(T) and T[i] = v
+```
+
+Positions are exact natural indices in the admitted native index domain.
+Duplicates in either input are allowed; membership consumes no multiplicity.
+An empty query list is true. An active query against an empty table is false;
+an inactive query imposes no value constraint. An out-of-range read is false.
+The [table library](../../libraries/relations/table/README.md) supplies exact
+finite scans and retained predicate applications. Selection-vector construction
+checks equal lengths before traversal. A malformed reached descriptor stops;
+it does not shorten the query list or return false.
+
+A field-valued reciprocal balance is a verifier equation, not this predicate.
+Its randomized argument requires its own commitment, challenge and security
+law. The [executable control](../../examples/projects/table/README.md) exhibits
+a successful reciprocal equation on a false membership instance.
+
 ## Source encoding adequacy
 
 An external representation may reorder public values and add auxiliary witness
@@ -50,7 +104,14 @@ T.holds(f(s),z) → ∃ w, S.holds(s,w) ∧ C(s,w,z).
 
 The second law quantifies over every satisfying target assignment, including
 assignments an honest witness generator never emits. Together they imply
-`Valid(S,s) ↔ Valid(T,f(s))`. Auxiliary values need not be unique, and witness
+`Valid(S,s) ↔ Valid(T,f(s))`. A positive existential encoding does not automatically expose an exact Boolean:
+encoding `P(x)` as `exists z, C(x,z)` does not justify negating `C` on a chosen
+assignment to decide `not P(x)`. A Boolean consumer requires a law for both
+returned truth values, with actual input/output projections and every satisfying
+target assignment. A protocol verifier encoding names that verifier; its
+cryptographic reduction to the source predicate is a separate law.
+
+Auxiliary values need not be unique, and witness
 recovery need not be executable. An importer claiming stronger knowledge or
 efficient extraction properties must state those additional requirements.
 

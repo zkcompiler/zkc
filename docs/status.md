@@ -266,6 +266,18 @@ set 4096 descriptor keys per environment including fixed Boolean descriptors,
 64 delimiter holes and 8 MiB output; lowered SDK limits are rechecked on retained
 projects. This does not supply an LSP server or formatter.
 
+Source Entry originals use checked Func/CF control with explicit Data/Exec
+boundaries. Fallible operations expose return-or-stop outcomes; their independent
+reader checks actual edges, carried values and terminal propagation. The
+[table relation library](../libraries/relations/table/README.md) supplies exact
+finite membership and indexed-read consumers through the current VM, including
+masks and duplicate/empty cases. Its AIR reciprocal control is a verifier-equation
+comparison, not a new lookup proof system. The independent Lean evaluator laws
+do not establish a native correspondence theorem. The current structured Lean
+import profile refuses the aggregate query type and finite-fold realization;
+the [formal scope](../lean/docs/spec/table-relations.md) records the missing
+source connection separately from native execution support.
+
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
 Original PIR retains all closed declaration contracts and exact relation

@@ -246,6 +246,33 @@ proof Right=Run{
         refuses(compareOriginal(left.entry(), *candidate),
                 "source.correspondence");
       });
+  cases.run(
+      "equal-typed public leaves retain their ordered source association", [&] {
+        auto checked = original(R"(module sample;
+      relation Equal(statement left:bool,statement right:bool){return left == right;}
+      protocol Run roles(P,V)(left:bool@V,right:bool@V)->(accepted:bool@V)
+        spec{target selected=Equal(in.left,in.right) accept out.accepted;}
+        {return(accepted=left);}
+      proof Demo=Run{prover P;verifier V;public{left,right};accept accepted;target selected;construction authored;})");
+        auto module = parse(checked.bytes());
+        protocol_ir::StatementOp statement;
+        module->walk([&](protocol_ir::StatementOp op) { statement = op; });
+        require(statement && statement.getInputs().size() == 2,
+                "missing ordered public leaves");
+        auto first = statement.getInputs()[0];
+        statement.setOperand(0, statement.getInputs()[1]);
+        statement.setOperand(1, first);
+        // The types still agree, but the owned target fixes each actual port.
+        refuses(compareOriginal(checked.entry(), *module), "target.admission");
+        auto interface = take(json::parse(checked.interfaceJson()));
+        auto *publicInputs =
+            interface.getAsObject()->getObject("job")->getArray("public");
+        require(publicInputs && publicInputs->size() == 2,
+                "missing public interface coordinates");
+        std::swap((*publicInputs)[0], (*publicInputs)[1]);
+        refuses(readInterface(checked.bytes(), printJson(interface)),
+                "source.interface");
+      });
   cases.run("source proof compilation retains exact Entry selections", [&] {
     auto checked = original(source);
     const auto &view = checked.interface();

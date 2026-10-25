@@ -139,6 +139,7 @@ import Zkc.Semantics.Observation
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
 import Zkc.Semantics.StateInterpretation
+import Zkc.Semantics.TableRelation
 import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
 import Zkc.Source.Common.Import
@@ -422,6 +423,7 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import Tests.TableRelation
 import Tests.TargetElaboration
 import ZkcExamples.Construction.ChaumPedersenProof
 import ZkcExamples.Construction.ChaumPedersenProofBodies
@@ -749,6 +751,7 @@ import ZkcExamples.Structured.UnitStateData
 import ZkcExamples.StructuredPrograms
 import ZkcTools.CommonSource.Reference
 import ZkcTools.JsonSupport
+import ZkcTools.ProofAccount
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bindings.Callbacks
 import ZkcTools.StructuredSource.Bindings.Calls

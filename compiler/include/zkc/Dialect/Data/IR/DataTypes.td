@@ -24,4 +24,10 @@ def Sequence : TypeDef<DataDialect, "Sequence",
   let assemblyFormat = "`<` $elementType `>`";
   let genVerifyDecl = 1;
 }
+def DataValue : TypeDef<DataDialect, "Value"> {
+  let mnemonic = "value";
+  let summary = "nominal source value with an exact logical schema";
+  let parameters = (ins StringRefParameter<"Canonical logical schema">:$schema);
+  let assemblyFormat = "`<` $schema `>`";
+}
 #endif

@@ -16,6 +16,7 @@ that all native behavior already has a Lean model.
 - [Structured import](spec/structured-source.md): checked original protocol-stage
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.
+- [Exact tables](spec/table-relations.md): complete Boolean membership and indexed-read evaluator laws.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.

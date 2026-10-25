@@ -1,0 +1,65 @@
+module table_relation;
+use zkc::vector::{Vector};
+use zkc::sequence::{Sequence};
+
+// Selection is part of the statement, including inactive query values. The
+// predicate ignores their value but the source association does not drop them.
+pub struct Query<F: Field> { pub active: bool, pub value: F }
+
+// Zip admission checks both lengths before traversal, even for empty inputs.
+pub fn selected_queries<F: Field>(values: Vector<F>, active: Sequence<bool>) -> Sequence<Query<F>> effects(stop) where () {
+  return zkc::finite::collect(zkc::finite_domain::zip(zkc::vector::elements(values), zkc::sequence::elements(active)),
+    fn(pair) => Query<F>{active: pair.1, value: pair.0});
+}
+
+pub math fn contains<F: Field>(table: Vector<F>, value: F) -> bool where () {
+  return zkc::finite_math::fold(zkc::vector::elements(table), false,
+    fn(found, row) => found || row == value);
+}
+
+// Exact finite membership. Repeated queries may reuse the same table row;
+// this is not equality of multisets and does not infer natural multiplicities.
+pub math fn membership<F: Field>(table: Vector<F>, queries: Sequence<Query<F>>) -> bool where () {
+  return zkc::finite_math::fold(zkc::sequence::elements(queries), true,
+    fn(valid, query) => valid && (!query.active || contains(table, query.value)));
+}
+
+// Scanning indices makes an out-of-range coordinate false without a partial
+// read. Every actual access is justified by the finite-domain item binder.
+pub math fn indexed_read<F: Field>(table: Vector<F>, position: index, value: F) -> bool where () {
+  return zkc::finite_math::fold(zkc::vector::indices(table), false,
+    fn(found, coordinate) => found || (coordinate == position && zkc::vector::at(table, coordinate) == value));
+}
+
+pub relation Membership<F: Field>(parameter table: Vector<F>, statement queries: Sequence<Query<F>>) {
+  return membership(table, queries);
+}
+
+pub relation IndexedRead<F: Field>(parameter table: Vector<F>, statement position: index, statement value: F) {
+  return indexed_read(table, position, value);
+}
+
+// Ordered invocation boundary for protocol consumers. Mathematical evaluation
+// is total; installing and running its finite computation can stop.
+pub fn check_membership<F: Field>(table: Vector<F>, queries: Sequence<Query<F>>) -> bool effects(stop) where () {
+  return membership(table, queries);
+}
+pub fn check_read<F: Field>(table: Vector<F>, position: index, value: F) -> bool effects(stop) where () {
+  return indexed_read(table, position, value);
+}
+
+// The verifier uses its actual role-local table. An external argument can
+// replace this scan only under a separately stated encoding or security law.
+pub protocol CheckMembership<F: Field> roles(P,V)
+    (table: Vector<F> @V, queries: Sequence<Query<F>> @V) -> (accepted: bool @V)
+    where () spec { target selected_rows = Membership<F>(in.table, in.queries) accept out.accepted; }
+{
+  return check_membership(table, queries);
+}
+
+pub protocol CheckRead<F: Field> roles(P,V)
+    (table: Vector<F> @V, position: index @V, value: F @V) -> (accepted: bool @V)
+    where () spec { target selected_read = IndexedRead<F>(in.table, in.position, in.value) accept out.accepted; }
+{
+  return check_read(table, position, value);
+}

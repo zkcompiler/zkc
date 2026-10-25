@@ -122,4 +122,21 @@ def Data_DimOp : DataExpression<"dim", [DeclareOpInterfaceMethods<MathematicalOp
                        I64Attr:$axis);
   let results = (outs UI64:$output);
 }
+// Nominal source construction is distinct from the represented Variant carrier.
+// Descriptor/schema correspondence is checked by the source reader.
+class DataLogicalOperation<string name> : Op<DataDialect, name> {
+  let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$descriptor);
+  let results = (outs Variadic<AnyType>:$outputs);
+}
+def Data_ConstructOp : DataLogicalOperation<"construct">;
+def Data_UnpackOp : DataLogicalOperation<"unpack">;
+def Data_ProjectOp : DataLogicalOperation<"project">;
+include "mlir/Interfaces/ControlFlowInterfaces.td"
+def Data_MatchOp : Op<DataDialect, "match", [Terminator,
+    DeclareOpInterfaceMethods<BranchOpInterface>]> {
+  let arguments = (ins DataValue:$input, Variadic<AnyType>:$captures,
+                       StrArrayAttr:$alternatives);
+  let successors = (successor VariadicSuccessor<AnySuccessor>:$arms);
+  let hasVerifier = 1;
+}
 #endif

@@ -1,8 +1,9 @@
 # Architecture
 
 The `.zkc` frontend checks application functions and participant protocols.
-Entry control uses standard MLIR functions and structured control, with an
-`entry` dialect for typed value assembly, numerical calls and deployments.
+Entry control uses standard MLIR functions and CFG branches, with Data for
+logical value assembly and Exec for fallible numerical calls and deployments.
+Exec outcomes explicitly distinguish returned values from terminal stops.
 Protocol IR (PIR) retains participant mathematics and interaction. Both numerical
 Entry helpers and participant computation use the existing Kernel, physical
 lowering and VM; the Host does not implement a second arithmetic interpreter.
@@ -13,7 +14,7 @@ lowering and VM; the Host does not implement a second arithmetic interpreter.
 explicit .zkc modules + Assets
               │
            frontend
-              ├── Entry functions → func/scf + entry operations → zkc.host/0
+              ├── Entry functions → func/cf + Data/Exec boundaries → zkc.host/0
               │                            │                         │
               │                      numerical helpers              │
               └── Protocol IR              │                  Entry Host
@@ -66,7 +67,7 @@ judgment.
 | Language | `compiler/include/zkc/Language`: explicit modules/Assets, checked definitions, static application and Entry closure |
 | Relation | `compiler/include/zkc/Relation`: R1CS/AIR data, relation bundles, staged predicates, normalization and evaluation |
 | Program | `compiler/include/zkc/Program`: executable model, codec and structural admission |
-| IR | `compiler/include/zkc/Dialect`: mathematical and Entry dialects, interfaces and mandatory verification |
+| IR | `compiler/include/zkc/Dialect`: mathematical, Data and Exec dialects, interfaces and mandatory verification |
 | Translation | `compiler/include/zkc/Translation`: Language emission/comparison, relation import and checked program export |
 | Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
 | Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |

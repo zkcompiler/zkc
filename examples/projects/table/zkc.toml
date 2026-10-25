@@ -1,0 +1,13 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+
+[dependencies]
+table = { workspace = "relations.table" }
+collections = { workspace = "core.collections" }
+primitive-collections = { workspace = "core.primitives.collections" }
+air = { workspace = "relations.air" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"
