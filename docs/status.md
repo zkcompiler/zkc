@@ -73,7 +73,10 @@ active scope with an explicit outcome. Symbol rewriting and malformed-target
 controls cover that boundary. The finite-premise checker maps actual data
 operands separately from the scope and retains entry-argument assumptions in
 CFG bodies. Mathematical closure, invoking the premise checker and realization
-comparison remain consumer duties; the scoped readers still
+comparison remain consumer duties. Source-closure admission checks actual
+mathematical bodies, selected modules, call premises and logical affine
+ownership before realization, including malformed dormant definitions. The
+scoped readers still
 refuse unresolved mathematical requests. This operation has not yet replaced
 the default `kernel.call` path. See
 [mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).

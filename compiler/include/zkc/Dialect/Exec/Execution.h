@@ -31,6 +31,16 @@ readExecutionDefinitions(mlir::Operation *symbolTable, bool physical);
 /// correspondence, and its result cannot be published unexpanded.
 llvm::Expected<program::LocalDefinitions>
 readSourceExecutionDefinitions(mlir::Operation *symbolTable);
+/// Admit the current scoped source closure before mathematical realization.
+/// In addition to ordinary helpers, permits typed exec.compute with supported
+/// native logical ports, after checking actual mathematical bodies and call
+/// premises. Reuses logical affine/resource admission with transient derived
+/// signatures; no model or signature-only source declaration is returned.
+/// Checks every immediate scoped/math definition and selected computation unit,
+/// including dormant ones. Other declarations belong to the enclosing profile.
+/// This does not admit ordered finite requests, establish source correspondence
+/// or permit unresolved calls in an executable artifact.
+llvm::Error verifySourceExecutionClosure(mlir::Operation *symbolTable);
 /// Independently compare current actual CFG with admitted native definitions.
 /// Allows SSA renaming; checks all actual bodies and bindings without calling
 /// the reconstruction reader or replaying emission. No source theorem is

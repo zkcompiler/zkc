@@ -376,5 +376,196 @@ int main() {
     refuses("finite-bound", context,
             [&] { return finite::verifyCallPreconditions(call(*module)); });
   });
+
+  auto closureSource = changed(
+      source, "-> !O {",
+      "-> !O attributes {no_inline, runtime.origin=[\"caller\", []]} {");
+  auto checkClosure = [&](StringRef text, bool valid) {
+    ScopedDiagnosticHandler quiet(&context,
+                                  [](Diagnostic &) { return success(); });
+    auto module = parse(text);
+    auto checked = protocol::verifySourceExecutionClosure(*module);
+    if (valid) {
+      if (checked)
+        throw std::runtime_error(llvm::toString(std::move(checked)));
+    } else {
+      require(bool(checked), "invalid source closure accepted");
+      require(namesIdentifier(llvm::toString(std::move(checked)),
+                              "execution-source-closure"),
+              "wrong source closure refusal");
+    }
+    return module;
+  };
+  cases.run(
+      "source closure admits actual mathematical calls before realization",
+      [&] {
+        auto module = checkClosure(closureSource, true);
+        auto native = protocol::readSourceExecutionDefinitions(*module);
+        require(!native, "unresolved math escaped through native extraction");
+        llvm::consumeError(native.takeError());
+        auto executable = protocol::readLocalExecution(*module, false);
+        require(!executable, "unresolved math escaped executable admission");
+        llvm::consumeError(executable.takeError());
+      });
+  cases.run("source closure admits a selected unit's actual entry", [&] {
+    checkClosure(
+        changed(closureSource, "callee = @sum", "callee = @selected::@entry"),
+        true);
+  });
+  cases.run(
+      "source closure is rechecked after actual mathematical body mutation",
+      [&] {
+        auto module = checkClosure(closureSource, true);
+        auto helper = module->lookupSymbol<func::FuncOp>("sum");
+        OpBuilder builder(helper.getBody().front().getTerminator());
+        func::CallOp::create(builder, helper.getLoc(), "sum",
+                             helper.getResultTypes(), helper.getArguments());
+        auto checked = protocol::verifySourceExecutionClosure(*module);
+        require(bool(checked), "recursive post-check helper accepted");
+        llvm::consumeError(std::move(checked));
+      });
+  cases.run("source closure checks dormant selected units", [&] {
+    checkClosure(
+        changed(
+            closureSource,
+            "%v = algebra.field_multiply %a, %b : (!F, !F) -> !F\n      return",
+            "%v = func.call @entry(%a, %b) : (!F, !F) -> !F\n      return"),
+        false);
+  });
+  cases.run(
+      "source closure checks dormant selected IR before typed inspection", [&] {
+        auto module = checkClosure(closureSource, true);
+        auto selected = module->lookupSymbol<ModuleOp>("selected");
+        selected.lookupSymbol<func::FuncOp>("entry")->setAttr(
+            "function_type", TypeAttr::get(IntegerType::get(&context, 1)));
+        ScopedDiagnosticHandler quiet(&context,
+                                      [](Diagnostic &) { return success(); });
+        auto checked = protocol::verifySourceExecutionClosure(*module);
+        require(
+            bool(checked) && namesIdentifier(llvm::toString(std::move(checked)),
+                                             "execution-source-closure"),
+            "malformed selected signature escaped source closure admission");
+      });
+  cases.run("source closure checks dormant selected SSA types", [&] {
+    checkClosure(changed(closureSource,
+                         "func.func @entry(%a: !F, %b: !F) -> !F",
+                         "func.func @entry(%a: !F, %b: !F) -> i1"),
+                 false);
+  });
+  cases.run("source closure refuses dormant unadmitted mathematics", [&] {
+    checkClosure(
+        changed(
+            closureSource,
+            "%v = algebra.field_multiply %a, %b : (!F, !F) -> !F\n    return",
+            "%v = func.call @product(%a, %b) : (!F, !F) -> !F\n    return"),
+        false);
+  });
+  cases.run("source admission keys cannot shadow an actual definition", [&] {
+    checkClosure(changed(closureSource, "func.func private @product",
+                         "func.func private @_mathematical_admission_0"),
+                 true);
+  });
+  cases.run("source closure permits only checked entry assumptions", [&] {
+    auto text = changed(
+        bounded, "attributes {data.preconditions = [#data.index_bound<4,1,0>",
+        "attributes {no_inline, runtime.origin=[\"caller\", []], "
+        "data.preconditions = [#data.index_bound<4,1,0>");
+    text = changed(text,
+                   "    cf.cond_br %condition, ^invoke, ^via\n  ^via:\n    "
+                   "cf.br ^invoke\n  ^invoke:\n",
+                   "");
+    checkClosure(text, true);
+    checkClosure(changed(text, "(%scope, %left, %right, %i)",
+                         "(%scope, %unrelated, %right, %j)"),
+                 false);
+    checkClosure(changed(text, "#data.index_bound<4,1,0>, ", ""), false);
+    checkClosure(changed(text, ", #data.equal_extent<1,0,2,0>", ""), false);
+  });
+  cases.run(
+      "source closure rejects helper recursion even with an unused result",
+      [&] {
+        checkClosure(changed(closureSource, "    %call = \"exec.compute\"",
+                             "    %unused = func.call @caller(%scope, %a, %b) "
+                             "{runtime.site=\"recurse\"} : (!S, !F, !F) -> !O\n"
+                             "    %call = \"exec.compute\""),
+                     false);
+      });
+  cases.run("source closure refuses unsupported invocation attributes", [&] {
+    checkClosure(changed(closureSource, "callee = @sum, site = \"sum\"",
+                         "callee = @sum, site = \"sum\", authority=true"),
+                 false);
+  });
+  cases.run(
+      "source closure cannot turn stopped outcomes into successful results",
+      [&] {
+        checkClosure(
+            changed(closureSource,
+                    "%failure = \"exec.failed\"(%cause) : (!exec.stop) -> !O",
+                    "%failure = \"exec.returned\"(%a) : (!F) -> !O"),
+            false);
+      });
+  cases.run("source helper return remains uncharged", [&] {
+    checkClosure(changed(closureSource, "\"exec.returned\"(%v) : (!F)",
+                         "\"exec.complete\"(%scope, %v) : (!S, !F)"),
+                 false);
+  });
+  cases.run(
+      "source closure does not grant executable ports to formal quotients",
+      [&] {
+        checkClosure(R"mlir(
+!S = !runtime.scope
+!Q = !poly.quotient<12289, 8>
+!O = !exec.outcome<(!Q)>
+module {
+  func.func private @identity(%x: !Q) -> !Q { return %x : !Q }
+  func.func @caller(%scope: !S, %x: !Q) -> !O attributes {no_inline, runtime.origin=["caller", []]} {
+    %call = "exec.compute"(%scope, %x) {callee=@identity, site="identity"} : (!S, !Q) -> !O
+    "exec.dispatch"(%call)[^done, ^failed] : (!O) -> ()
+  ^done(%value: !Q):
+    %returned = "exec.returned"(%value) : (!Q) -> !O
+    return %returned : !O
+  ^failed(%stop: !exec.stop):
+    %failure = "exec.failed"(%stop) : (!exec.stop) -> !O
+    return %failure : !O
+  }
+})mlir",
+                     false);
+      });
+  for (bool duplicate : {false, true})
+    cases.run(
+        duplicate ? "source closure refuses duplicated logical affine return"
+                  : "source closure preserves a single logical affine return",
+        [&] {
+          std::string text = R"mlir(
+!S = !runtime.scope
+!C = !runtime.capability<"resource_unit:Guard">
+!O = !exec.outcome<(!C)>
+module {
+  func.func @caller(%scope: !S, %value: !C) -> !O attributes {no_inline, runtime.origin=["caller", []]} {
+    %returned = "exec.returned"(%value) : (!C) -> !O
+    return %returned : !O
+  }
+})mlir";
+          if (duplicate) {
+            text =
+                changed(text, "!exec.outcome<(!C)>", "!exec.outcome<(!C, !C)>");
+            text =
+                changed(text, "(%value) : (!C)", "(%value, %value) : (!C, !C)");
+          }
+          checkClosure(text, !duplicate);
+        });
+  cases.run("source closure with only mathematics keeps its owning admission",
+            [&] {
+              checkClosure(R"mlir(module {
+      func.func private @identity(%x: i1) -> i1 { return %x : i1 }
+    })mlir",
+                           true);
+            });
+  cases.run("source closure rejects a missing subject", [&] {
+    auto result = protocol::verifySourceExecutionClosure(nullptr);
+    require(bool(result) && namesIdentifier(llvm::toString(std::move(result)),
+                                            "execution-source-closure"),
+            "missing closure subject accepted");
+  });
   return cases.result();
 }

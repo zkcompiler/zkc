@@ -3,6 +3,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
@@ -68,15 +69,59 @@ public:
 };
 class Reader {
   Operation *module;
-  bool physical, source;
+  bool physical, source, mathematicalCalls;
   unsigned remaining = 1000000, next = 0;
   llvm::DenseSet<Operation *> active, visited;
   std::string problem;
+  SmallVector<LocalRealization> mathematicalSignatures;
+  llvm::DenseMap<Operation *, std::string> mathematicalNames;
+  unsigned nextMathematics = 0;
 
 public:
-  Reader(Operation *module, bool physical, bool source = false)
-      : module(module), physical(physical), source(source) {}
+  Reader(Operation *module, bool physical, bool source = false,
+         bool mathematicalCalls = false)
+      : module(module), physical(physical), source(source),
+        mathematicalCalls(mathematicalCalls) {}
   bool isSource() const { return source; }
+  bool computation(exec::ComputeOp call, std::string &name) {
+    if (!source || !mathematicalCalls ||
+        failed(finite::verifyCallPreconditions(call)))
+      return fail(
+          "unresolved mathematical invocation outside source admission");
+    SymbolTableCollection symbols;
+    auto helper = call.resolveCallee(symbols);
+    if (!helper)
+      return fail("mathematical invocation has no actual definition");
+    // The outer closure check has admitted every actual math definition/unit.
+    // Derive only a private temporary key and signature for logical ownership
+    // checking; neither is source authority or an executable declaration.
+    auto found = mathematicalNames.find(helper);
+    if (found != mathematicalNames.end()) {
+      name = found->second;
+      return true;
+    }
+    LocalRealization signature;
+    do {
+      if (!charge())
+        return false;
+      signature.name =
+          "_mathematical_admission_" + std::to_string(nextMathematics++);
+    } while (SymbolTable::lookupSymbolIn(module, signature.name));
+    for (bool input : {true, false}) {
+      auto ports = input ? helper.getArgumentTypes() : helper.getResultTypes();
+      for (Type port : ports) {
+        std::string spelling;
+        if (!type(port, spelling))
+          return false;
+        (input ? signature.inputs : signature.outputs)
+            .push_back(std::move(spelling));
+      }
+    }
+    name = signature.name;
+    mathematicalNames.try_emplace(helper, name);
+    mathematicalSignatures.push_back(std::move(signature));
+    return true;
+  }
   bool helper(func::CallOp call) {
     auto function = dyn_cast_or_null<func::FuncOp>(
         SymbolTable::lookupSymbolIn(module, call.getCallee()));
@@ -147,9 +192,10 @@ public:
         isa<runtime::ScopeType>(function.getArgument(0).getType()) &&
         function.getFunctionType().getNumResults() == 1 &&
         isa<exec::OutcomeType>(function.getFunctionType().getResult(0)) &&
-        attributes(function,
-                   {"sym_name", "function_type", "sym_visibility", "no_inline",
-                    "runtime.origin", "runtime.region"}) &&
+        attributes(function, {"sym_name", "function_type", "sym_visibility",
+                              "no_inline", "runtime.origin", "runtime.region",
+                              "data.preconditions"}) &&
+        (mathematicalCalls || !function->hasAttr("data.preconditions")) &&
         (regionBody
              ? bool(function->getAttrOfType<UnitAttr>("runtime.region")) &&
                    !function->hasAttr("runtime.origin")
@@ -553,6 +599,17 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
           !results(values, record.outputs))
         return false;
       body.push_back({apply.getSite().str(), std::move(record)});
+    } else if (auto compute = dyn_cast<exec::ComputeOp>(op)) {
+      program::LocalApply record;
+      if (compute.getScope() != scope ||
+          !reader.computation(compute, record.callee) ||
+          !names(compute.getInputs(), record.inputs))
+        return reader.fail("invalid source mathematical invocation");
+      SmallVector<Value> values;
+      if (!dispatch(compute.getOutcome(), values) ||
+          !results(values, record.outputs))
+        return false;
+      body.push_back({compute.getSite().str(), std::move(record)});
     } else if (auto call = dyn_cast<func::CallOp>(op)) {
       program::LocalApply record;
       auto site = call->getAttrOfType<StringAttr>("runtime.site");
@@ -723,7 +780,9 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
         !visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
   if (source) {
-    if (auto e = admitNativeLocalDefinitions(result))
+    if (mathematicalCalls && result.functions.empty())
+      return result;
+    if (auto e = admitNativeLocalDefinitions(result, mathematicalSignatures))
       return std::move(e);
     return result;
   }
@@ -756,5 +815,44 @@ readSourceExecutionDefinitions(Operation *symbolTable) {
     return error("execution-cfg", "invalid source execution definition scope");
   return Reader(symbolTable, /*physical=*/false, /*source=*/true)
       .run(/*mixed=*/true);
+}
+Error verifySourceExecutionClosure(Operation *symbolTable) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable, true)))
+    return error("execution-source-closure", "invalid source definition scope");
+  SmallVector<Operation *> definitions;
+  unsigned remaining = 1000000;
+  for (Operation &op : symbolTable->getRegion(0).front()) {
+    if (isa<func::FuncOp, data::DomainOp>(op))
+      definitions.push_back(&op);
+    if (auto unit = dyn_cast<ModuleOp>(op)) {
+      if (!unit->hasAttr("exec.computation"))
+        continue;
+      // The enclosing source profile has not verified this nested symbol
+      // table. Bound and verify its actual IR before querying typed signatures
+      // or mathematical premises, including for dormant selected units.
+      if (unit.walk<WalkOrder::PreOrder>([&](Operation *) {
+                if (!remaining)
+                  return WalkResult::interrupt();
+                --remaining;
+                return WalkResult::advance();
+              })
+              .wasInterrupted() ||
+          failed(verify(unit)) ||
+          failed(mathematical::verifyComputationUnit(unit)))
+        return error("execution-source-closure",
+                     "invalid selected computation unit");
+    }
+  }
+  // Include scoped entry premises and actual ordinary/mathematical call sites,
+  // as well as the plain mathematical definitions checked by formation.
+  if (failed(finite::verifyDefinitionClosure(symbolTable, definitions)))
+    return error("execution-source-closure",
+                 "source data premises do not hold");
+  auto admitted = Reader(symbolTable, /*physical=*/false, /*source=*/true,
+                         /*mathematicalCalls=*/true)
+                      .run(/*mixed=*/true);
+  if (!admitted)
+    return error("execution-source-closure", toString(admitted.takeError()));
+  return Error::success();
 }
 } // namespace zkc::protocol

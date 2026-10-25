@@ -151,6 +151,18 @@ Realization occurs in the borrowed scope without adding a helper frame. Reached
 admission, allocation and first-stop behavior remain ordered execution duties.
 The prepared native profile must refuse an unresolved mathematical invocation.
 
+The source-closure admission API checks all immediate scoped and mathematical
+definitions, including dormant definitions and selected computation modules.
+Selected modules undergo bounded structural verification before typed inspection
+and mathematical closure admission. It checks declared entry preconditions and
+their discharge at each actual call, then checks logical affine ownership with
+private signatures derived from the admitted mathematical bodies. These
+temporary signatures are not returned as executable declarations or accepted
+from metadata. This admission permits mathematical calls with supported native
+logical ports; formal polynomial/quotient invocation ports and ordered finite
+requests still require their own realization. Source-equation correspondence,
+candidate comparison and executable extraction remain separate checks.
+
 ## Scoped native instruction profile
 
 The local execution writer and reconstruction reader connect a bounded Func/CF
