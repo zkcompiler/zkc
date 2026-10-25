@@ -20,14 +20,16 @@ mlir::OwningOpRef<mlir::ModuleOp>
 proposeStructuredComputation(mlir::Block &formula, llvm::ArrayRef<bool> rowwise,
                              StructuredResult result);
 
-/// Apply upstream CSE/DCE to the scalar region. A candidate must be read again
-/// afterwards, and after any subsequent mutation. No persisted approval bit.
+/// Apply upstream elementwise fusion and scalar-region CSE/DCE. Read a
+/// candidate again afterwards, and after any subsequent mutation. No persisted
+/// approval bit.
 mlir::LogicalResult optimizeStructuredComputation(mlir::ModuleOp candidate);
 
 /// Independently read the actual candidate's complete schema, tensor axes,
 /// iteration kind, seed, ports, scalar expression and returned value. Compare
-/// scalar DAGs by ordered labelled bisimulation, allowing sharing/dead-code
-/// changes but no unsupported algebraic identities. Never calls the producer.
+/// the composed pointwise scalar DAG by ordered labelled bisimulation, allowing
+/// map/reduction fusion and sharing/dead-code changes but no unsupported
+/// algebraic identities. Never calls the producer or fusion transformation.
 mlir::LogicalResult verifyStructuredComputation(mlir::Block &formula,
                                                 llvm::ArrayRef<bool> rowwise,
                                                 StructuredResult result,

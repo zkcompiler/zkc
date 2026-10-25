@@ -1,12 +1,14 @@
 #include "zkc/Transforms/StructuredComputation.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/CSE.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -106,159 +108,190 @@ bool equivalent(const ring::Expression &source,
   return true;
 }
 
-struct Readback {
-  func::FuncOp function;
-  linalg::GenericOp generic;
-  Value term;
-  Operation *combiner = nullptr;
-};
-// Read a bounded, complete packet. All values below are actual candidate SSA.
-// In particular, no metadata declares which tensor supplies a dimension or
-// which scalar value the function returns.
-FailureOr<Readback> read(ModuleOp candidate, const Signature &sig,
-                         ArrayRef<bool> rowwise, StructuredResult result) {
-  unsigned remaining = workLimit;
-  auto scan = candidate->walk([&](Operation *op) {
-    uint64_t cost = 1 + op->getNumOperands() + op->getNumResults();
-    if (cost > remaining)
-      return WalkResult::interrupt();
-    remaining -= cost;
-    return WalkResult::advance();
-  });
-  if (scan.wasInterrupted() || failed(verify(candidate)) ||
-      !candidate->getAttrs().empty() ||
+// Reject nested or oversized packets before invoking recursive MLIR services.
+// The admitted profile has only a module, a function and scalar generic bodies.
+bool boundedPacket(ModuleOp candidate) {
+  if (!candidate || !candidate.getBodyRegion().hasOneBlock() ||
       !llvm::hasSingleElement(*candidate.getBody()))
-    return failure();
+    return false;
   auto function = dyn_cast<func::FuncOp>(candidate.getBody()->front());
-  Type output =
-      result == StructuredResult::Map ? Type(sig.lanes) : Type(sig.field);
-  if (!function || function.isExternal() || !function.getBody().hasOneBlock() ||
-      !attrs(function, {"sym_name", "function_type"}) ||
-      function.getFunctionType() !=
-          FunctionType::get(candidate.getContext(), sig.inputs, {output}))
-    return failure();
-  auto &body = function.front();
-  auto cursor = body.begin();
-  auto take = [&]() -> Operation * {
-    if (cursor == body.end())
-      return nullptr;
-    return &*cursor++;
+  if (!function || !function.getBody().hasOneBlock())
+    return false;
+  uint64_t remaining = workLimit;
+  auto charge = [&](Operation &op) {
+    uint64_t cost = 1 + op.getNumOperands() + op.getNumResults();
+    if (cost > remaining || op.getNumSuccessors())
+      return false;
+    remaining -= cost;
+    return true;
   };
-  Value initial;
-  if (result == StructuredResult::Map) {
-    auto zero = dyn_cast_or_null<arith::ConstantIndexOp>(take());
-    auto dim = dyn_cast_or_null<tensor::DimOp>(take());
-    auto empty = dyn_cast_or_null<tensor::EmptyOp>(take());
-    if (!zero || zero.value() != 0 || !attrs(zero, {"value"}) || !dim ||
-        !dim->getAttrs().empty() ||
-        dim.getSource() != body.getArgument(sig.firstRow) ||
-        dim.getIndex() != zero.getResult() || !empty ||
-        !empty->getAttrs().empty() || empty.getType() != sig.lanes ||
-        empty.getDynamicSizes() != ValueRange{dim.getResult()})
-      return failure();
-    initial = empty.getResult();
-  } else {
-    auto zero = dyn_cast_or_null<algebra::ConstantFieldOp>(take());
-    auto seed = dyn_cast_or_null<tensor::FromElementsOp>(take());
-    if (!zero || zero.getValue() != "0" || !attrs(zero, {"value"}) ||
-        zero.getType() != sig.field || !seed || !seed->getAttrs().empty() ||
-        seed.getType() != RankedTensorType::get({}, sig.field) ||
-        seed.getElements() != ValueRange{zero.getResult()})
-      return failure();
-    initial = seed.getResult();
+  for (Operation &op : function.front()) {
+    if (!charge(op))
+      return false;
+    if (auto generic = dyn_cast<linalg::GenericOp>(op)) {
+      if (!generic.getRegion().hasOneBlock())
+        return false;
+      for (Operation &scalar : generic.getRegion().front())
+        if (!charge(scalar) || scalar.getNumRegions())
+          return false;
+    } else if (op.getNumRegions()) {
+      return false;
+    }
   }
-  auto generic = dyn_cast_or_null<linalg::GenericOp>(take());
-  if (!generic ||
-      !attrs(generic,
-             {"indexing_maps", "iterator_types", "operandSegmentSizes"}) ||
-      generic.getInputs() != body.getArguments() ||
-      generic.getOutputs() != ValueRange{initial} ||
-      generic.getNumResults() != 1 ||
-      generic.getResult(0).getType() != initial.getType() ||
-      !generic.getRegion().hasOneBlock())
-    return failure();
-  auto maps = generic.getIndexingMapsArray();
-  if (maps.size() != rowwise.size() + 1)
-    return failure();
-  auto identity = AffineMap::getMultiDimIdentityMap(1, candidate.getContext());
-  auto scalar = AffineMap::get(1, 0, {}, candidate.getContext());
-  for (auto [i, row] : llvm::enumerate(rowwise))
-    if (maps[i] != (row ? identity : scalar))
-      return failure();
-  if (maps.back() != (result == StructuredResult::Map ? identity : scalar) ||
-      generic.getIteratorTypesArray() !=
-          ArrayRef<utils::IteratorType>{result == StructuredResult::Map
-                                            ? utils::IteratorType::parallel
-                                            : utils::IteratorType::reduction})
-    return failure();
-  auto &region = generic.getRegion().front();
-  if (region.getNumArguments() != rowwise.size() + 1 || region.empty() ||
-      llvm::any_of(region.getArgumentTypes(),
-                   [&](Type t) { return t != sig.field; }))
-    return failure();
-  auto yield = dyn_cast<linalg::YieldOp>(region.back());
-  if (!yield || yield.getNumOperands() != 1 || !yield->getAttrs().empty())
-    return failure();
-  Value term = yield.getOperand(0);
-  Operation *combiner = nullptr;
-  auto accumulator = region.getArguments().back();
-  if (result == StructuredResult::Sum) {
-    auto add = term.getDefiningOp<algebra::FieldAddOp>();
-    if (!add || add->getBlock() != &region || add->getNextNode() != yield ||
-        !add->getAttrs().empty() || add.getOperand(0) != accumulator ||
-        !accumulator.hasOneUse())
-      return failure();
-    term = add.getOperand(1);
-    combiner = add;
-  } else if (!accumulator.use_empty()) {
-    return failure();
-  }
-  // Admit every scalar operation, including unused values; reject captures.
-  auto expression = algebra::describeRingExpression(region, ValueRange{term});
-  if (!expression) {
-    consumeError(expression.takeError());
-    return failure();
-  }
-  auto used = expression->usedInputs({0});
-  if (!used) {
-    consumeError(used.takeError());
-    return failure();
-  }
-  if (llvm::is_contained(*used, unsigned(rowwise.size())))
-    return failure();
-  Value returned = generic.getResult(0);
-  if (result == StructuredResult::Sum) {
-    auto extract = dyn_cast_or_null<tensor::ExtractOp>(take());
-    if (!extract || !extract->getAttrs().empty() ||
-        extract.getTensor() != returned || !extract.getIndices().empty())
-      return failure();
-    returned = extract.getResult();
-  }
-  auto ret = dyn_cast_or_null<func::ReturnOp>(take());
-  if (!ret || !ret->getAttrs().empty() ||
-      ret.getOperands() != ValueRange{returned} || cursor != body.end())
-    return failure();
-  return Readback{function, generic, term, combiner};
+  return true;
 }
 
-OwningOpRef<func::FuncOp> extract(Readback readback) {
-  auto &body = readback.generic.getRegion().front();
-  SmallVector<Type> inputs(body.getArgumentTypes());
-  inputs.pop_back();
-  OpBuilder builder(readback.function.getContext());
-  OwningOpRef<func::FuncOp> function(func::FuncOp::create(
-      readback.function.getLoc(), "scalar",
-      builder.getFunctionType(inputs, {readback.term.getType()})));
-  auto *block = function->addEntryBlock();
-  builder.setInsertionPointToEnd(block);
-  IRMapping mapping;
-  mapping.map(body.getArguments().drop_back(), block->getArguments());
-  for (Operation &op : body.without_terminator())
-    if (&op != readback.combiner)
-      builder.clone(op, mapping);
-  func::ReturnOp::create(builder, readback.function.getLoc(),
-                         mapping.lookup(readback.term));
-  return function;
+// Read and compose the actual pointwise SSA graph. Tensor values map to their
+// element formulas; this interpretation is valid only under the separately
+// checked common-extent premise. There are no producer correspondence labels.
+OwningOpRef<func::FuncOp> read(ModuleOp candidate, const Signature &sig,
+                               StructuredResult result) {
+  if (!boundedPacket(candidate) || failed(verify(candidate)) ||
+      !candidate->getAttrs().empty())
+    return {};
+  auto function = cast<func::FuncOp>(candidate.getBody()->front());
+  Type output =
+      result == StructuredResult::Map ? Type(sig.lanes) : Type(sig.field);
+  if (!attrs(function, {"sym_name", "function_type"}) ||
+      function.getFunctionType() !=
+          FunctionType::get(candidate.getContext(), sig.inputs, {output}))
+    return {};
+  OpBuilder builder(candidate.getContext());
+  SmallVector<Type> scalarInputs(sig.inputs.size(), sig.field);
+  OwningOpRef<func::FuncOp> scalar(
+      func::FuncOp::create(function.getLoc(), "scalar",
+                           builder.getFunctionType(scalarInputs, {sig.field})));
+  auto *target = scalar->addEntryBlock();
+  builder.setInsertionPointToEnd(target);
+  auto &body = function.front();
+  llvm::DenseMap<Value, Value> terms;
+  for (auto [from, to] : llvm::zip(body.getArguments(), target->getArguments()))
+    terms[from] = to;
+  Value zeroIndex, extent, empty, zeroField, seed, reduction, extracted;
+  auto identity = AffineMap::getMultiDimIdentityMap(1, candidate.getContext());
+  auto broadcast = AffineMap::get(1, 0, {}, candidate.getContext());
+  unsigned generics = 0;
+  for (Operation &op : body) {
+    if (auto zero = dyn_cast<arith::ConstantIndexOp>(op)) {
+      if (zeroIndex || zero.value() != 0 || !attrs(zero, {"value"}))
+        return {};
+      zeroIndex = zero;
+    } else if (auto dim = dyn_cast<tensor::DimOp>(op)) {
+      if (extent || !zeroIndex || !dim->getAttrs().empty() ||
+          dim.getSource() != body.getArgument(sig.firstRow) ||
+          dim.getIndex() != zeroIndex)
+        return {};
+      extent = dim;
+    } else if (auto init = dyn_cast<tensor::EmptyOp>(op)) {
+      if (empty || !extent || !init->getAttrs().empty() ||
+          init.getType() != sig.lanes ||
+          init.getDynamicSizes() != ValueRange{extent})
+        return {};
+      empty = init;
+    } else if (auto zero = dyn_cast<algebra::ConstantFieldOp>(op)) {
+      if (zeroField || zero.getValue() != "0" || !attrs(zero, {"value"}) ||
+          zero.getType() != sig.field)
+        return {};
+      zeroField = zero;
+    } else if (auto init = dyn_cast<tensor::FromElementsOp>(op)) {
+      if (seed || !zeroField || !init->getAttrs().empty() ||
+          init.getType() != RankedTensorType::get({}, sig.field) ||
+          init.getElements() != ValueRange{zeroField})
+        return {};
+      seed = init;
+    } else if (auto generic = dyn_cast<linalg::GenericOp>(op)) {
+      ++generics;
+      auto iterators = generic.getIteratorTypesArray();
+      bool sum = iterators ==
+                 ArrayRef<utils::IteratorType>{utils::IteratorType::reduction};
+      if (reduction ||
+          (!sum &&
+           iterators !=
+               ArrayRef<utils::IteratorType>{utils::IteratorType::parallel}) ||
+          (sum && result != StructuredResult::Sum) ||
+          !attrs(generic,
+                 {"indexing_maps", "iterator_types", "operandSegmentSizes"}) ||
+          generic.getNumResults() != 1)
+        return {};
+      Value destination = sum ? seed : empty;
+      if (!destination || generic.getOutputs() != ValueRange{destination} ||
+          generic.getResult(0).getType() != destination.getType())
+        return {};
+      auto maps = generic.getIndexingMapsArray();
+      auto inputs = generic.getInputs();
+      auto &region = generic.getRegion().front();
+      if (maps.size() != inputs.size() + 1 ||
+          maps.back() != (sum ? broadcast : identity) ||
+          region.getNumArguments() != inputs.size() + 1 || region.empty() ||
+          llvm::any_of(region.getArgumentTypes(),
+                       [&](Type t) { return t != sig.field; }))
+        return {};
+      IRMapping mapping;
+      for (auto [index, input] : llvm::enumerate(inputs)) {
+        bool row = input.getType() == sig.lanes;
+        if ((!row && input.getType() != sig.field) ||
+            maps[index] != (row ? identity : broadcast) ||
+            !terms.contains(input))
+          return {};
+        mapping.map(region.getArgument(index), terms.lookup(input));
+      }
+      auto yield = dyn_cast<linalg::YieldOp>(region.back());
+      if (!yield || yield.getNumOperands() != 1 || !yield->getAttrs().empty())
+        return {};
+      Value term = yield.getOperand(0);
+      Operation *combiner = nullptr;
+      auto accumulator = region.getArguments().back();
+      if (sum) {
+        auto add = term.getDefiningOp<algebra::FieldAddOp>();
+        if (!add || add->getBlock() != &region || add->getNextNode() != yield ||
+            !add->getAttrs().empty() || add.getOperand(0) != accumulator ||
+            !accumulator.hasOneUse())
+          return {};
+        term = add.getOperand(1);
+        combiner = add;
+      } else if (!accumulator.use_empty()) {
+        return {};
+      }
+      // This independently admits every scalar operation, including dead ones,
+      // and rejects values captured from the containing function or other maps.
+      auto expression =
+          algebra::describeRingExpression(region, ValueRange{term});
+      if (!expression) {
+        consumeError(expression.takeError());
+        return {};
+      }
+      auto used = expression->usedInputs({0});
+      if (!used) {
+        consumeError(used.takeError());
+        return {};
+      }
+      if (llvm::is_contained(*used, unsigned(inputs.size())))
+        return {};
+      for (Operation &scalarOp : region.without_terminator())
+        if (&scalarOp != combiner)
+          builder.clone(scalarOp, mapping);
+      terms[generic.getResult(0)] = mapping.lookup(term);
+      if (sum)
+        reduction = generic.getResult(0);
+    } else if (auto extract = dyn_cast<tensor::ExtractOp>(op)) {
+      if (extracted || !reduction || !extract->getAttrs().empty() ||
+          extract.getTensor() != reduction || !extract.getIndices().empty())
+        return {};
+      extracted = extract;
+      terms[extracted] = terms.lookup(reduction);
+    } else if (auto ret = dyn_cast<func::ReturnOp>(op)) {
+      if (&op != &body.back() || !generics || !ret->getAttrs().empty() ||
+          ret.getNumOperands() != 1 || !terms.contains(ret.getOperand(0)) ||
+          (result == StructuredResult::Sum &&
+           (!extracted || ret.getOperand(0) != extracted)))
+        return {};
+      func::ReturnOp::create(builder, ret.getLoc(),
+                             terms.lookup(ret.getOperand(0)));
+    } else {
+      return {};
+    }
+  }
+  return scalar;
 }
 } // namespace
 
@@ -283,53 +316,65 @@ OwningOpRef<ModuleOp> proposeStructuredComputation(Block &formula,
                            builder.getFunctionType(sig->inputs, {output}));
   auto *entry = function.addEntryBlock();
   builder.setInsertionPointToEnd(entry);
-  Value initial;
-  if (result == StructuredResult::Map) {
-    auto extent = tensor::DimOp::create(
-        builder, location, entry->getArgument(sig->firstRow), int64_t(0));
-    initial = tensor::EmptyOp::create(builder, location,
-                                      ArrayRef<int64_t>{ShapedType::kDynamic},
-                                      sig->field, ValueRange{extent});
-  } else {
-    auto zero =
-        algebra::ConstantFieldOp::create(builder, location, sig->field, "0");
-    initial = tensor::FromElementsOp::create(
-        builder, location, RankedTensorType::get({}, sig->field),
-        ValueRange{zero});
-  }
+  auto extent = tensor::DimOp::create(
+      builder, location, entry->getArgument(sig->firstRow), int64_t(0));
+  auto initial = tensor::EmptyOp::create(
+      builder, location, ArrayRef<int64_t>{ShapedType::kDynamic}, sig->field,
+      ValueRange{extent});
   auto identity = AffineMap::getMultiDimIdentityMap(1, context);
-  auto scalar = AffineMap::get(1, 0, {}, context);
+  auto broadcast = AffineMap::get(1, 0, {}, context);
   SmallVector<AffineMap> maps;
   for (bool row : rowwise)
-    maps.push_back(row ? identity : scalar);
-  maps.push_back(result == StructuredResult::Map ? identity : scalar);
-  auto generic = linalg::GenericOp::create(
-      builder, location, TypeRange{initial.getType()}, entry->getArguments(),
+    maps.push_back(row ? identity : broadcast);
+  maps.push_back(identity);
+  auto mapped = linalg::GenericOp::create(
+      builder, location, TypeRange{sig->lanes}, entry->getArguments(),
       ValueRange{initial}, maps,
-      ArrayRef<utils::IteratorType>{result == StructuredResult::Map
-                                        ? utils::IteratorType::parallel
-                                        : utils::IteratorType::reduction},
+      ArrayRef<utils::IteratorType>{utils::IteratorType::parallel},
       [&](OpBuilder &nested, Location loc, ValueRange args) {
         IRMapping mapping;
         mapping.map(formula.getArguments(), args.drop_back());
         for (Operation &op : formula.without_terminator())
           nested.clone(op, mapping);
-        Value term = mapping.lookup(formula.back().getOperand(0));
-        if (result == StructuredResult::Sum)
-          term = algebra::FieldAddOp::create(nested, loc, sig->field,
-                                             args.back(), term);
-        linalg::YieldOp::create(nested, loc, term);
+        linalg::YieldOp::create(nested, loc,
+                                mapping.lookup(formula.back().getOperand(0)));
       });
-  Value returned = generic.getResult(0);
-  if (result == StructuredResult::Sum)
-    returned =
-        tensor::ExtractOp::create(builder, location, returned, ValueRange{});
+  Value returned = mapped.getResult(0);
+  if (result == StructuredResult::Sum) {
+    auto zero =
+        algebra::ConstantFieldOp::create(builder, location, sig->field, "0");
+    auto seed = tensor::FromElementsOp::create(
+        builder, location, RankedTensorType::get({}, sig->field),
+        ValueRange{zero});
+    auto reduced = linalg::GenericOp::create(
+        builder, location, TypeRange{seed.getType()}, ValueRange{returned},
+        ValueRange{seed}, ArrayRef<AffineMap>{identity, broadcast},
+        ArrayRef<utils::IteratorType>{utils::IteratorType::reduction},
+        [&](OpBuilder &nested, Location loc, ValueRange args) {
+          auto sum = algebra::FieldAddOp::create(nested, loc, sig->field,
+                                                 args.back(), args.front());
+          linalg::YieldOp::create(nested, loc, sum.getResult());
+        });
+    returned = tensor::ExtractOp::create(builder, location,
+                                         reduced.getResult(0), ValueRange{});
+  }
   func::ReturnOp::create(builder, location, returned);
   return candidate;
 }
 
 LogicalResult optimizeStructuredComputation(ModuleOp candidate) {
-  if (failed(verify(candidate)))
+  if (!boundedPacket(candidate) || failed(verify(candidate)))
+    return failure();
+  RewritePatternSet patterns(candidate.getContext());
+  linalg::populateElementwiseOpsFusionPatterns(
+      patterns, [](OpOperand *) { return true; });
+  // Only the selected fusion is allowed here. Generic folding and constant
+  // hoisting could introduce unsupported identities or captures. Scalar CSE
+  // remains local to each closed region below.
+  GreedyRewriteConfig config;
+  config.setUseTopDownTraversal().enableFolding(false).enableConstantCSE(false);
+  config.setMaxNumRewrites(workLimit);
+  if (failed(applyPatternsGreedily(candidate, std::move(patterns), config)))
     return failure();
   IRRewriter rewriter(candidate.getContext());
   DominanceInfo dominance(candidate);
@@ -346,14 +391,13 @@ LogicalResult verifyStructuredComputation(Block &formula,
   auto sig = signature(formula, rowwise);
   if (failed(sig))
     return refuse(candidate, "original scalar profile");
-  auto actual = read(candidate, *sig, rowwise, result);
-  if (failed(actual))
+  auto actual = read(candidate, *sig, result);
+  if (!actual)
     return refuse(candidate, "candidate structure or bindings");
-  auto scalar = extract(*actual);
   auto source =
       algebra::describeRingExpression(formula, formula.back().getOperands());
   auto target = algebra::describeRingExpression(
-      scalar->front(), scalar->front().back().getOperands());
+      actual->front(), actual->front().back().getOperands());
   if (!source || !target) {
     if (!source)
       consumeError(source.takeError());
@@ -373,9 +417,9 @@ OwningOpRef<func::FuncOp> consumeStructuredComputation(Block &formula,
   if (failed(verifyStructuredComputation(formula, rowwise, result, candidate)))
     return {};
   auto sig = signature(formula, rowwise);
-  auto actual = read(candidate, *sig, rowwise, result);
-  if (failed(actual))
+  auto actual = read(candidate, *sig, result);
+  if (!actual)
     return {};
-  return extract(*actual);
+  return actual;
 }
 } // namespace zkc::mathematical

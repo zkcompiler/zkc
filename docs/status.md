@@ -63,7 +63,7 @@ materialization performs no lifetime selection. Private numerical schedules use
 standard SCF loops and are independently checked before Local lowering.
 Retained pointwise maps and selected sums now use a private
 [Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
-with exact field scalar regions, upstream CSE/DCE, independent candidate
+with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
 readback and execution through the current native handlers. General tensor
 transforms and writable-buffer ownership are outside this profile.
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage

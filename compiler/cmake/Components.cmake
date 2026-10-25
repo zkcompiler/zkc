@@ -367,7 +367,7 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRLinalgDialect MLIRTensorDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)

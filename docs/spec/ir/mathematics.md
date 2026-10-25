@@ -105,14 +105,18 @@ extracts and returns that same reduction result. Empty input therefore yields
 an empty map or a zero sum. These are exact field laws, not floating-point
 reassociation or machine-overflow assumptions.
 
-The selected upstream optimization is CSE/DCE within the scalar region. The
-independent reader admits every actual operation, including unused work, then
-compares the original and candidate scalar DAGs by ordered labelled
-bisimulation. It checks nominal fields, literals, input coordinates, iteration
+The canonical sum candidate retains a pointwise map followed by a reduction.
+Upstream elementwise fusion combines their actual regions, then scalar-region
+CSE/DCE shares repeated work. The independent reader admits both the original
+tensor graph and the fused form, reconstructs a scalar formula from actual
+pointwise SSA edges, and compares it with the original scalar DAG by ordered
+labelled bisimulation. Every operation, including unused work, is admitted.
+A bounded structural check rejects nested packets before recursive MLIR
+verification. It checks nominal fields, literals, input coordinates, iteration
 kinds, indexing maps, seeds, captures and the actual returned value. Unknown
 operations/attributes, nonmatching maps, extra work outside the admitted packet,
 and changed formulas refuse with `structured-computation`. The reader does not
-rerun the producer or CSE, and approval does not survive candidate mutation.
+rerun the producer, fusion or CSE, and approval does not survive candidate mutation.
 
 The executable adapter reads the admitted candidate's scalar body into the
 existing typed native map/reduction handlers. The original-to-executable

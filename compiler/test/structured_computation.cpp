@@ -33,6 +33,34 @@ int main() {
   auto formula = *source->getOps<func::FuncOp>().begin();
   const bool rowwise[] = {true, true, false};
   for (auto kind : {StructuredResult::Map, StructuredResult::Sum}) {
+    for (StringRef formulaKind : {"identity", "broadcast", "constant"}) {
+      cases.run(
+          (formulaKind + (kind == StructuredResult::Map ? " map" : " sum"))
+              .str(),
+          [&] {
+            OwningOpRef<func::FuncOp> simple(func::FuncOp::create(
+                formula.getLoc(), "simple", formula.getFunctionType()));
+            auto *block = simple->addEntryBlock();
+            OpBuilder builder(block, block->end());
+            Value returned =
+                block->getArgument(formulaKind == "identity" ? 0 : 2);
+            if (formulaKind == "constant")
+              returned = algebra::ConstantFieldOp::create(
+                  builder, formula.getLoc(), returned.getType(), "42");
+            func::ReturnOp::create(builder, formula.getLoc(), returned);
+            auto candidate =
+                proposeStructuredComputation(*block, rowwise, kind);
+            test::require(bool(candidate), "simple proposal");
+            test::require(succeeded(verifyStructuredComputation(
+                              *block, rowwise, kind, *candidate)),
+                          "simple original correspondence");
+            test::require(succeeded(optimizeStructuredComputation(*candidate)),
+                          "simple optimization");
+            test::require(bool(consumeStructuredComputation(*block, rowwise,
+                                                            kind, *candidate)),
+                          "simple candidate consumption");
+          });
+    }
     cases.run(
         kind == StructuredResult::Map ? "map CSE and consumption"
                                       : "sum CSE and consumption",
@@ -43,11 +71,17 @@ int main() {
           test::require(succeeded(verifyStructuredComputation(
                             formula.front(), rowwise, kind, *candidate)),
                         "original correspondence");
-          unsigned before = 0, after = 0;
+          unsigned before = 0, after = 0, stagesBefore = 0, stagesAfter = 0;
           candidate->walk([&](algebra::FieldMultiplyOp) { ++before; });
+          candidate->walk([&](linalg::GenericOp) { ++stagesBefore; });
           test::require(succeeded(optimizeStructuredComputation(*candidate)),
                         "CSE");
           candidate->walk([&](algebra::FieldMultiplyOp) { ++after; });
+          candidate->walk([&](linalg::GenericOp) { ++stagesAfter; });
+          test::require(stagesBefore ==
+                                (kind == StructuredResult::Map ? 1 : 2) &&
+                            stagesAfter == 1,
+                        "upstream fusion did not combine map and reduction");
           test::require(before == 2 && after == 1,
                         "upstream CSE did not share multiplication");
           auto actual = consumeStructuredComputation(formula.front(), rowwise,
@@ -55,26 +89,36 @@ int main() {
           test::require(bool(actual), "actual candidate consumption");
         });
     auto mutation = [&](StringRef name, auto change) {
-      cases.run(name, [&] {
-        auto candidate =
-            proposeStructuredComputation(formula.front(), rowwise, kind);
-        test::require(bool(candidate), "proposal");
-        change(*candidate);
-        std::string diagnostic;
-        ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
-          diagnostic += d.str();
-          return success();
-        });
-        test::require(failed(verifyStructuredComputation(
-                          formula.front(), rowwise, kind, *candidate)),
-                      "mutation accepted");
-        test::require(diagnostic.find("structured-computation") !=
-                          std::string::npos,
-                      "missing refusal identifier");
-      });
+      for (bool optimized : {false, true}) {
+        cases.run(
+            (name + (optimized ? " after fusion" : " before fusion")).str(),
+            [&] {
+              auto candidate =
+                  proposeStructuredComputation(formula.front(), rowwise, kind);
+              test::require(bool(candidate), "proposal");
+              if (optimized)
+                test::require(
+                    succeeded(optimizeStructuredComputation(*candidate)),
+                    "upstream optimization");
+              change(*candidate);
+              std::string diagnostic;
+              ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
+                diagnostic += d.str();
+                return success();
+              });
+              test::require(failed(verifyStructuredComputation(
+                                formula.front(), rowwise, kind, *candidate)),
+                            "mutation accepted");
+              test::require(diagnostic.find("structured-computation") !=
+                                std::string::npos,
+                            "missing refusal identifier");
+            });
+      }
     };
     mutation("actual input permutation", [&](ModuleOp module) {
       module.walk([&](linalg::GenericOp generic) {
+        if (generic.getInputs().size() < 2)
+          return;
         Value a = generic.getOperand(0), b = generic.getOperand(1);
         generic->setOperand(0, b);
         generic->setOperand(1, a);
@@ -102,10 +146,19 @@ int main() {
         op->setAttr("meaning", UnitAttr::get(&context));
       });
     });
+    mutation("nested region in scalar packet", [&](ModuleOp module) {
+      auto function = *module.getOps<func::FuncOp>().begin();
+      OpBuilder builder(&function.front().back());
+      auto nested = ModuleOp::create(builder, function.getLoc());
+      builder.setInsertionPointToEnd(nested.getBody());
+      ModuleOp::create(builder, function.getLoc());
+    });
     mutation("unlisted scalar capture", [&](ModuleOp module) {
       module.walk([&](linalg::GenericOp generic) {
         auto outer = generic->getParentOfType<func::FuncOp>();
         auto &body = generic.getRegion().front();
+        if (generic.getInputs().size() < 3)
+          return;
         body.getArgument(2).replaceAllUsesWith(outer.getArgument(2));
       });
     });
@@ -131,6 +184,9 @@ int main() {
       });
       mutation("reduction omits accumulator", [&](ModuleOp module) {
         module.walk([&](linalg::GenericOp generic) {
+          if (generic.getIteratorTypesArray().front() !=
+              utils::IteratorType::reduction)
+            return;
           auto &body = generic.getRegion().front();
           auto add =
               body.back().getOperand(0).getDefiningOp<algebra::FieldAddOp>();
