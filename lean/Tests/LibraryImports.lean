@@ -140,6 +140,7 @@ import Zkc.Semantics.Observation
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
 import Zkc.Semantics.StateInterpretation
+import Zkc.Semantics.WeakestPrecondition
 import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
 import Zkc.Source.Common.Import

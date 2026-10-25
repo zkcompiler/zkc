@@ -469,6 +469,11 @@ def entries : List Entry := [
     some `ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies,
     "The admitted source program contains the exact sumcheck, prefix, terminal-check \
     and table-check helper bodies with their complete checked dependencies."⟩,
+  ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.HonestCompiled.pairWP,
+    "On one fixed shared answer table, the actual producer and validator both return, \
+    the validator consumes exactly the generated proof and accepts at the selected position. \
+    This pointwise runner property supplies no probabilistic or adversarial assumption."⟩,
   ⟨"wellformed.honest-readback", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Readback,
     "A derivation aligns producer sends with typed validator receives and identical \

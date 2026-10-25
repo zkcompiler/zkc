@@ -36,7 +36,7 @@ def checkpoints : List Checkpoint := [
     callee := ``Zkc.Obligations.Derivation.frameReturns
     proofObjectHeads := [``Zkc.Obligations.Derivation], route := .generalRule },
   { identifier := "terminal", phase := "terminal", responsibility := "M"
-    owner := ``OriginalRaw.root_rejected, callee := ``OriginalRaw.terminal_rejected
+    owner := ``OriginalRaw.terminal_spec, callee := ``OriginalRaw.terminal_rejected
     proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }]
 
 private def dataTerm (stx : Syntax) : TermElabM Expr := do

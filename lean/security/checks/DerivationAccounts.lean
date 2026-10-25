@@ -53,6 +53,14 @@ run_cmd do
         ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
         ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1
         4
+    -- The WP root consumes the terminal contract. The mathematical discharge
+    -- is inside that reached contract, not a direct application in the root.
+    Tests.ProofAccount.expectRefusal "stale direct terminal attribution" "missing application" <|
+      ZkcTools.ProofAccount.account graph {
+        identifier := "stale-terminal", phase := "terminal", responsibility := "M"
+        owner := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_rejected
+        callee := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.terminal_rejected
+        proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }
     let some root := roots.head? | throwError "missing root"
     Tests.ProofAccount.expectRefusal "wrong receipt root" "declaration is not reached" <|
       ZkcSecurity.Generation.SumcheckAccounts.measure root ``Tests.ProofAccount.dependent

@@ -313,6 +313,7 @@ import ZkcSecurity.HashChain.Reduction
 import ZkcSecurity.HashChain.Simulator
 import ZkcSecurity.HashChain.Steps
 import ZkcSecurity.Obligations.Derivation
+import ZkcSecurity.Obligations.WeakestPrecondition
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.Oracle.Keys
 import ZkcSecurity.Probability.UniformTape
@@ -449,6 +450,7 @@ import TestsSecurity.HonestCompiled
 import TestsSecurity.HonestInput
 import TestsSecurity.HonestOracle
 import TestsSecurity.HonestSampling
+import TestsSecurity.HonestWeakestPrecondition
 import TestsSecurity.InputFormulaBindings
 import TestsSecurity.InputLaws
 import TestsSecurity.InterfaceAxioms
@@ -515,3 +517,4 @@ import TestsSecurity.SumcheckHonestReferences
 import TestsSecurity.SumcheckReference
 import TestsSecurity.SumcheckRootCompleteness
 import TestsSecurity.SumcheckSubjectInputs
+import TestsSecurity.WeakestPrecondition
