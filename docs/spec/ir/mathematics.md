@@ -85,6 +85,42 @@ domain literal contract is not part of this implementation.
 
 ## Realization
 
+### Structured tensor computations
+
+Retained scalar maps and their selected sum reductions pass through a private
+standard `func.func` with `tensor` and `linalg.generic` operations. Rowwise
+arguments have type `tensor<?x!algebra.field<"F">>`; scalar arguments remain
+exact Algebra field values. Every input coordinate remains in the function
+signature, including unused columns. The execution boundary checks all rowwise
+lengths in source order before evaluating the computation. Equal lengths are a
+domain premise of this internal tensor profile, never inferred from the tensor
+type or from the inputs actually read by the scalar formula.
+
+A map has one parallel iterator, identity maps for rowwise inputs and output,
+and empty maps for scalar broadcasts. Its `tensor.empty` extent comes from the
+first rowwise input. The scalar region cannot read the uninitialized destination.
+A sum has one reduction iterator and a rank-zero destination initialized to the
+exact field zero. Its region adds each term to the accumulator; the function
+extracts and returns that same reduction result. Empty input therefore yields
+an empty map or a zero sum. These are exact field laws, not floating-point
+reassociation or machine-overflow assumptions.
+
+The selected upstream optimization is CSE/DCE within the scalar region. The
+independent reader admits every actual operation, including unused work, then
+compares the original and candidate scalar DAGs by ordered labelled
+bisimulation. It checks nominal fields, literals, input coordinates, iteration
+kinds, indexing maps, seeds, captures and the actual returned value. Unknown
+operations/attributes, nonmatching maps, extra work outside the admitted packet,
+and changed formulas refuse with `structured-computation`. The reader does not
+rerun the producer or CSE, and approval does not survive candidate mutation.
+
+The executable adapter reads the admitted candidate's scalar body into the
+existing typed native map/reduction handlers. The original-to-executable
+numerical reader still checks the actual final payload and all length guards.
+The private tensor program grants no general Tensor/Linalg admission, buffer
+ownership, vectorized machine representation, native correspondence theorem,
+or permission to change runtime refusal behavior.
+
 The nullary `algebra.group_identity : !algebra.group<"G">` lowers to
 `algebra.exec.group_identity` bound to `curve.identity<G>`. The producer reads
 `G` from the result type; the independent recipe checker verifies the exact

@@ -94,7 +94,7 @@ with case("multiple verifier setups are current public inputs"):
 
 with case("unused PCS entry operands still require setup authorization"):
     src, policy = OUT / "unused-key.mlir", OUT / "unused-key.policy"
-    src.write_text('''!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
+    src.write_text('''!pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%key:!pk,%accepted:i1):
    "protocol.return"(%accepted) : (i1)->()

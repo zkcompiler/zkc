@@ -10,8 +10,7 @@ set(zkc_builtin_dialects
   "algebra|Algebra|types"
   "poly|Polynomial|types"
   "plan|Plan|types"
-  "pcs|PCS|types"
-  "oracle|Oracle|types"
+  "commitment|Commitment|types"
   "relation|Relation|none"
 )
 

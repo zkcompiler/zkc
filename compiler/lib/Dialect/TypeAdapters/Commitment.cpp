@@ -21,22 +21,23 @@ template <bool AllowPCS, bool AllowOracle>
 Type decodeObject(MLIRContext *context, const BoundType &type) {
   auto carrier = carrierFor(type.identity);
   if (AllowPCS && carrier == Carrier::PCS)
-    return loadedType<zkc::pcs::ObjectType>(context, type.identity, type.kind);
+    return loadedType<zkc::commitment::PolynomialObjectType>(
+        context, type.identity, type.kind);
   if (AllowOracle && carrier == Carrier::Oracle)
-    return loadedType<zkc::oracle::OracleObjectType>(context, type.identity,
-                                                     type.kind);
+    return loadedType<zkc::commitment::VectorObjectType>(context, type.identity,
+                                                         type.kind);
   return {};
 }
 
 template <bool AllowPCS, bool AllowOracle>
 std::optional<BoundType> encodeObject(Type type, llvm::StringRef constructor) {
   if constexpr (AllowPCS)
-    if (auto object = dyn_cast<zkc::pcs::ObjectType>(type))
+    if (auto object = dyn_cast<zkc::commitment::PolynomialObjectType>(type))
       if (object.getKind() == constructor &&
           carrierFor(object.getScheme()) == Carrier::PCS)
         return BoundType{constructor.str(), object.getScheme().str(), {}};
   if constexpr (AllowOracle)
-    if (auto object = dyn_cast<zkc::oracle::OracleObjectType>(type))
+    if (auto object = dyn_cast<zkc::commitment::VectorObjectType>(type))
       if (object.getKind() == constructor &&
           carrierFor(object.getScheme()) == Carrier::Oracle)
         return BoundType{constructor.str(), object.getScheme().str(), {}};

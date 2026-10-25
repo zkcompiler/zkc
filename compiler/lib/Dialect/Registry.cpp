@@ -2,7 +2,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "zkc/Dialect/BuiltinHeaders.h.inc"
 #include "zkc/Dialect/ContributionHeaders.h.inc"
 #include "zkc/Interfaces/Mathematical.h"
@@ -26,7 +28,8 @@ using ProtocolDialects = DialectSet<mlir::func::FuncDialect
 void registerDialects(mlir::DialectRegistry &registry) {
   ProtocolDialects::registerIn(registry);
   registry.insert<mlir::arith::ArithDialect, mlir::scf::SCFDialect,
-                  mlir::cf::ControlFlowDialect>();
+                  mlir::cf::ControlFlowDialect, mlir::linalg::LinalgDialect,
+                  mlir::tensor::TensorDialect>();
   registerMathematicalInterfaces(registry);
 }
 bool hasProtocolDialects(mlir::MLIRContext &context) {

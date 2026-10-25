@@ -98,7 +98,7 @@ for i, suite in enumerate(["merlin3.bls12-381.fr64be/0", "spongefish0.8.0.keccak
 
 with case("an empty PCS sequence still requires deployment setup authority"):
     source = OUT / "missing-setup.mlir"
-    source.write_text('''!s = !data.sequence<!pcs.object<"multilinear.kzg.bls12-381/0", "proof">>
+    source.write_text('''!s = !data.sequence<!commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">>
 module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%data:!s,%ok:i1):
    %received = protocol.exchange %data {sender="P",receiver="V",site="data"} : !s
@@ -145,7 +145,7 @@ with case("complete MLIR sequence type obeys structural depth"):
                       refuses="binding-type-limit")
 with case("copyable PCS elements do not grant total mathematical operations"):
     source = OUT / "non-total.mlir"
-    source.write_text('''!s = !data.sequence<!pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">>
+    source.write_text('''!s = !data.sequence<!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">>
 module { "protocol.module"() ({
  "protocol.func"() ({
    %empty = "data.sequence_empty"() : ()->!s

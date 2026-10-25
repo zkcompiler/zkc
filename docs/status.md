@@ -61,6 +61,11 @@ Existing installed backends execute the resulting operations. The checked physic
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
 standard SCF loops and are independently checked before Local lowering.
+Retained pointwise maps and selected sums now use a private
+[Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
+with exact field scalar regions, upstream CSE/DCE, independent candidate
+readback and execution through the current native handlers. General tensor
+transforms and writable-buffer ownership are outside this profile.
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
 dense vector arithmetic and reductions, matvec/split, BLS table fold and

@@ -51,7 +51,7 @@ refuses('{site="nested"}', '{site="nested", bad="new_semantics"}', 'interactive-
 refuses('callee=@work', 'callee=@missing', 'interactive-symbol-kind')
 refuses('callee=@work', 'callee=@main', 'interactive-symbol-kind')
 refuses('callee=@work', 'callee=@leaf', 'interactive-call-signature')
-for ty in ['!local.capability<"rng:bls12-381.fr">', '!pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">', '!pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">']:
+for ty in ['!local.capability<"rng:bls12-381.fr">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">']:
     declaration = f'relation.declare @forbidden {{kind="external", key="example/type", revision="0", signature=({ty}) -> i1, purposes=["statement"]}}'
     commands.verified('module { ' + declaration + ' }', 'relation-declaration-signature')
 

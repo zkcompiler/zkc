@@ -1,5 +1,5 @@
-#ifndef ZKC_DIALECT_PCS_IR_PCSOPS_H
-#define ZKC_DIALECT_PCS_IR_PCSOPS_H
+#ifndef ZKC_DIALECT_COMMITMENT_IR_COMMITMENTOPS_H
+#define ZKC_DIALECT_COMMITMENT_IR_COMMITMENTOPS_H
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -10,9 +10,9 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/BoundOperations.h"
-#include "zkc/Dialect/PCS/IR/PCSTypes.h"
+#include "zkc/Dialect/Commitment/IR/CommitmentTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES
-#include "zkc/Dialect/PCS/IR/pcsOps.h.inc"
+#include "zkc/Dialect/Commitment/IR/commitmentOps.h.inc"
 
 #endif

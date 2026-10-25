@@ -38,9 +38,9 @@ bool detail::isLogicalOperationData(Type type) {
              algebra::FixedVectorType, data::SequenceType, data::BytesType,
              algebra::FieldVectorType, algebra::GroupVectorType,
              algebra::IndicesType, algebra::FieldMatrixType,
-             algebra::FieldArrayType, pcs::ObjectType, oracle::OracleObjectType,
-             local::CapabilityType, local::VariantType,
-             crypto::Shake128StateType>(type) ||
+             algebra::FieldArrayType, commitment::PolynomialObjectType,
+             commitment::VectorObjectType, local::CapabilityType,
+             local::VariantType, crypto::Shake128StateType>(type) ||
          type.isSignlessInteger(1) || type.isUnsignedInteger(64);
 }
 

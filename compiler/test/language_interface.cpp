@@ -959,9 +959,10 @@ protocol Run roles(P)(v:Choice@P)->(a:Token@P,b:Token@P,x:Choice@P,y:Choice@P) {
                               : "multilinear.kzg.bls12-381/0";
       bool shared =
           head == "commitment" || head == "proof" || head == "commitments";
-      auto type = ((rows ? "!oracle.object<\"" : "!pcs.object<\"") + domain +
-                   "\", \"" + head + "\">")
-                      .str();
+      auto type =
+          ((rows ? "!commitment.vector<\"" : "!commitment.polynomial<\"") +
+           domain + "\", \"" + head + "\">")
+              .str();
       auto mlir =
           "module {\"protocol.module\"() <{profile = "
           "#protocol.profile<protocol>}> ({\"protocol.func\"() <{sym_name = "

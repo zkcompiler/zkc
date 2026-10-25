@@ -1,9 +1,9 @@
 !message = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
-!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
-!vk = !pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">
-!c = !pcs.object<"multilinear.kzg.bls12-381/0", "commitment">
-!o = !pcs.object<"multilinear.kzg.bls12-381/0", "opening_state">
-!proof = !pcs.object<"multilinear.kzg.bls12-381/0", "proof">
+!pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
+!vk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">
+!c = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">
+!o = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "opening_state">
+!proof = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
@@ -25,7 +25,7 @@ module { "protocol.module"() ({
  "local.binding"() {sym_name="open",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  "local.binding"() {sym_name="check",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  local.func @produce(%table:!t,%key:!pk,%points:!fs)->!batch attributes {logical_origin=["produce",[]]} {
-   %state:2 = "pcs.exec.commit"(%key,%table) {binding=@commit,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
+   %state:2 = "commitment.exec.polynomial_commit"(%key,%table) {binding=@commit,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
    %empty = "data.exec.sequence_empty"() {binding=@empty,parameters=[],site="empty"} : ()->!batch
    %count = "algebra.exec.vector_length"(%points) {binding=@vlength,parameters=[],site="count"} : (!fs)->ui64
    %zero = "algebra.exec.index_constant"() {binding=@constant,parameters=["0"],site="zero"} : ()->ui64
@@ -33,7 +33,7 @@ module { "protocol.module"() ({
      %x = "algebra.exec.vector_get"(%xs,%i) {binding=@get,parameters=[],site="coordinate"} : (!fs,ui64)->!f
      %p0 = "poly.exec.empty_point"() {binding=@point,parameters=[],site="point"} : ()->!p
      %p1 = "poly.exec.append_point"(%p0,%x) {binding=@coordinate,parameters=[],site="point1"} : (!p,!f)->!p
-     %opening:2 = "pcs.exec.open"(%s,%p1) {binding=@open,parameters=[],site="opening"} : (!o,!p)->(!f,!proof)
+     %opening:2 = "commitment.exec.polynomial_open"(%s,%p1) {binding=@open,parameters=[],site="opening"} : (!o,!p)->(!f,!proof)
      %record = "local.variant_inject"(%opening#0,%opening#1) {alternative="some",site="record"} : (!f,!proof)->!message
      %next = "data.exec.sequence_append"(%acc,%record) {binding=@append,parameters=[],site="append"} : (!batch,!message)->!batch
      "local.yield"(%next,%s,%xs) : (!batch,!o,!fs)->()
@@ -56,7 +56,7 @@ module { "protocol.module"() ({
          %no = "local.bool_constant"() {value=false,site="absent"} : ()->i1
          "local.yield"(%no) : (i1)->()
        }, { ^some(%v:!f,%proof:!proof,%match_key:!vk,%match_root:!c,%match_point:!p):
-         %valid = "pcs.exec.check"(%match_key,%match_root,%match_point,%v,%proof) {binding=@check,parameters=[],site="check"} : (!vk,!c,!p,!f,!proof)->i1
+         %valid = "commitment.exec.polynomial_check"(%match_key,%match_root,%match_point,%v,%proof) {binding=@check,parameters=[],site="check"} : (!vk,!c,!p,!f,!proof)->i1
          "local.yield"(%valid) : (i1)->()
        }) {alternatives=["none","some"],site="present"} : (!message,!vk,!c,!p)->i1
        %next = "algebra.exec.bool_and"(%ok,%valid) {binding=@and,parameters=[],site="next"} : (i1,i1)->i1

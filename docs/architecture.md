@@ -141,6 +141,10 @@ Local functions are the executable output. Source symbol context and output
 binding allocation remain separate.
 Numerical realization chooses native contractions, compact pointwise expressions,
 bulk vector operations or a private standard SCF schedule before Local lowering.
+Retained pointwise maps and selected sums first use standard Tensor/Linalg
+computations with exact Algebra scalar regions. A separate reader checks the
+actual transformed packet and its source formula before the native handler
+adapter consumes that packet; final numerical readback remains independent.
 The native expression handlers borrow typed columns and scalar captures,
 evaluate bounded row chunks, and construct private results through the existing
 numerical scope. They share provider-packed slice arithmetic with dense vector

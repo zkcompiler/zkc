@@ -195,8 +195,8 @@ add_zkc_component(IR
   lib/Dialect/Polynomial/IR/Types.cpp
   lib/Dialect/Polynomial/IR/Mathematical.cpp
   lib/Dialect/Polynomial/IR/Recipes.cpp
-  lib/Dialect/Oracle/IR/OracleDialect.cpp
-  lib/Dialect/PCS/IR/PCSDialect.cpp
+  lib/Dialect/Commitment/IR/CommitmentDialect.cpp
+  lib/Dialect/Commitment/IR/CommitmentDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
   lib/Dialect/MathematicalSemantics.cpp
@@ -280,6 +280,7 @@ add_zkc_component(Transforms
   lib/Transforms/NestedContractions.cpp
   lib/Transforms/NestedContractionVerification.cpp
   lib/Transforms/MapRealizations.cpp
+  lib/Transforms/StructuredComputation.cpp
   lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
@@ -362,7 +363,8 @@ target_link_libraries(ZkcTranslation PUBLIC ZkcIR ZkcLanguage)
 mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRIR MLIRControlFlowInterfaces MLIRSideEffectInterfaces
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
-  MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect)
+  MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
+  MLIRLinalgDialect MLIRTensorDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)

@@ -5,9 +5,9 @@
 !e = !algebra.field<"koala-bear.ext8-binomial3">
 !ev = !algebra.field_vector<"koala-bear.ext8-binomial3">
 !poly = !poly.univariate<"koala-bear.ext8-binomial3">
-!root = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","commitment">
-!path = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","proof">
-!state = !oracle.object<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","opening_state">
+!root = !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","commitment">
+!path = !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","proof">
+!state = !commitment.vector<"rows.merkle-keccak256.koala-bear.ext8-binomial3/0","opening_state">
 !rng = !protocol.service_ref<"random.koala-bear.ext8-binomial3/0">
 module { "protocol.module"() ({
 "local.binding"() {sym_name="index_constant",contract="index.constant",arguments=[],implementation=""} : ()->()
@@ -70,15 +70,15 @@ local.func @transitions(%trace:!bv,%start:!b,%step:!b,%n:ui64)->(i1) attributes 
 }
 local.func @open_fold(%values:!ev,%query:ui64)->(!root,!ev,!path) attributes {logical_origin=["open_fold",[]]} {
   %columns = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["1"],site="columns"} : ()->(ui64)
-  %tree:2 = "oracle.exec.commit"(%values,%columns) {binding=@oracle_commit,parameters=[],site="tree"} : (!ev,ui64)->(!root,!state)
-  %opening:2 = "oracle.exec.open"(%tree#1,%query) {binding=@oracle_open,parameters=[],site="opening"} : (!state,ui64)->(!ev,!path)
+  %tree:2 = "commitment.exec.vector_commit"(%values,%columns) {binding=@oracle_commit,parameters=[],site="tree"} : (!ev,ui64)->(!root,!state)
+  %opening:2 = "commitment.exec.vector_open"(%tree#1,%query) {binding=@oracle_open,parameters=[],site="opening"} : (!state,ui64)->(!ev,!path)
   local.return %tree#0,%opening#0,%opening#1 : !root,!ev,!path
 }
 local.func @check_opening(%values:!ev,%root:!root,%row:!ev,%path:!path,%query:ui64,%n:ui64)->(i1) attributes {logical_origin=["check_opening",[]]} {
   %one = "algebra.exec.index_constant"() {binding=@index_constant,parameters=["1"],site="one"} : ()->(ui64)
   %expected = "algebra.exec.vector_slice"(%values,%query,%one) {binding=@vector_slice,parameters=[],site="expected"} : (!ev,ui64,ui64)->(!ev)
   %row_valid = "algebra.exec.vector_equal"(%expected,%row) {binding=@vector_equal,parameters=[],site="row_valid"} : (!ev,!ev)->(i1)
-  %path_valid = "oracle.exec.check"(%root,%one,%n,%query,%row,%path) {binding=@oracle_check,parameters=[],site="path_valid"} : (!root,ui64,ui64,ui64,!ev,!path)->(i1)
+  %path_valid = "commitment.exec.vector_check"(%root,%one,%n,%query,%row,%path) {binding=@oracle_check,parameters=[],site="path_valid"} : (!root,ui64,ui64,ui64,!ev,!path)->(i1)
   %valid = "algebra.exec.bool_and"(%row_valid,%path_valid) {binding=@bool_and,parameters=[],site="valid"} : (i1,i1)->(i1)
   local.return %valid : i1
 }

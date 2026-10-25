@@ -145,13 +145,14 @@ int main() {
   };
   for (StringRef kind :
        {"commitment", "proof", "opening_state", "prover_key", "verifier_key"})
-    nativeCases.emplace_back(kind.str() + ":" + pcs,
-                             zkc::pcs::ObjectType::get(&context, pcs, kind));
+    nativeCases.emplace_back(
+        kind.str() + ":" + pcs,
+        zkc::commitment::PolynomialObjectType::get(&context, pcs, kind));
   for (StringRef kind : {"commitment", "proof", "opening_state", "commitments",
                          "opening_states"})
     nativeCases.emplace_back(
         kind.str() + ":" + oracle,
-        zkc::oracle::OracleObjectType::get(&context, oracle, kind));
+        zkc::commitment::VectorObjectType::get(&context, oracle, kind));
   cases.run("variant native carrier and physical wrapper", [&] {
     auto descriptor = encodeVariant(
         {"Result", {{"Value", {"bool"}}, {"Guard", {"resource_unit:Guard"}}}});
@@ -226,28 +227,30 @@ int main() {
     require(!decodeBoundType(&fresh, bound), "unloaded plan dialect accepted");
     require(!fresh.getLoadedDialect("plan"), "plan dialect was initialized");
   });
-  cases.run("loaded PCS cannot replace an unloaded oracle dialect", [&] {
-    MLIRContext fresh;
-    fresh.loadDialect<zkc::pcs::PCSDialect>();
-    require(!decodeBoundType(&fresh, {"proof", oracle, {}}),
-            "oracle scheme fell back to PCS");
-  });
-  cases.run("loaded oracle cannot replace an unloaded PCS dialect", [&] {
-    MLIRContext fresh;
-    fresh.loadDialect<zkc::oracle::OracleDialect>();
-    require(!decodeBoundType(&fresh, {"proof", pcs, {}}),
-            "PCS scheme fell back to oracle");
-  });
+  cases.run(
+      "shared commitment owner preserves polynomial and vector carriers", [&] {
+        MLIRContext fresh;
+        fresh.loadDialect<zkc::commitment::CommitmentDialect>();
+        auto polynomial = decodeBoundType(&fresh, {"proof", pcs, {}});
+        auto vector = decodeBoundType(&fresh, {"proof", oracle, {}});
+        require(polynomial &&
+                    isa<zkc::commitment::PolynomialObjectType>(polynomial),
+                "polynomial scheme lost its carrier");
+        require(vector && isa<zkc::commitment::VectorObjectType>(vector),
+                "vector scheme lost its carrier");
+        require(polynomial != vector,
+                "distinct authentication guarantees collapsed");
+      });
 
   for (const auto &identity : {pcs, oracle, field, std::string("uninstalled")})
     cases.run("unknown constructor: " + identity, [&] {
       require(!decodeBoundType(&context, {"uninstalled", identity, {}}),
               "unknown constructor became an object");
-      refuses(encodeBoundType(
-                  zkc::pcs::ObjectType::get(&context, identity, "uninstalled"),
-                  false),
+      refuses(encodeBoundType(zkc::commitment::PolynomialObjectType::get(
+                                  &context, identity, "uninstalled"),
+                              false),
               "binding-type");
-      refuses(encodeBoundType(zkc::oracle::OracleObjectType::get(
+      refuses(encodeBoundType(zkc::commitment::VectorObjectType::get(
                                   &context, identity, "uninstalled"),
                               false),
               "binding-type");
@@ -260,15 +263,15 @@ int main() {
 
   std::vector<std::pair<std::string, Type>> invalidCarriers{
       {"PCS object with oracle scheme",
-       zkc::pcs::ObjectType::get(&context, oracle, "proof")},
+       zkc::commitment::PolynomialObjectType::get(&context, oracle, "proof")},
       {"oracle object with PCS scheme",
-       zkc::oracle::OracleObjectType::get(&context, pcs, "proof")},
-      {"PCS collection",
-       zkc::pcs::ObjectType::get(&context, pcs, "commitments")},
+       zkc::commitment::VectorObjectType::get(&context, pcs, "proof")},
+      {"PCS collection", zkc::commitment::PolynomialObjectType::get(
+                             &context, pcs, "commitments")},
       {"oracle key",
-       zkc::oracle::OracleObjectType::get(&context, oracle, "prover_key")},
+       zkc::commitment::VectorObjectType::get(&context, oracle, "prover_key")},
       {"field as PCS object",
-       zkc::pcs::ObjectType::get(&context, field, "field")},
+       zkc::commitment::PolynomialObjectType::get(&context, field, "field")},
       {"field as capability",
        zkc::local::CapabilityType::get(&context, "field:" + field)},
       {"variant prefix", zkc::local::VariantType::get(&context, "invalid:")},
@@ -380,7 +383,8 @@ int main() {
               "binding-representation");
     });
   cases.run("wrapped wrong commitment carrier", [&] {
-    auto object = zkc::pcs::ObjectType::get(&context, oracle, "proof");
+    auto object =
+        zkc::commitment::PolynomialObjectType::get(&context, oracle, "proof");
     auto representation = take(defaultRepresentation({"proof", oracle, {}}));
     refuses(encodeBoundType(
                 zkc::plan::DataType::get(&context, object,
