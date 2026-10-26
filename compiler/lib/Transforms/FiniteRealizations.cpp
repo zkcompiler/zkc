@@ -46,6 +46,8 @@ observedChoice(mathematical::RealizationKind kind) {
     return Choice::Bilinear;
   case Kind::NestedContraction:
     return Choice::NestedContraction;
+  case Kind::CollectionSum:
+    return Choice::MapSum;
   case Kind::Reduction:
   case Kind::PointwiseReduction:
     return Choice::Reduction;
@@ -249,7 +251,8 @@ class Realizer {
     return sitePrefix + suffix;
   }
   Value emit(const protocol::BindingApplication &application, ValueRange inputs,
-             Type output, ArrayRef<std::string> params = {}) {
+             Type output, ArrayRef<std::string> params = {},
+             StringRef explicitSite = {}) {
     // A fixed envelope covers the invoke/dispatch/success block, binding and
     // operands. Debit before creating any CFG or declaration. Callback copies
     // and nested traversal spend the same enclosing transaction account.
@@ -276,7 +279,7 @@ class Realizer {
       }
       occurrence = std::move(*encoded);
     } else
-      occurrence = site();
+      occurrence = explicitSite.empty() ? site() : explicitSite.str();
     if (admissionPath)
       ++admissionOccurrence;
     if (failedHelper)
@@ -578,7 +581,8 @@ class Realizer {
       Value output = {},
       mathematical::LaneResultMode mode = mathematical::LaneResultMode::Map,
       ValueRange additionalTerms = {},
-      MathematicalIdentity combine = MathematicalIdentity::FieldAdd) {
+      MathematicalIdentity combine = MathematicalIdentity::FieldAdd,
+      Operation *sumConsumer = nullptr, StringRef sumOccurrence = {}) {
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
     for (const auto &access : view.accesses)
@@ -603,9 +607,15 @@ class Realizer {
           *admitted->formula, vector, sizes.lookup(root), mode,
           [&](const protocol::BindingApplication &binding, ValueRange operands,
               Type result, ArrayRef<std::string> parameters) {
-            return emit(binding, operands, result, parameters);
+            auto previousLocation = loc;
+            if (sumConsumer)
+              loc = sumConsumer->getLoc();
+            auto value = emit(binding, operands, result, parameters,
+                              sumConsumer ? sumOccurrence : StringRef());
+            loc = previousLocation;
+            return value;
           });
-      if (!result ||
+      if (!result || sumConsumer ||
           result->status == mathematical::LaneRealizationStatus::Realized)
         return result;
       // Body/port capacity is optional and has emitted nothing. Reuse the
@@ -794,10 +804,10 @@ public:
         scopedCallback(scopedCallback), budget(budget),
         scopedOccurrence(scopedOccurrence), entryControl(entryControl),
         scopedEntry(scopedCallback ? function() : func::FuncOp()) {}
-  FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
-                                         bool optimize,
-                                         const CollectFold *pair = nullptr,
-                                         ValueRange consumerInputs = {}) {
+  FailureOr<SmallVector<Value>>
+  emitBody(Operation *source, ValueRange entry, bool optimize,
+           const CollectFold *pair = nullptr, ValueRange consumerInputs = {},
+           Operation *sumConsumer = nullptr, StringRef sumOccurrence = {}) {
     composition = pair;
     // The source closure may be separate from the table receiving bindings.
     // Detached helper copies keep resolving through this original owner.
@@ -818,7 +828,7 @@ public:
     OwningOpRef<ModuleOp> normalized;
     Computation selectionComputation = computation;
     mathematical::ComputationSelection selection;
-    if (optimize) {
+    if (optimize || sumConsumer) {
       CallbackStructuralWork callbackWork(work.matching,
                                           selection.diagnostic.outcome);
       bool ready = true;
@@ -850,6 +860,55 @@ public:
         selection =
             mathematical::selectComputation(selectionComputation, {true, false},
                                             callbackWork.remaining, recipes);
+      // A collection and its sole adjacent native sum have a separate policy
+      // from ordinary finite bulk lowering. Recognition reads the admitted
+      // scalar callback; no candidate or structural pair supplies its equation.
+      if (sumConsumer &&
+          selection.kind == mathematical::RealizationKind::Elementwise &&
+          selection.view && selection.view->results.size() == 1) {
+        selection.sumCollection = true;
+        auto &view = *selection.view;
+        auto *product = view.results[0].getDefiningOp();
+        auto *meaning = product ? finite::semantics(product) : nullptr;
+        SmallVector<unsigned> inputs;
+        if (meaning &&
+            meaning->identity == MathematicalIdentity::FieldMultiply &&
+            product->getNumOperands() == 2) {
+          for (Value operand : product->getOperands()) {
+            std::optional<unsigned> input;
+            for (const auto &access : view.accesses) {
+              if (!consumeComputationWork(callbackWork.remaining.structural, 1,
+                                          WorkOwner::Structural,
+                                          &selection.diagnostic.outcome))
+                break;
+              if (access.value == operand &&
+                  access.kind == AccessKind::Element &&
+                  isa<algebra::FieldVectorType>(
+                      computation.signature.getInput(access.input)))
+                input = access.input;
+            }
+            if (!input || selection.diagnostic.outcome.status ==
+                              OptimizationStatus::Capacity)
+              break;
+            inputs.push_back(*input);
+          }
+        }
+        if (inputs.size() == 2) {
+          selection.collectionSum =
+              mathematical::selectMapSum({inputs[0], inputs[1]}, recipes);
+          if (selection.collectionSum)
+            selection.kind = mathematical::RealizationKind::CollectionSum;
+        }
+      }
+      if (!optimize) {
+        // An independently enabled contraction does not enable the ordinary
+        // map alternatives. Its required endpoint remains the ordered source.
+        selection.allowCollectionMap = false;
+        if (!selection.collectionSum &&
+            !(selection.sumCollection &&
+              expressionMode == NumericalExpressionMode::PreferNative))
+          selection.kind = mathematical::RealizationKind::Ordered;
+      }
       mathematical::applyNumericalSelection(work, selection, recipes);
       // A normalized helper's positions are not source positions. Attribute
       // queries inside that private view to the original finite occurrence.
@@ -865,7 +924,7 @@ public:
             prepared(occurrence))
           occurrence = source;
     }
-    if (!optimize)
+    if (!optimize && !sumConsumer)
       selection.diagnostic.outcome = {
           retryOrdered ? OptimizationStatus::Succeeded
                        : OptimizationStatus::PolicyDisabled,
@@ -985,6 +1044,21 @@ public:
       return failedHelper ? FailureOr<SmallVector<Value>>(failure())
                           : FailureOr<SmallVector<Value>>(branch.outputs);
     }
+    if (selection.kind == mathematical::RealizationKind::CollectionSum) {
+      const auto &reduction = *selection.collectionSum;
+      SmallVector<Value> operands;
+      for (unsigned input : reduction.inputs)
+        operands.push_back(entry[input]);
+      auto vector =
+          cast<algebra::FieldVectorType>(computation.signature.getResult(0));
+      loc = sumConsumer->getLoc();
+      auto result =
+          emit({reduction.recipe->target.str(), {vector.getDomain().str()}, ""},
+               operands, vector.getElementType(), {}, sumOccurrence);
+      return failedHelper
+                 ? FailureOr<SmallVector<Value>>(failure())
+                 : FailureOr<SmallVector<Value>>(SmallVector<Value>{result});
+    }
     if (selection.kind == mathematical::RealizationKind::Bilinear) {
       const auto &plan = selection.equations.bilinear;
       auto type = computation.signature.getResult(0);
@@ -1035,14 +1109,16 @@ public:
           reduction ? selection.equations.pointwiseReduction->term : Value();
       const auto *equation =
           reduction ? &*selection.equations.pointwiseReduction : nullptr;
-      auto mode = !reduction ? mathematical::LaneResultMode::Map
+      auto mode = selection.sumCollection ? mathematical::LaneResultMode::Sum
+                  : !reduction            ? mathematical::LaneResultMode::Map
                   : equation->combine == MathematicalIdentity::FieldMultiply
                       ? mathematical::LaneResultMode::Product
                       : mathematical::LaneResultMode::Sum;
       auto result = elementwise(
           *view->callbackBody, *view, formula, entry, vector, term, mode,
           equation ? ValueRange(equation->additionalTerms) : ValueRange{},
-          equation ? equation->combine : MathematicalIdentity::FieldAdd);
+          equation ? equation->combine : MathematicalIdentity::FieldAdd,
+          selection.sumCollection ? sumConsumer : nullptr, sumOccurrence);
       if (!result) {
         diagnostics::emit(source->emitOpError(), result.takeError());
         return failure();
@@ -1238,7 +1314,8 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     ScopedEmissionBudget *budget,
     const protocol::SourceExecutionClosure *sourceClosure,
     const llvm::DenseSet<Operation *> *fixedBindings,
-    const mathematical::MathematicalRecipes &recipes) {
+    const mathematical::MathematicalRecipes &recipes, Operation *sumConsumer,
+    StringRef sumOccurrence) {
   auto *block = builder.getInsertionBlock();
   auto function =
       block ? dyn_cast<func::FuncOp>(block->getParentOp()) : func::FuncOp();
@@ -1256,7 +1333,8 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
   Realizer realizer(owner, builder, work, recipes, &scope, false,
                     policy.numericalExpressions, callback, &control,
                     occurrenceName, budget, sourceClosure, fixedBindings);
-  auto result = realizer.emitBody(source, inputs, policy.finiteBulk);
+  auto result = realizer.emitBody(source, inputs, policy.finiteBulk, nullptr,
+                                  {}, sumConsumer, sumOccurrence);
   if (succeeded(result))
     scope.complete();
   return result;

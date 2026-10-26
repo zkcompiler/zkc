@@ -17,6 +17,7 @@ enum class RealizationKind {
   Bilinear,
   NestedContraction,
   Reduction,
+  CollectionSum,
   PointwiseReduction,
   Elementwise
 };
@@ -34,6 +35,12 @@ struct ComputationSelection {
   ComputationEquations equations;
   std::optional<NestedContraction> nested;
   std::optional<SelectedReduction> reduction;
+  std::optional<SelectedReduction> collectionSum;
+  // An actual collection/native-sum pair permits a summed expression even
+  // when ordinary finite map selection is disabled. These are producer choices,
+  // never premises supplied to the independent source/candidate reader.
+  bool sumCollection = false;
+  bool allowCollectionMap = true;
   const ReductionRecipe *pointwiseReduction = nullptr;
   const MatrixContractionRecipe *matrix = nullptr;
 };

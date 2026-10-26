@@ -259,14 +259,24 @@ selection, simplification and storage release. The same
 `MathematicalSelectionPolicy` is carried through preparation and projection to
 late realization. Retaining a map does not itself authorize fusion.
 
-An eligible pair is an adjacent map call and a single-use `vector.sum` in the
-same block, with exact field identity, no operation attributes and no fixed
-reducer implementation. Late selection can use:
+An eligible pair is a scoped `exec.collect` followed by an `exec.apply` of the
+native `vector.sum` contract, with the collected vector used only by that sum.
+Adjacency is in the admitted ordered execution steps: the required outcome
+dispatch blocks are administrative control flow. The exact field identity and
+empty parameter list must agree, and neither an explicit binding selection nor
+a fixed reducer implementation permits replacement. Late selection can use:
 
 - `vector.dot` when the admitted live formula is exactly the product of two
   row slots, including equal slots;
 - `numerical.sum` for a supported pointwise field formula;
-- a native or vector map followed by the original sum if fusion is unavailable.
+- a native or vector map followed by the original sum if fusion is unavailable
+  and finite bulk selection is enabled;
+- ordered collection followed by the original sum as the required endpoint.
+
+The fusion policy independently permits the dot and summed-expression choices.
+It does not enable ordinary bulk collection lowering. An unavailable provider
+advances only the implicated occurrence through its permitted alternatives.
+Discarded construction and optional recognition/comparison work stay charged.
 
 Every choice preserves the complete original ordered shape-check prefix,
 including unused rows, and the surrounding argument evaluations. Fixed bindings,
@@ -275,8 +285,10 @@ acquire replacement permission. Other reducers retain their original calls.
 
 The [checked physical plan](../../compiler/representation.md#checked-physical-decisions)
 selects feasible alternatives per occurrence before publication. Its independent
-reader checks the original source against the actual selected Local body;
-physical ports, implementations, conversions and final program capacity are
+reader interprets the original domain and callback against the actual selected
+scoped body, without accepting the producer's equation or recipe as evidence.
+It checks all domain admission before comparing the scalar sum and preserves
+the final reducer's occurrence and source location. Physical ports, implementations, conversions and final program capacity are
 checked separately. A reached runtime failure never triggers another realization.
 
 ### Admitted type uses

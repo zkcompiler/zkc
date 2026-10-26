@@ -48,7 +48,8 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedExpression(
     const protocol::SourceExecutionClosure *sourceClosure = nullptr,
     const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr,
     const mathematical::MathematicalRecipes &recipes =
-        mathematical::mathematicalRecipes());
+        mathematical::mathematicalRecipes(),
+    mlir::Operation *sumConsumer = nullptr, llvm::StringRef sumOccurrence = {});
 } // namespace zkc::finite
 
 #endif

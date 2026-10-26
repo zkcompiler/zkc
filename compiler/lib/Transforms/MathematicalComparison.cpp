@@ -1278,8 +1278,8 @@ public:
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
                           Operation *&cursor,
-                          llvm::DenseSet<Operation *> &bindings,
-                          Operation *end) {
+                          llvm::DenseSet<Operation *> &bindings, Operation *end,
+                          bool sumCollection = false) {
     sourceClosure = source.scopedSource;
     fixedBindings = source.fixedBindings;
     if (source.predicate || !source.helper ||
@@ -1292,7 +1292,9 @@ public:
     auto field = scalarField(resultType);
     if (!field || (source.collect && !vectorType(resultType)))
       return failure();
-    if (!source.collect)
+    if (sumCollection && !source.collect)
+      return failure();
+    if (!source.collect || sumCollection)
       terms.useNeutralLaws();
     auto &descriptor = source.domain->getRegion(0).front();
     llvm::DenseMap<Value, Value> mapping;
@@ -1331,6 +1333,11 @@ public:
       if (dimensions.size() != 1)
         return failure();
       expected.kind = Meaning::Lane;
+      if (sumCollection) {
+        expected = {Meaning::Scalar, aggregate(field.getDomain(),
+                                               ring::Kind::Add, expected.term)};
+        resultType = field;
+      }
     } else {
       auto reduction = terms.reduction(expected.term, state);
       // Identity normalization can erase an additive zero term completely.
@@ -1708,14 +1715,13 @@ compareLaneSum(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
   }
   return result;
 }
-FailureOr<Value> compareFinitePayload(const finite::Computation &source,
-                                      ValueRange inputs, Value rows,
-                                      Operation *&cursor, SymbolTable &symbols,
-                                      llvm::DenseSet<Operation *> &bindings,
-                                      uint64_t &remaining, Operation *end,
-                                      ComparisonCapacity *capacity,
-                                      std::optional<CapacityCause> *debit,
-                                      const ScopedCandidate *candidate) {
+FailureOr<Value>
+compareFinitePayload(const finite::Computation &source, ValueRange inputs,
+                     Value rows, Operation *&cursor, SymbolTable &symbols,
+                     llvm::DenseSet<Operation *> &bindings, uint64_t &remaining,
+                     Operation *end, ComparisonCapacity *capacity,
+                     std::optional<CapacityCause> *debit,
+                     const ScopedCandidate *candidate, bool sumCollection) {
   if (capacity)
     *capacity = ComparisonCapacity::None;
   if (debit)
@@ -1736,8 +1742,8 @@ FailureOr<Value> compareFinitePayload(const finite::Computation &source,
                  comparison.check(source, inputs, cursor, bindings, end));
   }
   Comparison comparison(symbols, rows, remaining, candidate);
-  return check(comparison,
-               comparison.finite(source, inputs, cursor, bindings, end));
+  return check(comparison, comparison.finite(source, inputs, cursor, bindings,
+                                             end, sumCollection));
 }
 StringRef comparisonCapacityName(ComparisonCapacity capacity) {
   switch (capacity) {

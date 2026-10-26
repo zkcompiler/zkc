@@ -115,6 +115,8 @@ mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
 
 add_zkc_test(finite_callback_selection Transforms finite-callback-selection)
 mlir_target_link_libraries(zkc-finite_callback_selection-test PRIVATE MLIRParser)
+add_zkc_test(scoped_collection_sum Transforms scoped-collection-sum)
+mlir_target_link_libraries(zkc-scoped_collection_sum-test PRIVATE MLIRParser)
 add_zkc_test(finite_preparation Transforms finite-preparation)
 mlir_target_link_libraries(zkc-finite_preparation-test PRIVATE MLIRParser)
 

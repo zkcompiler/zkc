@@ -1,6 +1,7 @@
 #include "Kernel/Support.h"
 #include "NumericalSelection.h"
 #include "RealizationSubject.h"
+#include "ScopedCollectionSum.h"
 #include "ScopedFinite.h"
 #include "ScopedPreparation.h"
 #include "ScopedSubstitution.h"
@@ -252,7 +253,8 @@ class ScopedExpander : private OpBuilder::Listener {
       return {};
     }
     const auto &steps = source.bodies.at(function.getSymName().str());
-    for (const auto &step : steps) {
+    for (unsigned index = 0; index < steps.size(); ++index) {
+      const auto &step = steps[index];
       auto *op = step.operation;
       auto previousLocation = control.getLocation();
       control.setLocation(op->getLoc());
@@ -313,6 +315,17 @@ class ScopedExpander : private OpBuilder::Listener {
         std::optional<CapacityCause> cause;
         finite::ScopedEmissionBudget budget{remaining, remainingBytes, cause};
 
+        auto *sumConsumer =
+            finitePolicy.vectorReductionFusion
+                ? finite::collectionSumConsumer(
+                      step,
+                      index + 1 < steps.size() ? &steps[index + 1] : nullptr,
+                      fixedBindings)
+                : nullptr;
+        auto sumOccurrence =
+            sumConsumer ? site(sumConsumer, path) : std::string();
+        if (!valid)
+          return {};
         auto effective = finitePolicy;
         auto previousSelection = finiteWork->numericalSelection;
         auto previousOccurrence = finiteWork->numericalOccurrence;
@@ -332,7 +345,8 @@ class ScopedExpander : private OpBuilder::Listener {
           subject.site = occurrence;
           subject.occurrence = path;
           selection->enterInvocation({});
-          auto id = selection->discover(subject, finitePolicy.finiteBulk,
+          auto id = selection->discover(subject,
+                                        finitePolicy.finiteBulk || sumConsumer,
                                         finitePolicy.numericalExpressions);
           if (!id) {
             diagnostics::emit(op->emitOpError(), id.takeError());
@@ -346,15 +360,31 @@ class ScopedExpander : private OpBuilder::Listener {
         }
         auto result = finite::realizeScopedExpression(
             op, inputs, builder, control, callback, *finiteWork, effective,
-            nullptr, occurrence, &budget, &source, fixedBindings, recipes);
+            nullptr, occurrence, &budget, &source, fixedBindings, recipes,
+            effective.vectorReductionFusion ? sumConsumer : nullptr,
+            sumOccurrence);
         if (failed(result) || result->size() != step.outputs.size()) {
           if (capacity && cause)
             *capacity = cause;
           valid = false;
           return {};
         }
-        for (auto [before, after] : zip(step.outputs, *result))
+        bool fused =
+            sumConsumer && result->size() == 1 &&
+            (*result)[0].getType() == steps[index + 1].outputs[0].getType();
+        const auto &outputs = fused ? steps[index + 1].outputs : step.outputs;
+        if (ValueRange(outputs).getTypes() != ValueRange(*result).getTypes()) {
+          valid = false;
+          return {};
+        }
+        for (auto [before, after] : zip(outputs, *result))
           env[before] = after;
+        if (fused) {
+          const auto &sum = steps[++index];
+          if (!charge(sum.operation,
+                      1 + sum.inputs.size() + sum.outputs.size()))
+            return {};
+        }
         continue;
       }
       if (auto call = dyn_cast<func::CallOp>(op)) {
@@ -636,12 +666,14 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
   auto &choices = selection ? *selection : standalone;
   for (;;) {
     mathematical::RecipeConstructionWork construction(work);
-    bool speculative = policy.finiteBulk && choices.canSpeculate() &&
-                       work.discardedRecipeCopy &&
+    bool speculative = (policy.finiteBulk || policy.vectorReductionFusion) &&
+                       choices.canSpeculate() && work.discardedRecipeCopy &&
                        work.discardedRecipeSiteBytes &&
                        construction.canDiscard(work);
-    if (!speculative)
+    if (!speculative) {
       policy.finiteBulk = false;
+      policy.vectorReductionFusion = false;
+    }
     auto incomingCopy = copy, incomingBytes = siteBytes;
     auto copyCeiling =
         speculative ? std::min(copy, work.discardedRecipeCopy) : copy;
@@ -719,6 +751,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     copy = copyCeiling;
     siteBytes = byteCeiling;
     policy.finiteBulk = false;
+    policy.vectorReductionFusion = false;
   }
 }
 

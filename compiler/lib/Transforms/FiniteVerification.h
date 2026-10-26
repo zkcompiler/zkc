@@ -28,6 +28,10 @@ struct VerificationLimits {
   // Required exact site sequence for ordered scoped preparation. Empty only
   // for readers whose enclosing numerical recipe checks occurrence names.
   llvm::StringRef finiteSite = {};
+  // Supplied only after inspecting the actual adjacent, sole-use native sum.
+  // A scalar result consumes both source steps; a vector result consumes one.
+  llvm::StringRef collectionSumSite = {};
+  std::optional<mlir::Location> collectionSumLocation = {};
 };
 enum class VerificationStatus {
   Verified,

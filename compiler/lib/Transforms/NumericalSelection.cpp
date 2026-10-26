@@ -116,8 +116,10 @@ MathematicalSelectionPolicy
 NumericalSelection::policy(NumericalOccurrence id,
                            MathematicalSelectionPolicy effective) const {
   auto choice = alternative(id);
-  if (choice == NumericalAlternative::Ordered)
+  if (choice == NumericalAlternative::Ordered) {
     effective.finiteBulk = false;
+    effective.vectorReductionFusion = false;
+  }
   if (choice == NumericalAlternative::Vector)
     effective.numericalExpressions = NumericalExpressionMode::VectorOnly;
   return effective;
@@ -135,16 +137,22 @@ void NumericalSelection::select(NumericalOccurrence id,
                         : canReplacePayload(*selected.view))) {
     occurrence.replaceable = false;
     occurrence.alternative = NumericalAlternative::Ordered;
+    selected.kind = RealizationKind::Ordered;
+    selected.sumCollection = false;
     return;
   }
   bool formula = selected.equations.pointwiseReduction.has_value() ||
                  selected.equations.elementwise.has_value();
-  occurrence.legal = {selected.kind == RealizationKind::Bilinear ||
-                          selected.kind == RealizationKind::NestedContraction ||
-                          selected.kind == RealizationKind::Reduction,
-                      formula && occurrence.expressionMode ==
-                                     NumericalExpressionMode::PreferNative,
-                      false, formula, true};
+  occurrence.legal = {
+      selected.kind == RealizationKind::Bilinear ||
+          selected.kind == RealizationKind::NestedContraction ||
+          selected.kind == RealizationKind::Reduction ||
+          selected.kind == RealizationKind::CollectionSum,
+      formula && (selected.allowCollectionMap || selected.sumCollection) &&
+          occurrence.expressionMode == NumericalExpressionMode::PreferNative,
+      formula && selected.sumCollection && selected.allowCollectionMap &&
+          occurrence.expressionMode == NumericalExpressionMode::PreferNative,
+      formula && selected.allowCollectionMap, true};
   auto index = static_cast<unsigned>(occurrence.alternative);
   while (!occurrence.legal[index])
     ++index;
@@ -152,8 +160,10 @@ void NumericalSelection::select(NumericalOccurrence id,
   auto choice = occurrence.alternative;
   if (choice == NumericalAlternative::Specialized)
     return;
+  selected.sumCollection &= choice == NumericalAlternative::Expression;
   selected.kind = RealizationKind::Ordered;
   selected.reduction.reset();
+  selected.collectionSum.reset();
   selected.matrix = nullptr;
   selected.pointwiseReduction = nullptr;
   if (choice == NumericalAlternative::Ordered)

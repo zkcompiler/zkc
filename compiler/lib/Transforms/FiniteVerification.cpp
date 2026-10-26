@@ -756,7 +756,7 @@ public:
     }
     bool startsEmpty =
         declaration && declaration.getContract() == "vector.empty";
-    if (allowBulk &&
+    if ((allowBulk || !limits.collectionSumSite.empty()) &&
         (mathematical::hasFinitePayloadContract(cursor, symbols) ||
          // An identity collect may return an existing vector without payload.
          (c.collect && cursor &&
@@ -774,20 +774,37 @@ public:
       mathematical::ComparisonCapacity capacity;
       std::optional<CapacityCause> debit;
       auto *payload = cursor;
-      if (auto compared = mathematical::compareFinitePayload(
-              c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
-              bindings, comparisonWork,
-              inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
-              &debit, limits.candidate);
-          succeeded(compared)) {
+      bool summed = !limits.collectionSumSite.empty();
+      auto compare = [&](bool sum) {
+        return mathematical::compareFinitePayload(
+            c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
+            bindings, comparisonWork,
+            inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
+            &debit, limits.candidate, sum);
+      };
+      auto compared = compare(summed);
+      if (failed(compared) && summed && allowBulk &&
+          capacity == mathematical::ComparisonCapacity::None) {
+        summed = false;
+        compared = compare(false);
+      }
+      if (succeeded(compared)) {
         // Mathematical equality does not authorize changing the actual
         // occurrence identities. Account and check the complete consumed
         // payload, including unused arithmetic admitted by the comparison.
-        for (auto *op = payload; op != cursor; op = ports.next(op))
-          if (!op || !charge() || !site(op)) {
+        for (auto *op = payload; op != cursor; op = ports.next(op)) {
+          bool final = op && summed && ports.next(op) == cursor;
+          bool named =
+              final ? op->getAttrOfType<StringAttr>("site") ==
+                              StringAttr::get(op->getContext(),
+                                              limits.collectionSumSite) &&
+                          limits.collectionSumLocation == op->getLoc()
+                    : op && site(op);
+          if (!op || !charge() || !named) {
             fail();
             return false;
           }
+        }
         finish(ValueRange{*compared});
         return valid;
       }

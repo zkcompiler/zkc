@@ -1,6 +1,7 @@
 #include "FiniteVerification.h"
 #include "Kernel/Support.h"
 #include "ScopedCandidate.h"
+#include "ScopedCollectionSum.h"
 #include "ScopedPreparation.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -80,7 +81,9 @@ class ScopedCorrespondence {
   }
   bool finite(Operation *op, const Steps &actual, unsigned &cursor,
               Environment &env, const SourceExecutionStep &step,
-              const Assignments &path, unsigned depth) {
+              const Assignments &path, unsigned depth,
+              const SourceExecutionStep *sum, bool &fused) {
+    fused = false;
     if (!view || cursor >= actual.size())
       return false;
     auto rootSite =
@@ -122,6 +125,18 @@ class ScopedCorrespondence {
     limits.fixedBindings = fixedBindings;
     limits.callback = callback;
     limits.finiteSite = *rootSite;
+    std::string sumSite;
+    if (sum) {
+      auto encoded = occurrence(
+          path, sum->operation->getAttrOfType<StringAttr>("site").getValue());
+      if (!encoded) {
+        consumeError(encoded.takeError());
+        return false;
+      }
+      sumSite = std::move(*encoded);
+      limits.collectionSumSite = sumSite;
+      limits.collectionSumLocation = sum->operation->getLoc();
+    }
     auto pure = [](Operation *, ValueRange, Operation *&) -> FailureOr<Values> {
       return failure();
     };
@@ -147,7 +162,9 @@ class ScopedCorrespondence {
       }
       return false;
     }
-    if (!bind(step.outputs, *result, env))
+    fused = sum && result->size() == 1 &&
+            (*result)[0].getType() == sum->outputs[0].getType();
+    if (!bind(fused ? sum->outputs : step.outputs, *result, env))
       return false;
     mathematical::CandidatePorts ports(view);
     for (auto *node = begin; node != at; node = ports.next(node)) {
@@ -309,13 +326,26 @@ class ScopedCorrespondence {
              bool &stopped) {
     if (depth > 64)
       return false;
-    for (const auto &step : source.bodies.at(function.getSymName().str())) {
+    const auto &steps = source.bodies.at(function.getSymName().str());
+    for (unsigned index = 0; index < steps.size(); ++index) {
+      const auto &step = steps[index];
       auto *op = step.operation;
       if (!charge(op, 1 + step.inputs.size() + step.outputs.size()))
         return false;
       if (finiteWork && isa<exec::FoldOp, exec::CollectOp>(op)) {
-        if (!finite(op, actual, cursor, env, step, path, depth))
+        auto *sum = index + 1 < steps.size() ? &steps[index + 1] : nullptr;
+        if (!finitePolicy.vectorReductionFusion ||
+            !finite::collectionSumConsumer(step, sum, fixedBindings))
+          sum = nullptr;
+        bool fused = false;
+        if (!finite(op, actual, cursor, env, step, path, depth, sum, fused))
           return false;
+        if (fused) {
+          ++index;
+          if (!charge(sum->operation,
+                      1 + sum->inputs.size() + sum->outputs.size()))
+            return false;
+        }
         continue;
       }
       if (auto call = dyn_cast<func::CallOp>(op)) {
