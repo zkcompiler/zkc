@@ -335,34 +335,12 @@ class NumericalBodyReader {
     return failure();
   }
 
-public:
-  NumericalBodyReader(ComputationBody &result, ComputationWork &work,
-                      ComputationDiagnostic &diagnostic,
-                      const protocol::SourceExecutionClosure *source = nullptr)
-      : result(result), work(work), diagnostic(diagnostic),
-        builder(result.helper.getContext()), targetSymbols(*result.storage),
-        scopedSource(source) {}
-  LogicalResult read(func::FuncOp source) {
-    auto *body = result.helper.addEntryBlock();
-    auto outputs = copyScoped(source, body->getArguments(), *body);
-    if (failed(outputs))
-      return failure();
-    builder.setInsertionPointToEnd(body);
-    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
-    result.sources[end] =
-        scopedSource->bodies.at(source.getSymName().str()).back().operation;
-    return success();
-  }
-  LogicalResult read(local::FuncOp source) {
-    auto *body = result.helper.addEntryBlock();
-    auto outputs =
-        copy(source.getBody().front(), body->getArguments(), *body, false);
-    if (failed(outputs))
-      return failure();
-    builder.setInsertionPointToEnd(body);
-    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
-    result.sources[end] = &source.getBody().front().back();
-    for (auto &op : llvm::make_early_inc_range(body->without_terminator())) {
+  // Exact projection substitution can leave an unused total pack. Remove
+  // only that descriptor from the optional view, retaining every scalar
+  // producer and original source occurrence. Executable callbacks and the
+  // independent semantic reader still use the unchanged source.
+  LogicalResult discardUnusedPacks(Block &body) {
+    for (auto &op : llvm::make_early_inc_range(body.without_terminator())) {
       if (!charge(&op))
         return failure();
       if (!isa<algebra::ArrayFromElementsOp>(op) || !op.use_empty())
@@ -379,6 +357,36 @@ public:
       op.erase();
     }
     return success();
+  }
+
+public:
+  NumericalBodyReader(ComputationBody &result, ComputationWork &work,
+                      ComputationDiagnostic &diagnostic,
+                      const protocol::SourceExecutionClosure *source = nullptr)
+      : result(result), work(work), diagnostic(diagnostic),
+        builder(result.helper.getContext()), targetSymbols(*result.storage),
+        scopedSource(source) {}
+  LogicalResult read(func::FuncOp source) {
+    auto *body = result.helper.addEntryBlock();
+    auto outputs = copyScoped(source, body->getArguments(), *body);
+    if (failed(outputs))
+      return failure();
+    builder.setInsertionPointToEnd(body);
+    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
+    result.sources[end] =
+        scopedSource->bodies.at(source.getSymName().str()).back().operation;
+    return discardUnusedPacks(*body);
+  }
+  LogicalResult read(local::FuncOp source) {
+    auto *body = result.helper.addEntryBlock();
+    auto outputs =
+        copy(source.getBody().front(), body->getArguments(), *body, false);
+    if (failed(outputs))
+      return failure();
+    builder.setInsertionPointToEnd(body);
+    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
+    result.sources[end] = &source.getBody().front().back();
+    return discardUnusedPacks(*body);
   }
 };
 

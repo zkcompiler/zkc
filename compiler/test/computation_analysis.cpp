@@ -381,6 +381,38 @@ int main() {
                     printed(*module) == before,
                 "result aliases/permutations or dead numerical work changed");
       });
+  cases.run("scoped projections discard only unused total packs", [&] {
+    auto module = numericalAdditionFixture(context);
+    auto raw = SymbolTable(&module->getBody()->front())
+                   .lookup<func::FuncOp>("raw_add");
+    auto sum = cast<algebra::FieldAddOp>(raw.front().front());
+    auto field = cast<algebra::FieldType>(raw.getArgument(0).getType());
+    OpBuilder builder(sum);
+    auto unused = algebra::FieldMultiplyOp::create(builder, raw.getLoc(), field,
+                                                   raw.getArguments());
+    auto pack = algebra::ArrayFromElementsOp::create(
+        builder, raw.getLoc(),
+        algebra::FieldArrayType::get(&context, field.getDomain(), 2),
+        ValueRange{raw.getArgument(1), raw.getArgument(0)});
+    auto left = algebra::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
+                                           builder.getI64IntegerAttr(1));
+    auto right = algebra::ArrayAtOp::create(builder, raw.getLoc(), field, pack,
+                                            builder.getI64IntegerAttr(0));
+    sum->setOperands({left, right});
+    require(succeeded(verify(*module)), "scoped packed source refused");
+    auto before = printed(*module);
+    auto c = computation(*module);
+    auto view = finite::analyzeComputation(c);
+    require(view && view->payload.size() == 2 &&
+                view->sourceOperation(view->payload[0]) == unused &&
+                view->payload[0]->use_empty() &&
+                view->sourceOperation(view->payload[1]) == sum &&
+                view->payload[1]->getOperand(0) == view->seeds[0].formal &&
+                view->payload[1]->getOperand(1) == view->items[0].formal &&
+                view->result == view->payload[1]->getResult(0) &&
+                printed(*module) == before,
+            "scoped pack substitution lost coordinates, scalar work or source");
+  });
   cases.run(
       "numerical call occurrences share source but own substituted SSA", [&] {
         auto module = numericalAdditionFixture(context, "sum");

@@ -95,7 +95,11 @@ fixtures retain complete carrier layouts and reached conversion order. Layout
 requests resolve semantic results in their actual outlined owners, excluding
 administrative operations with the same diagnostic site.
 Mathematical and retained finite requests are realized through this same scoped
-path. The physical transaction keeps the actual prepared and selected modules
+path. Scoped callback analysis substitutes exact total pack projections and
+removes unused pack descriptors from its private view, retaining scalar work
+and the unchanged source for independent comparison. Packed callbacks therefore
+participate in bulk selection with the same shape, failure and work controls.
+The physical transaction keeps the actual prepared and selected modules
 for independent checks of both edges. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
