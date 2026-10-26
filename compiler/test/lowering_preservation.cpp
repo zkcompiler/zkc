@@ -5,8 +5,12 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -32,8 +36,8 @@ protocol_ir::ParticipantOp participant(ModuleOp module, StringRef role = "P") {
   });
   return result;
 }
-local::FuncOp callee(local::CallOp call) {
-  return SymbolTable::lookupNearestSymbolFrom<local::FuncOp>(
+func::FuncOp callee(protocol_ir::LocalCallOp call) {
+  return SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
       call, call.getCalleeAttr());
 }
 constexpr StringLiteral fixture = R"mlir(module { "protocol.module"() ({
@@ -90,19 +94,22 @@ int main() {
     run(*original, protocol::createProjectProtocolPass());
     auto split = copy(*original);
     run(*split, protocol::createLowerMathPass());
-    auto call =
-        *participant(*split).getBody().front().getOps<local::CallOp>().begin();
+    auto call = *participant(*split)
+                     .getBody()
+                     .front()
+                     .getOps<protocol_ir::LocalCallOp>()
+                     .begin();
     auto function = callee(call);
-    auto invocation = cast<kernel::CallOp>(function.getBody().front().front());
-    SymbolTableCollection symbols;
-    auto entry = kernel::resolve(invocation, symbols);
+    auto invocation = cast<exec::ComputeOp>(function.getBody().front().front());
+    auto entry = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+        invocation, invocation.getCalleeAttr());
     require(bool(entry) && entry.getNumArguments() == 2 &&
                 isa<arith::AndIOp>(entry.front().front()),
             "split fixture mathematical body");
     auto closure = cast<mlir::ModuleOp>(entry->getParentOp());
     OpBuilder builder(function);
     auto prefixUnit = cast<mlir::ModuleOp>(builder.clone(*closure));
-    prefixUnit.setSymName("split_prefix_kernel");
+    prefixUnit.setSymName("split_prefix_computation");
     auto prefixEntry = mathematical::getComputationEntry(prefixUnit);
     auto &prefixBody = prefixEntry.front();
     auto &first = prefixBody.front();
@@ -110,20 +117,20 @@ int main() {
     for (auto &operation : llvm::make_early_inc_range(prefixBody))
       if (&operation != &first && !isa<func::ReturnOp>(operation))
         operation.erase();
-    auto prefix = cast<local::FuncOp>(builder.clone(*function));
+    auto prefix = cast<func::FuncOp>(builder.clone(*function));
     prefix.setSymName("split_prefix");
-    prefix->setAttr("logical_origin",
+    prefix->setAttr("runtime.origin",
                     builder.getArrayAttr({builder.getStringAttr("split_prefix"),
                                           builder.getArrayAttr({})}));
     auto prefixInvocation =
-        cast<kernel::CallOp>(prefix.getBody().front().front());
+        cast<exec::ComputeOp>(prefix.getBody().front().front());
     prefixInvocation.setCalleeAttr(SymbolRefAttr::get(
         SymbolTable::getSymbolName(prefixUnit),
         {FlatSymbolRefAttr::get(&context, prefixEntry.getSymName())}));
     builder.setInsertionPoint(call);
-    auto prefixCall = local::CallOp::create(
+    auto prefixCall = protocol_ir::LocalCallOp::create(
         builder, call.getLoc(), call.getResultTypes(), call.getInputs(),
-        prefix.getSymName(), "split_prefix");
+        prefix.getSymName(), "split_prefix", call.getRole());
     auto &andOperation = entry.front().front();
     andOperation.getResult(0).replaceAllUsesWith(entry.getArgument(1));
     andOperation.erase();
@@ -152,7 +159,7 @@ int main() {
             partition,
         "split escaped the closed lowering policy");
   });
-  cases.run("logical Kernel operand mutation", [&] {
+  cases.run("logical computation operand mutation", [&] {
     auto candidate = copy(*logical);
     bool changed = false;
     candidate->walk([&](arith::AndIOp op) {
@@ -170,7 +177,7 @@ int main() {
                 cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front()),
                 cast<protocol_ir::ProtocolModuleOp>(
                     candidate->getBody()->front()))),
-            "changed Kernel mathematics escaped formation correspondence");
+            "changed computation mathematics escaped formation correspondence");
   });
   auto mutation = [&](StringRef name, llvm::function_ref<void(ModuleOp)> change,
                       bool formed = true,
@@ -193,7 +200,7 @@ int main() {
               "mutation did not retain formation");
       bool code = false;
       ScopedDiagnosticHandler expected(&context, [&](Diagnostic &diagnostic) {
-        code |= diagnostic.str().find("kernel-lowering-correspondence") !=
+        code |= diagnostic.str().find("numerical-lowering-correspondence") !=
                 std::string::npos;
         return success();
       });
@@ -203,8 +210,11 @@ int main() {
     });
   };
   auto calculations = [](ModuleOp module) {
-    return SmallVector<local::CallOp>(
-        participant(module).getBody().front().getOps<local::CallOp>());
+    return SmallVector<protocol_ir::LocalCallOp>(
+        participant(module)
+            .getBody()
+            .front()
+            .getOps<protocol_ir::LocalCallOp>());
   };
   mutation(
       "swapped calculation participant attribution",
@@ -236,26 +246,35 @@ int main() {
         });
       },
       false);
-  mutation(
-      "invalid generated function visibility",
-      [&](ModuleOp module) {
-        callee(calculations(module)[1])
-            ->setAttr("sym_visibility", StringAttr::get(&context, "public"));
-      },
-      false, "interactive-local-visibility");
+  mutation("changed generated function visibility", [&](ModuleOp module) {
+    callee(calculations(module)[1]).setPrivate();
+  });
+  cases.run("outlined guard bodies must remain private", [&] {
+    auto candidate = copy(*bound);
+    auto function = callee(calculations(*candidate)[0]);
+    auto closure =
+        take(protocol::readSourceExecutionClosure(function->getParentOp()));
+    auto &body = closure.bodies.at(function.getSymName().str());
+    require(isa<exec::TestOp>(body.front().operation) &&
+                body.front().regions.size() == 2,
+            "missing outlined guard bodies");
+    body.front().regions[0].setPublic();
+    refuses(protocol::readSourceExecutionClosure(function->getParentOp()),
+            "execution-source-closure");
+  });
   mutation("wrong capture AND(a,b) becomes AND(a,a)", [&](ModuleOp module) {
     auto call = calculations(module)[1];
     call->setOperand(1, call->getOperand(0));
   });
   mutation("wrong primitive operand", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    auto &op = function.getBody().front().front();
-    op.setOperand(1, op.getOperand(0));
+    auto op = scopedFinite::applications(function, "bool.and").front();
+    op->setOperand(2, op.getInputs()[0]);
   });
   mutation("swapped calculation results", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    auto returned = cast<local::ReturnOp>(function.getBody().front().back());
-    auto first = returned.getInputs()[0], second = returned.getInputs()[1];
+    auto returned = scopedComputation::returned(function);
+    auto first = returned.getValues()[0], second = returned.getValues()[1];
     returned->setOperand(0, second);
     returned->setOperand(1, first);
   });
@@ -267,12 +286,12 @@ int main() {
       "wrong guard rejection",
       [&](ModuleOp module) {
         auto function = callee(calculations(module)[0]);
-        function.walk([](local::LocalIfOp branch) {
-          Region temporary;
-          temporary.takeBody(branch.getThenRegion());
-          branch.getThenRegion().takeBody(branch.getElseRegion());
-          branch.getElseRegion().takeBody(temporary);
-        });
+        SmallVector<func::CallOp> arms;
+        function.walk([&](func::CallOp call) { arms.push_back(call); });
+        require(arms.size() == 2, "guard fixture closed bodies");
+        auto first = arms[0].getCalleeAttr();
+        arms[0].setCalleeAttr(arms[1].getCalleeAttr());
+        arms[1].setCalleeAttr(first);
       },
       false);
   mutation("wrong finish value", [&](ModuleOp module) {
@@ -285,51 +304,47 @@ int main() {
   });
   mutation("extra executable calculation", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    auto &first = function.getBody().front().front();
-    auto *extra = first.clone();
-    extra->setAttr("site", StringAttr::get(&context, "extra"));
-    OpBuilder builder(&first);
-    builder.setInsertionPointAfter(&first);
-    builder.insert(extra);
+    auto first = scopedFinite::applications(function).front();
+    scopedComputation::duplicateInvocation(first, function, "extra");
   });
   mutation("changed selection arm", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    bool done = false;
-    function.walk([&](local::LocalIfOp select) {
-      if (done || select.getNumResults() != 1 || select.getNumOperands() != 3)
-        return;
-      auto &block = select.getThenRegion().front();
-      auto yield = cast<local::LocalYieldOp>(block.back());
-      yield->setOperand(
-          0, block.getArgument(
-                 1 - cast<BlockArgument>(yield.getInputs()[0]).getArgNumber()));
-      done = true;
-    });
-    require(done, "no select in fixture");
+    auto closure =
+        take(protocol::readSourceExecutionClosure(function->getParentOp()));
+    bool changed = false;
+    for (const auto &step : closure.bodies.at(function.getSymName().str())) {
+      if (!isa<exec::TestOp>(step.operation) || step.outputs.size() != 1)
+        continue;
+      require(step.regions.size() == 2, "missing selection arms");
+      auto arm = cast<func::FuncOp>(step.regions[0]);
+      auto complete = cast<exec::CompleteOp>(
+          closure.bodies.at(arm.getSymName().str()).back().operation);
+      auto argument = cast<BlockArgument>(complete.getValues()[0]);
+      complete->setOperand(1, arm.getArgument(3 - argument.getArgNumber()));
+      changed = true;
+      break;
+    }
+    require(changed, "no select in fixture");
   });
   mutation("wrong literal", [&](ModuleOp module) {
-    callee(calculations(module)[1]).walk([](local::BoolConstantOp value) {
+    unsigned changed = 0;
+    callee(calculations(module)[1]).walk([&](exec::BooleanOp value) {
+      require(value.getValue(), "literal fixture must start true");
       value.setValue(false);
+      ++changed;
     });
+    require(changed == 1, "missing or duplicated selection literal");
   });
   mutation("changed primitive contract", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
-    auto &first = function.getBody().front().front();
+    auto first = scopedFinite::applications(function, "bool.and").front();
     FlatSymbolRefAttr binding;
     module.walk([&](runtime::BindingOp op) {
       if (op.getContract() == "bool.or")
         binding = FlatSymbolRefAttr::get(&context, op.getSymName());
     });
     require(bool(binding), "missing OR binding in fixture");
-    OperationState state(first.getLoc(), "algebra.exec.bool_or");
-    state.addOperands(first.getOperands());
-    state.addTypes(first.getResultTypes());
-    state.addAttributes(first.getAttrs());
-    OpBuilder builder(&first);
-    auto *replacement = builder.create(state);
-    replacement->setAttr("binding", binding);
-    first.replaceAllUsesWith(replacement->getResults());
-    first.erase();
+    first.setBindingAttr(binding);
   });
   mutation("untracked executable definition", [&](ModuleOp module) {
     auto function = callee(calculations(module)[1]);
@@ -337,7 +352,7 @@ int main() {
     Builder builder(&context);
     extra->setAttr("sym_name", builder.getStringAttr("extra_definition"));
     extra->setAttr(
-        "logical_origin",
+        "runtime.origin",
         builder.getArrayAttr({builder.getStringAttr("extra_definition"),
                               builder.getArrayAttr({})}));
     function->getBlock()->push_back(extra);
@@ -353,7 +368,7 @@ int main() {
     auto function = callee(calculations(module)[1]);
     Builder builder(&context);
     function->setAttr(
-        "logical_origin",
+        "runtime.origin",
         builder.getArrayAttr({builder.getStringAttr("different_origin"),
                               builder.getArrayAttr({})}));
   });
@@ -366,18 +381,40 @@ int main() {
         bound->walk([&](runtime::BindingOp binding) {
           unit.getBody().front().push_back(binding->clone());
         });
-        auto authored = cast<local::FuncOp>(templateFunction->clone());
+        auto closure = take(protocol::readSourceExecutionClosure(
+            templateFunction->getParentOp()));
+        llvm::DenseSet<Operation *> copied;
+        std::function<void(func::FuncOp)> copyRegions =
+            [&](func::FuncOp function) {
+              for (const auto &step :
+                   closure.bodies.at(function.getSymName().str()))
+                for (func::FuncOp region : step.regions)
+                  if (copied.insert(region).second) {
+                    unit.getBody().front().push_back(region->clone());
+                    copyRegions(region);
+                  }
+            };
+        copyRegions(templateFunction);
+        auto authored = cast<func::FuncOp>(templateFunction->clone());
         Builder builder(&context);
         authored.setSymName("authored_template");
         authored->setAttr(
-            "logical_origin",
+            "runtime.origin",
             builder.getArrayAttr({builder.getStringAttr("authored_template"),
                                   builder.getArrayAttr({})}));
         unit.getBody().front().push_back(authored);
         require(succeeded(verify(*original)),
                 "authored template lost formation");
+        // Demand lowering freezes its input after independently checked
+        // helper expansion. Compare at that boundary: outlining can rename
+        // the template's control bodies and qualify its primitive sites.
+        auto frozen = protocol::expandScopedHelpers(*original);
+        require(bool(frozen), "authored template expansion refused");
         auto candidate = copy(*original);
         run(*candidate, protocol::createLowerMathPass());
+        require(succeeded(mathematical::verifyProjectionPreserved(*frozen,
+                                                                  *candidate)),
+                "unmodified demand lowering lost the frozen source");
         auto call = calculations(*candidate)[1];
         auto generated = callee(call);
         auto old = call.getCalleeAttr();
@@ -398,15 +435,17 @@ int main() {
         require(succeeded(verify(*candidate)),
                 "repurposed callee lost formation");
         bool freshness = false;
+        std::string refusal;
         ScopedDiagnosticHandler expected(&context, [&](Diagnostic &diagnostic) {
+          refusal += diagnostic.str();
           freshness |= diagnostic.str().find("callee must be fresh") !=
                        std::string::npos;
           return success();
         });
-        require(failed(mathematical::verifyProjectionPreserved(*original,
-                                                               *candidate)) &&
-                    freshness,
-                "authored callee was repurposed as generated work");
+        auto checked =
+            mathematical::verifyProjectionPreserved(*frozen, *candidate);
+        require(failed(checked) && freshness,
+                "authored callee freshness check did not fire: " + refusal);
       });
   cases.run("equivalent authored binding may supply a generated recipe", [&] {
     auto original = copy(*source);
@@ -519,8 +558,10 @@ int main() {
       llvm::outs() << "SKIP 256 KiB stack control: LLVM threads disabled\n";
       require(compare(), "long-chain lowering refused");
     }
-    auto calls =
-        participant(*candidate).getBody().front().getOps<local::CallOp>();
+    auto calls = participant(*candidate)
+                     .getBody()
+                     .front()
+                     .getOps<protocol_ir::LocalCallOp>();
     require(llvm::hasSingleElement(calls) &&
                 (*calls.begin()).getNumResults() == 1,
             "dead expression leaked a result port");
