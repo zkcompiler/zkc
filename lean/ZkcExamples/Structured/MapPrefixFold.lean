@@ -5,6 +5,8 @@ public import ZkcExamples.Structured.MapPrefixLaws
 
 @[expose] public section
 
+set_option backward.isDefEq.respectTransparency false
+
 /-! The retained Prefix closure, including its private finite callback and
 unchanged captured point, is linked through the complete checked Payload. -/
 namespace ZkcExamples.Structured.MapPrefixFold
@@ -55,7 +57,7 @@ theorem foldWrapper_equation (xs : List F) (dimension columns : Nat) (point : Li
 /-- Every reached finite callback uses the same full captured domain vector. -/
 theorem transition_equation (point : List F)
     (state : Values (assignment F G) [vector, .index, .index]) (r : F) :
-    Evaluation.foldTransition (program.payload.meanings F G) foldSpec (.cons point .nil) .nil state r =
+    Evaluation.foldTransition (program.payload.meanings F G) foldSpec (.cons point .nil) .nil state (.cons r .nil) =
       invoke (program.payload.meanings F G) firstHelper (state.append (.cons r .nil)) := by
   cases state with | cons xs rest => cases rest with | cons dimension rest => cases rest with
     | cons columns rest =>
@@ -81,12 +83,12 @@ theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack]
   have domainAdmitted :
-      (foldSpec.domain.denote (.cons point (.nil : Values (assignment F G) []))).admit =
-        .returned point := by
+      foldSpec.domain.admit (.cons point (.nil : Values (assignment F G) [])) =
+        .returned (point.map fun r => .cons r .nil) := by
     rw [domain_admit, ite_eq_left pointBound]
-  simp only [Finite.execute, domainAdmitted, Finite.admitThen]
-  have transition : Evaluation.foldTransition (program.payload.meanings F G) foldSpec
-      (.cons point .nil) .nil = fun (state : Values (assignment F G) [vector, .index, .index]) r =>
+  simp only [domainAdmitted, Finite.admitThen, Finite.fold_map]
+  have transition : (fun state r => Evaluation.foldTransition (program.payload.meanings F G) foldSpec
+      (.cons point .nil) .nil state (.cons r .nil)) = fun (state : Values (assignment F G) [vector, .index, .index]) r =>
         invoke (program.payload.meanings F G) firstHelper (state.append (.cons r .nil)) := by
     funext state r
     exact transition_equation point state r
@@ -125,6 +127,6 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
   rw [Evaluation.denoteFold_pack]
   have stopped := domain_admit (G := G) point
   rw [ite_eq_right invalid] at stopped
-  simp only [Finite.execute, stopped, Finite.admitThen]
+  simp only [stopped, Finite.admitThen]
 
 end ZkcExamples.Structured.MapPrefixFold

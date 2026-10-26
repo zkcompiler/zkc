@@ -21,9 +21,10 @@ def firstInputs (xs : List F) (dimension columns : Nat) (r : F) :
   .cons xs (.cons dimension (.cons columns (.cons r .nil)))
 
 /-- This premise names the full invocation and its ordered scalar formula. -/
-def MapLaw (table : Meanings F G) : Prop :=
+def MapLaw (table : Meanings F G)
+    (bindings : MultilinearCollectBodies.Bindings := MapFirstBodies.bindings) : Prop :=
   ∀ (low high : List F) (r : F), low.length = high.length → low.length < indexLimit →
-    invoke table mapHelper (.cons low (.cons high (.cons r .nil))) =
+    invoke table (MultilinearCollectBodies.mapHelper bindings) (.cons low (.cons high (.cons r .nil))) =
       .done (.cons (List.zipWith (fun lo hi => lo + (hi - lo) * r) low high) .nil)
 
 def HalvesLaw (table : Meanings F G) : Prop :=
@@ -36,10 +37,11 @@ def HalvesLaw (table : Meanings F G) : Prop :=
       else .halt .reject
 
 /-- Split guard, exact two-row map, checked subtraction, and ordered triple. -/
-theorem first_body (table : Meanings F G) (halves : HalvesLaw table) (map : MapLaw table)
+theorem first_body {bindings : MultilinearCollectBodies.Bindings}
+    (table : Meanings F G) (halves : HalvesLaw table) (map : MapLaw table bindings)
     (xs : List F) (dimension columns : Nat) (r : F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit) :
-    firstBody.denote (meaning F G table) (firstInputs xs dimension columns r).get =
+    (MultilinearCollectBodies.firstBody bindings).denote (meaning F G table) (firstInputs xs dimension columns r).get =
       if 0 < dimension then
         .done (inputs (restrictValues xs r) (dimension - 1) columns)
       else .halt .reject := by
@@ -62,7 +64,7 @@ theorem first_body (table : Meanings F G) (halves : HalvesLaw table) (map : MapL
     simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get, Primitive.evaluate, checkedIndices, dimensionBound,
       show 1 < indexLimit by decide +kernel, and_self, ite_true, primitiveOutcome]
     simp only [show 1 ≤ dimension by omega, ite_true, PIR.Process.bind, Values.get, inputs, restrictValues]
-    change (invoke table mapHelper
+    change (invoke table (MultilinearCollectBodies.mapHelper bindings)
       (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil)))).bind
       (fun result => .done (inputs (result.get .here) (dimension - 1) columns)) =
       .done (inputs (restrictValues xs r) (dimension - 1) columns)

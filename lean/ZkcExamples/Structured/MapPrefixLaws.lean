@@ -5,6 +5,8 @@ public import Zkc.Source.Structured.Laws
 
 @[expose] public section
 
+set_option backward.isDefEq.respectTransparency false
+
 /-! Exact finite-fold body equations and the reached-state restriction invariant.
 The fold is the existing Source.Finite.fold over the existing helper invocation. -/
 namespace ZkcExamples.Structured.MapPrefixLaws
@@ -22,11 +24,10 @@ def prefixInputs (xs : List F) (dimension columns : Nat) (point : List F) :
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The actual finite domain admits the point before any callback. -/
 theorem domain_admit (point : List F) :
-    (foldSpec.domain.denote (.cons point (.nil : Values (assignment F G) []))).admit =
-      if point.length < indexLimit then .returned point else .stopped .exhausted := by
-  change (Finite.Domain.check (point.length < indexLimit) .exhausted (.elements point)).admit = _
-  simp only [Finite.Domain.admit, decide_eq_true_eq]
-  rfl
+    foldSpec.domain.admit (.cons point (.nil : Values (assignment F G) [])) =
+      if point.length < indexLimit then .returned (point.map fun r => .cons r .nil)
+      else .stopped .exhausted := by
+  simp [foldSpec, DomainSpec.admit_elements, Collection.values, Values.get]
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem triple_eta {Value : Ty → Type} {a b c : Ty} (value : Values Value [a,b,c]) :
@@ -216,10 +217,10 @@ theorem finite_prefix_generic_body (table : Meanings F G) (first : FirstLaw tabl
   rw [fold_body]
   change Evaluation.denoteFold table foldSpec
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
-  rw [Evaluation.denoteFold_pack, Finite.execute, domain_admit]
+  rw [Evaluation.denoteFold_pack, domain_admit]
   split
-  · simp only [Finite.admitThen]
-    have transition : Evaluation.foldTransition table foldSpec (.cons point .nil) .nil =
+  · simp only [Finite.admitThen, Finite.fold_map]
+    have transition : (fun state r => Evaluation.foldTransition table foldSpec (.cons point .nil) .nil state (.cons r .nil)) =
         fun (state : Values (assignment F G) [vector, .index, .index]) r =>
           invoke table firstHelper (state.append (.cons r .nil)) := by
       funext state r

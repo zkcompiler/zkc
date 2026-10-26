@@ -422,7 +422,11 @@ The same Linking owner provides `BodyIn`, its invocation theorem and the
 
 `MapFirstContracts` and `MapPrefixContracts` package exact associations in small
 propositions and derive the library laws once per client's own table. First needs
-only its shared arithmetic/shape/map closure. Prefix additionally retains the full
+its shared arithmetic and shape closure together with the actual collection,
+callback and scalar realization. Private binding names are explicit parameters
+of the exact body associations, so a client checks its own exported computations.
+The collection admits both rows before invoking callbacks and retains both full
+rows and the broadcast argument in their ABI. Prefix additionally retains the full
 finite callback ABI, including the captured point, arbitrary column widths,
 ordered restriction, initial point-length admission and reached zero-dimension
 rejection. `MapContractInstances` instantiates these constructors independently

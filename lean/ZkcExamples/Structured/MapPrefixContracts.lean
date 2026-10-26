@@ -5,6 +5,8 @@ public import ZkcExamples.Structured.MapProjectionContracts
 public import ZkcExamples.Structured.MapPrefixLaws
 
 @[expose] public section
+
+set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Structured.MapPrefixContracts
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixLaws MapPrefixBodies
 open Zkc.Polynomial.Multilinear (restrictPrefixValues)
@@ -90,7 +92,7 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
   rw [prefix_finite_body linked bodies, fold_body]
   change Evaluation.denoteFold (closedMeanings (F := F) (G := G) definitions) foldSpec
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
-  rw [Evaluation.denoteFold_pack, Finite.execute, domain_admit, ite_eq_right invalid]
+  rw [Evaluation.denoteFold_pack, domain_admit, ite_eq_right invalid]
   rfl
 
 theorem values_equation (xs : List F) (dimension columns : Nat) :
