@@ -83,6 +83,7 @@ import all Zkc.Executable.DomainProcesses
 import all Zkc.Executable.DomainSchema
 import all Zkc.Executable.DomainSoundness
 import all Zkc.Executable.DomainTermSemantics
+import all Zkc.Executable.DomainVerifierTransport
 import all Zkc.Executable.Evaluation
 import all Zkc.Executable.Execution
 import all Zkc.Executable.Framing

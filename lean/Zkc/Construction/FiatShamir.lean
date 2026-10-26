@@ -19,9 +19,10 @@ the producer is absorbed instead of sent. It is the generic transform of
 (`Context.interface`): raw answers are field elements decoded by the identity,
 and the oracle at a history before an occurrence and the occurrence is the
 challenge function at their concatenation. The transform is independent of any
-compiled program; `Zkc.Construction.Semantics` gives exported programs their
-ideal and interactive meanings and `Zkc.Construction.Rule` checks that the first
-is the transform of the second. Treating the native suite's challenge function
+compiled program. `Zkc.Construction.DomainExecution` gives constructed
+participants their meaning. The structural construction rule and an actual
+participant/source correspondence supply separate evidence that the selected
+participant implements this transform. Treating the native suite's challenge function
 as a random oracle is a named assumption of a security consumer, not of the
 transform.
 -/

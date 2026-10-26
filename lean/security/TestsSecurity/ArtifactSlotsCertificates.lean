@@ -1,12 +1,12 @@
 module
 
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums
+import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck
+import ZkcExamples.Structured.OriginalArtifacts.TwoSums
 
 /-! These equations check the selected typed outputs against the actual retained
 loop yields and nominal sorts. The full callback/root simulations are audited
 by ConstructionBindingsCertificates and ArtifactBinding. -/
-open ZkcSecurity.Examples.Generated.OriginalArtifacts
+open ZkcExamples.Structured.OriginalArtifacts
 
 #print axioms SmallSumcheck.ValidatorCall0.outputs_derived
 #print axioms SmallSumcheck.ProducerCall0.outputs_derived

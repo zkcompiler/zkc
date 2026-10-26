@@ -2,9 +2,9 @@ module
 
 public import ZkcTools.ConstructionBindings.Analysis
 public import ZkcSecurity.Generation.ConstructionBindingsTemplates
-public import ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
-public import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates
-public import ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates
+public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs
+public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates
+public import ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates
 
 @[expose] public section
 
@@ -15,8 +15,8 @@ set_option autoImplicit false
 namespace ZkcSecurity.Generation.ConstructionBindings
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcTools.ConstructionBindings
-open ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
-open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
+open ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs
+open ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding
 open ZkcTools.StructuredSource.Presentation
 
 
@@ -25,13 +25,13 @@ def literal {α : Type} [Repr α] (value : α) : String :=
 
 def preamble (name : String) (imports : List String) (search : Bool := true) : String :=
   "module\n\n" ++ String.join (imports.map fun name => "public import " ++ name ++ "\n") ++
-  (if search then "\npublic meta import Zkc.Construction.ArtifactBindingTactic\npublic meta import ZkcSecurity.Tools.ProcessView\n" else "") ++
+  (if search then "\npublic meta import Zkc.Construction.ArtifactBindingTactic\npublic meta import Zkc.Construction.ProcessViewTactic\n" else "") ++
   "\n@[expose] public section\nset_option autoImplicit false\nset_option maxRecDepth 50000\n" ++
   "set_option maxHeartbeats 8000000\n" ++
   (if search then "set_option backward.isDefEq.respectTransparency false\n" else "") ++
   "noncomputable section\nnamespace " ++ name ++ "\n" ++
   "open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured\n" ++
-  "open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding\n" ++
+  "open ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding\n" ++
   "variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
 
 def occurrenceName (index : Nat) : String := "occurrence" ++ toString index
@@ -77,13 +77,13 @@ it is not a semantic evaluator or a replacement for the emitted kernel checks. -
 def templateMatches (producer : Bool) (context : Zkc.Construction.Context)
     (occurrence : Occurrence) (offset : Nat) (instruction : Zkc.Construction.Instruction) : Bool :=
   let expected := if producer then
-    ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerInstructions context occurrence offset
-    else ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorInstructions context occurrence offset
+    ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerInstructions context occurrence offset
+    else ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.validatorInstructions context occurrence offset
   let outputs := if producer then
-    (ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerOutputs context offset).references
-    else (ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.verifierOutputs context offset).references
+    (ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerOutputs context offset).references
+    else (ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.verifierOutputs context offset).references
   let sorts := if producer then
-    ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs.sorts context.suite
+    ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Outputs.sorts context.suite
     else VerifierOutputs.sorts context.suite
   match instruction.operation with
   | .loop site _ yielded =>
@@ -106,7 +106,7 @@ def checkApplicability (method : ProofMethod) (producer : Bool)
 /-- Print the four local origin equations once per source occurrence. -/
 def originLaws (index : Nat) : String :=
   "theorem " ++ occurrenceName index ++ "_origins :\n" ++
-  "    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context " ++ occurrenceName index ++ " := by\n" ++
+  "    ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.OriginLaws context " ++ occurrenceName index ++ " := by\n" ++
   "  constructor <;> intro index <;> kernel_rfl\n\n"
 
 def source (program : Program) (validator producer : Participant)
@@ -119,11 +119,11 @@ def source (program : Program) (validator producer : Participant)
   let imports := [sourceModule, pairModule,
     "ZkcExamples.Structured.Generated.Constructed." ++ rootName ++ "Validator",
     "ZkcExamples.Structured.Generated.Constructed." ++ rootName ++ "Producer",
-    "ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs",
-    "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates",
-    "ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates",
-    "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingLoop",
-    "ZkcSecurity.Realizations.Sumcheck.OriginalProducerReduce",
+    "ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs",
+    "ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates",
+    "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates",
+    "ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingLoop",
+    "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerReduce",
     "Zkc.Source.Structured.BodyBindings"]
   let mut text := preamble moduleName imports (method == .checkedDerivation) ++
     "abbrev program := " ++ sourceModule ++ ".imported.program\n" ++
@@ -151,7 +151,7 @@ def source (program : Program) (validator producer : Participant)
     listText (names.map (· ++ ".draw")) ++ ", " ++
     listText (names.map fun name => "⟨" ++ name ++ ".draw, " ++ name ++ ".delivery⟩") ++ ", []⟩\n\n"
   for index in List.range layout.calls.length do text := text ++ routes layout index
-  text := text ++ "theorem helper_bodies : ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies program := by bind_structured_bodies\n" ++
+  text := text ++ "theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program := by bind_structured_bodies\n" ++
     "theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=\n  ⟨helper_bodies.sumcheck.empty, helper_bodies.sumcheck.append, helper_bodies.sumcheck.width, helper_bodies.sumcheck.«variables», helper_bodies.sumcheck.values⟩\n\n"
   for (role, selected) in [("Validator", layout), ("Producer", producerLayout)] do
     for (loop, index) in selected.loops.zipIdx do
@@ -171,9 +171,9 @@ def source (program : Program) (validator producer : Participant)
         pure ("VerifierOutputs", literal outputs, "verifierOutputs")
       else do
         let outputs ← producerOutputs layout.context.suite actual loop.instruction
-        pure ("ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs", literal outputs, "producerOutputs")
+        pure ("ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Outputs", literal outputs, "producerOutputs")
       text := text ++ "def outputs : " ++ outputType ++ " context.suite := " ++ outputValue ++ "\n" ++
-        "theorem outputs_derived : ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs." ++ derivation ++
+        "theorem outputs_derived : ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs." ++ derivation ++
         " context.suite " ++ artifact ++ " " ++ toString loop.instruction ++ " = .ok outputs := by decide +kernel\n" ++
         "theorem output_references : outputs.references = " ++ natsText loop.yielded ++ " := by kernel_rfl\n"
       text := text ++ "theorem capture_size : ((" ++ artifact ++ ".instructions.take " ++ toString loop.instruction ++
@@ -184,7 +184,7 @@ def source (program : Program) (validator producer : Participant)
         "theorem loop_operation : (" ++ artifact ++ ".instructions.get ⟨" ++ toString loop.instruction ++
         ", by decide +kernel⟩).operation = " ++ literal (Operation.loop loop.site loop.maximum loop.yielded) ++ " := by kernel_rfl\n"
       if role == "Producer" then
-        text := text ++ "open ZkcSecurity.Realizations.Sumcheck.OriginalProducer\n" ++
+        text := text ++ "open ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer\n" ++
           "abbrev routing (handle : Nat) : Original.Routing := { " ++ moduleName ++ ".routing handle with mode := .producer }\n" ++
           (((((ConstructionBindingsTemplates.producerRoutes.replace "$DELIVERIES"
             (listText (names.map fun name => "⟨" ++ name ++ ".draw, " ++ name ++ ".delivery⟩"))).replace
@@ -194,8 +194,8 @@ def source (program : Program) (validator producer : Participant)
             "$OCCURRENCE_DECIMAL" (occurrenceName index ++ "_decimal")) ++ "\n"
       else text := text ++ "abbrev routes := " ++ occurrenceName index ++ "_routes\n"
       let owner := if role == "Validator" then
-        "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates" else
-        "ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates"
+        "ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates" else
+        "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates"
       let roleName := if role == "Validator" then "validator" else "producer"
       let outputName := if role == "Validator" then "verifierOutputs" else "producerOutputs"
       let selectedInstruction := "(" ++ artifact ++ ".instructions.get ⟨" ++ toString loop.instruction ++ ", by decide +kernel⟩)"
@@ -205,7 +205,7 @@ def source (program : Program) (validator producer : Participant)
       text := text ++ "theorem body_syntax : " ++ selectedInstruction ++ ".body =\n    " ++
         bodySyntax ++ " := by kernel_rfl\n" ++
         "theorem loop_sorts : " ++ selectedInstruction ++ ".results = " ++
-        (if role == "Validator" then "VerifierOutputs" else "ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Outputs") ++
+        (if role == "Validator" then "VerifierOutputs" else "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Outputs") ++
         ".sorts context.suite := by kernel_rfl\n" ++
         "theorem loop_site : " ++ quoted loop.site ++ " = qualifyProtocolSite occurrence.protocol.applicationPrefix \"s15\" := by kernel_rfl\n"
       if method == .sharedTemplate then
@@ -220,7 +220,7 @@ def source (program : Program) (validator producer : Participant)
       text := text ++ ((((template.replace "$OFFSET" (toString loop.offset)).replace "$BODY" body).replace
         "$ORIGINS" (occurrenceName index ++ "_origins")).replace
         "$ORIGIN_DEFINITIONS" (nominalSimp layout)) ++ "\n"
-      let callbackType := if role == "Validator" then "VerifierCallback" else "ZkcSecurity.Realizations.Sumcheck.OriginalProducer.ProducerCallback"
+      let callbackType := if role == "Validator" then "VerifierCallback" else "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.ProducerCallback"
       text := text ++ "def callback (handle : Nat) : " ++ callbackType ++ " program (routing handle) occurrence context outputs " ++ toString loop.offset ++ " handle\n  (" ++ body ++ " (ringModel F G) program context) :=\n"
       text := text ++ (if role == "Validator" then
         "  ⟨fun captured size index point scalar history => round captured size index handle point scalar history⟩\n"

@@ -64,16 +64,16 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
   unless frame.length == artifact.inputs.length do throw "construction-binding-root-input-abi"
   let inputEnv := env frame
   let mut text := preamble moduleName [bindingModule, originalModule, producerSource,
-    "ZkcSecurity.Realizations.Sumcheck.ArtifactRoot", "ZkcExamples.Structured.NormalFormSteps",
+    "ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot", "ZkcExamples.Structured.NormalFormSteps",
     "Zkc.Construction.OriginalCorrespondence"] ++
     "attribute [local irreducible] Zkc.Construction.Original.fold ZkcExamples.Structured.OriginalSumcheckLibrary.reduce Zkc.Construction.Domain.View.loop Zkc.Source.Participant.owned Zkc.Source.Structured.invoke Zkc.Construction.Domain.callHelper\n" ++
-    "open ZkcSecurity.Realizations.Sumcheck.ArtifactRoot\n" ++
+    "open ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot\n" ++
     "abbrev program := " ++ bindingModule ++ ".program\nabbrev context := " ++ bindingModule ++ ".context\n" ++
     "abbrev artifact := " ++ bindingModule ++ (if producer then ".producerArtifact" else ".validatorArtifact") ++ "\n" ++
     "abbrev routing := " ++ bindingModule ++ (if producer then ".ProducerCall0.routing" else ".routing") ++ "\n" ++
     "abbrev RootReturns := " ++ (if producer then "ProducerReturns" else "ValidatorReturns") ++ " (F := F) (G := G)\n" ++
     "def inputs " ++ params inputParams ++ " (history : Domain.History (uniformCarriers F G)) : Domain.Environment (uniformCarriers F G) :=\n  " ++ inputEnv ++ "\n\n"
-  if producer then text := text ++ "open ZkcSecurity.Realizations.Sumcheck.OriginalProducer\n"
+  if producer then text := text ++ "open ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer\n"
   let mut dynamic : Parameters := []
   let mut rules : List String := []
   let mut captures : List String := []
@@ -101,7 +101,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
       let selected ← helper program name
       if selected == SumcheckHelperBodies.emptyHelper then
         results := [← data (.vector "bls12-381.fr") "[]"]
-        mathLaws := mathLaws ++ ["ZkcSecurity.Realizations.Sumcheck.DomainHelpers.empty program " ++ bindingModule ++ ".helper_bodies.sumcheck"]
+        mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.empty program " ++ bindingModule ++ ".helper_bodies.sumcheck"]
       else if selected == MapFirstBodies.tableHelper then
         let [raw, dimension, width] := read | throw "construction-binding-table-abi"
         unless width.term == "1" && dimension.term == count do throw "construction-binding-table-domain"
@@ -109,7 +109,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
         let shape := "shape" ++ toString rawIndex
         let bounded := "bounded" ++ toString rawIndex
         results := read
-        mathLaws := mathLaws ++ ["ZkcSecurity.Realizations.Sumcheck.DomainHelpers.table program " ++ bindingModule ++ ".helper_bodies.sumcheck " ++ raw.term ++ " " ++ count ++ " 1 " ++ shape ++ " " ++ bounded ++ " countBound (by decide +kernel)"]
+        mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.table program " ++ bindingModule ++ ".helper_bodies.sumcheck " ++ raw.term ++ " " ++ count ++ " 1 " ++ shape ++ " " ++ bounded ++ " countBound (by decide +kernel)"]
         sourceLaws := sourceLaws ++ ["ZkcExamples.Structured.OriginalSumcheckProducerCalls.table_owned program.payload " ++ bindingModule ++ ".helper_bodies.sumcheck " ++ raw.term ++ " " ++ count ++ " " ++ shape ++ " " ++ bounded]
       else if selected == MapFirstBodies.widthHelper then
         let [_, _, width] := read | throw "construction-binding-width-abi"
@@ -121,7 +121,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
         let [left, right] := read | throw "construction-binding-less-abi"
         unless left.term == count && right.term == count do throw "construction-binding-less-domain"
         results := [← data .boolean "false"]
-        mathLaws := mathLaws ++ ["ZkcSecurity.Realizations.Sumcheck.DomainHelpers.less program " ++ bindingModule ++ ".helper_bodies.sumcheck " ++ count ++ " " ++ count ++ " countBound countBound"]
+        mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.less program " ++ bindingModule ++ ".helper_bodies.sumcheck " ++ count ++ " " ++ count ++ " countBound countBound"]
       else if selected == SumcheckHelperBodies.checkHelper && !producer then
         let [entries, point, scalar] := read | throw "construction-binding-check-abi"
         let name := "terminalRule" ++ toString helperIndex
@@ -255,6 +255,6 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     (if helperIndex == 0 then "" else "      | (intro process frame equation; subst frame; rfl)\n") ++
     "      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); rfl)\n" ++
     "      | (unfold RootReturns " ++ (if producer then "ProducerReturns; exact ⟨rfl, rfl, rfl, rfl, rfl⟩" else "ValidatorReturns; exact ⟨_, rfl, rfl, rfl, rfl, rfl⟩") ++ "))\n\nend " ++ moduleName ++ "\n"
-  return if producer then text.replace ", carried," ", ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried," else text
+  return if producer then text.replace ", carried," ", ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.carried," else text
 
 end ZkcSecurity.Generation.ConstructionBindingsRoots

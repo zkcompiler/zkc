@@ -1,135 +1,135 @@
-# Retained Sumcheck model transition
+# Typed construction and executable model transition
 
-This document records a semantic API change, not a universal equality between
-the historical uniform interpreter and Domain. The authoritative constructed
-instruction meaning is `Domain.participant` over the admitted program's
-`ringModel`. `SumcheckDomainConnection.retained` interprets that Process through
-an explicit scalar ABI adapter.
+The authoritative meaning of a constructed instruction is
+`Construction.Domain.step`; whole participants use `Domain.participant` over
+the admitted program. The metered Code interpreter adds resource accounting
+and delegates instruction behavior to that meaning. The byte interpreter is a
+separate actual stage, related to Code by checked native correspondence.
+Neither a type-preserving rename nor an unchanged theorem statement proves
+that its dependency meanings stayed unchanged.
 
-## Selected artifacts and arbitrary values
+This document describes the maintained interfaces and their scope. The
+historical instruction interpreters and duplicate Uniform proof stack are
+removed; full GKR and composed Sumcheck use checked Domain/source connections.
+The final model-transition inventory and independent replay remain separate
+acceptance evidence. A successful finite artifact check is not an
+execution-correspondence theorem.
 
-`SumcheckDomainConnection.artifact_identity` checks the entire generated
-`SmallSumcheckValidator.artifact` against the older `SumcheckProof.participant`.
-`source_identity` checks the entire admitted source program. Reuse does not
-depend on entry names or matching digest strings.
+## Admission, execution, and security have different owners
 
-The checked root equation covers every `values : List F`, `claim : F`, and
-`rounds : Nat`, with every field reply in every lawful monad. It does not
-assume a relation, a valid table shape, a successful helper, or an honest size
-bound. Excess rounds refuse. The terminal preserves its actual ordered tests:
-point representability, point length below 64, and table representability.
-Failure and the unread malformed proof head remain observable.
+| Boundary | Evidence | What it does not establish |
+|---|---|---|
+| Export to admitted program and participant | Exact structured import, construction and projection checks | Equivalence of executions or security |
+| Actual participant to a readable source proof | All-reply open-process correspondence, including stops and effects | Honest success or a probability bound by itself |
+| Actual byte instructions to metered Code | `DomainVM.checked_execute_metered` with finite native admission and local helper preparation | Correctness of an unmodeled Rust execution |
+| Metered Code to participant observation | Budget-independent pruning; equality/success when sufficient resources are proved | Acceptance from a resource bound alone |
+| Source proof to fixed security request | Property-specific proof of the requested game and all required stage links | A different adversary, oracle, representation, or deployment model |
 
-`round_projection`, `loop_projection`, and `root_projection` are equations of
-the actual generated instruction Process. They discharge the reached operand,
-result-sort, suite, request, template and coordinate checks. `helper_table`
-and `Domain.Binding.helperTable_ringModel` fix the actual helper bodies and
-their admitted dependency prefixes. The finite protocol normal forms do not
-interpret instruction constructors.
+`checkLowering` always validates canonical normalization and both input and
+output schemas, including when the instruction lists compare equal. Its
+accepted certificate obtains semantics from
+`CanonicalNormalization.accepted_sound`. Native admission separately checks
+actual local instructions, helper signatures, occurrences and frame/loop
+custody. These finite facts are inputs to the execution theorems, not
+assumptions that a whole execution already agrees.
 
-## Exact theorem dispositions
+## Sumcheck: preserved claims and changed intermediate meanings
 
-The old `SumcheckProof.compiled_transform` quantified arbitrary typed public
-values, history, proof, service handle and lawful monadic challenge. Its left
-side was the acceptance projection of:
+The retained Sumcheck source binding covers every typed public table, claim,
+round count, initial history, proof stream and lawful monadic challenge. It
+assumes neither the relation nor a valid table shape. Excess rounds refuse;
+terminal helper tests retain their actual order and resource boundaries.
+`SumcheckProof.compiled_transform` relates the actual `ScalarVerifier.verify`
+to the original source transform. `compiled_transform_rounds` additionally
+uses the mathematical premises needed to interpret a decoded table.
 
-```lean
-ideal context challenge table participant.returned participant.instructions
-  (inputs values claim rounds ++ [.transcript initial]) proof
-```
+The executable connection has three separate consumers:
 
-The maintained theorem has the same quantifiers and original-transform right
-side. Its left side now uses:
+- `SumcheckProof.executable_metered` observes the actual byte interpreter
+  through `DomainVM.metered`. This replaces an intermediate historical Code
+  meaning; it is an intentional model change.
+- `SumcheckProof.domain_prunes` has the fixed byte-endpoint type: actual native
+  validation can only remove acceptance from the actual constructed verifier,
+  using the actual receive plan and bytes after the 40-byte header. It covers
+  all budgets, decoders, framed byte strings and typed public values.
+- `SumcheckProof.executable_transform_prunes` keeps the original source-byte
+  proposition, composed through the maintained constructed-verifier theorem.
 
-```lean
-SumcheckDomainConnection.retained challenge values claim rounds initial proof
-```
+`SumcheckCompleteness.honest_accepted` keeps the concrete actual-native
+acceptance proposition. Its hypotheses remain field-coordinate codec
+inversion and message-size bounds, a 32-byte binding, table length
+`2 ^ rounds`, rounds within the static maximum and budget at least
+`68 + 59 * rounds`. It requires no inverse law for unrelated payload types.
+The proof combines mathematical honest success, sufficient resources, exact
+message decoding and native correspondence. Success includes the returned
+Boolean and consumption of the whole proof.
 
-`legacy_compiled_transform` retains the exact previous typed proposition.
-`retained_legacy` proves equality of the complete return outcome and unread
-proof before acceptance. The maintained theorem is proved directly through
-`SumcheckSourceVerifier.verifier_optional`, the actual source rounds and
-`SumcheckVerifierTerminal.terminal_decision`; it does not use the old generic
-uniform construction/projection soundness proof.
+The parameterized family now derives mathematical honesty from local helper,
+occurrence and price laws, then proves actual native byte acceptance. Its
+generic dependency closure excludes the concrete Entry and whole-program
+success combinators. The retained Entry instantiates it with append price two;
+a second checked native fixture changes the entry, oracle keys and maximum.
 
-`SumcheckProof.compiled_transform_rounds` makes the same left-side transition;
-`legacy_compiled_transform_rounds` retains its exact previous proposition.
-Its existing decoded-table and resource premises belong to its mathematical
-terminal interpretation. They are not premises of `retained_legacy`,
-`compiled_transform`, or the byte transport.
+This is a changed family interface, not an assertion that every old admission
+record remains admissible. Four origin-presence facts did not establish typed
+draw requests. A checked counterexample retains those facts while replacing
+the request by an unsupported tag; canonical native admission refuses it.
+The new family requires the actual typed request, receive schema, coordinate
+resolution, projected-key and suite laws. The model-transition inventory must
+record this explicit boundary separately from the preserved concrete byte
+proposition. No execution-success premise conceals the change.
 
-The former `SumcheckProof.spec_transform` is retired. It quantified
-`data : List (Value F G)` with only `data.length = 3`, including incorrectly
-sorted or unsupported raw values. It equated the old `ideal` acceptance with
-the transform of the old `spec` instruction reading. That statement described
-those two historical models; it supplied no Domain sort or metadata check.
-There is no claim that the maintained typed theorem is equivalent to this raw
-statement. The replacement for the selected actual artifact is the maintained
-`compiled_transform` above. The original raw statement and its proof remain in
-Git history at base `20e9a277a`.
+Historical comparison proofs and old intermediate statements are retained in
+Git/archive evidence, not exposed as compatibility aliases. The former raw
+`spec_transform` theorem related two historical interpreters on lists of a
+particular length; it did not check a Domain input schema. No unconditional
+raw-input equivalence is asserted for it.
 
-`raw_model_disagreement` checks this boundary on the unmodified selected
-Sumcheck artifact: with a Boolean in the claim slot and one round, the old
-model consumes both field messages before refusing. Domain refuses at input
-sort checking and leaves both messages unread. The two full results differ
-for every tail, low value and high value. This is an actual raw-input failure
-of the proposed universal transport, in addition to the malformed-guard
-mutation below.
+## Why universal historical equality is false
 
-The generic `Uniform.check_sound`, `Uniform.compiled_transform`, and
-`Uniform.compiled_selected` have **not** been reinterpreted or silently given a
-sorted-input premise. They remain historical model statements required by
-other current consumers. This lane does not claim their deletion or generic
-Domain replacement.
+The historical model could consume both round messages before refusing a
+Boolean in Sumcheck's scalar claim slot. Domain refuses at the input schema
+and leaves those messages unread. A malformed guard declaring a Boolean
+result likewise distinguishes the old model from Domain. Such counterexamples
+prevent replacing the historical interpreter's definition and calling the
+change semantics preserving.
 
-`SumcheckDomainControls.legacy_malformed_guard` and `nominal_malformed_guard`
-give an actual counterexample to unconditional transport: a true guard with
-one declared Boolean result continues in the historical model and refuses in
-Domain. The checked selected artifact has no such reached instruction. This
-counterexample precludes obtaining retirement by merely renaming the old
-interpreter or replacing its definition by Domain.
+The maintained source theorem covers the exact admitted, typed subject.
+Malformed raw exports are rejected during admission. False claims and
+wrong-shaped tables of admitted types remain adversarial inputs; they are not
+removed by a relation premise.
 
-## Histories, queries and original sends
+## The selected oracle and history boundary
 
-Legacy initialization is an arbitrary opaque prefix. Only the execution suffix
-is projected to old events. Scalar payload, proof, data, transcript and return
-adapters are explicit and partial. Unrepresentable values refuse.
+`Origin.withoutCoordinates` structurally removes dynamic coordinates from the
+execution suffix before invoking the selected scalar challenge function and
+its cache. The arbitrary initial history remains an opaque prefix. The source
+connection proves the actual message, challenge and delivery occurrences at
+every reached iteration; delivery remains a send, distinct from a draw.
 
-`legacyOrigin` removes the delimited dynamic-coordinate suffix. The four
-selected origin equations hold at every iteration index, not only honest
-ones. `message_identities` and `query_identity` check actual source sites,
-senders, receivers and draw request. The direct source proof keeps delivery as
-an actual send; it is absorbed as a message. `query_not_delivery` distinguishes
-that event from the challenge occurrence. Outcome/proof projection does not
-assert identity of physical observation lists or runtime frames.
+This preserves the selected scalar oracle's effects, including its state and
+query count. It does not identify that oracle with an independently sampled
+oracle indexed by all nominal histories. Distinct nominal keys may project
+to the same scalar key. A new nominal random-oracle game needs its own
+sampling, adversary and cost theorem.
 
-The adapter maps the complete suffix and key **before** invoking the existing
-legacy challenge function. `query_state` preserves its entire arbitrary
-`StateT` state, so cache updates, random state and query counters follow that
-same function. `nominal_queries_distinct` and `legacy_query_collision` show why
-this is not an equivalence with an independently sampled nominal random
-oracle. No injectivity, sampling, adversary or query-cost equivalence between
-those enlarged games is asserted.
+The byte bridge preserves the returned observation and unread suffix on
+successful execution. On failure it preserves the selected stop observation
+and preceding effects; it does not claim equality of discarded raw bytes,
+physical counters or cleanup frames. Cleanup is checked by its separate
+execution invariant. Framing, binding and complete-proof acceptance remain
+explicit parts of `validate`.
 
-## Bytes and the remaining deletion boundary
+## Acceptance evidence
 
-`executable_metered` retains its exact proposition about the actual executable
-and costed lowered Code. `metered_domain_prunes` connects that Code result to
-the complete adapted Domain return and unread proof at every budget.
-`executable_prunes` now targets Domain; `executable_legacy_prunes` retains the
-exact old byte proposition. `executable_transform_prunes` retains its exact
-original-transform byte proposition through the maintained Domain theorem.
+A final model-transition record must enumerate every protected root and its
+type-and-proof dependency closure. Unchanged declarations, preserved
+fragments with a correspondence theorem, intentional new meanings and retired
+roots with named replacements are distinct dispositions. Standard axioms,
+closed dependency bodies and exact artifact identities are checked before the
+current model is accepted. Independent kernel replay checks that current
+model; it does not prove equality with the historical model.
 
-The decoder, actual native codec scope, 40-byte frame treatment, binding
-header, whole-proof acceptance, helper/instruction charges and cleanup are
-unchanged. Existing executable resource and cleanup controls still apply.
-
-The historical `specK/specStep` and `idealK/idealStep` definitions have **not**
-been deleted. In particular, generic Code metering/pruning proofs and the
-finite historical comparison still depend on them; `meteredStep` still calls
-the historical scalar step. Removing those cases now would leave the protected
-byte proof without its checked VM connection. The migrated source proofs use
-Domain alone; the old duplicate execution path remains in the Code dependency
-chain. Its retirement remains an open integration obligation. This document
-must not be cited as final semantic closure or as native cryptographic
-security evidence.
+The archived historical failed comparisons and replay failures remain
+historical failures. Neither refreshed lock files nor a majority of replay
+checkers can turn them into a preservation result.

@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.Generated.Original.SmallSumcheck
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
+public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot
+public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot
 public import ZkcSecurity.Realizations.Sumcheck.OriginalRoot
 
 @[expose] public section
@@ -19,31 +19,31 @@ open ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open ZkcSecurity.Realizations.Sumcheck.OriginalRoot
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-abbrev program := ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.program
+abbrev program := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program
 abbrev payload := program.payload
-abbrev routing := ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.routing
-abbrev context := ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.context
+abbrev routing := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.routing
+abbrev context := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context
 theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions := by bind_structured_bodies
 
-theorem source_root_association : ZkcExamples.Structured.Generated.Original.SmallSumcheck.root.signature = ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.program.payload.entry.signature := by kernel_rfl
+theorem source_root_association : ZkcExamples.Structured.Generated.Original.SmallSumcheck.root.signature = ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program.payload.entry.signature := by kernel_rfl
 
-theorem nominal_order : [ZkcExamples.Structured.Generated.Original.SmallSumcheck.callContext0] = [ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol] := by kernel_rfl
+theorem nominal_order : [ZkcExamples.Structured.Generated.Original.SmallSumcheck.callContext0] = [ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol] := by kernel_rfl
 
 theorem check0_helper : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper27.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
-def schedule0 := schedule ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0 context
+def schedule0 := schedule ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0 context
  theorem routes0 (handle : Nat) : OriginalSecurity.Routes (routing handle)
-    ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ schedule0 [] :=
-  routes (routing handle) ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0 handle (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0_routes handle)
+    ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ schedule0 [] :=
+  routes (routing handle) ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0 handle (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0_routes handle)
 
 theorem call0_raw (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.SmallSumcheck.step0Realized (G := G) (some scalar) (some count) (some handle) =
       if count ≤ 2 then
-        (run (G := G) ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
+        (run (G := G) ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
           (fun result => .done (output result))
       else .halt .refused := by
-  change verifierCall payload 2 ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes scalar count handle = _
-  rw [call_raw payload ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.verifier_bodies 2 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ (by change 0 ≠ 1; decide)]
+  change verifierCall payload 2 ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes scalar count handle = _
+  rw [call_raw payload ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.verifier_bodies 2 ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ (by change 0 ≠ 1; decide)]
   split
   · apply congrArg (PIR.Process.bind _)
     funext result
@@ -60,7 +60,7 @@ theorem check0_raw (raw : List F) (state : State F) :
 theorem checked0 (raw : List F) (scalar : F) (count handle : Nat) :
     (ZkcExamples.Structured.Generated.Original.SmallSumcheck.step0Realized (G := G) (some scalar) (some count) (some handle)).bind
       (ZkcExamples.Structured.Generated.Original.SmallSumcheck.step1 (OriginalSumcheckLibrary.helpers payload) (some raw)) =
-      sourceRoot 2 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ raw scalar count := by
+      sourceRoot 2 ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ raw scalar count := by
   rw [call0_raw]
   unfold sourceRoot
   split
@@ -72,13 +72,13 @@ theorem checked0 (raw : List F) (scalar : F) (count handle : Nat) :
 
 theorem call0_binding (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.SmallSumcheck.step0Realized (G := G) (some scalar) (some count) (some handle) =
-      verifierCall payload 2 ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes scalar count handle := by rfl
+      verifierCall payload 2 ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes scalar count handle := by rfl
 
 theorem check0_honest (state : OriginalHonest.MathState F 0)
     (bounded : state.original.length < indexLimit) (pointBound : state.point.length < 64) :
     ZkcExamples.Structured.Generated.Original.SmallSumcheck.step1 (OriginalSumcheckLibrary.helpers payload) (some state.original)
-      (maskValues (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol.roles 1)
-        (ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol.mapScopes ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes)
+      (maskValues (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol.roles 1)
+        (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol.mapScopes ZkcExamples.Structured.Generated.Original.SmallSumcheck.reduceDefinition.outputScopes)
         (SumcheckVerifierBodies.reduceReturnValues (OriginalHonest.verifierValues (G := G) state))) =
       .done (.cons (some (decide (state.entries.sum = state.scalar))) .nil) := by
   change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)
@@ -87,7 +87,7 @@ theorem check0_honest (state : OriginalHonest.MathState F 0)
 
 theorem source_root (input0 : List F) (input1 : F) (input2 : Nat) (handle : Nat) :
     Occurrence.participant (ringModel F G) program 1 (.cons (some input0) (.cons (some input1) (.cons (some input2) (.cons (some handle) .nil)))) =
-      sourceRoot 2 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ input0 input1 input2 := by
+      sourceRoot 2 ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ input0 input1 input2 := by
   rw [ZkcExamples.Structured.Generated.Original.SmallSumcheck.participant_binding]
   exact checked0 input0 input1 input2 handle
 
@@ -100,6 +100,6 @@ theorem bridge (input0 : List F) (input1 : F) (input2 : Nat) (handle : Nat) (his
       (presented input0 input1 input2 history) := by
   unfold Original.participant
   rw [source_root]
-  exact root_bridge (routing handle) ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ schedule0 2 input0 input1 input2 ⟨[], history⟩ (routes0 handle)
+  exact root_bridge (routing handle) ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, handle⟩ schedule0 2 input0 input1 input2 ⟨[], history⟩ (routes0 handle)
 
 end ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources

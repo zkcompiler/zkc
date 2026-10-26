@@ -68,14 +68,9 @@ theorem compiled_rejects_wrong_response : evalWithAnswerFn (fixed 4)
 
 /-- The compiled program requires the whole proof to be read. -/
 theorem compiled_rejects_trailing_message : evalWithAnswerFn (fixed 4)
-    ((fun result => accepted (mapOutcome ZkcExamples.Construction.SchnorrProof.acceptance result.1,
-      result.2)) <$>
-      ideal ZkcExamples.Construction.SchnorrProof.context historyChallenge
-        ZkcExamples.Construction.SchnorrProof.table ZkcExamples.Construction.SchnorrProof.participant.returned
-        ZkcExamples.Construction.SchnorrProof.participant.instructions
-        ((ZkcExamples.Construction.SchnorrProof.inputs base key).map .data ++
-          [.transcript (initial application base key)])
-        [.group groupDomain 3, .field fieldDomain (3 + 4 * 2), .field fieldDomain 0]) = false := by
+    (accepted <$> ZkcExamples.Construction.SchnorrProof.compiledVerifier historyChallenge
+      base key (initial application base key)
+      [.group groupDomain 3, .field fieldDomain (3 + 4 * 2), .field fieldDomain 0]) = false := by
   decide +kernel
 
 /-- The challenge history contains the statement of `initial`. The proof

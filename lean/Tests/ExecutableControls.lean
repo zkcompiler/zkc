@@ -1,6 +1,9 @@
 import ZkcExamples.Executable.SchnorrProofFacts
 import ZkcExamples.Construction.SchnorrProof
 import Zkc.Executable.DomainLowering
+import Zkc.Executable.Relation
+import Zkc.Executable.Decoding
+import Zkc.Executable.NativeLaws
 import Zkc.Executable.Cleanup
 import Mathlib.Algebra.Field.ZMod
 

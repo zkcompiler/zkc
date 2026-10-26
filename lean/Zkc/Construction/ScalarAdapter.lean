@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Construction.Scalar
 public import Zkc.Construction.DomainExecutionLaws
 
@@ -219,3 +222,8 @@ theorem callHelper_checked_signature (program : Structured.Program) (name : Stri
 
 end Execution
 end Zkc.Construction.Uniform.DomainAdapter
+
+-- Own generated equations here, before independent clients request them.
+-- Their proofs remain kernel checked and retain a single stored provider.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Uniform.DomainAdapter.readbackData

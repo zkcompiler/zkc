@@ -404,7 +404,7 @@ class Driver(Runner):
         glue_namespace = subject.construction_namespace
         # Only the generated glue and the rules: the charge, whose module reads the
         # generated facts and the hand proofs, is evaluated after they are rebuilt.
-        parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Lowering",
+        parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Reading",
                  "import Zkc.Executable.Helpers", "import Zkc.Construction.Participant", f"import {glue_module}"]
         parts += ["set_option maxRecDepth 20000",
                   strip_header(constructed.render(exported, "Fresh.Constructed")),

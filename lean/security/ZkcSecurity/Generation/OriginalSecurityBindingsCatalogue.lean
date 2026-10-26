@@ -33,7 +33,7 @@ run_cmd do
     let moduleName := "ZkcSecurity.Examples.Generated.OriginalSecurity." ++ root.name
     let output : OriginalSecurityBindings.Output := {
       moduleName, originalModule := "ZkcExamples.Structured.Generated.Original." ++ root.name
-      artifactModule := "ZkcSecurity.Examples.Generated.OriginalArtifacts." ++ root.name
+      artifactModule := "ZkcExamples.Structured.OriginalArtifacts." ++ root.name
       subjectModule := root.subjectModule, abiModule := root.componentModule "ABI"
       formulaNamespace := root.formulaNamespace, fieldType := root.mathematics.fieldType
       groupType := root.mathematics.groupType, modulus := root.mathematics.modulus

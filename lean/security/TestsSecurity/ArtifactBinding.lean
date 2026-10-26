@@ -7,7 +7,7 @@ No concrete field execution, fixed callback recognizer, or receipt is used. -/
 set_option autoImplicit false
 namespace TestsSecurity.ArtifactBinding
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcSecurity.Examples.Generated.OriginalArtifacts
+open ZkcExamples.Structured.OriginalArtifacts
 
 /-- Changing a nominal query identity cannot be certified by the structural
 rules. Checkpoints cannot hide the differing observable operation. -/
@@ -57,9 +57,9 @@ example (selected supplied : Nat) (different : supplied ≠ selected)
   simp [Original.Routing.draw, different]
 
 #print axioms Zkc.Construction.ArtifactBinding.captures_trans
-#print axioms ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.original_round
-#print axioms ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.VerifierCallback.reduce
-#print axioms ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.terminal
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.original_round
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.VerifierCallback.reduce
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.terminal
 #print axioms SmallSumcheck.ValidatorCall0.round
 #print axioms TwoSums.ValidatorCall0.round
 #print axioms TwoSums.ValidatorCall1.round

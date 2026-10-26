@@ -30,6 +30,7 @@ kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-deliv
 
 [construction]
 namespace = "ZkcExamples.Construction.GkrProof"
+connection = "ZkcExamples.Construction.GkrProof"
 admission = "external"
 views = "ZkcExamples.Structured.GkrSourceViews"
 inputs = "values"

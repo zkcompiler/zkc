@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Construction.ScalarAdapter
 public import Zkc.Construction.DomainBinding
 public import Zkc.Construction.OriginalSimulation
@@ -337,3 +340,9 @@ theorem callHelper_embed (program : Structured.Program)
 
 end Helpers
 end Zkc.Construction.Uniform.DomainAdapter
+
+-- Own generated equations here, before independent clients request them.
+-- Their proofs remain kernel checked and retain a single stored provider.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Uniform.DomainAdapter.readbackPayload
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.Uniform.DomainAdapter.readbackValue

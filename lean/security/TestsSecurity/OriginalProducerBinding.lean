@@ -1,7 +1,7 @@
 module
 
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot
+import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot
+import ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot
 
 /-! Kernel audits of actual original-to-retained producer certificates, with
 nominal delivery and stopped-prefix controls. No concrete execution fixture
@@ -9,7 +9,7 @@ or assumed root-process equality supplies the producer evidence. -/
 set_option autoImplicit false
 namespace TestsSecurity.OriginalProducerBinding
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcSecurity.Examples.Generated.OriginalArtifacts
+open ZkcExamples.Structured.OriginalArtifacts
 
 /-- Even an equal field payload cannot justify changing the delivery origin.
 The arbitrary continuation reply remains part of the structural certificate. -/
@@ -67,9 +67,9 @@ example (leftRaw rightRaw : List F) (count handle : Nat)
 
 end Projections
 
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalProducer.original_round
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalProducer.ProducerCallback.loop
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalProducer.ProducerCallback.reduce
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.original_round
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.ProducerCallback.loop
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.ProducerCallback.reduce
 #print axioms SmallSumcheck.ProducerCall0.round
 #print axioms TwoSums.ProducerCall0.round
 #print axioms TwoSums.ProducerCall1.round

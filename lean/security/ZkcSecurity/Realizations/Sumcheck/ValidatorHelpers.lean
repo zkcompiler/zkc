@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
+public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 @[expose] public section
 
@@ -39,7 +40,7 @@ theorem call_exhausted (program : Structured.Program) (helper : Helper)
 
 /-- Every raw length is included. The sole prefix bound is supplied by the
 actual Max guard plus successful loop output, never by a receipt premise. -/
-theorem terminal_all (program : Structured.Program) (bodies : DomainHelpers.Bodies program)
+theorem terminal_all (program : Structured.Program) (bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program)
     (raw point : List F) (claim : F) (pointSmall : point.length < 64) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
       [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" point),
@@ -50,7 +51,7 @@ theorem terminal_all (program : Structured.Program) (bodies : DomainHelpers.Bodi
       else .stopped .exhausted := by
   by_cases bounded : raw.length < indexLimit
   · rw [ite_eq_left bounded]
-    exact DomainHelpers.check program bodies.prefixBodies bodies.sumcheck.first bodies.check bodies.checkTable
+    exact ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check program bodies.prefixBodies bodies.sumcheck.first bodies.check bodies.checkTable
       raw point claim bounded (pointSmall.trans (by decide +kernel))
   · rw [ite_eq_right bounded]
     apply call_exhausted program checkHelper (checkInputs raw point claim) _ rfl

@@ -345,7 +345,7 @@ def main : IO Unit := IO.FS.writeFile {quoted(str(output))} (RootCompleteness.di
             return
         self.prepare(root.get("method_imports", []))
         self.prepare([
-            "ZkcSecurity.Tools.ProcessView", "ZkcSecurity.Families.Sigma.Algebra",
+            "Zkc.Construction.ProcessViewTactic", "ZkcSecurity.Families.Sigma.Algebra",
             "ZkcSecurity.Families.Sigma.Realization", "ZkcSecurity.Tools.SigmaReadback",
             "ZkcSecurity.Generation.UniformRoot",
             "ZkcSecurity.Generation.SigmaCompleteness", "ZkcSecurity.Generation.SigmaCompleteness.Command"])

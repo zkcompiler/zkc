@@ -529,7 +529,7 @@ end
 A local body that applies no transcript operation does not depend on the
 challenge function or the live transcript. `evalSteps` gives its unbounded
 meaning: what it hands back or why it stops, and how many instructions it
-charges until then. `Zkc.Executable.Soundness` shows that `localK` on such a
+charges until then. `Zkc.Executable.Evaluation` shows that `localK` on such a
 body is this evaluation, cut off by the budget. -/
 
 /-- What a local body or region hands back, or why it stops, with the

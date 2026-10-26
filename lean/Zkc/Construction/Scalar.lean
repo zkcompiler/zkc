@@ -224,3 +224,4 @@ end Zkc.Construction
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.decodeValues
   discard <| Lean.Meta.getEqnsFor? ``Zkc.Construction.scalarType
+  discard <| Lean.Meta.getUnfoldEqnFor? ``Zkc.Construction.encodeValues

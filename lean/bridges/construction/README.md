@@ -42,22 +42,20 @@ For each subject with the construction profile:
    original's data (rendered by the structured bridge's `snapshot.py`), the
    constructed participant (rendered by `render.py`), the typed bodies printed
    from the admitted original by the structured bridge's `bodies.py`, and the
-   per-Entry glue. The glue admits the original from the printed bodies with
-   `structured_views` (or names an existing Views module), checks the composed
-   rules (`compiled`) and the selection of the export's inputs and acceptance
-   output (`selection_checked`) in the kernel, and instantiates
-   `Zkc.Construction.Uniform.compiled_selected`, so `compiled_transform` holds with no
-   proof specific to the Entry. A manifest's `[construction] model` adds the
-   definitional equation of the original validator with a model process and the
-   interactive reading of the constructed program (`spec_equation`).
-4. A generated Lean file runs the composed check `Uniform.checkCompiled` and the
-   selection check in the kernel on the fresh export against the admitted
-   original, which must be accepted with axioms among `propext`,
-   `Classical.choice` and `Quot.sound`. The fresh original snapshot must be the
-   retained one (`original_retained`, by `rfl`), so the retained admission is
-   the fresh original's admission. The same file checks that the Lean model of
-   the canonical occurrence encoding (`templateTree`) encodes every exported
-   template to exactly its native bytes.
+   admission metadata. That metadata admits the original from the printed
+   bodies with `structured_views` (or names an existing Views module), checks
+   `compiled` and `selection_checked` in the kernel, and retains the exact
+   input/output ABI. The manifest's distinct `[construction] connection`
+   module supplies the maintained actual Domain-to-source execution theorem.
+   A finite admission check does not generate that execution theorem.
+4. A generated Lean file runs `Construction.checkCompiled` and the selection
+   check on the fresh export against the admitted original. Their proofs may
+   use only `propext`, `Classical.choice` and `Quot.sound`. The fresh original
+   snapshot must be the retained one (`original_retained`, by `rfl`). The file
+   also checks that the Lean occurrence encoding (`templateTree`) gives every
+   exported template exactly its native bytes. These are artifact identity and
+   structural checks. Source-model equations and actual execution bindings
+   have their own proof modules and scopes.
 5. The manifest's generic mutation kinds are applied to the fresh export (see
    `python3 lean/bridges/subject.py --list-mutations`): each applicable site must
    change the export, still render, and be refused by the rule its kind names

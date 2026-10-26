@@ -5,7 +5,7 @@ public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackLoop
 public import Zkc.Construction.DomainCalculations
 public import Mathlib.Tactic.FailIfNoProgress
 public meta import Lean.Elab.Tactic
-public meta import ZkcSecurity.Tools.ProcessView
+public meta import Zkc.Construction.ProcessViewTactic
 
 @[expose] public section
 

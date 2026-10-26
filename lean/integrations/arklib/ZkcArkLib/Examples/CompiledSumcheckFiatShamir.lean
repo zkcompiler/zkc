@@ -22,8 +22,8 @@ Two proved links compose:
 
 * Vertical. For every challenge function the compiled meaning is the
   Fiat–Shamir transform of the Proof Entry's original validator
-  (`SumcheckProof.compiled_transform`, an instance of the composed rules'
-  `Zkc.Construction.compiled_transform` with no Entry-specific equation). That
+  (`SumcheckProof.compiled_transform`, derived from the actual all-reply
+  Domain-to-source connection). That
   original validator is the imported `example::Interactive` verifier of the
   security theorems (`verifier_imported`): both read the admitted Sumcheck
   source, and the construction bridge checks that the Proof Entry's fresh

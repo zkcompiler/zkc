@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Sumcheck.OriginalProducerReduce
+public import ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerReduce
 public import ZkcSecurity.Realizations.Sumcheck.OriginalSecurity
 public import ZkcSecurity.FiatShamir.OriginalReadback
 
@@ -17,6 +17,7 @@ set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalHonest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
+open ZkcExamples.Structured.SumcheckArtifacts
 open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck
 open SumcheckVerifierBodies TableComponent
 

@@ -21,7 +21,7 @@ run_cmd do
     let program ← match Zkc.Source.Structured.check root.snapshot with
       | .ok program => pure program
       | .error reason => throwError "{root.name}: {reason}"
-    let moduleName := "ZkcSecurity.Examples.Generated.OriginalArtifacts." ++ root.name
+    let moduleName := "ZkcExamples.Structured.OriginalArtifacts." ++ root.name
     let generated ← match ConstructionBindings.source program root.artifacts.validator
         root.artifacts.producer moduleName root.sourceModule root.pairModule with
       | .ok text => pure text
@@ -40,7 +40,8 @@ run_cmd do
       let selected ← match ZkcTools.ConstructionBindings.analyzeWithContext program layout.context artifact with
         | .ok layout => pure layout
         | .error reason => throwError "{root.name}: {reason}"
-      let rootModule := moduleName ++ (if role == 0 then "ProducerRoot" else "ValidatorRoot")
+      let rootModule := moduleName ++
+        (if role == 0 then "ProducerRoot" else "ValidatorRoot")
       let generated ← match ConstructionBindingsRoots.source program artifact selected role rootModule moduleName
           ("ZkcExamples.Structured.Generated.Original." ++ root.name) producerModule with
         | .ok text => pure text

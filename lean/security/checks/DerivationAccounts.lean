@@ -15,8 +15,8 @@ theorem unrelatedMentions
       (F := Rat) (G := Rat) (some 0) (some 0) (some 0) =
       ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
       (F := Rat) (G := Rat) (some 0) (some 0) (some 0)) :
-    ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1 =
-      ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1 := rfl
+    ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 =
+      ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 := rfl
 
 run_cmd do
   let mut accounts := #[]
@@ -39,19 +39,19 @@ run_cmd do
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
         ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
         ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
-        ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1
+        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
         4
     Tests.ProofAccount.expectRefusal "wrong static bound" "typed association mismatch" <|
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
         ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
         ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
-        ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0
+        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0
         3
     Tests.ProofAccount.expectRefusal "names in an unrelated statement" "typed association mismatch" <|
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation
         (← ZkcTools.ProofAccount.reachable ``unrelatedMentions) ``unrelatedMentions
         ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
-        ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1
+        ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
         4
     -- The WP root consumes the terminal contract. The mathematical discharge
     -- is inside that reached contract, not a direct application in the root.

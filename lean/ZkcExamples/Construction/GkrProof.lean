@@ -1,224 +1,54 @@
 module
 
-public import Zkc.Construction.Uniform.Compiled
-public import Zkc.Source.Structured.CommonAdapter
-public import ZkcExamples.Structured.GkrSourceData
-public import ZkcExamples.Construction.GkrProofParticipant
-public import ZkcExamples.Structured.GkrSourceViews
+public import ZkcExamples.Construction.GkrArtifact
+public import ZkcExamples.Construction.GkrDomainConnection
+public import Zkc.Construction.ScalarVerifier
 
 @[expose] public section
 
-/-! Generated construction facts of the compiled `example::Proof` Entry of the subject
-`gkr`. Regenerate with `lean/bridges/subject.py --write`.
-
-`GkrSourceData` is the Entry's original export and
-`GkrProofParticipant` its constructed validator. The composed
-transcript-construction and participant projection Uniform.check accepts the pair
-(`compiled`), and the selection Uniform.check (`selection_checked`) discharges the
-positional premises of the composed rules from data the kernel reads, so
-`compiled_transform` holds with no proof specific to this Entry: for every
-challenge function, the compiled verifier's ideal meaning is the Fiat–Shamir
-transform of the original validator. -/
-
+/-! Selected canonical execution of the actual looped artifact. Admission
+metadata and the complete all-reply source binding are separate dependencies.
+No mathematical well-formedness premise is needed for this transport. -/
+set_option autoImplicit false
+set_option backward.isDefEq.respectTransparency false
+set_option maxRecDepth 50000
 namespace ZkcExamples.Construction.GkrProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open Zkc.Construction.Uniform
-
-set_option smartUnfolding false
-
-/-! ## The original Proof Entry -/
-
-abbrev program := ZkcExamples.Structured.GkrSourceViews.program
-/-- The admitted original. -/
-abbrev imported : Structured.Imported ZkcExamples.Structured.GkrSourceData.snapshot :=
-  ZkcExamples.Structured.GkrSourceViews.imported
-
-abbrev snapshot := ZkcExamples.Structured.GkrSourceData.snapshot
-abbrev participant := ZkcExamples.Construction.GkrProofParticipant.participant
-
-/-! ## The constructed validator and its checked selection -/
-
-set_option smartUnfolding true in
-/-- The composed per-compile Uniform.check accepts the actual export against the
-admitted original. -/
-theorem compiled : Uniform.checkCompiled imported participant = .ok () := by decide +kernel
-
-set_option smartUnfolding true in
-/-- The selection of the export's inputs and acceptance output, constructed from
-the admitted original and the export's policy. -/
-def selection : Uniform.Selection imported.program.payload.entry.outputs :=
-  (Uniform.select imported participant).get (by decide +kernel)
-
-theorem selected : Uniform.select imported participant = some selection := (Option.some_get _).symm
-
-set_option smartUnfolding true in
-/-- The selection Uniform.check accepts the export. -/
-theorem selection_checked : selection.check imported participant = true := by decide +kernel
-
-/-- The occurrence context the Uniform.check derives from the original roster and the
-exported policy. -/
-def context : Context := selection.context
-
-theorem context_admitted : Uniform.exportContext ZkcExamples.Structured.GkrSourceData.snapshot participant = some context :=
-  (select_sound imported participant selected).1
-
-set_option smartUnfolding true in
-/-- The derived context: entry, roster, producer and validator positions, the
-replaced service input, its contract and the draw request its challenges
-carry, the suite and the selected query/delivery sites. -/
-theorem context_eq : context =
-    Context.fiatShamir ZkcExamples.Structured.GkrSourceData.snapshot.entry ["role00000000", "role00000001"] 0 1 7 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) participant.policy.suite [("label_6f7574707574", "label_6f75747075745f64656c6976657279_0"), ("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0"), ("label_6c696e655f6368616c6c656e6765", "label_6c696e655f64656c6976657279_0")] := by
-  decide +kernel
-
-/-- The composed Uniform.check's two rules, each on the actual export. -/
-theorem compiled_rules : Uniform.checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () ∧ Uniform.check context participant = .ok () ∧
-    Uniform.project program context participant = .ok () := by
-  have accepted := compiled
-  unfold Uniform.checkCompiled at accepted
-  split at accepted
-  · rename_i context' exported found
-    rw [context_admitted] at found
-    cases found
-    obtain ⟨context'', found', checked⟩ := checkExport_sound exported
-    rw [context_admitted] at found'
-    cases found'
-    exact ⟨exported, checked, accepted⟩
-  · cases accepted
-  · cases accepted
-
-/-- The per-compile construction Uniform.check accepts the actual export. -/
-theorem accepted : Uniform.checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () := compiled_rules.1
-
-/-- The transcript-construction rule accepts the actual export. -/
-theorem checked : Uniform.check context participant = .ok () := compiled_rules.2.1
-
-/-- The participant projection rule accepts the actual export. -/
-theorem projected : Uniform.project program context participant = .ok () := compiled_rules.2.2
-
-set_option smartUnfolding true in
-theorem validator_eq : context.validator = 1 := by decide +kernel
-
-set_option smartUnfolding true in
-theorem producer_eq : context.producer = 0 := by decide +kernel
-
-/-- Where the export returns the selected acceptance output. -/
-def acceptancePosition : Nat := selection.position
-
-theorem acceptance_admitted : Uniform.exportAcceptance ZkcExamples.Structured.GkrSourceData.snapshot participant = some acceptancePosition :=
-  (select_sound imported participant selected).2.1
-
-set_option smartUnfolding true in
-theorem acceptancePosition_eq : acceptancePosition = 0 := by decide +kernel
-
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- The acceptance output selected by the policy, read from returned values. -/
-def acceptance (values : List (Value F G)) : Option Bool :=
-  match values[acceptancePosition]? with
-  | some (.data (.boolean decision)) => some decision
-  | _ => none
+/-- The actual participant with its fixed scalar input/output and oracle ABI. -/
+def compiledVerifier {m : Type → Type} [Monad m] (challenge : History F G → m F)
+    (inputValues outputValues add mul : List F) (layers selector width : Nat) (initial : History F G) (proof : Proof F G) :
+    m (PIR.Outcome (Option Bool) × Proof F G) :=
+  ScalarVerifier.verify program context participant acceptancePosition challenge
+    (inputs inputValues outputValues add mul layers selector width) initial proof
 
-/-- The acceptance decision among the validator's outputs. -/
-def decision (options : List (Option (Value F G))) : Option Bool :=
-  match options[acceptancePosition]? with
-  | some (some (.data (.boolean value))) => some value
-  | _ => none
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- On every list of the returned length, the acceptance output is the decision
-among the validator's outputs. -/
-theorem acceptance_decision (values : List (Value F G))
-    (length : values.length = participant.returned.length) :
-    acceptance values = decision (values.dropLast.map some) :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).1 values length
-
-/-- Data inputs of the constructed validator: the policy's public inputs, in
-policy order. -/
-def inputs (inputsValue outputsValue add mul : List F) (layers selector width : Nat) : List (Value F G) :=
-  [.vector "bls12-381.fr" inputsValue, .vector "bls12-381.fr" outputsValue, .vector "bls12-381.fr" add, .vector "bls12-381.fr" mul, .index layers, .index selector, .index width]
-
-/-- The validator's original inputs: the published values at their positions,
-absent inputs of other roles, and the challenge service handle. -/
-def verifierInputs (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) :
-    Values (Component (assignment F G)) program.payload.entry.inputs :=
-  .cons (some inputsValue) (.cons (some outputsValue) (.cons (some add) (.cons (some mul) (.cons (some layers) (.cons (some selector) (.cons (some width) (.cons (some handle) (.nil))))))))
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The constructed program's data inputs hold the validator's original inputs:
-the published values at their exported positions and the handle as the replaced
-service. -/
-theorem inputs_related (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) (initial : History F G) :
-    HoldsValues handle (inputs inputsValue outputsValue add mul layers selector width ++ [.transcript initial])
-      (Uniform.inputSlots context participant.policy program.payload.entry.inputs)
-      (verifierInputs (F := F) (G := G) inputsValue outputsValue add mul layers selector width handle) :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.1 handle
-    (.cons inputsValue (.cons outputsValue (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.nil)))))))) [.transcript initial]
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The constructed program's data inputs are the published inputs and the
-initial transcript. -/
-theorem inputs_arity (inputsValue outputsValue add mul : List F) (layers selector width : Nat) :
-    (inputs (F := F) (G := G) inputsValue outputsValue add mul layers selector width).length + 1 = participant.inputs.length :=
-  rfl
-
-/-- Helper calls of the constructed program denote the original's checked
-helpers. -/
-abbrev table : Structured.Meanings F G := Uniform.helperTable program F G
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The decision among the validator's outputs is its acceptance output. -/
-theorem decision_outputs (outputs : Values (Component (assignment F G)) program.payload.entry.outputs) :
-    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
-
-/-- The admitted root's validator process, read through its acceptance output. -/
-def process (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) : PIR.Process (participantInterface F G) (Option Bool) :=
-  (program.participant F G 1 (verifierInputs inputsValue outputsValue add mul layers selector width handle)).bind fun outputs =>
-    .done (outputs.get .here)
-
-/-- The original validator, read through its acceptance output. -/
-def verifier (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
-  (process inputsValue outputsValue add mul layers selector width handle).interpret CommonAdapter.project
-
-/-- The original validator, read through its outputs, is the verifier. -/
-theorem original_verifier (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) :
-    ((program.participant F G context.validator (verifierInputs inputsValue outputsValue add mul layers selector width handle)).bind fun outputs =>
-      .done (decision (validatorOutputs context.validator program.payload.entry.outputScopes
-        outputs))).interpret CommonAdapter.project = verifier inputsValue outputsValue add mul layers selector width handle := by
-  unfold verifier process
-  rw [validator_eq]
-  simp only [decision_outputs]
-
-/-- The compiled verifier, under the ideal transcript model with any challenge
-function in any lawful monad, is the Fiat–Shamir transform of the original
-Proof Entry's validator: equal acceptance outcomes, stops and unread proof
-suffixes, for every published input, initial transcript, proof and service
-handle. An instance of `Zkc.Construction.Uniform.compiled_selected`, whose positional
-premises the checked selection discharges. -/
+/-- All raw typed public inputs, every reply and initial history, exact stops
+and unread suffixes. Reference mathematics is applied only by later consumers. -/
 theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) (initial : History F G)
-    (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge table participant.returned participant.instructions
-          (inputs inputsValue outputsValue add mul layers selector width ++ [.transcript initial]) proof =
-      transform context challenge (verifier inputsValue outputsValue add mul layers selector width handle) initial proof :=
-  (compiled_selected imported participant compiled selected selection_checked).2 challenge handle
-    (.cons inputsValue (.cons outputsValue (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.nil)))))))) initial proof
-
-/-- By the construction rule alone, the compiled verifier is the Fiat–Shamir
-transform of the interactive reading of its exported instructions, read through
-the acceptance output, for every service handle. -/
-theorem spec_transform {m : Type → Type} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (handle : Nat) (data : List (Value F G))
-    (arity : data.length = 7) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge table participant.returned participant.instructions
-          (data ++ [.transcript initial]) proof =
-      transform context challenge
-        ((spec context handle table participant.returned participant.instructions
-          (data ++ [.transcript initial])).bind fun values => .done (acceptance values))
-        initial proof := by
-  rw [check_sound context challenge handle table participant checked data initial proof
-    (by rw [arity]; rfl), transform_bind_done]
+    (challenge : History F G → m F) (inputValues outputValues add mul : List F) (layers selector width : Nat) (handle : Nat)
+    (initial : History F G) (proof : Proof F G) :
+    compiledVerifier challenge inputValues outputValues add mul layers selector width initial proof =
+      transform context challenge (verifier inputValues outputValues add mul layers selector width handle) initial proof := by
+  rw [compiledVerifier, ScalarVerifier.verify_eq_runK program context participant acceptancePosition
+    challenge (inputs inputValues outputValues add mul layers selector width) (GkrDomainRoot.artifactInputs inputValues outputValues add mul layers selector width []) (by rfl) initial proof]
+  have keys : ScalarVerifier.origin participant = Origin.withoutCoordinates := by funext origin; rfl
+  rw [keys]
+  have context_same : context = GkrSourceProtocol.context := by rw [context_eq]; rfl
+  have accepts (result : Domain.Result (uniformCarriers F G)) :
+      ScalarVerifier.acceptance acceptancePosition result = Uniform.SourceProcess.acceptance result.values := by
+    rw [acceptancePosition_eq]
+    unfold ScalarVerifier.acceptance
+    cases result.values with
+    | nil => rfl
+    | cons head tail =>
+      cases head with
+      | data payload =>
+        rcases payload with ⟨ty, admissible, value⟩
+        cases ty <;> rfl
+      | transcript => rfl
+      | indices => rfl
+  simp only [accepts, context_same]
+  exact GkrDomainConnection.domain_to_source challenge inputValues outputValues add mul layers selector width handle initial proof
 
 end ZkcExamples.Construction.GkrProof

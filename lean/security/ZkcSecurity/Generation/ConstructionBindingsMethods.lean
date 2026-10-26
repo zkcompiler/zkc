@@ -28,7 +28,7 @@ def validatorProof : String :=
     normalizing (
       try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size]
       try normalize_artifact_operations
-        [ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append program helper_bodies.sumcheck,
+        [ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.append program helper_bodies.sumcheck,
           $ORIGINS.low, $ORIGINS.high, $ORIGINS.draw, $ORIGINS.delivery]
         unfolding [verifier, Original.queryField, Occurrence.origins,
           OccurrenceResolution.atCoordinates_request, Context.message, Origin.message,
@@ -55,12 +55,12 @@ def producerProof : String :=
     (routing handle) occurrence.protocol (by decide +kernel) index none
     (occurrence.origins context index) raw dimension width point shape bounded positive _
     (routes handle index)]
-  have sumsEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.sums (F := F) (G := G) program helper_bodies.sumcheck
+  have sumsEq := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.sums (F := F) (G := G) program helper_bodies.sumcheck
     raw dimension width (lt_trans shape.2.1 (by decide +kernel)) positive
     (shape.split_valid positive)
-  have firstEq (challenge : F) := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.first (F := F) (G := G)
+  have firstEq (challenge : F) := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.first (F := F) (G := G)
     program helper_bodies.sumcheck raw dimension width challenge shape bounded positive
-  have appendEq := ZkcSecurity.Realizations.Sumcheck.DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck
+  have appendEq := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.append (F := F) (G := G) program helper_bodies.sumcheck
   unfold_component_bodies [$BODY]
   derive_artifact_binding
     normalizing (
@@ -84,7 +84,7 @@ def producerProof : String :=
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
       | (unfold RoundReturns
          constructor
-         · unfold ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns
+         · unfold ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Returns
            refine ⟨_, _, _, _, rfl, ?_⟩
            simp (disch := omega) [outputs, SumcheckProverLaws.embedP,
              Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,

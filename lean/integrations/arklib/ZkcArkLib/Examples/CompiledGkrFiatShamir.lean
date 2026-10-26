@@ -20,10 +20,11 @@ when the acceptance output the policy selects is true (`compiledVerifier`).
 
 Three proved links compose:
 
-* Vertical. The composed transcript-construction and participant projection
-  check accepts the export, so for every challenge function the compiled
-  meaning is the Fiat–Shamir transform of the admitted original GKR validator,
-  read through its acceptance output (`GkrProof.compiled_transform`).
+* Vertical. Structural checks fix the admitted export. The separate
+  all-reply Domain-to-source connection proves that, for every challenge
+  function, its execution is the Fiat–Shamir transform of the admitted original
+  GKR validator, read through its acceptance output
+  (`GkrProof.compiled_transform`).
 * Original. On a well-formed statement the original validator at the verifier
   is the plain GKR verifier
   (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`): the generated

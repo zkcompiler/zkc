@@ -21,13 +21,13 @@ example (entries : List SmallSumcheck.Installation.Scalar) (claim : SmallSumchec
     (history : Domain.History SmallSumcheck.Installation.carriers) :
     ∃ after : PIR.Process (Nominal.signature SmallSumcheck.Installation.Scalar "bls12-381.fr")
         (Domain.Result SmallSumcheck.Installation.carriers),
-      Original.Alignment (ZkcSecurity.Realizations.Sumcheck.ArtifactRoot.ValidatorReturns OriginalArtifacts.SmallSumcheck.context 8 7)
+      Original.Alignment (ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot.ValidatorReturns ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context 8 7)
         (SmallSumcheck.Installation.presentedInputs entries claim count history) after ∧
       DomainReduction.Bridge (Nominal.interface (G := SmallSumcheck.Installation.Group) "bls12-381.fr")
         (fun reached result => ∃ source : ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.Result
             (F := SmallSumcheck.Installation.Scalar) (G := SmallSumcheck.Installation.Group),
           (source.2.history = reached ∧ source.2.frames = []) ∧
-          ZkcSecurity.Realizations.Sumcheck.ArtifactRoot.ValidatorReturns OriginalArtifacts.SmallSumcheck.context 8 7 source result) history
+          ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot.ValidatorReturns ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context 8 7 source result) history
         (Domain.participant model validatorCompiled.imported.program
           validatorCompiled.selection.context validatorArtifacts.participant
           (SmallSumcheck.Installation.publicInputs entries claim count ++

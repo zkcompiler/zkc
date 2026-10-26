@@ -23,7 +23,7 @@ run_cmd do
   for root in roots do
     let .ok program := Structured.check root.snapshot | Lean.throwError "source admission"
     Tests.ConstructionBindingsAnalysis.run program root.artifacts.validator root.artifacts.producer
-    let moduleName := "ZkcSecurity.Examples.Generated.OriginalArtifacts." ++ root.name
+    let moduleName := "ZkcExamples.Structured.OriginalArtifacts." ++ root.name
     let .ok generated := ConstructionBindings.source program root.artifacts.validator root.artifacts.producer
       moduleName root.sourceModule root.pairModule | Lean.throwError "binding generation refused"
     let .ok renamed := ConstructionBindings.source program root.artifacts.validator root.artifacts.producer

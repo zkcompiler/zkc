@@ -6,7 +6,7 @@ public import ZkcSecurity.Examples.Generated.Components.SampledAbortABI
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortProducer
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator
 public import Zkc.Construction.DomainCalculations
-public meta import ZkcSecurity.Tools.ProcessView
+public meta import Zkc.Construction.ProcessViewTactic
 
 @[expose] public section
 

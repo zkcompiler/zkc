@@ -37,8 +37,8 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
   change Nat at input2
   change Option Nat at input3
   change Readback _
-    (Domain.participant (ringModel Scalar Group) _ _ ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot.artifact (producerInputs input0 input1 input2))
-    (Domain.participant (ringModel Scalar Group) _ _ ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot.artifact (validatorInputs input0 input1 input2))
+    (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.artifact (producerInputs input0 input1 input2))
+    (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot.artifact (validatorInputs input0 input1 input2))
   prepare_target_readback [Scalar, Group] for subject using honestInput_iff
     reading (application_read input0 input1 input2 input3) evaluating ZkcSecurity.Examples.Components.SmallSumcheck.Formula.equation
   have shape0 : PrimitiveLibrary.HasShape input0 input2 1 := by

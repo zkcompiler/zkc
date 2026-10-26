@@ -102,15 +102,15 @@ run_cmd do
         pending := info.type.getUsedConstants.toList ++ pending
         if let some value := info.value? (allowOpaque := true) then
           pending := value.getUsedConstants.toList ++ pending
-  for required in [``ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot.validator,
-      ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot.validator,
+  for required in [``ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot.validator,
+      ``ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.validator,
       ``ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.source_root,
       ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.source_root,
       ``ZkcSecurity.FiatShamir.Original.Claims.Installation.losslessChargedExport,
       ``ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness.compiled_ideal_complete,
       ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Completeness.compiled_ideal_complete,
-      ``ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot.producer,
-      ``ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot.producer] do
+      ``ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.producer,
+      ``ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.producer] do
     unless seen.contains required do
       throwError "production receipt did not reach required original-source evidence: {required}"
   Lean.logInfo s!"PASS six production receipts: original-source evidence, full exports, no retired bindings ({seen.size} declarations visited)"

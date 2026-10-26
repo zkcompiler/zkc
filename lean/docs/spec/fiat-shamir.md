@@ -9,10 +9,10 @@ separate capabilities with their own source ownership and handler contracts.
 The nominal constructed evaluator (`Domain.participant`) is shared by both
 profiles. `Construction.checkCompiled` is structural admission; typed property
 proofs additionally use full `Domain.Correspondence` Process equations and their
-source/target laws. The older scalar/vector proof route is explicitly scoped
-under `Construction.Uniform`. Its selected Sumcheck interpreted-byte clients
-continue to use that route and its original restricted checker. Acceptance by
-the typed checker is not a premise of a uniform-evaluator theorem.
+source/target laws. The scalar ABI is an explicit partial presentation of that same participant.
+Its handler interprets Process effects and refuses unrepresentable values;
+it does not implement a second Instruction evaluator. Structural admission
+and a complete source/participant execution connection are separate facts.
 
 ## Plain construction
 
@@ -107,8 +107,9 @@ constructions (`indices.empty`, `indices.append`), transcript observations and
 challenges with their suites and decoded occurrence templates, calculations of
 the structured vocabulary, calls of the original program's helpers by name,
 guards, loops with their bodies, and unsupported operations retained by name.
-Values are structured data (Booleans, field and group elements, indices and
-field vectors), transcript histories and coordinates.
+Values use the shared recursive nominal data interpretation, including
+sequences and products, plus transcript histories and coordinates. Service
+capabilities are not admitted as data, even when nested.
 
 The same carrier also retains the actual producer's owner-local service
 interface in `Participant.servicePorts`, separate from ordinary SSA inputs.
@@ -138,36 +139,21 @@ qualified query site under the context's replaced service
 (`Template.origin`); a site is qualified by the path's applications as the
 structured semantics qualifies nested sites.
 
-`ideal` interprets such a program with transcript capabilities holding their
-histories: an observation appends a message event to its state operand, and a
-challenge applies the challenge function to its state operand followed by its
-occurrence, returning the answer and the extended history. Receives read the
-proof as in the transform; calculations use the structured evaluator's meaning;
-a call invokes the named helper of a closed helper table at its checked
-signature; a guard stops with `reject` when false; a loop runs its body for each
-induction index below its count, threading the carried values, and refuses a
-count above its maximum. Every unsupported or ill-formed instruction stops with
-`refused`.
+`Domain.participant` interprets the actual instruction list once. An
+observation appends the nominal message to its transcript operand; a challenge
+emits a typed query at the actual coordinate-bearing occurrence and extends the
+history with that query. Receives are open typed operations. Calculations use
+the structured evaluator, helpers use the admitted program's closed helper
+bodies, guards retain rejection, and loops check their actual carried/captured
+sorts and maximum before iterating. Stops and administrative checkpoints are
+part of this canonical Process.
 
-`spec` reads the same program back as the interactive validator it replaced:
-each challenge becomes the selected query on a supplied service handle, an
-observation of a message the validator sends is the delivery of that message to
-the producer, and transcript values are computed as inert histories. Both
-meanings are written in continuation style.
-
-The retained scalar/vector calculation adapter (`Calculation.evaluate`) uses
-`Structured.Evaluation.operationOn` at `ringModel`; it has no independent
-arithmetic interpreter. `Uniform.DomainAdapter.calculate_embed` proves that
-the nominal calculation runner commutes with the partial operand embedding,
-including malformed operand refusal and stopped calculations, when result
-types belong to the retained data fragment. Nominal field identities remain
-checked, and transcript capabilities have no data embedding.
-
-This calculation equation does not identify `spec` or `ideal` with
-`Domain.participant`. Their instruction checks and observation effects differ
-on unchecked inputs. The selected scalar byte claims retain their existing
-transcript, decoder, budget and unread-proof meanings until a reached-state
-simulation and transcript correspondence justify replacing those interpreters.
+The selected scalar handler embeds its proof messages, supplies the stated
+challenge function and reads back outcomes. `ScalarVerifier.verify` fixes the
+input preparation and acceptance selector. Plain or aggregate consumers may
+use the nominal runner directly. Handler-level observation projection states
+exactly which frame/checkpoint details it forgets; no universal equality with
+unchecked historical instruction interpretations is claimed.
 
 ## The rule
 
@@ -227,30 +213,12 @@ calculations, guards or results with the original; that is the obligation of
 the [participant projection](participant-projection.md) rule, which composes
 with this one.
 
-`Uniform.check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
-initial state and that nothing is pending at its end. The other final clauses of
-`check`, the coordinate conditions and the comparisons in `checkExport` are
-deployment checks; `Tests.ConstructionControls` and
-`Tests.SumcheckProjectionControls` exercise them as well, including coordinates
-not built from the enclosing induction values and a template without its repeat
-step.
-
-`Uniform.check_sound` proves, for every accepted program, every monad, challenge
-function, helper table, data input, initial history, service handle and proof:
-
-```text
-ideal context challenge table returned instructions (inputs ++ [transcript initial]) proof
-  = transform context challenge (spec context handle table returned instructions …) initial proof
-```
-
-Outcomes, stops and unread proofs are equal. The proof is a simulation: each
-accepted step transports agreement of continuations backwards, with the
-invariant that the transform's absorbed history is the current transcript state
-followed by the received message awaiting observation, if any. A loop is
-handled by induction on its iterations with the same invariant at each body
-entry and exit. No typing premise on supplied values is needed, because both
-sides make the same dynamic checks. `transform_bind_done` moves a pure final
-projection through the transform.
+The checks above establish structural admission. The selected execution
+connections use `Domain.Correspondence`, original-source simulations and
+Process handler laws, with exact artifact/source identities. They quantify all
+typed replies and retain failure paths; neither an honest trace nor a digest
+match supplies the needed equation. The [projection chapter](participant-projection.md#soundness)
+describes this distinction and the maintained consumers.
 
 ## The compiled Schnorr proof Entry
 
@@ -268,15 +236,11 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   and [participant projection](participant-projection.md)) on the actual export
   in the kernel, against the admitted original `imported` that
   `structured_views` builds from the snapshot and its admission;
-- `compiled_transform` instantiates the composed theorem: for every challenge
-  function, the compiled verifier's ideal meaning is the Fiat–Shamir transform
-  of the original Proof Entry's validator. Its Entry-specific premises are the
-  admission, the derived context, the input relation (`inputs_related`) and the
-  position of the acceptance output; no equation about the program's meaning
-  is assumed or computed;
-- `spec_equation`, that the export's interactive reading projected to the
-  selected acceptance output is the common Schnorr experiment, is derived from
-  `project_sound` and `verifier_correspondence`.
+- `compiled_transform` composes the actual Domain/source binding with scalar
+  execution and acceptance selection. It covers every public base/key, proof,
+  source service handle, initial history and lawful monadic challenge function.
+  Finite artifact/source equations and the generic all-reply Process rules
+  discharge the connection; it is not a consequence of admission alone.
 
 The compiled proof Entries of the Sumcheck example, its composed variant, the
 Sigma example, the GKR example and the guessing fixture are checked the same way
@@ -284,8 +248,8 @@ Sigma example, the GKR example and the guessing fixture are checked the same way
 [Sigma](participant-projection.md#the-compiled-sigma-proof-entries),
 [GKR](participant-projection.md#the-compiled-gkr-proof-entry),
 [guessing](participant-projection.md#the-compiled-guessing-proof-entry)):
-each validator's ideal meaning is the Fiat–Shamir transform of its original
-validator for every challenge function. For the compiled Sumcheck Entry,
+each selected canonical validator is connected to the Fiat–Shamir transform
+of its admitted original for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
 composes this with the round-by-round soundness of the imported verifier's
 transform. The compiled GKR Entry's bound composes the construction rule's
@@ -295,7 +259,8 @@ plain GKR verifier on well-formed statements
 guessing Entry's bound is imported from a worst-case round-by-round proof
 stated in ArkLib's framework (written for the example)
 ([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
-The composed Sumcheck Entry has no security theorem. The compiled
+The composed Sumcheck construction connection itself supplies no security
+theorem; the separately generated TwoSums receipts have their own requests. The compiled
 Chaum–Pedersen, two-proof AND and Okamoto proof Entries have fixed-statement
 knowledge soundness as applications of the registered knowledge endpoint
 ([endpoints](fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)).
@@ -390,12 +355,13 @@ differing only in a difficulty or a maximum are different data.
   native bytes; the suite's framing and payload codecs remain assumed. Fields of
   a native occurrence that the model origin does not read (protocol names in the
   path and event, and a query's service port, contract and owner) are fixed by
-  the exported instruction. Model occurrences omit the iteration coordinates
-  that native occurrences inside loops carry; a typed history stands for the
-  absorbed bytes because a validator's coordinates at each occurrence are
-  determined by its absorbed history. The suite reduces 64 squeezed bytes to a field
-  element, which is close to, not exactly, uniform; the model treats it as
-  exactly uniform.
+  the exported instruction. The selected scalar loop consumers explicitly project iteration coordinates
+  before the oracle/cache operation. Their equations preserve that projected
+  experiment, not a fresh nominal-oracle game or injectivity across projected
+  keys. Relating that experiment to deployed byte histories requires a
+  separate provider/encoding theorem. The suite reduces 64 squeezed bytes to a
+  field element; exactly uniform and realized reduced-challenge models remain
+  distinct, with decoding loss supplied where the relevant theorem states it.
 - Binding: the deployed host initializes the transcript with exactly the
   authorized context and the values at the policy's public inputs. The
   experiment starts from that binding (`initial_binds_public`); that the host

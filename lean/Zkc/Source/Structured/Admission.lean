@@ -30,6 +30,13 @@ mutual
     | .cons type rest => type.isService || rest.hasService
 end
 
+-- Materialize the mutual equations in their defining module. Lazy generation
+-- in independent clients can produce different stored proofs for the same
+-- equation name; declaration provenance must have a single checked owner.
+section
+attribute [local simp] Ty.isService ProductFields.hasService
+end
+
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
 def validPreparationName (name : String) : Bool :=
   name.utf8ByteSize ≤ Limits.preparationNameBytes && match name.toList with
