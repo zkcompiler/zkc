@@ -77,6 +77,32 @@ theorem zero_budget (oracle : History F G → F) (values : List F) (claim : F)
     DomainVM.meteredK, DomainVM.meteredStep]
   rfl
 
+/-- Transport any constructed successful retained root to its canonical Code
+observation, preserving its postcondition and every unread message. -/
+private theorem observation_of_root_passes (oracle : History F G → F) (initial : History F G)
+    (values : List F) (claim : F) (rounds : Nat)
+    (history : Domain.History (Structured.uniformCarriers F G)) (proof : Proof F G)
+    (holds : DomainVM.Environment F G → Proof F G → Prop)
+    (passes : DomainVM.Passes Origin.withoutCoordinates initial oracle
+      (rootProcess values claim rounds history) proof holds) :
+    DomainVM.Passes Origin.withoutCoordinates initial oracle
+      (DomainVM.observation ZkcExamples.Construction.SumcheckProof.program
+        ZkcExamples.Construction.SumcheckProof.context
+        (Code.instructions ZkcExamples.Executable.SumcheckProof.lowered.code)
+        ZkcExamples.Executable.SumcheckProof.lowered.returned (frame values claim rounds history)) proof holds := by
+  have instructions : Code.instructions ZkcExamples.Executable.SumcheckProof.lowered.code =
+      ZkcExamples.Construction.SumcheckProof.participant.instructions := by
+    rw [← Code.instructionList_eq]
+    decide +kernel
+  have returned : ZkcExamples.Executable.SumcheckProof.lowered.returned =
+      ZkcExamples.Construction.SumcheckProof.participant.returned := by kernel_rfl
+  rw [instructions, returned]
+  apply DomainVM.Passes.participant_observation
+  change DomainVM.Passes Origin.withoutCoordinates initial oracle (rootProjection values claim rounds history) _ _
+  rw [root_projection]
+  exact passes
+
+
 /-- Budget sufficiency does not force a returned Boolean to be true. The
 zero-round actual terminal check returns false on a false public claim, and
 preserves the entire supplied unread suffix. -/
@@ -102,18 +128,7 @@ theorem false_claim (oracle : History F G → F) (value claim : F) (wrong : valu
     (frame [value] claim 0 []) proof _
     (SumcheckCharges.sufficient (F := F) (G := G) 68 [value] claim 0 [] proof (by simp)
       (by rw [SumcheckCharges.charge_eq]))
-    (by
-      have instructions : Code.instructions SumcheckProof.lowered.code =
-          ZkcExamples.Construction.SumcheckProof.participant.instructions := by
-        rw [← Code.instructionList_eq]
-        decide +kernel
-      have returned : SumcheckProof.lowered.returned =
-          ZkcExamples.Construction.SumcheckProof.participant.returned := by kernel_rfl
-      rw [instructions, returned]
-      apply DomainVM.Passes.participant_observation
-      change DomainVM.Passes Origin.withoutCoordinates [] oracle (rootProjection [value] claim 0 []) _ _
-      rw [root_projection]
-      exact passes)
+    (observation_of_root_passes (F := F) (G := G) oracle [] [value] claim 0 [] proof _ passes)
   rcases good with ⟨rfl, rfl⟩
   exact executed
 

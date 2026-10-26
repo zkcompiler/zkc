@@ -376,7 +376,6 @@ run_cmd do
     `ZkcExamples.Executable.SumcheckCharges.programContract,
     `ZkcExamples.Executable.SumcheckCharges.sufficient_family,
     `ZkcExamples.Executable.SumcheckCharges.sufficient,
-    `ZkcExamples.Executable.SumcheckCharges.sufficient,
     `ZkcExamples.Executable.SumcheckDomainHonest.observation_passes,
     `ZkcExamples.Executable.SumcheckCompleteness.honest_metered,
     `ZkcExamples.Executable.SumcheckCompleteness.honest_decoded,
