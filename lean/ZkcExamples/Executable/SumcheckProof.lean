@@ -111,7 +111,7 @@ theorem helpersSorted : ∀ call ∈ Instruction.callList SumcheckProof.particip
     apply helperSorted_of_outputs
     intro entry found
     obtain ⟨entry', found', same⟩ :=
-      helperTable_lookup (F := F) (G := G) SumcheckProof.program helper (SumcheckHelpers.present association)
+      Uniform.helperTable_lookup (F := F) (G := G) SumcheckProof.program helper (SumcheckHelpers.present association)
     rw [found] at found'
     cases found'
     rw [same]

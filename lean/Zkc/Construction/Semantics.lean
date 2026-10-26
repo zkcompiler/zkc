@@ -212,21 +212,7 @@ def indexAt (env : List (Value F G)) (index : Nat) : Option Nat :=
 def read (env : List (Value F G)) (references : List Nat) : Option (List (Value F G)) :=
   references.mapM (env[·]?)
 
-namespace Template
 
-/-- The model occurrence of a template, as `transform` names it: a message by
-its qualified site and its roles; a selected draw challenge by its qualified
-query site under the context's replaced service, with that service's typed
-request. -/
-def origin (context : Context) (template : Template) : Option Origin :=
-  match template.event with
-  | ["message", _, site, schema, sender, receiver] =>
-      if schema = site then some (Origin.message context.entry (template.qualify site) sender receiver)
-      else none
-  | ["query", _, site, _, _, "draw", _] => context.request.map (context.query (template.qualify site))
-  | _ => none
-
-end Template
 
 /-- A scalar structured type as a common transcript type. -/
 def scalarType : Structured.Ty → Option Zkc.Source.Common.Native.Ty

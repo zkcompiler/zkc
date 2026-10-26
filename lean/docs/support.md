@@ -19,6 +19,19 @@ about an immutable two-cell sum relation, without KZG knowledge, native bytes,
 or a compiler-stage receipt. The WP consumer's verifier must have a returning
 deterministic table run; randomized validator continuations remain outside it.
 
+The actual plain `CheckMembership` construction now has checked original and
+artifact admission, exact aggregate preparation, one full nominal Process
+binding and runtime equations preserving exhaustion and oracle/proof state.
+`TableMembership.membership_completeness` proves successful actual paired
+execution for mathematical selected membership under explicit reached length
+bounds; `membership_false_rejected` proves deterministic rejection of false
+mathematical statements under every permitted reply, even outside those bounds.
+Nonvacuity has both empty-query and nonempty selected-row witnesses.
+`BatchOpening` separately admits and binds an actual aggregate send/receive
+client, preserves its returned batch and refuses wrong nominal or empty-sequence
+sorts. These are constructed-model results, with no new native/codec or KZG
+security receipt and no semantic-baseline acceptance.
+
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
 

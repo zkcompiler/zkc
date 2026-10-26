@@ -50,7 +50,7 @@ example : check snapshot = .ok program := by rfl
 
 private def model : DomainModel := ringModel (ZMod 5) (ZMod 5)
 private def context : Context :=
-  ⟨"Root", ["P", "V"], 0, 1, 0, "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), "suite", [("q", "d")]⟩
+  Context.fiatShamir "Root" (["P", "V"]) 0 1 0 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) "suite" ([("q", "d")])
 private def draw : Template := ⟨"Root", [], ["query", "Root", "q", "input_0", "random.bls12-381.fr/0", "draw", "V"]⟩
 private def delivery : Template := ⟨"Root", [], ["message", "Root", "d", "d", "V", "P"]⟩
 private def queryOrigin := context.query "q" (.draw "bls12-381.fr")

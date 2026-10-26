@@ -7,8 +7,10 @@ public import Zkc.Source.Structured.OpenMeaning
 
 /-! The participant projection rule.
 
-`project` checks that an exported role-local program, read interactively, is the
-projection of the admitted original entry to the validator role. It walks the
+`project` checks the structural source alignment of an exported role-local
+program with the admitted original entry at the validator role. Typed property
+consumers additionally prove the complete nominal Process binding and their
+source/helper laws; generic admission is not a universal projection theorem. It walks the
 original typed body in lockstep with the exported instructions, tracking for
 every original component what the validator holds (`Slot`): nothing, the value
 at an exported reference, a present value the exported program does not keep, or
@@ -33,7 +35,7 @@ against the repeat body once, for every iteration. Transcript plumbing (coordina
 messages) is skipped. Every exported instruction must be accounted for, and the
 returned references must hold the validator's outputs.
 
-`Zkc.Construction.project_sound` proves that the exported program's interactive
+`Zkc.Construction.Uniform.project_sound` proves the legacy uniform profile's interactive
 reading equals the original validator's participant process, read through its
 outputs, for every handle, input and reply.
 -/
@@ -43,6 +45,9 @@ set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source Zkc.Source.Structured
 
+/-- Typed transport eligibility is exactly recursive service exclusion. -/
+def transportData (ty : Ty) : Bool := !ty.isService
+
 /-- What the projected role holds for one original component: nothing (the
 component is absent at the role), the value at an exported reference, a present
 value the exported program does not keep, or the replaced service. -/
@@ -51,6 +56,7 @@ inductive Slot where
   | held (reference : Nat)
   | free
   | service
+  | local (root : Nat)
   deriving DecidableEq, Repr
 
 namespace Slot
@@ -142,7 +148,25 @@ def next? (instructions : List Instruction) : Option (Instruction × List Instru
   | (instruction :: rest, count) => some (instruction, rest, count)
   | ([], _) => none
 
-/-- The next instruction receives a scalar of type `ty` at `site`. -/
+/-- Owner-local service calls keep their source root and nominal request. -/
+def expectLocalService (site field : String) (root : Nat) (instructions : List Instruction) :
+    Option (List Instruction × Nat) :=
+  match next? context instructions with
+  | some (⟨.localService port request template _, [], [.data (.field actual)], []⟩, rest, count) =>
+      if port.root = root ∧ port.owner = context.role context.validator ∧
+          port.contract = "random." ++ field ++ "/0" ∧ request = .draw field ∧ actual = field ∧
+          template.querySite? = some site then some (rest, count) else none
+  | _ => none
+
+/-- Plain sends carry the exact source value and create no transcript slot. -/
+def expectSend (site : String) (reference : Nat) (instructions : List Instruction) :
+    Option (List Instruction × Nat) :=
+  match next? context instructions with
+  | some (⟨.send site' _ _, [value], [], []⟩, rest, count) =>
+      if site' = site ∧ value = reference then some (rest, count) else none
+  | _ => none
+
+/-- The next instruction receives typed data of type `ty` at `site`. -/
 def expectReceive (site : String) (ty : Ty) (instructions : List Instruction) :
     Option (List Instruction × Nat) :=
   match next? context instructions with
@@ -207,7 +231,7 @@ def walkVocabulary (n : Nat) (calculation : Calculation) (arguments : List Slot)
   if arguments.any Slot.isAbsent then
     .ok (instructions, calculation.op.results.map fun _ => .absent, n)
   else
-    match (if calculation.op.results.all dataType then Slot.references arguments else none).bind
+    match (if calculation.op.results.all transportData then Slot.references arguments else none).bind
         (fun references => expectCalculation context calculation references instructions) with
     | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
     | none =>
@@ -281,7 +305,7 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
             match expectCall context helper references instructions with
             | some (rest, count) =>
                 if helper ∈ program.payload.definitions.map CheckedDefinition.helper ∧
-                    helper.outputs.all dataType = true then
+                    helper.outputs.all transportData = true then
                   .ok (rest, (List.range helper.outputs.length).map fun index => .held (n + count + index),
                     n + count + helper.outputs.length)
                 else .error "projection-helper"
@@ -300,14 +324,20 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .exchange ty sender receiver site =>
       let qualified := qualifyProtocolSite ctx.applicationPrefix site
       if ctx.roles sender = ctx.roles receiver then .error "projection-exchange-roles"
-      else if scalarType ty = none then .error "projection-message-type"
+      else if ty.isService = true then .error "projection-message-type"
       else if ctx.roles sender = self then
         match arguments with
         | [.held reference] =>
             if ctx.roles receiver = context.producer then
-              match expectDelivery context qualified reference instructions with
-              | some (rest, count) => .ok (rest, [.held reference], n + count + 1)
-              | none => .error "projection-delivery"
+              match context.profile with
+              | .plain =>
+                  match expectSend context qualified reference instructions with
+                  | some (rest, count) => .ok (rest, [.held reference], n + count)
+                  | none => .error "projection-send"
+              | .fiatShamir _ =>
+                  match expectDelivery context qualified reference instructions with
+                  | some (rest, count) => .ok (rest, [.held reference], n + count + 1)
+                  | none => .error "projection-delivery"
             else .error "projection-delivery-receiver"
         | _ => .error "projection-send-operand"
       else if ctx.roles receiver = self then
@@ -320,6 +350,11 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .draw owner field site =>
       if ctx.roles owner = self then
         match arguments with
+        | [.local root] =>
+            match expectLocalService context (qualifyProtocolSite ctx.applicationPrefix site) field root
+                instructions with
+            | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
+            | none => .error "projection-local-service"
         | [.service] =>
             match expectChallenge context (qualifyProtocolSite ctx.applicationPrefix site) field
                 instructions with
@@ -426,7 +461,9 @@ def inputSlots (policy : Policy) (inputs : List Ty) : List Slot :=
   (List.range inputs.length).map fun index =>
     match policy.publicInputs.idxOf? index with
     | some position => .held position
-    | none => if index = context.service then .service else .absent
+    | none =>
+        if some index = context.service then .service
+        else match inputs[index]? with | some (.service _) => .local index | _ => .absent
 
 /-- The participant projection rule: the exported validator, read interactively,
 is the validator's projection of the original entry. The walk matches every
@@ -438,7 +475,7 @@ def project (participant : Participant) : Except String Unit :=
   let root := program.payload.entry
   let self := context.validator
   let slots := Slot.mask self root.inputScopes (inputSlots context participant.policy root.inputs)
-  match walk program context projectionFuel {} slots (participant.policy.publicInputs.length + 1) root.body
+  match walk program context projectionFuel {} slots participant.inputs.length root.body
       participant.instructions with
   | .error error => .error error
   | .ok (rest, outputs, count) =>
@@ -446,7 +483,7 @@ def project (participant : Participant) : Except String Unit :=
       | ([], skipped) =>
           match outputReferences self root.outputScopes outputs with
           | some references =>
-              if participant.returned.dropLast = references ∧ participant.returned ≠ [] ∧
+              if context.dataPorts participant.returned = references ∧
                   participant.returned.all (· < count + skipped) then .ok ()
               else .error "projection-outputs"
           | none => .error "projection-outputs"

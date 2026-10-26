@@ -37,10 +37,10 @@ theorem admitted : Structured.check snapshot = .ok program := kernel_admission
 theorem compiled : checkCompiled imported artifact = .ok () := by decide +kernel
 
 def selection : Selection program.payload.entry.outputs :=
-  ⟨⟨snapshot.entry, ["role00000000", "role00000001"], 0, 1, 2,
-    "random.koala-bear.ext8-binomial3/0", some (.draw "koala-bear.ext8-binomial3"),
-    "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
-    [("label_6368616c6c656e6765", "label_64656c6976657279_0")]⟩,
+  ⟨Context.fiatShamir snapshot.entry ["role00000000", "role00000001"] 0 1 2
+    "random.koala-bear.ext8-binomial3/0" (some (.draw "koala-bear.ext8-binomial3"))
+    "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
+    [("label_6368616c6c656e6765", "label_64656c6976657279_0")],
     0, [.field "koala-bear", .field "koala-bear"], [.held 0, .held 1, .service], .here⟩
 
 theorem selected : select imported artifact = some selection := by kernel_rfl

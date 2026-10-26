@@ -134,7 +134,7 @@ unread proof, is an exact image of the existing typed experiment. -/
 theorem computation (encoded : Domain.encodeValues statement = some inputs)
     (bridge : Bridge absorb Post initial
       (Domain.participant model compiled.imported.program compiled.selection.context art.participant
-        (inputs ++ [.transcript compiled.selection.context.suite initial])) presented)
+        (Domain.inputFrame compiled.selection.context inputs initial)) presented)
     (prover : OracleComp (OracleSpec.ofFn (Typed.ByLast (@Domain.Raw model.toCarriers)))
       (Domain.Proof model.toCarriers)) :
     (prover >>= compiled.verifier model (Typed.ask (R := Typed.ByLast Domain.Raw)) statement initial) =
@@ -156,7 +156,7 @@ honesty are not premises of its meaning. -/
 theorem soundness_charged (encoded : Domain.encodeValues statement = some inputs)
     (bridge : Bridge absorb Post initial
       (Domain.participant model compiled.imported.program compiled.selection.context art.participant
-        (inputs ++ [.transcript compiled.selection.context.suite initial])) presented)
+        (Domain.inputFrame compiled.selection.context inputs initial)) presented)
     {charge : Domain.History model.toCarriers → Domain.Event model.toCarriers → ENNReal}
     {ReductionPost : Domain.History model.toCarriers → Domain.Result model.toCarriers → Prop}
     (reduction : Typed.Reduction absorb ReductionPost charge)

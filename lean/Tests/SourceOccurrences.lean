@@ -14,9 +14,7 @@ open Zkc.Construction.SourceOccurrences
 private abbrev snapshot := ZkcExamples.Structured.SumcheckSourceData.snapshot
 private abbrev exported := ZkcExamples.Construction.SumcheckProofParticipant.participant
 private def context : Context :=
-  ⟨exported.policy.entry, ["role00000000", "role00000001"], 0, 1, 3,
-    "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), exported.policy.suite,
-    exported.policy.draws⟩
+  Context.fiatShamir (exported.policy.entry) (["role00000000", "role00000001"]) 0 1 3 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) (exported.policy.suite) (exported.policy.draws)
 
 private def loopBody : List Instruction :=
   match exported.instructions[1]? with
@@ -67,7 +65,7 @@ example : valid snapshot context { queryTemplate with
 example : valid snapshot context { queryTemplate with
     steps := queryTemplate.steps.map fun step => { step with protocol := "wrong-caller" } } = false := by
   decide +kernel
-example : valid snapshot { context with service := 0 } queryTemplate = false := by decide +kernel
+example : valid snapshot (context.mapReplacement (fun replacement => { replacement with service := 0 })) queryTemplate = false := by decide +kernel
 example : valid snapshot context { messageTemplate with
     event := messageTemplate.event.set 4 "role00000001" } = false := by decide +kernel
 example : valid snapshot context { messageTemplate with
@@ -94,7 +92,7 @@ private def source (swapped : Bool) : Snapshot :=
   { snapshot with entry := "Root", definitions := [.function (parent swapped), .function child] }
 
 private def rootContext : Context :=
-  ⟨"Root", ["P", "V"], 0, 1, 2, "random.F/0", some (.draw "F"), "suite", [("call.q", "delivery")]⟩
+  Context.fiatShamir "Root" (["P", "V"]) 0 1 2 "random.F/0" (some (.draw "F")) "suite" ([("call.q", "delivery")])
 
 private def occurrence : Template :=
   ⟨"Root", [⟨"apply", "Root", "call"⟩], ["query", "Child", "q", "input_0", "random.F/0", "draw", "V"]⟩

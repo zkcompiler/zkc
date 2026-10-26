@@ -38,7 +38,7 @@ def unit : Structured.UnitPayload where
 def program : Structured.Program := ⟨snapshot, unit⟩
 
 def context : Context :=
-  ⟨"main", ["P", "V"], 0, 1, 0, "random.field/0", some (.draw "field"), "suite", []⟩
+  Context.fiatShamir "main" (["P", "V"]) 0 1 0 "random.field/0" (some (.draw "field")) "suite" ([])
 def policy : Policy := ⟨"main", "P", "V", 0, "suite", [], [], [], "test", "test"⟩
 def query : Template :=
   ⟨"main", [], ["query", "main", "q", "input_0", "random.field/0", "draw", "V"]⟩

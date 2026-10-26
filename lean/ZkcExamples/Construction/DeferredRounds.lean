@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Construction.DeferredRoundsData
 public import ZkcExamples.Construction.DeferredRoundsParticipant
-public import Zkc.Construction.Structured
+public import Zkc.Construction.Uniform.Structured
 
 @[expose] public section
 
@@ -11,7 +11,7 @@ public import Zkc.Construction.Structured
 
 `DeferredRoundsData` is the Entry's original export and
 `DeferredRoundsParticipant` its constructed validator. The per-compile
-transcript-construction check accepts the pair (`accepted`); the participant
+transcript-construction Uniform.check accepts the pair (`accepted`); the participant
 projection rule is not applied to this Entry. -/
 
 namespace ZkcExamples.Construction.DeferredRounds
@@ -20,23 +20,23 @@ open Zkc.Construction
 abbrev participant := ZkcExamples.Construction.DeferredRoundsParticipant.participant
 
 set_option smartUnfolding true in
-/-- The per-compile construction check accepts the actual export. -/
-theorem accepted : checkExport ZkcExamples.Construction.DeferredRoundsData.snapshot participant = .ok () := by decide +kernel
+/-- The per-compile construction Uniform.check accepts the actual export. -/
+theorem accepted : Uniform.checkExport ZkcExamples.Construction.DeferredRoundsData.snapshot participant = .ok () := by decide +kernel
 
-/-- The occurrence context the check derives from the original roster and the
+/-- The occurrence context the Uniform.check derives from the original roster and the
 exported policy. -/
-def context : Context := (exportContext ZkcExamples.Construction.DeferredRoundsData.snapshot participant).get (by decide +kernel)
+def context : Context := (Uniform.exportContext ZkcExamples.Construction.DeferredRoundsData.snapshot participant).get (by decide +kernel)
 
-theorem context_admitted : exportContext ZkcExamples.Construction.DeferredRoundsData.snapshot participant = some context := by
+theorem context_admitted : Uniform.exportContext ZkcExamples.Construction.DeferredRoundsData.snapshot participant = some context := by
   rfl
 
 set_option smartUnfolding true in
 /-- Where the export returns the selected acceptance output. -/
 def acceptancePosition : Nat :=
-  (exportAcceptance ZkcExamples.Construction.DeferredRoundsData.snapshot participant).get (by decide +kernel)
+  (Uniform.exportAcceptance ZkcExamples.Construction.DeferredRoundsData.snapshot participant).get (by decide +kernel)
 
 theorem acceptance_admitted :
-    exportAcceptance ZkcExamples.Construction.DeferredRoundsData.snapshot participant = some acceptancePosition := by
+    Uniform.exportAcceptance ZkcExamples.Construction.DeferredRoundsData.snapshot participant = some acceptancePosition := by
   rfl
 
 set_option smartUnfolding true in

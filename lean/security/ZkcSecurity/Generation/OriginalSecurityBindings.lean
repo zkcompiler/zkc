@@ -66,7 +66,7 @@ def analyze (program : Program) (validator producer : Participant) : Except Stri
   let producers := root.inputs.zipIdx.filterMap fun (ty, index) =>
     if Domain.dataType ty && (root.inputScopes[index]?.getD []).contains 0 then some index else none
   let count ← one "count" (root.inputs.zipIdx.filterMap fun (ty, index) => if ty == .index then some index else none)
-  let service := layout.context.service
+  let some service := layout.context.service | throw "original-security-replacement-service"
   let some (.service contract) := root.inputs[service]? | throw "original-security-service"
   let mut calls : List Invocation := []
   let mut rest := assembly.steps
@@ -113,7 +113,7 @@ def analyze (program : Program) (validator producer : Participant) : Except Stri
     booleanRef, transcriptRef, producerRef, producerLayout.arity⟩
 
 def validateABI (program : Program) (binding : Binding) (metadata : SubjectABI.Metadata) : Except String Unit := do
-  unless metadata.types == program.payload.entry.inputs && metadata.context.service == binding.service &&
+  unless metadata.types == program.payload.entry.inputs && metadata.context.service == some binding.service &&
       metadata.publicPositions == binding.publicPositions && metadata.producerPositions == some binding.producerPositions do
     throw "original-security-subject-abi-association"
   unless (← metadata.targetPositions).all binding.publicPositions.contains do

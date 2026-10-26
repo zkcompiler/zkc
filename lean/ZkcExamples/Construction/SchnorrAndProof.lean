@@ -15,8 +15,8 @@ public import ZkcExamples.Construction.SchnorrAndProofModel
 
 `SchnorrAndProofData` is the Entry's original export and
 `SchnorrAndProofParticipant` its constructed validator. The composed
-transcript-construction and participant projection check accepts the pair
-(`compiled`), and the selection check (`selection_checked`) discharges the
+transcript-construction and participant projection Uniform.check accepts the pair
+(`compiled`), and the selection Uniform.check (`selection_checked`) discharges the
 positional premises of the composed rules from data the kernel reads, so
 `compiled_transform` holds with no proof specific to this Entry: for every
 challenge function, the compiled verifier's ideal meaning is the Fiat–Shamir
@@ -24,6 +24,7 @@ transform of the original validator. -/
 
 namespace ZkcExamples.Construction.SchnorrAndProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open Zkc.Construction.Uniform
 
 set_option smartUnfolding false
 
@@ -41,27 +42,27 @@ abbrev participant := ZkcExamples.Construction.SchnorrAndProofParticipant.partic
 /-! ## The constructed validator and its checked selection -/
 
 set_option smartUnfolding true in
-/-- The composed per-compile check accepts the actual export against the
+/-- The composed per-compile Uniform.check accepts the actual export against the
 admitted original. -/
-theorem compiled : checkCompiled imported participant = .ok () := by decide +kernel
+theorem compiled : Uniform.checkCompiled imported participant = .ok () := by decide +kernel
 
 set_option smartUnfolding true in
 /-- The selection of the export's inputs and acceptance output, constructed from
 the admitted original and the export's policy. -/
-def selection : Selection imported.program.payload.entry.outputs :=
-  (select imported participant).get (by decide +kernel)
+def selection : Uniform.Selection imported.program.payload.entry.outputs :=
+  (Uniform.select imported participant).get (by decide +kernel)
 
-theorem selected : select imported participant = some selection := (Option.some_get _).symm
+theorem selected : Uniform.select imported participant = some selection := (Option.some_get _).symm
 
 set_option smartUnfolding true in
-/-- The selection check accepts the export. -/
+/-- The selection Uniform.check accepts the export. -/
 theorem selection_checked : selection.check imported participant = true := by decide +kernel
 
-/-- The occurrence context the check derives from the original roster and the
+/-- The occurrence context the Uniform.check derives from the original roster and the
 exported policy. -/
 def context : Context := selection.context
 
-theorem context_admitted : exportContext ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = some context :=
+theorem context_admitted : Uniform.exportContext ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = some context :=
   (select_sound imported participant selected).1
 
 set_option smartUnfolding true in
@@ -69,14 +70,14 @@ set_option smartUnfolding true in
 replaced service input, its contract and the draw request its challenges
 carry, the suite and the selected query/delivery sites. -/
 theorem context_eq : context =
-    ⟨ZkcExamples.Construction.SchnorrAndProofData.snapshot.entry, ["role00000000", "role00000001"], 0, 1, 7, "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), participant.policy.suite, [("label_6368616c6c656e6765", "label_64656c6976657279_0")]⟩ := by
+    Context.fiatShamir ZkcExamples.Construction.SchnorrAndProofData.snapshot.entry ["role00000000", "role00000001"] 0 1 7 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) participant.policy.suite [("label_6368616c6c656e6765", "label_64656c6976657279_0")] := by
   decide +kernel
 
-/-- The composed check's two rules, each on the actual export. -/
-theorem compiled_rules : checkExport ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
-    project program context participant = .ok () := by
+/-- The composed Uniform.check's two rules, each on the actual export. -/
+theorem compiled_rules : Uniform.checkExport ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = .ok () ∧ Uniform.check context participant = .ok () ∧
+    Uniform.project program context participant = .ok () := by
   have accepted := compiled
-  unfold checkCompiled at accepted
+  unfold Uniform.checkCompiled at accepted
   split at accepted
   · rename_i context' exported found
     rw [context_admitted] at found
@@ -88,14 +89,14 @@ theorem compiled_rules : checkExport ZkcExamples.Construction.SchnorrAndProofDat
   · cases accepted
   · cases accepted
 
-/-- The per-compile construction check accepts the actual export. -/
-theorem accepted : checkExport ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = .ok () := compiled_rules.1
+/-- The per-compile construction Uniform.check accepts the actual export. -/
+theorem accepted : Uniform.checkExport ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = .ok () := compiled_rules.1
 
 /-- The transcript-construction rule accepts the actual export. -/
-theorem checked : check context participant = .ok () := compiled_rules.2.1
+theorem checked : Uniform.check context participant = .ok () := compiled_rules.2.1
 
 /-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := compiled_rules.2.2
+theorem projected : Uniform.project program context participant = .ok () := compiled_rules.2.2
 
 set_option smartUnfolding true in
 theorem validator_eq : context.validator = 1 := by decide +kernel
@@ -106,7 +107,7 @@ theorem producer_eq : context.producer = 0 := by decide +kernel
 /-- Where the export returns the selected acceptance output. -/
 def acceptancePosition : Nat := selection.position
 
-theorem acceptance_admitted : exportAcceptance ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = some acceptancePosition :=
+theorem acceptance_admitted : Uniform.exportAcceptance ZkcExamples.Construction.SchnorrAndProofData.snapshot participant = some acceptancePosition :=
   (select_sound imported participant selected).2.1
 
 set_option smartUnfolding true in
@@ -151,7 +152,7 @@ the published values at their exported positions and the handle as the replaced
 service. -/
 theorem inputs_related (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) (initial : History F G) :
     HoldsValues handle (inputs firstBase firstPoint secondBase secondPoint ++ [.transcript initial])
-      (inputSlots context participant.policy program.payload.entry.inputs)
+      (Uniform.inputSlots context participant.policy program.payload.entry.inputs)
       (verifierInputs (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle) :=
   (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.1 handle
     (.cons firstBase (.cons firstPoint (.cons secondBase (.cons secondPoint (.nil))))) [.transcript initial]
@@ -165,7 +166,7 @@ theorem inputs_arity (firstBase firstPoint secondBase secondPoint : G) :
 
 /-- Helper calls of the constructed program denote the original's checked
 helpers. -/
-abbrev table : Structured.Meanings F G := helperTable program F G
+abbrev table : Structured.Meanings F G := Uniform.helperTable program F G
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The decision among the validator's outputs is its acceptance output. -/

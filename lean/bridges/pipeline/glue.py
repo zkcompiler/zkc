@@ -172,6 +172,20 @@ def imports(names):
     return "\n".join(f"public import {name}" for name in names)
 
 
+def uniform_glue(source):
+    """Keep maintained interpreted-byte clients on their checked uniform route.
+
+    A typed admission does not imply the legacy scalar evaluator's theorem.
+    These references are explicit until the byte clients acquire nominal links.
+    """
+    source = source.replace("open Zkc.Source Zkc.Source.Structured Zkc.Construction\n",
+                            "open Zkc.Source Zkc.Source.Structured Zkc.Construction\n"
+                            "open Zkc.Construction.Uniform\n")
+    names = ("checkCompiled", "checkExport", "checkFrom", "checkStep", "check", "exportContext",
+             "exportAcceptance", "project", "select", "Selection", "Slot", "inputSlots", "helperTable", "inputPayloads", "publicValues")
+    return re.sub(r"(?<![.\w])(" + "|".join(names) + r")\b", r"Uniform.\1", source)
+
+
 def construction_glue(subject, entry, modules):
     """The generated glue module of a compiled proof Entry.
 
@@ -182,7 +196,7 @@ def construction_glue(subject, entry, modules):
     require(re.fullmatch(NAMESPACE, namespace) is not None, "invalid glue namespace")
     rule = subject.get("construction", "rule", "compiled")
     if rule == "construction":
-        return construction_only_glue(subject, entry, modules)
+        return uniform_glue(construction_only_glue(subject, entry, modules))
     admission = subject.get("construction", "admission", "views")
     require(admission == "external" or modules.get("bodies"), "views admission needs printed Bodies")
     form = subject.get("construction", "inputs", "values")
@@ -211,8 +225,8 @@ def construction_glue(subject, entry, modules):
     validator = entry.validator
     roles = "[" + ", ".join(text(role) for role in entry.roles) + "]"
     draws = "[" + ", ".join(f"({text(query)}, {text(delivery)})" for query, delivery in entry.draws) + "]"
-    context_literal = (f"⟨{data}.snapshot.entry, {roles}, {entry.producer}, {validator}, {entry.service}, "
-                       f"{text(entry.contract)}, {entry.request}, participant.policy.suite, {draws}⟩")
+    context_literal = (f"Context.fiatShamir {data}.snapshot.entry {roles} {entry.producer} {validator} {entry.service} "
+                       f"{text(entry.contract)} ({entry.request}) participant.policy.suite {draws}")
     module_imports = ["Zkc.Construction.Compiled", "Zkc.Source.Structured.CommonAdapter", data,
                       participant_module]
     if admission == "views":
@@ -488,7 +502,7 @@ theorem spec_equation {typed} (handle : Nat) (initial : History F G) :
 """.replace("{typed}", typed).replace("{args}", args).replace("{published}", published)
        .replace("{model}", model))
     out.append(f"end {namespace}\n")
-    return omit_declarations("\n".join(out), subject.get("construction", "omit", []))
+    return uniform_glue(omit_declarations("\n".join(out), subject.get("construction", "omit", [])))
 
 
 def omit_declarations(source, names):
@@ -519,7 +533,7 @@ def construction_only_glue(subject, entry, modules):
     typed = binders(names, types)
     inputs_body = "[" + ", ".join(value_term(ty, name) for name, ty in zip(names, types)) + "]"
     doc = subject.get("construction", "doc") or default_glue_doc(subject, modules)
-    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured"]), doc=doc) + f"""
+    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Uniform.Structured"]), doc=doc) + f"""
 namespace {namespace}
 open Zkc.Construction
 

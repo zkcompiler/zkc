@@ -8,7 +8,8 @@ public import Zkc.Source.Structured.ProtocolContext
 
 @[expose] public section
 
-/-! Role-local participant programs after native transcript construction.
+/-! Role-local participant programs after native construction, including plain
+participants with no transcript capability.
 
 The bridge decodes the compiler's `zkc.constructed-participant/0` export into
 this carrier. Every exported operation keeps its operand references and result

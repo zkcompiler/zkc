@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Rule
+public import Zkc.Construction.FiatShamir
 public import Zkc.Source.Structured.Vocabulary
 public import Zkc.Source.Structured.Algebra
 public import Zkc.Source.Structured.Import
@@ -9,16 +10,16 @@ public import Zkc.Source.Component
 
 @[expose] public section
 
-/-! The transcript-construction rule applied to an original structured export.
+/-! Profile-aware construction admission against an original structured export.
 
 `checkExport` requires the export to name the original's source digest and
 entry with native framing. It reads the original entry's role roster, port types
 and scopes; checks that the exported policy publishes exactly the validator's
-data inputs, that these are the exported validator's data inputs, that the
+data inputs, that these are the exported validator's data inputs, that any
 replaced service is a validator service input, that the selected acceptance
 output is a Boolean validator output which every retained statement of the
-entry selects, and that the exported outputs are the validator's outputs; derives
-the occurrence context from the roster, the policy and the replaced service's
+entry selects, and that the exported data outputs are all of the validator's outputs; derives
+the occurrence context from the roster, the policy and any replaced service's
 contract; and runs the construction rule. Public coverage is a deployment
 requirement: the host's initial binding absorbs exactly these inputs, in this
 order (`publicValues`, which reads scalar inputs only; vector, index and count
@@ -61,27 +62,36 @@ service reference, in original order. -/
 def dataInputs (inputs : List Structured.Ty) (scopes : List (List String)) (role : String) :
     List Nat :=
   ((inputs.zip scopes).zipIdx.filter fun ((ty, scope), _) =>
-    scope.contains role && !(ty matches .service _)).map (·.2)
+    scope.contains role && !ty.isService).map (·.2)
 
-/-- The data sort of an original port type: every type except a service. -/
-def dataSort? : Structured.Ty → Option Structured.Ty
-  | .service _ => none
-  | ty => some ty
+/-- A data sort excludes services recursively, using the source classifier. -/
+def dataSort? (ty : Structured.Ty) : Option Structured.Ty :=
+  if ty.isService then none else some ty
 
 /-- The occurrence context fixed by the policy, the original roster and the
-replaced service's contract and the typed request its challenges carry. Only
-the installed native construction with one replaced service is admitted. -/
+optional replaced service's contract and typed request. The empty-suite, empty
+replacement policy selects plain; a nonempty suite selects the installed
+single-service Fiat–Shamir profile. -/
 def Context.ofPolicy (policy : Policy) (roles : List String) (contract : String)
     (request : Option Request) : Option Context :=
-  match policy.services with
+  if policy.construction ≠ "" ∨ policy.producer ∉ roles ∨ policy.validator ∉ roles ∨
+      policy.producer = policy.validator ∨ !policy.draws.Nodup then none
+  else match policy.services with
+  | [] =>
+      if policy.suite = "" ∧ policy.draws = [] ∧ contract = "" ∧ request = none then
+        some (Context.plain policy.entry roles (roles.idxOf policy.producer) (roles.idxOf policy.validator))
+      else none
   | [service] =>
-      if policy.construction = "" ∧ service < 1024 ∧ policy.producer ∈ roles ∧
-          policy.validator ∈ roles ∧ policy.producer ≠ policy.validator ∧
-          policy.draws.Nodup then
-        some ⟨policy.entry, roles, roles.idxOf policy.producer, roles.idxOf policy.validator,
-          service, contract, request, policy.suite, policy.draws⟩
+      if service < 1024 ∧ policy.suite ≠ "" then
+        some (Context.fiatShamir policy.entry roles (roles.idxOf policy.producer)
+          (roles.idxOf policy.validator) service contract request policy.suite policy.draws)
       else none
   | _ => none
+
+/-- The policy has no transcript ABI when the suite is empty. Admission checks
+that this agrees with the explicit context profile and actual source services. -/
+def Policy.dataPorts {α : Type} (policy : Policy) (ports : List α) : List α :=
+  if policy.suite = "" then ports else ports.dropLast
 
 /-- The context of an export checked against its original entry: same entry;
 the policy publishes exactly the validator's data inputs, which are the
@@ -96,15 +106,16 @@ def exportContext (original : Structured.Snapshot) (participant : Participant) :
   match entryInterface original with
   | some (inputs, interface) =>
       let policy := participant.policy
-      match policy.services with
+      if policy.entry ≠ original.entry ∨
+          policy.publicInputs ≠ dataInputs inputs interface.inputScopes policy.validator ∨
+          (policy.dataPorts participant.inputs).map some ≠
+            policy.publicInputs.map (fun index => (inputs[index]? >>= dataSort?).map ValueSort.data) then none
+      else match policy.services with
+      | [] => Context.ofPolicy policy interface.roles "" none
       | [service] =>
           match inputs[service]?, interface.inputScopes[service]? with
           | some (.service contract), some scope =>
-              if policy.entry = original.entry ∧ scope.contains policy.validator ∧
-                  policy.publicInputs = dataInputs inputs interface.inputScopes policy.validator ∧
-                  participant.inputs.dropLast.map some =
-                    policy.publicInputs.map (fun index =>
-                      (inputs[index]? >>= dataSort?).map ValueSort.data) then
+              if scope.contains policy.validator then
                 Context.ofPolicy policy interface.roles contract
                   ((Instruction.challengeFieldList participant.instructions).map Request.draw)
               else none
@@ -115,9 +126,9 @@ def exportContext (original : Structured.Snapshot) (participant : Participant) :
 /-- Where the exported validator returns the selected acceptance output: its
 position among the validator's original outputs. The export must name the
 original's source digest with native framing, the selected output must be a
-Boolean validator output selected by every retained statement of the entry, and
-the exported outputs must be the validator's outputs followed by the final
-transcript. -/
+Boolean validator output selected by every retained statement of the entry.
+Plain keeps exactly the validator's original outputs; Fiat–Shamir appends its
+final transcript. -/
 def exportAcceptance (original : Structured.Snapshot) (participant : Participant) :
     Option Nat :=
   match entryInterface original, entryOutputs original with
@@ -128,7 +139,7 @@ def exportAcceptance (original : Structured.Snapshot) (participant : Participant
           outputs[policy.acceptance]? = some .boolean ∧
           policy.acceptance ∈ validatorOutputs ∧
           statements.all (· = policy.acceptance) ∧
-          participant.outputs.dropLast.map some =
+          (policy.dataPorts participant.outputs).map some =
             validatorOutputs.map (fun index => (outputs[index]? >>= dataSort?).map ValueSort.data) then
         some (validatorOutputs.idxOf policy.acceptance)
       else none

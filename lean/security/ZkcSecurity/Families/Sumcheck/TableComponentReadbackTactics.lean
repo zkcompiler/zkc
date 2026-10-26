@@ -114,7 +114,7 @@ macro "normalize_component_process " "[" checkpoints:term,* "]" "[" laws:term,* 
         Domain.View.empty, Domain.read, List.mapM_cons, List.mapM_nil, Bind.bind,
         Option.bind, Option.pure_def, List.getElem?_cons_zero, List.getElem?_cons_succ,
         List.cons_append, List.nil_append, Domain.sortsMatch, Domain.Value.sort,
-        Domain.Payload.ty, List.map_cons, List.map_nil, Nat.lt_irrefl, PIR.Process.bind,
+        List.map_cons, List.map_nil, Nat.lt_irrefl, PIR.Process.bind,
         beq_self_eq_true, ite_true, decide_true, decide_false, Bool.false_beq,
         Nat.zero_le, and_true, true_and, and_self])
     | fail_if_no_progress (dsimp only [Bind.bind, Pure.pure, instMonadOption,

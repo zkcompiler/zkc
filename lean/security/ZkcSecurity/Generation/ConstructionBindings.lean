@@ -48,6 +48,7 @@ def nominalSimp (layout : Layout) : String :=
     "ProtocolContext.enter", "qualifyProtocolSite", "roleSubstitution",
     "SumcheckVerifierLaws.lowSite", "SumcheckVerifierLaws.highSite", "SumcheckVerifierLaws.challengeSite",
     "SumcheckVerifierLaws.deliverySite", "Context.message", "Context.query", "Context.role",
+    "Context.service", "Context.request", "Context.contract", "Context.replacement?",
     "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw",
     "Occurrence.round_label", "Occurrence.challenge_label", "Occurrence.delivery_label"])
 

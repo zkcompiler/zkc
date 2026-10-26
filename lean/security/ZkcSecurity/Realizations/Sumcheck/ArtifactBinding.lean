@@ -194,10 +194,11 @@ theorem original_round (payload : UnitPayload)
         (.cons (some index) ((SumcheckVerifierLaws.embedV (some point, some scalar)).append
           (.cons (some handle) .nil)))) state =
       verifier routing context origins point scalar state := by
+  obtain ⟨replacement, profile⟩ := Zkc.Construction.Original.Routing.draw_profile routes.draw
   rw [OriginalSumcheckLibrary.round_verifier payload bodies context (context.roles 1)
     rfl separate index (some handle) (some point) (some scalar), Zkc.Construction.Original.fold_bind, Zkc.Construction.Original.fold_actions]
   simp only [SumcheckVerifierLaws.roundPlain, PIR.Process.interpretState,
-    Zkc.Construction.Original.operations, Zkc.Construction.Original.receive, Zkc.Construction.Original.send, Zkc.Construction.Original.query, routes.mode, routes.low, routes.high,
+    Zkc.Construction.Original.operations, profile, Zkc.Construction.Original.receive, Zkc.Construction.Original.send, Zkc.Construction.Original.query, routes.mode, routes.low, routes.high,
     Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self, dite_true,
     PIR.Process.bind, verifier, List.append_assoc]
   congr 1

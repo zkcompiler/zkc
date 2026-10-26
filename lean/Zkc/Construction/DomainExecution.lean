@@ -1,7 +1,6 @@
 module
 
 public import Zkc.Construction.DomainTranscript
-public import Zkc.Construction.Semantics
 public import Zkc.Source.Structured.DomainEvaluation
 public import Zkc.Semantics.MonadExecution
 
@@ -172,6 +171,14 @@ def dataType (ty : Structured.Ty) : Bool := !ty.isService
 
 def sortsMatch (declared : List ValueSort) (values : Environment carriers) : Bool :=
   values.map Value.sort == declared
+
+/-- Build exactly the admitted profile's physical data ABI. Plain inputs are
+unchanged; only the selected Fiat–Shamir profile supplies a transcript slot. -/
+def inputFrame (context : Context) (data : Environment carriers) (history : History carriers) :
+    Environment carriers :=
+  match context.profile with
+  | .plain => data
+  | .fiatShamir replacement => data ++ [.transcript replacement.suite history]
 
 /-- Captures remain in the immutable outer environment. Only explicit yields
 become the next carried state. Zero iterations do not execute the body. -/

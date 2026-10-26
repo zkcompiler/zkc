@@ -8,6 +8,20 @@ its composition with the
 validator; the [structured import](structured-source.md) supplies the admitted
 original program.
 
+The generic checker uses the same recursive data eligibility as the nominal
+runtime, including products and sequences. Its result is structural admission.
+Typed property consumers also supply a checked complete Process binding and
+source laws; the table root reuses the exact retained helper and formula
+closure. `Domain.Correspondence` quantifies every environment and typed reply,
+retaining stops, frames and all outputs. A general source-to-constructed theorem
+for every generically admitted program is not asserted here.
+
+The older generic projection theorem remains `Uniform.project_sound`, on
+`Uniform.project` and the scalar/vector uniform evaluator. Its clients must use
+that checker explicitly. The `spec` reading and theorem composition described
+below refer to this retained uniform route; the typed checker never broadens
+that theorem's premise.
+
 ## Readings
 
 The original side is the admitted root's participant process at the validator
@@ -28,7 +42,9 @@ program holds for it (`Slot`):
 - `absent`: the component is absent at the validator;
 - `held r`: the exported value at reference `r` encodes the component;
 - `free`: the component is present, and the exported program does not keep it;
-- `service`: the component is the replaced challenge service.
+- `service`: the component is the replaced challenge service;
+- `local root`: the component is an independently owned service capability at
+  that original input, matched with a nominal local request.
 
 The root's input slots hold each published data input at its exported position
 and the replaced service as `service`; every other input is absent. The root's
@@ -66,7 +82,7 @@ original operation:
   other roles are absent;
 - a guard owned by the validator must be implemented by a guard on the
   reference holding its condition;
-- an exchange must have distinct sender and receiver roles and a scalar type. A
+- an exchange must have distinct sender and receiver roles and a recursively service-free data type. A
   message from the producer to the validator must be implemented by a receive at
   the same qualified site with the same type; the received value is held. A
   message from the validator to the producer must be implemented by the
@@ -99,8 +115,9 @@ original operation:
   validator is absent.
 
 After the body, only plumbing may remain, every returned reference must be
-bound, and the returned references other than the last (the final transcript)
-must hold the validator's outputs in original order. Each refusal names its
+bound, and the data return references must hold the validator's outputs in
+original order. Plain profiles keep every returned reference. Only the
+Fiat–Shamir profile excludes its final transcript from that comparison. Each refusal names its
 obligation (`projection-calculation`, `projection-receive`,
 `projection-unexplained`, …).
 
@@ -119,7 +136,7 @@ or output requires a held reference and is refused, and a total calculation on a
 
 ## Soundness
 
-`project_sound` proves, for every accepted export, service handle, data input,
+`Uniform.project_sound` proves, for every accepted export, service handle, data input,
 initial transcript and original inputs related to the exported inputs by the
 input slots:
 
@@ -151,13 +168,13 @@ slots.
 
 ## Composition with transcript construction
 
-`checkCompiled imported participant` takes an admitted original,
+`Uniform.checkCompiled imported participant` takes an admitted original,
 `imported : Structured.Imported original`: the program together with the proof
-`Structured.check original = .ok program`. It runs `checkExport` (the
-transcript-construction rule against the original snapshot) and then `project`
+`Structured.check original = .ok program`. It runs `Uniform.checkExport` (the
+transcript-construction rule against the original snapshot) and then `Uniform.project`
 against `imported.program` with the derived context. Both rules therefore read
 the same original: a program admitted from another snapshot cannot be paired
-with this snapshot's export. `compiled_transform` composes the two soundness
+with this snapshot's export. `Uniform.compiled_transform` composes the two soundness
 theorems at the exported program's interactive reading: for every export
 accepted against an admitted original, monad, challenge function, service
 handle, related input, initial transcript and proof, and for any final
@@ -177,15 +194,15 @@ so to the export's source digest.
 
 The equation leaves three positional premises to each Entry: where the export
 returns its acceptance output, how its data inputs hold the original validator's
-inputs, and how many data inputs there are. `select imported participant`
+inputs, and how many data inputs there are. `Uniform.select imported participant`
 constructs that selection from the admitted original and the export's policy:
 the derived context, the acceptance output's position among the returned values,
 the types of the published inputs in policy order, the validator's input slots
-and its acceptance output. `Selection.check` validates it against the export
+and its acceptance output. `Uniform.Selection.check` validates it against the export
 (the acceptance output precedes the final transcript, every slot holds a
 published value of its type, the replaced service or nothing, and the acceptance
-output is the validator's output at that position), and `selection_sound`
-proves the three premises from an accepted check. `compiled_selected` then
+output is the validator's output at that position), and `Uniform.selection_sound`
+proves the three premises from an accepted check. `Uniform.compiled_selected` then
 states the equation for every list of published values of the selected types,
 read through the acceptance output on both sides, with no positional fact about
 the Entry.
@@ -220,7 +237,7 @@ checks and conjoins them with the Math helper `zkc::boolean::both`, which the
 compiler inlines as a Boolean conjunction. Its original is admitted from the
 typed bodies printed from the admitted snapshot (`admitted`), the composed check
 accepts the export (`compiled`) and the selection check accepts it
-(`selection_checked`), so `compiled_transform` is `compiled_selected` at the
+(`selection_checked`), so `compiled_transform` is `Uniform.compiled_selected` at the
 Entry's published inputs and acceptance output: no proof is specific to the
 Entry. No security theorem is stated for this Entry.
 

@@ -306,7 +306,7 @@ theorem calculate_total (calculation : Calculation) (total : calculation.total =
     cases calculation <;> simp [Calculation.total] at total <;>
       rcases values with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩ <;> exact ⟨_, rfl⟩
   obtain ⟨results, evaluated⟩ := evaluates
-  have length := encodeValues_length results
+  have length := Zkc.Construction.Uniform.encodeValues_length results
   rw [Calculation.single] at length
   rcases encoded : encodeValues results with _ | ⟨value, _ | ⟨_, _⟩⟩ <;> rw [encoded] at length <;>
     simp at length
@@ -849,7 +849,7 @@ theorem anchor_continues {operation : Operation} {results : List ValueSort} {arg
       rw [read_positions] at found
       cases found
       refine ⟨values, rfl, ?_, ?_⟩
-      · rw [calculate_length calculation computed]
+      · rw [Zkc.Construction.Uniform.calculate_length calculation computed]
         simp [Instruction.resultSorts]
       · exact calculate_sorted computed
   | call name =>
@@ -2164,7 +2164,7 @@ theorem helperSorted_of_outputs {table : Structured.Evaluation.Meanings F G Stru
               simp only [invoked, PIR.Outcome.returned.injEq] at called
               subst called
               rw [← outputs entry found]
-              exact ⟨by simp [encodeValues_length], encodeValues_sorted results⟩
+              exact ⟨by simp [Zkc.Construction.Uniform.encodeValues_length], encodeValues_sorted results⟩
 
 /-- What the per-compile rule establishes when it accepts: the reading, the
 agreeing interface, and equal ideal meanings of the reading and the constructed

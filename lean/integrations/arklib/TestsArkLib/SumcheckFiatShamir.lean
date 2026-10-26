@@ -61,8 +61,7 @@ theorem false_claim : (0 : Scalar) ≠ raw.sum := by decide +kernel
 
 /-- A concrete deployment context; the theorems quantify over all of them. -/
 def context : Context :=
-  ⟨"zkl_sumcheck", ["role00000000", "role00000001"], 0, 1, 3, "random.bls12-381.fr/0",
-    some (.draw "bls12-381.fr"), "merlin3.bls12-381.fr64be/0", [("challenge", "delivery")]⟩
+  Context.fiatShamir "zkl_sumcheck" (["role00000000", "role00000001"]) 0 1 3 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) "merlin3.bls12-381.fr64be/0" ([("challenge", "delivery")])
 
 def initial : History Scalar Scalar := [.binding "statement" [.field "bls12-381.fr" 0]]
 

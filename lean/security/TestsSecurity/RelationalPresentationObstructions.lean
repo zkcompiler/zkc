@@ -16,8 +16,7 @@ open DomainReduction
 abbrev carriers := Structured.uniformCarriers Bool Unit
 
 def context : Context :=
-  ⟨"entry", ["producer", "validator"], 0, 1, 0, "random.scalar/0",
-    some (.draw "scalar"), "suite", []⟩
+  Context.fiatShamir "entry" (["producer", "validator"]) 0 1 0 "random.scalar/0" (some (.draw "scalar")) "suite" ([])
 
 abbrev origin := context.query "draw" (.draw "scalar")
 abbrev querySignature : PIR.Signature := ⟨Unit, fun _ => Unit⟩

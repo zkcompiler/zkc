@@ -57,7 +57,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
      ("bounded" ++ toString index, "input" ++ toString index ++ ".length < indexLimit")] else []
   let originalInputs := root.inputs.zipIdx.map fun (_, index) =>
     if physicalInputs.any (fun pair => pair.2 == index) then "(some input" ++ toString index ++ ")"
-    else if !producer && index == layout.context.service then "(some handle)" else "none"
+    else if !producer && some index == layout.context.service then "(some handle)" else "none"
   let originalValues := valuesText originalInputs
   let mut frame ← physicalInputs.mapM fun (ty, index) => data ty ("input" ++ toString index)
   frame := frame ++ [history "history"]

@@ -96,7 +96,7 @@ def event (context : Context) (frame : Frame) (site : String) : Option (List Str
       let [some port] := arguments | none
       let some (.service contract) := frame.definition.inputs[port.localInput]? | none
       let owner ← frame.roles.lookup owner
-      if port.rootInput ≠ context.service ∨ contract ≠ context.contract ∨
+      if some port.rootInput ≠ context.service ∨ contract ≠ context.contract ∨
           context.request ≠ some (.draw field) ∨ owner ≠ context.role context.validator then none
       else some ["query", frame.definition.name, site, "input_" ++ decimal port.localInput,
         contract, "draw", owner]

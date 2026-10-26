@@ -751,7 +751,7 @@ theorem localK_metered (data : List (Value F G)) (call : String × String) :
                           cases computed : Zkc.Construction.calculate calculation arguments with
                           | stopped reason => simp
                           | returned values =>
-                              have valuesLength := calculate_length calculation computed
+                              have valuesLength := Zkc.Construction.Uniform.calculate_length calculation computed
                               simp only [List.length_map] at lengths
                               have outputsLength : outputs.length = values.length := by
                                 rw [lengths, valuesLength]

@@ -137,7 +137,7 @@ theorem validator_application_read (input0 : (model.Value (Zkc.Source.Structured
       (validatorArguments input0 input1 input2 input3 witness) := by
   rfl
 
-theorem context_eq : subject.selection.context = ({ entry := "s7h6578616d706c6515h53657175656e7469616c5369676d61",   roles := ["role00000000", "role00000001"],   producer := 0,   validator := 1,   service := 6,   contract := "random.bls12-381.fr/0",   request := some { method := "draw", operands := [], sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" },   suite := "merlin3.bls12-381.fr64be/0",   draws := [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"),             ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")] }) := rfl
+theorem context_eq : subject.selection.context = ({ toContextIdentity := { entry := "s7h6578616d706c6515h53657175656e7469616c5369676d61",                          roles := ["role00000000", "role00000001"],                          producer := 0,                          validator := 1 },   profile := Zkc.Construction.Profile.fiatShamir                { service := 6,                  contract := "random.bls12-381.fr/0",                  request := some { method := "draw",                               operands := [],                               sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" },                  suite := "merlin3.bls12-381.fr64be/0",                  draws := [("apply_2_s0_label_6368616c6c656e6765", "apply_2_s0_label_64656c6976657279_0"),                            ("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")] } }) := rfl
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 

@@ -5,10 +5,11 @@ public import Zkc.Construction.Structured
 @[expose] public section
 
 /-! Structural admission of actual compiled producer instructions. The shared
-construction step checks calculations, transcript observations, queries and
-coordinates. Producer sends append proof payloads and must immediately be
-observed. Owner-local field draws preserve transcript state and retain their
-separate service-port identity. Receives are unsupported. This checker proves
+Fiat–Shamir step checks calculations, transcript observations, queries and
+coordinates. Its producer sends append proof payloads and must immediately be
+observed. Plain uses the shared data-only rule with the producer role: sends
+and receives preserve actual data without observations or transcript slots. Owner-local field draws preserve transcript state and retain their
+separate service-port identity. Fiat–Shamir producer receives are unsupported. This checker proves
 no source projection theorem by itself.
 -/
 set_option autoImplicit false
@@ -99,7 +100,7 @@ def checkProducerStep (program : Program) (context : Context) (state : CheckStat
   | instruction => checkStep context state instruction
 end
 
-def checkProducer (program : Program) (context : Context) (participant : Participant) :
+def checkFiatShamirProducer (program : Program) (context : Context) (participant : Participant) :
     Except String Unit :=
   match participant.inputs.getLast? with
   | some (.transcript suite) =>
@@ -116,5 +117,12 @@ def checkProducer (program : Program) (context : Context) (participant : Partici
         | .error error => .error error
       else .error "construction-producer-inputs"
   | _ => .error "construction-producer-inputs"
+
+/-- Plain producers execute their actual data-only ABI. -/
+def checkProducer (program : Program) (context : Context) (participant : Participant) :
+    Except String Unit :=
+  match context.profile with
+  | .plain => checkPlain context context.producer context.validator participant
+  | .fiatShamir _ => checkFiatShamirProducer program context participant
 
 end Zkc.Construction.AuthoredPair

@@ -33,7 +33,7 @@ theorem layout :
         [3, 15], [14, 16]] ∧ actual.returned = [17, 13] := by
   decide +kernel
 
-theorem accepted : checkExport original actual = .ok () := SchnorrProof.accepted
+theorem accepted : checkExport original actual = .ok () := by decide +kernel
 
 /-- The mutation helper alone preserves acceptance. -/
 theorem unchanged_accepted : checkExport original (modify actual 2 id) = .ok () := by

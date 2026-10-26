@@ -88,7 +88,7 @@ structure Installation (subject : Claims.Domain.Subject model art) where
   presented : art.Statement model → Domain.History model.toCarriers → PIR.Process signature (Domain.Result model.toCarriers)
   bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
     (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context art.participant
-      (inputs statement ++ [.transcript subject.compiled.selection.context.suite initial]))
+      (Domain.inputFrame subject.compiled.selection.context (inputs statement) initial))
     (presented statement initial)
 
 /-- All-data public ABIs have one shared nominal encoder. A root supplies
@@ -100,7 +100,7 @@ def Installation.typed
     (presented : art.Statement model → Domain.History model.toCarriers → PIR.Process signature (Domain.Result model.toCarriers))
     (bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
       (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context art.participant
-        ((Domain.encodeValues statement).getD [] ++ [.transcript subject.compiled.selection.context.suite initial]))
+        (Domain.inputFrame subject.compiled.selection.context ((Domain.encodeValues statement).getD []) initial))
       (presented statement initial)) : Installation subject where
   signature := signature
   absorb := absorb

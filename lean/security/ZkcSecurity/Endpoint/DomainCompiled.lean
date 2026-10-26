@@ -60,7 +60,7 @@ def verifier (c : Compiled art) (model : DomainModel) {m : Type → Type} [Monad
   | some inputs =>
       (fun result => (Zkc.Transcript.mapOutcome c.acceptance result.outcome, result.state.proof)) <$>
         Construction.Domain.validate model c.imported.program c.selection.context art.participant
-          (inputs ++ [.transcript c.selection.context.suite initial]) proof (oracle query) ()
+          (Construction.Domain.inputFrame c.selection.context inputs initial) proof (oracle query) ()
 
 end Compiled
 

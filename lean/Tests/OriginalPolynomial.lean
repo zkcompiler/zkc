@@ -32,7 +32,7 @@ private def source : Snapshot where
 
 private def program : Program := (check source).toOption.get (by decide +kernel)
 private def context : Context :=
-  ⟨"Square", ["P", "V"], 0, 1, 0, "random.bls12-381.fr/0", none, "suite", []⟩
+  Context.fiatShamir "Square" (["P", "V"]) 0 1 0 "random.bls12-381.fr/0" none "suite" ([])
 private def routing : Routing := ⟨source, context, .validator, 73, [], [], [], []⟩
 private def artifact : Participant where
   source := "fixture"
@@ -83,7 +83,7 @@ private def certificate (value claim : F) (history : Domain.History (model (F :=
     normalizing (try simp [inputs, Domain.evaluate, Domain.read,
       Domain.sortsMatch, Domain.Value.sort, PIR.Process.bind,
       ])
-    solving (simp [returns, Zkc.Construction.ArtifactBinding.Captures, inputs])
+    solving (simp [returns, Zkc.Construction.ArtifactBinding.Captures, inputs, ↓reduceTransport])
 
 #print axioms certificate
 end Tests.OriginalPolynomial

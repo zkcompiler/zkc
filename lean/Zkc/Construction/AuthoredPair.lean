@@ -83,10 +83,11 @@ def selectionValid {original : Snapshot} (selected : Selection original) : Bool 
     contract.clauses.contains selected.target) &&
   selected.target.kind == .target && selected.target.residual == none &&
   selected.target.decision == some ⟨.output, policy.acceptance, policy.validator⟩ &&
-  roleInputSorts original policy.producer == some p.inputs.dropLast &&
-  roleOutputSorts original policy.producer == some p.outputs.dropLast &&
-  p.inputs.getLast? == some (.transcript policy.suite) &&
-  p.outputs.getLast? == some (.transcript policy.suite)
+  roleInputSorts original policy.producer == some (policy.dataPorts p.inputs) &&
+  roleOutputSorts original policy.producer == some (policy.dataPorts p.outputs) &&
+  (if policy.suite = "" then true else
+    p.inputs.getLast? == some (.transcript policy.suite) &&
+    p.outputs.getLast? == some (.transcript policy.suite))
 
 /-- Construct the selection before proof search from an explicit retained
 target name. Ambiguous, missing or changed targets refuse. -/

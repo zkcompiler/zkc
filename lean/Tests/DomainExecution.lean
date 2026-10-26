@@ -22,7 +22,7 @@ private def model : Structured.DomainModel where
   smul _ _ _ _ := 0
 
 private def context : Context :=
-  ⟨"main", ["P", "V"], 0, 1, 0, "random.extension/0", some (.draw "extension"), "suite", []⟩
+  Context.fiatShamir "main" (["P", "V"]) 0 1 0 "random.extension/0" (some (.draw "extension")) "suite" ([])
 
 private def helper (swapped : Bool) : Structured.Definition :=
   .function ⟨"pair", .math, .privateDef, [.boolean, .boolean], [.boolean, .boolean],
@@ -181,9 +181,9 @@ example : (run .producer oracle failAfterSend (state [] [])).state.environment =
     [base 7, .data (.boolean false)] := by rfl
 
 -- Malformed request/domain/method/template and unsupported private coins refuse.
-example : queryOrigin { context with request := some (.draw "base") } "suite" "extension" query [] = none := by rfl
+example : queryOrigin (context.mapReplacement (fun replacement => { replacement with request := some (.draw "base") })) "suite" "extension" query [] = none := by rfl
 example : queryOrigin context "suite" "base" query [] = none := by rfl
-example : queryOrigin { context with request := some ⟨"index", [], .field "extension"⟩ }
+example : queryOrigin (context.mapReplacement (fun replacement => { replacement with request := some ⟨"index", [], .field "extension"⟩ }))
     "suite" "extension" query [] = none := by rfl
 -- Runtime normalization reads the selected root service. Exact local port
 -- identity is checked against source by SourceOccurrences before execution.

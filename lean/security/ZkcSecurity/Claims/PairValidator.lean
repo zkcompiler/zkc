@@ -129,10 +129,10 @@ theorem runtimeInputs_binding (subject : Subject model original imported selecte
       (producer validator : Domain.Environment model.toCarriers),
       project (encodeInputs inputs) selected.policy.publicInputs = some validator ∧
       Domain.encodeValues statement = some validator ∧
-      actualProducer = producer ++ [.transcript selected.policy.suite
-        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement)] ∧
-      actualValidator = validator ++ [.transcript selected.policy.suite
-        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement)] := by
+      actualProducer = Domain.inputFrame subject.selection.context producer
+        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement) ∧
+      actualValidator = Domain.inputFrame subject.selection.context validator
+        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement) := by
   simp only [validatorCodec_eq]
   cases interfaceFound : entryInterface original with
   | none => simp [runtimeInputs, interfaceFound] at prepared
@@ -148,9 +148,16 @@ theorem runtimeInputs_binding (subject : Subject model original imported selecte
               obtain ⟨statement, encoding⟩ := subject.publicProjection inputs validator validatorFound
               have binding := Domain.PublicBinding.fromEnvironment_encodeValues statement
                 subject.originalExport selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData encoding
-              simp [runtimeInputs, interfaceFound, producerFound, validatorFound, binding] at prepared
-              exact ⟨statement, producer, validator, rfl, encoding,
-                prepared.1.symm, prepared.2.symm⟩
+              cases profile : subject.selection.context.profile with
+              | plain =>
+                  simp [runtimeInputs, interfaceFound, producerFound, validatorFound, profile] at prepared
+                  refine ⟨statement, producer, validator, rfl, encoding, ?_, ?_⟩
+                  · simpa only [Domain.inputFrame, profile] using prepared.1.symm
+                  · simpa only [Domain.inputFrame, profile] using prepared.2.symm
+              | fiatShamir replacement =>
+                  simp [runtimeInputs, interfaceFound, producerFound, validatorFound, profile, binding] at prepared
+                  exact ⟨statement, producer, validator, rfl, encoding,
+                    prepared.1.symm, prepared.2.symm⟩
 
 end HonestPair.Subject
 end ZkcSecurity.Claims

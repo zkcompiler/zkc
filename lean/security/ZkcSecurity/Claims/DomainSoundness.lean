@@ -114,7 +114,7 @@ structure ChargedExport (subject : Subject model art) (schedule : ChargeSchedule
   bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
     (Zkc.Construction.Domain.participant model subject.compiled.imported.program
       subject.compiled.selection.context art.participant
-      (inputs statement ++ [.transcript subject.compiled.selection.context.suite initial]))
+      (Domain.inputFrame subject.compiled.selection.context (inputs statement) initial))
     (presented statement initial)
   certificate : Typed.ChargedCertificate absorb
     (fun result => subject.compiled.acceptance result = some true) (schedule.charge queries)

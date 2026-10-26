@@ -1,6 +1,8 @@
 module
 
-public import Zkc.Construction.FiatShamir
+public import Zkc.Construction.Context
+public import Zkc.Construction.Binding
+public import Zkc.Transcript.Interface
 public import Zkc.Source.Structured.DomainParticipant
 
 @[expose] public section
@@ -157,7 +159,9 @@ def interface {carriers : Structured.Carriers} (context : Context) :
           .send (.message (context.message site context.validator receiver) payload) ()
       | none => .refuse
   | .query site field _ =>
-      .query (.challenge (context.query site (.draw field))) some
+      match context.profile with
+      | .plain => .refuse
+      | .fiatShamir _ => .query (.challenge (context.query site (.draw field))) some
 
 def transform {carriers : Structured.Carriers} {m : Type → Type} [Monad m]
     {A : Type} (context : Context)

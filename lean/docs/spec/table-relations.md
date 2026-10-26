@@ -60,3 +60,24 @@ monad or new formal carrier is introduced for the native Data/Exec operation
 layout. The [native contract](../../../docs/spec/ir/execution.md) and
 [table library](../../../libraries/relations/table/README.md) record their own
 implementation evidence.
+
+## Actual plain construction consumer
+
+`ZkcExamples.Construction.TableMembership` imports the unchanged library target
+and checks the actual native plain producer/validator pair. The policy has no
+selected service, suite or draw pair; the real validator ABI is a vector and a
+sequence of the nominal Query product, with its sole Boolean output retained.
+The source input tuple determines both prepared participant frames.
+
+`validator_binding` is one complete all-environment Process equation.
+`helper_equation`, `validator_equation`, `validate_equation` and `pair_equation`
+reuse the actual helper closure and preserve every checkpoint, oracle/proof
+state and exhausted scan. `target_agreement` connects the retained formula to
+mathematical selected membership under the explicit reached bounds above.
+`membership_completeness` proves success of the admitted actual pair under
+those bounds; `membership_false_rejected` proves rejection of mathematical
+false statements under every reply, including executions that exhaust bounds.
+There are related inputs with both empty queries and a nonempty selected row.
+No empty-schedule premise is used as a soundness proof. Inactive query values remain in the bound input data.
+These are nominal constructed-model theorems, without a selected codec/native
+execution realization or a new baseline acceptance.

@@ -73,8 +73,20 @@ theorem operations_forget (routing : Routing)
   | leave => simp only [operations]; split <;> rfl
   | action action =>
       cases action with
-      | receive => exact receive_forget _ _ _ _ _
-      | send => exact send_forget _ _ _ _ _ _
+      | receive =>
+          cases profile : routing.context.profile with
+          | fiatShamir _ => simpa only [operations, profile] using receive_forget routing state _ _ _
+          | plain =>
+              simp only [operations, profile, receivePlain]
+              split
+              · rfl
+              · split <;> rfl
+      | send =>
+          cases profile : routing.context.profile with
+          | fiatShamir _ => simpa only [operations, profile] using send_forget routing state _ _ _ _
+          | plain =>
+              simp only [operations, profile, sendPlain]
+              split <;> rfl
       | query site field args =>
           cases args with
           | cons handle tail => cases tail; exact query_forget _ _ _ _ _

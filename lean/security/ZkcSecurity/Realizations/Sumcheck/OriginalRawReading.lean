@@ -48,9 +48,10 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
       ((TableComponent.Execution.run "bls12-381.fr" schedule [index] (nominal state construction)).bind
         (fun final => .done (unpack final construction))) := by
   have request := schedule.request index
+  obtain ⟨replacement, profile⟩ := Zkc.Construction.Original.Routing.draw_profile (routes.draw index)
   simp only [step, TableComponent.Execution.run, nominal,
     Zkc.Construction.Original.fold, PIR.Process.interpretState,
-    Zkc.Construction.Original.operations, Zkc.Construction.Original.receive,
+    Zkc.Construction.Original.operations, profile, Zkc.Construction.Original.receive,
     Zkc.Construction.Original.record, routes.mode, routes.low, routes.high,
     Domain.Payload.ofValue, Ty.isService, eq_self, dite_true,
     PIR.Process.bind]
@@ -78,7 +79,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     subst payload
     apply DomainReduction.ReadingTo.observe
     by_cases passed : state.scalar = low + high
-    · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations,
+    · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations, profile,
         Zkc.Construction.Original.query, Zkc.Construction.Original.send, routes.mode, routes.draw,
         routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self,
         Zkc.Construction.Original.queryField, request, ↓reduceDIte, PIR.Process.bind]
@@ -90,7 +91,6 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
         apply DomainReduction.ReadingTo.observe
         apply DomainReduction.ReadingTo.absorbSend (I := Nominal.signature F "bls12-381.fr")
           (.deliver _ _) _ _ () rfl
-        simp only [List.getLast?_append, List.getLast?_cons, List.getLast?_nil]
         simpa [unpack, nominal, TableComponent.Execution.advance, TableComponent.Execution.finalHistory,
           TableComponent.Execution.receivedHistory, advance, List.append_assoc,
           DomainReduction.fieldReply, PIR.Process.bind] using
@@ -105,7 +105,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     intro high
     apply DomainReduction.CoherentTo.observe
     by_cases passed : state.scalar = low + high
-    · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations,
+    · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations, profile,
         Zkc.Construction.Original.query, Zkc.Construction.Original.send, routes.mode, routes.draw,
         routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self,
         Zkc.Construction.Original.queryField, request, ↓reduceDIte, PIR.Process.bind, List.append_assoc]
@@ -113,7 +113,6 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
       · exact DomainReduction.drawRequest_of_request request
       · intro challenge
         apply DomainReduction.CoherentTo.observe
-        simp only [List.getLast?_append, List.getLast?_cons, List.getLast?_nil]
         simp [PIR.Process.bind, List.append_assoc]
         apply DomainReduction.CoherentTo.done
         exact ⟨rfl, rfl⟩

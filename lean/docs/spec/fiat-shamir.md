@@ -1,5 +1,57 @@
 # Fiat–Shamir transcript construction
 
+The common application and role identity is `Construction.ContextIdentity`.
+`Context.profile` is exactly `plain` or `fiatShamir replacement`; a replacement
+owns its original service input, contract, request, suite and query/delivery
+sites. A plain context has no replacement service. Private service ports remain
+separate capabilities with their own source ownership and handler contracts.
+
+The nominal constructed evaluator (`Domain.participant`) is shared by both
+profiles. `Construction.checkCompiled` is structural admission; typed property
+proofs additionally use full `Domain.Correspondence` Process equations and their
+source/target laws. The older scalar/vector proof route is explicitly scoped
+under `Construction.Uniform`. Its selected Sumcheck interpreted-byte clients
+continue to use that route and its original restricted checker. Acceptance by
+the typed checker is not a premise of a uniform-evaluator theorem.
+
+## Plain construction
+
+An empty native suite with no replaced services or draw pairs selects `plain`.
+An authored construction selector is outside this installed profile. Input and
+output sorts are exactly the actual role-local data ABI: no transcript input or
+output is appended or removed. `Context.dataPorts` therefore preserves the
+entire plain list; in the Fiat–Shamir profile it removes the final capability.
+
+`checkPlain` tracks data sorts and enclosing induction references. It checks
+nominal receives, sends of held data, calculation signatures, helper data ports,
+Boolean guards and bounded loops with exact carried/yield sorts. Data eligibility
+is the existing recursive `!Ty.isService`, including sequences and products.
+A local service remains an owner-local request; source occurrence admission
+checks its complete original root and contract. A challenge refuses with
+`construction-plain-challenge`; an observation refuses with
+`construction-plain-transcript`. Data outputs, including an aggregate after a
+Boolean decision, are retained in full.
+
+`AuthoredPair.prepare` and the canonical honest-input preparation use the same
+original typed tuple to obtain both actual input frames. Plain preparation has
+no transcript history slot. The nominal runner preserves physical checkpoints,
+helper failure, exhausted finite scans, unread proof suffixes and service state.
+The original plain message fold sends/receives actual data without adding a
+transcript observation. A public challenge has no resolvable plain source route.
+
+The actual library `CheckMembership` consumer is
+`ZkcExamples.Construction.TableMembership`. Its one all-environment Process
+binding supports exact runtime equations, completeness for the retained target,
+and deterministic false-input rejection under every reply. Source truth
+requires successful formula execution, preserving the existing eager length
+bounds and exhaustion. An empty query schedule supplies no rejection premise.
+The independently admitted `BatchOpening` fixture sends nominal point/value
+record sequences and retains the received sequence as a real validator output.
+Its transport bindings and refusal controls make no commitment-security claim.
+Both consumers are proofs in the nominal constructed model; selected codec and
+native execution correspondence remain separate obligations.
+
+
 This chapter defines the formal check of the compiler's native
 [transcript construction](../../../docs/spec/ir/construction.md) for a role-local
 validator, the transform theorems it supports for the compiled proof Entries of
@@ -105,14 +157,14 @@ meanings are written in continuation style.
 
 ## The rule
 
-`check context participant` walks the instructions with the current transcript
+In the Fiat–Shamir branch, `check context participant` walks the instructions with the current transcript
 state, the one observation that must come next (a received message or a
 challenge delivery), the enclosing loop indices and the selected query sites
 already challenged. It accepts exactly when:
 
 - the inputs are data followed by one host transcript of the context's suite;
 - a receive has no observation pending, its schema is its site and its peer the
-  producer, and it yields one scalar value; the next transcript operation must
+  producer, and it yields one recursively typed data value; the next transcript operation must
   observe that value on the current state with its message occurrence
   (producer to validator);
 - a challenge has no observation pending, reads the current state, carries a
@@ -154,13 +206,14 @@ validator output selected by every statement retained in the entry's body, and
 the exported outputs must be the validator's outputs followed by the final
 transcript; `exportAcceptance` gives the returned position of the decision. The
 context is derived from the original roster, the policy and the service's
-contract. Only the installed native construction with one replaced service and
-distinct selected draws is admitted. The rule does not compare the program's
+contract. The explicit plain profile or the installed single-service Fiat–Shamir profile
+with distinct selected draws is admitted. The latter requires the final
+transcript; the former preserves every original data output. The rule does not compare the program's
 calculations, guards or results with the original; that is the obligation of
 the [participant projection](participant-projection.md) rule, which composes
 with this one.
 
-`check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
+`Uniform.check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
 initial state and that nothing is pending at its end. The other final clauses of
 `check`, the coordinate conditions and the comparisons in `checkExport` are
 deployment checks; `Tests.ConstructionControls` and
@@ -168,7 +221,7 @@ deployment checks; `Tests.ConstructionControls` and
 not built from the enclosing induction values and a template without its repeat
 step.
 
-`check_sound` proves, for every accepted program, every monad, challenge
+`Uniform.check_sound` proves, for every accepted program, every monad, challenge
 function, helper table, data input, initial history, service handle and proof:
 
 ```text

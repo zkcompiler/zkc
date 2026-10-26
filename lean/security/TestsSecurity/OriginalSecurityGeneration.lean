@@ -36,7 +36,7 @@ run_cmd do
     refuses "wrong nominal input types" (validateABI program binding
       { metadata with types := [] })
     refuses "wrong service association" (validateABI program binding
-      { metadata with context := { metadata.context with service := metadata.types.length } })
+      { metadata with context := metadata.context.mapReplacement (fun replacement => { replacement with service := metadata.types.length }) })
     refuses "missing root calls" (analyze program { root.artifacts.validator with instructions := [] } root.artifacts.producer)
     refuses "wrong root instruction order" (analyze program
       { root.artifacts.validator with instructions := root.artifacts.validator.instructions.reverse } root.artifacts.producer)

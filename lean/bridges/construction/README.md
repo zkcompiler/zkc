@@ -46,11 +46,11 @@ For each subject with the construction profile:
    `structured_views` (or names an existing Views module), checks the composed
    rules (`compiled`) and the selection of the export's inputs and acceptance
    output (`selection_checked`) in the kernel, and instantiates
-   `Zkc.Construction.compiled_selected`, so `compiled_transform` holds with no
+   `Zkc.Construction.Uniform.compiled_selected`, so `compiled_transform` holds with no
    proof specific to the Entry. A manifest's `[construction] model` adds the
    definitional equation of the original validator with a model process and the
    interactive reading of the constructed program (`spec_equation`).
-4. A generated Lean file runs the composed check `checkCompiled` and the
+4. A generated Lean file runs the composed check `Uniform.checkCompiled` and the
    selection check in the kernel on the fresh export against the admitted
    original, which must be accepted with axioms among `propext`,
    `Classical.choice` and `Quot.sound`. The fresh original snapshot must be the
@@ -79,7 +79,7 @@ recognized one with another shape refuses the export
 (`lean/checks/check_construction_renderer.py` exercises the conjunction). It
 decodes each origin's canonical bytes into a template with its application and
 repeat steps, requires the static coordinate array to be empty and re-encodes it
-exactly. It parses printed MLIR types of the scalar, vector, index, transcript
+exactly. It parses printed MLIR types of recursive service-free data, transcript
 and coordinate sorts and refuses others. A loop's captured block arguments
 denote its captured operands in every iteration, so the rendered body refers
 to those operands directly and the rendered loop keeps its count and carried
@@ -96,7 +96,7 @@ enclosing induction references; these references are metadata, not request
 operands. `Operation.localService` is separate from transcript challenges.
 The producer rule supports only owner-local field draws; source admission
 checks their original root, alias map, contract, method, nominal result and
-occurrence. The validator rule remains coin-free.
+occurrence. The Fiat–Shamir validator rule remains coin-free.
 
 Run the focused actual-producer and alias/repeat controls with existing builds:
 
@@ -109,3 +109,15 @@ not run a Lake build. It retains fresh Schnorr, borrowed-alias and repeat
 exports, strict-reader refusals and kernel-checked admission controls. It
 establishes admission of those artifacts, not fresh-sampling distribution laws,
 native entropy realization or compiled completeness.
+
+## Plain and aggregate fixtures
+
+`plain.py --compiler PATH --output DIRECTORY` reproduces the actual
+`libraries/relations/table` CheckMembership source and its plain constructed pair,
+and the `fixtures/batch-opening.zkc` nominal record-sequence message client.
+It compares exact generated constructor data and typed bodies; `--write`
+regenerates them through the same producers. `Tests.PlainConstruction` checks
+admission, retained real outputs, successful and false-input execution,
+wrong nominal and differently typed empty messages, and refused plain queries.
+The library-root theorems are in `ZkcExamples.Construction.TableMembership`;
+these checks are not native byte-codec or commitment-security receipts.

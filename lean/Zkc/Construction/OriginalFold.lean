@@ -94,6 +94,31 @@ def query (routing : Routing) (state : State carriers) (site field : String) (ha
       else .halt .refused
     | none => .halt .refused
 
+/-- Plain receives preserve construction state and perform only the real
+message action. Source occurrence resolution still authenticates the site. -/
+def receivePlain (routing : Routing) (state : State carriers) (ty : Structured.Ty)
+    (site : String) (sender : Nat) :
+    PIR.Process (effects carriers) (carriers.Value ty × State carriers) :=
+  let receiver := match routing.mode with
+    | .producer => routing.context.producer | .validator => routing.context.validator
+  match routing.message state.frames site sender receiver with
+  | none => .halt .refused
+  | some _ =>
+      if ty.isService then .halt .refused
+      else .call (.receive ty site site (routing.context.role sender)) fun value => .done (value, state)
+
+/-- Plain sends output the real payload. They never turn it into a transcript
+observation, including sends by the validator. -/
+def sendPlain (routing : Routing) (state : State carriers) (ty : Structured.Ty)
+    (site : String) (receiver : Nat) (value : carriers.Value ty) :
+    PIR.Process (effects carriers) (Unit × State carriers) :=
+  let sender := match routing.mode with
+    | .producer => routing.context.producer | .validator => routing.context.validator
+  match routing.message state.frames site sender receiver, Domain.Payload.ofValue ty value with
+  | some _, some payload =>
+      .call (.send site site (routing.context.role receiver) payload) fun _ => .done ((), state)
+  | _, _ => .halt .refused
+
 /-- Frames are outermost first. Leaving checks the exact last frame. A stopped
 body never reaches this operation; it cannot pop a frame or execute a suffix. -/
 def operations (routing : Routing) :
@@ -104,9 +129,14 @@ def operations (routing : Routing) :
     if state.frames.getLast? = some frame then
       .done ((), { state with frames := state.frames.dropLast })
     else .halt .refused
-  | .action (.receive ty site sender), state => receive routing state ty site sender
+  | .action (.receive ty site sender), state =>
+      match routing.context.profile with
+      | .plain => receivePlain routing state ty site sender
+      | .fiatShamir _ => receive routing state ty site sender
   | .action (@Participant.Action.send _ _ _ _ ty site receiver value), state =>
-      send routing state ty site receiver value
+      match routing.context.profile with
+      | .plain => sendPlain routing state ty site receiver value
+      | .fiatShamir _ => send routing state ty site receiver value
   | .action (.query site field (.cons handle .nil)), state => query routing state site field handle
 
 /-- The fold is generic in all typed replies, inputs, and reached stop reasons. -/

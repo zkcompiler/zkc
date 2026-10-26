@@ -27,7 +27,7 @@ theorem adaptive_computation
     (encoded : ∀ statement, Domain.encodeValues statement = some (inputs statement))
     (bridge : ∀ statement, Bridge absorb (ReadPost statement) (initial statement)
       (Domain.participant model compiled.imported.program compiled.selection.context art.participant
-        (inputs statement ++ [.transcript compiled.selection.context.suite (initial statement)]))
+        (Domain.inputFrame compiled.selection.context (inputs statement) (initial statement)))
       (presented statement))
     (prover : OracleComp (OracleSpec.ofFn (Typed.ByLast (@Domain.Raw model.toCarriers)))
       (art.Statement model × Domain.Proof model.toCarriers)) :
@@ -56,7 +56,7 @@ theorem adaptive_soundness_charged
     (encoded : ∀ statement, Domain.encodeValues statement = some (inputs statement))
     (bridge : ∀ statement, Bridge absorb (ReadPost statement) (initial statement)
       (Domain.participant model compiled.imported.program compiled.selection.context art.participant
-        (inputs statement ++ [.transcript compiled.selection.context.suite (initial statement)]))
+        (Domain.inputFrame compiled.selection.context (inputs statement) (initial statement)))
       (presented statement))
     (determined : Typed.Determined initial)
     (falseStatement : art.Statement model → Prop)

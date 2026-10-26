@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Participant
+public import Zkc.Construction.Context
 public import Zkc.Construction.Binding
 public import Zkc.Source.Participant
 public import Zkc.Source.Common.Scalar
@@ -29,6 +29,8 @@ transform.
 set_option autoImplicit false
 
 namespace Zkc.Construction
+
+export Zkc.Transcript (mapOutcome)
 open Zkc.Source Zkc.Source.Common.Native
 
 variable {F G : Type}
@@ -90,62 +92,6 @@ abbrev Proof (F G : Type) := List (Payload F G)
 
 /-- The common participant actions of a validator. -/
 abbrev Actions (F G : Type) := Participant.interface Nat Ty services (ScalarValue F G)
-
-/-- Deployment facts that fix occurrence identities: original entry, role
-roster, producer and validator positions, the replaced service's original input
-index, contract and the typed request its challenges carry, and the ordered
-query/delivery sites. -/
-structure Context where
-  entry : String
-  roles : List String
-  producer : Nat
-  validator : Nat
-  service : Nat
-  contract : String
-  request : Option Request
-  suite : String
-  draws : List (String × String)
-  deriving DecidableEq, Repr
-
-/-- One decimal digit; larger arguments spell `9`. -/
-def decimalDigit : Nat → String
-  | 0 => "0" | 1 => "1" | 2 => "2" | 3 => "3" | 4 => "4"
-  | 5 => "5" | 6 => "6" | 7 => "7" | 8 => "8" | _ => "9"
-
--- Materialize shared equation proofs at the definition's owner. Otherwise
--- independent clients can realize different private matcher proofs under the
--- same public equation name. The scoped attribute exports no global simp rule.
-section
-attribute [local simp] decimalDigit
-end
-
-/-- The canonical decimal spelling of an index below `10000`, as used in native
-service port names. It is built from literals so that kernel evaluation reduces
-it. -/
-def decimal (index : Nat) : String :=
-  if index < 10 then decimalDigit index
-  else if index < 100 then decimalDigit (index / 10) ++ decimalDigit (index % 10)
-  else if index < 1000 then
-    decimalDigit (index / 100) ++ decimalDigit (index / 10 % 10) ++ decimalDigit (index % 10)
-  else
-    decimalDigit (index / 1000 % 10) ++ decimalDigit (index / 100 % 10) ++
-      decimalDigit (index / 10 % 10) ++ decimalDigit (index % 10)
-
-namespace Context
-
-def role (context : Context) (index : Nat) : String := context.roles.getD index ""
-
-def message (context : Context) (site : String) (sender receiver : Nat) : Origin :=
-  .message context.entry site (context.role sender) (context.role receiver)
-
-/-- The selected query's occurrence names the replaced service's original port
-and contract, which the original export fixes, and carries the query's typed
-request. -/
-def query (context : Context) (site : String) (request : Request) : Origin :=
-  .query context.entry site ("input_" ++ decimal context.service) context.contract
-    (context.role context.validator) request
-
-end Context
 
 /-- The reply a received message event carries: the payload at the expected
 message occurrence, decoded at the expected type. -/
@@ -254,6 +200,15 @@ theorem transform_eq_send {A : Type} (context : Context) (challenge : History F 
       rw [Transcript.transform_send _ _ (event := .message (context.message site context.validator
         receiver) payload) (value := ()) (by simp [Context.interface, encoded])]
       rfl
+
+/-- A pure final projection commutes with the transform. -/
+theorem transform_bind_done [LawfulMonad m] {A B : Type} (context : Context)
+    (challenge : History F G → m F) (f : A → B) (process : PIR.Process (Actions F G) A) :
+    ∀ (history : History F G) (proof : Proof F G),
+      transform context challenge (process.bind fun value => .done (f value)) history proof =
+        (fun result => (mapOutcome f result.1, result.2)) <$>
+          transform context challenge process history proof :=
+  Transcript.transform_bind_done context.interface _ f process
 
 end Transform
 

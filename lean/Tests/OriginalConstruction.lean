@@ -55,7 +55,7 @@ private def program : Program := ⟨source, payload⟩
 example : check source = .ok program := by rfl
 
 private def model : DomainModel := ringModel (ZMod 5) (ZMod 5)
-private def context : Context := ⟨"Root", ["P", "V"], 0, 1, 0, "random.F/0", none, "suite", []⟩
+private def context : Context := Context.fiatShamir "Root" (["P", "V"]) 0 1 0 "random.F/0" none "suite" ([])
 private def message : Template := ⟨"Root", [], ["message", "Root", "m", "m", "P", "V"]⟩
 private def routing (mode : Domain.Mode) : Routing :=
   ⟨source, context, mode, 0, [message], [], [], []⟩

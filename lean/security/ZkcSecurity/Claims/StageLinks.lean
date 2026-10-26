@@ -18,8 +18,8 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
   {art : Artifacts} {endpoint : Semantics} (subject : Subject F G art endpoint)
 
 def ConstructionChecked : Prop :=
-  checkCompiled subject.compiled.imported art.participant = .ok () ∧
-  select subject.compiled.imported art.participant = some subject.compiled.selection ∧
+  Uniform.checkCompiled subject.compiled.imported art.participant = .ok () ∧
+  Uniform.select subject.compiled.imported art.participant = some subject.compiled.selection ∧
   subject.compiled.selection.check subject.compiled.imported art.participant = true ∧
   subject.compiled.selection.publics = art.publics
 

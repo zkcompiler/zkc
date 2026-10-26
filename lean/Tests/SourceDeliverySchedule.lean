@@ -36,8 +36,7 @@ private def snapshot : Snapshot where
 private def program : Program := (check snapshot).toOption.get (by decide +kernel)
 
 private def context : Context :=
-  ⟨"Root", ["P", "V"], 0, 1, 0, "random.bls12-381.fr/0",
-    some (.draw "bls12-381.fr"), "suite", [("q", "d1"), ("q", "d2")]⟩
+  Context.fiatShamir "Root" (["P", "V"]) 0 1 0 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) "suite" ([("q", "d1"), ("q", "d2")])
 private def draw : Template :=
   ⟨"Root", [], ["query", "Root", "q", "input_0", "random.bls12-381.fr/0", "draw", "V"]⟩
 private def message (site : String) : Template :=
@@ -97,7 +96,7 @@ private def delayedSnapshot : Snapshot :=
       .instruction (.exchange "V" "P") [1] [.field "bls12-381.fr"] [] "d"]
       (.ret [0])⟩] }
 private def delayedProgram : Program := (check delayedSnapshot).toOption.get (by decide +kernel)
-private def delayedContext : Context := { context with service := 1, draws := [("q", "d")] }
+private def delayedContext : Context := context.mapReplacement (fun replacement => { replacement with service := 1, draws := [("q", "d")] })
 private def delayedDraw : Template :=
   ⟨"Root", [], ["query", "Root", "q", "input_1", "random.bls12-381.fr/0", "draw", "V"]⟩
 private def proverMessage : Template := ⟨"Root", [], ["message", "Root", "m", "m", "P", "V"]⟩
@@ -125,9 +124,9 @@ theorem delayed_validator_returns : (mapExecution Prod.fst
 
 
 -- Even a correct source edge must belong to the fixed construction policy.
-example : ({ routing .producer with context := { context with draws := [] } }).delivery
+example : ({ routing .producer with context := context.mapReplacement (fun replacement => { replacement with draws := [] }) }).delivery
     [] "d1" "bls12-381.fr" 1 = none := by decide +kernel
-example : (({ routing .producer with context := { context with draws := [("q", "d1")] } }).delivery
+example : (({ routing .producer with context := context.mapReplacement (fun replacement => { replacement with draws := [("q", "d1")] }) }).delivery
     [] "d1" "bls12-381.fr" 1).isSome = true := by decide +kernel
 
 end Tests.SourceDeliverySchedule

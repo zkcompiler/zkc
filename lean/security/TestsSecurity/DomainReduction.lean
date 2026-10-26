@@ -14,8 +14,7 @@ abbrev carriers := Structured.uniformCarriers Bool Unit
 abbrev State := Domain.History carriers × Bool
 
 def context : Context :=
-  ⟨"entry", ["producer", "validator"], 0, 1, 0, "random.scalar/0",
-    some (.draw "scalar"), "suite", []⟩
+  Context.fiatShamir "entry" (["producer", "validator"]) 0 1 0 "random.scalar/0" (some (.draw "scalar")) "suite" ([])
 
 def message (site : String) (value : Bool) : Domain.Event carriers :=
   .message (context.message site 0 1) (.field "scalar" value)

@@ -242,7 +242,7 @@ local instance : Fact (Nat.Prime 5) := ⟨by decide⟩
 abbrev F := ZMod 5
 abbrev G := ZMod 5
 
-def context : Context := ⟨"entry", ["prover", "verifier"], 0, 1, 2, "contract", some (.draw fr), suite, []⟩
+def context : Context := Context.fiatShamir "entry" (["prover", "verifier"]) 0 1 2 "contract" (some (.draw fr)) (suite) ([])
 
 /-- A challenge function that counts its queries. -/
 def counting (_ : History F G) : StateM Nat F := do

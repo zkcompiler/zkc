@@ -77,8 +77,10 @@ theorem call_eq {helper : Helper} {body : Region dialect helper.inputs helper.ou
           (invoke (SumcheckSourceContracts.helperMeanings (F := F) (G := G)) helper values) with
       | .returned results => .returned (encodeValues results)
       | .stopped reason => .stopped reason := by
-  rw [callHelper_invoke _ helper (helperTable_lookup program helper (present association)) arguments values
-    decoded, table_eq]
+  rw [Uniform.callHelper_invoke _ helper (Uniform.helperTable_lookup program helper (present association)) arguments values
+    decoded]
+  simp only [Uniform.helperTable]
+  rw [table_eq]
   rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in

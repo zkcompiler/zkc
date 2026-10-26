@@ -149,11 +149,12 @@ theorem original_round (payload : UnitPayload)
         (.cons (some index) ((SumcheckProverLaws.embedP (raw, dimension, width, point)).append
           (.cons service .nil)))) state =
       producer routing context origins raw dimension width point state := by
+  obtain ⟨replacement, profile⟩ := Original.Routing.delivery_profile routes.delivery
   rw [OriginalSumcheckLibrary.round_producer payload bodies context (context.roles 0)
     rfl separate index service (raw, dimension, width, point) shape bounded positive,
     Original.fold_bind, Original.fold_actions]
   simp only [SumcheckProverLaws.roundPresent, PIR.Process.interpretState,
-    Original.operations, Original.send, Original.receive, routes.mode, routes.low, routes.high,
+    Original.operations, profile, Original.send, Original.receive, routes.mode, routes.low, routes.high,
     routes.delivery, Original.record, Domain.Payload.ofValue, Ty.isService, eq_self, Original.queryField, routes.request,
     PIR.Process.bind, Original.fold, producer, ↓reduceDIte,
     List.append_assoc, List.cons_append, List.nil_append]

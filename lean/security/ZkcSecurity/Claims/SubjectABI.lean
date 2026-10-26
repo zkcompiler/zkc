@@ -25,10 +25,13 @@ theorem runtime_layout (subject : Subject model original imported selected)
     subject.runtimeInputs inputs = (do
       let producer ← project (encodeInputs inputs) producerPositions
       let validator ← project (encodeInputs inputs) selected.policy.publicInputs
-      let history ← Domain.PublicBinding.fromEnvironment subject.originalExport
-        selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData validator
-      pure (producer ++ [.transcript selected.policy.suite history],
-        validator ++ [.transcript selected.policy.suite history])) := by
+      match subject.selection.context.profile with
+      | .plain => pure (producer, validator)
+      | .fiatShamir _ =>
+          let history ← Domain.PublicBinding.fromEnvironment subject.originalExport
+            selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData validator
+          pure (Domain.inputFrame subject.selection.context producer history,
+            Domain.inputFrame subject.selection.context validator history)) := by
   cases entry : entryInterface original with
   | none => simp [entry] at layout
   | some actual =>
@@ -50,13 +53,14 @@ theorem runtime_of_projections (subject : Subject model original imported select
     (publicProjection : project (encodeInputs inputs) selected.policy.publicInputs = some validator)
     (encoding : Domain.encodeValues statement = some validator) :
     subject.runtimeInputs inputs = some
-      (producer ++ [.transcript selected.policy.suite (Domain.PublicBinding.history
-        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData)],
-       validator ++ [.transcript selected.policy.suite (Domain.PublicBinding.history
-        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData)]) := by
-  simp [runtimeInputs, entry, producerProjection, publicProjection,
-    Domain.PublicBinding.fromEnvironment_encodeValues statement subject.originalExport
-      selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData encoding]
+      (Domain.inputFrame subject.selection.context producer (Domain.PublicBinding.history
+        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData),
+       Domain.inputFrame subject.selection.context validator (Domain.PublicBinding.history
+        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData)) := by
+  cases profile : subject.selection.context.profile <;>
+    simp [runtimeInputs, entry, producerProjection, publicProjection, profile, Domain.inputFrame,
+      Domain.PublicBinding.fromEnvironment_encodeValues statement subject.originalExport
+        selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData encoding]
 
 theorem no_input_clauses (subject : Subject model original imported selected)
     (empty : ∀ clause ∈ subject.target.owner.contract.clauses, clause.kind ≠ .input)

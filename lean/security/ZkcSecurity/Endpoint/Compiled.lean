@@ -19,7 +19,7 @@ that every endpoint needs: the admitted original, the composed
 transcript-construction and participant projection check accepting the export
 against it, and the selection of the export's inputs and acceptance output,
 constructed in Lean from the admitted original and the policy and checked
-against the export (`Zkc.Construction.select`, `Selection.check`). The
+against the export (`Zkc.Construction.select`, `Uniform.Selection.check`). The
 generated per-Entry modules provide each fact by kernel evaluation.
 
 From these facts alone, `Compiled.transform_eq` states the compiled verifier's
@@ -40,6 +40,7 @@ set_option autoImplicit false
 
 namespace ZkcSecurity.Endpoint
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open Zkc.Construction.Uniform
 
 /-- The artifacts of a compiled Proof Entry: the original export, the
 constructed validator export, the types of the published inputs in policy
@@ -77,9 +78,9 @@ constructed from the admitted original and the policy, checked against the
 export, and publishing the artifacts' published types. -/
 structure Compiled (art : Artifacts) where
   imported : Structured.Imported art.original
-  compiled : checkCompiled imported art.participant = .ok ()
-  selection : Selection imported.program.payload.entry.outputs
-  selected : select imported art.participant = some selection
+  compiled : Uniform.checkCompiled imported art.participant = .ok ()
+  selection : Uniform.Selection imported.program.payload.entry.outputs
+  selected : Uniform.select imported art.participant = some selection
   checked : selection.check imported art.participant = true
   publics : selection.publics = art.publics
 
@@ -101,15 +102,15 @@ original's checked helpers, on a statement's published values and the initial
 transcript, read through the acceptance output the policy selects. -/
 def verifier {m : Type → Type} [Monad m] (challenge : History F G → m F) (statement : art.Statement F G)
     (initial : History F G) (proof : Proof F G) : m (PIR.Outcome (Option Bool) × Proof F G) :=
-  (fun result => (mapOutcome (acceptanceAt c.position) result.1, result.2)) <$>
-    ideal c.context challenge (helperTable c.imported.program F G) art.participant.returned
+  (fun result => (mapOutcome (Uniform.acceptanceAt c.position) result.1, result.2)) <$>
+    ideal c.context challenge (Uniform.helperTable c.imported.program F G) art.participant.returned
       art.participant.instructions (encodeValues statement ++ [.transcript initial]) proof
 
 /-- The admitted original validator on a statement's published values, with the
 replaced service at `handle`, read through its acceptance output. -/
 def original (statement : art.Statement F G) (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   ((c.imported.program.participant F G c.context.validator
-      (heldInputs handle (encodeValues statement) c.selection.slots
+      (Uniform.heldInputs handle (encodeValues statement) c.selection.slots
         c.imported.program.payload.entry.inputs)).bind
     fun outputs => .done (outputs.get c.selection.output)).interpret CommonAdapter.project
 
@@ -143,7 +144,7 @@ def verdict (result : PIR.Outcome (Option Bool) × Proof F G) : Bool :=
 /-- Host acceptance of an ideal run's observation is the complete acceptance of
 the result read through the acceptance output at the same position. -/
 theorem verdict_eq (position : Nat) (result : PIR.Outcome (List (Value F G)) × Proof F G) :
-    verdict (mapOutcome (acceptanceAt position) result.1, result.2) =
+    verdict (mapOutcome (Uniform.acceptanceAt position) result.1, result.2) =
       Zkc.Executable.Accepts position (Zkc.Executable.idealObservation result) := by
   rcases result with ⟨outcome, unread⟩
   cases outcome with
@@ -152,7 +153,7 @@ theorem verdict_eq (position : Nat) (result : PIR.Outcome (List (Value F G)) × 
         Zkc.Executable.observation, Zkc.Executable.Decision]
   | returned values =>
       simp only [mapOutcome, Zkc.Executable.idealObservation, Zkc.Executable.observation,
-        Zkc.Executable.Accepts, Zkc.Executable.Decision, acceptanceAt, Zkc.Executable.selectedTrue]
+        Zkc.Executable.Accepts, Zkc.Executable.Decision, Uniform.acceptanceAt, Zkc.Executable.selectedTrue]
       cases values[position]? with
       | none => cases unread <;> simp [verdict]
       | some value =>
@@ -189,7 +190,7 @@ theorem accepted_of_verdict {result : PIR.Outcome (Option Bool) × Proof F G}
 the acceptance output. -/
 theorem accepted_of_accepts {position : Nat} {result : PIR.Outcome (List (Value F G)) × Proof F G}
     (accepts : Zkc.Executable.Accepts position (Zkc.Executable.idealObservation result) = true) :
-    Zkc.Transcript.Accepted (· = some true) (mapOutcome (acceptanceAt position) result.1) := by
+    Zkc.Transcript.Accepted (· = some true) (mapOutcome (Uniform.acceptanceAt position) result.1) := by
   rw [← verdict_eq] at accepts
   exact accepted_of_verdict accepts
 

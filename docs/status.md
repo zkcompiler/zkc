@@ -288,7 +288,11 @@ reader checks actual edges, carried values and terminal propagation. The
 finite membership and indexed-read consumers through the current VM, including
 masks and duplicate/empty cases. Its AIR reciprocal control is a verifier-equation
 comparison, not a new lookup proof system. The independent Lean evaluator laws
-do not establish a native correspondence theorem. The structured Lean
+do not establish a native correspondence theorem. The actual plain
+CheckMembership artifacts also have checked aggregate preparation and
+constructed-model completeness and deterministic rejection proofs. Their
+explicit resource bounds and remaining native/codec boundary are recorded in
+[formal support](../lean/docs/support.md). The structured Lean
 import admits the complete table subjects, including nominal queries and
 finite-fold realizations. Exact retained formula laws state the full Boolean
 result under reached length bounds and exhaustion otherwise; the
