@@ -6,7 +6,10 @@ public import Zkc.Executable.DomainAnchorSemantics
 @[expose] public section
 
 /-! Soundness of finite scoped normalization against actual Domain execution.
-No independent instruction semantics or assumed helper honesty is used. -/
+Acceptance proves equality of observable Processes, including stopped paths.
+It does not imply participant admission or successful execution: unchanged
+anchors can retain the same refusal on both sides. Helper behavior comes from
+the actual program and the canonical Domain interpreter. -/
 set_option autoImplicit false
 namespace Zkc.Executable.CanonicalNormalization
 open Zkc.Construction Zkc.Source
@@ -805,8 +808,9 @@ theorem checkNormalized_sound {inputs : List ValueSort} {exported : List Instruc
               · simp [same] at accepted
 
 
-/-- The public checker discharges output-schema and structural admission;
-the theorem needs only the actual reached input schema. -/
+/-- The public checker verifies the selected output schema and normalization
+structure. Actual participant admission is separate. The equality requires
+only the reached input schema and retains any common anchor refusal. -/
 theorem check_sound {inputs outputs : List ValueSort} {exported reading : List Instruction}
     {exportedReturned readingReturned : List Nat} {result : Terms × List Nat × List Nat}
     (accepted : check inputs outputs exported exportedReturned reading readingReturned = .ok result)
@@ -829,8 +833,8 @@ theorem accepted_sound {inputs outputs : List ValueSort} {exported reading : Lis
   | error refusal => simp [checked, Except.toOption] at accepted
   | ok certificate => exact check_sound program context checked env schema
 
-/-- Parent integration seam: the native bridge targets the exact Code reading.
-Its own charges and static sufficient budget remain on that reading. -/
+/-- Normalize the exact Code reading at its own static sufficient budget.
+Rescheduling does not assert equality of the two instruction charge schedules. -/
 theorem metered_checked {m : Type → Type} [Monad m]
     (key : Origin → Origin) (initial : Zkc.Construction.History F G) (challenge : Zkc.Construction.History F G → m F)
     (cost : String → List (Zkc.Construction.Value F G) → Nat) (budget : Nat)
