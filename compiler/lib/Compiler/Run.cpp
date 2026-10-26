@@ -88,7 +88,7 @@ class Schedule {
       matches = bool(instruction->get<program::Receive>());
     else if (kind == "protocol.service_query")
       matches = bool(instruction->get<program::ServiceQuery>());
-    else if (kind == "local.call" || kind == "local.guard") {
+    else if (kind == "protocol.local_call" || kind == "local.guard") {
       auto *call = instruction->get<program::LocalCall>();
       Coordinate key{roles[role].program->name, site.str()};
       if (kind == "local.guard") {

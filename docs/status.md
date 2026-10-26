@@ -73,8 +73,13 @@ domain closure, with actual-body preservation checks. Projected local calls
 remain Protocol actions and must match their participant's role. Participant
 mathematical preparation now expands scoped helpers and creates scoped
 calculations with typed mathematical requests and explicit guard outcomes.
-Numerical realization, physical selection and publication still require migration before
-this becomes a complete default source-to-executable path. See the
+Fully resolved scoped bodies now feed physical port selection, actual-use
+conversions, diagonal contraction checks, storage release scheduling, native
+publication and independent artifact comparison. The planner indexes semantic
+payload definitions and uses across administrative CFG blocks. Captures retain
+their producer layout; body-only conversions execute in their reached body.
+Numerical realization still requires migration before mathematical and retained
+finite requests complete the default source-to-executable path. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
 Checked scoped helper expansion substitutes actual SSA bodies, preserves

@@ -1,5 +1,7 @@
 #include "Storage.h"
+#include "../Target/ExecutionPorts.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 
@@ -7,139 +9,73 @@ using namespace llvm;
 using namespace mlir;
 using namespace zkc::target;
 namespace zkc::protocol {
-namespace {
-bool releaseShape(Operation *op) {
-  return isa<plan::ReleaseOp>(op) && !op->getNumResults() &&
-         !op->getNumRegions() && !op->getNumSuccessors() &&
-         op->getAttrs().empty() && op->getNumOperands() &&
-         op->getNumOperands() <= 1024;
-}
-} // namespace
-
-Error applyStorage(ModuleOp module, ArrayRef<StorageRelease> releases,
-                   ArrayRef<Operation *> operations,
-                   ArrayRef<SmallVector<Value>> conversions) {
-  if (releases.empty())
-    return Error::success();
-  SmallVector<SmallVector<Block *>> blocks(operations.size());
-  for (auto [index, op] : enumerate(operations))
-    for (auto &region : op->getRegions())
-      for (auto &block : region)
-        blocks[index].push_back(&block);
-  auto blockAt = [&](size_t operation, unsigned block) -> Block * {
-    return block < blocks[operation].size() ? blocks[operation][block]
-                                            : nullptr;
-  };
+Error applyStorage(ModuleOp module, ArrayRef<StorageRelease> releases) {
+  auto admitted = ExecutionPorts::read(module);
+  if (!admitted)
+    return admitted.takeError();
+  const auto &flow = *admitted;
+  auto operations = flow.operations();
   auto valueAt = [&](StorageValue value) -> Value {
     if (value.operation >= operations.size())
       return {};
     auto *owner = operations[value.operation];
-    switch (value.kind) {
-    case StorageValue::OperationResult:
-      if (!value.block && value.index < owner->getNumResults())
-        return owner->getResult(value.index);
-      break;
-    case StorageValue::BlockArgument:
-      if (auto *block = blockAt(value.operation, value.block))
-        if (value.index < block->getNumArguments())
-          return block->getArgument(value.index);
-      break;
-    case StorageValue::ConversionResult:
-      if (!value.block && value.operation < conversions.size() &&
-          value.index < conversions[value.operation].size())
-        return conversions[value.operation][value.index];
-      break;
+    if (value.kind == StorageValue::OperationResult && !value.block &&
+        value.index < flow.outputs(owner).size())
+      return flow.outputs(owner)[value.index];
+    if (value.kind == StorageValue::BlockArgument &&
+        value.block < flow.get(owner).bodies.size()) {
+      const auto &body = flow.body(flow.get(owner).bodies[value.block]);
+      if (body.owner == owner && value.index < body.arguments.size())
+        return body.arguments[value.index];
     }
     return {};
   };
   OpBuilder builder(module.getContext());
-  std::map<StoragePoint, Operation *> tails;
   for (const auto &release : releases) {
-    auto at = release.point;
-    if (at.operation >= operations.size() || release.values.empty() ||
+    const auto &point = release.point;
+    if (point.operation >= operations.size() || release.values.empty() ||
         release.values.size() > 1024)
       return error("storage-materialization-correspondence");
-    auto tail = tails.find(at);
-    if (tail != tails.end()) {
-      builder.setInsertionPointAfter(tail->second);
-    } else {
-      auto *owner = operations[at.operation];
-      switch (at.kind) {
-      case StoragePoint::BlockEntry: {
-        auto *block = blockAt(at.operation, at.index);
-        if (!block)
-          return error("storage-materialization-correspondence");
-        builder.setInsertionPointToStart(block);
-        break;
-      }
-      case StoragePoint::AfterConversion: {
-        auto value =
-            valueAt({StorageValue::ConversionResult, at.operation, at.index});
-        if (!value || !value.getDefiningOp())
-          return error("storage-materialization-correspondence");
-        builder.setInsertionPointAfter(value.getDefiningOp());
-        break;
-      }
-      case StoragePoint::AfterOperation:
-        if (at.index || owner->hasTrait<OpTrait::IsTerminator>())
-          return error("storage-materialization-correspondence");
-        builder.setInsertionPointAfter(owner);
-        break;
-      default:
+    auto *owner = operations[point.operation];
+    Block *entry = nullptr;
+    Operation *before = nullptr;
+    if (point.kind == StoragePoint::BlockEntry &&
+        point.index < flow.get(owner).bodies.size()) {
+      entry = flow.get(owner).bodies[point.index];
+      const auto &body = flow.body(entry);
+      if (body.owner != owner || !isa<func::FuncOp>(owner) ||
+          body.instructions.empty())
         return error("storage-materialization-correspondence");
-      }
+      before = body.instructions.front();
+    } else if (point.kind == StoragePoint::AfterOperation && !point.index) {
+      entry = flow.enclosingBody(owner);
+      if (!entry)
+        return error("storage-materialization-correspondence");
+      const auto &instructions = flow.body(entry).instructions;
+      auto position = llvm::find(instructions, owner);
+      if (position == instructions.end() || ++position == instructions.end())
+        return error("storage-materialization-correspondence");
+      before = *position;
+    } else {
+      return error("storage-materialization-correspondence");
     }
-    SmallVector<Value> operands;
+    SmallVector<Value> values;
     for (auto coordinate : release.values) {
-      Value value = valueAt(coordinate);
+      auto value = valueAt(coordinate);
       if (!value)
         return error("storage-materialization-correspondence");
-      operands.push_back(value);
+      values.push_back(value);
     }
-    auto inserted =
-        plan::ReleaseOp::create(builder, builder.getUnknownLoc(), operands);
-    tails[at] = inserted;
+    builder.setInsertionPoint(before);
+    runtime::ReleaseBindingsOp::create(builder, before->getLoc(),
+                                       entry->getArgument(0), values);
   }
   return Error::success();
 }
 
-StorageReleaseReader::StorageReleaseReader(ArrayRef<StorageRelease> releases)
-    : expected(releases.size()) {
-  for (const auto &release : releases)
-    points[release.point].push_back(&release);
-}
-bool StorageReleaseReader::read(StoragePoint point, Block &block,
-                                Block::iterator &cursor,
-                                llvm::function_ref<Value(StorageValue)> valueAt,
-                                size_t &remaining) {
-  auto found = points.find(point);
-  if (found == points.end())
-    return true;
-  for (const auto *release : found->second) {
-    if (cursor == block.end() || !releaseShape(&*cursor) ||
-        cursor->getNumOperands() != release->values.size())
-      return false;
-    size_t work = cursor->getNumOperands() + 1;
-    if (work > remaining) {
-      remaining = 0;
-      return false;
-    }
-    remaining -= work;
-    for (auto [operand, coordinate] :
-         zip(cursor->getOperands(), release->values)) {
-      Value value = valueAt(coordinate);
-      if (!value || operand != value)
-        return false;
-    }
-    ++cursor;
-    ++consumed;
-  }
-  points.erase(found);
-  return true;
-}
-
 namespace {
 class StorageCorrespondence {
+  std::optional<ExecutionPorts> sourcePorts, actualPorts;
   llvm::DenseMap<Operation *, size_t> indices;
   llvm::DenseMap<Value, Value> values;
   llvm::DenseMap<Value, StorageValue> coordinates;
@@ -155,22 +91,27 @@ class StorageCorrespondence {
     return true;
   }
   bool sameRelease(Operation *source, Operation *actual) {
-    if (!isa<plan::ReleaseOp>(source) || !isa<plan::ReleaseOp>(actual) ||
-        source->getNumOperands() != actual->getNumOperands() ||
+    if (!isa<runtime::ReleaseBindingsOp>(source) ||
+        !isa<runtime::ReleaseBindingsOp>(actual) ||
+        sourcePorts->inputs(source).size() !=
+            actualPorts->inputs(actual).size() ||
         source->getAttrDictionary() != actual->getAttrDictionary())
       return false;
     for (auto [before, after] :
-         zip(source->getOperands(), actual->getOperands()))
+         zip(sourcePorts->inputs(source), actualPorts->inputs(actual)))
       if (values.lookup(before) != after)
         return false;
     return true;
   }
   bool added(StoragePoint point, Operation *actual) {
-    if (!releaseShape(actual) || !charge(actual->getNumOperands() + 1))
+    auto inputs = actualPorts->inputs(actual);
+    if (!isa<runtime::ReleaseBindingsOp>(actual) || inputs.empty() ||
+        inputs.size() > 1024 || !actual->getAttrs().empty() ||
+        !charge(inputs.size() + 1))
       return false;
     StorageRelease release{point, {}};
-    for (Value operand : actual->getOperands()) {
-      auto found = coordinates.find(operand);
+    for (Value input : inputs) {
+      auto found = coordinates.find(input);
       if (found == coordinates.end())
         return false;
       release.values.push_back(found->second);
@@ -178,7 +119,63 @@ class StorageCorrespondence {
     releases.push_back(std::move(release));
     return true;
   }
+  bool function(func::FuncOp source, func::FuncOp actual) {
+    if (!actual || source->getAttrDictionary() != actual->getAttrDictionary())
+      return false;
+    const auto &before = sourcePorts->body(&source.front());
+    const auto &after = actualPorts->body(&actual.front());
+    if (!charge(before.arguments.size() + 1) ||
+        before.arguments.size() != after.arguments.size())
+      return false;
+    for (auto [index, pair] :
+         enumerate(zip(before.arguments, after.arguments))) {
+      values[std::get<0>(pair)] = std::get<1>(pair);
+      coordinates[std::get<1>(pair)] = {StorageValue::BlockArgument,
+                                        indices.lookup(source), unsigned(index),
+                                        0};
+    }
+    size_t cursor = 0;
+    StoragePoint point{StoragePoint::BlockEntry, indices.lookup(source), 0};
+    for (auto *old : before.instructions) {
+      while (cursor != after.instructions.size() &&
+             isa<runtime::ReleaseBindingsOp>(after.instructions[cursor]) &&
+             !sameRelease(old, after.instructions[cursor]))
+        if (!added(point, after.instructions[cursor++]))
+          return false;
+      if (cursor == after.instructions.size())
+        return false;
+      auto *op = after.instructions[cursor++];
+      const auto &left = sourcePorts->get(old), &right = actualPorts->get(op);
+      if (!charge(left.inputs.size() + left.outputs.size() +
+                  left.bodies.size() + 1) ||
+          old->getName() != op->getName() ||
+          old->getAttrDictionary() != op->getAttrDictionary() ||
+          left.inputs.size() != right.inputs.size() ||
+          left.outputs.size() != right.outputs.size() ||
+          left.bodies.size() != right.bodies.size() ||
+          left.step->conditional != right.step->conditional ||
+          !llvm::equal(ValueRange(left.outputs).getTypes(),
+                       ValueRange(right.outputs).getTypes()))
+        return false;
+      for (auto [x, y] : zip(left.inputs, right.inputs))
+        if (values.lookup(x) != y)
+          return false;
+      for (auto [x, y] : zip(left.bodies, right.bodies))
+        if (sourcePorts->body(x).owner->getAttr("sym_name") !=
+            actualPorts->body(y).owner->getAttr("sym_name"))
+          return false;
+      for (auto [index, pair] : enumerate(zip(left.outputs, right.outputs))) {
+        values[std::get<0>(pair)] = std::get<1>(pair);
+        coordinates[std::get<1>(pair)] = {StorageValue::OperationResult,
+                                          indices.lookup(old), unsigned(index)};
+      }
+      point = {StoragePoint::AfterOperation, indices.lookup(old)};
+    }
+    return cursor == after.instructions.size();
+  }
   bool operation(Operation *source, Operation *actual, unsigned depth) {
+    if (auto scoped = dyn_cast<func::FuncOp>(source))
+      return function(scoped, dyn_cast<func::FuncOp>(actual));
     if (depth > 128 ||
         !charge(source->getNumOperands() + source->getNumResults() + 1) ||
         source->getName() != actual->getName() ||
@@ -208,21 +205,9 @@ class StorageCorrespondence {
                {StorageValue::BlockArgument, indices.lookup(source),
                 a.getArgNumber(), block}});
         }
-        StoragePoint point{StoragePoint::BlockEntry, indices.lookup(source),
-                           block};
         auto cursor = after.begin();
-        for (Operation &old : before) {
-          while (cursor != after.end() && isa<plan::ReleaseOp>(*cursor) &&
-                 !sameRelease(&old, &*cursor)) {
-            if (!added(point, &*cursor++))
-              return false;
-          }
+        for (Operation &old : before)
           if (cursor == after.end() || !operation(&old, &*cursor++, depth + 1))
-            return false;
-          point = {StoragePoint::AfterOperation, indices.lookup(&old)};
-        }
-        while (cursor != after.end() && isa<plan::ReleaseOp>(*cursor))
-          if (!added(point, &*cursor++))
             return false;
         if (cursor != after.end())
           return false;
@@ -240,18 +225,16 @@ class StorageCorrespondence {
 
 public:
   Expected<SmallVector<StorageRelease>> check(ModuleOp before, ModuleOp after) {
-    bool exceeded = false;
-    before->walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (indices.size() == remaining) {
-        exceeded = true;
-        return WalkResult::interrupt();
-      }
-      size_t index = indices.size();
+    auto beforeView = ExecutionPorts::read(before);
+    if (!beforeView)
+      return beforeView.takeError();
+    auto afterView = ExecutionPorts::read(after);
+    if (!afterView)
+      return afterView.takeError();
+    sourcePorts = std::move(*beforeView);
+    actualPorts = std::move(*afterView);
+    for (auto [index, op] : enumerate(sourcePorts->operations()))
       indices[op] = index;
-      return WalkResult::advance();
-    });
-    if (exceeded)
-      return error("storage-schedule-limit");
     if (!operation(before, after, 0))
       return error(remaining ? "storage-correspondence"
                              : "storage-schedule-limit");

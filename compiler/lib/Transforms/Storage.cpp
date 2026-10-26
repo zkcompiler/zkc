@@ -42,8 +42,7 @@ LogicalResult releaseLocalStorage(ModuleOp module) {
   if (auto e = target::validateStorage(module, {}, *releases))
     return diagnostics::emit(module.emitError(), std::move(e));
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-  if (auto e = applyStorage(*candidate, *releases,
-                            target::physicalPlanOperations(*candidate)))
+  if (auto e = applyStorage(*candidate, *releases))
     return diagnostics::emit(module.emitError(), std::move(e));
   if (failed(verify(*candidate)))
     return failure();

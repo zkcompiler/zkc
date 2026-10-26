@@ -1,3 +1,7 @@
+#include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/ExecutionPorts.h"
+#include "../lib/Target/PhysicalPlan.h"
+#include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
@@ -6,14 +10,19 @@
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Program/Codec.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
+#include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Language.h"
+#include "zkc/Translation/Protocol.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -22,6 +31,7 @@ using namespace zkc::test;
 namespace {
 struct Sample {
   const char *name, *source;
+  const char *field = "koala-bear";
 };
 const Sample samples[] = {
     {"ordinary and mathematical helpers", R"(
@@ -145,7 +155,15 @@ protocol Run roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return square(x)+y;}
 )"},
     {"participant direct and computed guards", R"(
 protocol Run roles(P)(x:Fr@P,y:Fr@P,go:bool@P)->(r:Fr@P){require @P go;require @P x==y;return x+y;}
-)"}};
+)"},
+    {"scoped diagonal producer with two reached consumers", R"(
+type Vector<F:Field>=builtin("vector",F);
+fn mul<F:Field>(a:Vector<F>,b:Vector<F>)->Vector<F>=primitive("vector.mul");
+fn dot<F:Field>(a:Vector<F>,b:Vector<F>)->F=primitive("vector.dot");
+fn work(w:Vector<Fr>,f:Vector<Fr>,v:Vector<Fr>)->Fr{let mapped=mul(f,v);let a=dot(w,mapped);let b=dot(w,mapped);return a+b;}
+protocol Run roles(P)(w:Vector<Fr>@P,f:Vector<Fr>@P,v:Vector<Fr>@P)->(v:Fr@P){return work(w,f,v);}
+)",
+     "bls12-381.fr"}};
 struct Fixture {
   CheckedProject checked;
   ClosedEntry entry;
@@ -154,12 +172,10 @@ struct Fixture {
   Fixture(MLIRContext &context, const Sample &sample)
       : checked(take(
             analyze(
-                take(capture(
-                    {{"sample",
-                      std::string(
-                          "module sample;domain Fr=field(\"koala-bear\");\n") +
-                          sample.source,
-                      "scoped-source.zkc"}})))
+                take(capture({{"sample",
+                               std::string("module sample;domain Fr=field(\"") +
+                                   sample.field + "\");\n" + sample.source,
+                               "scoped-source.zkc"}})))
                 .checkedProject())),
         entry(take(closeNativeRun(checked, "sample::Run"))),
         text(take(emitOriginal(entry, context))),
@@ -228,8 +244,248 @@ int main() {
       require(succeeded(mathematical::verifyProjectionPreserved(*expanded,
                                                                 *candidate)),
               "scoped preparation correspondence failed");
+      bool unresolved = false;
+      candidate->walk([&](mlir::Operation *op) {
+        unresolved |= isa<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(op);
+      });
+      if (!unresolved) {
+        auto ports = take(target::ExecutionPorts::read(*candidate));
+        target::PhysicalPlanOptions physicalOptions;
+        physicalOptions.releaseStorage = true;
+        physicalOptions.linearContractions = true;
+        protocol::Assignments requests;
+        candidate->walk([&](runtime::BindingOp binding) {
+          if (binding.getContract() == "poly.fold")
+            requests.emplace_back(binding.getSymName().str(),
+                                  "arkworks-msb/poly.fold");
+        });
+        auto plan = take(target::proposePhysical(*candidate,
+                                                 target::installedCandidates(),
+                                                 requests, physicalOptions));
+        auto checked = take(target::validatePhysical(*candidate, plan));
+        auto physical =
+            OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
+        auto physicalPlan = take(
+            target::proposePhysical(*physical, target::installedCandidates(),
+                                    requests, physicalOptions));
+        auto physicalChecked =
+            take(target::validatePhysical(*physical, physicalPlan));
+        if (auto error =
+                protocol::materializePhysical(*physical, physicalChecked))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        if (auto error = protocol::verifyPhysicalMaterialization(
+                *candidate, *physical, checked))
+          throw std::runtime_error(llvm::toString(std::move(error)));
+        auto artifact = take(protocol::exportProgram(*physical));
+        std::string bytes;
+        llvm::raw_string_ostream(bytes) << program::encode(artifact);
+        take(protocol::verifyProgramArtifact(*physical, bytes));
+        auto storageInput =
+            OwningOpRef<ModuleOp>(cast<ModuleOp>((*physical)->clone()));
+        SmallVector<mlir::Operation *> existingReleases;
+        storageInput->walk([&](runtime::ReleaseBindingsOp release) {
+          existingReleases.push_back(release);
+        });
+        for (auto *release : existingReleases)
+          release->erase();
+        auto storageBefore =
+            OwningOpRef<ModuleOp>(cast<ModuleOp>((*storageInput)->clone()));
+        require(succeeded(protocol::releaseLocalStorage(*storageInput)) &&
+                    succeeded(protocol::verifyStoragePreserved(*storageBefore,
+                                                               *storageInput)),
+                "standalone scoped storage producer or reader failed");
+        if (sample.name == StringRef("require and returning branches")) {
+          bool changed = false;
+          physical->walk([&](exec::ApplyOp apply) {
+            if (!changed && apply.getInputs().size() == 2 &&
+                apply.getInputs()[0].getType() ==
+                    apply.getInputs()[1].getType() &&
+                apply.getInputs()[0] != apply.getInputs()[1]) {
+              auto first = apply.getInputs()[0];
+              apply->setOperand(1, apply.getInputs()[1]);
+              apply->setOperand(2, first);
+              changed = true;
+            }
+          });
+          require(changed && succeeded(verify(*physical)),
+                  "same-typed payload mutation was not admitted");
+          auto error = protocol::verifyPhysicalMaterialization(
+              *candidate, *physical, checked);
+          require(
+              bool(error),
+              "physical checker accepted changed actual payload association");
+          llvm::consumeError(std::move(error));
+        }
+        if (sample.name ==
+            StringRef("scoped diagonal producer with two reached consumers"))
+          require(plan.contractions.size() == 1 &&
+                      plan.contractions[0].consumers.size() == 2 &&
+                      checked.stats().eligibleProducers == 1 &&
+                      checked.stats().eligiblePairs == 2 &&
+                      checked.stats().selectedPairs == 2,
+                  "scoped contraction lost actual payload consumers");
+        bool payloadArgument = false;
+        for (auto *op : ports.operations()) {
+          const auto &node = ports.get(op);
+          for (auto [index, value] : llvm::enumerate(node.outputs)) {
+            auto definition = ports.definition(value);
+            require(definition.owner == op && definition.port == index &&
+                        !definition.argument,
+                    "payload lost its actual semantic producer");
+            payloadArgument |= isa<BlockArgument>(value);
+          }
+          for (auto [index, value] : llvm::enumerate(node.inputs)) {
+            const auto operandIndex = index;
+            require(llvm::any_of(ports.uses(value),
+                                 [&](auto use) {
+                                   return use.operation == op &&
+                                          use.operand == operandIndex;
+                                 }),
+                    "actual payload use disappeared");
+          }
+          if (auto function = dyn_cast<func::FuncOp>(op))
+            require(!ports.contains(function.getArgument(0)),
+                    "scope was treated as a represented data value");
+        }
+        require(
+            payloadArgument ||
+                sample.name ==
+                    StringRef("stopping ordinary helper truncates its caller"),
+            "fixture did not exercise a CFG payload definition");
+      }
     });
   }
+  for (bool loop : {false, true})
+    cases.run(
+        loop ? "scoped iteration converts only reached state uses"
+             : "scoped branch converts only reached captured uses",
+        [&] {
+          OpBuilder builder(&context);
+          auto location = builder.getUnknownLoc();
+          auto module = OwningOpRef<ModuleOp>(ModuleOp::create(location));
+          builder.setInsertionPointToStart(module->getBody());
+          auto root = protocol_ir::ProtocolModuleOp::create(
+              builder, location, protocol_ir::Profile::Exec);
+          root.getBody().push_back(new Block);
+          builder.setInsertionPointToStart(&root.getBody().front());
+          runtime::BindingOp::create(builder, location, "fold", "poly.fold",
+                                     builder.getStrArrayAttr({"bls12-381.fr"}),
+                                     "arkworks-msb/poly.fold",
+                                     builder.getArrayAttr({}));
+          auto table =
+              parseType("!poly.multilinear<\"bls12-381.fr\">", &context);
+          auto field = parseType("!algebra.field<\"bls12-381.fr\">", &context);
+          auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+          auto makeFunction = [&](StringRef name, TypeRange ports,
+                                  bool region) {
+            builder.setInsertionPointToEnd(&root.getBody().front());
+            SmallVector<mlir::Type> arguments{
+                runtime::ScopeType::get(&context)};
+            llvm::append_range(arguments, ports);
+            auto result = exec::OutcomeType::get(&context, {table});
+            auto function = func::FuncOp::create(
+                builder, location, name,
+                builder.getFunctionType(arguments, result));
+            function->setAttr("no_inline", builder.getUnitAttr());
+            if (region) {
+              function.setPrivate();
+              function->setAttr("runtime.region", builder.getUnitAttr());
+            } else {
+              function->setAttr(
+                  "runtime.origin",
+                  builder.getArrayAttr(
+                      {builder.getStringAttr(name), builder.getArrayAttr({})}));
+            }
+            function.addEntryBlock();
+            return function;
+          };
+          SmallVector<mlir::Type> ports{table, field};
+          if (loop) {
+            ports.push_back(index);
+            ports.push_back(index);
+          } else {
+            ports.push_back(builder.getI1Type());
+          }
+          auto work = makeFunction("work", ports, false);
+          auto branch = makeFunction("body",
+                                     loop ? TypeRange{index, table, field}
+                                          : TypeRange{table, field},
+                                     true);
+          builder.setInsertionPointToEnd(&branch.front());
+          exec::ScopedExecutionBuilder inner(builder, branch);
+          unsigned start = loop ? 2 : 1;
+          auto folded = inner.invoke(
+              "exec.apply", TypeRange{table},
+              inner.scoped(
+                  {branch.getArgument(start), branch.getArgument(start + 1)}),
+              {builder.getNamedAttr("binding",
+                                    FlatSymbolRefAttr::get(&context, "fold")),
+               builder.getNamedAttr("parameters", builder.getArrayAttr({})),
+               builder.getNamedAttr("site", builder.getStringAttr("fold"))});
+          inner.complete(folded);
+          func::FuncOp alternative;
+          if (!loop) {
+            alternative =
+                makeFunction("otherwise", TypeRange{table, field}, true);
+            builder.setInsertionPointToEnd(&alternative.front());
+            exec::ScopedExecutionBuilder(builder, alternative)
+                .complete(alternative.getArgument(1));
+          }
+          builder.setInsertionPointToEnd(&work.front());
+          exec::ScopedExecutionBuilder outer(builder, work);
+          SmallVector<mlir::Value> result;
+          if (loop)
+            result = outer.loop(work.getArgument(3), work.getArgument(4),
+                                work.getArgument(1), work.getArgument(2),
+                                TypeRange{table}, false, "loop",
+                                [&](unsigned) { return branch; });
+          else
+            result = outer.conditional(
+                work.getArgument(3), {work.getArgument(1), work.getArgument(2)},
+                TypeRange{table}, "choose",
+                [&](unsigned arm) { return arm ? alternative : branch; });
+          outer.returned(result);
+          require(succeeded(verify(*module)),
+                  "execution table fixture failed admission");
+          auto flow = take(target::ExecutionPorts::read(*module));
+          target::PhysicalPlanOptions options;
+          options.releaseStorage = true;
+          auto plan = take(target::proposePhysical(
+              *module, target::installedCandidates(), {}, options));
+          auto checked = take(target::validatePhysical(*module, plan));
+          unsigned conversions = 0;
+          for (auto [position, op] : llvm::enumerate(flow.operations())) {
+            const auto &choice = plan.operations[position];
+            if (isa<exec::TestOp, exec::RangeOp>(op)) {
+              require(choice.conversions.empty(),
+                      "capture conversion moved before control entry");
+              auto changed = plan;
+              auto *entry = flow.get(op).bodies[0];
+              auto producer = flow.body(entry).instructions.front();
+              unsigned producerIndex = llvm::find(flow.operations(), producer) -
+                                       flow.operations().begin();
+              changed.operations[position].inputs[loop ? 2 : 1] =
+                  plan.operations[producerIndex].inputs[0];
+              refuses(target::validatePhysical(*module, changed),
+                      "binding-operation-signature");
+            }
+            for (const auto &conversion : choice.conversions) {
+              (void)conversion;
+              require(op->getParentOfType<func::FuncOp>()->hasAttr(
+                          "runtime.region"),
+                      "body-only conversion escaped its reached region");
+              ++conversions;
+            }
+          }
+          require(conversions >= 2,
+                  "fixture did not require reached-use conversions");
+          if (auto error = protocol::materializePhysical(*module, checked))
+            throw std::runtime_error(llvm::toString(std::move(error)));
+          auto program = take(protocol::exportProgram(*module));
+          std::string bytes;
+          llvm::raw_string_ostream(bytes) << program::encode(program);
+          take(protocol::verifyProgramArtifact(*module, bytes));
+        });
   auto projected = [&](Fixture &fixture) {
     auto candidate = OwningOpRef<ModuleOp>(
         cast<ModuleOp>(fixture.module->getOperation()->clone()));

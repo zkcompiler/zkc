@@ -315,6 +315,7 @@ add_zkc_component(Transforms
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
+  lib/Target/ExecutionPorts.cpp
   lib/Target/PhysicalPlan.cpp
   lib/Target/StorageSchedule.cpp
 )

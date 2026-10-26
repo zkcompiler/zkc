@@ -10,10 +10,11 @@ class CheckedPhysicalPlan;
 }
 namespace zkc::protocol {
 // Freshness-check the original input, then compare actual physical output with
-// the checked plan's selected Local subject. Numerical correspondence from
-// original Kernel source to that privately retained subject was independently
-// established by validation. Includes participant/source preservation, all
-// local operands, selected implementations and per-use conversions.
+// the checked plan's selected executable subject. Numerical correspondence from
+// original numerical source to that privately retained subject was
+// independently established by validation. Includes participant/source
+// preservation, all local operands, selected implementations and per-use
+// conversions.
 llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp before,
                                           mlir::ModuleOp after,
                                           const target::CheckedPhysicalPlan &);

@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Kernel.h"
@@ -21,7 +22,7 @@ LogicalResult lowerPhysical(
     ArrayRef<target::FunctionPortSelection> functionPorts) {
   if (stats)
     *stats = {};
-  module.getContext()->getOrLoadDialect<zkc::plan::PlanDialect>();
+  module.getContext()->getOrLoadDialect<zkc::exec::ExecDialect>();
   module.getContext()->getOrLoadDialect<zkc::runtime::RuntimeDialect>();
   if (failed(verify(module)))
     return failure();
@@ -76,7 +77,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
            "role programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<zkc::plan::PlanDialect, zkc::runtime::RuntimeDialect>();
+    registry.insert<zkc::exec::ExecDialect, zkc::runtime::RuntimeDialect>();
     kernel::createLowerKernelsPass()->getDependentDialects(registry);
   }
   void runOnOperation() final {
