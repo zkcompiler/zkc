@@ -29,8 +29,10 @@ mathematical statements under every permitted reply, even outside those bounds.
 Nonvacuity has both empty-query and nonempty selected-row witnesses.
 `BatchOpening` separately admits and binds an actual aggregate send/receive
 client, preserves its returned batch and refuses wrong nominal or empty-sequence
-sorts. These are constructed-model results, with no new native/codec or KZG
-security receipt and no semantic-baseline acceptance.
+sorts. The [selected byte connection](spec/data-codecs.md) also relates its actual
+constructed processes to the finite interpreted codec, preserving false answers,
+stop behavior and unread frames. This is distinct from native ZKCV framing and
+KZG security; baseline acceptance requires separate model review and replay.
 
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.

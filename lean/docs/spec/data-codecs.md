@@ -90,13 +90,25 @@ action skeletons. The validator equation quantifies every peer byte string;
 `received_encoded`, `received_malformed` and `received_trailing` give its
 successful and unsuccessful outcomes. This is a mathematical byte handler.
 
-The source/constructed artifact connection must separately establish that the
-actual producer sends this exact type with the selected site and peer, the
-validator receives it, and the actual checked helper computes `checkBatch`.
-That yields the artifact equations against the selected `producer` and
-`validator` skeletons, after the appropriate output projection. The codec is not a
-compiled-process or native-pipeline theorem and makes no commitment-security
-claim. `Tests.DataCodec` exercises the positive layout and refusal boundaries.
+`BatchOpeningConnection` now connects the actual admitted producer and validator
+artifacts to their complete nominal processes. Its helper equation uses the
+retained finite fold for every batch, preserves false decisions, and distinguishes
+bounded completion from exhaustion. The validator equation includes its returned
+Boolean and original aggregate, physical environment and every receive reply.
+
+`BatchOpeningByteConnection` interprets those actual processes with the selected
+byte handler. `schema_agreement` and `context_agreement` check the exact nominal
+schema, roles, site, policy and exported instructions. `produce_equation` and
+`validate_equation` retain stopped outcomes, oracle state, existing proof prefixes
+and unread frames. Canonical decoding consumes all bytes within one frame;
+additional frames remain unread according to the actual Domain execution.
+Malformed heads refuse without consuming them. Size limits belong to this codec,
+while larger batches remain ordinary typed source/adversary messages.
+
+These are connections to the mathematical byte handler and exact constructed
+artifacts. They make no commitment-security claim. `Tests.DataCodec` and
+`Tests.BatchOpeningByteConnection` exercise the layout, actual transport and
+refusal boundaries.
 
 ## Native boundary
 
