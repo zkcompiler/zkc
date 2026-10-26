@@ -1743,17 +1743,26 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       }
       return Error::success();
     };
+    SmallVector<Diagnostic> preparationDiagnostics;
     if (speculative) {
-      ScopedDiagnosticHandler quiet(module.getContext(),
-                                    [](Diagnostic &) { return success(); });
+      ScopedDiagnosticHandler quiet(module.getContext(), [&](Diagnostic &d) {
+        preparationDiagnostics.push_back(std::move(d));
+        return success();
+      });
       refusal = prepare();
     } else
       refusal = prepare();
     bool preparationCheckingCapacity =
         preparationOutcome.outcome ==
         mathematical::VerificationObservation::OptionalCapacity;
-    if (refusal && !preparationCapacity && !preparationCheckingCapacity)
+    if (refusal && !preparationCapacity && !preparationCheckingCapacity) {
+      // Optional attempts stay quiet while ordered preparation can recover.
+      // A terminal failure must retain its diagnostic instead of replacing
+      // the cause with the enclosing preparation-stage error.
+      for (auto &diagnostic : preparationDiagnostics)
+        module.getContext()->getDiagEngine().emit(std::move(diagnostic));
       return refusal;
+    }
     if (refusal)
       constructionCapacity = speculative;
     if (!refusal && hasNumerical) {
