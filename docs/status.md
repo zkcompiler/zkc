@@ -106,6 +106,11 @@ Numerical transformation controls now exercise scoped recipe fragments, exact
 closures, retained policies, forwarding ports and repeated invocation origins.
 Fragment admission rejects data ports on either outer owner; capture mutations
 remain checked after coherent scope-entry and outlined-call rewiring.
+Structured collection/computation controls retain actual domains, callbacks,
+unused row checks and full logical data signatures. Export depth includes the
+derived declarations in the emitted graph, with exact boundary controls checked
+by the independent Lean reader. The native CFG observer retains separate
+operation, definition and reached invocation capacities.
 
 Checked scoped helper expansion substitutes actual SSA bodies, preserves
 uncharged helper returns and charged control yields, and normalizes aliased

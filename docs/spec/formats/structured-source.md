@@ -789,20 +789,26 @@ to 512 UTF-8 bytes (protocol template paths to 2048 bytes, binding names to 256 
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. Operand references index the lexical
 value list and are also at most 4096. The instruction count includes nested
-bodies and one derived instruction per finite, realization or map declaration;
-it excludes terminators and domain
-constructors. The independent native reference enforces the same 4096-instruction
-admission budget, independently of runtime fuel and without expanding calls.
+bodies, domain constructors and one derived instruction per finite, realization,
+collection or map declaration; it excludes terminators. The independent native
+reference has a separate 4096-operation admission budget over actual native
+nonterminators, including outcome packaging, and counts actual native
+definitions rather than export-local derived rows. Neither tool expands calls
+for these counts. Both capacities are independent of runtime fuel; equality of
+their numeric limits does not imply identical admitted source sets.
 General lexical JSON and region nesting are bounded by 64. Only slot 8 of an
 exact ten-slot protocol-function row in the definitions table is exempt from
 ordinary lexical JSON depth; its origin is strictly decoded using the separate
 typed tree limits above, with up to two arrays per term level. The input's MLIR
 nesting preflight still applies. Helper reference depth is the
-longest reference path in **edges**, with a leaf at 0 and a maximum of 64 in both
-native readers. A preparation-to-Math-helper reference contributes one edge,
-as do calls to Local wrappers and preparations. References are derived from
-stored instructions, with at most two helper references per instruction; shared
-calls are not expanded for admission.
+longest reference path in **edges**, with a leaf at 0 and a maximum of 64.
+The writer counts the emitted graph: a scoped request contributes an edge to
+its derived declaration, which contributes another edge to each referenced
+helper or domain. This matches the structured reader's retained declaration
+graph. The independent native observer instead counts actual native references;
+its graph has no export-local declaration nodes. Both inspect dormant references
+and shared suffixes without expanding calls. Their depth capacities are distinct
+from the observer's one-based reached invocation depth above.
 See the [formal contract](../../../lean/docs/spec/structured-source.md). All failures
 produce diagnostics rather than a partial successful snapshot.
 

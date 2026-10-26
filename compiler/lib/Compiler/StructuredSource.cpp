@@ -19,6 +19,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/SaveAndRestore.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -396,8 +397,10 @@ class Exporter {
     auto domain = reference(op, "domain", {"domain"});
     if (!domain)
       return domain.takeError();
-    StringRef helperKind = isa<exec::FoldOp, exec::CollectOp>(op) ? "local" : "math";
-    auto step = reference(op, isa<exec::CollectOp>(op) ? "body" : "step", {helperKind});
+    StringRef helperKind =
+        isa<exec::FoldOp, exec::CollectOp>(op) ? "local" : "math";
+    auto step =
+        reference(op, isa<exec::CollectOp>(op) ? "body" : "step", {helperKind});
     if (!step)
       return step.takeError();
     auto predicate = reference(op, "predicate", {helperKind}, true);
@@ -433,6 +436,10 @@ class Exporter {
       return json::Array{"apply", target->str()};
     }
     if (isa<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(op)) {
+      // The exported apply names a derived declaration, whose own references
+      // add an edge. Count that emitted graph, not just native direct calls.
+      dependencies[definition].push_back(&op);
+      SaveAndRestore<Operation *> derivedOwner(definition, &op);
       if (isa<exec::ComputeOp>(op)) {
         auto helper = reference(op, "callee", {"math"});
         if (!helper)
@@ -956,7 +963,8 @@ class Exporter {
         return error("structured-source-limit");
       if (constructor.getNumResults() != 1)
         return error("structured-source-domain");
-      auto result = dyn_cast<data::DomainType>(constructor.getResult(0).getType());
+      auto result =
+          dyn_cast<data::DomainType>(constructor.getResult(0).getType());
       if (!result)
         return error("structured-source-domain");
       auto items = sorts(result.getItemTypes());
@@ -965,8 +973,9 @@ class Exporter {
       json::Array desc;
       if (isa<data::DomainElementsOp, data::DomainIndicesOp>(constructor)) {
         bool indices = isa<data::DomainIndicesOp>(constructor);
-        if (auto e = attributes(constructor, indices ? ArrayRef<StringRef>{"axis"}
-                                                     : ArrayRef<StringRef>{}))
+        if (auto e =
+                attributes(constructor, indices ? ArrayRef<StringRef>{"axis"}
+                                                : ArrayRef<StringRef>{}))
           return std::move(e);
         auto arg = input(constructor.getOperand(0));
         if (!arg)
@@ -1000,10 +1009,12 @@ class Exporter {
             return error("structured-source-domain");
           operands.push_back(found->second);
         }
-        desc = json::Array{isa<data::DomainZipOp>(constructor) ? "zip" : "product",
-                           std::move(operands)};
+        desc =
+            json::Array{isa<data::DomainZipOp>(constructor) ? "zip" : "product",
+                        std::move(operands)};
       } else {
-        return error("structured-source-domain", constructor.getName().getStringRef());
+        return error("structured-source-domain",
+                     constructor.getName().getStringRef());
       }
       constructors.push_back(std::move(desc));
       for (auto &entry : refs)
@@ -1194,7 +1205,7 @@ class Exporter {
         sorts(cast<exec::OutcomeType>(op.getResult(0).getType()).getPayload());
     if (!outputs)
       return outputs.takeError();
-    definition = op.getParentOfType<func::FuncOp>();
+    definition = &op;
     if (isa<exec::ComputeOp>(op)) {
       auto helper = reference(op, "callee", {"math"});
       if (!helper)

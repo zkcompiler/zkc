@@ -86,6 +86,42 @@ def domain_cases(suite):
                    suite.compare(subject, n, [str(lo), str(hi), '42'], ['returned', [str(e)]]))
 
 
+def reference_depth_cases(suite):
+    fixtures = ROOT / 'compiler/test/fixtures/structured-source'
+    for kind, stem, ty, base in [
+        ('collection', 'map-declarations', '!F', 6),
+        ('computation', 'realization-projection', '!V', 4),
+    ]:
+        original = (fixtures / (stem + '.mlir')).read_text()
+        for reverse in (False, True):
+            for edges in (63, 64, 65):
+                # Count the actual wire graph, including the declarations
+                # inserted for Collect and Compute, before scalar helper calls.
+                last = edges - base
+                helpers = [f'func.func private @h0(%x:{ty})->{ty} {{ func.return %x : {ty} }}']
+                for index in range(1, last + 1):
+                    helpers.append(f'''func.func private @h{index}(%x:{ty})->{ty} {{
+%r = func.call @h{index - 1}(%x) : ({ty})->{ty}
+func.return %r : {ty} }}''')
+                if reverse:
+                    helpers.reverse()
+                if kind == 'collection':
+                    source = original.replace('func.call @square', f'func.call @h{last}')
+                else:
+                    source = original.replace('   func.return %xs',
+                        f'   %r = func.call @h{last}(%xs) : (!V)->!V\n   func.return %r')
+                marker = ' func.func private'
+                if marker not in source or source == original:
+                    raise AssertionError('reference-depth fixture did not change')
+                source = source.replace(marker, '\n'.join(helpers) + '\n' + marker, 1)
+                label = f'{kind}-wire-depth-{edges}-reverse-{reverse}'
+                if edges <= 64:
+                    suite.case(label, lambda n=label, s=source: suite.export(n, s))
+                else:
+                    suite.case(label, lambda n=label, s=source:
+                               suite.refuse_native(n, s, 'structured-source-limit'))
+
+
 def run_cases(suite):
     subjects = {name: suite.subject(name)
                 for name in ('Choose', 'Replace', 'Require', 'Compute', 'Last')}
@@ -157,6 +193,7 @@ def run_cases(suite):
         mutate(definition(changed, local[1]))
         suite.case(label, lambda label=label, s=changed: suite.refuse_snapshot(label, s))
     domain_cases(suite)
+    reference_depth_cases(suite)
 
 
 def main():
