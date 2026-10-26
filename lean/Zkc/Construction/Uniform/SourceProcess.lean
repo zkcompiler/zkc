@@ -222,31 +222,9 @@ theorem run_map {B : Type} (key : Origin → Origin) (initial : History F G)
         run key initial challenge process proof =
       runK key initial challenge process proof
         (fun value unread => pure (.returned (project value), unread)) := by
-  simp only [run]
-  induction process generalizing proof with
-  | done => simp [runK, mapOutcome]
-  | halt => simp [runK, mapOutcome]
-  | call operation next ih =>
-      cases operation with
-      | receive ty site schema peer =>
-          cases proof with
-          | nil => simp [runK, mapOutcome]
-          | cons payload unread =>
-              cases decoded : Value.decode ty (.data payload) with
-              | none => simp [runK, decoded, mapOutcome]
-              | some value => simp only [runK, decoded]; exact ih value unread
-      | send | observe | checkpoint => exact ih () proof
-      | localService => simp [runK, mapOutcome]
-      | query history origin =>
-          simp only [runK]
-          split
-          · simp only [map_bind]
-            congr 1
-            funext answer
-            cases answer with
-            | stopped => simp [mapOutcome]
-            | returned value => exact ih value proof
-          · simp [mapOutcome]
+  simpa only [run, map_pure, mapOutcome] using
+    (runK_mapOutcome key initial challenge project process proof
+      (fun value unread => pure (.returned value, unread)))
 
 theorem sourceView_transform_map {B : Type} (context : Context) (challenge : History F G → m F)
     (process : PIR.Process (Actions F G) A) (project : A → B)

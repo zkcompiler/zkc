@@ -7,7 +7,7 @@ public import ZkcExamples.Structured.SumcheckSourceVerifier
 
 /-! The compiled Sumcheck verifier read through the source rounds.
 
-`SumcheckProof` is generated from the Entry's exports. With an admitted round
+`SumcheckArtifact` records the Entry's exports. With an admitted round
 count and a decoded verifier table, its original validator is the source rounds
 followed by the multilinear terminal check
 (`SumcheckSourceVerifier.verifier_checked`), so the compiled verifier is the
@@ -28,8 +28,7 @@ theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
     (decoded : Zkc.Polynomial.Multilinear.ofList? rounds values = some table)
     (vectorBound : values.length < indexLimit) (initial : History F G) (proof : Proof F G) :
     (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
-          (inputs values claim rounds ++ [.transcript initial]) proof =
+        SumcheckDomainConnection.retained challenge values claim rounds initial proof =
       transform context challenge
         (((PIR.repeatN rounds (ZkcExamples.Structured.SumcheckVerifierLaws.roundPlain (G := G)
             ZkcExamples.Structured.SumcheckSourceVerifier.childContext (some handle)) (some [], some claim)).bind
@@ -50,5 +49,26 @@ theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
   congr 1
   funext pc
   rcases pc with ⟨_ | point, _ | value⟩ <;> rfl
+
+/-- Exact previous typed mathematical-round proposition, through the checked
+artifact comparison. -/
+theorem legacy_compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (rounds : Nat) (admitted : rounds ≤ 2) (values : List F) (claim : F)
+    (handle : Nat) (table : Zkc.Polynomial.Multilinear.Table F rounds)
+    (decoded : Zkc.Polynomial.Multilinear.ofList? rounds values = some table)
+    (vectorBound : values.length < indexLimit) (initial : History F G) (proof : Proof F G) :
+    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
+        ideal context challenge (helperTable program F G) participant.returned participant.instructions
+          (inputs values claim rounds ++ [.transcript initial]) proof =
+      transform context challenge
+        (((PIR.repeatN rounds (ZkcExamples.Structured.SumcheckVerifierLaws.roundPlain (G := G)
+            ZkcExamples.Structured.SumcheckSourceVerifier.childContext (some handle)) (some [], some claim)).bind
+          (fun pc => match pc.1, pc.2 with
+            | some point, some value => .done (some (decide (point.length = rounds ∧
+                Zkc.Polynomial.Multilinear.extension rounds table
+                  (Zkc.Polynomial.coordinates rounds point) = value)))
+            | _, _ => .halt .incomplete)).interpret CommonAdapter.project) initial proof := by
+  rw [SumcheckDomainConnection.retained_legacy]
+  exact compiled_transform_rounds challenge rounds admitted values claim handle table decoded vectorBound initial proof
 
 end ZkcExamples.Construction.SumcheckProof

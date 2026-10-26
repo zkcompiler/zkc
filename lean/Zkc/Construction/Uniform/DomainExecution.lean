@@ -156,6 +156,21 @@ theorem drawRequest_of_draw (origin : Origin) (field : String)
       subst asked
       rfl
 
+/-- Mapping precedes the existing stateful oracle, so its exact cache, random
+state and resource post-state are preserved. No independent nominal sampling
+or cache is introduced. This equation also covers repeated/adaptive calls. -/
+theorem query_state {S : Type} (key : Origin → Origin) (initial : History F G)
+    (challenge : History F G → StateT S m F)
+    (history : Domain.History (Structured.uniformCarriers F G))
+    (entry : String) (event : List String) (field : String) (suffix : History F G)
+    (mapped : readbackHistory key history = some suffix) (state : S) :
+    (query key initial challenge history ⟨entry, event, some (.draw field)⟩) state = (do
+      let (answer, post) ← challenge
+        (initial ++ suffix ++ [.challenge (key ⟨entry, event, some (.draw field)⟩)]) state
+      pure (.returned answer, post)) := by
+  exact congrArg (fun computation => computation state)
+    (query_draw key initial challenge history entry event field suffix mapped)
+
 def oracle (key : Origin → Origin) (initial : History F G) (challenge : History F G → m F) :
     Domain.Oracle m (Structured.uniformCarriers F G) Unit
   | history, .challenge origin, _ => do

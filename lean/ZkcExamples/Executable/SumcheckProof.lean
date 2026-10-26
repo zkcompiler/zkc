@@ -4,6 +4,7 @@ public import ZkcExamples.Executable.SumcheckProofFacts
 public import ZkcExamples.Executable.SumcheckHelpers
 public import ZkcExamples.Executable.SumcheckFamily
 public import Zkc.Executable.NormalizationSoundness
+public import ZkcExamples.Construction.SumcheckProof
 
 @[expose] public section
 
@@ -30,10 +31,10 @@ For every challenge function in every lawful monad, decoder, budget, data
 input, initial transcript and proof byte string, the executable's observation
 is the metered meaning of the reading on the proof its message bytes decode to,
 at the receive types of the round count (`executable_metered`). Host
-validation prunes the ideal acceptance of the decoded proof by rejections, at
-every budget and with every framing header (`executable_prunes`); with the
-composed rules' theorem for this Entry
-(`ZkcExamples.Construction.SumcheckProof.compiled_transform`) that ideal
+validation prunes the adapted Domain acceptance of the decoded proof by
+rejections, at every budget and with every framing header (`executable_prunes`);
+with the direct source correspondence for this Entry
+(`ZkcExamples.Construction.SumcheckDomainConnection.retained_transform`) that adapted
 acceptance is the acceptance of the Fiat–Shamir transform of the original
 Sumcheck validator (`executable_transform_prunes`).
 -/
@@ -140,9 +141,46 @@ theorem executable_metered {m : Type → Type} [Monad m] [LawfulMonad m]
   exact execute_metered installed validator SumcheckProof.context challenge _ decode budget _ prepared
     (checkLowering_spec accepted).1 _ initial bytes (admitted values claim rounds)
 
-/-- Host validation of proof bytes prunes the ideal acceptance of the decoded
+/-- The existing costed Code stage prunes the complete Domain result. Its
+helper/instruction charges and stop timing are those of `metered`; the target
+retains every returned value and the exact unread proof, before acceptance. -/
+theorem metered_domain_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (budget : Nat) (values : List F) (claim : F) (rounds : Nat)
+    (initial : History F G) (proof : Proof F G) :
+    Prunes Stopped
+      (metered SumcheckProof.context challenge (helperTable SumcheckProof.program F G)
+        (helperCost installed validator) budget lowered
+        (SumcheckProof.inputs values claim rounds ++ [.transcript initial]) proof)
+      (SumcheckDomainConnection.retained challenge values claim rounds initial proof) := by
+  obtain ⟨_, same, inputs, _⟩ := checkLowering_sound (F := F) (G := G) accepted
+  have sorted := admits_sorted (admitted (G := G) values claim rounds) initial
+  rw [inputs] at sorted
+  have pruned := metered_prunes SumcheckProof.context challenge (helperTable SumcheckProof.program F G)
+    (helperCost installed validator) budget lowered
+    (SumcheckProof.inputs values claim rounds ++ [.transcript initial]) proof
+  rw [same _ _ _ helpersSorted _ sorted, SumcheckDomainConnection.retained_legacy] at pruned
+  exact pruned
+
+/-- Host validation of proof bytes prunes the adapted Domain acceptance of the decoded
 proof by rejections, at every budget and with every framing header. -/
 theorem executable_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (decode : PhysicalType → List UInt8 → Option (Payload F G))
+    (budget : Nat) (binding : List UInt8) (values : List F) (claim : F) (rounds : Nat)
+    (initial : History F G) (bytes : List UInt8) :
+    Prunes (fun accepted => accepted = false)
+      (validate installed validator SumcheckProof.context challenge decode budget binding
+        SumcheckProof.acceptancePosition (SumcheckProof.inputs values claim rounds) initial bytes)
+      ((fun result => Accepts SumcheckProof.acceptancePosition (idealObservation result)) <$>
+        SumcheckDomainConnection.retained challenge values claim rounds initial
+          (decodeProof decode (receives rounds) (bytes.drop 40))) := by
+  rw [← SumcheckDomainConnection.retained_legacy]
+  rw [← plan_types (G := G) values claim rounds]
+  exact validate_prunes_export installed validator SumcheckProof.context challenge _ decode budget accepted
+    prepared helpersSorted binding SumcheckProof.acceptancePosition _ initial bytes (admitted values claim rounds)
+
+/-- Exact historical proposition retained as a comparison theorem. The
+maintained endpoint above states its target using the Domain Process adapter. -/
+theorem executable_legacy_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) (decode : PhysicalType → List UInt8 → Option (Payload F G))
     (budget : Nat) (binding : List UInt8) (values : List F) (claim : F) (rounds : Nat)
     (initial : History F G) (bytes : List UInt8) :
@@ -154,9 +192,8 @@ theorem executable_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
           SumcheckProof.participant.returned SumcheckProof.participant.instructions
           (SumcheckProof.inputs values claim rounds ++ [.transcript initial])
           (decodeProof decode (receives rounds) (bytes.drop 40))) := by
-  rw [← plan_types (G := G) values claim rounds]
-  exact validate_prunes_export installed validator SumcheckProof.context challenge _ decode budget accepted
-    prepared helpersSorted binding SumcheckProof.acceptancePosition _ initial bytes (admitted values claim rounds)
+  rw [SumcheckDomainConnection.retained_legacy]
+  exact executable_prunes challenge decode budget binding values claim rounds initial bytes
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- Acceptance of a verifier's result: it returned the decision true and read
@@ -195,7 +232,7 @@ theorem executable_transform_prunes {m : Type → Type} [Monad m] [LawfulMonad m
       (accepting <$> transform SumcheckProof.context challenge
         (SumcheckProof.verifier values claim rounds handle) initial
         (decodeProof decode (receives rounds) (bytes.drop 40))) := by
-  rw [← SumcheckProof.compiled_transform challenge values claim rounds handle initial, Functor.map_map]
+  rw [← SumcheckDomainConnection.retained_transform challenge values claim rounds handle initial, Functor.map_map]
   simp only [← accepts_eq]
   exact executable_prunes challenge decode budget binding values claim rounds initial bytes
 

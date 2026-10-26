@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckProofProgramData
-public import ZkcExamples.Construction.SumcheckProof
+public import ZkcExamples.Construction.SumcheckArtifact
 public import ZkcExamples.Structured.SumcheckSourceContracts
 public import Zkc.Executable.HelperSoundness
 public import Zkc.Executable.Installed

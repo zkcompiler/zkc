@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Uniform.DomainExecution
+public import Zkc.Construction.Uniform.DomainProperties
 
 @[expose] public section
 /-! The scalar proof property is a projection of the installed Domain handler.
@@ -54,5 +55,35 @@ theorem run_actual {A : Type} (key : Origin → Origin) (initial : History F G)
             funext answer
             cases answer <;> simp [Functor.map_map, ih]
           · simp
+
+/-- The retained validator ABI is a projection of the actual installed runner.
+Full frames and observation lists remain in the runner; this statement selects
+the complete return outcome and exact unread scalar proof. -/
+theorem validate_actual [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+    (program : Structured.Program) (context : Context) (artifact : Participant)
+    (key : Origin → Origin) (initial : History F G) (challenge : History F G → m F)
+    (inputs : Domain.Environment (Structured.uniformCarriers F G)) (proof : Proof F G) :
+    (fun result =>
+        (postOutcome (fun result => readbackOutcome context.suite key initial (.returned result.values))
+          result.outcome, result.state.proof)) <$>
+        Domain.run .validator (oracle key initial challenge)
+          (Domain.participant (Structured.ringModel F G) program context artifact inputs)
+          ⟨inputs, embedProof proof, ()⟩ =
+      (fun result => (result.1, embedProof result.2)) <$>
+        validate program context artifact key challenge inputs initial proof := by
+  let finish := fun result : Domain.Result (Structured.uniformCarriers F G) =>
+    readbackOutcome context.suite key initial (.returned result.values)
+  have actual := congrArg
+    (fun computation => (fun result => (postOutcome finish result.1, result.2)) <$> computation)
+    (run_actual key initial challenge
+      (Domain.participant (Structured.ringModel F G) program context artifact inputs) inputs proof)
+  simp only [Functor.map_map] at actual
+  dsimp only [finish] at actual
+  rw [actual]
+  have projected := congrArg
+    (fun computation => (fun result => (result.1, embedProof result.2)) <$> computation)
+    (run_postOutcome key initial challenge finish
+      (Domain.participant (Structured.ringModel F G) program context artifact inputs) proof)
+  simpa only [Functor.map_map, validate, finish] using projected
 
 end Zkc.Construction.Uniform.DomainAdapter
