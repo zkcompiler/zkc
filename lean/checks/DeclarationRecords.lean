@@ -1408,8 +1408,12 @@ def record (env : Environment) (registered : Std.HashSet Name) (properties : Std
   return Json.mkObj fields
 
 def runMeta {α : Type} (env : Environment) (action : MetaM α) : IO α := do
+  -- Keep Core's finite metadata budget stable when pretty printing uses
+  -- `withOptions`: empty options would reset the context's 1000 limit to 512.
+  let options := Lean.maxRecDepth.set {} 1000
   let context : Core.Context :=
-    { fileName := "<declaration records>", fileMap := default, maxHeartbeats := 0 }
+    { fileName := "<declaration records>", fileMap := default, maxHeartbeats := 0,
+      options, maxRecDepth := Lean.maxRecDepth.get options }
   let (result, _, _) ← action.toIO context { env }
   return result
 
