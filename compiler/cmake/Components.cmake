@@ -300,6 +300,7 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/NestedContractions.cpp
   lib/Transforms/NestedContractionVerification.cpp
+  lib/Transforms/ScopedNestedContraction.cpp
   lib/Transforms/MapRealizations.cpp
   lib/Transforms/StructuredComputation.cpp
   lib/Transforms/VectorReductions.cpp

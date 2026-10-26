@@ -49,6 +49,7 @@ class ScopedExpander : private OpBuilder::Listener {
   mathematical::RealizationWork *finiteWork;
   MathematicalSelectionPolicy finitePolicy;
   const llvm::DenseSet<Operation *> *fixedBindings;
+  const mathematical::MathematicalRecipes &recipes;
   llvm::DenseSet<Operation *> replacedDefinitions;
   SmallVector<mathematical::NumericalOccurrence> finiteOwners;
   void notifyOperationInserted(Operation *op, OpBuilder::InsertPoint) override {
@@ -341,7 +342,7 @@ class ScopedExpander : private OpBuilder::Listener {
         }
         auto result = finite::realizeScopedExpression(
             op, inputs, builder, control, callback, *finiteWork, effective,
-            nullptr, occurrence, &budget, &source, fixedBindings);
+            nullptr, occurrence, &budget, &source, fixedBindings, recipes);
         if (failed(result) || result->size() != step.outputs.size()) {
           if (capacity && cause)
             *capacity = cause;
@@ -468,7 +469,9 @@ public:
       std::optional<CapacityCause> *capacity = nullptr,
       mathematical::RealizationWork *finiteWork = nullptr,
       MathematicalSelectionPolicy finitePolicy = {},
-      const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
+      const llvm::DenseSet<Operation *> *fixedBindings = nullptr,
+      const mathematical::MathematicalRecipes &recipes =
+          mathematical::mathematicalRecipes())
       : source(source), symbols(original), target(target),
         builder(target.getContext(), this),
         remaining(selection ? selection->remainingCopy : defaultRemaining),
@@ -476,7 +479,7 @@ public:
                                  : defaultBytes),
         replacements(replacements), selection(selection), capacity(capacity),
         finiteWork(finiteWork), finitePolicy(finitePolicy),
-        fixedBindings(fixedBindings) {
+        fixedBindings(fixedBindings), recipes(recipes) {
     if (replacements)
       for (const auto &replacement : *replacements)
         replacedDefinitions.insert(replacement.second);
@@ -612,7 +615,8 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                     MathematicalSelectionPolicy policy,
                     const llvm::DenseSet<Operation *> *fixedBindings,
                     mathematical::NumericalSelection *selection,
-                    mathematical::VerificationDecision *reported) {
+                    mathematical::VerificationDecision *reported,
+                    const mathematical::MathematicalRecipes &recipes) {
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
@@ -660,9 +664,10 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       target.getBody().push_back(new Block);
       choices.remainingCopy = copy;
       choices.remainingSiteBytes = siteBytes;
-      auto result = ScopedExpander(*closure, owner, target, nullptr, &choices,
-                                   &capacity, &work, policy, fixedBindings)
-                        .run(owner);
+      auto result =
+          ScopedExpander(*closure, owner, target, nullptr, &choices, &capacity,
+                         &work, policy, fixedBindings, recipes)
+              .run(owner);
       copy = choices.remainingCopy;
       siteBytes = choices.remainingSiteBytes;
       if (failed(result) || failed(verify(*candidate)) ||

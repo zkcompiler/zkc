@@ -15,6 +15,7 @@ bool canReplaceNestedContraction(const finite::ComputationView &view);
 enum class RealizationKind {
   Ordered,
   Bilinear,
+  NestedContraction,
   Reduction,
   PointwiseReduction,
   Elementwise
@@ -31,6 +32,7 @@ struct ComputationSelection {
   OptimizationStatus outcome() const { return diagnostic.outcome.status; }
   std::optional<finite::ComputationView> view;
   ComputationEquations equations;
+  std::optional<NestedContraction> nested;
   std::optional<SelectedReduction> reduction;
   const ReductionRecipe *pointwiseReduction = nullptr;
   const MatrixContractionRecipe *matrix = nullptr;

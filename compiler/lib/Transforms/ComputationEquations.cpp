@@ -712,11 +712,11 @@ matchNestedContraction(const ComputationView &structure,
   EquationWork work{remaining, false, &observed};
   if (!work.take())
     return std::nullopt;
-  if (!isa<local::FiniteCollectOp>(structure.computation.operation))
+  if (!structure.computation.collect)
     return std::nullopt;
   NestedContraction selected;
   selected.outer = structure.computation;
-  if (selected.outer.predicate || !isa<local::FuncOp>(selected.outer.helper))
+  if (selected.outer.predicate)
     return std::nullopt;
   const auto *view = &structure;
   if (view->nested.size() != 1 || view->iteration.size() != 1 ||
@@ -730,12 +730,10 @@ matchNestedContraction(const ComputationView &structure,
   if (!equations.reduction && !equations.pointwiseReduction &&
       !equations.bilinear && !equations.elementwise)
     observed = childDiagnostic;
-  auto call = dyn_cast_or_null<local::ApplyOp>(child.occurrence);
+  auto *call = child.occurrence;
   if (!matrix || !call || child.computation.collect ||
       child.computation.predicate || child.computation.states != 1 ||
-      !isa<local::FiniteFoldOp>(child.computation.operation) ||
-      !isa<local::FuncOp>(child.computation.helper) || !equations.reduction ||
-      equations.reduction->inputs.size() != 2 ||
+      !equations.reduction || equations.reduction->inputs.size() != 2 ||
       !equations.reduction->matrixOperand ||
       !equations.reduction->selectedIndex)
     return std::nullopt;
@@ -827,7 +825,7 @@ matchNestedContraction(const ComputationView &structure,
   for (const auto &axis : view->axes)
     selected.witness.freeAxes.push_back(axis.identity);
   selected.inner = child.computation;
-  selected.call = view->sourceOperation(call.getOperation());
+  selected.call = view->sourceOperation(call);
   selected.matrix = *matrix;
   selected.vector = *vector;
   selected.axis = axis;

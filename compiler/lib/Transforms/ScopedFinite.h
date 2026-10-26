@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_SCOPEDFINITE_H
 #define ZKC_TRANSFORMS_SCOPEDFINITE_H
 
+#include "MathematicalRecipes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Transforms/Finite.h"
@@ -45,7 +46,9 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedExpression(
     mathematical::RealizationTrace *trace = nullptr,
     llvm::StringRef occurrence = {}, ScopedEmissionBudget *budget = nullptr,
     const protocol::SourceExecutionClosure *sourceClosure = nullptr,
-    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr);
+    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr,
+    const mathematical::MathematicalRecipes &recipes =
+        mathematical::mathematicalRecipes());
 } // namespace zkc::finite
 
 #endif

@@ -131,7 +131,8 @@ void NumericalSelection::select(NumericalOccurrence id,
   if (!selected.view || status == OptimizationStatus::Capacity ||
       status == OptimizationStatus::PolicyDisabled ||
       status == OptimizationStatus::ReplacementRestricted ||
-      !canReplacePayload(*selected.view)) {
+      !(selected.nested ? canReplaceNestedContraction(*selected.view)
+                        : canReplacePayload(*selected.view))) {
     occurrence.replaceable = false;
     occurrence.alternative = NumericalAlternative::Ordered;
     return;
@@ -139,6 +140,7 @@ void NumericalSelection::select(NumericalOccurrence id,
   bool formula = selected.equations.pointwiseReduction.has_value() ||
                  selected.equations.elementwise.has_value();
   occurrence.legal = {selected.kind == RealizationKind::Bilinear ||
+                          selected.kind == RealizationKind::NestedContraction ||
                           selected.kind == RealizationKind::Reduction,
                       formula && occurrence.expressionMode ==
                                      NumericalExpressionMode::PreferNative,

@@ -70,8 +70,8 @@ class NumericalBodyReader {
   llvm::DenseSet<Operation *> active;
   llvm::DenseMap<Operation *, runtime::BindingOp> bindings;
   OpBuilder builder;
+  SymbolTable targetSymbols;
   const protocol::SourceExecutionClosure *scopedSource;
-  const llvm::DenseSet<Operation *> *fixedBindings;
   bool charge(Operation *op) {
     return consumeComputationWork(
         work.structural, 1 + op->getNumOperands() + op->getNumResults(),
@@ -167,8 +167,7 @@ class NumericalBodyReader {
           if (!charge(binding))
             return failure();
           auto *declaration = binding->clone();
-          SymbolTable table(*result.storage);
-          table.insert(declaration);
+          targetSymbols.insert(declaration);
           retained = cast<runtime::BindingOp>(declaration);
         }
         copy->setAttr("binding",
@@ -254,13 +253,30 @@ class NumericalBodyReader {
         values.map(step.outputs, *outputs);
         continue;
       }
+      if (isComputation(op)) {
+        // An uninterpreted typed call retains the nested occurrence in this
+        // private SSA view. Its source association, not its temporary symbol,
+        // supplies the descriptor, callback and scoped execution contract.
+        OpBuilder::InsertionGuard restore(builder);
+        builder.setInsertionPointToEnd(result.storage->getBody());
+        auto declaration = func::FuncOp::create(
+            op->getLoc(), "_nested_computation",
+            builder.getFunctionType(ValueRange(inputs).getTypes(),
+                                    ValueRange(step.outputs).getTypes()));
+        declaration.setPrivate();
+        targetSymbols.insert(declaration);
+        builder.setInsertionPointToEnd(&target);
+        auto call =
+            func::CallOp::create(builder, op->getLoc(), declaration, inputs);
+        result.sources[call] = op;
+        values.map(step.outputs, call.getResults());
+        continue;
+      }
       auto apply = dyn_cast<exec::ApplyOp>(op);
       if (!apply || step.outputs.size() != 1)
         return failure();
       auto binding = symbols.lookupNearestSymbolFrom<runtime::BindingOp>(
           apply, apply.getBindingAttr());
-      if (fixedBindings && fixedBindings->contains(binding))
-        return failure();
       auto decoded =
           binding ? protocol::readBinding(binding)
                   : llvm::Expected<protocol::OperationBinding>(
@@ -270,8 +286,6 @@ class NumericalBodyReader {
         llvm::consumeError(decoded.takeError());
         return failure();
       }
-      if (!decoded->application.implementation.empty())
-        return failure();
       SmallVector<protocol::BoundType> inputTypes, outputTypes;
       for (auto [ports, types] :
            {std::pair{ValueRange(step.inputs), &inputTypes},
@@ -329,11 +343,10 @@ class NumericalBodyReader {
 public:
   NumericalBodyReader(ComputationBody &result, ComputationWork &work,
                       ComputationDiagnostic &diagnostic,
-                      const protocol::SourceExecutionClosure *source = nullptr,
-                      const llvm::DenseSet<Operation *> *fixed = nullptr)
+                      const protocol::SourceExecutionClosure *source = nullptr)
       : result(result), work(work), diagnostic(diagnostic),
-        builder(result.helper.getContext()), scopedSource(source),
-        fixedBindings(fixed) {}
+        builder(result.helper.getContext()), targetSymbols(*result.storage),
+        scopedSource(source) {}
   LogicalResult read(func::FuncOp source) {
     auto *body = result.helper.addEntryBlock();
     auto outputs = copyScoped(source, body->getArguments(), *body);
@@ -375,8 +388,7 @@ public:
 std::shared_ptr<ComputationBody>
 readNumericalBody(CallbackView &callback, ComputationWork &work,
                   ComputationDiagnostic &diagnostic,
-                  const protocol::SourceExecutionClosure *source = nullptr,
-                  const llvm::DenseSet<Operation *> *fixed = nullptr) {
+                  const protocol::SourceExecutionClosure *source = nullptr) {
   // The original ABI has already been checked. This standard function is only
   // owned SSA storage; it does not change the partial callback's contract.
   auto *helper = callback.abi.symbol;
@@ -422,7 +434,7 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
                             ArrayAttr::get(helper->getContext(), translated));
   }
   result->storage->getBody()->push_back(result->helper);
-  NumericalBodyReader reader(*result, work, diagnostic, source, fixed);
+  NumericalBodyReader reader(*result, work, diagnostic, source);
   if (failed(scoped ? reader.read(cast<func::FuncOp>(helper))
                     : reader.read(cast<local::FuncOp>(helper))))
     return {};
@@ -824,10 +836,11 @@ public:
       callback = readCallback(c, role);
     if (failed(callback))
       return std::nullopt;
+    SmallVector<Value> originalReturned(callback->returned);
     std::shared_ptr<ComputationBody> numericalBody;
     if (c.scoped) {
-      numericalBody = readNumericalBody(*callback, work, diagnostic,
-                                        c.scopedSource, c.fixedBindings);
+      numericalBody =
+          readNumericalBody(*callback, work, diagnostic, c.scopedSource);
       if (!numericalBody)
         return std::nullopt;
     } else if (auto helper = dyn_cast<local::FuncOp>(c.helper)) {
@@ -928,7 +941,7 @@ public:
         occurrence ? occurrence->getOperands() : ValueRange{};
     ValueRange actualResults =
         occurrence ? occurrence->getResults() : ValueRange{};
-    if (c.scoped) {
+    if (c.scoped && occurrence == sourceOccurrence) {
       auto function = occurrence
                           ? dyn_cast<func::FuncOp>(occurrence->getParentOp())
                           : func::FuncOp();
@@ -1003,7 +1016,7 @@ public:
         payload.push_back(&op);
         Operation *source = result.sourceOperation(&op);
         Operation *definition = source;
-        if (isa<local::ApplyOp, func::CallOp>(op)) {
+        if (!isComputation(source) && isa<local::ApplyOp, func::CallOp>(op)) {
           auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
           definition = reference
                            ? symbols.lookupNearestSymbolFrom(source, reference)
@@ -1014,6 +1027,8 @@ public:
         Computation child;
         if (failed(describe(definition, child, nullptr, &symbols)))
           return false;
+        child.scopedSource = c.scopedSource;
+        child.fixedBindings = c.fixedBindings;
         auto nested =
             read(child, &op, result.occurrencePath, environment, source);
         if (!nested)
@@ -1067,7 +1082,7 @@ public:
            c.signature.getResult(i),
            c.collect && !c.predicate ? std::optional<unsigned>(result.root)
                                      : std::nullopt,
-           c.helper->getRegion(0).front().back().getOperand(i)});
+           originalReturned[i]});
     if (result.results.size() == 1)
       result.result = result.results.front();
     AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence,

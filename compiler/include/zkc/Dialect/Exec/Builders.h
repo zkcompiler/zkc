@@ -22,6 +22,8 @@ public:
 
   ScopedExecutionBuilder(mlir::OpBuilder &builder, mlir::func::FuncOp function);
   mlir::Value getScope() const { return scope; }
+  mlir::Location getLocation() const { return location; }
+  void setLocation(mlir::Location value) { location = value; }
   Values scoped(mlir::ValueRange inputs);
   Values invoke(llvm::StringRef name, mlir::TypeRange outputs,
                 mlir::ValueRange inputs,

@@ -24,7 +24,9 @@
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <algorithm>
@@ -42,6 +44,8 @@ observedChoice(mathematical::RealizationKind kind) {
     return Choice::Ordered;
   case Kind::Bilinear:
     return Choice::Bilinear;
+  case Kind::NestedContraction:
+    return Choice::NestedContraction;
   case Kind::Reduction:
   case Kind::PointwiseReduction:
     return Choice::Reduction;
@@ -160,6 +164,8 @@ class Realizer {
   Type index, boolean;
   mathematical::RealizationEmitter emitter;
   unsigned occurrence = 0;
+  std::optional<protocol::Assignments> admissionPath;
+  unsigned admissionOccurrence = 0;
   llvm::DenseMap<Value, Value> values, sizes, lowers;
   Computation computation;
   const CollectFold *composition = nullptr;
@@ -218,6 +224,19 @@ class Realizer {
   std::string site() {
     auto suffix = std::to_string(occurrence++);
     auto size = sitePrefix.size() + suffix.size();
+    if (size > 128 && scoped()) {
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes = budget ? budget->siteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite({}, sitePrefix + suffix, bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        if (budget)
+          budget->capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes};
+        failedHelper = true;
+        return {};
+      }
+      return std::move(*encoded);
+    }
     if (budget) {
       if (size > budget->siteBytes) {
         budget->capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes, size,
@@ -240,7 +259,26 @@ class Realizer {
       failedHelper = true;
       return {};
     }
-    auto occurrence = site();
+    std::string occurrence;
+    if (admissionPath && application.contract == "control.require") {
+      ++this->occurrence;
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes = budget ? budget->siteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite(
+          *admissionPath, "finite_" + std::to_string(admissionOccurrence),
+          bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        if (budget)
+          budget->capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes};
+        failedHelper = true;
+        return {};
+      }
+      occurrence = std::move(*encoded);
+    } else
+      occurrence = site();
+    if (admissionPath)
+      ++admissionOccurrence;
     if (failedHelper)
       return {};
     SmallVector<Type> outputs;
@@ -252,6 +290,10 @@ class Realizer {
         parameters.push_back(builder.getStringAttr(parameter));
       auto reference = emitter.binding(builder, loc, application);
       auto &control = scopeControl();
+      auto previousLocation = control.getLocation();
+      control.setLocation(loc);
+      auto restoreLocation =
+          llvm::scope_exit([&] { control.setLocation(previousLocation); });
       auto values = control.invoke(
           "exec.apply", outputs, control.scoped(inputs),
           {builder.getNamedAttr("binding", reference),
@@ -861,6 +903,88 @@ public:
     SmallVector<Value> initial(partitions->initialState), environment;
     append_range(environment, partitions->domain);
     append_range(environment, partitions->captures);
+    if (selection.kind == mathematical::RealizationKind::NestedContraction) {
+      const auto &nested = *selection.nested;
+      const auto &recipe = *selection.matrix;
+      auto output = computation.signature.getResult(0);
+      auto field = cast<algebra::FieldVectorType>(output).getElementType();
+      SmallVector<std::string> arguments{
+          cast<algebra::FieldType>(field).getDomain().str()};
+      auto root = computation.domain.getBody().front().back().getOperand(0);
+      Value size = sizes.lookup(root), zero = number(0);
+      Value nonempty = emit("index.less", {zero, size}, boolean);
+      SmallVector<Value> inputs{nonempty};
+      append_range(inputs, entry);
+      inputs.push_back(size);
+      inputs.push_back(zero);
+      auto branch = control("local.if", inputs, output, 2);
+      auto captureTypes = ValueRange(inputs).drop_front().getTypes();
+      for (unsigned arm = 0; arm < 2 && !failedHelper; ++arm) {
+        auto captures = region(branch, arm, captureTypes);
+        if (failedHelper)
+          break;
+        if (arm) {
+          yield(emit("vector.empty", {}, output, arguments));
+          continue;
+        }
+        // Only the entered arm admits inner domains. Inspect every constructor
+        // in source order, including unused lanes and strict zip comparisons.
+        // The outer indices guarantee the same selector bounds on later rows.
+        auto &domain = nested.inner.domain->getRegion(0).front();
+        auto mapped = [&](Value formal) {
+          auto position = cast<BlockArgument>(formal).getArgNumber();
+          auto input = nested.domainInputs[position];
+          return input ? captures[input - 1] : captures.back();
+        };
+        llvm::DenseMap<Value, Value> extents;
+        loc = nested.inner.operation->getLoc();
+        admissionPath = protocol::Assignments{
+            {scopedOccurrence.str(),
+             SymbolTable::getSymbolName(computation.helper).str()},
+            {nested.call->getAttrOfType<StringAttr>("site").str(),
+             SymbolTable::getSymbolName(nested.inner.helper).str()}};
+        admissionOccurrence = 0;
+        for (auto &op : domain.without_terminator()) {
+          if (failedHelper)
+            break;
+          Value extent;
+          if (isa<data::DomainElementsOp>(op))
+            extent = length(mapped(op.getOperand(0)));
+          else if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(
+                       op)) {
+            Value matrix = mapped(op.getOperand(0));
+            Value limit = length(matrix, nested.axis);
+            require(
+                emit("index.less", {mapped(op.getOperand(1)), limit}, boolean));
+            extent = length(matrix, 1 - nested.axis);
+          } else {
+            extent = extents.lookup(op.getOperand(0));
+            for (Value child : op.getOperands().drop_front())
+              require(emit("index.equal", {extent, extents.lookup(child)},
+                           boolean));
+          }
+          extents[op.getResult(0)] = extent;
+        }
+        admissionPath.reset();
+        loc = source->getLoc();
+        Value seed = nested.seed.input
+                         ? captures[*nested.seed.input]
+                         : emit("field.constant", {}, field, arguments,
+                                {nested.seed.constant});
+        SmallVector<Value> roles{captures[nested.matrix],
+                                 captures[nested.vector]};
+        SmallVector<Value> operands;
+        for (unsigned i = 0; i < recipe.arity; ++i)
+          operands.push_back(roles[recipe.operands[i]]);
+        Value result = emit(recipe.target, operands, output, arguments);
+        Value initial = emit("vector.fill", {seed, captures[entry.size()]},
+                             output, arguments);
+        yield(emit(recipe.seedCombiner, {initial, result}, output, arguments));
+      }
+      resume(branch);
+      return failedHelper ? FailureOr<SmallVector<Value>>(failure())
+                          : FailureOr<SmallVector<Value>>(branch.outputs);
+    }
     if (selection.kind == mathematical::RealizationKind::Bilinear) {
       const auto &plan = selection.equations.bilinear;
       auto type = computation.signature.getResult(0);
@@ -1113,7 +1237,8 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     mathematical::RealizationTrace *trace, StringRef occurrenceName,
     ScopedEmissionBudget *budget,
     const protocol::SourceExecutionClosure *sourceClosure,
-    const llvm::DenseSet<Operation *> *fixedBindings) {
+    const llvm::DenseSet<Operation *> *fixedBindings,
+    const mathematical::MathematicalRecipes &recipes) {
   auto *block = builder.getInsertionBlock();
   auto function =
       block ? dyn_cast<func::FuncOp>(block->getParentOp()) : func::FuncOp();
@@ -1128,10 +1253,9 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     return failure();
   mathematical::RealizationScope scope(trace, "finite-expression", source,
                                        policy, &work);
-  Realizer realizer(owner, builder, work, mathematical::mathematicalRecipes(),
-                    &scope, false, policy.numericalExpressions, callback,
-                    &control, occurrenceName, budget, sourceClosure,
-                    fixedBindings);
+  Realizer realizer(owner, builder, work, recipes, &scope, false,
+                    policy.numericalExpressions, callback, &control,
+                    occurrenceName, budget, sourceClosure, fixedBindings);
   auto result = realizer.emitBody(source, inputs, policy.finiteBulk);
   if (succeeded(result))
     scope.complete();

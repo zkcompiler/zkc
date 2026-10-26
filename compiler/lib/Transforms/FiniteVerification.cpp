@@ -5,6 +5,7 @@
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
 #include "ScopedCandidate.h"
+#include "ScopedNestedContraction.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
@@ -17,6 +18,7 @@
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -39,10 +41,28 @@ class Reader {
   bool stoppedCallback = false;
   bool allowBulk;
   unsigned occurrence = 0;
+  std::optional<Location> admissionLocation;
+  std::optional<protocol::Assignments> admissionPath;
+  unsigned admissionOccurrence = 0;
   std::string nextSite() {
     auto suffix = std::to_string(occurrence++);
     auto size =
         limits.finiteSite.size() + StringRef("_finite_").size() + suffix.size();
+    if (size > 128 && ports.isScoped()) {
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes =
+          limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite(
+          {}, (limits.finiteSite + "_finite_" + suffix).str(), bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes}};
+        fail();
+        return {};
+      }
+      return std::move(*encoded);
+    }
     if (!limits.finiteSite.empty() && limits.sharedSiteBytes) {
       if (size > *limits.sharedSiteBytes) {
         result = {VerificationStatus::RequiredCapacity, "finite site bytes",
@@ -55,13 +75,34 @@ class Reader {
     }
     return (limits.finiteSite + "_finite_" + suffix).str();
   }
-  bool site(Operation *op) {
+  bool site(Operation *op, StringRef contract = {}) {
     if (limits.finiteSite.empty())
       return true;
-    auto expected = nextSite();
+    std::string expected;
+    if (admissionPath && contract == "control.require") {
+      ++occurrence;
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes =
+          limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite(
+          *admissionPath, "finite_" + std::to_string(admissionOccurrence),
+          bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes}};
+        fail();
+        return false;
+      }
+      expected = std::move(*encoded);
+    } else
+      expected = nextSite();
+    if (admissionPath)
+      ++admissionOccurrence;
     auto actual = op->getAttrOfType<StringAttr>("site");
     return valid && actual && actual.getValue() == expected;
   }
+
   HelperReader helperReader;
   const CollectFold *composition = nullptr;
   ComposedHelperReader composedHelper;
@@ -132,11 +173,13 @@ class Reader {
                        : runtime::BindingOp();
     auto params = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
-    if (!binding || !params || !site || !this->site(op) ||
+    if (!binding || !params || !site || !this->site(op, contract) ||
         op->getAttrs().size() != 3 || ports.bodies(op) ||
         ports.inputs(op) != operands ||
         ports.outputs(op).size() != unsigned(bool(result)) ||
         (result && ports.outputs(op)[0].getType() != result) ||
+        (admissionLocation && contract == "control.require" &&
+         op->getLoc() != *admissionLocation) ||
         binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size() ||
@@ -310,6 +353,86 @@ class Reader {
     }
     cursor = after;
     return branch ? ports.outputs(branch)[0] : Value();
+  }
+  bool nestedContraction(const nested::ScopedSource &source, ValueRange entry,
+                         Value size) {
+    auto output = c.signature.getResult(0);
+    auto field = cast<algebra::FieldVectorType>(output).getElementType();
+    SmallVector<std::string> parameters{
+        cast<algebra::FieldType>(field).getDomain().str()};
+    Value zero = natural(0);
+    Value nonempty = kernel("index.less", {zero, size}, boolean);
+    SmallVector<Value> inputs{nonempty};
+    append_range(inputs, entry);
+    inputs.push_back(size);
+    inputs.push_back(zero);
+    auto *branch = control("local.if", inputs, output, 2);
+    if (!branch)
+      return false;
+    auto *after = cursor;
+    auto captureTypes = ValueRange(inputs).drop_front().getTypes();
+    for (unsigned arm = 0; arm < 2 && valid; ++arm) {
+      auto *block = enter(branch, arm, captureTypes);
+      if (!block)
+        return false;
+      auto captures = arguments(block);
+      if (arm) {
+        Value empty = kernel("vector.empty", {}, output, parameters);
+        end("local.yield", empty ? ValueRange{empty} : ValueRange{});
+        continue;
+      }
+      auto &domain = source.inner.domain->getRegion(0).front();
+      auto mapped = [&](Value formal) {
+        auto position = cast<BlockArgument>(formal).getArgNumber();
+        auto input = source.inputMap[position];
+        return input ? captures[input - 1] : captures.back();
+      };
+      llvm::DenseMap<Value, Value> extents;
+      admissionLocation = source.inner.operation->getLoc();
+      admissionPath = protocol::Assignments{
+          {limits.finiteSite.str(), SymbolTable::getSymbolName(c.helper).str()},
+          {source.call->getAttrOfType<StringAttr>("site").str(),
+           SymbolTable::getSymbolName(source.inner.helper).str()}};
+      admissionOccurrence = 0;
+      for (auto &op : domain.without_terminator()) {
+        if (!valid)
+          return false;
+        Value size;
+        if (isa<data::DomainElementsOp>(op))
+          size = extent(mapped(op.getOperand(0)));
+        else if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(op)) {
+          Value matrix = mapped(op.getOperand(0));
+          Value bound = extent(matrix, source.axis);
+          require(
+              kernel("index.less", {mapped(op.getOperand(1)), bound}, boolean));
+          size = extent(matrix, 1 - source.axis);
+        } else {
+          size = extents.lookup(op.getOperand(0));
+          for (Value child : op.getOperands().drop_front())
+            require(
+                kernel("index.equal", {size, extents.lookup(child)}, boolean));
+        }
+        extents[op.getResult(0)] = size;
+      }
+      admissionLocation.reset();
+      admissionPath.reset();
+      Value seed = source.seed.input
+                       ? captures[*source.seed.input]
+                       : kernel("field.constant", {}, field, parameters,
+                                {source.seed.constant});
+      Value result = kernel(source.axis ? "matrix.transpose_mul_vector"
+                                        : "matrix.mul_vector",
+                            {captures[source.matrix], captures[source.vector]},
+                            output, parameters);
+      Value initial = kernel("vector.fill", {seed, captures[entry.size()]},
+                             output, parameters);
+      Value value = kernel("vector.add", {initial, result}, output, parameters);
+      end("local.yield", value ? ValueRange{value} : ValueRange{});
+    }
+    cursor = after;
+    if (valid)
+      finish(ports.outputs(branch));
+    return valid;
   }
   Value product(Value left, Value right) {
     bound(left);
@@ -607,6 +730,30 @@ public:
     auto declaration =
         binding ? symbols.lookup<runtime::BindingOp>(binding.getValue())
                 : runtime::BindingOp();
+    if (allowBulk && ports.isScoped() && c.collect && declaration &&
+        declaration.getContract() == "index.constant") {
+      // The optional source interpreter has its own comparison allowance. It
+      // consumes actual scoped instructions, never the producer's selection.
+      uint64_t comparisonWork =
+          reserve(std::min(availableWork(), limits.comparison),
+                  limits.sharedComparison);
+      auto settle = llvm::scope_exit([&] {
+        if (limits.sharedComparison)
+          *limits.sharedComparison += comparisonWork;
+      });
+      bool exhausted = false;
+      auto nested = nested::readScopedSource(c, comparisonWork, exhausted);
+      if (exhausted) {
+        result = {VerificationStatus::OptionalCapacity,
+                  "nested contraction source work",
+                  CapacityCause{WorkOwner::OptionalComparison, {}, {}},
+                  mathematical::realizationSubject(c.operation)};
+        return false;
+      }
+      if (nested)
+        return nestedContraction(*nested, entry,
+                                 cardinalities.lookup(rootDomain));
+    }
     bool startsEmpty =
         declaration && declaration.getContract() == "vector.empty";
     if (allowBulk &&
