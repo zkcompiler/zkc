@@ -25,6 +25,7 @@ def subject : Subject F G artifacts .idealMeaning where
   reference := sourceReference .compiledIdeal
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .importedLanguage Contract.importedLanguage
   importedRegistry := ⟨[⟨⟨"languages.guess", 0⟩, "zkc.language.guess/0", some Contract.importedLanguage⟩]⟩
   importedRegistered := by

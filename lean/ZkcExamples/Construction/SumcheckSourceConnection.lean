@@ -79,12 +79,12 @@ theorem source_round_transform {R : Type} (challenge : History F G → m F)
 theorem source_loop_transform {R : Type} (challenge : History F G → m F)
     (initial : History F G) (handle : Nat) (indices : List Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (proof : Proof F G)
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (proof : Proof F G)
     (next : List F × F → PIR.Process (Actions F G) R) :
     transform SumcheckProof.context challenge
         (((PIR.repeatN indices.length (roundPresent childContext handle) (point, scalar)).interpret
           CommonAdapter.project).bind next) (initial ++ suffix) proof =
-      runK legacyOrigin initial challenge (reduce indices point scalar history) proof
+      runK Origin.withoutCoordinates initial challenge (reduce indices point scalar history) proof
         (readbackRoundK initial (fun point scalar history unread =>
           transform SumcheckProof.context challenge (next (point, scalar)) history unread)) := by
   induction indices generalizing point scalar history suffix proof with
@@ -97,7 +97,7 @@ theorem source_loop_transform {R : Type} (challenge : History F G → m F)
       rw [← scalar_round challenge initial index point scalar history suffix mapped proof]
       apply runK_congr_yields _ _ _ _ _ (round_mapped history suffix mapped index point scalar)
       intro state unread hasMapping
-      cases found : readbackHistory legacyOrigin state.history with
+      cases found : readbackHistory Origin.withoutCoordinates state.history with
       | none => simp [found] at hasMapping
       | some current =>
           simp only [readbackRoundK, found]
@@ -106,13 +106,13 @@ theorem source_loop_transform {R : Type} (challenge : History F G → m F)
 theorem source_terminal_transform (challenge : History F G → m F) (initial : History F G)
     (values : List F) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (proof : Proof F G) :
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (proof : Proof F G) :
     transform SumcheckProof.context challenge
         (((SumcheckVerifierTerminal.actualOwnedCheck SumcheckSourceViews.unit 1
           (some values) (some point) (some scalar)).bind fun outputs => .done (outputs.get .here)).interpret
             CommonAdapter.project) (initial ++ suffix) proof =
       (fun result => (mapOutcome SumcheckProof.acceptance result.1, result.2)) <$>
-        runK legacyOrigin initial challenge (terminal values ⟨point, scalar, history⟩) proof
+        runK Origin.withoutCoordinates initial challenge (terminal values ⟨point, scalar, history⟩) proof
           (nominalFinish initial) := by
   rw [SumcheckVerifierTerminal.terminal_decision]
   split_ifs <;>
@@ -155,7 +155,7 @@ theorem source_transform (challenge : History F G → m F) (values : List F) (cl
     rw [loopEq]
     apply runK_congr_yields _ _ _ _ _ (reduce_mapped (List.range rounds) [] claim [] [] rfl)
     intro state unread hasMapping
-    cases found : readbackHistory legacyOrigin state.history with
+    cases found : readbackHistory Origin.withoutCoordinates state.history with
     | none => simp [found] at hasMapping
     | some suffix =>
         simp only [readbackRoundK, found]

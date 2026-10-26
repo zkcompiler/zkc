@@ -5,7 +5,7 @@ public import ZkcExamples.Construction.GuessProofData
 public import ZkcExamples.Construction.GuessProofBodies
 public import ZkcExamples.Construction.GuessProofModel
 public import Zkc.Construction.Uniform.SourceProcess
-public import Zkc.Construction.Uniform.Compiled
+public import ZkcExamples.Construction.GuessArtifact
 public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
@@ -13,7 +13,7 @@ public import Zkc.Source.Structured.UnitViews
 
 /-! Connection of the exact retained Guess artifact and admitted source.
 The full returned tuple and transcript suffix are preserved before selecting
-acceptance. No relation or honest-input premise restricts public inputs. -/
+Uniform.SourceProcess.acceptance. No relation or honest-input premise restricts public inputs. -/
 set_option autoImplicit false
 set_option smartUnfolding false
 set_option linter.unusedSimpArgs false
@@ -26,22 +26,9 @@ open Zkc.Construction.Uniform.DomainAdapter
 open Zkc.Construction.Uniform.SourceProcess
 open ZkcExamples.Structured.Generated.Constructed
 
-structured_views ZkcExamples.Construction.GuessProofData.snapshot
-  helpers []
-  protocols [proof := ZkcExamples.Construction.GuessProofBodies.proof]
+open GuessProof
 
-theorem admitted : Structured.check ZkcExamples.Construction.GuessProofData.snapshot = .ok program := kernel_admission
-
-
-abbrev artifact := GuessProofParticipant.participant
-
-def context : Context := Context.fiatShamir ZkcExamples.Construction.GuessProofData.snapshot.entry ["role00000000", "role00000001"] 0 1 2 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) artifact.policy.suite [("label_6368616c6c656e6765", "label_64656c6976657279_0")]
-
-/-- Structural selection checks the entire source/artifact pair, including
-body, policy, ABI and return projection; digest spelling alone is insufficient. -/
-theorem checked : Uniform.checkCompiled imported artifact = .ok () := by decide +kernel
-
-theorem context_checked : Uniform.exportContext GuessProofData.snapshot artifact = some context := by decide +kernel
+abbrev artifact := participant
 
 theorem artifact_identity : GuessValidator.artifact = artifact := rfl
 
@@ -124,21 +111,21 @@ theorem domain_transform (challenge : History F G → m F)
     (offset : F) (handle : Nat) (initial : History F G) (proof : Proof F G) :
     runK legacyOrigin initial challenge
         (Domain.participant (ringModel F G) program context artifact (inputs offset)) proof
-        (fun result unread => pure (.returned (acceptance result.values), unread)) =
+        (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
       transform context challenge (sourceVerifier offset handle) initial proof := by
   rw [participant_run challenge offset handle initial proof
-    (fun values unread => pure (.returned (acceptance values), unread))]
+    (fun values unread => pure (.returned (Uniform.SourceProcess.acceptance values), unread))]
   have law := sourceView_transform_map context challenge
     (sourceDecision (F := F) (G := G) offset handle) some initial proof
   rw [← source_decision] at law
   exact law
 
 /-- The installed Domain runtime has the same complete outcome and unread
-proof after selecting acceptance. Physical frames remain with Domain.run.
+proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.
 No nominal random-oracle game is identified with the legacy oracle. -/
 theorem actual_transform (challenge : History F G → m F)
     (offset : F) (handle : Nat) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome (fun returned => acceptance returned.values) result.outcome,
+    (fun result => (mapOutcome (fun returned => Uniform.SourceProcess.acceptance returned.values) result.outcome,
         result.state.proof)) <$>
       Domain.run .validator (oracle legacyOrigin initial challenge)
         (Domain.participant (ringModel F G) program context artifact (inputs offset))
@@ -146,7 +133,7 @@ theorem actual_transform (challenge : History F G → m F)
     (fun result => (result.1, embedProof result.2)) <$>
       transform context challenge (sourceVerifier offset handle) initial proof := by
   let actual := Domain.participant (ringModel F G) program context artifact (inputs offset)
-  let project := fun result : Domain.Result (uniformCarriers F G) => acceptance result.values
+  let project := fun result : Domain.Result (uniformCarriers F G) => Uniform.SourceProcess.acceptance result.values
   have installed := run_actual legacyOrigin initial challenge actual (inputs offset) proof
   have selected := congrArg (fun action =>
     (fun result => (mapOutcome project result.1, result.2)) <$> action) installed

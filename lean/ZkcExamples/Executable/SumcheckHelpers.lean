@@ -77,11 +77,20 @@ theorem call_eq {helper : Helper} {body : Region dialect helper.inputs helper.ou
           (invoke (SumcheckSourceContracts.helperMeanings (F := F) (G := G)) helper values) with
       | .returned results => .returned (encodeValues results)
       | .stopped reason => .stopped reason := by
-  rw [Uniform.callHelper_invoke _ helper (Uniform.helperTable_lookup program helper (present association)) arguments values
-    decoded]
-  simp only [Uniform.helperTable]
-  rw [table_eq]
-  rfl
+  obtain ⟨⟨foundHelper, implementation⟩, found, same⟩ :=
+    Evaluation.linked_lookup (F := F) (G := G) (interface := closedInterface)
+      .closed program.payload.linked helper (present association)
+  change (helperTable program F G).find? (fun entry => entry.helper.name == helper.name) =
+    some ⟨foundHelper, implementation⟩ at found
+  simp only at same
+  subst same
+  rw [← table_eq]
+  have invoked : invoke (helperTable program F G) foundHelper values = implementation values := by
+    simp [invoke, found]
+  rw [invoked]
+  simp only [callHelper, found, decoded]
+  generalize Zkc.Construction.closedOutcome (implementation values) = outcome
+  cases outcome <;> rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- An encoded value has the sort of its type. -/

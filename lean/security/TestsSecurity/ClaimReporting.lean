@@ -29,6 +29,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   reference := ZkcSecurity.Examples.Subjects.Schnorr.sourceReference (stage endpoint)
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.Schnorr.compiled
+  connection := ZkcSecurity.Examples.Subjects.Schnorr.sourceConnection
   target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []
@@ -149,6 +150,7 @@ def otherArtifactsSubject : Subject F G ZkcSecurity.Examples.Subjects.ChaumPeder
   reference := ZkcSecurity.Examples.Subjects.ChaumPedersen.sourceReference .compiledIdeal
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.ChaumPedersen.compiled
+  connection := ZkcSecurity.Examples.Subjects.ChaumPedersen.sourceConnection
   target := .retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []

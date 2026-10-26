@@ -90,6 +90,7 @@ endpoint and the application's witness relation `holds`. -/
 structure KnowledgeEvidence (art : Artifacts) (endpoint : Semantics) (Stmt Wit Commit PrvState Resp : Type)
     (holds : art.Statement F G → Wit → Prop) where
   compiled : Compiled art
+  connection : compiled.SourceConnection (F := F) (G := G)
   target : RetainedTarget compiled.imported art.participant.policy art.publics
   /-- Embedding extracted witnesses cannot replace publications or parameters. -/
   witness : Wit → target.Witness F G
@@ -129,7 +130,7 @@ theorem corresponds (statement : art.Statement F G) (initial : History F G) :
     Sigma.Corresponds evidence.family.shape (evidence.family.sigma statement) (evidence.family.key statement)
       initial (evidence.verify statement initial) := by
   intro proof
-  rw [verify, Compiled.transform_eq _ _ statement evidence.handle, evidence.model,
+  rw [verify, Compiled.transform_eq _ evidence.connection _ statement evidence.handle, evidence.model,
     evidence.family.transform_shape, map_bind]
   simp [verdict]
 
@@ -146,7 +147,7 @@ theorem verdict_cases {m : Type → Type} [Monad m] [LawfulMonad m] (challenge :
   · exact .inl (by rw [← canonical])
   · refine .inr ⟨_, transform evidence.compiled.context challenge (evidence.family.validator statement) initial
       proof, ?_⟩
-    rw [Compiled.transform_eq _ _ statement evidence.handle, evidence.model]
+    rw [Compiled.transform_eq _ evidence.connection _ statement evidence.handle, evidence.model]
     exact rejects
 
 /-- The probability that the compiled verifier accepts the prover's commitment

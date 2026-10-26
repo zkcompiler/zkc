@@ -40,6 +40,7 @@ private def subject : Subject F G artifacts .idealMeaning where
   reference := ⟨"admitted-guess-unit", "example::Proof", .compiledIdeal, []⟩
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .importedLanguage Contract.importedLanguage
   importedRegistry := ⟨[⟨⟨"languages.guess", 0⟩, "arklib.guess.language/0", some Contract.importedLanguage⟩]⟩
   importedRegistered := by

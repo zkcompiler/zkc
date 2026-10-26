@@ -14,7 +14,7 @@ construction = true
 original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/GkrProof.lean"
+glue = "lean/ZkcExamples/Construction/GkrArtifact.lean"
 
 [normal_forms]
 request = "lean/bridges/structured/normal-forms/gkr-source.toml"
@@ -29,6 +29,7 @@ kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-deliv
          "native-challenge-reads-host", "native-domain-separator", "native-helper-constant"]
 
 [construction]
+namespace = "ZkcExamples.Construction.GkrProof"
 admission = "external"
 views = "ZkcExamples.Structured.GkrSourceViews"
 inputs = "values"

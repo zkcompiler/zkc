@@ -11,8 +11,7 @@ public import ZkcExamples.Structured.GkrSourceVerifier
 The subject is the compiler's constructed validator for the GKR example's
 `example::Proof` Entry (`ZkcExamples.Construction.GkrProofParticipant.participant`),
 which the composed transcript-construction and participant projection check
-accepts (`ZkcExamples.Construction.GkrProof.compiled`). Its meaning is the ideal
-interpretation of the exported operations (`Zkc.Construction.ideal`) under the
+accepts (`ZkcExamples.Construction.GkrProof.compiled`). Its meaning is actual checked Domain execution of the exported operations under the
 Entry's checked occurrence context, with helper calls read by the original's
 checked helpers, on the circuit's input values, the claimed outputs, the stacked
 wiring tables, the number of layers, the number of selector coordinates and the
@@ -82,17 +81,14 @@ structure WellFormed [CommRing F] (inputs outputs add mul : List F) (layers sele
 section Compiled
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- The compiled GKR verifier: the ideal meaning of the exported validator with
+/-- The compiled GKR verifier: actual checked Domain execution of the exported validator with
 the challenge function `challenge`, on the raw public statement, from the
 initial transcript `initial`, read through the acceptance output the policy
 selects. -/
 def compiledVerifier {m : Type → Type} [Monad m] (challenge : History F G → m F)
     (inputs outputs add mul : List F) (layers selector width : Nat) (initial : History F G)
     (proof : Proof F G) : m (PIR.Outcome (Option Bool) × Proof F G) :=
-  (fun result => (mapOutcome GkrProof.acceptance result.1, result.2)) <$>
-    ideal GkrProof.context challenge (helperTable GkrProof.program F G) GkrProof.participant.returned
-      GkrProof.participant.instructions
-      (GkrProof.inputs inputs outputs add mul layers selector width ++ [.transcript initial]) proof
+  GkrProof.compiledVerifier challenge inputs outputs add mul layers selector width initial proof
 
 /-- For every challenge function, the compiled verifier on a well-formed
 statement is the Fiat–Shamir transform of the plain GKR verifier. -/

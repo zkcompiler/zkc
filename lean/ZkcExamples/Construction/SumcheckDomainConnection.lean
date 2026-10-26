@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Construction.OriginProjection
 public import Zkc.Construction.Uniform.DomainExecution
 public import ZkcExamples.Construction.SumcheckArtifact
 public import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
@@ -24,11 +25,6 @@ theorem artifact_identity : ZkcExamples.Structured.Generated.Constructed.SmallSu
 
 theorem source_identity :
     Generated.Bindings.SmallSumcheckInputs.imported.program = SumcheckProof.program := by kernel_rfl
-
-/-- Erase the explicitly delimited actual-coordinate suffix at the legacy
-boundary. Query fields, including the validator role, remain intact. -/
-def legacyOrigin (origin : Origin) : Origin :=
-  { origin with event := origin.event.takeWhile (· != "indices") }
 
 abbrev roundInstruction : Construction.Instruction := SumcheckProof.participant.instructions[1]'(by decide +kernel)
 abbrev roundBody : List Construction.Instruction := roundInstruction.body
@@ -84,10 +80,10 @@ theorem message_requests (index : Nat) :
   constructor <;> kernel_rfl
 
 theorem legacy_origins (index : Nat) :
-    legacyOrigin (Domain.atCoordinates (staticOrigin lowTemplate) [index]) = staticOrigin lowTemplate ∧
-    legacyOrigin (Domain.atCoordinates (staticOrigin highTemplate) [index]) = staticOrigin highTemplate ∧
-    legacyOrigin (Domain.atCoordinates (staticOrigin drawTemplate) [index]) = staticOrigin drawTemplate ∧
-    legacyOrigin (Domain.atCoordinates (staticOrigin deliveryTemplate) [index]) = staticOrigin deliveryTemplate := by
+    Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin lowTemplate) [index]) = staticOrigin lowTemplate ∧
+    Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin highTemplate) [index]) = staticOrigin highTemplate ∧
+    Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin drawTemplate) [index]) = staticOrigin drawTemplate ∧
+    Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin deliveryTemplate) [index]) = staticOrigin deliveryTemplate := by
   constructor
   · kernel_rfl
   constructor
@@ -121,13 +117,15 @@ theorem helper_outcome (helper : Helper)
     (encoding : Domain.encodeValues arguments = some encoded) :
     Domain.callHelper (ringModel F G) SumcheckProof.program helper.name
         (helper.outputs.map ValueSort.data) encoded =
-      match Domain.closedOutcome (invoke (Zkc.Construction.Uniform.helperTable SumcheckProof.program F G) helper arguments) with
+      match Domain.closedOutcome (invoke (Zkc.Construction.helperTable SumcheckProof.program F G) helper arguments) with
       | .stopped reason => .stopped reason
       | .returned results =>
           match Domain.encodeValues results with
           | some values => .returned values
           | none => .stopped .refused := by
-  obtain ⟨entry, found, same⟩ := Zkc.Construction.Uniform.helperTable_lookup (F := F) (G := G) SumcheckProof.program helper present
+  obtain ⟨entry, found, same⟩ := Evaluation.linked_lookup (F := F) (G := G) (interface := closedInterface) .closed SumcheckProof.program.payload.linked helper present
+  change (Construction.helperTable SumcheckProof.program F G).find?
+    (fun item => item.helper.name == helper.name) = some entry at found
   subst helper
   have lookup : (Domain.helperTable (ringModel F G) SumcheckProof.program).find?
       (fun item => item.helper.name == entry.helper.name) = some entry := by
@@ -137,7 +135,7 @@ theorem helper_outcome (helper : Helper)
   simp only [invoke, found, ↓reduceDIte]
   kernel_rfl
 
-theorem helper_table : Zkc.Construction.Uniform.helperTable SumcheckProof.program F G =
+theorem helper_table : Zkc.Construction.helperTable SumcheckProof.program F G =
     SumcheckSourceContracts.helperMeanings (F := F) (G := G) := rfl
 
 theorem helper_present {helper : Helper} {body : Region dialect helper.inputs helper.outputs}

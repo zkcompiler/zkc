@@ -16,10 +16,11 @@ executable = true
 [generated]
 data = "lean/ZkcExamples/Structured/SumcheckSourceData.lean"
 participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SumcheckProof.lean"
+glue = "lean/ZkcExamples/Construction/SumcheckArtifact.lean"
 program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
 artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Artifacts.lean"
+lowering = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Lowering.lean"
 claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.lean"
 
 [normal_forms]
@@ -51,6 +52,8 @@ charge_arguments = ["rounds"]
 completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"
 
 [construction]
+namespace = "ZkcExamples.Construction.SumcheckProof"
+connection = "ZkcExamples.Construction.SumcheckProof"
 admission = "external"
 views = "ZkcExamples.Structured.SumcheckSourceViews"
 inputs = "values"

@@ -26,13 +26,13 @@ def readbackCarriedK {R : Type} (initial : History F G)
 theorem legacy_loop {R : Type} (challenge : History F G → m F) (initial : History F G)
     (a b c d e : Value F G) (indices : List Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (proof : Proof F G)
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (proof : Proof F G)
     (next : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G)) :
     iterateM
         (fun start unread continuation => idealK SumcheckProof.context challenge
           (Uniform.helperTable SumcheckProof.program F G) roundBody start unread continuation)
         [a, b, c, d, e] [26, 31, 25] indices (legacyCarried point scalar (initial ++ suffix)) proof next =
-      runK legacyOrigin initial challenge (reduce indices point scalar history) proof (readbackCarriedK initial next) := by
+      runK Origin.withoutCoordinates initial challenge (reduce indices point scalar history) proof (readbackCarriedK initial next) := by
   induction indices generalizing point scalar history suffix proof with
   | nil => simp only [iterateM, reduce, runK, readbackCarriedK, readbackRoundK, mapped]
   | cons index rest ih =>
@@ -45,7 +45,7 @@ theorem legacy_loop {R : Type} (challenge : History F G → m F) (initial : Hist
       rw [← scalar_round challenge initial index point scalar history suffix mapped proof]
       apply runK_congr_yields _ _ _ _ _ (round_mapped history suffix mapped index point scalar)
       intro state unread hasMapping
-      cases found : readbackHistory legacyOrigin state.history with
+      cases found : readbackHistory Origin.withoutCoordinates state.history with
       | none => simp [found] at hasMapping
       | some current =>
           simp only [readbackRoundK, found]

@@ -5,7 +5,7 @@ public import ZkcExamples.Construction.SchnorrProofBodies
 public import ZkcExamples.Construction.SchnorrProofModel
 public import ZkcExamples.Construction.SchnorrProofParticipant
 public import Zkc.Construction.Uniform.SourceProcess
-public import Zkc.Construction.Uniform.Compiled
+public import ZkcExamples.Construction.SchnorrArtifact
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator
 
@@ -13,7 +13,7 @@ public import ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedVali
 
 /-! Connection of the exact retained Schnorr artifact and admitted source.
 The full returned tuple and transcript suffix are preserved before selecting
-acceptance. No relation or honest-input premise restricts public inputs. -/
+Uniform.SourceProcess.acceptance. No relation or honest-input premise restricts public inputs. -/
 set_option autoImplicit false
 set_option smartUnfolding false
 set_option linter.unusedSimpArgs false
@@ -25,22 +25,9 @@ open Zkc Zkc.Source Zkc.Source.Structured Zkc.Construction
 open Zkc.Construction.Uniform.DomainAdapter
 open Zkc.Construction.Uniform.SourceProcess
 
-structured_views ZkcExamples.Construction.SchnorrProofData.snapshot
-  helpers [formula := ZkcExamples.Construction.SchnorrProofBodies.formula]
-  protocols [proof := ZkcExamples.Construction.SchnorrProofBodies.proof]
+open SchnorrProof
 
-theorem admitted : Structured.check ZkcExamples.Construction.SchnorrProofData.snapshot = .ok program := kernel_admission
-
-
-abbrev artifact := SchnorrProofParticipant.participant
-
-def context : Context := Context.fiatShamir ZkcExamples.Construction.SchnorrProofData.snapshot.entry ["role00000000", "role00000001"] 0 1 4 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) artifact.policy.suite [("label_6368616c6c656e6765", "label_64656c6976657279_0")]
-
-/-- Structural selection checks the entire source/artifact pair, including
-body, policy, ABI and return projection; digest spelling alone is insufficient. -/
-theorem checked : Uniform.checkCompiled imported artifact = .ok () := by decide +kernel
-
-theorem context_checked : Uniform.exportContext SchnorrProofData.snapshot artifact = some context := by decide +kernel
+abbrev artifact := participant
 
 theorem artifact_identity : ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.artifact = artifact := rfl
 
@@ -123,21 +110,21 @@ theorem domain_transform (challenge : History F G → m F)
     (base point : G) (handle : Nat) (initial : History F G) (proof : Proof F G) :
     runK legacyOrigin initial challenge
         (Domain.participant (ringModel F G) program context artifact (inputs base point)) proof
-        (fun result unread => pure (.returned (acceptance result.values), unread)) =
+        (fun result unread => pure (.returned (Uniform.SourceProcess.acceptance result.values), unread)) =
       transform context challenge (sourceVerifier base point handle) initial proof := by
   rw [participant_run challenge base point handle initial proof
-    (fun values unread => pure (.returned (acceptance values), unread))]
+    (fun values unread => pure (.returned (Uniform.SourceProcess.acceptance values), unread))]
   have law := sourceView_transform_map context challenge
     (sourceDecision (F := F) (G := G) base point handle) some initial proof
   rw [← source_decision] at law
   exact law
 
 /-- The installed Domain runtime has the same complete outcome and unread
-proof after selecting acceptance. Physical frames remain with Domain.run.
+proof after selecting Uniform.SourceProcess.acceptance. Physical frames remain with Domain.run.
 No nominal random-oracle game is identified with the legacy oracle. -/
 theorem actual_transform (challenge : History F G → m F)
     (base point : G) (handle : Nat) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome (fun returned => acceptance returned.values) result.outcome,
+    (fun result => (mapOutcome (fun returned => Uniform.SourceProcess.acceptance returned.values) result.outcome,
         result.state.proof)) <$>
       Domain.run .validator (oracle legacyOrigin initial challenge)
         (Domain.participant (ringModel F G) program context artifact (inputs base point))
@@ -145,7 +132,7 @@ theorem actual_transform (challenge : History F G → m F)
     (fun result => (result.1, embedProof result.2)) <$>
       transform context challenge (sourceVerifier base point handle) initial proof := by
   let actual := Domain.participant (ringModel F G) program context artifact (inputs base point)
-  let project := fun result : Domain.Result (uniformCarriers F G) => acceptance result.values
+  let project := fun result : Domain.Result (uniformCarriers F G) => Uniform.SourceProcess.acceptance result.values
   have installed := run_actual legacyOrigin initial challenge actual (inputs base point) proof
   have selected := congrArg (fun action =>
     (fun result => (mapOutcome project result.1, result.2)) <$> action) installed

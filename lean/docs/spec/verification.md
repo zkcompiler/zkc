@@ -301,10 +301,27 @@ including unsupported interactive models. Reports remain IR-relative with an
 explicit `source.correspondence` premise; interpreted executable-byte claims
 never establish native executable conformance by themselves.
 
-For compiled ideal, the actual subject's construction check, selection and
-public schema discharge `construction.checked`. Interpreted bytes also require
-`lowering.interpreted_bytes`, pinning that subject's actual program, checked
-lowering, helper interpretation and public admission. Reporting reconstructs
+For compiled ideal, `Endpoint.Compiled` reuses `Endpoint.Domain.Compiled` for
+static admission, selection, public schema and source occurrences. Its scalar
+verifier executes `Domain.run` on `Domain.participant`, through the fixed
+`ScalarVerifier` ABI. The nominal input carries an empty transcript suffix;
+the initial scalar history is an opaque prefix. The artifact determines the
+origin map, which is applied before invoking the caller's oracle and cache.
+
+`construction.checked` additionally requires `Compiled.SourceConnection`:
+the all-reply transport from that exact actual verifier to that exact admitted
+source. Neither side, the origin map, the extractor nor a resource boundary
+can be selected by evidence. Structural checker acceptance alone cannot supply
+this proof. Maintained instances derive it from their actual artifact binding,
+including malformed typed proof values and every typed public statement.
+
+Interpreted bytes also require `lowering.interpreted_bytes`, pinning that
+subject's actual program, checked lowering, helper interpretation and public
+admission, together with `Endpoint.BytePruning`. This is a fixed-target proof
+at every budget and framing header from actual Lean byte validation to complete
+acceptance of the same Domain verifier on the decoded proof. Static lowering
+admission does not imply this transport. Byte completeness and exact execution
+observations remain separate obligations. Reporting reconstructs
 these goals from the typed subject and compares them with each registered
 obligation and its proof. Direct lower-stage proofs can certify that interpreted
 endpoint while native closure stays open; native realization is a separate

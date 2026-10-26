@@ -112,7 +112,11 @@ theorem helpersSorted : ∀ call ∈ Instruction.callList SumcheckProof.particip
     apply helperSorted_of_outputs
     intro entry found
     obtain ⟨entry', found', same⟩ :=
-      Uniform.helperTable_lookup (F := F) (G := G) SumcheckProof.program helper (SumcheckHelpers.present association)
+      Zkc.Source.Structured.Evaluation.linked_lookup (F := F) (G := G)
+        (interface := Zkc.Source.Structured.closedInterface) .closed
+        SumcheckProof.program.payload.linked helper (SumcheckHelpers.present association)
+    change (helperTable SumcheckProof.program F G).find? (fun value => value.helper.name == helper.name) =
+      some entry' at found'
     rw [found] at found'
     cases found'
     rw [same]

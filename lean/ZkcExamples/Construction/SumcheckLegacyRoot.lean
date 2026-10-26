@@ -42,13 +42,13 @@ omit [LawfulMonad m] in
 theorem terminal_transport (challenge : History F G → m F) (initial : History F G)
     (values : List F) (claim : F) (rounds : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (proof : Proof F G) :
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (proof : Proof F G) :
     idealK SumcheckProof.context challenge (Uniform.helperTable SumcheckProof.program F G)
       [terminalInstruction]
       ((SumcheckProof.inputs values claim rounds ++ [.transcript initial, .vector "bls12-381.fr" []]) ++
         legacyCarried point scalar (initial ++ suffix)) proof
       (fun final unread => pure (finish SumcheckProof.participant.returned final, unread)) =
-    runK legacyOrigin initial challenge (terminal values ⟨point, scalar, history⟩) proof (nominalFinish initial) := by
+    runK Origin.withoutCoordinates initial challenge (terminal values ⟨point, scalar, history⟩) proof (nominalFinish initial) := by
   have checkResult := legacy_check_total (F := F) (G := G) values point scalar
   rw [idealK]
   simp only [terminalInstruction, SumcheckProof.participant, SumcheckProofParticipant.participant,
@@ -93,7 +93,7 @@ theorem retained_legacy (challenge : History F G → m F) (values : List F) (cla
     simp only [rootProcess, bounded, ite_true, runK_bind, readbackCarriedK]
     apply runK_congr_yields _ _ _ _ _ (reduce_mapped (List.range rounds) [] claim [] [] rfl)
     intro state unread hasMapping
-    cases found : readbackHistory legacyOrigin state.history with
+    cases found : readbackHistory Origin.withoutCoordinates state.history with
     | none => simp [found] at hasMapping
     | some suffix =>
         simp only [readbackRoundK, found]
@@ -123,7 +123,7 @@ theorem raw_legacy_consumes (initial : History F G) (low high : F) (tail : Proof
 receive, preserving the entire unread proof. -/
 theorem raw_domain_refuses (initial : History F G) (low high : F) (tail : Proof F G) :
     Uniform.DomainAdapter.validate (m := Id) SumcheckProof.program SumcheckProof.context SumcheckProof.participant
-      legacyOrigin (fun _ => (0 : F)) illSortedDomainInputs initial
+      Origin.withoutCoordinates (fun _ => (0 : F)) illSortedDomainInputs initial
       (.field "bls12-381.fr" low :: .field "bls12-381.fr" high :: tail) =
       (.stopped .refused, .field "bls12-381.fr" low :: .field "bls12-381.fr" high :: tail) := by kernel_rfl
 
@@ -135,7 +135,7 @@ theorem raw_model_disagreement (initial : History F G) (low high : F) (tail : Pr
       (illSortedLegacyInputs initial)
       (.field "bls12-381.fr" low :: .field "bls12-381.fr" high :: tail) ≠
     Uniform.DomainAdapter.validate (m := Id) SumcheckProof.program SumcheckProof.context SumcheckProof.participant
-      legacyOrigin (fun _ => (0 : F)) illSortedDomainInputs initial
+      Origin.withoutCoordinates (fun _ => (0 : F)) illSortedDomainInputs initial
       (.field "bls12-381.fr" low :: .field "bls12-381.fr" high :: tail) := by
   rw [raw_legacy_consumes, raw_domain_refuses]
   intro same

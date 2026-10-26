@@ -60,6 +60,7 @@ endpoint. -/
 def knowledge (endpoint : Semantics) (lowering : LoweringRequirement artifacts compiled F G endpoint) :
     KnowledgeEvidence (F := F) (G := G) artifacts endpoint (G × G) F (G × G) F F Contract.holds where
   compiled := compiled
+  connection := sourceConnection
   target := Contract.retained
   witness := Contract.embed
   relationPinned := Contract.holds_pinned

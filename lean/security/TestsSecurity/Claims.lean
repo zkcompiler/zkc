@@ -19,6 +19,7 @@ private def subject (endpoint : Semantics) : Subject F G ZkcSecurity.Examples.Su
   reference := ⟨"admitted-schnorr-unit", "example::Proof", stage endpoint, [⟨"validator", "schnorr-program"⟩]⟩
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.Schnorr.compiled
+  connection := ZkcSecurity.Examples.Subjects.Schnorr.sourceConnection
   target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []

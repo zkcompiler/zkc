@@ -181,15 +181,12 @@ theorem verifier_queryBound (offset : F) (handle : Nat) :
   rw [GuessProof.verifier_correspondence]
   exact fun _ => ⟨Nat.one_pos, fun _ => trivial⟩
 
-/-- The compiled verifier: the ideal meaning of the exported validator with the
+/-- The compiled verifier: actual checked Domain execution of the exported validator with the
 challenge function `challenge`, on the offset, from the initial transcript
 `initial`, read through the acceptance output the policy selects. -/
 def compiledVerifier {m : Type → Type} [Monad m] (challenge : History F G → m F) (offset : F)
     (initial : History F G) (proof : Proof F G) : m (PIR.Outcome (Option Bool) × Proof F G) :=
-  (fun result => (mapOutcome GuessProof.acceptance result.1, result.2)) <$>
-    ideal GuessProof.context challenge GuessProof.table GuessProof.participant.returned
-      GuessProof.participant.instructions ((GuessProof.inputs offset).map .data ++
-        [.transcript initial]) proof
+  GuessProof.compiledVerifier challenge offset initial proof
 
 /-- Fiat–Shamir soundness of the compiled guessing verifier from the imported
 ArkLib certificate. The prover is any oracle computation on the transcript oracle

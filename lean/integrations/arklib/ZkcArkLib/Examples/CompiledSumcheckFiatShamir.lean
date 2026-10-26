@@ -11,8 +11,8 @@ public import ZkcExamples.Construction.SumcheckProof
 The subject is the compiler's constructed validator for the Sumcheck example's
 `example::Proof` Entry (`ZkcExamples.Construction.SumcheckProof.participant`),
 which the composed transcript-construction and participant projection check
-accepts (`SumcheckProof.compiled`). Its meaning is the ideal interpretation of
-the exported operations (`Zkc.Construction.ideal`) under the Entry's checked
+accepts (`SumcheckProof.compiled`). Its meaning is actual checked Domain execution of
+the exported operations under the Entry's checked
 occurrence context, with helper calls read by the original's checked helpers,
 on the verifier's table values, claimed sum and round count, the initial
 transcript and the proof's messages. The verifier accepts when the acceptance
@@ -66,17 +66,14 @@ variable {F G : Type}
 section Compiled
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- The compiled Sumcheck verifier: the ideal meaning of the exported validator
+/-- The compiled Sumcheck verifier: actual checked Domain execution of the exported validator
 with the challenge function `challenge`, on the table values `raw`, the claimed
 sum and the round count, from the initial transcript `initial`, read through
 the acceptance output the policy selects. -/
 def compiledVerifier {m : Type → Type} [Monad m] (challenge : History F G → m F) (raw : List F)
     (claim : F) (count : Nat) (initial : History F G) (proof : Proof F G) :
     m (PIR.Outcome (Option Bool) × Proof F G) :=
-  (fun result => (mapOutcome SumcheckProof.acceptance result.1, result.2)) <$>
-    ideal SumcheckProof.context challenge (helperTable SumcheckProof.program F G)
-      SumcheckProof.participant.returned SumcheckProof.participant.instructions
-      (SumcheckProof.inputs raw claim count ++ [.transcript initial]) proof
+  SumcheckProof.compiledVerifier challenge raw claim count initial proof
 
 /-- The Proof Entry's original validator is the imported `example::Interactive`
 verifier: both are the role-1 participant of the admitted Sumcheck source, read
@@ -145,7 +142,7 @@ sampled random oracle on all typed histories (empty initial cache, shared with
 the verifier's challenges), the compiled verifier accepts a false claim on the
 raw table values with probability at most `(queries + count) / |F|`, for every
 initial transcript. Acceptance here ignores unread proof messages, so the bound
-also covers an acceptance of the same ideal interpretation that additionally
+also covers an acceptance of the same Domain execution that additionally
 requires the whole proof to be read; no executable meaning of this Entry is
 covered. -/
 theorem soundness (count : Nat) (raw : List F) (table : Table F count)

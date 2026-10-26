@@ -63,6 +63,28 @@ root.
 | `executable` | `charge`, `charge_arguments`, `completeness_module` | Lean charge function, the public inputs it takes, and its module |
 | `executable` | `namespace` | namespace of the generated facts (default: the facts module's name); a hand executable module of the Entry continues it |
 
+The metadata module, declaration namespace and maintained connection have
+separate owners. For example:
+
+```toml
+[generated]
+glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"
+
+[construction]
+namespace = "ZkcExamples.Construction.SchnorrProof"
+connection = "ZkcExamples.Construction.SchnorrProof"
+```
+
+`glue` is the exact file regenerated; the driver never rewrites its name.
+`namespace` selects the names declared inside that file and defaults to its
+module name. Static checks and generated executable facts import this metadata
+module. `connection` names the maintained module proving correspondence to the
+actual source, required for generated source claims. Artifact evidence imports
+that module and applies its checked `compiled_transform`; admission alone does
+not imply correspondence. The maintained module may continue the metadata's
+namespace. Its file is separate from generated outputs, so regeneration cannot
+overwrite the proof or accidentally build it before its metadata is ready.
+
 Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured
 suite also produces must agree byte for byte.
@@ -75,8 +97,11 @@ endpoint theorems exist. The separate scalar bridge remains selected by
 `scalar.properties`; it does not authorize source requests.
 
 For a configured Lean namespace, `Artifacts.lean` contains the freshly exported
-original, participant and optional program, plus checked compilation/lowering
-facts. `Contract.lean` pins the actual retained application or an explicit
+original, participant and optional program, plus checked admission and source
+connection facts. Executable claims explicitly name `generated.lowering`, whose
+module carries the separate byte-to-Domain transport; it imports the maintained
+byte proof without making the artifact module depend on that proof. Generated
+output paths must be distinct. `Contract.lean` pins the actual retained application or an explicit
 registered imported language. `Registration.lean` supplies typed subjects,
 property/model registries and small author-library proof exports. Python emits
 only Wire.Request and method data and generic Lean construction calls in
@@ -129,6 +154,8 @@ public exposure used by the installed generated modules.
 
 | Table | Field | Meaning |
 |---|---|---|
+| `construction` | `namespace` | declaration namespace of generated admission metadata (default: its module name) |
+| `construction` | `connection` | maintained source-correspondence module, required for generated source claims and distinct from generated metadata |
 | `construction` | `admission` | how the glue admits the original: `views` (default: from the printed Bodies, which `generated.bodies` must name) or `external` (an existing Views module) |
 | `construction` | `views` | the Views module for `external` admission |
 | `construction` | `inputs` | `values` (default) or `payloads`: the form of the generated `inputs` |

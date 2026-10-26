@@ -26,19 +26,13 @@ theorem nominal_queries_distinct :
 /-- The legacy boundary deliberately collapses these occurrence coordinates.
 Consequently a fresh nominal random oracle is not the mapped legacy oracle. -/
 theorem legacy_query_collision :
-    legacyOrigin (Domain.atCoordinates (staticOrigin drawTemplate) [0]) =
-      legacyOrigin (Domain.atCoordinates (staticOrigin drawTemplate) [1]) :=
+    Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin drawTemplate) [0]) =
+      Origin.withoutCoordinates (Domain.atCoordinates (staticOrigin drawTemplate) [1]) :=
   (legacy_origins 0).2.2.1.trans (legacy_origins 1).2.2.1.symm
 
 def malformedGuard : Construction.Instruction := ⟨.guard "diagnostic", [0], [.data .boolean], []⟩
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-
-/-- The broad raw legacy theorem concerns a different model: it ignores this
-guard's declared result metadata and continues successfully. -/
-theorem legacy_malformed_guard (context : Context) (proof : Proof F G) :
-    idealStep (m := Id) context (fun _ => (0 : F)) [] malformedGuard [.data (.boolean true)] proof
-      (fun _ unread => pure (.returned (), unread)) = (.returned (), proof) := rfl
 
 /-- The authoritative instruction meaning checks that a guard has no results.
 Unconditional legacy/new equality is therefore false. -/

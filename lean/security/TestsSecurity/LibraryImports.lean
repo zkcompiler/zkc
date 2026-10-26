@@ -183,9 +183,11 @@ import ZkcSecurity.Examples.Subjects.Okamoto.Evidence
 import ZkcSecurity.Examples.Subjects.Okamoto.Registration
 import ZkcSecurity.Examples.Subjects.Schnorr.Artifacts
 import ZkcSecurity.Examples.Subjects.Schnorr.Claims
+import ZkcSecurity.Examples.Subjects.Schnorr.CompiledEndpoints
 import ZkcSecurity.Examples.Subjects.Schnorr.Contract
 import ZkcSecurity.Examples.Subjects.Schnorr.Endpoints
 import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
+import ZkcSecurity.Examples.Subjects.Schnorr.Lowering
 import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Artifacts
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims
@@ -513,6 +515,7 @@ import TestsSecurity.RootAssemblyFixture
 import TestsSecurity.RootAssemblyGeneration
 import TestsSecurity.SampledReadback
 import TestsSecurity.SampledRootClaims
+import TestsSecurity.ScalarDomainEndpoints
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.SourceAdmission.CurrentSubjects

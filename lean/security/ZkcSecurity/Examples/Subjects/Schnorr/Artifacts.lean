@@ -1,8 +1,9 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcExamples.Construction.SchnorrArtifact
 public import ZkcExamples.Construction.SchnorrProof
-public import ZkcExamples.Executable.SchnorrProof
+public import ZkcExamples.Executable.SchnorrProofProgramData
 
 @[expose] public section
 
@@ -24,7 +25,7 @@ def artifacts : Artifacts where
   original := ZkcExamples.Construction.SchnorrProof.snapshot
   participant := ZkcExamples.Construction.SchnorrProof.participant
   publics := [.group "bls12-381.g1", .group "bls12-381.g1"]
-  program := some ZkcExamples.Executable.SchnorrProof.validator
+  program := some ZkcExamples.Executable.SchnorrProofProgramData.validator
 
 set_option smartUnfolding true in
 /-- The admitted original, the composed check and the checked selection. -/
@@ -35,20 +36,15 @@ def compiled : Compiled artifacts where
   selected := ZkcExamples.Construction.SchnorrProof.selected
   checked := ZkcExamples.Construction.SchnorrProof.selection_checked
   publics := by decide +kernel
+  occurrences := by decide +kernel
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- The executable validator, accepted by the lowering rule. -/
-def lowering : LoweringEvidence artifacts compiled F G where
-  validator := ZkcExamples.Executable.SchnorrProof.validator
-  program := rfl
-  lowered := ZkcExamples.Executable.SchnorrProof.lowered
-  accepted := ZkcExamples.Executable.SchnorrProof.accepted
-  prepared := ZkcExamples.Executable.SchnorrProof.prepared
-  sorted := ZkcExamples.Executable.SchnorrProof.helpersSorted
-  admits statement := by
+/-- Actual all-reply source transport, separate from static admission. -/
+theorem sourceConnection : compiled.SourceConnection (F := F) (G := G) where
+  equation challenge statement handle initial proof := by
     match statement with
-    | .cons value0 (.cons value1 .nil) => exact ZkcExamples.Executable.SchnorrProof.admitted value0 value1
+    | .cons value0 (.cons value1 .nil) => exact ZkcExamples.Construction.SchnorrProof.compiled_transform challenge value0 value1 handle initial proof
 
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/

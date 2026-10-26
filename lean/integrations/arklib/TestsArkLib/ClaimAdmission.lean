@@ -23,6 +23,7 @@ private def subject (endpoint : Semantics) : Subject F G artifacts endpoint wher
   reference := ⟨"admitted-sumcheck-unit", "example::Proof", stage endpoint, []⟩
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .retained Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []

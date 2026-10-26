@@ -17,14 +17,14 @@ variable {m : Type → Type} [Monad m] [LawfulMonad m]
 def readbackRoundK {R : Type} (initial : History F G)
     (next : List F → F → History F G → Proof F G → m (PIR.Outcome R × Proof F G))
     (state : RoundState F G) (proof : Proof F G) : m (PIR.Outcome R × Proof F G) :=
-  match readbackHistory legacyOrigin state.history with
+  match readbackHistory Origin.withoutCoordinates state.history with
   | some suffix => next state.point state.scalar (initial ++ suffix) proof
   | none => pure (.stopped .refused, proof)
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem mapped_messages (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (index : Nat) (low high : F) :
-    readbackHistory legacyOrigin (history ++
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (index : Nat) (low high : F) :
+    readbackHistory Origin.withoutCoordinates (history ++
       [.message (Domain.atCoordinates (staticOrigin lowTemplate) [index]) (.field "bls12-381.fr" low),
         .message (Domain.atCoordinates (staticOrigin highTemplate) [index]) (.field "bls12-381.fr" high)]) =
       some (suffix ++ [.message (staticOrigin lowTemplate) (.field "bls12-381.fr" low),
@@ -35,8 +35,8 @@ theorem mapped_messages (history : Domain.History (uniformCarriers F G)) (suffix
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem mapped_round (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (index : Nat) (low high answer : F) :
-    readbackHistory legacyOrigin (history ++
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (index : Nat) (low high answer : F) :
+    readbackHistory Origin.withoutCoordinates (history ++
       [.message (Domain.atCoordinates (staticOrigin lowTemplate) [index]) (.field "bls12-381.fr" low),
         .message (Domain.atCoordinates (staticOrigin highTemplate) [index]) (.field "bls12-381.fr" high),
         .challenge (Domain.atCoordinates (staticOrigin drawTemplate) [index]),
@@ -51,8 +51,8 @@ theorem mapped_round (history : Domain.History (uniformCarriers F G)) (suffix : 
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem round_mapped (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (index : Nat) (point : List F) (scalar : F) :
-    PIR.Yields (fun state => (readbackHistory legacyOrigin state.history).isSome)
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (index : Nat) (point : List F) (scalar : F) :
+    PIR.Yields (fun state => (readbackHistory Origin.withoutCoordinates state.history).isSome)
       (roundState index point scalar history) := by
   simp only [roundState, PIR.Yields]
   intro low ignoredLow high ignoredHigh
@@ -67,15 +67,15 @@ Both malformed-message cases preserve the exact unread head. -/
 theorem scalar_round {R : Type} (challenge : History F G → m F) (initial : History F G)
     (index : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) (proof : Proof F G)
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) (proof : Proof F G)
     (next : List F → F → History F G → Proof F G → m (PIR.Outcome R × Proof F G)) :
-    runK legacyOrigin initial challenge (roundState index point scalar history) proof
+    runK Origin.withoutCoordinates initial challenge (roundState index point scalar history) proof
         (readbackRoundK initial next) =
       scalarRoundK challenge point scalar (initial ++ suffix) proof next := by
-  have mappedOrigin : legacyOrigin (roundDrawOrigin index) = staticOrigin drawTemplate := by
+  have mappedOrigin : Origin.withoutCoordinates (roundDrawOrigin index) = staticOrigin drawTemplate := by
     rw [roundDrawOrigin_actual]
     exact (legacy_origins index).2.2.1
-  have queried (low high : F) := query_of_draw legacyOrigin initial challenge _ (roundDrawOrigin index)
+  have queried (low high : F) := query_of_draw Origin.withoutCoordinates initial challenge _ (roundDrawOrigin index)
     "bls12-381.fr" rfl _ (mapped_messages history suffix mapped index low high)
   simp only [mappedOrigin, List.append_assoc] at queried
   have allowed : Domain.drawRequest (roundDrawOrigin index) = true := rfl
@@ -112,8 +112,8 @@ theorem scalar_round {R : Type} (challenge : History F G → m F) (initial : His
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem reduce_mapped (indices : List Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) (suffix : History F G)
-    (mapped : readbackHistory legacyOrigin history = some suffix) :
-    PIR.Yields (fun state => (readbackHistory legacyOrigin state.history).isSome)
+    (mapped : readbackHistory Origin.withoutCoordinates history = some suffix) :
+    PIR.Yields (fun state => (readbackHistory Origin.withoutCoordinates state.history).isSome)
       (reduce indices point scalar history) := by
   induction indices generalizing point scalar history suffix with
   | nil => exact Option.isSome_iff_exists.mpr ⟨suffix, mapped⟩

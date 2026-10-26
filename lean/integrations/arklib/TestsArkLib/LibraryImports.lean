@@ -24,9 +24,11 @@ import ZkcArkLib.Examples.Subjects.Guess.Evidence
 import ZkcArkLib.Examples.Subjects.Guess.Registration
 import ZkcArkLib.Examples.Subjects.Sumcheck.Artifacts
 import ZkcArkLib.Examples.Subjects.Sumcheck.Claims
+import ZkcArkLib.Examples.Subjects.Sumcheck.CompiledEndpoints
 import ZkcArkLib.Examples.Subjects.Sumcheck.Contract
 import ZkcArkLib.Examples.Subjects.Sumcheck.Endpoints
 import ZkcArkLib.Examples.Subjects.Sumcheck.Evidence
+import ZkcArkLib.Examples.Subjects.Sumcheck.Lowering
 import ZkcArkLib.Examples.Subjects.Sumcheck.Registration
 import ZkcArkLib.Examples.Sumcheck
 import ZkcArkLib.Examples.SumcheckFiatShamir

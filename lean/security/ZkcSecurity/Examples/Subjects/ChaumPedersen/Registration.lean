@@ -40,6 +40,7 @@ def subject : Subject F G artifacts .idealMeaning where
   reference := sourceReference (stage .idealMeaning)
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .retained Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites
