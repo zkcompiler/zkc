@@ -30,6 +30,8 @@ namespace zkc {
 /// CFG function premises refer to entry arguments, never same-numbered
 /// successor block arguments. Pure helper-result extraction remains restricted
 /// to admitted single-block mathematical bodies.
+/// A unique successful dispatch of an index.constant binding preserves that
+/// exact literal; arbitrary joins and reached tests supply no literal evidence.
 class MathematicalFactAnalysis {
 public:
   explicit MathematicalFactAnalysis(mlir::Operation *symbolRoot);

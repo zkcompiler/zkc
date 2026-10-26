@@ -5,6 +5,8 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
@@ -406,7 +408,8 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
   }
   bool hasKernels = false;
   source.walk([&](Operation *op) {
-    hasKernels |= (mathematical::isComputationUnit(op) || isa<CallOp>(op));
+    hasKernels |= (mathematical::isComputationUnit(op) ||
+                   isa<CallOp, exec::ComputeOp>(op));
   });
   if (hasKernels) {
     // Reconstruct and check mathematical normalization/frontier only. No
@@ -423,6 +426,10 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
     source = *normalized;
   }
   auto subject = cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+  if (llvm::any_of(subject.getBody().front().getOps<func::FuncOp>(),
+                   protocol::isScopedExecutionFunction))
+    return verifyScopedNumericalContext(subject, after, before, policy, work,
+                                        outcome);
   return Checker(subject, after, before, policy, selections, work, outcome,
                  maps)
       .run();

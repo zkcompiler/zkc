@@ -76,6 +76,12 @@ LogicalResult CallOp::verifySymbolUses(SymbolTableCollection &symbols) {
   if (!entry)
     return refuse(*this, "kernel-call-symbol",
                   "expected the public entry of a sibling computation module");
+  if (auto raw = entry->getAttr("data.preconditions")) {
+    auto conditions = dyn_cast<ArrayAttr>(raw);
+    if (!conditions || !conditions.empty())
+      return refuse(*this, "kernel-call-signature",
+                    "legacy invocation requires an unconditional entry");
+  }
   auto attribute = entry->getAttrOfType<TypeAttr>("function_type");
   auto type =
       attribute ? dyn_cast<FunctionType>(attribute.getValue()) : FunctionType();

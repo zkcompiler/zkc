@@ -1,6 +1,10 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
+#include "../lib/Transforms/FiniteVerification.h"
+#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/ScopedCandidate.h"
+#include "../lib/Transforms/ScopedFinite.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -9,6 +13,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/Execution.h"
@@ -163,6 +168,15 @@ fn dot<F:Field>(a:Vector<F>,b:Vector<F>)->F=primitive("vector.dot");
 fn work(w:Vector<Fr>,f:Vector<Fr>,v:Vector<Fr>)->Fr{let mapped=mul(f,v);let a=dot(w,mapped);let b=dot(w,mapped);return a+b;}
 protocol Run roles(P)(w:Vector<Fr>@P,f:Vector<Fr>@P,v:Vector<Fr>@P)->(v:Fr@P){return work(w,f,v);}
 )",
+     "bls12-381.fr"},
+    {"conditional mathematical helper retains its premise", R"(
+type Vector<F:Field>=builtin("vector",F);
+type Array<F:Field,N:nat>=builtin("field_array",F,N);
+math fn at(xs:Array<Fr,2>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Array<Fr,2>>("container.at",xs,i);}
+math fn pick(xs:Array<Fr,2>,i:index)->Fr{return at(xs,0);}
+fn work(xs:Vector<Fr>,i:index)->Fr{let packed=kernel<Fr,2>("field_array.from_vector",xs);return pick(packed,0);}
+protocol Run roles(P)(xs:Vector<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}
+)",
      "bls12-381.fr"}};
 struct Fixture {
   CheckedProject checked;
@@ -246,10 +260,9 @@ int main() {
               "scoped preparation correspondence failed");
       bool unresolved = false;
       candidate->walk([&](mlir::Operation *op) {
-        unresolved |= isa<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(op);
+        unresolved |= isa<exec::FoldOp, exec::CollectOp>(op);
       });
       if (!unresolved) {
-        auto ports = take(target::ExecutionPorts::read(*candidate));
         target::PhysicalPlanOptions physicalOptions;
         physicalOptions.releaseStorage = true;
         physicalOptions.linearContractions = true;
@@ -262,6 +275,8 @@ int main() {
         auto plan = take(target::proposePhysical(*candidate,
                                                  target::installedCandidates(),
                                                  requests, physicalOptions));
+        auto selected = take(plan.cloneSelectedSubject(*candidate));
+        auto ports = take(target::ExecutionPorts::read(*selected));
         auto checked = take(target::validatePhysical(*candidate, plan));
         auto physical =
             OwningOpRef<ModuleOp>(cast<ModuleOp>((*candidate)->clone()));
@@ -508,6 +523,284 @@ int main() {
               "independent expansion check accepted a changed computation");
     });
   };
+  for (StringRef mutation : {"formula", "site", "origin", "binding contract"})
+    cases.run(
+        "numerical correspondence refuses actual scoped " + mutation, [&] {
+          Fixture fixture(context, samples[0]);
+          auto source = projected(fixture);
+          PassManager lowering(&context);
+          lowering.addPass(protocol::createLowerMathPass());
+          require(succeeded(lowering.run(*source)),
+                  "numerical source preparation failed");
+          auto candidate = kernel::proposeKernelLowering(*source);
+          require(bool(candidate) && succeeded(kernel::verifyKernelLowering(
+                                         *source, *candidate)),
+                  "scoped numerical positive control failed");
+          bool changed = false;
+          candidate->walk([&](exec::ApplyOp op) {
+            if (changed || op.getInputs().size() != 2 ||
+                op.getInputs()[0].getType() != op.getInputs()[1].getType())
+              return;
+            if (mutation == "formula") {
+              auto function = op->getParentOfType<func::FuncOp>();
+              mlir::Value alternative;
+              for (mlir::Value argument : function.getArguments().drop_front())
+                if (argument.getType() == op.getInputs()[0].getType() &&
+                    argument != op.getInputs()[0])
+                  alternative = argument;
+              if (!alternative)
+                return;
+              op->setOperand(1, alternative);
+            } else if (mutation == "site")
+              op.setSite("changed_numerical_occurrence");
+            else if (mutation == "origin") {
+              auto function = op->getParentOfType<func::FuncOp>();
+              function->setAttr(
+                  "runtime.origin",
+                  ArrayAttr::get(&context,
+                                 {StringAttr::get(&context, "changed_origin"),
+                                  ArrayAttr::get(&context, {})}));
+            } else {
+              // Replacing one selected arithmetic instruction with another
+              // legal binding preserves the scoped ABI while changing its
+              // meaning.
+              auto binding = dyn_cast<runtime::BindingOp>(
+                  SymbolTable::lookupNearestSymbolFrom(op,
+                                                       op.getBindingAttr()));
+              if (!binding || binding.getContract() != "field.mul")
+                return;
+              binding.setContract("field.add");
+            }
+            changed = true;
+          });
+          require(changed && succeeded(verify(*candidate)),
+                  "numerical mutation must remain admitted");
+          ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+          require(failed(kernel::verifyKernelLowering(*source, *candidate)),
+                  "changed scoped numerical candidate accepted");
+        });
+  for (unsigned sample : {8u, 9u, 11u})
+    for (bool stops : {false, true})
+      cases.run(
+          std::string(stops ? "stopping scoped finite callback: "
+                            : "returning scoped finite callback: ") +
+              samples[sample].name,
+          [&] {
+            Fixture fixture(context, samples[sample]);
+            fixture.module = protocol::expandScopedHelpers(*fixture.module);
+            require(bool(fixture.module), "finite callback expansion refused");
+            auto sourceOwner = cast<protocol_ir::ProtocolModuleOp>(
+                fixture.module->getBody()->front());
+            mlir::Operation *request = nullptr;
+            fixture.module->walk([&](mlir::Operation *op) {
+              if (isa<exec::FoldOp, exec::CollectOp>(op))
+                request = op;
+            });
+            require(request != nullptr, "missing ordered finite source");
+            finite::Computation computation;
+            require(succeeded(finite::describe(request, computation)),
+                    "finite source ABI refused");
+            // Independently author a small callback against the admitted finite
+            // ABI. These tests isolate domain/control lowering from aggregate
+            // preparation.
+            auto callback = cast<func::FuncOp>(computation.helper);
+            auto payload = cast<exec::OutcomeType>(callback.getResultTypes()[0])
+                               .getPayload();
+            callback.getBody().dropAllReferences();
+            callback.getBody().getBlocks().clear();
+            callback.addEntryBlock();
+            OpBuilder callbackBuilder(&callback.front(),
+                                      callback.front().end());
+            exec::ScopedExecutionBuilder callbackControl(callbackBuilder,
+                                                         callback);
+            if (stops)
+              callbackControl.reject("reject", "callback_stop");
+            else {
+              auto values = callback.getArguments().slice(1, payload.size());
+              require(llvm::equal(ValueRange(values).getTypes(), payload),
+                      "identity callback ports differ");
+              callbackControl.returned(values);
+            }
+            bool erased;
+            do {
+              erased = false;
+              for (auto function : llvm::make_early_inc_range(
+                       sourceOwner.getBody().front().getOps<func::FuncOp>()))
+                if (function->hasAttr("runtime.region") &&
+                    SymbolTable::symbolKnownUseEmpty(function, sourceOwner)) {
+                  function.erase();
+                  erased = true;
+                }
+            } while (erased);
+            require(succeeded(verify(*fixture.module)),
+                    "authored finite source refused");
+            auto closure =
+                take(protocol::readSourceExecutionClosure(sourceOwner));
+            auto location = fixture.module->getLoc();
+            OwningOpRef<ModuleOp> candidate(ModuleOp::create(location));
+            OpBuilder builder(candidate->getBody(),
+                              candidate->getBody()->end());
+            auto owner = protocol_ir::ProtocolModuleOp::create(
+                builder, location, protocol_ir::Profile::Exec);
+            owner.getBody().emplaceBlock();
+            builder.setInsertionPointToEnd(&owner.getBody().front());
+            SmallVector<mlir::Type> types{runtime::ScopeType::get(&context)};
+            llvm::append_range(types, computation.signature.getInputs());
+            auto function = func::FuncOp::create(
+                builder, location, "finite",
+                builder.getFunctionType(
+                    types,
+                    {exec::OutcomeType::get(
+                        &context, SmallVector<mlir::Type>(
+                                      computation.signature.getResults()))}));
+            function.setPrivate();
+            function.setNoInline(true);
+            function->setAttr(
+                "runtime.origin",
+                builder.getArrayAttr({builder.getStringAttr("finite"),
+                                      builder.getArrayAttr({})}));
+            function.addEntryBlock();
+            builder.setInsertionPointToEnd(&function.front());
+            exec::ScopedExecutionBuilder control(builder, function);
+            auto emit = [&](func::FuncOp helper, ValueRange inputs,
+                            StringRef callSite,
+                            exec::ScopedExecutionBuilder &scope)
+                -> FailureOr<finite::ScopedCallbackResult> {
+              require(helper == callback, "unexpected callback identity");
+              if (stops) {
+                scope.reject("reject", callSite.str() + "_stop");
+                return finite::ScopedCallbackResult{{}, true};
+              }
+              return finite::ScopedCallbackResult{
+                  SmallVector<mlir::Value>(inputs.take_front(payload.size())),
+                  false};
+            };
+            mathematical::RealizationWork work;
+            MathematicalSelectionPolicy policy;
+            policy.finiteBulk = false;
+            auto results = finite::realizeScopedExpression(
+                request, function.getArguments().drop_front(), builder, control,
+                emit, work, policy);
+            require(succeeded(results), "scoped finite emission failed");
+            control.returned(*results);
+            require(succeeded(verify(*candidate)),
+                    "scoped finite candidate failed admission");
+            auto actual = take(mathematical::ScopedCandidate::read(owner));
+            mathematical::CandidatePorts ports(actual.get());
+            auto read = [&](func::FuncOp helper, ValueRange inputs,
+                            mlir::Operation *&at)
+                -> FailureOr<finite::ScopedCallbackResult> {
+              const auto &body = closure.bodies.at(helper.getSymName().str());
+              if (body.size() != 1)
+                return failure();
+              if (auto reject =
+                      dyn_cast<exec::RejectOp>(body.front().operation)) {
+                auto stopped = dyn_cast_or_null<exec::RejectOp>(at);
+                if (!stopped || stopped.getReason() != reject.getReason())
+                  return failure();
+                at = ports.next(at);
+                return finite::ScopedCallbackResult{{}, true};
+              }
+              if (!isa<exec::ReturnOp>(body.front().operation))
+                return failure();
+              SmallVector<mlir::Value> returned;
+              for (auto operand : body.front().inputs) {
+                auto position = llvm::find(helper.getArguments(), operand);
+                if (position == helper.getArguments().end() ||
+                    position == helper.getArguments().begin())
+                  return failure();
+                returned.push_back(
+                    inputs[position - helper.getArguments().begin() - 1]);
+              }
+              return finite::ScopedCallbackResult{returned, false};
+            };
+            finite::VerificationLimits limits;
+            limits.candidate = actual.get();
+            limits.callback = read;
+            finite::VerificationResult outcome{
+                finite::VerificationStatus::Mismatch, {}};
+            auto *cursor = ports.first(&function.front());
+            auto pure = [](mlir::Operation *, ValueRange, mlir::Operation *&)
+                -> FailureOr<SmallVector<mlir::Value>> { return failure(); };
+            auto checked = finite::verifyExpression(
+                request, function.getArguments().drop_front(), cursor, pure,
+                sourceOwner, limits, outcome, policy);
+            require(succeeded(checked) && *checked == *results && cursor &&
+                        isa<exec::ReturnOp>(cursor),
+                    "independent finite traversal differs");
+            bool mutated = false;
+            if (stops)
+              candidate->walk([&](exec::RejectOp reject) {
+                reject->setAttr("reason", builder.getStringAttr("abort"));
+                mutated = true;
+              });
+            else
+              candidate->walk([&](exec::RangeOp range) {
+                if (!mutated && range.getLower() != range.getUpper()) {
+                  range->setOperand(2, range.getLower());
+                  mutated = true;
+                }
+              });
+            require(mutated && succeeded(verify(*candidate)),
+                    "finite mutation must remain ordinarily admitted");
+            actual = take(mathematical::ScopedCandidate::read(owner));
+            ports = mathematical::CandidatePorts(actual.get());
+            limits.candidate = actual.get();
+            cursor = ports.first(&function.front());
+            require(failed(finite::verifyExpression(
+                        request, function.getArguments().drop_front(), cursor,
+                        pure, sourceOwner, limits, outcome, policy)),
+                    "finite reader accepted a changed bound or stop reason");
+          });
+  for (bool discharged : {true, false})
+    cases.run(
+        discharged
+            ? "scoped conditional mathematical entry is selectable"
+            : "scoped mathematical use must discharge the actual entry premise",
+        [&] {
+          Fixture fixture(context, samples[std::size(samples) - 1]);
+          func::FuncOp conditional;
+          fixture.module->walk([&](func::FuncOp function) {
+            if (auto premises =
+                    function->getAttrOfType<ArrayAttr>("data.preconditions");
+                premises && !premises.empty())
+              conditional = function;
+          });
+          require(bool(conditional), "missing conditional entry");
+          bool changed = false;
+          fixture.module->walk([&](exec::ComputeOp op) {
+            auto function = op->getParentOfType<func::FuncOp>();
+            if (!changed && function.getNumArguments() == 3 &&
+                op.getInputs().size() == 2 &&
+                function.getArgument(2).getType() ==
+                    op.getInputs()[1].getType()) {
+              op->setAttr("callee", FlatSymbolRefAttr::get(
+                                        &context, conditional.getSymName()));
+              if (!discharged)
+                op->setOperand(2, function.getArgument(2));
+              changed = true;
+            }
+          });
+          require(changed, "missing conditional invocation");
+          if (discharged) {
+            require(succeeded(verify(*fixture.module)),
+                    "actual static entry premise was lost");
+            auto source = projected(fixture);
+            PassManager lowering(&context);
+            lowering.addPass(protocol::createLowerMathPass());
+            require(succeeded(lowering.run(*source)),
+                    "conditional computation preparation refused");
+            auto candidate = kernel::proposeKernelLowering(*source);
+            require(
+                candidate && succeeded(kernel::verifyKernelLowering(
+                                 *source, *candidate)),
+                "conditional computation selection or correspondence refused");
+            return;
+          }
+          ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+          require(failed(verify(*fixture.module)),
+                  "undischarged actual premise accepted");
+        });
   auto preparedMutation = [&](StringRef name, unsigned sample, auto edit,
                               bool formed = true) {
     cases.run(name, [&] {

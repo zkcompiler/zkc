@@ -3,6 +3,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SetVector.h"
@@ -430,17 +431,27 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   llvm::DenseSet<Operation *> shareable;
   SymbolTableCollection symbols;
   SmallVector<KernelNormalizationRewrite> rewrites;
-  SmallVector<CallOp> calls;
-  source.walk([&](CallOp call) { calls.push_back(call); });
+  SmallVector<Operation *> calls;
+  source.walk([&](Operation *op) {
+    if (isa<CallOp, exec::ComputeOp>(op))
+      calls.push_back(op);
+  });
   // One immutable unit can have several actual invocations. Give each proposal
   // a private normalized entry so sharing never changes another invocation.
   SymbolTable outer(owner);
   for (auto sourceCall : calls) {
-    auto call = cast<CallOp>(sourceMapping.lookup(sourceCall.getOperation()));
-    auto raw = resolve(call, symbols);
+    auto *call = sourceMapping.lookup(sourceCall);
+    auto raw = resolveInvocation(call, symbols);
     if (!raw)
       return {};
-    auto unit = cast<mlir::ModuleOp>(raw->getParentOp());
+    auto unit = dyn_cast<mlir::ModuleOp>(raw->getParentOp());
+    OwningOpRef<mlir::ModuleOp> closed;
+    if (!unit || !mathematical::isComputationUnit(unit)) {
+      closed = closeComputation(raw, remaining);
+      if (!closed)
+        return {};
+      unit = *closed;
+    }
     llvm::DenseSet<Operation *> generated;
     auto normalized = normalizeUnit(unit, remaining, generated, capacity);
     if (!normalized)
@@ -451,8 +462,9 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     SymbolTable::setSymbolName(*normalized, "_normalized_kernel");
     auto fresh = normalized.release();
     auto name = outer.insert(fresh, owner.getBody().front().end());
-    call.setCalleeAttr(SymbolRefAttr::get(
-        name, {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
+    call->setAttr("callee",
+                  SymbolRefAttr::get(
+                      name, {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
     shareable.insert(generated.begin(), generated.end());
     rewrites.push_back({sourceCall, call, fresh});
   }

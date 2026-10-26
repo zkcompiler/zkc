@@ -1,3 +1,6 @@
+#include "Kernel/Support.h"
+#include "NumericalSelection.h"
+#include "ScopedSubstitution.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -34,7 +37,18 @@ class ScopedExpander {
   llvm::StringSet<> names;
   unsigned nextRegion = 0;
   unsigned definitions = 0;
-  uint64_t remaining = 100000, remainingBytes = 16 * 1024 * 1024;
+  uint64_t defaultRemaining = 100000, defaultBytes = 16 * 1024 * 1024;
+  uint64_t &remaining, &remainingBytes;
+  const llvm::DenseMap<Operation *, func::FuncOp> *replacements;
+  mathematical::NumericalSelection *selection;
+  std::optional<CapacityCause> *capacity;
+  llvm::DenseSet<Operation *> replacedDefinitions;
+
+  void record(Operation *before, Operation *after) {
+    if (selection)
+      for (auto owner : selection->owners(before))
+        selection->record(after, owner);
+  }
   bool valid = true;
   std::string root;
 
@@ -42,6 +56,9 @@ class ScopedExpander {
     if (!valid)
       return false;
     if (work > remaining) {
+      if (capacity)
+        *capacity =
+            CapacityCause{WorkOwner::AlgorithmExpansion, work, remaining};
       diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit");
       valid = false;
       return false;
@@ -52,6 +69,8 @@ class ScopedExpander {
   bool declaration(Operation *op) {
     if (++definitions <= 4096)
       return true;
+    if (capacity)
+      *capacity = CapacityCause{WorkOwner::AlgorithmExpansion, 1, 0};
     diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit",
                       "expanded definition limit");
     valid = false;
@@ -68,8 +87,21 @@ class ScopedExpander {
     auto original = op->getAttrOfType<StringAttr>("site");
     if (!original)
       return {};
+    if (replacements && path.empty()) {
+      if (original.getValue().size() > remainingBytes) {
+        if (capacity)
+          *capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes,
+                                    original.getValue().size(), remainingBytes};
+        valid = false;
+        return {};
+      }
+      remainingBytes -= original.getValue().size();
+      return original.getValue().str();
+    }
     auto encoded = algorithmSite(path, original.getValue(), remainingBytes);
     if (!encoded) {
+      if (capacity)
+        *capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes};
       diagnostics::emit(op->emitOpError(), encoded.takeError());
       valid = false;
       return {};
@@ -151,6 +183,8 @@ class ScopedExpander {
               exec::ScopedExecutionBuilder &control, const Assignments &path,
               unsigned depth, bool inlineReturn) {
     if (depth > 64) {
+      if (capacity)
+        *capacity = CapacityCause{WorkOwner::AlgorithmExpansion};
       diagnostics::emit(function.emitOpError(), "algorithm-expansion-limit");
       valid = false;
       return {};
@@ -161,6 +195,27 @@ class ScopedExpander {
       if (!charge(op, 1 + step.inputs.size() + step.outputs.size()))
         return {};
       auto inputs = values(step.inputs, env);
+      if (replacements) {
+        auto selected = replacements->find(op);
+        if (selected != replacements->end()) {
+          auto callee = selected->second;
+          Environment arguments;
+          for (auto [formal, actual] :
+               zip(callee.getArguments().drop_front(), inputs))
+            arguments[formal] = actual;
+          auto result =
+              body(callee, std::move(arguments), control, {}, depth + 1, true);
+          if (!valid || result.stopped)
+            return result;
+          if (result.values.size() != step.outputs.size()) {
+            valid = false;
+            return {};
+          }
+          for (auto [before, after] : zip(step.outputs, result.values))
+            env[before] = after;
+          continue;
+        }
+      }
       if (auto call = dyn_cast<func::CallOp>(op)) {
         auto callee = symbols.lookup<func::FuncOp>(call.getCallee());
         Assignments nested(path);
@@ -199,6 +254,8 @@ class ScopedExpander {
         control.reject(reject.getReason(), occurrence);
         return {{}, true};
       }
+      auto *insertion = builder.getInsertionBlock();
+      auto *previous = insertion->empty() ? nullptr : &insertion->back();
       Values outputs;
       auto outputTypes = types(step.outputs);
       if (!step.regions.empty()) {
@@ -229,8 +286,11 @@ class ScopedExpander {
         outputs = control.invoke(op->getName().getStringRef(), outputTypes,
                                  control.scoped(inputs), attributes.getAttrs());
       }
-      if (!valid)
+      if (!valid || outputs.size() != step.outputs.size()) {
+        valid = false;
         return {};
+      }
+      record(op, previous ? previous->getNextNode() : &insertion->front());
       for (auto [before, after] : zip(step.outputs, outputs))
         env[before] = after;
     }
@@ -239,10 +299,21 @@ class ScopedExpander {
   }
 
 public:
-  ScopedExpander(const SourceExecutionClosure &source, Operation *original,
-                 protocol_ir::ProtocolModuleOp target)
+  ScopedExpander(
+      const SourceExecutionClosure &source, Operation *original,
+      protocol_ir::ProtocolModuleOp target,
+      const llvm::DenseMap<Operation *, func::FuncOp> *replacements = nullptr,
+      mathematical::NumericalSelection *selection = nullptr,
+      std::optional<CapacityCause> *capacity = nullptr)
       : source(source), symbols(original), target(target),
-        builder(target.getContext()) {
+        builder(target.getContext()),
+        remaining(selection ? selection->remainingCopy : defaultRemaining),
+        remainingBytes(selection ? selection->remainingSiteBytes
+                                 : defaultBytes),
+        replacements(replacements), selection(selection), capacity(capacity) {
+    if (replacements)
+      for (const auto &replacement : *replacements)
+        replacedDefinitions.insert(replacement.second);
     for (Operation &op : original->getRegion(0).front())
       if (auto name = SymbolTable::getSymbolName(&op))
         names.insert(name.getValue());
@@ -252,11 +323,19 @@ public:
     // Its non-execution declarations remain exact and in their original order.
     for (Operation &op : original->getRegion(0).front()) {
       auto function = dyn_cast<func::FuncOp>(op);
+      if (replacedDefinitions.contains(&op))
+        continue;
       if (!function || !isScopedExecutionFunction(function)) {
         if (!declaration(&op))
           return failure();
         builder.setInsertionPointToEnd(&target.getBody().front());
-        builder.clone(op);
+        IRMapping mapping;
+        auto *copy = builder.clone(op, mapping);
+        record(&op, copy);
+        op.walk([&](Operation *nested) {
+          if (nested != &op)
+            record(nested, mapping.lookup(nested));
+        });
         continue;
       }
       if (function->hasAttr("runtime.region"))
@@ -311,4 +390,63 @@ expandScopedHelpers(ModuleOp source, std::vector<AlgorithmOrigin> *origins) {
     return {};
   return candidate;
 }
+OwningOpRef<ModuleOp> substituteNumericalBodies(
+    ModuleOp source,
+    const llvm::DenseMap<Operation *, func::FuncOp> &replacements,
+    mathematical::NumericalSelection &selection,
+    std::optional<CapacityCause> *capacity) {
+  if (!hasSingleElement(*source.getBody()) ||
+      !kernel::chargeCopy(source, selection.remainingCopy, capacity))
+    return {};
+  auto owner =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+  if (!owner)
+    return {};
+  auto closure = readSourceExecutionClosure(owner);
+  if (!closure) {
+    diagnostics::emit(owner.emitOpError(), closure.takeError());
+    return {};
+  }
+  for (const auto &[operation, function] : replacements) {
+    if (!isa<exec::ComputeOp>(operation) ||
+        operation->getParentOfType<protocol_ir::ProtocolModuleOp>() != owner ||
+        function->getParentOp() != owner.getOperation() ||
+        !isScopedExecutionFunction(function) ||
+        function->hasAttr("runtime.region"))
+      return {};
+    auto compute = cast<exec::ComputeOp>(operation);
+    auto selected = function;
+    auto found = closure->bodies.find(selected.getSymName().str());
+    if (!llvm::equal(selected.getArgumentTypes().drop_front(),
+                     compute.getInputs().getTypes()) ||
+        !llvm::equal(selected.getResultTypes(),
+                     TypeRange{compute.getOutcome().getType()}) ||
+        found == closure->bodies.end() || found->second.empty() ||
+        !isa<exec::ReturnOp>(found->second.back().operation))
+      return {};
+  }
+  OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
+  candidate->getOperation()->setAttrs(source->getAttrs());
+  OpBuilder builder(candidate->getBodyRegion());
+  auto target = protocol_ir::ProtocolModuleOp::create(builder, owner.getLoc(),
+                                                      owner.getProfileAttr());
+  target->setAttrs(owner->getAttrs());
+  target.getBody().push_back(new Block);
+  if (failed(ScopedExpander(*closure, owner, target, &replacements, &selection,
+                            capacity)
+                 .run(owner)))
+    return {};
+  return candidate;
+}
+
 } // namespace zkc::protocol
+
+namespace zkc::mathematical {
+OwningOpRef<ModuleOp> substituteScopedComputations(
+    ModuleOp source,
+    const llvm::DenseMap<Operation *, func::FuncOp> &replacements,
+    NumericalSelection &selection, std::optional<CapacityCause> *capacity) {
+  return protocol::substituteNumericalBodies(source, replacements, selection,
+                                             capacity);
+}
+} // namespace zkc::mathematical

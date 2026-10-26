@@ -16,6 +16,12 @@ mlir::LogicalResult verifyDependencies(mlir::Operation *sourceOwner,
 mlir::OwningOpRef<mlir::func::FuncOp> exactReadback(mlir::func::FuncOp source,
                                                     mlir::Operation *owner,
                                                     uint64_t &remaining);
+// Copy the actual selected helper and its closed mathematical dependencies,
+// retaining all static premises. The source owner has already been admitted.
+mlir::OwningOpRef<mlir::ModuleOp> closeComputation(mlir::func::FuncOp source,
+                                                   uint64_t &remaining);
+mlir::func::FuncOp resolveInvocation(mlir::Operation *call,
+                                     mlir::SymbolTableCollection &symbols);
 // Temporary normalized mathematical subject, including checked extra concrete
 // ports on uniquely invoked generated calculation wrappers. No recipe emission.
 // Executable binding choices are unchanged and do not affect normalization;
@@ -55,11 +61,12 @@ normalizeUnit(mlir::ModuleOp unit, uint64_t &remaining,
               llvm::DenseSet<mlir::Operation *> &polynomialGenerated,
               std::optional<CapacityCause> *capacity = nullptr);
 mlir::FailureOr<MathematicalSelectionPolicy>
-selectionPolicy(CallOp call, MathematicalSelectionPolicy fallback);
+selectionPolicy(mlir::Operation *call, MathematicalSelectionPolicy fallback);
 // The persisted call policy carries the three admitted family flags. Preserve
 // the caller's remaining representation/construction policy when reading it.
 inline mlir::FailureOr<MathematicalSelectionPolicy>
-effectiveSelectionPolicy(CallOp call, MathematicalSelectionPolicy fallback) {
+effectiveSelectionPolicy(mlir::Operation *call,
+                         MathematicalSelectionPolicy fallback) {
   auto policy = selectionPolicy(call, fallback);
   if (succeeded(policy)) {
     policy->calculationBatching = fallback.calculationBatching;
@@ -93,6 +100,13 @@ realizeEntry(mlir::ModuleOp source, llvm::StringRef callSite,
 // participant Entry; whole-program admission applies after insertion. Read the
 // actual CFG, outlined bodies, resource origins and resolved binding closure.
 mlir::LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate);
+
+// Independent comparison of the actual scoped source and numerical candidate.
+mlir::LogicalResult verifyScopedNumericalContext(
+    protocol_ir::ProtocolModuleOp original,
+    protocol_ir::ProtocolModuleOp candidate,
+    protocol_ir::ProtocolModuleOp declarations, MathematicalSelectionPolicy,
+    mathematical::RealizationWork &, mathematical::VerificationDecision &);
 
 // Independent complete-candidate reader, including executable admission,
 // output interface, binding use and occurrence roots. The typed result allows

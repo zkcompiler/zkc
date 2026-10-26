@@ -37,8 +37,12 @@ Standalone clients must perform both checks. Only the symbol name and profile
 marker are admitted module attributes. Entry lookup and profile classification
 are inspection helpers, not admission evidence.
 
-The entry has total, non-affine native data ports and must discharge its own
-mathematical premises. Formal polynomials and quotient elements may occur internally but cannot cross
+The entry has total, non-affine native data ports. Its explicit
+`data.preconditions` remain part of its mathematical contract; public visibility
+selects the entry and does not assert that its premises hold universally. A scoped
+`exec.compute` invocation must discharge those premises using its actual data
+operands. Closing or normalizing a helper retains the conditions verbatim.
+The retiring `kernel.call` path admits only unconditional entries. Formal polynomials and quotient elements may occur internally but cannot cross
 the entry boundary. Private helper conditions are checked against their actual
 arguments. The shared `TotalClosure` analysis checks the mathematical vocabulary,
 dependency closure, bounded access and polynomial observations. An installed

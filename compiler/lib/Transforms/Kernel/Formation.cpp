@@ -80,6 +80,44 @@ void emitGuard(OpBuilder &builder, Location location, Value condition,
 }
 } // namespace
 
+OwningOpRef<mlir::ModuleOp> closeComputation(func::FuncOp source,
+                                             uint64_t &remaining) {
+  if (!source || !source->getParentOp() ||
+      !source->getParentOp()->hasTrait<OpTrait::SymbolTable>())
+    return {};
+  SymbolTable symbols(source->getParentOp());
+  llvm::SetVector<Operation *> closure;
+  closure.insert(source);
+  for (unsigned i = 0; i < closure.size(); ++i)
+    if (failed(dependencies(closure[i], symbols, closure, remaining)))
+      return {};
+  OpBuilder builder(source.getContext());
+  OwningOpRef<mlir::ModuleOp> unit(
+      mlir::ModuleOp::create(builder, source.getLoc(), "_computation"));
+  unit->getOperation()->setAttr("exec.computation", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(unit->getBody());
+  for (Operation *declaration : closure) {
+    if (!chargeCopy(declaration, remaining))
+      return {};
+    auto *copy = builder.clone(*declaration);
+    if (declaration == source.getOperation())
+      cast<func::FuncOp>(copy).setPublic();
+  }
+  if (failed(verifyKernelClosure(source->getParentOp(), source, *unit)) ||
+      failed(mathematical::verifyComputationUnit(*unit)))
+    return {};
+  return unit;
+}
+
+func::FuncOp resolveInvocation(Operation *call,
+                               SymbolTableCollection &symbols) {
+  if (auto scoped = dyn_cast_or_null<exec::ComputeOp>(call))
+    return scoped.resolveCallee(symbols);
+  if (auto legacy = dyn_cast_or_null<CallOp>(call))
+    return resolve(legacy, symbols);
+  return {};
+}
+
 LogicalResult formCalculation(local::FuncOp wrapper, Operation *sourceOwner,
                               MathematicalSelectionPolicy policy) {
   if (!wrapper.getBody().hasOneBlock())
@@ -327,7 +365,7 @@ LogicalResult formCalculation(func::FuncOp wrapper, Operation *sourceOwner,
 }
 
 FailureOr<MathematicalSelectionPolicy>
-selectionPolicy(CallOp call, MathematicalSelectionPolicy fallback) {
+selectionPolicy(Operation *call, MathematicalSelectionPolicy fallback) {
   if (auto raw = call->getAttr("policy")) {
     auto policy = dyn_cast<ArrayAttr>(raw);
     if (!policy || policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||

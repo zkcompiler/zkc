@@ -1,4 +1,5 @@
 #include "FrontierVerification.h"
+#include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
@@ -643,9 +644,12 @@ LogicalResult verifyKernelNormalizationContext(
         declarations.lookup(SymbolTable::getSymbolName(unit)) ||
         !targets.insert(b).second ||
         !context.appendedDeclarations.insert(unit).second ||
-        !context.callees.try_emplace(a, b.getCalleeAttr()).second)
+        !context.callees
+             .try_emplace(a, b->getAttrOfType<SymbolRefAttr>("callee"))
+             .second)
       return refuse(normalized, "invalid or duplicate checked callee rewrite");
-    auto raw = resolve(a, symbols), entry = resolve(b, symbols);
+    auto raw = resolveInvocation(a, symbols),
+         entry = resolveInvocation(b, symbols);
     if (!raw || !entry || entry->getParentOp() != unit.getOperation() ||
         raw.getFunctionType() != entry.getFunctionType())
       return refuse(normalized,
@@ -664,8 +668,7 @@ LogicalResult verifyKernelNormalizationContext(
       !context.appendedDeclarations.empty())
     return refuse(normalized, "normalization changed source context");
   for (auto rewrite : checkedRewrites)
-    if (context.pairs.lookup(rewrite.sourceCall) !=
-        rewrite.normalizedCall.getOperation())
+    if (context.pairs.lookup(rewrite.sourceCall) != rewrite.normalizedCall)
       return refuse(normalized,
                     "normalization rewrote a different ordered call");
   return success();

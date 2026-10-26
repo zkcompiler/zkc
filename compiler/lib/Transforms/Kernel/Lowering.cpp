@@ -2,6 +2,7 @@
 #include "../CheckedCandidate.h"
 #include "../RealizationSubject.h"
 #include "../RealizationTrace.h"
+#include "../ScopedSubstitution.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -9,11 +10,14 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -28,25 +32,35 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
                           mathematical::NumericalSelection &selection,
                           mathematical::VerificationDecision *outcome,
                           bool optionalConstruction) {
-  SmallVector<CallOp> calls;
-  owner.walk([&](CallOp call) { calls.push_back(call); });
+  SmallVector<exec::ComputeOp> calls;
+  owner.walk([&](exec::ComputeOp call) { calls.push_back(call); });
   SymbolTable outer(owner);
-  unsigned nextBinding = 0;
+  unsigned nextBinding = 0, nextFunction = 0;
   llvm::DenseMap<DictionaryAttr, std::string> importedBindings;
+  llvm::DenseMap<Operation *, func::FuncOp> substitutions;
   auto &remaining = selection.remainingCopy;
   auto &remainingBytes = selection.remainingSiteBytes;
   auto &work = selection.work;
+  auto capacity = [&](StringRef detail) {
+    if (outcome)
+      *outcome = {optionalConstruction
+                      ? mathematical::VerificationObservation::OptionalCapacity
+                      : mathematical::VerificationObservation::RequiredCapacity,
+                  detail.str(), CapacityCause{WorkOwner::AlgorithmExpansion}};
+    return failure();
+  };
   for (auto [invocation, call] : enumerate(calls)) {
     selection.enterInvocation(invocation);
     SymbolTableCollection symbols;
-    auto entry = resolve(call, symbols);
+    auto entry = call.resolveCallee(symbols);
     auto policy = effectiveSelectionPolicy(call, fallback);
-    if (!entry || failed(policy))
-      return refuse(call, "invalid numerical closure or policy");
-    auto unit = cast<mlir::ModuleOp>(entry->getParentOp());
-    auto scratch = realizeEntry(unit, call.getSite(), *policy, work, remaining,
-                                remainingBytes, {}, trace, &selection, outcome,
-                                optionalConstruction);
+    if (!entry || failed(policy) ||
+        !mathematical::isComputationUnit(entry->getParentOp()))
+      return refuse(call, "invalid normalized numerical closure or policy");
+    auto scratch =
+        realizeEntry(cast<mlir::ModuleOp>(entry->getParentOp()), call.getSite(),
+                     *policy, work, remaining, remainingBytes, {}, trace,
+                     &selection, outcome, optionalConstruction);
     if (!scratch) {
       if (outcome) {
         outcome->invocation = invocation;
@@ -60,111 +74,119 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     auto output =
         cast<protocol_ir::ProtocolModuleOp>(scratch->getBody()->front());
     auto function =
-        SymbolTable(output).lookup<local::FuncOp>(entry.getSymName());
-    // Import declarations under fresh outer identities. References are renamed
-    // only in this private workspace; nominal domains and source units remain
-    // unchanged. Original fixed bindings are never reused or modified.
+        SymbolTable(output).lookup<func::FuncOp>(entry.getSymName());
+    if (!function)
+      return refuse(call, "missing scoped numerical entry");
+    llvm::StringSet<> reserved;
+    for (auto &definition : output.getBody().front())
+      reserved.insert(SymbolTable::getSymbolName(&definition).getValue());
     StringMap<std::string> renamed;
-    SmallVector<runtime::BindingOp> bindings;
-    for (auto binding : output.getBody().front().getOps<runtime::BindingOp>()) {
-      NamedAttrList signature(binding->getAttrs());
-      signature.erase("sym_name");
-      auto key = signature.getDictionary(owner.getContext());
-      auto found = importedBindings.find(key);
-      if (found != importedBindings.end()) {
-        renamed[binding.getSymName()] = found->second;
+    llvm::DenseSet<Operation *> omitted;
+    for (auto &definition : output.getBody().front()) {
+      auto name = SymbolTable::getSymbolName(&definition);
+      if (auto binding = dyn_cast<runtime::BindingOp>(definition)) {
+        NamedAttrList signature(binding->getAttrs());
+        signature.erase("sym_name");
+        auto key = signature.getDictionary(owner.getContext());
+        if (auto found = importedBindings.find(key);
+            found != importedBindings.end()) {
+          renamed[name.getValue()] = found->second;
+          omitted.insert(&definition);
+          continue;
+        }
+        std::string fresh;
+        do {
+          fresh = "_numerical_binding_" + std::to_string(nextBinding++);
+        } while (outer.lookup(fresh) || !reserved.insert(fresh).second);
+        importedBindings.try_emplace(key, fresh);
+        renamed[name.getValue()] = fresh;
+      } else if (isa<func::FuncOp>(definition)) {
+        std::string fresh;
+        do {
+          fresh = "_numerical_body_" + std::to_string(nextFunction++);
+        } while (outer.lookup(fresh) || !reserved.insert(fresh).second);
+        renamed[name.getValue()] = fresh;
+      } else
+        return refuse(call, "unresolved numerical declaration");
+    }
+    for (auto &definition : output.getBody().front()) {
+      auto old = SymbolTable::getSymbolName(&definition);
+      if (failed(SymbolTable::replaceAllSymbolUses(
+              old,
+              StringAttr::get(owner.getContext(),
+                              renamed.lookup(old.getValue())),
+              output)))
+        return refuse(call, "numerical symbol import refused");
+    }
+    OpBuilder builder(owner.getContext());
+    builder.setInsertionPointToEnd(&owner.getBody().front());
+    for (auto &definition : output.getBody().front()) {
+      auto old = SymbolTable::getSymbolName(&definition);
+      if (omitted.contains(&definition)) {
+        auto *binding = outer.lookup(renamed.lookup(old.getValue()));
+        for (auto occurrence : selection.owners(&definition))
+          selection.record(binding, occurrence);
         continue;
       }
-      std::string name;
-      do {
-        name = "_kernel_binding_" + std::to_string(nextBinding++);
-      } while (outer.lookup(name));
-      importedBindings.try_emplace(key, name);
-      renamed[binding.getSymName()] = name;
-      bindings.push_back(binding);
-    }
-    scratch->walk([&](Operation *op) {
-      if (auto binding = op->getAttrOfType<FlatSymbolRefAttr>("binding")) {
-        auto found = renamed.find(binding.getValue());
-        if (found != renamed.end())
-          op->setAttr("binding",
-                      FlatSymbolRefAttr::get(op->getContext(), found->second));
-      }
-    });
-    OpBuilder builder(owner.getContext());
-    builder.setInsertionPointToStart(&owner.getBody().front());
-    for (auto binding : bindings) {
-      std::optional<CapacityCause> capacity;
-      if (!chargeCopy(binding, remaining, &capacity)) {
-        if (outcome)
-          *outcome = {
-              optionalConstruction
-                  ? mathematical::VerificationObservation::OptionalCapacity
-                  : mathematical::VerificationObservation::RequiredCapacity,
-              "Kernel binding import capacity", capacity};
-        return failure();
-      }
-      auto *copy = builder.clone(*binding.getOperation());
-      SymbolTable::setSymbolName(copy, renamed.lookup(binding.getSymName()));
+      if (!chargeCopy(&definition, remaining))
+        return capacity("numerical declaration import capacity");
+      IRMapping mapping;
+      auto *copy = builder.clone(definition, mapping);
+      SymbolTable::setSymbolName(copy, renamed.lookup(old.getValue()));
       outer.insert(copy);
-    }
-    builder.setInsertionPoint(call);
-    IRMapping values;
-    values.map(function.getArguments(), call.getInputs());
-    for (auto &op : function.getBody().front().without_terminator()) {
-      auto walk = op.walk([&](Operation *nested) {
-        uint64_t cost = 1 + nested->getNumOperands() + nested->getNumResults();
-        if (cost > remaining) {
-          if (outcome)
-            *outcome = {
-                optionalConstruction
-                    ? mathematical::VerificationObservation::OptionalCapacity
-                    : mathematical::VerificationObservation::RequiredCapacity,
-                "Kernel inline copy capacity",
-                CapacityCause{WorkOwner::AlgorithmExpansion, cost, remaining}};
-          return WalkResult::interrupt();
-        }
-        remaining -= cost;
-        return WalkResult::advance();
+      definition.walk([&](Operation *nested) {
+        for (auto occurrence : selection.owners(nested))
+          selection.record(nested == &definition ? copy
+                                                 : mapping.lookup(nested),
+                           occurrence);
       });
-      if (walk.wasInterrupted())
-        return outcome ? failure() : refuse(call, "inlining work limit");
-      builder.clone(op, values);
-      op.walk([&](Operation *nested) {
-        auto owners = selection.owners(nested);
-        for (auto occurrence : owners)
-          selection.record(values.lookup(nested), occurrence);
-      });
+      if (&definition == function.getOperation())
+        substitutions[call] = cast<func::FuncOp>(copy);
     }
-    auto returned = cast<local::ReturnOp>(function.getBody().front().back());
-    if (returned.getNumOperands() != call.getNumResults())
-      return refuse(call, "recipe return interface changed");
-    for (auto [output, value] : zip(call.getResults(), returned.getInputs()))
-      output.replaceAllUsesWith(values.lookup(value));
-    call.erase();
   }
-  // Identity recipes can alias captures that were distinct before inlining.
-  // Rewrite their ports together before physical scheduling sees the module.
-  if (failed(protocol::detail::canonicalizeCaptures(owner)))
-    return refuse(owner, "capture normalization refused");
-  // Formation already checked dormant definitions. They create no executable
-  // work but still cannot remain in physical input, even when there are no
-  // calls.
-  for (auto unit :
-       make_early_inc_range(owner.getBody().front().getOps<mlir::ModuleOp>()))
-    unit.erase();
+  auto module = owner->getParentOfType<mlir::ModuleOp>();
+  std::optional<CapacityCause> substitutionCapacity;
+  auto result = mathematical::substituteScopedComputations(
+      module, substitutions, selection, &substitutionCapacity);
+  if (!result) {
+    if (substitutionCapacity) {
+      if (outcome)
+        *outcome = {
+            optionalConstruction
+                ? mathematical::VerificationObservation::OptionalCapacity
+                : mathematical::VerificationObservation::RequiredCapacity,
+            "scoped numerical substitution capacity", substitutionCapacity};
+      return failure();
+    }
+    return refuse(owner, "scoped numerical substitution refused");
+  }
+  // Remove original mathematical declarations only after their complete source
+  // closure has been admitted and every selected invocation substituted.
+  auto target = cast<protocol_ir::ProtocolModuleOp>(result->getBody()->front());
+  bool finite = false;
+  target.walk(
+      [&](Operation *op) { finite |= isa<exec::FoldOp, exec::CollectOp>(op); });
+  for (auto &definition : make_early_inc_range(target.getBody().front()))
+    if (isa<mlir::ModuleOp>(definition) ||
+        (!finite && (isa<data::DomainOp>(definition) ||
+                     (isa<func::FuncOp>(definition) &&
+                      !protocol::isScopedExecutionFunction(
+                          cast<func::FuncOp>(definition))))))
+      definition.erase();
+  module.walk([&](Operation *op) { selection.origins.erase(op); });
+  module.getBodyRegion().takeBody(result->getBodyRegion());
   return success();
 }
 } // namespace
 LogicalResult discoverKernelCalls(mlir::ModuleOp module,
                                   MathematicalSelectionPolicy fallback,
                                   mathematical::NumericalSelection &selection) {
-  SmallVector<CallOp> calls;
-  module.walk([&](CallOp call) { calls.push_back(call); });
+  SmallVector<exec::ComputeOp> calls;
+  module.walk([&](exec::ComputeOp call) { calls.push_back(call); });
   SymbolTableCollection symbols;
   for (auto [invocation, call] : enumerate(calls)) {
     selection.enterInvocation(invocation);
-    auto entry = resolve(call, symbols);
+    auto entry = call.resolveCallee(symbols);
     auto policy = effectiveSelectionPolicy(call, fallback);
     if (!entry || failed(policy))
       return refuse(call, "invalid numerical closure or policy");

@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_FINITEVERIFICATION_H
 #define ZKC_TRANSFORMS_FINITEVERIFICATION_H
 
+#include "ScopedFinite.h"
 #include "zkc/Transforms/Finite.h"
 
 namespace zkc::mathematical {
@@ -21,6 +22,7 @@ struct VerificationLimits {
   uint64_t *sharedSiteBytes = nullptr;
   // Borrowed actual scoped candidate; mutation invalidates the whole view.
   const mathematical::ScopedCandidate *candidate = nullptr;
+  ScopedCallbackReader callback = {};
 };
 enum class VerificationStatus {
   Verified,

@@ -5,7 +5,9 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -203,6 +205,36 @@ struct MathematicalFactAnalysis::Impl {
         uint64_t n;
         if (!index.getValue().getAsInteger(10, n))
           return {Status::Proven, n};
+      }
+      // A returned payload of the exact index.constant invocation retains its
+      // value. This observes a successful result, not a reached guard or an
+      // assumption about arbitrary CFG block arguments. Multiple predecessors
+      // and control joins deliberately supply no constant evidence.
+      if (auto argument = dyn_cast<BlockArgument>(value);
+          argument && argument.getArgNumber() == 0 &&
+          argument.getOwner()->getNumArguments() == 1 && contains(value)) {
+        auto *block = argument.getOwner();
+        auto *predecessor = block->getSinglePredecessor();
+        auto dispatch = predecessor && !predecessor->empty()
+                            ? dyn_cast<exec::DispatchOp>(predecessor->back())
+                            : exec::DispatchOp();
+        auto apply = dispatch && dispatch.getReturned() == block
+                         ? dispatch.getOutcome().getDefiningOp<exec::ApplyOp>()
+                         : exec::ApplyOp();
+        if (apply && apply.getInputs().empty() &&
+            apply.getParameters().size() == 1 && work.charge()) {
+          auto binding =
+              dyn_cast_or_null<runtime::BindingOp>(resolve(apply, "binding"));
+          auto outcome = cast<exec::OutcomeType>(apply.getOutcome().getType());
+          auto parameter = dyn_cast<StringAttr>(apply.getParameters()[0]);
+          uint64_t n;
+          if (binding && binding.getContract() == "index.constant" &&
+              binding.getArguments().empty() &&
+              outcome.getPayload().size() == 1 &&
+              outcome.getPayload()[0] == value.getType() && parameter &&
+              !parameter.getValue().getAsInteger(10, n))
+            return {Status::Proven, n};
+        }
       }
       auto *call = value.getDefiningOp();
       if (isa_and_nonnull<func::CallOp, local::ApplyOp>(call)) {

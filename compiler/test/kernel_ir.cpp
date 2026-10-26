@@ -352,6 +352,15 @@ int main() {
     )mlir"),
             context);
   });
+  cases.run("computation entry retains explicit mathematical premises", [&] {
+    accepts(standalone(R"mlir(
+      module @unit attributes {exec.computation} {
+        func.func @a(%x:!A,%i:ui64) attributes
+          {data.preconditions=[#data.index_bound<1,0,0>]} {func.return}
+      }
+    )mlir"),
+            context);
+  });
   for (const auto &test : {
            std::tuple<StringRef, StringRef, StringRef>{
                "missing entry", "module @unit attributes {exec.computation} {}",
@@ -403,11 +412,6 @@ int main() {
             "private @r(%r:!runtime.capability<\"rng:bls12-381.fr\">) "
             "{func.return}}",
             "mathematical-formation"},
-           {"entry preconditions",
-            "module @unit attributes {exec.computation} {func.func "
-            "@a(%x:!A,%i:ui64) attributes "
-            "{data.preconditions=[#data.index_bound<1,0,0>]} {func.return}}",
-            "computation-entry"},
            {"dormant recursive helper",
             "module @unit attributes {exec.computation} {func.func @a() "
             "{func.return} func.func "

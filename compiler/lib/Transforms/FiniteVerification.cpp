@@ -36,6 +36,7 @@ class Reader {
   Type index, boolean;
   llvm::DenseMap<Value, Value> actual, cardinalities, offsets;
   bool valid = true, inlineMode = false;
+  bool stoppedCallback = false;
   bool allowBulk;
   HelperReader helperReader;
   const CollectFold *composition = nullptr;
@@ -219,6 +220,11 @@ class Reader {
     return block;
   }
   void end(StringRef name, ValueRange inputs) {
+    if (stoppedCallback) {
+      if (cursor)
+        fail();
+      return;
+    }
     if (cursor && isa<scf::ForOp>(cursor->getParentOp()) &&
         name == "local.yield")
       name = "scf.yield";
@@ -382,13 +388,39 @@ class Reader {
       fail();
       return {};
     }
-    auto environment = bindCallback(*callback, actuals);
+    Value scope;
+    if (c.scoped && cursor && ports.isScoped())
+      scope = cast<func::FuncOp>(cursor->getParentOp()).getArgument(0);
+    auto environment = bindCallback(*callback, actuals, scope);
     if (failed(environment)) {
       fail();
       return {};
     }
     auto *helper = callback->symbol;
     ValueRange args = environment->actuals;
+    if (c.scoped) {
+      if (!limits.callback) {
+        fail();
+        return {};
+      }
+      auto result = limits.callback(cast<func::FuncOp>(helper),
+                                    args.drop_front(), cursor);
+      if (failed(result)) {
+        fail();
+        return {};
+      }
+      stoppedCallback = result->stopped;
+      if ((stoppedCallback && !result->values.empty()) ||
+          (!stoppedCallback &&
+           !llvm::equal(
+               ValueRange(result->values).getTypes(),
+               cast<exec::OutcomeType>(callback->signature.getResult(0))
+                   .getPayload()))) {
+        fail();
+        return {};
+      }
+      return result->values;
+    }
     if (c.total) {
       auto result = helperReader(helper, args, cursor);
       if (failed(result)) {
@@ -457,7 +489,7 @@ class Reader {
         invoke(c.collect ? CallbackRole::Body : CallbackRole::Step,
                {c.collect ? ValueRange{} : state, items,
                 env.take_front(c.arguments), env.drop_front(c.arguments)});
-    if (!valid || !c.collect)
+    if (!valid || stoppedCallback || !c.collect)
       return next;
     auto col = mathematical::interpretCollection(state[0].getType());
     return {kernel(col.append, {state[0], next[0]}, state[0].getType(),
@@ -643,45 +675,49 @@ public:
                           item,
                           ValueRange(environment).take_front(c.arguments),
                           ValueRange(environment).drop_front(c.arguments)});
-      if (!valid || pred.size() != 1)
+      if (!valid || (!stoppedCallback && pred.size() != 1))
         return false;
-      SmallVector<Value> capturedValues;
-      for (ValueRange operands :
-           {ValueRange(current), ValueRange(item), ValueRange(environment)})
-        for (Value value : operands)
-          if (!is_contained(capturedValues, value))
-            capturedValues.push_back(value);
-      SmallVector<Value> bi{pred[0]};
-      append_range(bi, capturedValues);
-      auto *branch = control("local.if", bi, types, 2);
-      auto *following = cursor;
-      SmallVector<Type> branchTypes;
-      for (Value v : capturedValues)
-        branchTypes.push_back(v.getType());
-      auto remap = [&](Block *block, ValueRange operands) {
-        SmallVector<Value> result;
-        for (Value value : operands) {
-          auto position =
-              llvm::find(capturedValues, value) - capturedValues.begin();
-          result.push_back(arguments(block)[position]);
+      if (!stoppedCallback) {
+        SmallVector<Value> capturedValues;
+        for (ValueRange operands :
+             {ValueRange(current), ValueRange(item), ValueRange(environment)})
+          for (Value value : operands)
+            if (!is_contained(capturedValues, value))
+              capturedValues.push_back(value);
+        SmallVector<Value> bi{pred[0]};
+        append_range(bi, capturedValues);
+        auto *branch = control("local.if", bi, types, 2);
+        auto *following = cursor;
+        SmallVector<Type> branchTypes;
+        for (Value v : capturedValues)
+          branchTypes.push_back(v.getType());
+        auto remap = [&](Block *block, ValueRange operands) {
+          SmallVector<Value> result;
+          for (Value value : operands) {
+            auto position =
+                llvm::find(capturedValues, value) - capturedValues.begin();
+            result.push_back(arguments(block)[position]);
+          }
+          return result;
+        };
+        if (auto *yes = enter(branch, 0, branchTypes)) {
+          auto result = transition(remap(yes, current), remap(yes, item),
+                                   remap(yes, environment));
+          end("local.yield", result);
         }
-        return result;
-      };
-      if (auto *yes = enter(branch, 0, branchTypes)) {
-        auto result = transition(remap(yes, current), remap(yes, item),
-                                 remap(yes, environment));
-        end("local.yield", result);
+        stoppedCallback = false;
+        if (auto *no = enter(branch, 1, branchTypes))
+          end("local.yield", remap(no, current));
+        cursor = following;
+        if (!valid)
+          return false;
+        append_range(next, ports.outputs(branch));
       }
-      if (auto *no = enter(branch, 1, branchTypes))
-        end("local.yield", remap(no, current));
-      cursor = following;
-      if (!valid)
-        return false;
-      append_range(next, ports.outputs(branch));
     } else
       next = transition(current, item, environment, bodyArguments[0]);
     append_range(next, captured);
     end("local.yield", next);
+    stoppedCallback = false;
     cursor = after;
     if (!valid)
       return false;

@@ -27,11 +27,11 @@ class RealizationEmitter {
   using Key = std::tuple<std::string, std::vector<std::string>, std::string>;
   std::map<Key, std::string> bindings;
 
-  mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
-                                  const protocol::BindingApplication &);
-
 public:
   RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
+
+  mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
+                                  const protocol::BindingApplication &);
 
   mlir::Operation *emit(mlir::OpBuilder &, mlir::Location, llvm::StringRef site,
                         const protocol::BindingApplication &,

@@ -278,6 +278,7 @@ add_zkc_component(Transforms
   lib/Transforms/Kernel/Verification.cpp
   lib/Transforms/Kernel/Schedule.cpp
   lib/Transforms/Kernel/ScopedSchedule.cpp
+  lib/Transforms/Kernel/ScopedVerification.cpp
   lib/Transforms/Kernel/Recipes.cpp
   lib/Transforms/Kernel/RecipeVerification.cpp
   lib/Transforms/Kernel/Frontier.cpp

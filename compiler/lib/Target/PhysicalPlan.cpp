@@ -1616,7 +1616,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   bool hasKernels = false, hasMaps = false;
   root.walk([&](Operation *op) {
     hasKernels |=
-        (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
+        (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
     hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
   });
   bool hasNumerical = hasKernels || hasMaps;

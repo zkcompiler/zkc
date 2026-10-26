@@ -32,8 +32,8 @@ verifyKernelFrontier(mlir::ModuleOp normalizedBefore,
 // this record grants only the named callee rewrite and appended unit, never
 // changes to source units, interfaces, attributes, actions, or ordered SSA.
 struct KernelNormalizationRewrite {
-  CallOp sourceCall;
-  CallOp normalizedCall;
+  mlir::Operation *sourceCall;
+  mlir::Operation *normalizedCall;
   mlir::ModuleOp normalizedUnit;
 };
 mlir::LogicalResult verifyKernelNormalizationContext(
