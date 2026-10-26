@@ -1,10 +1,14 @@
 #include "../lib/Transforms/ComputationSelection.h"
+#include "../lib/Transforms/FinitePreparation.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalRecipes.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -14,12 +18,15 @@
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <fstream>
 #include <sstream>
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
+namespace sf = zkc::test::scopedFinite;
+namespace sc = zkc::test::scopedComputation;
 namespace {
 const char *source = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
@@ -31,14 +38,25 @@ module { "protocol.module"() ({
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>) -> ()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @step(%state:!F,%item:!F,%xs:!V) -> !F attributes {logical_origin=["step",[]]} {
-   %next = "algebra.exec.field_add"(%state,%item) {binding=@add,parameters=[],site="add"} : (!F,!F)->!F
-   local.return %next : !F
+ func.func private @step(%scope:!runtime.scope,%state:!F,%item:!F,%xs:!V) -> !exec.outcome<(!F)> attributes {no_inline,runtime.origin=["step",[]]} {
+   %next = "exec.apply"(%scope,%state,%item) {binding=@add,parameters=[],site="add"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%next)[^ok,^stop] : (!exec.outcome<(!F)>)->()
+ ^ok(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^stop(%reason:!exec.stop):
+   %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!F)->!F,domain=@items,step=@step} : ()->()
- local.func @work(%xs:!V,%init:!F) -> !F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @fold(%xs,%init) {site="fold"} : (!V,!F)->!F
-   local.return %r : !F
+ func.func @work(%scope:!runtime.scope,%xs:!V,%init:!F) -> !exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %r = "exec.fold"(%scope,%xs,%init) {domain=@items,step=@step,site="fold"} : (!runtime.scope,!V,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%r)[^ok,^stop] : (!exec.outcome<(!F)>)->()
+ ^ok(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^stop(%reason:!exec.stop):
+   %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
  "protocol.func"() ({
  ^entry(%xs:!V,%init:!F):
@@ -62,27 +80,81 @@ std::string fixture(StringRef name) {
   text << stream.rdbuf();
   return text.str();
 }
-std::string linearCollect(unsigned additions, bool subtract = false) {
-  auto text = fixture("collect");
-  auto begin = text.find("   %y =");
-  auto end = text.find("\n }", begin);
-  require(begin != std::string::npos && end != std::string::npos,
-          "missing collect helper body");
-  std::string body, previous = "%x";
-  for (unsigned i = 0; i < additions; ++i) {
-    auto next = "%v" + std::to_string(i);
-    body += "   " + next + " = \"algebra.exec." +
-            (subtract ? "field_subtract\"(%x," + previous
-                      : "field_add\"(" + previous + ",%x") +
-            ") {binding=@mul,parameters=[],site=\"step" + std::to_string(i) +
-            "\"} : (!F,!F)->!F\n";
-    previous = next;
+// Construct the actual scoped callback. Recognition owns a separate, admitted
+// mathematical view; none of these controls mutate that private view.
+void linearBody(func::FuncOp helper, unsigned terms, StringRef binding,
+                unsigned initial, unsigned repeated, bool subtract = false) {
+  helper.getBody().dropAllReferences();
+  helper.getBody().getBlocks().clear();
+  OpBuilder builder(helper.getContext());
+  builder.setInsertionPointToEnd(helper.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, helper);
+  auto item = helper.getArgument(repeated);
+  Value previous = helper.getArgument(initial);
+  for (unsigned i = 0; i < terms; ++i) {
+    auto values = control.invoke(
+        "exec.apply", TypeRange{item.getType()},
+        control.scoped(subtract ? ValueRange{item, previous}
+                                : ValueRange{previous, item}),
+        {builder.getNamedAttr(
+             "binding", FlatSymbolRefAttr::get(helper.getContext(), binding)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr({})),
+         builder.getNamedAttr(
+             "site", builder.getStringAttr("term" + std::to_string(i)))});
+    previous = values.front();
   }
-  body += "   local.return " + previous + " : !F";
-  text.replace(begin, end - begin, body);
-  return replace(text, "contract=\"field.mul\"",
-                 subtract ? "contract=\"field.sub\""
-                          : "contract=\"field.add\"");
+  control.returned(previous);
+}
+OwningOpRef<ModuleOp> linearCollect(MLIRContext &context, unsigned additions,
+                                    bool subtract = false) {
+  auto module = parseSourceString<ModuleOp>(fixture("collect"), &context);
+  require(bool(module), "collect fixture refused");
+  auto binding = SymbolTable(&module->getBody()->front())
+                     .lookup<runtime::BindingOp>("mul");
+  binding.setContract(subtract ? "field.sub" : "field.add");
+  linearBody(sf::function(*module, "square"), additions, "mul", 1, 1, subtract);
+  require(succeeded(verify(*module)), "linear callback refused");
+  return module;
+}
+OwningOpRef<ModuleOp> prepare(ModuleOp source,
+                              mathematical::RealizationWork &work,
+                              MathematicalSelectionPolicy policy = {}) {
+  uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+  std::optional<CapacityCause> capacity;
+  auto result = protocol::prepareScopedFinite(source, work, copy, bytes,
+                                              capacity, policy);
+  require(bool(result), "scoped finite preparation failed");
+  require(succeeded(sf::compare(source, *result)),
+          "independent scoped comparison failed");
+  return result;
+}
+bool reached(ModuleOp module, StringRef name) {
+  return !sf::executionApplications(module, "work", name).empty();
+}
+// Ring depth and scoped callback-analysis capacity are different limits. Read
+// the actual callback with sufficient structural work before testing Ring's
+// exact limit; the default emitter still applies its private callback envelope.
+void checkLaneDepth(ModuleOp module, bool fits) {
+  auto subject = readComputation(module);
+  auto selected = mathematical::selectComputation(subject, {});
+  require(selected.kind == mathematical::RealizationKind::Elementwise &&
+              selected.view && selected.view->callbackBody,
+          "linear callback has no mathematical view");
+  auto &body = *selected.view->callbackBody;
+  auto vector = body.getArgument(1);
+  llvm::DenseMap<Value, mathematical::LaneInput> inputs;
+  inputs[body.getArgument(0)] = {vector, true};
+  inputs[vector] = {vector, false};
+  uint64_t remaining = 1000000;
+  auto admitted = take(
+      mathematical::admitLaneFormula(body, inputs, vector.getType(), &remaining,
+                                     mathematical::mathematicalRecipes()));
+  require(fits ? bool(admitted.formula)
+               : !admitted.formula &&
+                     admitted.status ==
+                         mathematical::LaneRealizationStatus::Capacity &&
+                     admitted.reason == "ring-depth",
+          "exact Ring depth boundary changed");
 }
 void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
   SmallVector<std::string> codes;
@@ -93,14 +165,14 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
   });
   require(!parseSourceString<ModuleOp>(text, &context),
           "invalid IR was admitted");
-  require(llvm::is_contained(codes, code.str()),
-          "missing refusal identifier " + code);
+  require(llvm::is_contained(codes, code.str()), "missing refusal identifier " +
+                                                     code + "; observed " +
+                                                     llvm::join(codes, ", "));
 }
 void pipeline(ModuleOp module, bool optimize = true) {
   PassManager pm(module.getContext());
   pm.addPass(protocol::createProjectProtocolPass(optimize, {optimize, false}));
   pm.addPass(protocol::createLowerMathPass({optimize, false}));
-  pm.addPass(kernel::createLowerKernelsPass());
   pm.addPass(protocol::createSelectPhysicalPass());
   require(succeeded(pm.run(module)), "finite pipeline failed");
 }
@@ -117,29 +189,12 @@ int main(int argc, char **argv) {
   cases.run("repeated associative terms have linear recognition work", [&] {
     uint64_t smallerCost = 0;
     for (unsigned terms : {160u, 320u}) {
-      std::string body, previous = "%state";
-      for (unsigned i = 0; i < terms; ++i) {
-        auto next = "%term" + std::to_string(i);
-        body += "   " + next + " = \"algebra.exec.field_add\"(" + previous +
-                ",%item) {binding=@add,parameters=[],site=\"term" +
-                std::to_string(i) + "\"} : (!F,!F)->!F\n";
-        previous = next;
-      }
-      auto text =
-          replace(source,
-                  "   %next = \"algebra.exec.field_add\"(%state,%item) "
-                  "{binding=@add,parameters=[],site=\"add\"} : (!F,!F)->!F\n"
-                  "   local.return %next : !F",
-                  body + "   local.return " + previous + " : !F");
-      auto module = parseSourceString<ModuleOp>(text, &context);
-      require(bool(module), "long repeated-term fold refused");
-      SymbolTable symbols(&module->getBody()->front());
-      finite::Computation subject, later;
-      require(succeeded(finite::describe(symbols.lookup("fold"), subject)),
-              "long fold has no computation view");
-      SymbolTable laterSymbols(&original->getBody()->front());
-      require(succeeded(finite::describe(laterSymbols.lookup("fold"), later)),
-              "small fold has no computation view");
+      auto module = parseSourceString<ModuleOp>(source, &context);
+      require(bool(module), "fold fixture refused");
+      linearBody(sf::function(*module, "step"), terms, "add", 1, 2);
+      require(succeeded(verify(*module)), "long repeated-term fold refused");
+      auto subject = readComputation(*module);
+      auto later = readComputation(*original);
       auto view = finite::analyzeComputation(subject);
       require(bool(view), "long fold has no structural view");
       finite::ComputationWork shared;
@@ -175,41 +230,28 @@ int main(int argc, char **argv) {
                   declined.outcome() == OptimizationStatus::Capacity &&
                   !exact.equations,
               "short spine allowance did not retain ordered execution");
-      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*module)->clone()));
       mathematical::RealizationWork stageWork;
-      require(succeeded(finite::realizeLocals(*candidate, {}, &stageWork)) &&
-                  succeeded(finite::verifyRealizations(*module, *candidate)),
-              "long spine failed independent realized-payload comparison");
-      bool loop = false, aggregate = false;
-      candidate->walk([&](Operation *op) {
-        loop |= isa<local::LocalForOp>(op);
-        aggregate |= op->getName().getStringRef() ==
-                         protocol::boundOperationName("numerical.sum") ||
-                     op->getName().getStringRef() ==
-                         protocol::boundOperationName("vector.sum");
-      });
-      require(!loop && aggregate, "long repeated spine lost bulk selection");
-      OwningOpRef<ModuleOp> small(cast<ModuleOp>((*original)->clone()));
-      require(succeeded(finite::realizeLocals(*small, {}, &stageWork)) &&
-                  succeeded(finite::verifyRealizations(*original, *small)),
-              "later fold failed with the shared realization context");
-      loop = aggregate = false;
-      small->walk([&](Operation *op) {
-        loop |= isa<local::LocalForOp>(op);
-        aggregate |= op->getName().getStringRef() ==
-                     protocol::boundOperationName("vector.sum");
-      });
-      require(!loop && aggregate, "long spine starved later stage selection");
+      auto candidate = prepare(*module, stageWork);
+      require(!sf::hasLoop(*candidate) &&
+                  (reached(*candidate, "numerical.sum") ||
+                   reached(*candidate, "vector.sum")),
+              "long repeated spine lost bulk selection");
+      auto small = prepare(*original, stageWork);
+      require(!sf::hasLoop(*small) && reached(*small, "vector.sum"),
+              "long spine starved later stage selection");
     }
   });
   cases.run("lane outcomes distinguish decline from construction failure", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("collect"), &context);
     require(bool(module), "collect was refused");
     SymbolTable symbols(&module->getBody()->front());
-    auto helper = symbols.lookup<local::FuncOp>("square");
-    auto vector = helper.getArgument(1);
+    auto subject = readComputation(*module);
+    auto view = finite::analyzeComputation(subject);
+    require(bool(view), "missing collect structural view");
+    auto &body = *view->callbackBody;
+    auto vector = body.getArgument(1);
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
-    inputs[helper.getArgument(0)] = {vector, true};
+    inputs[body.getArgument(0)] = {vector, true};
     inputs[vector] = {vector, false};
     unsigned emitted = 0;
     auto emit = [&](StringRef, ValueRange, Type, ArrayRef<std::string>) {
@@ -218,13 +260,13 @@ int main(int argc, char **argv) {
     };
     uint64_t remaining = 0;
     auto declined = take(mathematical::realizeLanes(
-        helper.getBody().front(), inputs, vector.getType(), {}, &remaining,
+        body, inputs, vector.getType(), {}, &remaining,
         mathematical::mathematicalRecipes(), emit));
     require(declined.status == mathematical::LaneRealizationStatus::Capacity &&
                 declined.reason == "mathematical-lane-work" && !emitted,
             "optional capacity emitted part of a candidate");
     remaining = 1000;
-    auto work = symbols.lookup<local::FuncOp>("work");
+    auto work = symbols.lookup<func::FuncOp>("work");
     llvm::DenseMap<Value, mathematical::LaneInput> noInputs;
     auto unsupported = take(mathematical::realizeLanes(
         work.getBody().front(), noInputs, vector.getType(), {}, &remaining,
@@ -236,71 +278,91 @@ int main(int argc, char **argv) {
             "unsupported formula emitted part of a candidate");
     remaining = 1000;
     refuses(mathematical::realizeLanes(
-                helper.getBody().front(), inputs, vector.getType(), {},
-                &remaining, mathematical::mathematicalRecipes(), emit),
+                body, inputs, vector.getType(), {}, &remaining,
+                mathematical::mathematicalRecipes(), emit),
             "mathematical-lane-realization");
     require(emitted == 1, "construction failure did not come from the emitter");
   });
-  for (unsigned additions : {1023u, 1024u})
+  for (unsigned additions : {512u, 1023u, 1024u})
     cases.run("optional lane depth " + std::to_string(additions), [&] {
-      auto text = linearCollect(additions);
-      for (bool prepare : {false, true}) {
-        auto module = parseSourceString<ModuleOp>(text, &context);
-        require(bool(module), "valid linear collect was refused");
-        if (prepare) {
+      for (bool prepareSource : {false, true}) {
+        auto module = linearCollect(context, additions);
+        if (prepareSource) {
           PassManager pm(&context);
           pm.addPass(protocol::createPrepareProtocolPass());
-          require(succeeded(pm.run(*module)), "prepare lost ordered fallback");
-        } else
-          require(succeeded(finite::realizeLocals(*module)),
-                  "optional Ring capacity rejected ordered collect");
-        bool loop = false, lanes = false;
-        module->walk([&](Operation *op) {
-          loop |= isa<local::LocalForOp>(op);
-          lanes |= op->getName().getStringRef() == "algebra.exec.vector_add";
-        });
-        require(loop == (additions == 1024) && lanes == !loop,
-                "depth boundary did not select bulk or clean fallback");
+          require(succeeded(pm.run(*module)), "source preparation failed");
+        }
+        checkLaneDepth(*module, additions < 1024);
+        if (additions >= 1023) {
+          finite::ComputationWork shared;
+          mathematical::ComputationSelection selected;
+          auto subject = readComputation(*module);
+          {
+            finite::CallbackStructuralWork callback(
+                shared, selected.diagnostic.outcome);
+            selected = mathematical::selectComputation(subject, {},
+                                                       callback.remaining);
+          }
+          require(selected.kind == mathematical::RealizationKind::Ordered &&
+                      selected.outcome() == OptimizationStatus::Capacity &&
+                      selected.diagnostic.outcome.capacity &&
+                      selected.diagnostic.outcome.capacity->owner ==
+                          WorkOwner::FiniteCallbackStructural &&
+                      shared.structural ==
+                          finite::ComputationWork{}.structural -
+                              finite::callbackStructuralLimit,
+                  "scoped callback limit lost its cause or shared debit");
+        }
+        auto candidate = sf::prepare(*module);
+        require(succeeded(sf::compare(*module, *candidate)),
+                "linear collection comparison failed");
+        bool loop = sf::hasLoop(*candidate);
+        bool lanes = reached(*candidate, "vector.add") ||
+                     reached(*candidate, "numerical.map");
+        require(
+            loop == (additions >= 1023) && lanes == !loop,
+            "scoped callback capacity did not select bulk or clean fallback");
       }
     });
   for (unsigned subtractions : {511u, 512u})
     cases.run(
         "right-nested subtraction depth " + std::to_string(subtractions), [&] {
-          auto module = parseSourceString<ModuleOp>(
-              linearCollect(subtractions, true), &context);
-          require(bool(module), "valid subtraction collection was refused");
-          require(succeeded(finite::realizeLocals(*module)),
-                  "subtraction depth rejected ordered fallback");
-          bool loop = false, lanes = false;
-          module->walk([&](Operation *op) {
-            loop |= isa<local::LocalForOp>(op);
-            lanes |= op->getName().getStringRef() == "algebra.exec.vector_sub";
-          });
+          auto module = linearCollect(context, subtractions, true);
+          checkLaneDepth(*module, subtractions == 511);
+          auto candidate = sf::prepare(*module);
+          require(succeeded(sf::compare(*module, *candidate)),
+                  "subtraction collection comparison failed");
+          bool loop = sf::hasLoop(*candidate);
+          bool lanes = reached(*candidate, "vector.sub") ||
+                       reached(*candidate, "numerical.map");
           require(loop == (subtractions == 512) && lanes == !loop,
                   "subtraction's extra negation depth lost clean fallback");
         });
-  cases.run("lane work is shared across definitions", [&] {
-    auto text = fixture("collect");
-    auto begin = text.find(" \"local.finite_collect\"");
-    auto end = text.find('\n', begin);
-    require(begin != std::string::npos && end != std::string::npos,
-            "missing collect declaration");
-    auto second = replace(text.substr(begin, end - begin),
-                          "sym_name=\"collect\"", "sym_name=\"second\"");
-    text.insert(end, "\n" + second);
-    for (uint64_t allowance : {0u, 64u}) {
-      auto module = parseSourceString<ModuleOp>(text, &context);
-      require(bool(module), "two collects were refused");
+  cases.run("lane work is shared across invocations", [&] {
+    auto original = parseSourceString<ModuleOp>(fixture("collect"), &context);
+    require(bool(original), "collect fixture refused");
+    // Measure one invocation, then give two occurrences exactly that allowance.
+    mathematical::RealizationWork measured;
+    uint64_t initial = measured.lanes;
+    auto single = prepare(*original, measured);
+    auto cost = initial - measured.lanes;
+    require(cost && !sf::hasLoop(*single), "missing lane-work control");
+    auto helper = sf::function(*original, "work");
+    exec::CollectOp collect;
+    helper.walk([&](exec::CollectOp op) { collect = op; });
+    require(bool(collect), "missing collection");
+    auto second = sc::duplicateInvocation(collect, helper, "second");
+    sc::returned(helper)->setOperand(0, sc::payload(second).front());
+    require(succeeded(verify(*original)), "two invocations refused");
+    for (uint64_t allowance : {uint64_t(0), cost}) {
       mathematical::RealizationWork work;
       work.lanes = allowance;
-      require(succeeded(finite::realizeLocals(*module, {}, &work)),
-              "lane exhaustion refused an ordered implementation");
-      unsigned loops = 0, lanes = 0;
-      module->walk([&](Operation *op) {
-        loops += isa<local::LocalForOp>(op);
-        lanes += op->getName().getStringRef() == "algebra.exec.vector_mul" ||
-                 op->getName().getStringRef() == "algebra.exec.numerical_map";
-      });
+      auto candidate = prepare(*original, work);
+      unsigned loops = 0;
+      candidate->walk([&](exec::RangeOp) { ++loops; });
+      auto lanes =
+          sf::executionApplications(*candidate, "work", "vector.mul").size() +
+          sf::executionApplications(*candidate, "work", "numerical.map").size();
       require(loops == (allowance ? 1u : 2u) && lanes == 2 - loops,
               "lane budget was reset or a declined candidate emitted payload");
       require(work.lanes == 0, "lane work was not charged to the caller");
@@ -339,26 +401,16 @@ int main(int argc, char **argv) {
   });
   for (bool optimize : {false, true})
     cases.run(optimize ? "native sum" : "generic fold", [&] {
-      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
-      require(succeeded(finite::realizeLocals(*candidate, {optimize, false})),
-              "finite realization failed");
-      require(succeeded(finite::verifyRealizations(*original, *candidate)),
+      auto candidate = sf::prepare(*original, {optimize, false});
+      require(succeeded(sf::compare(*original, *candidate)),
               "independent correspondence failed");
-      bool found = false;
-      candidate->walk([&](Operation *op) {
-        if (optimize &&
-            op->getName().getStringRef() == "algebra.exec.vector_sum")
-          found = true;
-        if (!optimize && isa<local::LocalForOp>(op))
-          found = true;
-      });
-      require(found, "required realization missing");
-      candidate->walk([&](local::ReturnOp ret) {
-        auto function = ret->getParentOfType<local::FuncOp>();
-        if (function.getSymName() == "fold")
-          ret->setOperand(0, function.getArgument(1));
-      });
-      require(failed(finite::verifyRealizations(*original, *candidate)),
+      require(optimize ? reached(*candidate, "vector.sum")
+                       : sf::hasLoop(*candidate),
+              "required realization missing");
+      auto root = sf::function(*candidate, "work");
+      sc::returned(root)->setOperand(0, root.getArgument(2));
+      require(succeeded(verify(*candidate)), "result mutation malformed");
+      require(failed(sf::compare(*original, *candidate)),
               "mutated result accepted");
     });
   for (bool optimize : {false, true})
@@ -368,7 +420,6 @@ int main(int argc, char **argv) {
       pm.addPass(
           protocol::createProjectProtocolPass(optimize, {optimize, false}));
       pm.addPass(protocol::createLowerMathPass({optimize, false}));
-      pm.addPass(kernel::createLowerKernelsPass());
       pm.addPass(protocol::createSelectPhysicalPass());
       require(succeeded(pm.run(*candidate)), "finite pipeline failed");
     });
@@ -387,13 +438,15 @@ int main(int argc, char **argv) {
                   protocol::createPrepareProtocolPass(simplify, policy));
               require(succeeded(prepare.run(*candidate)),
                       "policy preparation failed");
-              bool sum = false, loop = false;
-              candidate->walk([&](Operation *op) {
-                sum |=
-                    op->getName().getStringRef() == "algebra.exec.vector_sum";
-                loop |= isa<local::LocalForOp>(op);
-              });
-              require(sum == bulk && loop == !bulk,
+              require(!sf::hasLoop(*candidate) &&
+                          !reached(*candidate, "vector.sum"),
+                      "source preparation selected executable work early");
+              bool finiteRequest = false;
+              candidate->walk([&](exec::FoldOp) { finiteRequest = true; });
+              require(finiteRequest, "source preparation lost finite meaning");
+              auto selected = sf::prepare(*candidate, policy);
+              require(reached(*selected, "vector.sum") == bulk &&
+                          sf::hasLoop(*selected) == !bulk,
                       "finite selection followed simplify or fusion");
               OwningOpRef<ModuleOp> projected(
                   cast<ModuleOp>((*candidate)->clone()));
@@ -405,7 +458,7 @@ int main(int argc, char **argv) {
               require(succeeded(mathematical::verifyAuthoredLocalsPreserved(
                           &candidate->getBody()->front(),
                           &projected->getBody()->front())),
-                      "projection changed accepted Local algorithms");
+                      "projection changed accepted scoped definitions");
               auto total = parseSourceString<ModuleOp>(fixture("total-collect"),
                                                        &context);
               require(bool(total), "total fixture refused");
@@ -413,26 +466,26 @@ int main(int argc, char **argv) {
               demand.addPass(
                   protocol::createProjectProtocolPass(simplify, policy));
               demand.addPass(protocol::createLowerMathPass(policy));
-              demand.addPass(kernel::createLowerKernelsPass());
+              demand.addPass(protocol::createSelectPhysicalPass());
               require(succeeded(demand.run(*total)),
                       "total demand policy failed");
               bool totalLoop = false;
-              total->walk([&](local::LocalForOp) { totalLoop = true; });
+              total->walk([&](exec::RangeOp) { totalLoop = true; });
               require(totalLoop == !bulk,
                       "total demand ignored finite family policy");
             }
           });
-  cases.run("default preparation selects bulk without generic simplify", [&] {
+  cases.run("default source preparation retains finite requests", [&] {
     auto candidate = mathematical::rewriteLocalAlgorithms(*original);
-    require(bool(candidate), "checked Local preparation failed");
-    bool sum = false, originalFinite = false;
-    candidate->walk([&](Operation *op) {
-      sum |= op->getName().getStringRef() == "algebra.exec.vector_sum";
-    });
-    original->walk(
-        [&](Operation *op) { originalFinite |= finite::isDeclaration(op); });
-    require(sum && originalFinite,
-            "default preparation changed source or omitted bulk selection");
+    require(bool(candidate), "checked source preparation failed");
+    bool retained = false;
+    candidate->walk([&](exec::FoldOp) { retained = true; });
+    require(retained && !reached(*candidate, "vector.sum") &&
+                !sf::hasLoop(*candidate),
+            "source preparation changed the selection boundary");
+    auto selected = sf::prepare(*candidate);
+    require(reached(*selected, "vector.sum") && !sf::hasLoop(*selected),
+            "default executable preparation omitted bulk selection");
   });
   cases.run("descriptor arbitrary expression refused", [&] {
     auto invalid = replace(
@@ -442,15 +495,11 @@ int main(int argc, char **argv) {
             "descriptor evaluated arbitrary expression");
   });
   cases.run("same helper name changed body refused", [&] {
-    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*original)->clone()));
-    require(succeeded(finite::realizeLocals(*candidate)),
-            "finite realization failed");
-    candidate->walk([&](local::FuncOp function) {
-      if (function.getSymName() == "step")
-        function.getBody().front().back().setOperand(0,
-                                                     function.getArgument(0));
-    });
-    require(failed(finite::verifyRealizations(*original, *candidate)),
+    auto candidate = sf::prepare(*original);
+    auto helper = sf::function(*candidate, "step");
+    sc::returned(helper)->setOperand(0, helper.getArgument(1));
+    require(succeeded(verify(*candidate)), "changed helper malformed");
+    require(failed(sf::compare(*original, *candidate)),
             "stale helper accepted");
   });
   for (StringRef name : {"dot",
@@ -516,20 +565,15 @@ int main(int argc, char **argv) {
           lower.addPass(
               protocol::createProjectProtocolPass(optimize, {optimize, false}));
           lower.addPass(protocol::createLowerMathPass({optimize, false}));
-          lower.addPass(kernel::createLowerKernelsPass());
           require(succeeded(lower.run(*module)),
                   "ignored capture lowering failed");
-          unsigned additions = 0;
-          module->walk([&](Operation *op) {
-            additions += op->getName().getStringRef() ==
-                         protocol::boundOperationName("field.add");
-          });
-          require(additions == 1,
-                  "eager capture calculation was removed or duplicated");
           PassManager physical(&context);
           physical.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(physical.run(*module)),
                   "ignored capture physical selection failed");
+          unsigned additions = sf::applications(*module, "field.add").size();
+          require(additions == 1,
+                  "eager capture calculation was removed or duplicated");
         });
   cases.run("finite repeated state fixed point and conservative cloning", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("total-state"), &context);
@@ -575,9 +619,15 @@ int main(int argc, char **argv) {
         context, "finite-bound");
   });
   cases.run("affine state swapping refused", [&] {
-    refusesIR(
-        replace(fixture("affine"), "local.return %a,%b", "local.return %b,%a"),
-        context, "mathematical-formation");
+    auto module = parseSourceString<ModuleOp>(fixture("affine"), &context);
+    require(bool(module), "affine fixture refused");
+    auto helper = sf::function(*module, "step");
+    sc::returned(helper)->setOperands(
+        ValueRange{helper.getArgument(2), helper.getArgument(1)});
+    std::string text;
+    llvm::raw_string_ostream out(text);
+    module->print(out);
+    refusesIR(text, context, "execution-source-closure");
   });
   cases.run("unknown bound boolean refused", [&] {
     refusesIR(replace(fixture("total-state"),
@@ -682,77 +732,66 @@ int main(int argc, char **argv) {
     refusesIR(text, context, "finite-domain");
   });
   for (StringRef name : {"dot", "collect"})
-    cases.run(name + " actual kernel operand mutation", [&] {
+    cases.run(name + " actual executable operand mutation", [&] {
       auto before = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(before), "fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)), "realization failed");
-      bool changed = false;
-      after->walk([&](Operation *op) {
-        if (op->getName().getStringRef() == "algebra.exec.vector_dot") {
-          op->setOperand(1, op->getOperand(0));
-          changed = true;
-        } else if (name == "collect" &&
-                   (op->getName().getStringRef() == "algebra.exec.vector_mul" ||
-                    op->getName().getStringRef() ==
-                        "algebra.exec.numerical_map")) {
-          auto function = op->getParentOfType<local::FuncOp>();
-          function.getBody().front().back().setOperand(0,
-                                                       function.getArgument(0));
-          changed = true;
-        }
-      });
-      require(changed, "native realization missing");
-      require(failed(finite::verifyRealizations(*before, *after)),
+      auto after = sf::prepare(*before);
+      if (name == "dot") {
+        auto dots = sf::executionApplications(*after, "work", "vector.dot");
+        require(dots.size() == 1, "native dot missing");
+        dots.front().getInputsMutable()[1].set(dots.front().getInputs()[0]);
+      } else {
+        require(reached(*after, "vector.mul") ||
+                    reached(*after, "numerical.map"),
+                "native collection missing");
+        auto helper = sf::function(*after, "work");
+        sc::returned(helper)->setOperand(0, helper.getArgument(1));
+      }
+      require(succeeded(verify(*after)), "operand mutation malformed");
+      require(failed(sf::compare(*before, *after)),
               "changed native candidate accepted");
     });
   for (StringRef name : {"dot", "filter"})
     cases.run(name + " removed ignored shape guard", [&] {
       auto before = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(before), "fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)), "realization failed");
-      Operation *last = nullptr;
-      after->walk([&](Operation *op) {
-        if (op->getName().getStringRef() == "local.exec.require")
-          last = op;
-      });
-      if (!last)
-        after->walk([&](Operation *op) {
-          auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-          auto binding =
-              ref ? dyn_cast_or_null<runtime::BindingOp>(
-                        SymbolTable::lookupNearestSymbolFrom(op, ref))
-                  : runtime::BindingOp();
-          if (binding && binding.getContract() == "control.require")
-            last = op;
-        });
-      require(last, "shape guard missing");
-      last->erase();
-      require(failed(finite::verifyRealizations(*before, *after)),
+      auto after = sf::prepare(*before);
+      auto guards =
+          sf::executionApplications(*after, "work", "control.require");
+      require(!guards.empty(), "shape guard missing");
+      sc::omit(guards.back());
+      require(succeeded(verify(*after)), "guard omission malformed");
+      require(failed(sf::compare(*before, *after)),
               "removed ignored guard accepted");
     });
   cases.run("actual predicate arms exchanged", [&] {
     auto before = parseSourceString<ModuleOp>(fixture("filter"), &context);
-    OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after, {false, false})),
-            "realization failed");
-    local::LocalIfOp branch;
-    after->walk([&](local::LocalIfOp op) { branch = op; });
+    require(bool(before), "filter fixture refused");
+    auto after = sf::prepare(*before, {false, false});
+    cf::CondBranchOp branch;
+    after->walk([&](cf::CondBranchOp op) { branch = op; });
     require(bool(branch), "predicate branch missing");
-    Region temporary;
-    temporary.takeBody(branch->getRegion(0));
-    branch->getRegion(0).takeBody(branch->getRegion(1));
-    branch->getRegion(1).takeBody(temporary);
-    require(failed(finite::verifyRealizations(*before, *after)),
-            "predicate arms exchanged");
+    auto armCall = [&](Block *arm) {
+      auto enter = cast<runtime::EnterScopeOp>(arm->front());
+      auto dispatch = cast<exec::DispatchOp>(enter->getNextNode());
+      return cast<func::CallOp>(dispatch.getReturned()->front());
+    };
+    auto first = armCall(branch.getTrueDest());
+    auto second = armCall(branch.getFalseDest());
+    auto callee = first.getCalleeAttr();
+    first.setCalleeAttr(second.getCalleeAttr());
+    second.setCalleeAttr(callee);
+    require(succeeded(verify(*after)), "arm exchange malformed");
+    require(failed(sf::compare(*before, *after)), "predicate arms exchanged");
   });
-  cases.run("finite local static reference cycle", [&] {
-    auto text = replace(
-        source,
-        "%next = \"algebra.exec.field_add\"(%state,%item) "
-        "{binding=@add,parameters=[],site=\"add\"} : (!F,!F)->!F",
-        "%next = local.apply @fold(%xs,%state) {site=\"recur\"} : (!V,!F)->!F");
+  cases.run("finite scoped static reference cycle", [&] {
+    auto text = replace(source,
+                        "%next = \"exec.apply\"(%scope,%state,%item) "
+                        "{binding=@add,parameters=[],site=\"add\"}",
+                        "%next = \"exec.fold\"(%scope,%xs,%state) "
+                        "{domain=@items,step=@step,site=\"recur\"}");
+    text = replace(text, "(!runtime.scope,!F,!F)->!exec.outcome<(!F)>",
+                   "(!runtime.scope,!V,!F)->!exec.outcome<(!F)>");
     refusesIR(text, context, "finite-cycle");
   });
   cases.run("nested total static reference cycle", [&] {
@@ -893,36 +932,50 @@ int main(int argc, char **argv) {
     PassManager lower(&context);
     lower.addPass(protocol::createLowerMathPass({false, false}));
     require(succeeded(lower.run(*after)), "lowering failed");
-    bool changed = false;
-    after->walk([&](local::ReturnOp op) {
-      if (op.getNumOperands() == 2) {
-        Value first = op.getOperand(0);
-        op->setOperand(0, op.getOperand(1));
-        op->setOperand(1, first);
-        changed = true;
-      }
+    require(succeeded(mathematical::verifyProjectionPreserved(*before, *after,
+                                                              {false, false})),
+            "unmodified total lowering failed independent comparison");
+    // Lowering retains an actual compute request and its ordered result ports.
+    // Swapping those uses in the participant must fail projection comparison.
+    protocol_ir::LocalCallOp call;
+    after->walk([&](protocol_ir::LocalCallOp op) {
+      if (op.getNumResults() == 2)
+        call = op;
     });
-    require(changed, "multi-result calculation missing");
-    require(failed(mathematical::verifyProjectionPreserved(*before, *after)),
+    require(bool(call), "multi-result calculation missing");
+    SmallVector<OpOperand *> first, second;
+    for (auto &use : call.getResult(0).getUses())
+      first.push_back(&use);
+    for (auto &use : call.getResult(1).getUses())
+      second.push_back(&use);
+    for (auto *use : first)
+      use->set(call.getResult(1));
+    for (auto *use : second)
+      use->set(call.getResult(0));
+    require(succeeded(verify(*after)), "result exchange malformed");
+    require(failed(mathematical::verifyProjectionPreserved(*before, *after,
+                                                           {false, false})),
             "exchanged total results accepted");
   });
   for (StringRef name : {"matrix-row", "matrix-column", "msm", "product"})
     cases.run(name + " native operand mutation", [&] {
       auto before = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(before), "fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)), "realization failed");
-      bool changed = false;
-      after->walk([&](local::FuncOp function) {
-        if (function.getSymName() != "fold")
-          return;
-        auto &body = function.getBody().front();
-        body.back().setOperand(
-            0, function.getArgument(function.getNumArguments() - 1));
-        changed = true;
-      });
-      require(changed, "native result missing");
-      require(failed(finite::verifyRealizations(*before, *after)),
+      auto after = sf::prepare(*before);
+      if (name == "msm") {
+        auto equal = sf::executionApplications(*after, "work", "curve.equal");
+        auto scales = sf::executionApplications(*after, "work", "curve.scale");
+        require(equal.size() == 1 && scales.size() == 2,
+                "missing MSM comparison or seed");
+        equal.front().getInputsMutable()[0].set(
+            sc::payload(scales.front()).front());
+      } else {
+        auto helper = sf::function(*after, "work");
+        sc::returned(helper)->setOperand(
+            0, helper.getArgument(helper.getNumArguments() - 1));
+      }
+      require(succeeded(verify(*after)), "result mutation malformed");
+      require(failed(sf::compare(*before, *after)),
               "changed native result accepted");
     });
   if (checkedAccess) {
@@ -948,18 +1001,14 @@ int main(int argc, char **argv) {
         auto before =
             parseSourceString<ModuleOp>(fixture("bilinear"), &context);
         require(bool(before), "bilinear source refused");
-        OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-        require(succeeded(finite::realizeLocals(*after)),
-                "bilinear realization failed");
-        bool changed = false;
-        after->walk([&](Operation *op) {
-          if (op->getName().getStringRef() == "algebra.exec.matrix_bilinear") {
-            op->setOperand(2, op->getOperand(1));
-            changed = true;
-          }
-        });
-        require(changed, "bilinear native kernel missing");
-        require(failed(finite::verifyRealizations(*before, *after)),
+        auto after = sf::prepare(*before);
+        auto products =
+            sf::executionApplications(*after, "work", "matrix.bilinear");
+        require(products.size() == 1, "bilinear native invocation missing");
+        products.front().getInputsMutable()[2].set(
+            products.front().getInputs()[1]);
+        require(succeeded(verify(*after)), "bilinear mutation malformed");
+        require(failed(sf::compare(*before, *after)),
                 "wrong bilinear vector accepted");
       });
     }
