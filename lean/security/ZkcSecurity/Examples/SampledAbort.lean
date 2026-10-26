@@ -80,7 +80,8 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
     decide_true, decide_false, Bool.false_beq, and_true, true_and, and_self,
     Template.origin, Template.qualify, Template.applicationPrefix, Template.repeats,
     Context.query, Context.role, Origin.query, Origin.message, Domain.atCoordinates,
-    Request.draw]
+    Request.draw, Context.fiatShamir, Context.replacement?, Context.request, Context.contract,
+    Context.suite, Ty.isService, dite_true]
   conv_lhs => simp [PIR.Process.runM, Domain.handler, PIR.Execution.followM,
     SampledCompiled.services, SampledCompiled.privateServices, SampledCompiled.allowed,
     ZkcExamples.Construction.Generated.SampledAbortPair.Producer.participant,

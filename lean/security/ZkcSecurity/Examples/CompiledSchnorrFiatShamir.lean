@@ -175,7 +175,7 @@ theorem transform_experiment {m : Type → Type} [Monad m] [LawfulMonad m]
   rcases proof with ⟨commitment, response⟩
   simp [Zkc.Protocols.Schnorr.Common.experiment, transform_eq_done, transform_eq_receive,
     transform_eq_query, transform_eq_send, Payload.value, Payload.ofValue, SchnorrProof.wiring, ZkcExamples.NativePrograms.Schnorr.wiring, commitmentOrigin,
-    challengeOrigin, SchnorrProof.context_eq]
+    challengeOrigin, SchnorrProof.context_eq, Context.fiatShamir]
 
 /-- Prover oracles: uniform coins and the transcript oracle on histories. -/
 abbrev HistorySpec (F G : Type) := unifSpec + (History F G →ₒ F)
