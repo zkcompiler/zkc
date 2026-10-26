@@ -2,12 +2,15 @@
 #include "../lib/Transforms/MathematicalComparison.h"
 #include "../lib/Transforms/MathematicalRecipes.h"
 #include "../lib/Transforms/RealizationEmission.h"
+#include "../lib/Transforms/ScopedPreparation.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Finite.h"
@@ -43,10 +46,30 @@ std::string fieldText(std::string text, StringRef field) {
 Operation *operation(ModuleOp module, StringRef contract) {
   Operation *result = nullptr;
   module.walk([&](Operation *op) {
-    if (op->getName().getStringRef() == protocol::boundOperationName(contract))
+    auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+    auto declaration =
+        reference ? SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                        op, reference)
+                  : runtime::BindingOp{};
+    if (declaration && declaration.getContract() == contract)
       result = op;
   });
   return result;
+}
+Value payload(Operation *operation) {
+  auto dispatch = dyn_cast_or_null<exec::DispatchOp>(operation->getNextNode());
+  require(dispatch && dispatch.getReturned()->getNumArguments() == 1,
+          "missing actual outcome payload");
+  return dispatch.getReturned()->getArgument(0);
+}
+void omit(Operation *operation, Value replacement) {
+  auto dispatch = cast<exec::DispatchOp>(operation->getNextNode());
+  auto *continuation = dispatch.getReturned();
+  auto *before = operation->getBlock();
+  dispatch.erase();
+  operation->erase();
+  IRRewriter rewriter(replacement.getContext());
+  rewriter.mergeBlocks(continuation, before, {replacement});
 }
 runtime::BindingOp binding(Operation *op) {
   require(op != nullptr, "missing numerical call");
@@ -93,20 +116,14 @@ module { "protocol.module"() ({
    %r = "algebra.finite_fold"(%xs,%seed,%a) {domain=@items,step=@step} : (!V,!F,!F)->!F
    func.return %r : !F
  }
- local.realize @realized = @total : (!V,!F,!F)->!F
- local.func @work(%xs:!V,%seed:!F,%a:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%xs,%seed,%a) {site="realized"} : (!V,!F,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({ ^entry(%xs:!V,%seed:!F,%a:!F):
-   %r = "protocol.local_call"(%xs,%seed,%a) {callee=@work,role="P",site="work"} : (!V,!F,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!F,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+ "protocol.func"() ({
+   "protocol.return"() : ()->()
+ }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
-// This Local source exercises explicit backend pins, including dead work. The
-// total Kernel source above intentionally contains no physical binding choices.
-constexpr StringLiteral localFoldText = R"mlir(
+// Executable callbacks carry explicit pins, including unused reached work.
+// The mathematical source above has no physical binding choices.
+constexpr StringLiteral scopedFoldText = R"mlir(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
 module { "protocol.module"() ({
@@ -116,21 +133,36 @@ module { "protocol.module"() ({
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @step(%s:!F,%x:!F,%xs:!V,%a:!F)->!F attributes {logical_origin=["step",[]]} {
-   %sq = "algebra.exec.field_multiply"(%x,%x) {binding=@mul,parameters=[],site="square"} : (!F,!F)->!F
-   %t = "algebra.exec.field_add"(%sq,%a) {binding=@add,parameters=[],site="term"} : (!F,!F)->!F
-   %r = "algebra.exec.field_add"(%s,%t) {binding=@add,parameters=[],site="combine"} : (!F,!F)->!F
-   local.return %r : !F
+ func.func private @step(%scope:!runtime.scope,%s:!F,%x:!F,%xs:!V,%a:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["step",[]]} {
+   %square = "exec.apply"(%scope,%x,%x) {binding=@mul,parameters=[],site="square"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%square)[^square,^failed] : (!exec.outcome<(!F)>)->()
+ ^square(%sq:!F):
+   %term = "exec.apply"(%scope,%sq,%a) {binding=@add,parameters=[],site="term"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%term)[^term,^failed] : (!exec.outcome<(!F)>)->()
+ ^term(%t:!F):
+   %combined = "exec.apply"(%scope,%s,%t) {binding=@add,parameters=[],site="combine"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%combined)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%r:!F):
+   %result = "exec.returned"(%r) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
- "local.finite_fold"() {sym_name="realized",function_type=(!V,!F,!F)->!F,domain=@items,step=@step} : ()->()
- local.func @work(%xs:!V,%seed:!F,%a:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%xs,%seed,%a) {site="realized"} : (!V,!F,!F)->!F
-   local.return %r : !F
+ func.func @work(%scope:!runtime.scope,%xs:!V,%seed:!F,%a:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %r = "exec.fold"(%scope,%xs,%seed,%a) {domain=@items,step=@step,site="realized"} : (!runtime.scope,!V,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%r)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F,%a:!F):
    %r = "protocol.local_call"(%xs,%seed,%a) {callee=@work,role="P",site="work"} : (!V,!F,!F)->!F
    "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!F,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 OwningOpRef<ModuleOp> emitFold(ModuleOp source,
@@ -152,7 +184,7 @@ bool compareFold(ModuleOp source, ModuleOp candidate) {
 }
 bool hasLoop(ModuleOp module) {
   bool result = false;
-  module.walk([&](local::LocalForOp) { result = true; });
+  module.walk([&](exec::RangeOp) { result = true; });
   return result;
 }
 } // namespace
@@ -231,7 +263,7 @@ int main(int argc, char **argv) {
               auto *seed =
                   operation(*candidate, product ? "field.mul" : "field.add");
               require(
-                  seed && is_contained(seed->getOperands(), call->getResult(0)),
+                  seed && is_contained(seed->getOperands(), payload(call)),
                   "source seed was not combined outside the numerical call");
               MathematicalSelectionPolicy vectorPolicy;
               vectorPolicy.numericalExpressions =
@@ -251,17 +283,6 @@ int main(int argc, char **argv) {
                   "contract",
                   StringAttr::get(&context, product ? "numerical.sum"
                                                     : "numerical.product"));
-              OperationState replacement(
-                  changed->getLoc(),
-                  protocol::boundOperationName(product ? "numerical.sum"
-                                                       : "numerical.product"));
-              replacement.addOperands(changed->getOperands());
-              replacement.addTypes(changed->getResultTypes());
-              replacement.addAttributes(changed->getAttrs());
-              OpBuilder builder(changed);
-              auto *newCall = builder.create(replacement);
-              changed->getResult(0).replaceAllUsesWith(newCall->getResult(0));
-              changed->erase();
               require(succeeded(kernel::verifyRecipeOutput(*wrong)) &&
                           !compareFold(*source, *wrong),
                       "wrong aggregate mode survived independent comparison");
@@ -294,20 +315,19 @@ int main(int argc, char **argv) {
             call = operation(*wrong, contract);
             auto *seed = operation(*wrong, product ? "field.mul" : "field.add");
             require(seed, "missing external seed combiner");
-            auto entry = cast<local::FuncOp>(call->getParentOp());
+            auto entry = cast<func::FuncOp>(call->getParentOp());
             if (mutation == "replace seed") {
-              for (unsigned i = 0; i < seed->getNumOperands(); ++i)
-                if (seed->getOperand(i) != call->getResult(0))
-                  seed->setOperand(i, entry.getArgument(2));
+              for (unsigned i = 1; i < seed->getNumOperands(); ++i)
+                if (seed->getOperand(i) != payload(call))
+                  seed->setOperand(i, entry.getArgument(3));
             } else if (mutation == "omit seed") {
-              seed->getResult(0).replaceAllUsesWith(call->getResult(0));
-              seed->erase();
+              omit(seed, payload(call));
             } else if (mutation == "seed in term") {
               require(call->getOperand(call->getNumOperands() - 1) ==
-                          entry.getArgument(2),
+                          entry.getArgument(3),
                       "missing scalar capture slot");
               call->setOperand(call->getNumOperands() - 1,
-                               entry.getArgument(1));
+                               entry.getArgument(2));
               // The source's scalar capture is unused in this spine.
               // Make that slot contribute, duplicating the external seed.
               mutateBody(call, [](json::Array &root) {
@@ -637,7 +657,7 @@ int main(int argc, char **argv) {
       });
   for (unsigned pin = 0; pin != 3; ++pin)
     cases.run("source implementation restriction " + Twine(pin), [&] {
-      auto text = localFoldText.str();
+      auto text = scopedFoldText.str();
       if (pin == 1)
         text =
             replaceText(text,
@@ -652,18 +672,26 @@ int main(int argc, char **argv) {
                         "{sym_name=\"dead\",contract=\"field.add\",arguments=["
                         "\"koala-bear\"],implementation=\"plonky3/field.add\"} "
                         ": ()->()\n \"runtime.binding\"()");
-        text = replaceText(text, "   local.return %r : !F",
-                           "   %dead = \"algebra.exec.field_add\"(%x,%x) "
+        text = replaceText(text, "   %result = \"exec.returned\"(%r)",
+                           "   %dead = \"exec.apply\"(%scope,%x,%x) "
                            "{binding=@dead,parameters=[],site=\"dead\"} : "
-                           "(!F,!F)->!F\n   local.return %r : !F");
+                           "(!runtime.scope,!F,!F)->!exec.outcome<(!F)>\n"
+                           "   \"exec.dispatch\"(%dead)[^after_dead,^failed] : "
+                           "(!exec.outcome<(!F)>)->()\n"
+                           " ^after_dead(%unused:!F):\n"
+                           "   %result = \"exec.returned\"(%r)");
       }
       auto source = parse(context, text);
-      auto candidate = copy(*source);
+      RealizationWork work;
+      uint64_t copies = 1000000, sites = 16 * 1024 * 1024;
+      std::optional<CapacityCause> capacity;
+      auto candidate =
+          protocol::prepareScopedFinite(*source, work, copies, sites, capacity);
       require(
-          succeeded(finite::realizeLocals(*candidate)) &&
-              hasLoop(*candidate) == bool(pin) &&
+          candidate && hasLoop(*candidate) == bool(pin) &&
               bool(operation(*candidate, "numerical.sum")) == !pin &&
-              succeeded(finite::verifyRealizations(*source, *candidate)),
+              succeeded(protocol::verifyScopedFinitePreparation(
+                  *source, *candidate, work)),
           "native formula erased a live or dead implementation restriction");
     });
   for (unsigned variant = 0; variant != 3; ++variant)
@@ -729,8 +757,8 @@ module { "protocol.module"() ({
                 "unused field-vector domain slot or its extent was lost");
             auto wrong = copy(*candidate);
             auto *changed = operation(*wrong, "numerical.sum");
-            auto entry = cast<local::FuncOp>(changed->getParentOp());
-            changed->setOperand(2, entry.getArgument(4));
+            auto entry = cast<func::FuncOp>(changed->getParentOp());
+            changed->setOperand(3, entry.getArgument(5));
             require(succeeded(kernel::verifyRecipeOutput(*wrong)),
                     "unused vector substitution failed ordinary admission");
             ScopedDiagnosticHandler quiet(
