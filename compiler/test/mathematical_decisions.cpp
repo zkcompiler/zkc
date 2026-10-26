@@ -10,6 +10,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Kernel.h"
@@ -161,30 +162,35 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  auto prepare = [&](ModuleOp source, RealizationWork &work,
+                     MathematicalSelectionPolicy policy = {},
+                     RealizationTrace *trace = nullptr) {
+    uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> capacity;
+    return protocol::prepareScopedFinite(source, work, copy, bytes, capacity,
+                                         policy, nullptr, nullptr, nullptr,
+                                         mathematicalRecipes(), trace);
+  };
   for (auto name : {"dot", "collect"})
     cases.run(std::string("finite retry ") + name, [&, name] {
-      auto original = fixture(context, name);
-      auto source = copy(*original), ordered = copy(*original),
-           unobserved = copy(*original);
+      auto original = fixture(context, name), before = copy(*original);
       RealizationWork work, orderedWork, unobservedWork;
+      work.requiredFiniteChecking = unobservedWork.requiredFiniteChecking =
+          100000;
+      work.optionalFiniteChecking = unobservedWork.optionalFiniteChecking = 1;
       RealizationTrace trace;
-      require(succeeded(finite::realizeLocals(*ordered, {false, false},
-                                              &orderedWork)),
-              "ordered control failed");
-      require(succeeded(finite::realizeLocalsWithLimits(*source, {}, &work,
-                                                        mathematicalRecipes(),
-                                                        {100000, 1}, &trace)) &&
-                  succeeded(finite::realizeLocalsWithLimits(
-                      *unobserved, {}, &unobservedWork, mathematicalRecipes(),
-                      {100000, 1})) &&
-                  same(*source, *ordered) && same(*source, *unobserved) &&
-                  sameWork(work, unobservedWork),
+      auto ordered = prepare(*original, orderedWork, {false, false});
+      auto source = prepare(*original, work, {}, &trace);
+      auto unobserved = prepare(*original, unobservedWork);
+      require(ordered && source && unobserved && same(*source, *ordered) &&
+                  same(*source, *unobserved) &&
+                  sameWork(work, unobservedWork) && same(*original, *before),
               "observation changed retry behavior or accounting");
       require(work.matching.equations < orderedWork.matching.equations &&
                   work.helperOperations == orderedWork.helperOperations &&
                   work.helperSlots == orderedWork.helperSlots,
               "retry replenished optional work or consumed required reserve");
-      checkRetry(trace, "finite-attempt");
+      checkRetry(trace, "scoped-finite-attempt");
       auto publications = events<PublicationDecision>(trace);
       require(
           llvm::count_if(
@@ -192,20 +198,53 @@ int main() {
               [](const RealizationEvent *event) {
                 return event->parent == 0 &&
                        std::get<PublicationDecision>(event->payload).boundary ==
-                           PublicationBoundary::PublishedToCaller;
+                           PublicationBoundary::ReturnedCandidate;
               }) == 1,
-          "standalone finite service omitted caller installation");
+          "standalone finite service lost its returned candidate");
       require(trace.activeScopes.empty() && sameWork(trace.remainingWork, work),
               "trace retained active scope or incorrect final balance");
     });
+  cases.run("bounded scoped diagnostics preserve retry and work", [&] {
+    auto source = fixture(context, "dot"), before = copy(*source);
+    RealizationWork controlWork;
+    controlWork.requiredFiniteChecking = 100000;
+    controlWork.optionalFiniteChecking = 1;
+    auto control = prepare(*source, controlWork);
+    require(bool(control), "unobserved retry control refused");
+    ScopedDiagnosticHandler quiet(&context,
+                                  [](Diagnostic &) { return success(); });
+    for (size_t limit : {size_t(0), size_t(2)})
+      for (unsigned mode = 0; mode < 3; ++mode) {
+        RealizationWork work;
+        work.requiredFiniteChecking = 100000;
+        work.optionalFiniteChecking = 1;
+        RealizationTrace trace;
+        trace.eventLimit = limit;
+        trace.remarks = mode == 1;
+        std::string text;
+        llvm::raw_string_ostream stream(text);
+        trace.ir = mode == 2 ? &stream : nullptr;
+        auto candidate = prepare(*source, work, {}, &trace);
+        require(candidate && same(*candidate, *control) &&
+                    same(*source, *before) && sameWork(work, controlWork) &&
+                    sameWork(trace.remainingWork, work),
+                "bounded diagnostics changed retry output or work");
+        require(trace.events.size() == limit && trace.droppedEvents &&
+                    trace.activeScopes.empty() &&
+                    trace.declarationOrigins.empty(),
+                "bounded diagnostics lost truncation or retained scope state");
+      }
+  });
   cases.run("lane capacity retains ordered realization and typed decline", [&] {
-    auto source = fixture(context, "collect"), ordered = copy(*source);
+    auto source = fixture(context, "collect");
     RealizationTrace trace;
-    RealizationWork work;
+    RealizationWork work, orderedWork;
     work.lanes = 0;
-    require(succeeded(finite::realizeLocals(*source, {}, &work, &trace)) &&
-                succeeded(finite::realizeLocals(*ordered, {false, false})) &&
-                same(*source, *ordered),
+    MathematicalSelectionPolicy policy;
+    policy.numericalExpressions = NumericalExpressionMode::VectorOnly;
+    auto candidate = prepare(*source, work, policy, &trace);
+    auto ordered = prepare(*source, orderedWork, {false, false});
+    require(candidate && ordered && same(*candidate, *ordered),
             "lane decline changed the fallback");
     bool declined = false;
     for (auto *event : events<SelectionDecision>(trace)) {
@@ -226,8 +265,7 @@ int main() {
   cases.run("unsupported lane construction emits no payload", [&] {
     auto source = fixture(context, "collect");
     finite::Computation computation;
-    auto unit = cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
-    auto declaration = SymbolTable(unit).lookup("collect");
+    auto declaration = &scopedFinite::function(*source, "work").front().front();
     require(declaration &&
                 succeeded(finite::describe(declaration, computation)),
             "missing collect");
@@ -253,10 +291,10 @@ int main() {
     RealizationTrace trace;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(finite::realizeLocalsWithLimits(*source, {}, nullptr,
-                                                   mathematicalRecipes(),
-                                                   {0, 100000}, &trace)) &&
-                same(*source, *before),
+    RealizationWork work;
+    work.requiredFiniteChecking = 0;
+    auto candidate = prepare(*source, work, {}, &trace);
+    require(!candidate && same(*source, *before),
             "required capacity published a candidate");
     auto discards = events<DiscardDecision>(trace);
     require(discards.size() == 1 && events<RetryDecision>(trace).empty() &&
@@ -271,48 +309,56 @@ int main() {
         "required reader capacity became a recognition failure");
   });
   cases.run("map helper expansion remains deferred until realization", [&] {
-    auto source = fixture(context, "dot"),
-         maps = fixture(context, "map-realization", true);
-    auto unit = cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
-    auto mapUnit =
-        cast<protocol_ir::ProtocolModuleOp>(maps->getBody()->front());
-    OpBuilder builder(&unit.getBody().front(), unit.getBody().front().end());
-    for (auto &op : mapUnit.getBody().front())
-      if (isa<func::FuncOp, algebra::MapRealizeOp>(op))
-        builder.clone(op);
-    require(succeeded(verify(*source)), "combined admitted control refused");
-    auto original = copy(*source);
+    auto source = fixture(context, "total-collect"), original = copy(*source);
     RealizationTrace trace;
     RealizationWork work;
     work.helperOperations = 0;
-    ScopedDiagnosticHandler quiet(&context,
-                                  [](Diagnostic &) { return success(); });
     auto candidate = rewriteLocalAlgorithms(*source, {}, &trace, work);
-    require(
-        candidate && same(*source, *original) &&
-            !cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front())
-                 .getBody()
-                 .front()
-                 .getOps<algebra::MapRealizeOp>()
-                 .empty(),
-        "preparation expanded a retained map or changed its source");
+    unsigned collections = 0;
+    if (candidate)
+      candidate->walk([&](algebra::FiniteCollectOp) { ++collections; });
+    require(candidate && same(*source, *original) && collections == 1 &&
+                work.helperOperations == 0,
+            "preparation expanded a retained map or changed its source");
     require(events<DiscardDecision>(trace).empty() &&
                 trace.activeScopes.empty(),
             "successful preparation retained a discarded or active scope");
+    PassManager demand(&context);
+    demand.addPass(protocol::createProjectProtocolPass(false));
+    demand.addPass(protocol::createLowerMathPass());
+    require(succeeded(demand.run(*candidate)), "map demand formation refused");
+    exec::ComputeOp request;
+    candidate->walk([&](exec::ComputeOp op) { request = op; });
+    require(bool(request), "map demand lost its mathematical request");
+    SymbolTableCollection symbols;
+    auto entry = request.resolveCallee(symbols);
+    auto numerical = cast<ModuleOp>(entry->getParentOp());
     auto prepared = copy(*candidate);
+    RealizationWork positiveWork;
+    require(bool(realizeKernelEntry(numerical, request.getSite(),
+                                    {false, false}, positiveWork)),
+            "unbounded map realization control refused");
     RealizationTrace mapTrace;
-    require(failed(expandMapRealizations(*candidate, &work, &mapTrace)) &&
-                same(*candidate, *prepared),
-            "required map expansion failed to refuse atomically");
-    bool failedMap = false;
-    for (auto *event : events<DiscardDecision>(mapTrace))
-      if (event->service == "map-realizations") {
-        auto *cause = std::get_if<RequiredFailure>(
-            &std::get<DiscardDecision>(event->payload).cause);
-        failedMap = cause && cause->capacity &&
-                    cause->capacity->owner == WorkOwner::HelperOperations;
-      }
-    require(failedMap, "late map failure lost its typed capacity cause");
+    ScopedDiagnosticHandler quiet(&context,
+                                  [](Diagnostic &) { return success(); });
+    auto refused = realizeKernelEntry(numerical, request.getSite(),
+                                      {false, false}, work, {}, &mapTrace);
+    require(
+        !refused && same(*candidate, *prepared) &&
+            events<RetryDecision>(mapTrace).empty() &&
+            events<PublicationDecision>(mapTrace).empty(),
+        "required helper expansion retried, published or changed its source");
+    bool failedHelper = false;
+    for (auto *event : events<CompletionDecision>(mapTrace)) {
+      auto &completion = std::get<CompletionDecision>(event->payload);
+      if (!completion.cause)
+        continue;
+      auto *cause = std::get_if<RequiredFailure>(&*completion.cause);
+      failedHelper |= cause && cause->capacity &&
+                      cause->capacity->owner == WorkOwner::HelperOperations &&
+                      cause->capacity->available == 0;
+    }
+    require(failedHelper, "late helper failure lost its typed capacity cause");
   });
   for (bool nested : {false, true})
     cases.run(nested ? "nested total retry" : "ordinary total retry", [&,
@@ -386,12 +432,8 @@ int main() {
   cases.run(
       "declaration origins follow observer scopes and sequential reuse", [&] {
         auto source = fixture(context, "dot"), before = copy(*source);
-        auto *op = &SymbolTable(unit(*source))
-                        .lookup<local::FuncOp>("work")
-                        .getBody()
-                        .front()
-                        .front();
-        auto *fold = SymbolTable(unit(*source)).lookup("fold");
+        auto *op = &scopedFinite::function(*source, "work").front().front();
+        auto *fold = scopedFinite::function(*source, "step").getOperation();
         auto original = realizationSubject(op), expected = original;
         expected.declaration = "original";
         RealizationTrace trace;
@@ -408,7 +450,7 @@ int main() {
         {
           RealizationScope outer(&trace, "origin-parent", op, {}, &work);
           outer.declarationOrigin("work", "original");
-          outer.declarationOrigin("fold", "original_fold");
+          outer.declarationOrigin("step", "original_fold");
           finite::ComputationDiagnostic diagnostic;
           diagnostic.subject = op;
           diagnostic.occurrencePath = {op, fold};
@@ -419,7 +461,7 @@ int main() {
             const auto &event = trace.events.back();
             auto query = expected;
             query.occurrence = {{original.site, "original"},
-                                {"local.finite_fold", "original_fold"}};
+                                {"func.func", "original_fold"}};
             require(
                 event.subject == expected &&
                     std::get<SelectionDecision>(event.payload).querySubject ==
@@ -715,9 +757,7 @@ int main() {
         "published state");
   });
   cases.run("nested occurrence state is independent of diagnostics", [&] {
-    auto source = fixture(context, "nested-matrix");
-    auto control = copy(*source), observed = copy(*source);
-    protocol::AlgorithmExpansionState a, b;
+    auto source = fixture(context, "nested-matrix"), before = copy(*source);
     RealizationTrace trace;
     std::string text;
     llvm::raw_string_ostream stream(text);
@@ -725,26 +765,20 @@ int main() {
     trace.ir = &stream;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(succeeded(protocol::expandAlgorithms(
-                *control, protocol::AlgorithmExpansionPhase::RetainMaps, a)) &&
-                succeeded(protocol::expandAlgorithms(
-                    *observed, protocol::AlgorithmExpansionPhase::RetainMaps, b,
-                    nullptr, &trace)),
-            "retained expansion failed");
     RealizationWork wa, wb;
-    require(succeeded(nested::rewriteFiniteCollections(*control, a, {}, &wa)) &&
-                succeeded(nested::rewriteFiniteCollections(*observed, b, {},
-                                                           &wb, &trace)) &&
-                same(*control, *observed) && sameWork(wa, wb),
-            "nested observation changed selection");
-    const auto &ar = protocol::detail::AlgorithmStateAccess::get(a);
-    const auto &br = protocol::detail::AlgorithmStateAccess::get(b);
-    require(ar == br, "observer changed occurrence state");
+    auto control = prepare(*source, wa),
+         observed = prepare(*source, wb, {}, &trace);
+    require(control && observed && same(*control, *observed) &&
+                same(*source, *before) && sameWork(wa, wb),
+            "nested observation changed selection or its source");
     bool selected = false;
     for (auto *event : events<SelectionDecision>(trace))
       selected |= std::get<SelectionDecision>(event->payload).choice ==
                   RealizationChoice::NestedContraction;
-    require(selected, "nested selection was not observable");
+    require(selected && trace.activeScopes.empty() &&
+                trace.declarationOrigins.empty() &&
+                sameWork(trace.remainingWork, wb),
+            "nested selection was not observable or retained observer state");
   });
   return cases.result();
 }

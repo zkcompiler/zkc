@@ -35,7 +35,8 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedExpression(
     const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr,
     const mathematical::MathematicalRecipes &recipes =
         mathematical::mathematicalRecipes(),
-    mlir::Operation *sumConsumer = nullptr, llvm::StringRef sumOccurrence = {});
+    mlir::Operation *sumConsumer = nullptr, llvm::StringRef sumOccurrence = {},
+    bool orderedRetry = false);
 } // namespace zkc::finite
 
 #endif

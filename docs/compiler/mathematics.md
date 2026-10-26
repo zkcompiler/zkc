@@ -376,6 +376,12 @@ the outer installation event means that preparation changed the caller's module.
 The observer records these decisions without supplying evidence, consuming
 semantic work or changing selection and retry policy.
 
+Standalone scoped finite preparation journals each private attempt, including
+discard and ordered retry, and reports a returned candidate after its independent
+check succeeds. It does not install that candidate in the caller's module.
+Nested finite emitters share the journal; limiting or disabling event recording
+does not change the candidate, checking allowances, or construction work.
+
 For tool-driven inspection:
 
 ```sh

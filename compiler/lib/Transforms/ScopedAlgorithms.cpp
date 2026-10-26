@@ -1,6 +1,7 @@
 #include "Kernel/Support.h"
 #include "NumericalSelection.h"
 #include "RealizationSubject.h"
+#include "RealizationTrace.h"
 #include "ScopedCollectionSum.h"
 #include "ScopedFinite.h"
 #include "ScopedPreparation.h"
@@ -51,6 +52,8 @@ class ScopedExpander : private OpBuilder::Listener {
   MathematicalSelectionPolicy finitePolicy;
   const llvm::DenseSet<Operation *> *fixedBindings;
   const mathematical::MathematicalRecipes &recipes;
+  mathematical::RealizationTrace *trace;
+  bool orderedRetry;
   llvm::DenseSet<Operation *> replacedDefinitions;
   SmallVector<mathematical::NumericalOccurrence> finiteOwners;
   void notifyOperationInserted(Operation *op, OpBuilder::InsertPoint) override {
@@ -367,9 +370,9 @@ class ScopedExpander : private OpBuilder::Listener {
         }
         auto result = finite::realizeScopedExpression(
             op, inputs, builder, control, callback, *finiteWork, effective,
-            nullptr, occurrence, &budget, &source, fixedBindings, recipes,
+            trace, occurrence, &budget, &source, fixedBindings, recipes,
             effective.vectorReductionFusion ? sumConsumer : nullptr,
-            sumOccurrence);
+            sumOccurrence, orderedRetry);
         if (failed(result) || result->size() != step.outputs.size()) {
           if (capacity && cause)
             *capacity = cause;
@@ -512,7 +515,9 @@ public:
       MathematicalSelectionPolicy finitePolicy = {},
       const llvm::DenseSet<Operation *> *fixedBindings = nullptr,
       const mathematical::MathematicalRecipes &recipes =
-          mathematical::mathematicalRecipes())
+          mathematical::mathematicalRecipes(),
+      mathematical::RealizationTrace *trace = nullptr,
+      bool orderedRetry = false)
       : source(source), symbols(original), target(target),
         builder(target.getContext(), this),
         remaining(selection ? selection->remainingCopy : defaultRemaining),
@@ -520,7 +525,8 @@ public:
                                  : defaultBytes),
         replacements(replacements), selection(selection), capacity(capacity),
         finiteWork(finiteWork), finitePolicy(finitePolicy),
-        fixedBindings(fixedBindings), recipes(recipes) {
+        fixedBindings(fixedBindings), recipes(recipes), trace(trace),
+        orderedRetry(orderedRetry) {
     if (replacements)
       for (const auto &replacement : *replacements)
         replacedDefinitions.insert(replacement.second);
@@ -657,7 +663,10 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                     const llvm::DenseSet<Operation *> *fixedBindings,
                     mathematical::NumericalSelection *selection,
                     mathematical::VerificationDecision *reported,
-                    const mathematical::MathematicalRecipes &recipes) {
+                    const mathematical::MathematicalRecipes &recipes,
+                    mathematical::RealizationTrace *trace) {
+  mathematical::RealizationScope scope(trace, "scoped-finite-preparation",
+                                       source, policy, &work);
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
@@ -671,6 +680,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
   }
   mathematical::NumericalSelection standalone(&work);
   auto &choices = selection ? *selection : standalone;
+  bool orderedRetry = false;
   for (;;) {
     mathematical::RecipeConstructionWork construction(work);
     bool speculative = (policy.finiteBulk || policy.vectorReductionFusion) &&
@@ -681,6 +691,9 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       policy.finiteBulk = false;
       policy.vectorReductionFusion = false;
     }
+    mathematical::RealizationScope attempt(trace, "scoped-finite-attempt",
+                                           source, policy);
+    attempt.propose(policy);
     auto incomingCopy = copy, incomingBytes = siteBytes;
     auto copyCeiling =
         speculative ? std::min(copy, work.discardedRecipeCopy) : copy;
@@ -707,10 +720,10 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       target.getBody().push_back(new Block);
       choices.remainingCopy = copy;
       choices.remainingSiteBytes = siteBytes;
-      auto result =
-          ScopedExpander(*closure, owner, target, nullptr, &choices, &capacity,
-                         &work, policy, fixedBindings, recipes)
-              .run(owner);
+      auto result = ScopedExpander(*closure, owner, target, nullptr, &choices,
+                                   &capacity, &work, policy, fixedBindings,
+                                   recipes, trace, orderedRetry)
+                        .run(owner);
       copy = choices.remainingCopy;
       siteBytes = choices.remainingSiteBytes;
       if (failed(result) || failed(verify(*candidate)) ||
@@ -730,8 +743,17 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       candidate = propose();
     if (reported)
       *reported = outcome;
-    if (candidate)
+    if (candidate) {
+      attempt.publish();
+      scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
       return candidate;
+    }
+    mathematical::DecisionCause cause = outcome;
+    if (capacity)
+      cause =
+          mathematical::RequiredFailure{"scoped finite construction", capacity};
+    attempt.discard(cause);
+    scope.failure(cause);
     // A containing physical attempt owns its complete discard envelope. Do
     // not retry or transfer the same construction to a second reserve here.
     if (selection)
@@ -759,6 +781,8 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     siteBytes = byteCeiling;
     policy.finiteBulk = false;
     policy.vectorReductionFusion = false;
+    orderedRetry = true;
+    attempt.retry(policy);
   }
 }
 

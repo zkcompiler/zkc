@@ -1315,7 +1315,7 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     const protocol::SourceExecutionClosure *sourceClosure,
     const llvm::DenseSet<Operation *> *fixedBindings,
     const mathematical::MathematicalRecipes &recipes, Operation *sumConsumer,
-    StringRef sumOccurrence) {
+    StringRef sumOccurrence, bool orderedRetry) {
   auto *block = builder.getInsertionBlock();
   auto function =
       block ? dyn_cast<func::FuncOp>(block->getParentOp()) : func::FuncOp();
@@ -1330,7 +1330,7 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     return failure();
   mathematical::RealizationScope scope(trace, "finite-expression", source,
                                        policy, &work);
-  Realizer realizer(owner, builder, work, recipes, &scope, false,
+  Realizer realizer(owner, builder, work, recipes, &scope, orderedRetry,
                     policy.numericalExpressions, callback, &control,
                     occurrenceName, budget, sourceClosure, fixedBindings);
   auto result = realizer.emitBody(source, inputs, policy.finiteBulk, nullptr,

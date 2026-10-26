@@ -29,6 +29,7 @@ mlir::OwningOpRef<mlir::ModuleOp> prepareScopedFinite(
     mathematical::NumericalSelection *selection = nullptr,
     mathematical::VerificationDecision *outcome = nullptr,
     const mathematical::MathematicalRecipes &recipes =
-        mathematical::mathematicalRecipes());
+        mathematical::mathematicalRecipes(),
+    mathematical::RealizationTrace *trace = nullptr);
 } // namespace zkc::protocol
 #endif
