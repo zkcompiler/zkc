@@ -1,8 +1,11 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -39,45 +42,59 @@ void reject(Error error, StringRef code) {
   require(namesIdentifier(message, code), "unexpected refusal: " + message);
 }
 std::string layouts(bool fixed = true) {
-  auto text = mathematicalFixture(R"(
+  auto text = scopedFixture(R"(
 "runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 "runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )",
-                                  "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T", R"(
-%x = "poly.exec.fold"(%a,%r) {binding=@msb,site="first",parameters=[]} : (!T,!F)->!T
-%q = "poly.exec.fold"(%x,%r) {binding=@msb,site="same",parameters=[]} : (!T,!F)->!T
-%y = "poly.exec.fold"(%x,%r) {binding=@dense,site="left",parameters=[]} : (!T,!F)->!T
-%z = "poly.exec.fold"(%x,%r) {binding=@dense,site="right",parameters=[]} : (!T,!F)->!T
-local.return %q : !T
+                            "%a:!T,%r:!F", "%a,%r", "!T,!F", "!T", R"(
+%first_attempt = "exec.apply"(%scope,%a,%r) {binding=@msb,site="first",parameters=[]} : (!runtime.scope,!T,!F)->!exec.outcome<(!T)>
+"exec.dispatch"(%first_attempt)[^first,^failed] : (!exec.outcome<(!T)>)->()
+^first(%x:!T):
+%same_attempt = "exec.apply"(%scope,%x,%r) {binding=@msb,site="same",parameters=[]} : (!runtime.scope,!T,!F)->!exec.outcome<(!T)>
+"exec.dispatch"(%same_attempt)[^same,^failed] : (!exec.outcome<(!T)>)->()
+^same(%q:!T):
+%left_attempt = "exec.apply"(%scope,%x,%r) {binding=@dense,site="left",parameters=[]} : (!runtime.scope,!T,!F)->!exec.outcome<(!T)>
+"exec.dispatch"(%left_attempt)[^left,^failed] : (!exec.outcome<(!T)>)->()
+^left(%y:!T):
+%right_attempt = "exec.apply"(%scope,%x,%r) {binding=@dense,site="right",parameters=[]} : (!runtime.scope,!T,!F)->!exec.outcome<(!T)>
+"exec.dispatch"(%right_attempt)[^right,^failed] : (!exec.outcome<(!T)>)->()
+^right(%z:!T):
+%done = "exec.returned"(%q) : (!T)->!exec.outcome<(!T)>
+func.return %done : !exec.outcome<(!T)>
 )",
-                                  2);
+                            2);
   if (!fixed)
     text = replaceText(text, "arkworks-msb/poly.fold", "");
   return "!F = !algebra.field<\"bls12-381.fr\">\n!T = "
          "!poly.multilinear<\"bls12-381.fr\">\n" +
          text;
 }
-std::string contractions(bool group = false) {
-  auto text =
-      mathematicalFixture(R"(
+std::string contractions(bool group = false, bool escape = false) {
+  auto text = scopedFixture(R"(
 "runtime.binding"() {sym_name="map",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
 "runtime.binding"() {sym_name="reduce",contract="vector.dot",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )",
-                          "%w:!V,%f:!V,%v:!A", "%w,%f,%v", "!V,!V,!A", "!R", R"(
-%mapped = "algebra.exec.vector_mul"(%f,%v) {binding=@map,site="map",parameters=[]} : (!V,!A)->!A
-%a = "algebra.exec.vector_dot"(%w,%mapped) {binding=@reduce,site="first",parameters=[]} : (!V,!A)->!R
-%b = "algebra.exec.vector_dot"(%w,%mapped) {binding=@reduce,site="second",parameters=[]} : (!V,!A)->!R
-local.return %b : !R
-)",
-                          3);
+                            "%w:!V,%f:!V,%v:!A", "%w,%f,%v", "!V,!V,!A",
+                            escape ? "!A" : "!R",
+                            std::string(R"(
+%map_attempt = "exec.apply"(%scope,%f,%v) {binding=@map,site="map",parameters=[]} : (!runtime.scope,!V,!A)->!exec.outcome<(!A)>
+"exec.dispatch"(%map_attempt)[^map,^failed] : (!exec.outcome<(!A)>)->()
+^map(%mapped:!A):
+%first_attempt = "exec.apply"(%scope,%w,%mapped) {binding=@reduce,site="first",parameters=[]} : (!runtime.scope,!V,!A)->!exec.outcome<(!R)>
+"exec.dispatch"(%first_attempt)[^first,^failed] : (!exec.outcome<(!R)>)->()
+^first(%a:!R):
+%second_attempt = "exec.apply"(%scope,%w,%mapped) {binding=@reduce,site="second",parameters=[]} : (!runtime.scope,!V,!A)->!exec.outcome<(!R)>
+"exec.dispatch"(%second_attempt)[^second,^failed] : (!exec.outcome<(!R)>)->()
+^second(%b:!R):
+)") + (escape ? R"(%done = "exec.returned"(%mapped) : (!A)->!exec.outcome<(!A)>
+func.return %done : !exec.outcome<(!A)>)"
+              : R"(%done = "exec.returned"(%b) : (!R)->!exec.outcome<(!R)>
+func.return %done : !exec.outcome<(!R)>)"),
+                            3);
   if (group) {
     text = replaceText(text, "bls12-381.fr", "ristretto255.group");
     text = replaceText(text, "vector.mul", "curve.scale_each");
     text = replaceText(text, "vector.dot", "curve.msm");
-    text = replaceText(text, "algebra.exec.vector_mul",
-                       "algebra.exec.group_scale_each");
-    text =
-        replaceText(text, "algebra.exec.vector_dot", "algebra.exec.group_msm");
   }
   std::string scalar = group ? "ristretto255.scalar" : "bls12-381.fr";
   return "!V = !algebra.field_vector<\"" + scalar + "\">\n!A = " +
@@ -90,66 +107,169 @@ local.return %b : !R
 }
 std::string arithmetic(std::string identity = "bls12-381.fr") {
   return "!F = !algebra.field<\"" + identity + "\">\n" +
-         mathematicalFixture(
+         scopedFixture(
              "\"runtime.binding\"() "
              "{sym_name=\"add\",contract=\"field.add\",arguments=[\"" +
                  identity + "\"],implementation=\"\"} : ()->()",
              "%a:!F,%b:!F", "%a,%b", "!F,!F", "!F", R"(
-%c = "algebra.exec.field_add"(%a,%b) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-local.return %c : !F
+%add_attempt = "exec.apply"(%scope,%a,%b) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%add_attempt)[^add,^failed] : (!exec.outcome<(!F)>)->()
+^add(%c:!F):
+%done = "exec.returned"(%c) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
 )",
              2);
 }
 std::string orderedCrossings() {
   return R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)" + mathematicalFixture(R"(
+)" + scopedFixture(R"(
 "runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
 "runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
 )",
-                         "%a:!T,%b:!T,%allowed:i1", "%a,%b,%allowed",
-                         "!T,!T,i1", "!F", R"(
-"local.exec.require"(%allowed) {binding=@guard,site="before",parameters=[]} : (i1)->()
-%value = "poly.exec.product_sum"(%a,%b) {binding=@product,site="product",parameters=[]} : (!T,!T)->!F
-"local.exec.require"(%allowed) {binding=@guard,site="after",parameters=[]} : (i1)->()
-local.return %value : !F
+                   "%a:!T,%b:!T,%allowed:i1", "%a,%b,%allowed", "!T,!T,i1",
+                   "!F", R"(
+%before_attempt = "exec.apply"(%scope,%allowed) {binding=@guard,site="before",parameters=[]} : (!runtime.scope,i1)->!exec.outcome<>
+"exec.dispatch"(%before_attempt)[^before,^failed] : (!exec.outcome<>)->()
+^before():
+%product_attempt = "exec.apply"(%scope,%a,%b) {binding=@product,site="product",parameters=[]} : (!runtime.scope,!T,!T)->!exec.outcome<(!F)>
+"exec.dispatch"(%product_attempt)[^product,^failed] : (!exec.outcome<(!F)>)->()
+^product(%value:!F):
+%after_attempt = "exec.apply"(%scope,%allowed) {binding=@guard,site="after",parameters=[]} : (!runtime.scope,i1)->!exec.outcome<>
+"exec.dispatch"(%after_attempt)[^after,^failed] : (!exec.outcome<>)->()
+^after():
+%done = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
 )",
-                         3);
+                   3);
 }
-std::string nestedLayouts() {
-  return R"(!F = !algebra.field<"bls12-381.fr">
+// Build the actual outlined scope transitions; the physical checker reads
+// these CFGs independently of this mechanical construction helper.
+func::FuncOp regionFunction(OpBuilder &builder, func::FuncOp parent,
+                            StringRef name, TypeRange inputs,
+                            TypeRange outputs) {
+  builder.setInsertionPoint(parent);
+  SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};
+  llvm::append_range(arguments, inputs);
+  auto type = builder.getFunctionType(
+      arguments,
+      exec::OutcomeType::get(builder.getContext(), llvm::to_vector(outputs)));
+  auto region = func::FuncOp::create(builder, parent.getLoc(), name, type);
+  region.setPrivate();
+  region->setAttr("no_inline", builder.getUnitAttr());
+  region->setAttr("runtime.region", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(region.addEntryBlock());
+  return region;
+}
+SmallVector<Value> apply(exec::ScopedExecutionBuilder &control,
+                         OpBuilder &builder, StringRef binding, StringRef site,
+                         ValueRange inputs, TypeRange outputs) {
+  return control.invoke(
+      "exec.apply", outputs, control.scoped(inputs),
+      {builder.getNamedAttr(
+           "binding", FlatSymbolRefAttr::get(builder.getContext(), binding)),
+       builder.getNamedAttr("parameters", builder.getArrayAttr({})),
+       builder.getNamedAttr("site", builder.getStringAttr(site))});
+}
+std::string nestedLayouts(MLIRContext &context) {
+  auto text = R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)" + mathematicalFixture(R"(
+)" + scopedFixture(R"(
 "runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )",
-                         "%a:!T,%r:!F,%condition:i1", "%a,%r,%condition",
-                         "!T,!F,i1", "!T", R"(
-%x = "poly.exec.fold"(%a,%r) {binding=@fold,site="outer",parameters=[]} : (!T,!F)->!T
-%z = "local.if"(%condition,%x,%r) ({^left(%leftTable:!T,%leftScalar:!F):
-  %y = "poly.exec.fold"(%leftTable,%leftScalar) {binding=@fold,site="inner",parameters=[]} : (!T,!F)->!T
-  "local.yield"(%y) : (!T)->()
-}, {^right(%rightTable:!T,%rightScalar:!F):
-  %y = "poly.exec.fold"(%rightTable,%rightScalar) {binding=@fold,site="other",parameters=[]} : (!T,!F)->!T
-  "local.yield"(%y) : (!T)->()
-}) {site="choose"} : (i1,!T,!F)->!T
-local.return %z : !T
+                   "%a:!T,%r:!F,%condition:i1", "%a,%r,%condition", "!T,!F,i1",
+                   "!T", R"(
+%done = "exec.returned"(%a) : (!T)->!exec.outcome<(!T)>
+func.return %done : !exec.outcome<(!T)>
 )",
-                         3);
+                   3);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "nested layout source parse");
+  auto work = scopedFinite::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto table = work.getArgument(1), scalar = work.getArgument(2);
+  auto outer = apply(control, builder, "fold", "outer", {table, scalar},
+                     {table.getType()});
+  auto selected = control.conditional(
+      work.getArgument(3), {outer.front(), scalar}, {table.getType()}, "choose",
+      [&](unsigned index) {
+        auto region = regionFunction(builder, work, index ? "right" : "left",
+                                     {table.getType(), scalar.getType()},
+                                     {table.getType()});
+        exec::ScopedExecutionBuilder nested(builder, region);
+        auto inner =
+            apply(nested, builder, "fold", index ? "other" : "inner",
+                  region.getArguments().drop_front(), {table.getType()});
+        nested.complete(inner);
+        return region;
+      });
+  control.returned(selected);
+  require(succeeded(verify(*module)), "nested layout source formation");
+  return printed(*module);
+}
+std::string nestedContractions(MLIRContext &context, bool group) {
+  auto module = parseSourceString<ModuleOp>(contractions(group), &context);
+  require(bool(module), "nested contraction source parse");
+  auto work = scopedFinite::function(*module, "Work");
+  auto output =
+      cast<exec::OutcomeType>(work.getResultTypes().front()).getPayload();
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto condition = control.invoke(
+      "exec.boolean", {builder.getI1Type()}, {work.getArgument(0)},
+      {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+       builder.getNamedAttr("site", builder.getStringAttr("yes"))});
+  auto values = control.conditional(
+      condition.front(), work.getArguments().drop_front(), output, "branch",
+      [&](unsigned index) {
+        auto region =
+            regionFunction(builder, work, index ? "unchosen" : "chosen",
+                           work.getArgumentTypes().drop_front(), output);
+        exec::ScopedExecutionBuilder nested(builder, region);
+        if (index) {
+          nested.reject("abort", "unused");
+        } else {
+          auto mapped = apply(nested, builder, "map", "map",
+                              {region.getArgument(2), region.getArgument(3)},
+                              {region.getArgument(3).getType()});
+          apply(nested, builder, "reduce", "first",
+                {region.getArgument(1), mapped.front()}, output);
+          auto second = apply(nested, builder, "reduce", "second",
+                              {region.getArgument(1), mapped.front()}, output);
+          nested.complete(second);
+        }
+        return region;
+      });
+  control.returned(values);
+  require(succeeded(verify(*module)), "nested contraction source formation");
+  return printed(*module);
+}
+std::string encodedSite(StringRef name) {
+  return "lc_" + std::to_string(name.size()) + "_" + name.str();
 }
 OperationDecision &site(PhysicalPlan &plan, ModuleOp module, StringRef name) {
   auto ops = physicalPlanOperations(module);
   for (auto &decision : plan.operations)
     if (auto attr = ops[decision.operation]->getAttrOfType<StringAttr>("site"))
-      if (attr.getValue() == name)
+      if (attr.getValue() == encodedSite(name))
         return decision;
   throw std::runtime_error("missing site " + name.str());
 }
-zkc::local::FuncOp function(ModuleOp module) {
-  return *cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front())
-              .getBody()
-              .front()
-              .getOps<zkc::local::FuncOp>()
-              .begin();
+func::FuncOp function(ModuleOp module) {
+  return scopedFinite::function(module, "Work");
+}
+std::string implementation(exec::ApplyOp op) {
+  return SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+             op, op.getBindingAttr())
+      .getImplementation()
+      .str();
 }
 void refusedMutation(ModuleOp module, PhysicalPlan &plan, StringRef code) {
   auto before = printed(module);
@@ -261,11 +381,11 @@ int main() {
                         : "physical selection still admits local definitions",
               [&] {
                 auto module = take(executableFixture(layouts(), context));
-                function(*module)->removeAttr("logical_origin");
+                function(*module)->removeAttr("runtime.origin");
                 if (extraRoot)
                   module->getBody()->push_back(
                       ModuleOp::create(module->getLoc()).getOperation());
-                refusedSelection(*module, "binding-logical-origin");
+                refusedSelection(*module, "execution-source-closure");
               });
   cases.run(
       "mixed layouts, per-use crossing order and immutable checked copy", [&] {
@@ -285,12 +405,11 @@ int main() {
         require(succeeded(verify(*module)), "physical verification");
         std::vector<std::string> implementations;
         unsigned conversions = 0;
-        for (auto op :
-             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>()) {
-          implementations.push_back(op.getImplementation().str());
-          if (op.getImplementation() == "arkworks/table.relayout") {
+        for (auto op : scopedFinite::applications(function(*module))) {
+          implementations.push_back(implementation(op));
+          if (implementation(op) == "arkworks/table.relayout") {
             ++conversions;
-            require(op.getResult(0).hasOneUse(),
+            require(scopedComputation::payload(op).front().hasOneUse(),
                     "conversion result is per-use");
           }
         }
@@ -547,9 +666,8 @@ int main() {
                                              "arkworks-diagonal/vector.dot",
                                              "arkworks-diagonal/vector.dot"};
           std::vector<std::string> actual;
-          for (auto op :
-               function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
-            actual.push_back(op.getImplementation().str());
+          for (auto op : scopedFinite::applications(function(*module)))
+            actual.push_back(implementation(op));
           require(actual == expected,
                   "independent contraction implementation expectations");
         });
@@ -598,25 +716,8 @@ int main() {
   });
   cases.run("nested block contractions are checked before publication", [&] {
     for (bool group : {false, true}) {
-      auto source = contractions(group);
-      auto start = source.find("%mapped =");
-      auto end = source.find("local.return %b : !R", start);
-      auto body =
-          replaceText(source.substr(start, end - start), "%", "%inner_");
-      auto nested =
-          std::string(
-              R"(%yes = "local.bool_constant"() {value=true,site="yes"} : ()->i1
-%result = "local.if"(%yes,%w,%f,%v) ({^chosen(%inner_w:!V,%inner_f:!V,%inner_v:!A):
-)") + body +
-          R"("local.yield"(%inner_b) : (!R)->()
-}, {^unused(%unused_w:!V,%unused_f:!V,%unused_v:!A):
-"local.stop"() {site="unused",reason="abort"} : ()->()
-}) {site="branch"} : (i1,!V,!V,!A)->!R
-local.return %result : !R)";
-      source.replace(start,
-                     end + std::string("local.return %b : !R").size() - start,
-                     nested);
-      auto module = take(executableFixture(source, context));
+      auto module =
+          take(executableFixture(nestedContractions(context, group), context));
       auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                        PhysicalPlanOptions{true}));
       require(plan.contractions.size() == 1, "nested opportunity is selected");
@@ -632,12 +733,6 @@ local.return %result : !R)";
       "logical roles survive absence of an installed diagonal layout", [&] {
         auto source = replaceText(contractions(), "bls12-381.fr", "koala-bear");
         auto module = take(executableFixture(source, context));
-        LinearContractionStats opportunities;
-        require(
-            findLinearContractions(function(*module), opportunities).size() ==
-                1,
-            "logical scalar action remains eligible without a diagonal "
-            "backend");
         auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                          PhysicalPlanOptions{true}));
         require(plan.contractions.empty() && plan.bindings.size() == 2,
@@ -815,12 +910,7 @@ local.return %result : !R)";
     take(validatePhysical(*module, plan));
   });
   cases.run("all-uses escape keeps group dense", [&] {
-    auto source = contractions();
-    source = replaceText(source, "local.return %b : !R",
-                         "local.return %mapped : !A");
-    source = replaceText(source, ")->!R attributes", ")->!A attributes");
-    source = replaceText(source, "(!V,!V,!A)->!R", "(!V,!V,!A)->!A");
-    source = replaceText(source, "(%out) : (!R)", "(%out) : (!A)");
+    auto source = contractions(false, true);
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                      PhysicalPlanOptions{true}));
@@ -828,12 +918,7 @@ local.return %result : !R)";
     take(validatePhysical(*module, plan));
   });
   cases.run("explicit diagonal escape rejected before materialization", [&] {
-    auto source = contractions();
-    source = replaceText(source, "local.return %b : !R",
-                         "local.return %mapped : !A");
-    source = replaceText(source, ")->!R attributes", ")->!A attributes");
-    source = replaceText(source, "(!V,!V,!A)->!R", "(!V,!V,!A)->!A");
-    source = replaceText(source, "(%out) : (!R)", "(%out) : (!A)");
+    auto source = contractions(false, true);
     auto module = take(executableFixture(source, context));
     auto before = printed(*module);
     // Dense return has no installed representation conversion for a view.
@@ -846,7 +931,8 @@ local.return %result : !R)";
   });
   cases.run("two slots using a producer keep group dense", [&] {
     auto source = contractions();
-    source = replaceText(source, "(%w,%mapped)", "(%mapped,%mapped)");
+    source =
+        replaceText(source, "(%scope,%w,%mapped)", "(%scope,%mapped,%mapped)");
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                      PhysicalPlanOptions{true}));
@@ -862,11 +948,11 @@ local.return %result : !R)";
     auto foldRoot =
         cast<protocol_ir::ProtocolModuleOp>(&folds->getBody()->front());
     for (auto &operation : foldRoot.getBody().front()) {
-      if (auto local = dyn_cast<zkc::local::FuncOp>(operation)) {
+      if (auto local = dyn_cast<func::FuncOp>(operation)) {
         auto *clone = local->clone();
         clone->setAttr("sym_name", StringAttr::get(&context, "Fold"));
         OpBuilder builder(&context);
-        clone->setAttr("logical_origin",
+        clone->setAttr("runtime.origin",
                        builder.getArrayAttr({builder.getStringAttr("Fold"),
                                              builder.getArrayAttr({})}));
         root.getBody().front().push_back(clone);
@@ -929,9 +1015,8 @@ local.return %result : !R)";
         accept(materializePhysical(*module, checked));
         require(succeeded(verify(*module)), "ordered crossing verification");
         std::vector<std::string> actual;
-        for (auto op :
-             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
-          actual.push_back(op.getImplementation().str());
+        for (auto op : scopedFinite::applications(function(*module)))
+          actual.push_back(implementation(op));
         require(actual ==
                     std::vector<std::string>{"arkworks/control.require",
                                              "arkworks/table.relayout",
@@ -941,7 +1026,7 @@ local.return %result : !R)";
                 "stopping source instructions retain their original positions");
       });
   cases.run("nested control captures preserve actual interface layouts", [&] {
-    auto module = take(executableFixture(nestedLayouts(), context));
+    auto module = take(executableFixture(nestedLayouts(context), context));
     auto plan = take(proposePhysical(*module));
     auto &control = site(plan, *module, "choose");
     require(control.conversions.empty(),
@@ -949,11 +1034,29 @@ local.return %result : !R)";
     auto physical = decodeBoundType(
         &context,
         take(parseBoundType("table:bls12-381.fr@arkworks.mle-msb/0", true)));
-    require(control.inputs[1] == physical &&
-                control.blockArguments[0][0] == physical &&
-                control.blockArguments[1][0] == physical &&
-                control.outputs[0] == physical,
+    require(control.inputs.size() == 3 && control.outputs.size() == 1 &&
+                control.inputs[1] == physical &&
+                control.outputs[0] == physical &&
+                control.blockArguments.empty(),
             "control ports preserve the actual complete layout");
+    auto ports = take(ExecutionPorts::read(*module));
+    auto operations = physicalPlanOperations(*module);
+    const auto &regions = ports.get(operations[control.operation]).bodies;
+    require(regions.size() == 2, "conditional lost its outlined branches");
+    for (auto *entry : regions) {
+      auto *owner = ports.body(entry).owner;
+      auto found = llvm::find_if(plan.operations, [&](const auto &decision) {
+        return operations[decision.operation] == owner;
+      });
+      require(found != plan.operations.end() && found->functionType &&
+                  found->functionType.getNumInputs() == 2 &&
+                  found->functionType.getInput(0) == physical &&
+                  found->functionType.getResult(0) == physical &&
+                  found->blockArguments.size() == 1 &&
+                  found->blockArguments[0].size() == 2 &&
+                  found->blockArguments[0][0] == physical,
+              "outlined branch ABI changed the captured table layout");
+    }
     auto checked = take(validatePhysical(*module, plan));
     accept(materializePhysical(*module, checked));
     require(succeeded(verify(*module)),
@@ -1035,7 +1138,7 @@ local.return %result : !R)";
     auto plan = take(proposePhysical(*module));
     auto operations = physicalPlanOperations(*module);
     auto index = site(plan, *module, "left").operation;
-    operations[index]->setOperand(0, function(*module).getArgument(0));
+    operations[index]->setOperand(1, function(*module).getArgument(1));
     refusedMutation(*module, plan, "binding-stale-selection");
   });
   cases.run("unused generated declaration refuses", [&] {
@@ -1073,7 +1176,7 @@ local.return %result : !R)";
     auto location = FileLineColLoc::get(&context, "conversion.mlir", 7, 5);
     module->walk([&](Operation *op) {
       if (auto name = op->getAttrOfType<StringAttr>("site"))
-        if (name.getValue() == "first")
+        if (name.getValue() == encodedSite("first"))
           op->setLoc(location);
     });
     TestCandidates policy;
@@ -1101,31 +1204,34 @@ local.return %result : !R)";
             "validation refusal retains operation location");
   });
   for (bool changeReturn : {false, true}) {
-    cases.run(
-        changeReturn ? "materialized local return changed"
-                     : "materialized kernel operand changed",
-        [&] {
-          auto before = take(executableFixture(arithmetic(), context));
-          auto checked =
-              take(validatePhysical(*before, take(proposePhysical(*before))));
-          OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-          auto own =
-              take(validatePhysical(*after, take(proposePhysical(*after))));
-          accept(materializePhysical(*after, own));
-          accept(verifyPhysicalMaterialization(*before, *after, checked));
-          auto fn = function(*after);
-          if (changeReturn)
-            fn.getBody().front().back().setOperand(0, fn.getArgument(0));
-          else {
-            auto kernel =
-                *fn.getBody().front().getOps<zkc::plan::ApplyOp>().begin();
-            kernel->setOperand(1, kernel->getOperand(0));
-          }
-          require(succeeded(verify(*after)),
-                  "physical mutation must remain formed");
-          reject(verifyPhysicalMaterialization(*before, *after, checked),
-                 "binding-materialization-correspondence");
-        });
+    cases.run(changeReturn ? "materialized scoped return changed"
+                           : "materialized invocation operand changed",
+              [&] {
+                auto before = take(executableFixture(arithmetic(), context));
+                auto checked = take(
+                    validatePhysical(*before, take(proposePhysical(*before))));
+                OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
+                auto own = take(
+                    validatePhysical(*after, take(proposePhysical(*after))));
+                accept(materializePhysical(*after, own));
+                accept(verifyPhysicalMaterialization(*before, *after, checked));
+                auto fn = function(*after);
+                if (changeReturn)
+                  [&] {
+                    exec::CompleteOp returned;
+                    fn.walk([&](exec::CompleteOp op) { returned = op; });
+                    require(bool(returned), "missing native completion");
+                    returned->setOperand(1, fn.getArgument(1));
+                  }();
+                else {
+                  auto kernel = scopedFinite::application(fn, "field.add");
+                  kernel->setOperand(2, kernel->getOperand(1));
+                }
+                require(succeeded(verify(*after)),
+                        "physical mutation must remain formed");
+                reject(verifyPhysicalMaterialization(*before, *after, checked),
+                       "binding-materialization-correspondence");
+              });
   }
   cases.run("conversion feeds the wrong same-typed table", [&] {
     auto before = take(executableFixture(layouts(), context));
@@ -1136,16 +1242,15 @@ local.return %result : !R)";
     accept(materializePhysical(*after, own));
     auto fn = function(*after);
     Value other;
-    zkc::plan::ApplyOp crossing;
-    fn.walk([&](zkc::plan::ApplyOp op) {
-      if (op.getSite() == "same")
-        other = op.getResult(0);
-      if (other && op.getImplementation() == "arkworks/table.relayout" &&
-          !crossing)
+    exec::ApplyOp crossing;
+    fn.walk([&](exec::ApplyOp op) {
+      if (op.getSite() == encodedSite("same"))
+        other = scopedComputation::payload(op).front();
+      if (other && implementation(op) == "arkworks/table.relayout" && !crossing)
         crossing = op;
     });
     require(other && crossing, "missing per-use conversion");
-    crossing->setOperand(0, other);
+    crossing->setOperand(1, other);
     require(succeeded(verify(*after)),
             "conversion mutation must remain formed");
     reject(verifyPhysicalMaterialization(*before, *after, checked),

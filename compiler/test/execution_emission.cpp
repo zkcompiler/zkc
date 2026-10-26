@@ -376,6 +376,63 @@ int main(int argc, char **argv) {
     refusedDefinitions(nullptr, expected);
     refusedDefinitions(module->lookupSymbol<func::FuncOp>("work"), expected);
   });
+  for (bool bindingLimit : {false, true})
+    cases.run(
+        bindingLimit ? "binding inventory is independent of definitions"
+                     : "definition inventory is independent of bindings",
+        [&] {
+          program::LocalDefinitions expected;
+          expected.bindings.push_back(
+              {"add", {"field.add", {"bls12-381.fr"}, "arkworks/field.add"}});
+          expected.functions.push_back({"work",
+                                        {{"x", physical("field:bls12-381.fr")}},
+                                        {physical("field:bls12-381.fr")},
+                                        {{"", program::Return{{"x"}}}},
+                                        program::LogicalOrigin{"work", {}}});
+          for (unsigned i = 1; i < 4096; ++i) {
+            if (bindingLimit) {
+              auto binding = expected.bindings.front();
+              binding.name = "unused" + std::to_string(i);
+              expected.bindings.push_back(std::move(binding));
+            } else {
+              auto function = expected.functions.front();
+              function.name = "unused" + std::to_string(i);
+              expected.functions.push_back(std::move(function));
+            }
+          }
+          auto module =
+              take(protocol::writeLocalExecution(context, expected, true));
+          auto actual = take(protocol::readLocalExecution(*module, true));
+          require(actual.functions.size() == expected.functions.size() &&
+                      actual.bindings.size() == expected.bindings.size(),
+                  "exact inventory boundary was truncated");
+          if (auto error =
+                  protocol::verifyLocalExecution(*module, expected, true))
+            throw std::runtime_error(llvm::toString(std::move(error)));
+          // A declaration owned by the enclosing profile shares collision work,
+          // but cannot consume the independent execution inventory.
+          auto extra = ModuleOp::create(module->getLoc(), "other_profile");
+          module->getBody()->push_back(extra);
+          auto mixedActual =
+              take(protocol::readExecutionDefinitions(*module, true));
+          require(mixedActual.functions.size() == expected.functions.size() &&
+                      mixedActual.bindings.size() == expected.bindings.size(),
+                  "enclosing declaration changed execution coverage");
+          Operation *last =
+              bindingLimit
+                  ? (*module->getOps<runtime::BindingOp>().begin())
+                        .getOperation()
+                  : (*module->getOps<func::FuncOp>().begin()).getOperation();
+          auto *overflow = last->clone();
+          overflow->setAttr("sym_name",
+                            StringAttr::get(&context, "one_too_many"));
+          module->getBody()->push_back(overflow);
+          refusedDefinitions(module->getOperation(), expected);
+          overflow->erase();
+          // Foreign declarations still cannot shadow an owned symbol.
+          extra->setAttr("sym_name", StringAttr::get(&context, "work"));
+          refusedDefinitions(module->getOperation(), expected);
+        });
   auto check = [&](const program::LocalDefinitions &model, StringRef name) {
     auto emitted = protocol::writeLocalExecution(context, model, true);
     if (!emitted)

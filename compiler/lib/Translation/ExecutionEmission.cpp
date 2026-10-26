@@ -36,7 +36,7 @@ class ResultTypes {
   std::map<std::string, Types> bindings;
   std::map<const program::Instruction *, Types> results;
   bool valid = true;
-  unsigned definitions;
+  unsigned definitions = 0;
 
   Type decode(const BoundType &bound) {
     auto type = decodeBoundType(&context, bound);
@@ -58,8 +58,8 @@ class ResultTypes {
   }
 
 public:
-  ResultTypes(MLIRContext &context, bool physical, unsigned definitions)
-      : context(context), physical(physical), definitions(definitions) {}
+  ResultTypes(MLIRContext &context, bool physical)
+      : context(context), physical(physical) {}
   Type type(StringRef spelling) {
     auto bound = parseBoundType(spelling, physical);
     if (!bound) {
@@ -206,10 +206,10 @@ class Writer {
 
 public:
   ResultTypes types;
-  Writer(MLIRContext &context, bool physical, unsigned bindings)
+  Writer(MLIRContext &context, bool physical)
       : context(context), builder(&context),
         module(ModuleOp::create(builder.getUnknownLoc())),
-        types(context, physical, bindings) {}
+        types(context, physical) {}
   func::FuncOp function(StringRef name, TypeRange inputs, TypeRange outputs) {
     builder.setInsertionPointToEnd(module->getBody());
     Types arguments{runtime::ScopeType::get(&context)};
@@ -403,7 +403,6 @@ writeLocalExecution(MLIRContext &context,
   context.loadDialect<func::FuncDialect, arith::ArithDialect,
                       cf::ControlFlowDialect, exec::ExecDialect,
                       runtime::RuntimeDialect>();
-  return Writer(context, physical, definitions.bindings.size())
-      .run(definitions);
+  return Writer(context, physical).run(definitions);
 }
 } // namespace zkc::protocol

@@ -332,8 +332,12 @@ Reconstruction admits all returned native definitions and bindings at the
 explicit logical or physical stage. It retains physical representations and
 checks every potential region body. It rereads current SSA on each invocation;
 an earlier successful read is not a cached validation grant. Bounds are 4,096
-definitions, 64 active outlined bodies and one million inspected operations,
-in addition to independent native model limits.
+Func/domain definitions and, separately, 4,096 Runtime bindings, 64 active
+outlined bodies and one million inspected operations. Direct declaration
+collision inspection consumes that structural allowance, including declarations
+owned by an enclosing profile; those declarations do not consume the local
+Func/domain or binding inventories. Independent native model limits also apply,
+including the combined callable/participant limit.
 
 The local comparison API takes independently admitted native definitions and
 compares their records against current actual SSA. It checks exact bindings,

@@ -30,11 +30,11 @@ inline llvm::StringRef contract(exec::ApplyOp operation) {
   require(bool(binding), "missing invocation binding");
   return binding.getContract();
 }
-inline llvm::SmallVector<exec::ApplyOp> applications(mlir::Operation *owner,
-                                                     llvm::StringRef name) {
+inline llvm::SmallVector<exec::ApplyOp>
+applications(mlir::Operation *owner, llvm::StringRef name = {}) {
   llvm::SmallVector<exec::ApplyOp> result;
   owner->walk([&](exec::ApplyOp operation) {
-    if (contract(operation) == name)
+    if (name.empty() || contract(operation) == name)
       result.push_back(operation);
   });
   return result;

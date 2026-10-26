@@ -25,11 +25,18 @@ verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false) {
     return failure();
   auto &definitions = scope->getRegion(0).front();
   llvm::StringSet<> symbols;
-  unsigned count = 0, remaining = 1000000;
+  unsigned definitionsCount = 0, bindingsCount = 0, remaining = 1000000;
   // Reject collisions before any nested symbol user performs a lookup. Other
   // declarations cannot shadow or ambiguously select an execution definition.
   for (Operation &op : definitions) {
-    if (++count > 4096)
+    if (!remaining)
+      return failure();
+    --remaining;
+    // Bindings and callable/domain definitions have independent inventories.
+    // Enclosing protocol metadata belongs to neither; collision inspection
+    // still consumes the shared structural allowance.
+    if ((isa<runtime::BindingOp>(op) && ++bindingsCount > 4096) ||
+        (isa<func::FuncOp, data::DomainOp>(op) && ++definitionsCount > 4096))
       return failure();
     if (auto raw = op.getAttr(SymbolTable::getSymbolAttrName())) {
       auto name = dyn_cast<StringAttr>(raw);

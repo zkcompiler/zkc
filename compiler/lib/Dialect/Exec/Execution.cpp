@@ -857,10 +857,14 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
 }
 Expected<program::LocalDefinitions> Reader::run(bool mixed) {
   program::LocalDefinitions result;
-  unsigned definitions = 0;
+  unsigned definitions = 0, bindings = 0;
   for (Operation &op : module->getRegion(0).front()) {
-    if (++definitions > 4096)
-      return error("execution-cfg", "definition limit");
+    if (!remaining)
+      return error("execution-cfg", "definition inspection limit");
+    --remaining;
+    if ((isa<runtime::BindingOp>(op) && ++bindings > 4096) ||
+        (isa<func::FuncOp, data::DomainOp>(op) && ++definitions > 4096))
+      return error("execution-cfg", "definition inventory limit");
     if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
       if (!attributes(binding, {"sym_name", "contract", "arguments",
                                 "implementation", "physical_arguments"}))

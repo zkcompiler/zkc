@@ -339,10 +339,11 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
   }
   unsigned binding = 0, root = 0, definitions = 0;
   for (Operation &op : module->getRegion(0).front()) {
-    if (!charge() || ++definitions > 4096)
+    if (!charge() ||
+        (isa<func::FuncOp, data::DomainOp>(op) && ++definitions > 4096))
       return false;
     if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
-      if (binding == expected.bindings.size() ||
+      if (binding >= 4096 || binding == expected.bindings.size() ||
           !attrs(declaration, {"sym_name", "contract", "arguments",
                                "implementation", "physical_arguments"}))
         return false;
