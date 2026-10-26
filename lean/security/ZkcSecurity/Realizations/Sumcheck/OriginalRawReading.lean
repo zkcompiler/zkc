@@ -52,7 +52,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     Zkc.Construction.Original.fold, PIR.Process.interpretState,
     Zkc.Construction.Original.operations, Zkc.Construction.Original.receive,
     Zkc.Construction.Original.record, routes.mode, routes.low, routes.high,
-    Domain.Payload.ofValue,
+    Domain.Payload.ofValue, Ty.isService, eq_self, dite_true,
     PIR.Process.bind]
   constructor
   · apply DomainReduction.ReadingTo.receive (I := Nominal.signature F "bls12-381.fr")
@@ -62,7 +62,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
       (fun value => value) rfl (by intro payload; simpa using Nominal.received_message _ _ payload)
     intro payload low decoded
     have payloadEq : payload = .field "bls12-381.fr" low := by
-      simpa only [Domain.Payload.ofValue, Option.some.injEq] using
+      simpa only [Domain.Payload.ofValue, Ty.isService, eq_self, dite_true, Option.some.injEq] using
         (Domain.Payload.ofValue_value decoded).symm
     subst payload
     apply DomainReduction.ReadingTo.observe
@@ -73,14 +73,14 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
       (fun value => value) rfl (by intro payload; simpa using Nominal.received_message _ _ payload)
     intro payload high decoded
     have payloadEq : payload = .field "bls12-381.fr" high := by
-      simpa only [Domain.Payload.ofValue, Option.some.injEq] using
+      simpa only [Domain.Payload.ofValue, Ty.isService, eq_self, dite_true, Option.some.injEq] using
         (Domain.Payload.ofValue_value decoded).symm
     subst payload
     apply DomainReduction.ReadingTo.observe
     by_cases passed : state.scalar = low + high
     · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations,
         Zkc.Construction.Original.query, Zkc.Construction.Original.send, routes.mode, routes.draw,
-        routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue,
+        routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self,
         Zkc.Construction.Original.queryField, request, ↓reduceDIte, PIR.Process.bind]
       apply DomainReduction.ReadingTo.query (I := Nominal.signature F "bls12-381.fr")
         _ _ _ (.query _ request) _ (DomainReduction.fieldReply request)
@@ -107,7 +107,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     by_cases passed : state.scalar = low + high
     · simp only [passed, ite_true, PIR.Process.interpretState, Zkc.Construction.Original.operations,
         Zkc.Construction.Original.query, Zkc.Construction.Original.send, routes.mode, routes.draw,
-        routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue,
+        routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self,
         Zkc.Construction.Original.queryField, request, ↓reduceDIte, PIR.Process.bind, List.append_assoc]
       apply DomainReduction.CoherentTo.query _ _ _
       · exact DomainReduction.drawRequest_of_request request
