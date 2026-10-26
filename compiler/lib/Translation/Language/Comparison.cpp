@@ -504,7 +504,8 @@ class Comparator {
         llvm::scope_exit restore([&] { scoped = parent; });
         auto &entry = domainOp->getRegion(0).front();
         auto cursor = entry.begin();
-        Values domains;
+        mlir::Value root;
+        SmallVector<mlir::Type> admittedItems;
         for (auto input : entry.getArguments()) {
           auto *elements =
               next(entry, cursor, span, "data.domain_elements", input, 1);
@@ -514,14 +515,17 @@ class Comparator {
             fail("mapped element domain differs");
             return {};
           }
-          domains.push_back(elements->getResult(0));
-        }
-        mlir::Value root = domains.front();
-        if (domains.size() > 1) {
-          auto *zip = next(entry, cursor, span, "data.domain_zip", domains, 1);
+          admittedItems.push_back(scalar);
+          if (!root) {
+            root = elements->getResult(0);
+            continue;
+          }
+          auto *zip = next(entry, cursor, span, "data.domain_zip",
+                           {root, elements->getResult(0)}, 1);
           if (!zip || !attributes(*zip, {}) ||
-              zip->getResult(0).getType() != domainType) {
-            fail("mapped zip domain differs");
+              zip->getResult(0).getType() !=
+                  data::DomainType::get(module.getContext(), admittedItems)) {
+            fail("mapped zip domain or row admission order differs");
             return {};
           }
           root = zip->getResult(0);

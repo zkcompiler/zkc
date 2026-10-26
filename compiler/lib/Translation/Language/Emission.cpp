@@ -276,17 +276,22 @@ class Emitter {
       for (auto input : vectors)
         domainBody.addArgument(input.getType(), location);
       builder.setInsertionPointToEnd(&domainBody);
-      Values domains;
+      mlir::Value root;
+      SmallVector<mlir::Type> admittedItems;
       auto elementDomain = data::DomainType::get(&context, *scalar);
       for (auto input : domainBody.getArguments()) {
         auto *elements = make("data.domain_elements", elementDomain, input, {});
         if (!elements)
           return {};
-        domains.push_back(elements->getResult(0));
-      }
-      mlir::Value root = domains.front();
-      if (domains.size() > 1) {
-        auto *zip = make("data.domain_zip", domainType, domains, {});
+        admittedItems.push_back(scalar->front());
+        if (!root) {
+          root = elements->getResult(0);
+          continue;
+        }
+        // A mismatched row stops before any later row is admitted.
+        auto *zip = make("data.domain_zip",
+                         data::DomainType::get(&context, admittedItems),
+                         {root, elements->getResult(0)}, {});
         if (!zip)
           return {};
         root = zip->getResult(0);

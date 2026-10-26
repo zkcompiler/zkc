@@ -153,8 +153,8 @@ mapping = export(mapped)
 collection = next(d for d in mapping[7] if d[0] == 'collect')
 domain = next(d for d in mapping[4] if d[1] == collection[5])
 with case('collection preserves all zipped operands including an unused row'):
-    assert domain[3:] == [[['elements', 0], ['elements', 1], ['elements', 2],
-                          ['zip', [2, 1, 0]]], 0]
+    assert domain[3:] == [[['elements', 0], ['elements', 1], ['zip', [1, 0]],
+                          ['elements', 2], ['zip', [1, 0]]], 0]
     assert collection[4] == [['vector', 'bls12-381.fr']]
     assert collection[7] == ''
     callback = next(d for d in mapping[7] if d[1] == collection[6])
@@ -169,7 +169,8 @@ with case('domain item order follows the actual SSA zip operands'):
     operands = zipped[1].split(', ')
     changed = mapped.replace(zipped[0], '"data.domain_zip"(' + ', '.join(reversed(operands)) + ')')
     actual = next(d for d in export(changed)[4] if d[1] == domain[1])
-    assert actual[3][-1] == ['zip', [0, 1, 2]]
+    assert actual[3][2] == ['zip', [0, 1]]
+    assert actual[3][-1] == ['zip', [1, 0]]
 
 with case('unused domain constructors retain their ordered admission'):
     element = re.search(r'"data.domain_elements"[^\n]+', mapped)[0]

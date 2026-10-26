@@ -241,6 +241,40 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("map mismatch precedes admission of a later unused row", [&] {
+    const Sample sample{"ordered map rows", R"(
+type Vector<F:Field>=builtin("vector",F);
+math fn difference(a:Fr,b:Fr,unused:Fr)->Fr{return a-b;}
+fn work(a:Vector<Fr>,b:Vector<Fr>,unused:Vector<Fr>)->Vector<Fr>{
+ return map difference(each a,each b,each unused);
+}
+protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
+ ->(r:Vector<Fr>@P){return work(a,b,unused);}
+)"};
+    Fixture fixture(context, sample);
+    mlir::Operation *domain = nullptr;
+    fixture.module->walk([&](mlir::Operation *op) {
+      if (op->getName().getStringRef() == "data.domain")
+        domain = op;
+    });
+    require(domain, "missing map domain");
+    SmallVector<mlir::Operation *> constructors;
+    for (auto &op : domain->getRegion(0).front().without_terminator())
+      constructors.push_back(&op);
+    require(constructors.size() == 5 &&
+                constructors[2]->getName().getStringRef() ==
+                    "data.domain_zip" &&
+                constructors[3]->getName().getStringRef() ==
+                    "data.domain_elements" &&
+                constructors[4]->getName().getStringRef() == "data.domain_zip",
+            "row equality is delayed past a later row admission");
+    // This remains well-formed SSA but changes the first reached failure.
+    constructors[3]->moveBefore(constructors[2]);
+    require(succeeded(verify(*fixture.module)),
+            "admission-order mutation is not well formed");
+    refuses(compareOriginal(fixture.entry, *fixture.module),
+            "source.correspondence");
+  });
   cases.run("role-free preparation refuses protocol obligations", [&] {
     Fixture fixture(context, samples[0]);
     auto preparation = mathematical::PreparedProtocol::prepare(*fixture.module);
