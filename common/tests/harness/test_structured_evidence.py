@@ -138,6 +138,24 @@ def successful_run(bridge, args):
     return report
 
 
+def test_inlining_selects_toolchain_from_package_directory(bridge, source_tree, tmp_path, monkeypatch):
+    monkeypatch.setattr(bridge, "ROOT", source_tree)
+    inlining = load("inlining_toolchain_selection", BRIDGE / "inlining.py")
+    monkeypatch.setattr(inlining, "SUBJECTS", ())
+    args = arguments(tmp_path)
+    args.optimizer = args.compiler
+    # Model Elan's working-directory lookup before Lake processes its arguments.
+    args.lake = executable(tmp_path / "lake")
+    args.lake.write_text("#!/bin/sh\npwd\n")
+    suite = bridge.Suite(args)
+    assert suite.run(lambda s: s.case("toolchain", lambda: inlining.run_cases(s))) == 0
+    environment = json.loads((suite.directory / "environment.json").read_text())
+    assert environment["toolchain"] == str(source_tree / "lean")
+    command, = [row for row in suite.commands if row["label"] == "lean-version"]
+    assert command["cwd"] == str(source_tree / "lean")
+    assert command["argv"] == [str(args.lake), "env", "lean", "--version"]
+
+
 @pytest.mark.parametrize("failure", ["compiler", "optimizer", "version-exit", "version-missing", "cases"])
 def test_cli_setup_failure_replaces_success_and_preserves_old_archive(
         bridge, source_tree, tmp_path, monkeypatch, failure):
