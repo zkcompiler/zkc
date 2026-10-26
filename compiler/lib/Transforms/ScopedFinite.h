@@ -18,7 +18,16 @@ using ScopedCallbackEmitter =
         exec::ScopedExecutionBuilder &)>;
 using ScopedCallbackReader =
     llvm::function_ref<mlir::FailureOr<ScopedCallbackResult>(
-        mlir::func::FuncOp, mlir::ValueRange, mlir::Operation *&)>;
+        mlir::func::FuncOp, mlir::ValueRange, llvm::StringRef,
+        mlir::Operation *&)>;
+
+// Required construction accounts shared with callback substitution. Debits
+// bound each generated instruction and its CFG plumbing before allocation.
+struct ScopedEmissionBudget {
+  uint64_t &work;
+  uint64_t &siteBytes;
+  std::optional<CapacityCause> &capacity;
+};
 
 // Producer-only traversal at the caller's current scoped insertion point.
 // Callback substitution uses the same builder and borrowed runtime scope.
@@ -29,7 +38,8 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedExpression(
     exec::ScopedExecutionBuilder &control, ScopedCallbackEmitter callback,
     mathematical::RealizationWork &work,
     MathematicalSelectionPolicy policy = {},
-    mathematical::RealizationTrace *trace = nullptr);
+    mathematical::RealizationTrace *trace = nullptr,
+    llvm::StringRef occurrence = {}, ScopedEmissionBudget *budget = nullptr);
 } // namespace zkc::finite
 
 #endif

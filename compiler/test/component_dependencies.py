@@ -190,6 +190,7 @@ def main():
         ROOT / "lib/Transforms/ScopedCandidate.h",
         ROOT / "lib/Transforms/ScopedSubstitution.h",
         ROOT / "lib/Transforms/ScopedFinite.h",
+        ROOT / "lib/Transforms/ScopedPreparation.h",
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
         ROOT / "lib/Transforms/HelperNormalization.h",

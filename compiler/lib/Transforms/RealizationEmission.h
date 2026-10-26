@@ -29,6 +29,7 @@ class RealizationEmitter {
 
 public:
   RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
+  void reserveNames(mlir::Operation *source);
 
   mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
                                   const protocol::BindingApplication &);

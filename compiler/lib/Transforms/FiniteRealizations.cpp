@@ -168,6 +168,8 @@ class Realizer {
   NumericalExpressionMode expressionMode;
   bool failedHelper = false;
   ScopedCallbackEmitter scopedCallback;
+  ScopedEmissionBudget *budget;
+  StringRef scopedOccurrence;
   bool stoppedCallback = false;
   unsigned nextRegion = 0;
   struct Control {
@@ -196,9 +198,48 @@ class Realizer {
     return *control;
   }
   std::string sitePrefix = "finite_";
-  std::string site() { return sitePrefix + std::to_string(occurrence++); }
+  bool reserve(uint64_t amount) {
+    if (failedHelper)
+      return false;
+    if (!budget)
+      return true;
+    if (amount > budget->work) {
+      budget->capacity =
+          CapacityCause{WorkOwner::AlgorithmExpansion, amount, budget->work};
+      failedHelper = true;
+      return false;
+    }
+    budget->work -= amount;
+    return true;
+  }
+  std::string site() {
+    auto suffix = std::to_string(occurrence++);
+    auto size = sitePrefix.size() + suffix.size();
+    if (budget) {
+      if (size > budget->siteBytes) {
+        budget->capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes, size,
+                                         budget->siteBytes};
+        failedHelper = true;
+        return {};
+      }
+      budget->siteBytes -= size;
+    }
+    return sitePrefix + suffix;
+  }
   Value emit(const protocol::BindingApplication &application, ValueRange inputs,
              Type output, ArrayRef<std::string> params = {}) {
+    // A fixed envelope covers the invoke/dispatch/success block, binding and
+    // operands. Debit before creating any CFG or declaration. Callback copies
+    // and nested traversal spend the same enclosing transaction account.
+    if (!reserve(32 + 8 * (inputs.size() + bool(output) + params.size() +
+                           application.arguments.size())) ||
+        llvm::any_of(inputs, [](Value value) { return !value; })) {
+      failedHelper = true;
+      return {};
+    }
+    auto occurrence = site();
+    if (failedHelper)
+      return {};
     SmallVector<Type> outputs;
     if (output)
       outputs.push_back(output);
@@ -211,13 +252,13 @@ class Realizer {
       auto values = control.invoke(
           "exec.apply", outputs, control.scoped(inputs),
           {builder.getNamedAttr("binding", reference),
-           builder.getNamedAttr("site", builder.getStringAttr(site())),
+           builder.getNamedAttr("site", builder.getStringAttr(occurrence)),
            builder.getNamedAttr("parameters",
                                 builder.getArrayAttr(parameters))});
       return output ? values.front() : Value();
     }
-    auto *op = emitter.emit(builder, loc, site(), application, inputs, outputs,
-                            params);
+    auto *op = emitter.emit(builder, loc, occurrence, application, inputs,
+                            outputs, params);
     return output ? op->getResult(0) : Value();
   }
   Value emit(StringRef contract, ValueRange inputs, Type output,
@@ -230,6 +271,8 @@ class Realizer {
     return emit("index.constant", {}, index, {}, {std::to_string(n)});
   }
   Value length(Value input, unsigned axis = 0) {
+    if (failedHelper || !input)
+      return {};
     auto col = mathematical::collectionRealization(input.getType());
     assert(col && axis < col->rank && "admitted collection axis required");
     if (col->staticExtent)
@@ -241,6 +284,14 @@ class Realizer {
   void require(Value condition) { emit("control.require", condition, {}, {}); }
   Control control(StringRef name, ValueRange inputs, TypeRange outputs,
                   unsigned regions) {
+    if (!reserve(64 + 16 * (inputs.size() + outputs.size() + regions)) ||
+        llvm::any_of(inputs, [](Value value) { return !value; })) {
+      failedHelper = true;
+      return {};
+    }
+    auto occurrence = site();
+    if (failedHelper)
+      return {};
     if (scoped()) {
       Control result;
       bool loop = name == "local.for";
@@ -259,7 +310,8 @@ class Realizer {
         std::string name;
         do {
           name = "_finite_region_" + std::to_string(nextRegion++);
-        } while (SymbolTable::lookupSymbolIn(unit, name));
+        } while (SymbolTable::lookupSymbolIn(unit, name) ||
+                 SymbolTable::lookupSymbolIn(sourceRoot, name));
         auto body = func::FuncOp::create(
             builder, loc, name,
             builder.getFunctionType(
@@ -275,7 +327,6 @@ class Realizer {
         return body;
       };
       auto &control = scopeControl();
-      auto occurrence = site();
       result.outputs =
           loop ? control.loop(inputs[0], inputs[1],
                               inputs.slice(2, outputs.size()), captures,
@@ -288,13 +339,15 @@ class Realizer {
     OperationState state(loc, name);
     state.addOperands(inputs);
     state.addTypes(outputs);
-    state.addAttribute("site", builder.getStringAttr(site()));
+    state.addAttribute("site", builder.getStringAttr(occurrence));
     for (unsigned i = 0; i < regions; ++i)
       state.addRegion();
     auto *op = builder.create(state);
     return {op, SmallVector<Value>(op->getResults()), {}, {}};
   }
   SmallVector<Value> region(Control &control, unsigned i, TypeRange types) {
+    if (failedHelper)
+      return {};
     if (scoped()) {
       auto body = control.bodies[i];
       assert(llvm::equal(body.getArgumentTypes().drop_front(), types));
@@ -309,6 +362,8 @@ class Realizer {
     return SmallVector<Value>(block->getArguments());
   }
   void resume(const Control &control) {
+    if (failedHelper)
+      return;
     if (scoped()) {
       builder.restoreInsertionPoint(control.continuation);
       stoppedCallback = false;
@@ -316,6 +371,8 @@ class Realizer {
       builder.setInsertionPointAfter(control.operation);
   }
   void yield(ValueRange values) {
+    if (!reserve(8 + 2 * values.size()))
+      return;
     if (scoped()) {
       if (!stoppedCallback) {
         auto current = function();
@@ -342,11 +399,13 @@ class Realizer {
     SmallVector<Type> types(inputs.size() - 1, index);
     auto branch = control("local.if", inputs, {index}, 2);
     auto yes = region(branch, 0, types);
+    if (failedHelper)
+      return {};
     yield(emit("index.sub", {yes[upper == lower ? 0 : 1], yes[0]}, index));
     region(branch, 1, types);
     yield(number(0));
     resume(branch);
-    return branch.outputs[0];
+    return failedHelper ? Value() : branch.outputs[0];
   }
   Value cardinalityProduct(Value left, Value right) {
     validateBound(left);
@@ -358,6 +417,8 @@ class Realizer {
   void admit(ArrayRef<Operation *> admission) {
     // Visit all constructors in descriptor order, including dead intermediates.
     for (Operation *constructor : admission) {
+      if (!reserve(1 + constructor->getNumOperands()))
+        return;
       auto &op = *constructor;
       Value size;
       if (isa<data::DomainElementsOp, data::DomainIndicesOp>(op)) {
@@ -403,6 +464,8 @@ class Realizer {
   }
   SmallVector<Value> items(Value descriptor, Value position,
                            IRMapping &mapping) {
+    if (!reserve(1))
+      return {};
     auto *op = descriptor.getDefiningOp();
     auto actual = [&](Value v) { return mapping.lookup(values.lookup(v)); };
     if (isa<data::DomainZipOp>(op)) {
@@ -504,6 +567,8 @@ class Realizer {
   }
 
   SmallVector<Value> apply(CallbackRole role, CallbackValues actuals) {
+    if (!reserve(1))
+      return {};
     auto callback = readCallbackABI(computation, role);
     if (failed(callback)) {
       failedHelper = true;
@@ -573,9 +638,12 @@ class Realizer {
       return results;
     }
     if (scoped()) {
+      auto occurrence = site();
+      if (failedHelper)
+        return {};
       auto result =
           scopedCallback(cast<func::FuncOp>(helper), arguments.drop_front(),
-                         site(), scopeControl());
+                         occurrence, scopeControl());
       if (failed(result)) {
         failedHelper = true;
         return {};
@@ -655,13 +723,16 @@ public:
            NumericalExpressionMode expressionMode =
                NumericalExpressionMode::PreferNative,
            ScopedCallbackEmitter scopedCallback = {},
-           exec::ScopedExecutionBuilder *entryControl = nullptr)
+           exec::ScopedExecutionBuilder *entryControl = nullptr,
+           StringRef scopedOccurrence = {},
+           ScopedEmissionBudget *budget = nullptr)
       : unit(unit), builder(builder), loc(unit->getLoc()),
         index(IntegerType::get(unit->getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
         work(work), recipes(recipes), observation(observation),
         retryOrdered(retryOrdered), expressionMode(expressionMode),
-        scopedCallback(scopedCallback), entryControl(entryControl),
+        scopedCallback(scopedCallback), budget(budget),
+        scopedOccurrence(scopedOccurrence), entryControl(entryControl),
         scopedEntry(scopedCallback ? function() : func::FuncOp()) {}
   FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
                                          bool optimize,
@@ -674,6 +745,7 @@ public:
     if (!sourceRoot ||
         failed(describe(source, computation, sourceRoot, &symbols)))
       return failure();
+    emitter.reserveNames(sourceRoot);
     auto partitions = partitionEntry(computation, entry);
     if (failed(partitions))
       return failure();
@@ -752,8 +824,11 @@ public:
     failedHelper = false;
     loc = source->getLoc();
     if (computation.total || scoped())
-      sitePrefix = source->getAttrOfType<StringAttr>("site").getValue().str() +
-                   "_finite_";
+      sitePrefix =
+          (scopedOccurrence.empty()
+               ? source->getAttrOfType<StringAttr>("site").getValue().str()
+               : scopedOccurrence.str()) +
+          "_finite_";
     else
       sitePrefix = "finite_";
     for (auto [formal, actual] :
@@ -761,6 +836,8 @@ public:
              partitions->domain))
       values[formal] = actual;
     admit(admission);
+    if (failedHelper)
+      return failure();
     SmallVector<Value> initial(partitions->initialState), environment;
     append_range(environment, partitions->domain);
     append_range(environment, partitions->captures);
@@ -863,6 +940,8 @@ public:
       assert(col && col->empty && "admitted collection construction required");
       initial.push_back(emit(*col->empty, {}, col->storage));
     }
+    if (failedHelper)
+      return failure();
     Value root = computation.domain.getBody().front().back().getOperand(0);
     Value zero = number(0), upper = sizes.lookup(root);
     // Capture only Copy/Drop values; each affine state is in the carried
@@ -890,12 +969,16 @@ public:
     for (Value v : captures)
       arguments.push_back(v.getType());
     auto body = region(loop, 0, arguments);
+    if (failedHelper)
+      return failure();
     IRMapping mapping;
     auto state = ValueRange(body).slice(1, initial.size());
     auto captured = ValueRange(body).drop_front(1 + initial.size());
     for (auto [a, b] : zip(captures, captured))
       mapping.map(a, b);
     auto item = items(root, body[0], mapping);
+    if (failedHelper)
+      return failure();
     SmallVector<Value> env;
     for (Value v : environment)
       env.push_back(mapping.lookup(v));
@@ -927,6 +1010,8 @@ public:
         for (Value v : branchCaptures)
           branchTypes.push_back(v.getType());
         auto yes = region(branch, 0, branchTypes);
+        if (failedHelper)
+          return failure();
         IRMapping branchMapping;
         for (auto [a, b] : zip(branchCaptures, yes))
           branchMapping.map(a, b);
@@ -955,6 +1040,8 @@ public:
     append_range(next, captured);
     yield(next);
     resume(loop);
+    if (failedHelper)
+      return failure();
     SmallVector<Value> results(loop.outputs);
     if (!composition && computation.collect &&
         computation.signature.getResult(0) != results[0].getType()) {
@@ -964,6 +1051,8 @@ public:
       results[0] =
           emit(*col->wrap, results, computation.signature.getResult(0));
     }
+    if (failedHelper)
+      return failure();
     return results;
   }
   LogicalResult run(Operation *declaration, bool optimize) {
@@ -1001,7 +1090,8 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     Operation *source, ValueRange inputs, OpBuilder &builder,
     exec::ScopedExecutionBuilder &control, ScopedCallbackEmitter callback,
     mathematical::RealizationWork &work, MathematicalSelectionPolicy policy,
-    mathematical::RealizationTrace *trace) {
+    mathematical::RealizationTrace *trace, StringRef occurrenceName,
+    ScopedEmissionBudget *budget) {
   auto *block = builder.getInsertionBlock();
   auto function =
       block ? dyn_cast<func::FuncOp>(block->getParentOp()) : func::FuncOp();
@@ -1018,7 +1108,7 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
                                        policy, &work);
   Realizer realizer(owner, builder, work, mathematical::mathematicalRecipes(),
                     &scope, false, policy.numericalExpressions, callback,
-                    &control);
+                    &control, occurrenceName, budget);
   auto result = realizer.emitBody(source, inputs, policy.finiteBulk);
   if (succeeded(result))
     scope.complete();

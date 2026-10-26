@@ -23,12 +23,13 @@ class ScopedCandidate {
       : closure(std::move(value)) {}
 
 public:
+  enum class Requests { Resolved, Retained };
   static llvm::Expected<std::unique_ptr<ScopedCandidate>>
-  read(mlir::Operation *owner) {
+  read(mlir::Operation *owner, Requests requests = Requests::Resolved) {
     auto value = protocol::readSourceExecutionClosure(owner);
     if (!value)
       return value.takeError();
-    if (!value->computations.empty())
+    if (requests == Requests::Resolved && !value->computations.empty())
       return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                      "unresolved numerical candidate");
     auto result = std::unique_ptr<ScopedCandidate>(

@@ -427,6 +427,33 @@ leaves the original and caller-owned occurrence output unchanged. This edge
 does not select a numerical implementation, add native participant completion,
 or admit an unresolved source helper as a native executable.
 
+## Checked ordered finite preparation
+
+Ordered scoped folds and collections are expanded before optional numerical
+selection. Their callbacks may stop or carry affine state; a total numerical
+formula has a separate contract. Each callback occurrence receives its own
+actual mathematical requests and qualified sites. Selection can then choose or
+fall back independently for those occurrences.
+
+The producer substitutes callbacks under the borrowed scope and preserves
+reached descriptor admission, predicate ordering, zero-trip seed return,
+collection construction, outlined completion and first-stop behavior. Nested
+requests use the same construction and occurrence-byte accounts. Each emitted
+instruction reserves a conservative allowance for its CFG plumbing before
+allocation; domain visits and callback copies also debit shared work. Refusal
+discards the private candidate without modifying the source.
+
+The physical transaction retains the actual finite-prepared module alongside
+the selected numerical module. Its independent validation checks both edges:
+source to finite preparation, then finite preparation to numerical selection.
+The finite reader interprets the original callback under actual operand
+substitution, checking exact generated occurrence sequences, ordered controls,
+callback bodies, stops and retained declarations. Validation does not regenerate
+an executable intermediate or accept a producer's expansion map as evidence.
+The snapshots are private to the transaction; source identity and current
+contents must still match before publication. These native checks do not by
+themselves establish a formal simulation or a runtime resource equivalence.
+
 ## Formal consumer boundary
 
 A source exporter connects the admitted profile to the independent

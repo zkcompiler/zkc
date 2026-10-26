@@ -1,5 +1,7 @@
 #include "Kernel/Support.h"
 #include "NumericalSelection.h"
+#include "ScopedFinite.h"
+#include "ScopedPreparation.h"
 #include "ScopedSubstitution.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
@@ -42,6 +44,7 @@ class ScopedExpander {
   const llvm::DenseMap<Operation *, func::FuncOp> *replacements;
   mathematical::NumericalSelection *selection;
   std::optional<CapacityCause> *capacity;
+  mathematical::RealizationWork *finiteWork;
   llvm::DenseSet<Operation *> replacedDefinitions;
 
   void record(Operation *before, Operation *after) {
@@ -87,7 +90,7 @@ class ScopedExpander {
     auto original = op->getAttrOfType<StringAttr>("site");
     if (!original)
       return {};
-    if (replacements && path.empty()) {
+    if ((replacements || finiteWork) && path.empty()) {
       if (original.getValue().size() > remainingBytes) {
         if (capacity)
           *capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes,
@@ -216,6 +219,51 @@ class ScopedExpander {
           continue;
         }
       }
+      if (finiteWork && isa<exec::FoldOp, exec::CollectOp>(op)) {
+        auto occurrence = site(op, path);
+        if (!valid)
+          return {};
+        if (!finiteWork->finiteExpressions) {
+          if (capacity)
+            *capacity = CapacityCause{WorkOwner::AlgorithmExpansion, 1, 0};
+          valid = false;
+          return {};
+        }
+        --finiteWork->finiteExpressions;
+        auto callback = [&](func::FuncOp callee, ValueRange actuals,
+                            StringRef callSite,
+                            exec::ScopedExecutionBuilder &scope)
+            -> FailureOr<finite::ScopedCallbackResult> {
+          Environment arguments;
+          for (auto [formal, actual] :
+               zip(callee.getArguments().drop_front(), actuals))
+            arguments[formal] = actual;
+          Assignments nested(path);
+          nested.emplace_back(callSite.str(), callee.getSymName().str());
+          auto result = body(callee, std::move(arguments), scope, nested,
+                             depth + 1, true);
+          if (!valid)
+            return failure();
+          return finite::ScopedCallbackResult{std::move(result.values),
+                                              result.stopped};
+        };
+        std::optional<CapacityCause> cause;
+        finite::ScopedEmissionBudget budget{remaining, remainingBytes, cause};
+        MathematicalSelectionPolicy ordered;
+        ordered.finiteBulk = false;
+        auto result = finite::realizeScopedExpression(
+            op, inputs, builder, control, callback, *finiteWork, ordered,
+            nullptr, occurrence, &budget);
+        if (failed(result) || result->size() != step.outputs.size()) {
+          if (capacity && cause)
+            *capacity = cause;
+          valid = false;
+          return {};
+        }
+        for (auto [before, after] : zip(step.outputs, *result))
+          env[before] = after;
+        continue;
+      }
       if (auto call = dyn_cast<func::CallOp>(op)) {
         auto callee = symbols.lookup<func::FuncOp>(call.getCallee());
         Assignments nested(path);
@@ -304,13 +352,15 @@ public:
       protocol_ir::ProtocolModuleOp target,
       const llvm::DenseMap<Operation *, func::FuncOp> *replacements = nullptr,
       mathematical::NumericalSelection *selection = nullptr,
-      std::optional<CapacityCause> *capacity = nullptr)
+      std::optional<CapacityCause> *capacity = nullptr,
+      mathematical::RealizationWork *finiteWork = nullptr)
       : source(source), symbols(original), target(target),
         builder(target.getContext()),
         remaining(selection ? selection->remainingCopy : defaultRemaining),
         remainingBytes(selection ? selection->remainingSiteBytes
                                  : defaultBytes),
-        replacements(replacements), selection(selection), capacity(capacity) {
+        replacements(replacements), selection(selection), capacity(capacity),
+        finiteWork(finiteWork) {
     if (replacements)
       for (const auto &replacement : *replacements)
         replacedDefinitions.insert(replacement.second);
@@ -435,6 +485,43 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
   if (failed(ScopedExpander(*closure, owner, target, &replacements, &selection,
                             capacity)
                  .run(owner)))
+    return {};
+  return candidate;
+}
+
+OwningOpRef<ModuleOp>
+prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
+                    uint64_t &copy, uint64_t &siteBytes,
+                    std::optional<CapacityCause> &capacity) {
+  if (failed(verify(source)) || !hasSingleElement(*source.getBody()) ||
+      !kernel::chargeCopy(source, copy, &capacity))
+    return {};
+  auto owner =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+  if (!owner)
+    return {};
+  auto closure = readSourceExecutionClosure(owner);
+  if (!closure) {
+    diagnostics::emit(owner.emitOpError(), closure.takeError());
+    return {};
+  }
+  OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
+  candidate->getOperation()->setAttrs(source->getAttrs());
+  OpBuilder builder(candidate->getBodyRegion());
+  auto target = protocol_ir::ProtocolModuleOp::create(builder, owner.getLoc(),
+                                                      owner.getProfileAttr());
+  target->setAttrs(owner->getAttrs());
+  target.getBody().push_back(new Block);
+  mathematical::NumericalSelection budgets;
+  budgets.remainingCopy = copy;
+  budgets.remainingSiteBytes = siteBytes;
+  auto result = ScopedExpander(*closure, owner, target, nullptr, &budgets,
+                               &capacity, &work)
+                    .run(owner);
+  copy = budgets.remainingCopy;
+  siteBytes = budgets.remainingSiteBytes;
+  if (failed(result) || failed(verify(*candidate)) ||
+      failed(verifyScopedFinitePreparation(source, *candidate, work)))
     return {};
   return candidate;
 }

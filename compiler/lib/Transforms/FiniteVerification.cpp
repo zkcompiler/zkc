@@ -38,6 +38,30 @@ class Reader {
   bool valid = true, inlineMode = false;
   bool stoppedCallback = false;
   bool allowBulk;
+  unsigned occurrence = 0;
+  std::string nextSite() {
+    auto suffix = std::to_string(occurrence++);
+    auto size =
+        limits.finiteSite.size() + StringRef("_finite_").size() + suffix.size();
+    if (!limits.finiteSite.empty() && limits.sharedSiteBytes) {
+      if (size > *limits.sharedSiteBytes) {
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes, size,
+                                *limits.sharedSiteBytes}};
+        fail();
+        return {};
+      }
+      *limits.sharedSiteBytes -= size;
+    }
+    return (limits.finiteSite + "_finite_" + suffix).str();
+  }
+  bool site(Operation *op) {
+    if (limits.finiteSite.empty())
+      return true;
+    auto expected = nextSite();
+    auto actual = op->getAttrOfType<StringAttr>("site");
+    return valid && actual && actual.getValue() == expected;
+  }
   HelperReader helperReader;
   const CollectFold *composition = nullptr;
   ComposedHelperReader composedHelper;
@@ -108,8 +132,9 @@ class Reader {
                        : runtime::BindingOp();
     auto params = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
-    if (!binding || !params || !site || op->getAttrs().size() != 3 ||
-        ports.bodies(op) || ports.inputs(op) != operands ||
+    if (!binding || !params || !site || !this->site(op) ||
+        op->getAttrs().size() != 3 || ports.bodies(op) ||
+        ports.inputs(op) != operands ||
         ports.outputs(op).size() != unsigned(bool(result)) ||
         (result && ports.outputs(op)[0].getType() != result) ||
         binding.getContract() != contract ||
@@ -193,7 +218,7 @@ class Reader {
     if (ports.inputs(op) != operands ||
         ports.outputs(op).getTypes() != results ||
         ports.bodies(op) != regions || !op->getAttrOfType<StringAttr>("site") ||
-        op->getAttrs().size() != 1) {
+        op->getAttrs().size() != 1 || !site(op)) {
       fail();
       return nullptr;
     }
@@ -213,6 +238,21 @@ class Reader {
     }
     if (ports.isScoped())
       regionReturns[block->getParentOp()] = ports.outputs(op).size();
+    if (ports.isScoped() && !limits.finiteSite.empty()) {
+      auto function = cast<func::FuncOp>(block->getParentOp());
+      NamedAttrList expected;
+      expected.set("sym_name", function.getSymNameAttr());
+      expected.set("function_type", function->getAttr("function_type"));
+      expected.set("sym_visibility",
+                   StringAttr::get(op->getContext(), "private"));
+      expected.set("no_inline", UnitAttr::get(op->getContext()));
+      expected.set("runtime.region", UnitAttr::get(op->getContext()));
+      if (expected.getDictionary(op->getContext()) !=
+          function->getAttrDictionary()) {
+        fail();
+        return nullptr;
+      }
+    }
     cursor = ports.first(block);
     if (isa<scf::ForOp>(op))
       cursor =
@@ -403,8 +443,11 @@ class Reader {
         fail();
         return {};
       }
+      auto callSite = nextSite();
+      if (!valid)
+        return {};
       auto result = limits.callback(cast<func::FuncOp>(helper),
-                                    args.drop_front(), cursor);
+                                    args.drop_front(), callSite, cursor);
       if (failed(result)) {
         fail();
         return {};

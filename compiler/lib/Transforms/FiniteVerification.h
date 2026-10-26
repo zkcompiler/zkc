@@ -23,6 +23,9 @@ struct VerificationLimits {
   // Borrowed actual scoped candidate; mutation invalidates the whole view.
   const mathematical::ScopedCandidate *candidate = nullptr;
   ScopedCallbackReader callback = {};
+  // Required exact site sequence for ordered scoped preparation. Empty only
+  // for readers whose enclosing numerical recipe checks occurrence names.
+  llvm::StringRef finiteSite = {};
 };
 enum class VerificationStatus {
   Verified,

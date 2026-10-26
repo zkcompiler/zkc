@@ -13,7 +13,10 @@ RealizationEmitter::RealizationEmitter(Operation *candidate,
   assert(unit && unit->hasTrait<OpTrait::SymbolTable>() &&
          unit->getNumRegions() == 1 && unit->getRegion(0).hasOneBlock() &&
          "realization requires a single-block symbol table");
-  for (auto &op : unit->getRegion(0).front())
+  reserveNames(unit);
+}
+void RealizationEmitter::reserveNames(Operation *source) {
+  for (auto &op : source->getRegion(0).front())
     if (auto name = SymbolTable::getSymbolName(&op))
       names.insert(name.getValue());
 }

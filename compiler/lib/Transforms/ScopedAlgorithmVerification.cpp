@@ -1,3 +1,7 @@
+#include "FiniteVerification.h"
+#include "Kernel/Support.h"
+#include "ScopedCandidate.h"
+#include "ScopedPreparation.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
@@ -20,7 +24,13 @@ using Steps = std::vector<SourceExecutionStep>;
 class ScopedCorrespondence {
   const SourceExecutionClosure &source, &candidate;
   SymbolTable symbols;
-  uint64_t remaining = 1000000, remainingBytes = 16 * 1024 * 1024;
+  uint64_t defaultRemaining = 1000000, defaultBytes = 16 * 1024 * 1024;
+  uint64_t &remaining, &remainingBytes;
+  mathematical::RealizationWork *finiteWork;
+  const mathematical::ScopedCandidate *view;
+  Operation *sourceRoot;
+  llvm::DenseMap<Operation *, unsigned> positions;
+  llvm::DenseSet<Operation *> finiteBindings;
   bool valid = true;
   std::string root;
   std::vector<AlgorithmOrigin> origins;
@@ -56,11 +66,109 @@ class ScopedCorrespondence {
       result.push_back(env.lookup(value));
     return result;
   }
+  Expected<std::string> occurrence(const Assignments &path, StringRef site) {
+    if (!finiteWork || !path.empty())
+      return algorithmSite(path, site, remainingBytes);
+    if (site.size() > remainingBytes)
+      return createStringError(inconvertibleErrorCode(),
+                               "algorithm-origin-limit");
+    remainingBytes -= site.size();
+    return site.str();
+  }
+  bool finite(Operation *op, const Steps &actual, unsigned &cursor,
+              Environment &env, const SourceExecutionStep &step,
+              const Assignments &path, unsigned depth) {
+    if (!view || cursor >= actual.size())
+      return false;
+    auto rootSite =
+        occurrence(path, op->getAttrOfType<StringAttr>("site").getValue());
+    if (!rootSite) {
+      consumeError(rootSite.takeError());
+      return false;
+    }
+    auto callback =
+        [&](func::FuncOp function, ValueRange inputs, StringRef callSite,
+            Operation *&at) -> FailureOr<finite::ScopedCallbackResult> {
+      if (!at)
+        return failure();
+      auto body = cast<func::FuncOp>(at->getParentOp());
+      const auto &steps = candidate.bodies.at(body.getSymName().str());
+      auto found = positions.find(at);
+      if (found == positions.end())
+        return failure();
+      unsigned position = found->second;
+      Environment arguments;
+      if (!bind(function.getArguments().drop_front(), inputs, arguments))
+        return failure();
+      Assignments nested(path);
+      nested.emplace_back(callSite.str(), function.getSymName().str());
+      Values returned;
+      bool stopped = false;
+      if (!block(function, steps, position, std::move(arguments), nested,
+                 definition(function), depth + 1, true, returned, stopped))
+        return failure();
+      at = position < steps.size() ? steps[position].operation : nullptr;
+      return finite::ScopedCallbackResult{std::move(returned), stopped};
+    };
+    finite::VerificationLimits limits;
+    limits.sharedReader = &finiteWork->requiredFiniteChecking;
+    limits.sharedComparison = &finiteWork->optionalFiniteChecking;
+    limits.sharedSiteBytes = &remainingBytes;
+    limits.candidate = view;
+    limits.callback = callback;
+    limits.finiteSite = *rootSite;
+    MathematicalSelectionPolicy ordered;
+    ordered.finiteBulk = false;
+    auto pure = [](Operation *, ValueRange, Operation *&) -> FailureOr<Values> {
+      return failure();
+    };
+    auto *begin = actual[cursor].operation;
+    auto *at = begin;
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    auto result =
+        finite::verifyExpression(op, mapped(step.inputs, env), at, pure,
+                                 sourceRoot, limits, outcome, ordered);
+    if (failed(result) || !bind(step.outputs, *result, env))
+      return false;
+    mathematical::CandidatePorts ports(view);
+    for (auto *node = begin; node != at; node = ports.next(node)) {
+      if (!node || ports
+                       .walk(node,
+                             [&](Operation *nested) {
+                               if (!charge(nested, 1))
+                                 return WalkResult::interrupt();
+                               if (auto reference =
+                                       nested->getAttrOfType<FlatSymbolRefAttr>(
+                                           "binding")) {
+                                 auto *binding =
+                                     SymbolTable::lookupNearestSymbolFrom(
+                                         nested, reference);
+                                 if (!binding)
+                                   return WalkResult::interrupt();
+                                 finiteBindings.insert(binding);
+                               }
+                               return WalkResult::advance();
+                             })
+                       .wasInterrupted())
+        return false;
+    }
+    if (at) {
+      auto found = positions.find(at);
+      if (found == positions.end() || found->second < cursor ||
+          found->second >= actual.size() ||
+          actual[found->second].operation != at)
+        return false;
+      cursor = found->second;
+    } else
+      cursor = actual.size();
+    return true;
+  }
   bool attrs(Operation *original, Operation *actual, const Assignments &path,
              StringRef definition) {
     NamedAttrList expected(original->getAttrs());
     if (auto site = original->getAttrOfType<StringAttr>("site")) {
-      auto encoded = algorithmSite(path, site.getValue(), remainingBytes);
+      auto encoded = occurrence(path, site.getValue());
       if (!encoded) {
         consumeError(encoded.takeError());
         return false;
@@ -171,6 +279,11 @@ class ScopedCorrespondence {
       auto *op = step.operation;
       if (!charge(op, 1 + step.inputs.size() + step.outputs.size()))
         return false;
+      if (finiteWork && isa<exec::FoldOp, exec::CollectOp>(op)) {
+        if (!finite(op, actual, cursor, env, step, path, depth))
+          return false;
+        continue;
+      }
       if (auto call = dyn_cast<func::CallOp>(op)) {
         auto callee = symbols.lookup<func::FuncOp>(call.getCallee());
         Environment arguments;
@@ -226,8 +339,17 @@ public:
   std::vector<AlgorithmOrigin> takeOrigins() { return std::move(origins); }
   ScopedCorrespondence(const SourceExecutionClosure &source,
                        const SourceExecutionClosure &candidate,
-                       Operation *original)
-      : source(source), candidate(candidate), symbols(original) {}
+                       Operation *original,
+                       mathematical::RealizationWork *work = nullptr,
+                       const mathematical::ScopedCandidate *view = nullptr)
+      : source(source), candidate(candidate), symbols(original),
+        remaining(work ? work->numericalContextChecking : defaultRemaining),
+        remainingBytes(work ? work->numericalCheckSiteBytes : defaultBytes),
+        finiteWork(work), view(view), sourceRoot(original) {
+    for (const auto &[name, steps] : candidate.bodies)
+      for (auto [index, step] : enumerate(steps))
+        positions[step.operation] = index;
+  }
   LogicalResult run(protocol_ir::ProtocolModuleOp before,
                     protocol_ir::ProtocolModuleOp after) {
     if (before->getAttrDictionary() != after->getAttrDictionary())
@@ -265,6 +387,12 @@ public:
     for (Operation &op : after.getBody().front()) {
       auto function = dyn_cast<func::FuncOp>(op);
       if (!function || !isScopedExecutionFunction(function)) {
+        if (finiteWork && isa<runtime::BindingOp>(op) &&
+            !symbols.lookup(SymbolTable::getSymbolName(&op))) {
+          if (!finiteBindings.contains(&op))
+            return refuse(&op, "unaccounted finite binding");
+          continue;
+        }
         actualDeclarations.push_back(&op);
         continue;
       }
@@ -310,4 +438,43 @@ verifyScopedHelperExpansionPreserved(ModuleOp source, ModuleOp candidate,
     *origins = checker.takeOrigins();
   return success();
 }
+LogicalResult
+verifyScopedFinitePreparation(ModuleOp source, ModuleOp candidate,
+                              mathematical::RealizationWork &work) {
+  if (failed(verify(source)) || failed(verify(candidate)) ||
+      !hasSingleElement(*source.getBody()) ||
+      !hasSingleElement(*candidate.getBody()) ||
+      source->getAttrDictionary() != candidate->getAttrDictionary() ||
+      !kernel::chargeCopy(source, work.numericalContextChecking) ||
+      !kernel::chargeCopy(candidate, work.numericalContextChecking))
+    return failure();
+  auto before =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
+  auto after =
+      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
+  if (!before || !after)
+    return failure();
+  auto original = readSourceExecutionClosure(before);
+  auto actual = readSourceExecutionClosure(after);
+  auto view = mathematical::ScopedCandidate::read(
+      after, mathematical::ScopedCandidate::Requests::Retained);
+  if (!original || !actual || !view) {
+    if (!original)
+      consumeError(original.takeError());
+    if (!actual)
+      consumeError(actual.takeError());
+    if (!view)
+      consumeError(view.takeError());
+    return failure();
+  }
+  bool unresolved = false;
+  after.walk([&](Operation *op) {
+    unresolved |= isa<exec::FoldOp, exec::CollectOp>(op);
+  });
+  if (unresolved)
+    return failure();
+  return ScopedCorrespondence(*original, *actual, before, &work, view->get())
+      .run(before, after);
+}
+
 } // namespace zkc::protocol

@@ -5,6 +5,7 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "../lib/Transforms/ScopedFinite.h"
+#include "../lib/Transforms/ScopedPreparation.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -177,7 +178,32 @@ math fn pick(xs:Array<Fr,2>,i:index)->Fr{return at(xs,0);}
 fn work(xs:Vector<Fr>,i:index)->Fr{let packed=kernel<Fr,2>("field_array.from_vector",xs);return pick(packed,0);}
 protocol Run roles(P)(xs:Vector<Fr>@P,i:index@P)->(r:Fr@P){return work(xs,i);}
 )",
-     "bls12-381.fr"}};
+     "bls12-381.fr"},
+    {"nested finite callbacks retain distinct numerical occurrences", R"(
+type Vector<F:Field>=builtin("vector",F);
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)=finite("local.fold");
+fn work(xs:Vector<Fr>,seed:Fr)->Fr{return fold(elements(xs),seed,fn(state,item)=>fold(elements(xs),state,fn(acc,value)=>acc+value+item));}
+protocol Run roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return work(xs,seed);}
+)"},
+    {"finite predicate can stop before the state callback", R"(
+type Vector<F:Field>=builtin("vector",F);
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,keep:fn(item:I)->bool effects(stop) where item_from(item,rows),step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)=finite("local.fold_where");
+fn work(xs:Vector<Fr>,seed:Fr,enabled:bool)->Fr{return fold(elements(xs),seed,fn(item)=>if enabled{true}else{stop "reject";},fn(state,item)=>state+item);}
+protocol Run roles(P)(xs:Vector<Fr>@P,seed:Fr@P,enabled:bool@P)->(r:Fr@P){return work(xs,seed,enabled);}
+ )"},
+    {"finite callbacks retain total bounded computations", R"(
+type Vector<F:Field>=builtin("vector",F);
+domain fn indices<F:Field>(xs:Vector<F>)->domain<index>=domain("indices");
+math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Vector<Fr>>("container.at",xs,i);}
+fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)=finite("local.fold");
+math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+math fn sum(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(state,i)=>state+at(xs,i));}
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+fn work(xs:Vector<Fr>,seed:Fr)->Fr{return fold(elements(xs),seed,fn(state,item)=>state+sum(xs));}
+protocol Run roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return work(xs,seed);}
+)"}};
 struct Fixture {
   CheckedProject checked;
   ClosedEntry entry;
@@ -258,11 +284,7 @@ int main() {
       require(succeeded(mathematical::verifyProjectionPreserved(*expanded,
                                                                 *candidate)),
               "scoped preparation correspondence failed");
-      bool unresolved = false;
-      candidate->walk([&](mlir::Operation *op) {
-        unresolved |= isa<exec::FoldOp, exec::CollectOp>(op);
-      });
-      if (!unresolved) {
+      {
         target::PhysicalPlanOptions physicalOptions;
         physicalOptions.releaseStorage = true;
         physicalOptions.linearContractions = true;
@@ -579,6 +601,129 @@ int main() {
           require(failed(kernel::verifyKernelLowering(*source, *candidate)),
                   "changed scoped numerical candidate accepted");
         });
+  auto finiteSource = [&] {
+    Fixture fixture(context, samples[7]);
+    auto source = projected(fixture);
+    PassManager lowering(&context);
+    lowering.addPass(protocol::createLowerMathPass());
+    require(succeeded(lowering.run(*source)),
+            "finite source preparation failed");
+    return source;
+  };
+  for (StringRef quota : {"copy", "sites", "expressions", "reader"})
+    cases.run("finite preparation refuses exhausted " + quota, [&] {
+      auto source = finiteSource();
+      mathematical::RealizationWork work;
+      uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+      if (quota == "copy")
+        copy = 0;
+      if (quota == "sites")
+        bytes = 0;
+      if (quota == "expressions")
+        work.finiteExpressions = 0;
+      if (quota == "reader")
+        work.requiredFiniteChecking = 0;
+      std::optional<CapacityCause> capacity;
+      std::string before;
+      llvm::raw_string_ostream saved(before);
+      source->print(saved);
+      ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+      auto candidate =
+          protocol::prepareScopedFinite(*source, work, copy, bytes, capacity);
+      require(!candidate, "required finite exhaustion published a candidate");
+      std::string after;
+      llvm::raw_string_ostream current(after);
+      source->print(current);
+      require(before == after && succeeded(verify(*source)),
+              "failed preparation mutated its source");
+    });
+  cases.run(
+      "finite construction exhaustion is bounded at internal boundaries", [&] {
+        auto source = finiteSource();
+        mathematical::RealizationWork measured;
+        uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+        std::optional<CapacityCause> capacity;
+        auto complete = protocol::prepareScopedFinite(*source, measured, copy,
+                                                      bytes, capacity);
+        require(bool(complete), "finite quota measurement refused");
+        uint64_t required = 1000000 - copy;
+        ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+        for (uint64_t allowance : {required / 4, required / 2, required - 1}) {
+          mathematical::RealizationWork work;
+          uint64_t available = allowance, sites = 16 * 1024 * 1024;
+          capacity.reset();
+          auto partial = protocol::prepareScopedFinite(*source, work, available,
+                                                       sites, capacity);
+          require(!partial && capacity && available <= allowance,
+                  "internal finite exhaustion lost required capacity or "
+                  "published partial work");
+        }
+        mathematical::RealizationWork exact;
+        bytes = 16 * 1024 * 1024;
+        copy = required;
+        capacity.reset();
+        auto result = protocol::prepareScopedFinite(*source, exact, copy, bytes,
+                                                    capacity);
+        require(bool(result) && copy == 0,
+                "exact finite construction allowance changed semantics");
+      });
+  for (StringRef mutation : {"domain site", "callback site", "callback operand",
+                             "bound", "region premise"})
+    cases.run("finite preparation rejects changed " + mutation, [&] {
+      auto source = finiteSource();
+      mathematical::RealizationWork work;
+      uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+      std::optional<CapacityCause> capacity;
+      auto candidate =
+          protocol::prepareScopedFinite(*source, work, copy, bytes, capacity);
+      require(bool(candidate), "finite preparation positive control failed");
+      bool changed = false;
+      candidate->walk([&](mlir::Operation *op) {
+        if (changed)
+          return;
+        if (auto function = dyn_cast<func::FuncOp>(op);
+            function && mutation == "region premise" &&
+            function.getSymName().starts_with("_finite_region_")) {
+          function->setAttr("data.preconditions", ArrayAttr::get(&context, {}));
+          changed = true;
+          return;
+        }
+        auto site = op->getAttrOfType<StringAttr>("site");
+        if (mutation == "domain site" && isa<exec::ApplyOp>(op) && site &&
+            site.getValue().contains("_finite_")) {
+          op->setAttr("site",
+                      StringAttr::get(&context, "changed_domain_occurrence"));
+          changed = true;
+        } else if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
+          auto binding = dyn_cast_or_null<runtime::BindingOp>(
+              SymbolTable::lookupNearestSymbolFrom(apply,
+                                                   apply.getBindingAttr()));
+          auto function = apply->getParentOfType<func::FuncOp>();
+          if (!binding || binding.getContract() != "field.add" ||
+              !function->hasAttr("runtime.region"))
+            return;
+          if (mutation == "callback site") {
+            apply.setSite("changed_callback_occurrence");
+            changed = true;
+          } else if (mutation == "callback operand" &&
+                     apply.getInputs().size() == 2 &&
+                     apply.getInputs()[0] != apply.getInputs()[1]) {
+            apply->setOperand(1, apply.getInputs()[1]);
+            changed = true;
+          }
+        } else if (auto loop = dyn_cast<exec::RangeOp>(op);
+                   loop && mutation == "bound") {
+          loop->setOperand(2, loop.getLower());
+          changed = true;
+        }
+      });
+      require(changed && succeeded(verify(*candidate)),
+              "finite mutation was not admitted");
+      ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+      require(failed(protocol::verifyScopedFinitePreparation(*source,
+                                                             *candidate, work)),
+              "finite correspondence accepted an actual mutation");
+    });
   for (unsigned sample : {8u, 9u, 11u})
     for (bool stops : {false, true})
       cases.run(
@@ -687,7 +832,7 @@ int main() {
                     "scoped finite candidate failed admission");
             auto actual = take(mathematical::ScopedCandidate::read(owner));
             mathematical::CandidatePorts ports(actual.get());
-            auto read = [&](func::FuncOp helper, ValueRange inputs,
+            auto read = [&](func::FuncOp helper, ValueRange inputs, StringRef,
                             mlir::Operation *&at)
                 -> FailureOr<finite::ScopedCallbackResult> {
               const auto &body = closure.bodies.at(helper.getSymName().str());
@@ -758,7 +903,7 @@ int main() {
             ? "scoped conditional mathematical entry is selectable"
             : "scoped mathematical use must discharge the actual entry premise",
         [&] {
-          Fixture fixture(context, samples[std::size(samples) - 1]);
+          Fixture fixture(context, samples[20]);
           func::FuncOp conditional;
           fixture.module->walk([&](func::FuncOp function) {
             if (auto premises =

@@ -2,6 +2,7 @@
 #include "../Transforms/Kernel/Support.h"
 #include "../Transforms/NumericalLowering.h"
 #include "../Transforms/NumericalSelection.h"
+#include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
 #include "ExecutionPorts.h"
 #include "mlir/IR/RegionKindInterface.h"
@@ -63,6 +64,9 @@ struct InputSnapshot {
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
   // Accessible only inside Target; callers can obtain independent clones.
+  // Actual ordered finite preparation, retained for independent composition.
+  // Source/candidate mutation cannot turn a producer cache into evidence.
+  OwningOpRef<ModuleOp> finite;
   OwningOpRef<ModuleOp> numerical;
   Error check(ModuleOp module) const {
     // Compare only fresh live IR against opaque saved addresses. Never walk or
@@ -1600,6 +1604,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                     options.numericalPolicy,
                     options.functionPorts,
                     options.valueLayouts,
+                    {},
                     {}});
   for (const auto &choice : options.functionPorts) {
     bool found = false;
@@ -1613,12 +1618,14 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!found)
       return error("binding-unknown-selection");
   }
-  bool hasKernels = false, hasMaps = false;
+  bool hasKernels = false, hasMaps = false, hasFinite = false;
   root.walk([&](Operation *op) {
     hasKernels |=
         (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
     hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
+    hasFinite |= isa<exec::FoldOp, exec::CollectOp>(op);
   });
+  hasKernels |= hasFinite;
   bool hasNumerical = hasKernels || hasMaps;
   PhysicalSelection selection;
   if (options.numericalWork)
@@ -1640,10 +1647,20 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   });
   OwningOpRef<ModuleOp> prepared;
   mathematical::PreparedMaps maps;
+  ModuleOp numericalSource = module;
+  if (hasFinite) {
+    std::optional<CapacityCause> capacity;
+    input->finite = protocol::prepareScopedFinite(
+        module, selection.numerical.work, selection.numerical.remainingCopy,
+        selection.numerical.remainingSiteBytes, capacity);
+    if (!input->finite)
+      return error("kernel-lowering", "ordered finite preparation refused");
+    numericalSource = *input->finite;
+  }
   if (hasNumerical) {
     if (hasKernels)
       prepared = kernel::prepareKernelLowering(
-          module, &selection.numerical.remainingCopy);
+          numericalSource, &selection.numerical.remainingCopy);
     else {
       if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
         return error("kernel-lowering", "numerical source copy capacity");
@@ -1815,7 +1832,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     }
     if (!refusal && hasNumerical &&
         failed(mathematical::verifyNumericalLowering(
-            module, selected, options.numericalPolicy, selections,
+            numericalSource, selected, options.numericalPolicy, selections,
             &selection.numerical.work, &numericalOutcome))) {
       if (numericalOutcome.outcome !=
           mathematical::VerificationObservation::OptionalCapacity)
@@ -2029,11 +2046,20 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   if (failed(verify(module)))
     return error("binding-operation");
   ModuleOp selected = module;
+  ModuleOp numericalSource = module;
+  mathematical::RealizationWork numericalChecking;
+  if (plan.input->finite) {
+    if (failed(protocol::verifyScopedFinitePreparation(
+            module, *plan.input->finite, numericalChecking)))
+      return error("numerical-lowering-correspondence",
+                   "ordered finite preparation differs");
+    numericalSource = *plan.input->finite;
+  }
   if (plan.input->numerical) {
     selected = *plan.input->numerical;
     if (failed(mathematical::verifyNumericalLowering(
-            module, selected, plan.input->numericalPolicy,
-            plan.input->selections)))
+            numericalSource, selected, plan.input->numericalPolicy,
+            plan.input->selections, &numericalChecking)))
       return error("numerical-lowering-correspondence");
   }
   auto root =
