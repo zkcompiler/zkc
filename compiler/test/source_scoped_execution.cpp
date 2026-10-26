@@ -15,6 +15,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -1410,6 +1411,59 @@ protocol Run roles(P)(xs:Vector<Fr>@P,go:bool@P)->(a:Vector<Fr>@P,b:Vector<Fr>@P
             refuses(compareOriginal(fixture.entry, *fixture.module, smaller),
                     "source.limit");
           }
+        });
+  for (bool bindingInventory : {false, true})
+    cases.run(
+        bindingInventory
+            ? "scoped expansion retains 4096 bindings independently"
+            : "scoped expansion retains 4096 definitions independently",
+        [&] {
+          auto text = scopedFixture(R"(
+"runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
+)",
+                                    "%x:i1", "%x", "i1", "i1",
+                                    scopedReturn("%x", "i1"), 1);
+          auto module = parseSourceString<ModuleOp>(text, &context);
+          require(bool(module), "inventory fixture");
+          auto owner =
+              cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+          auto work = SymbolTable(owner).lookup<func::FuncOp>("Work");
+          mlir::Operation *prototype = bindingInventory
+                                           ? SymbolTable(owner).lookup("and")
+                                           : work.getOperation();
+          OpBuilder builder(&context);
+          builder.setInsertionPoint(prototype);
+          auto add = [&](StringRef name) {
+            auto *copy = builder.clone(*prototype);
+            copy->setAttr("sym_name", builder.getStringAttr(name));
+            if (!bindingInventory)
+              copy->setAttr("runtime.origin",
+                            builder.getArrayAttr({builder.getStringAttr(name),
+                                                  builder.getArrayAttr({})}));
+            return copy;
+          };
+          for (unsigned i = 1; i < 4096; ++i)
+            add("unused_" + std::to_string(i));
+          auto expanded = protocol::expandScopedHelpers(*module);
+          require(bool(expanded), "independent expansion inventory refused");
+          require(succeeded(protocol::verifyScopedHelperExpansionPreserved(
+                      *module, *expanded)),
+                  "inventory expansion correspondence refused");
+          auto actual = take(protocol::readSourceExecutionClosure(
+              cast<protocol_ir::ProtocolModuleOp>(
+                  expanded->getBody()->front())));
+          require(actual.definitions.bindings.size() ==
+                          (bindingInventory ? 4096 : 1) &&
+                      actual.definitions.functions.size() ==
+                          (bindingInventory ? 1 : 4096),
+                  "expansion truncated an inventory");
+          add("overflow");
+          refuses(protocol::readSourceExecutionClosure(owner),
+                  "execution-source-closure");
+          ScopedDiagnosticHandler silence(
+              &context, [](mlir::Diagnostic &) { return success(); });
+          require(!protocol::expandScopedHelpers(*module),
+                  "overflow source was expanded");
         });
   return cases.result();
 }

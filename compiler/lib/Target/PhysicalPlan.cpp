@@ -739,7 +739,8 @@ class Proposer {
       for (auto *op : operations) {
         auto function = op->getParentOfType<func::FuncOp>();
         auto site = op->getAttrOfType<StringAttr>("site");
-        if (function && function.getSymName() == seed.function && site &&
+        if (flow().get(op).step && function &&
+            function.getSymName() == seed.function && site &&
             site.getValue() == seed.site) {
           if (found)
             return error("binding-duplicate-selection");
@@ -837,15 +838,27 @@ class Proposer {
           args.push_back(initial(value.getType()));
         d.blockArguments.push_back(std::move(args));
       }
-      if (flow().get(op).callable) {
-        auto selected =
-            selectedFunctionType(op, flow().get(op).callable, functionPorts);
-        if (!selected)
-          return selected.takeError();
-        d.functionType = *selected;
+      if (auto signature = flow().get(op).callable) {
+        if (flow().callers(op).empty()) {
+          auto selected = selectedFunctionType(op, signature, functionPorts);
+          if (!selected)
+            return selected.takeError();
+          d.functionType = *selected;
+        } else {
+          // A closed control body's ports follow its owning occurrence. An
+          // inactive variant payload can have no default representation; keep
+          // its provisional slot until the complete variant layout is solved.
+          SmallVector<Type> inputs, outputs;
+          for (auto type : signature.getInputs())
+            inputs.push_back(initial(type));
+          for (auto type : signature.getResults())
+            outputs.push_back(initial(type));
+          d.functionType =
+              FunctionType::get(module.getContext(), inputs, outputs);
+        }
         if (!d.blockArguments.empty())
-          d.blockArguments[0].assign(selected->getInputs().begin(),
-                                     selected->getInputs().end());
+          d.blockArguments[0].assign(d.functionType.getInputs().begin(),
+                                     d.functionType.getInputs().end());
       }
       if (d.binding) {
         applications[index] = plan.bindings[*d.binding].binding.application;
@@ -2424,7 +2437,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     for (auto [index, op] : enumerate(operations)) {
       auto function = op->getParentOfType<func::FuncOp>();
       auto site = op->getAttrOfType<StringAttr>("site");
-      if (function && function.getSymName() == seed.function && site &&
+      if (flow.get(op).step && function &&
+          function.getSymName() == seed.function && site &&
           site.getValue() == seed.site) {
         if (found || seed.result >= plan.operations[index].outputs.size())
           return error("binding-unknown-selection");

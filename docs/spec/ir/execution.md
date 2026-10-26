@@ -450,7 +450,10 @@ bind values in their callers without introducing a completion tick; outlined
 control bodies retain `exec.complete`. A stopped helper truncates its caller's
 remaining work. If substitution aliases immutable captures, their actual
 capture list and all corresponding closed-region formal positions change
-together. Loop-carried state is not merged with invariant captures.
+together. Loop-carried state is not merged with invariant captures. Expansion
+retains the separate Func/domain and Runtime binding inventory bounds above;
+profile metadata cannot consume either inventory. Newly outlined bodies consume
+the definition allowance before construction.
 
 `verifyScopedHelperExpansionPreserved` independently walks the original under
 virtual substitution while reading the admitted candidate. It checks actual

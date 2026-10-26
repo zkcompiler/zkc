@@ -84,7 +84,12 @@ their producer layout; body-only conversions execute in their reached body.
 Resident field/group controls exercise explicit entry and return ABIs, outlined
 branch and loop ports, helper expansion, and variant payloads on this path.
 Native execution checks retain zero-trip behavior, reached conversion failures,
-and the original resource allowances.
+and the original resource allowances. Aggregate controls also cover nested
+sequences, independent variant payloads, inactive payloads without a default
+representation, and resident dense arrays and fixed vectors. Their native
+fixtures retain complete carrier layouts and reached conversion order. Layout
+requests resolve semantic results in their actual outlined owners, excluding
+administrative operations with the same diagnostic site.
 Mathematical and retained finite requests are realized through this same scoped
 path. The physical transaction keeps the actual prepared and selected modules
 for independent checks of both edges. See the
@@ -94,6 +99,8 @@ Checked scoped helper expansion substitutes actual SSA bodies, preserves
 uncharged helper returns and charged control yields, and normalizes aliased
 immutable capture ports together. Its separate reader checks virtual source
 substitution against the actual candidate and recovers full occurrence paths.
+Exact-limit and overflow controls retain separate 4,096-entry binding and
+Func/domain inventories during expansion; profile metadata consumes neither.
 Transitive dependency checks keep the scoped substitution, finite, polynomial
 recipe and numerical readback consumers separate from producer recognition and
 recipe interfaces. Shared callback signatures carry no selected recipe.

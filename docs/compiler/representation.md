@@ -78,7 +78,7 @@ certificate or protection against concurrent mutation of IR.
 
 Each mismatched operand gets its conversion immediately before its consumer, in
 operand order. Declarations may be shared; dynamic instructions and results are
-not silently shared or hoisted. Function ports use installed defaults unless an
+not silently shared or hoisted. Callable root ports use installed defaults unless an
 exact input/output occurrence is selected in the physical-plan options. Captures,
 branch yields and loop state retain checked physical equations, including the
 zero-iteration path. Operation results retain their selected representation until
@@ -109,7 +109,14 @@ including the zero-trip result; a required change at a yield executes in the
 reached iteration. Match payloads use the selected variant child layout. Every
 actual control edge constrains its closed body's callable signature. Explicit
 function-port requests name callable roots or participants; compiler-owned
-outlined bodies have signatures derived from those edges.
+outlined bodies have signatures derived from those edges. An inactive payload
+without a default layout remains provisional until its complete variant layout
+is solved; all published ports must have admitted physical types.
+
+Explicit value-layout requests identify a semantic result by its actual retained
+function, qualified site and result index. Administrative CFG and scope
+operations carrying the same site are not additional selection targets. The
+independent reader applies this same coordinate contract to the actual subject.
 
 Materialization constructs the selected scoped CFG and inserts only recorded
 conversions and releases. Its independent reader checks the resulting payload

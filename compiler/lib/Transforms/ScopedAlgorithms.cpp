@@ -41,7 +41,7 @@ class ScopedExpander : private OpBuilder::Listener {
   OpBuilder builder;
   llvm::StringSet<> names;
   unsigned nextRegion = 0;
-  unsigned definitions = 0;
+  unsigned definitions = 0, bindings = 0;
   uint64_t defaultRemaining = 100000, defaultBytes = 16 * 1024 * 1024;
   uint64_t &remaining, &remainingBytes;
   const llvm::DenseMap<Operation *, func::FuncOp> *replacements;
@@ -82,12 +82,19 @@ class ScopedExpander : private OpBuilder::Listener {
     return true;
   }
   bool declaration(Operation *op) {
-    if (++definitions <= 4096)
+    // Binding and Func/domain inventories have separate carrier limits.
+    // Profile metadata shares the symbol namespace, not either inventory.
+    auto *inventory = isa<runtime::BindingOp>(op)             ? &bindings
+                      : isa<func::FuncOp, data::DomainOp>(op) ? &definitions
+                                                              : nullptr;
+    if (!inventory || ++*inventory <= 4096)
       return true;
     if (capacity)
       *capacity = CapacityCause{WorkOwner::AlgorithmExpansion, 1, 0};
     diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit",
-                      "expanded definition limit");
+                      isa<runtime::BindingOp>(op)
+                          ? "expanded binding limit"
+                          : "expanded definition limit");
     valid = false;
     return false;
   }
