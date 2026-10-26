@@ -2,11 +2,15 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Transforms/Mathematical.h"
+#include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Language.h"
 
 using namespace mlir;
@@ -158,8 +162,92 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
-  for (const auto &sample : samples)
+  for (const auto &sample : samples) {
     cases.run(sample.name, [&] { Fixture fixture(context, sample); });
+    cases.run((llvm::Twine("project ") + sample.name).str(), [&] {
+      Fixture fixture(context, sample);
+      auto candidate = OwningOpRef<ModuleOp>(
+          cast<ModuleOp>(fixture.module->getOperation()->clone()));
+      PassManager manager(&context);
+      manager.addPass(protocol::createProjectProtocolPass());
+      require(succeeded(manager.run(*candidate)),
+              "scoped source projection failed");
+      require(succeeded(mathematical::verifyProjectionPreserved(*fixture.module,
+                                                                *candidate)),
+              "scoped source projection correspondence failed");
+      require(succeeded(mathematical::verifyAuthoredLocalsPreserved(
+                  &fixture.module->getBody()->front(),
+                  &candidate->getBody()->front())),
+              "projection changed the authored closure");
+    });
+  }
+  auto projected = [&](Fixture &fixture) {
+    auto candidate = OwningOpRef<ModuleOp>(
+        cast<ModuleOp>(fixture.module->getOperation()->clone()));
+    PassManager manager(&context);
+    manager.addPass(protocol::createProjectProtocolPass());
+    require(succeeded(manager.run(*candidate)), "projection fixture failed");
+    return candidate;
+  };
+  cases.run("projection refuses a changed scoped helper body", [&] {
+    Fixture fixture(context, samples[0]);
+    auto candidate = projected(fixture);
+    bool changed = false;
+    candidate->walk([&](exec::ReturnOp returned) {
+      auto function = returned->getParentOfType<func::FuncOp>();
+      if (!changed && function.getNumArguments() == 3 &&
+          returned.getValues().size() == 1) {
+        returned->setOperand(0, function.getArgument(1));
+        changed = true;
+      }
+    });
+    require(changed && succeeded(verify(*candidate)),
+            "body mutation must remain admitted");
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(failed(mathematical::verifyProjectionPreserved(*fixture.module,
+                                                           *candidate)),
+            "projection ignored its actual scoped helper body");
+  });
+  for (bool scoped : {true, false})
+    cases.run(scoped ? "projection retains dormant scoped helpers"
+                     : "projection retains dormant mathematical helpers",
+              [&] {
+                Fixture fixture(context, samples[0]);
+                auto &owner = fixture.module->getBody()->front();
+                func::FuncOp original;
+                for (auto function :
+                     owner.getRegion(0).front().getOps<func::FuncOp>())
+                  if (protocol::isScopedExecutionFunction(function) == scoped &&
+                      !function->hasAttr("runtime.region")) {
+                    original = function;
+                    break;
+                  }
+                require(bool(original), "missing dormant helper template");
+                auto extra = cast<func::FuncOp>(original->clone());
+                extra.setSymName("dormant");
+                owner.getRegion(0).front().push_back(extra);
+                require(succeeded(verify(*fixture.module)),
+                        "dormant helper fixture is invalid");
+                auto candidate = projected(fixture);
+                auto &target = candidate->getBody()->front();
+                SymbolTable::lookupSymbolIn(&target, "dormant")->erase();
+                require(succeeded(verify(*candidate)),
+                        "dormant deletion must remain admitted");
+                ScopedDiagnosticHandler silence(&context,
+                                                [](mlir::Diagnostic &) {});
+                require(failed(mathematical::verifyProjectionPreserved(
+                            *fixture.module, *candidate)),
+                        "projection silently dropped a dormant definition");
+              });
+  cases.run("participant invocation cannot change its role", [&] {
+    Fixture fixture(context, samples[0]);
+    auto candidate = projected(fixture);
+    candidate->walk(
+        [&](protocol_ir::LocalCallOp call) { call.setRole("different"); });
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(failed(verify(*candidate)),
+            "participant invocation accepted a foreign role");
+  });
   auto mutation = [&](llvm::StringRef name, unsigned sample, auto edit) {
     cases.run(name, [&] {
       Fixture fixture(context, samples[sample]);

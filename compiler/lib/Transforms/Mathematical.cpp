@@ -195,7 +195,7 @@ class Projector {
             operation = protocol_ir::ConstructionStartOp::getOperationName();
         } else if (isa<zkc::protocol_ir::LocalCallOp>(op)) {
           if (op.getAttr("role") == role)
-            operation = zkc::local::CallOp::getOperationName();
+            operation = zkc::protocol_ir::LocalCallOp::getOperationName();
         } else if (op.getAttr("owner") == role) {
           operation =
               isa<protocol_ir::FinishIfOp>(op)
@@ -448,9 +448,9 @@ class Projector {
           }
           arguments.push_back(mapping.lookup(input));
         }
-        auto invocation = zkc::local::CallOp::create(
+        auto invocation = zkc::protocol_ir::LocalCallOp::create(
             builder, op.getLoc(), call.getResultTypes(), arguments,
-            call.getCalleeAttr(), call.getSiteAttr());
+            call.getCalleeAttr(), call.getSiteAttr(), call.getRoleAttr());
         for (auto [old, value] :
              zip(call.getResults(), invocation.getResults()))
           mapping.map(old, value);
@@ -613,11 +613,6 @@ public:
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
-    bool hasFinite = false;
-    for (auto program :
-         common.getBody().front().getOps<protocol_ir::MathematicalOp>())
-      program.walk(
-          [&](Operation *op) { hasFinite |= finite::isComputation(op); });
     llvm::DenseSet<Operation *> mapHelpers;
     if (failed(algebra::collectMapHelpers(common, mapHelpers)))
       return {};
@@ -625,7 +620,7 @@ public:
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
       if (mapHelpers.contains(&op) || isa<algebra::MapRealizeOp>(op) ||
-          (hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
+          isa<data::DomainOp, func::FuncOp>(op) ||
           isa<zkc::relation::DeclareOp, mlir::ModuleOp, zkc::local::FuncOp,
               zkc::runtime::BindingOp>(op)) {
         auto *copy = builder.clone(op);
@@ -1059,8 +1054,8 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
     return {};
   for (auto &op : unit.getBody().front())
     if (mapHelpers.contains(&op) ||
-        isa<algebra::MapRealizeOp, mlir::ModuleOp, zkc::local::FuncOp,
-            zkc::runtime::BindingOp>(op))
+        isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, mlir::ModuleOp,
+            zkc::local::FuncOp, zkc::runtime::BindingOp>(op))
       snapshotBuilder.clone(op);
   unsigned remainingHelpers = realizedHelperOperationLimit;
   uint64_t helperIndices = 1000000;

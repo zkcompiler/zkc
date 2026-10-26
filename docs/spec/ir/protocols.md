@@ -128,13 +128,24 @@ role substitution and effect contract; they are not pure helper calls.
 
 ## Executable local calls and type use
 
-A private `func.func` helper is transparent total computation. An executable
-`local.func` is an ordered local program that may stop, consume capabilities or
-fail under work and storage limits. `protocol.local_call` invokes one such
+A private `func.func` with plain mathematical ports is transparent total
+computation. A scoped function with an explicit scope input and outcome result
+is ordered execution that may stop, consume capabilities or fail under work
+and storage limits; its actual CFG is checked by the
+[scoped execution profile](execution.md#source-scoped-helper-profile).
+`protocol.local_call` invokes one such
 function at one owner, with exact available operands and owner-only results on
-normal return. It projects to a role-free `local.call` at that owner. Calls
+normal return. Projection retains `protocol.local_call` at that owner's
+participant and checks its role against the enclosing participant. This action
+owns the runtime invocation boundary; an ordinary scoped `func.call` inside a
+helper instead borrows the active scope. Calls
 remain observable work even with unused or zero results. They are not pure,
 inlined as mathematical helpers, merged, or moved across action cuts.
+Preparation and projection retain every immediate function and domain
+definition, including dormant ones. The preservation checker compares actual
+bodies, attributes and bindings, independently of the participant call list.
+Plain mathematical definitions can be consumed later by the checked numerical
+realization boundary; scoped execution cannot be silently erased there.
 
 The protocol profile can declare an executable realization of a total helper:
 
@@ -343,9 +354,10 @@ Contracts do not add statement operations, guards or witness equalities.
 Application expansion retains the declaration inventory and its symbol
 references; it does not attach callee entry indices to caller instructions.
 Participant projection deliberately erases declaration contracts and formula
-links, and the statement's selected-target reference, because that artifact does
-not retain the original declaration inventory or Math closure. It retains the
-existing statement identity/ABI projection. No certificate for the
+links, and the statement's selected-target reference. The artifact retains
+helper bodies and domains for execution preparation, but does not retain the
+original protocol contract subject. It retains the existing statement
+identity/ABI projection. No certificate for the
 original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and

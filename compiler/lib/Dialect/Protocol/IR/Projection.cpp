@@ -5,6 +5,7 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -390,7 +391,7 @@ struct MetadataVerifier {
                         }) ||
                 (exchange ? operation.getValue() != "protocol.send" &&
                                 operation.getValue() != "protocol.receive"
-                 : call   ? operation.getValue() != "local.call"
+                 : call   ? operation.getValue() != "protocol.local_call"
                  : loop   ? operation.getValue() != "protocol.loop"
                  : start ? operation.getValue() != "protocol.construction_start"
                  : kind.getValue() == "protocol.query"
@@ -766,7 +767,7 @@ struct MetadataVerifier {
                 ? (operation.getValue() == "protocol.send" ||
                    operation.getValue() == "protocol.receive")
             : loop      ? operation.getValue() == "protocol.loop"
-            : localCall ? operation.getValue() == "local.call"
+            : localCall ? operation.getValue() == "protocol.local_call"
             : start     ? operation.getValue() == "protocol.construction_start"
             : kind.getValue() == "protocol.query"
                 ? operation.getValue() == "protocol.service_query"
@@ -1002,7 +1003,9 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return refuse(unit, "expected one participant symbol-table block");
   if (unit->getAttrs().size() != 1)
     return refuse(unit, "unexpected attribute in the 'participant' profile");
-  if (failed(verifyTotalClosure(unit)))
+  if (auto error = protocol::verifySourceExecutionClosure(unit))
+    return diagnostics::emit(unit.emitOpError(), std::move(error));
+  if (failed(finite::verifyClosure(unit)))
     return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);

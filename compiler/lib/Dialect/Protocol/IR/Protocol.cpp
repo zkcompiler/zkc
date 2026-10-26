@@ -173,9 +173,14 @@ zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
       return failure();
     if (!getRoleAttr() || !roles.contains(getRoleAttr().getValue()))
       return diagnostics::emit(emitOpError(), "interactive-local-role");
+  } else if (auto participant =
+                 (*this)->getParentOfType<protocol_ir::ParticipantOp>()) {
+    if (getRoleAttr() != participant.getRoleAttr())
+      return diagnostics::emit(emitOpError(), "interactive-local-role",
+                               "call role must match its participant");
   } else {
     return diagnostics::emit(emitOpError(), "interactive-local-role",
-                             "expected a common protocol owner");
+                             "expected a protocol or participant owner");
   }
   if (isa<func::FuncOp>(callee)) {
     auto attribute = callee->getAttrOfType<TypeAttr>("function_type");

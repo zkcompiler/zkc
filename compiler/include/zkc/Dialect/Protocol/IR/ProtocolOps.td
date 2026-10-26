@@ -102,7 +102,7 @@ def GuardOp : Op<ProtocolDialect, "guard",
 
 
 def LocalCallOp : Op<ProtocolDialect, "local_call",
-    [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
+    [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
     StrAttr:$site, StrAttr:$role);

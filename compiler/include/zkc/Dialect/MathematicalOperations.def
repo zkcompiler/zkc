@@ -22,7 +22,7 @@ ZKC_MATH_OPERATION(protocol_ir::ExchangeOp, Action, Context::Protocol, "site", "
 ZKC_MATH_OPERATION(protocol_ir::GuardOp, Action, Context::Protocol, "site", "owner")
 ZKC_MATH_OPERATION(protocol_ir::FinishIfOp, Action, Context::Protocol | Context::Participant, "site", "owner")
 ZKC_MATH_OPERATION(protocol_ir::QueryOp, Action, Context::Protocol, "method", "owner", "site")
-ZKC_MATH_OPERATION(protocol_ir::LocalCallOp, Action, Context::Protocol, "callee", "role", "site")
+ZKC_MATH_OPERATION(protocol_ir::LocalCallOp, Action, Context::Protocol | Context::Participant, "callee", "role", "site")
 ZKC_MATH_OPERATION(local::CallOp, Action, Context::Participant, "callee", "site")
 
 ZKC_MATH_OPERATION(protocol_ir::EmitOp, Action, Context::Participant, "site", "schema", "peer")

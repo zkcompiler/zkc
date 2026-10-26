@@ -67,9 +67,12 @@ emission and independent comparison now use this scoped profile. Protocol
 repeat analysis reads exact continuing affine roots from its admitted Program
 view. Structured export preserves actual SSA binding positions and checked
 control, and the independent Lean reader exercises fresh branches, loops,
-stops, mathematical calls and ordered finite callbacks. Participant preparation,
-physical selection and publication still require migration before this becomes
-a complete default source-to-executable path. See the
+stops, mathematical calls and ordered finite callbacks. Preparation and
+participant projection retain the complete scoped/mathematical helper and
+domain closure, with actual-body preservation checks. Projected local calls
+remain Protocol actions and must match their participant's role. Executable
+preparation, physical selection and publication still require migration before
+this becomes a complete default source-to-executable path. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
 Typed `exec.compute` formation resolves actual private source mathematical

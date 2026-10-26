@@ -339,8 +339,9 @@ class Correspondence {
       } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         if (call.getRoleAttr() != role)
           continue;
-        auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
+        auto invocation = dyn_cast_if_present<protocol_ir::LocalCallOp>(cursor);
         if (!invocation || invocation.getCalleeAttr() != call.getCalleeAttr() ||
+            invocation.getRoleAttr() != call.getRoleAttr() ||
             invocation.getSite() != call.getSite() ||
             !operands(left, call.getInputs(), right, invocation.getInputs()) ||
             !results(left, &op, right, cursor))

@@ -4,6 +4,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -167,23 +168,31 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
       failed(algebra::collectMapHelpers(after, targetHelpers)))
     return failure();
   auto profile = cast<protocol_ir::ProtocolModuleOp>(after).getProfile();
+  const bool retainsMathematics = profile == protocol_ir::Profile::Protocol ||
+                                  profile == protocol_ir::Profile::Participant;
+  auto retained = [&](Operation *op,
+                      const llvm::DenseSet<Operation *> &mapHelpers) {
+    if (auto function = dyn_cast<func::FuncOp>(op))
+      return retainsMathematics ||
+             protocol::isScopedExecutionFunction(function) ||
+             mapHelpers.contains(op);
+    return mapHelpers.contains(op) ||
+           (retainsMathematics && isa<data::DomainOp>(op)) ||
+           isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
+               runtime::BindingOp>(op);
+  };
   // Projection and mathematical simplification cannot invent executable work.
   // Lowering may add generated calculations while preserving every authored
   // one.
-  if (profile == protocol_ir::Profile::Protocol ||
-      profile == protocol_ir::Profile::Participant) {
+  if (retainsMathematics) {
     for (auto &op : after->getRegion(0).front())
-      if ((targetHelpers.contains(&op) ||
-           isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-               runtime::BindingOp>(op)) &&
+      if (retained(&op, targetHelpers) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!sourceHelpers.contains(&op) &&
-        !isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-             runtime::BindingOp>(op))
+    if (!retained(&op, sourceHelpers))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);
@@ -311,6 +320,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
   }
   if (before.getProfile() != protocol_ir::Profile::Protocol)
     return success();
+  if (failed(verifyAuthoredLocalsPreserved(before, after)))
+    return failure();
   // Raw application-bearing inputs compose an independently checked
   // substitution edge with projection. Already prepared pass inputs are used
   // directly, so the producer's actual adjacent subject is retained.
