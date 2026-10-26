@@ -412,6 +412,13 @@ otherwise unreachable blocks. Reordered, inserted or deleted blocks require a
 new checked correspondence; this original profile is not an arbitrary CFG
 optimizer's equivalence checker.
 
+Generic participant-schedule transformations treat scoped calls as opaque
+ordered effects. Numerical transformations operate within admitted mathematical
+definitions. Applying unrestricted CF canonicalization inside a scoped helper
+can change the checked block/edge profile and requires its own admission and
+correspondence; success of a generic MLIR pass alone does not authorize
+publication of that result.
+
 The reader then compares the recovered functions with checked closed source.
 Numerical definitions and child deployment packages have their existing
 independent readers. Metadata alone is not executable authority, and the reader

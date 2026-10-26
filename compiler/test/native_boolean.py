@@ -11,6 +11,15 @@ out = records()
 commands = Commands(out)
 source = (Path(__file__).parent / "fixtures/mathematical/booleans.mlir").read_text()
 
+
+def bound_count(ir, contract):
+    bindings = re.findall(
+        r'"runtime.binding"[^\n]*contract = "' + re.escape(contract)
+        + r'"[^\n]*sym_name = "([^"]+)"', ir)
+    return sum(len(re.findall(r'binding = @' + re.escape(name) + r'[,>]', ir))
+               for name in bindings)
+
+
 def evaluate(carrier, arguments):
     bindings = {b[0]: b[1] for b in carrier[1]}
     functions = {f[1]: f for f in carrier[2]}
@@ -43,13 +52,13 @@ for optimize in (False, True):
     passes = ["--zkc-project-protocol"]
     if optimize: passes += ["--zkc-simplify-participant"]
     logical = commands.verified(source, None, *passes, "--zkc-lower-math")
-    assert "exec.computation" in logical and "kernel.call" in logical
-    assert "algebra.exec.bool_and" not in logical
+    assert "exec.computation" in logical and "exec.compute" in logical
+    assert bound_count(logical, "bool.and") == 0
     bound = commands.verified(logical, None, "--zkc-lower-kernels")
-    assert "arith." not in bound and "local.bool_constant" in bound
+    assert "arith.andi" not in bound and "exec.boolean" in bound
     commands.source("protocol-export", bound, refuses="native-physical-required")
     physical = commands.verified(bound, None, "--zkc-select-physical=release-storage=true")
-    assert "local.bool_constant" not in physical and "plan.bool_constant" in physical
+    assert "exec.boolean" in physical
     encoded = commands.source("protocol-export", physical)
     carrier = json.loads(encoded)
     assert carrier[0] == "zkc.program/0"
@@ -89,9 +98,9 @@ for operation in ("andi", "select"):
     direct = commands.verified(mutant, None, "--zkc-lower-math", "--zkc-lower-kernels")
     simplified = commands.verified(mutant, None, "--zkc-simplify-participant", "--zkc-lower-math", "--zkc-lower-kernels")
     if operation == "andi":
-        assert direct.count('algebra.exec.bool_and') > simplified.count('algebra.exec.bool_and')
+        assert bound_count(direct, 'bool.and') > bound_count(simplified, 'bool.and')
     else:
-        assert direct.count('local.if') > simplified.count('local.if')
+        assert direct.count('exec.test') > simplified.count('exec.test')
     c = json.loads(commands.source("protocol-export", commands.verified(direct, None, "--zkc-select-physical")))
     for a, b, condition in itertools.product((False, True), repeat=3):
         values = evaluate(c, [a, b, condition, 11, 23, 31, 47])
@@ -109,7 +118,7 @@ for label, parameters, signature, roles, expression, expected in [
       }}) {{sym_name="main", function_type=({signature}) -> i1, roles=["P"], input_roles=[{roles}], output_roles=[["P"]]}} : () -> ()
     }}) {{profile=#protocol.profile<protocol>}} : () -> () }}'''
     bound = commands.verified(tiny, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-lower-kernels")
-    assert "local.bool_constant" in bound
+    assert "exec.boolean" in bound
     c = json.loads(commands.source("protocol-export", commands.verified(bound, None, "--zkc-select-physical")))
     assert evaluate(c, [] if not parameters else [False]) == [expected]
     (out / (label + ".json")).write_text(json.dumps(c))

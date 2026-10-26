@@ -70,7 +70,10 @@ reconstruct a logical execution model internally to validate and select
 representations. That internal check is not public serialization admission:
 `program::checkStructure`, program JSON decoding and JSON export refuse a
 logical program root. Public checked export runs full MLIR verification, including
-projection metadata and native type policy, before reconstructing the model.
+projection metadata and native type policy, then requires the `physical` profile
+before reconstructing the serializable model. A well-formed logical scoped
+program is refused with `native-physical-required`; its source return boundaries
+are not interpreted as physical execution.
 
 Only the exact `zkc.program/0` tag and specified record shapes are admitted.
 Unknown tags and wrong record arities refuse independently. See the
@@ -142,9 +145,10 @@ control, return-type and resource checks apply. Program identifiers are bounded
 to 128 bytes. Missing, duplicate or malformed sites and duplicate outputs fail
 admission, including in retained unused functions and dormant branches.
 
-The logical MLIR operation is `local.bool_constant`; its physical form is
-`plan.bool_constant` with exactly the selected native Boolean representation.
-These operations have no `Pure`, `ConstantLike` or speculative-execution grant.
+The scoped MLIR operation is `exec.boolean`. It borrows the current scope and
+returns an explicit outcome; physical selection gives its payload exactly the
+selected native Boolean representation. The operation has no `Pure`,
+`ConstantLike` or speculative-execution grant.
 Their placement and accounting belong to executable local semantics. Total
 `arith.constant` remains a different operation before lowering.
 

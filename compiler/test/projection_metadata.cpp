@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -226,12 +227,14 @@ void suppliedMaterialization(MLIRContext &context) {
 void changeLocalOperand(ModuleOp module) {
   unsigned mutations = 0;
   module.walk([&](Operation *op) {
-    if (mutations || !(op->getParentOfType<local::FuncOp>() ||
-                       op->getParentOfType<mlir::ModuleOp>()))
+    if (mutations || !op->getParentOfType<func::FuncOp>())
       return;
-    if (op->getNumOperands() == 2 && op->getOperand(0) != op->getOperand(1) &&
-        op->getOperand(0).getType() == op->getOperand(1).getType()) {
-      op->setOperand(0, op->getOperand(1));
+    unsigned offset = isa<exec::ApplyOp>(op) ? 1 : 0;
+    if (op->getNumOperands() == offset + 2 &&
+        op->getOperand(offset) != op->getOperand(offset + 1) &&
+        op->getOperand(offset).getType() ==
+            op->getOperand(offset + 1).getType()) {
+      op->setOperand(offset, op->getOperand(offset + 1));
       ++mutations;
     }
   });
@@ -358,8 +361,8 @@ void scheduling(MLIRContext &context) {
     if (op.getRole() == "P")
       sender = op;
   });
-  SmallVector<local::CallOp> calls(
-      sender.getBody().front().getOps<local::CallOp>());
+  SmallVector<protocol_ir::LocalCallOp> calls(
+      sender.getBody().front().getOps<protocol_ir::LocalCallOp>());
   require(calls.size() == 3 && calls[0].getSite() == "gate" &&
               calls[0].getNumResults() == 0,
           "guard did not remain before later work");
@@ -378,8 +381,8 @@ void scheduling(MLIRContext &context) {
   mutated->walk([&](protocol_ir::ParticipantOp op) {
     if (op.getRole() != "P")
       return;
-    SmallVector<local::CallOp> local(
-        op.getBody().front().getOps<local::CallOp>());
+    SmallVector<protocol_ir::LocalCallOp> local(
+        op.getBody().front().getOps<protocol_ir::LocalCallOp>());
     local[1]->moveBefore(local[0]);
   });
   require(succeeded(verify(*mutated)),
@@ -435,12 +438,23 @@ void scheduling(MLIRContext &context) {
   run(*physical, protocol::createSelectPhysicalPass({}, false, true));
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),
           "storage-release pipeline changed participant control data flow");
-  // Generic transformations must retain a zero-result stopping invocation.
-  run(*bound, createCanonicalizerPass());
+  // Canonicalize the participant schedule, where the stopping call is opaque.
+  // Its scoped callee has a checked CFG profile; unrestricted CF rewrites do
+  // not preserve that profile merely because they preserve SSA formation.
+  {
+    PassManager manager(&context);
+    manager.nest<protocol_ir::ProtocolModuleOp>()
+        .nest<protocol_ir::ParticipantOp>()
+        .addPass(createCanonicalizerPass());
+    require(succeeded(manager.run(*bound)),
+            "participant canonicalization lost the execution profile");
+  }
   run(*bound, createCSEPass());
   run(*bound, createSymbolDCEPass());
   unsigned guards = 0;
-  bound->walk([&](local::CallOp call) { guards += call.getSite() == "gate"; });
+  bound->walk([&](protocol_ir::LocalCallOp call) {
+    guards += call.getSite() == "gate";
+  });
   require(guards == 1, "generic transforms erased the zero-result guard");
 }
 } // namespace
@@ -551,7 +565,7 @@ int main() {
     op->setAttr("trusted", UnitAttr::get(&context));
   });
   require(failed(verify(*malformed)), "unknown relation annotation admitted");
-  malformed = copy(*bound);
+  malformed = copy(*physical);
   malformed->walk([&](protocol_ir::ProjectionOp op) {
     op.setCalculationsAttr(ArrayAttr::get(&context, {}));
   });
