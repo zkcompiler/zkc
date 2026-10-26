@@ -1,27 +1,49 @@
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="multiply",contract="field.mul",arguments=["bls12-381.fr"],implementation="arkworks/field.mul"} : ()->()
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%xs:!V):
-   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
-   "data.domain_yield"(%d) : (!data.domain<!F>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @body(%x:!F,%xs:!V)->!F attributes {logical_origin=["body",[]]} {
-   %r = "algebra.exec.field_multiply"(%x,%x) {binding=@multiply,parameters=[],site="square"} : (!F,!F)->!F
-   local.return %r : !F
- }
- local.func private @step(%state:!F,%x:!F,%xs:!V)->!F attributes {logical_origin=["step",[]]} {
-   %r = "algebra.exec.field_add"(%state,%x) {binding=@add,parameters=[],site="add"} : (!F,!F)->!F
-   local.return %r : !F
- }
- "local.finite_collect"() {sym_name="collect",function_type=(!V)->!V,domain=@items,body=@body} : ()->()
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!F)->!F,domain=@items,step=@step} : ()->()
- local.func @evaluate(%xs:!V,%seed:!F)->!F attributes {logical_origin=["evaluate",[]]} {
-   %ys = local.apply @collect(%xs) {site="collect"} : (!V)->!V
-   %r = local.apply @fold(%ys,%seed) {site="fold"} : (!V,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({ "protocol.return"() : ()->() })
- {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "arkworks/field.mul", sym_name = "multiply"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
+    "data.domain"() <{function_type = (!V) -> !data.domain<!F>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !V):
+      %0 = "data.domain_elements"(%arg0) : (!V) -> !data.domain<!F>
+      "data.domain_yield"(%0) : (!data.domain<!F>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = () -> (), input_roles = [], origin = ["main", []], output_roles = [], roles = ["P"], sym_name = "main"}> ({
+      "protocol.return"() : () -> ()
+    }) : () -> ()
+    func.func private @body(%arg0: !runtime.scope, %arg1: !F, %arg2: !V) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["body", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg1) <{binding = @multiply, parameters = [], site = "square"}> : (!runtime.scope, !F, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb1(%1: !F):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!F) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    }
+    func.func private @step(%arg0: !runtime.scope, %arg1: !F, %arg2: !F, %arg3: !V) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["step", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @add, parameters = [], site = "add"}> : (!runtime.scope, !F, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb1(%1: !F):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!F) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    }
+    func.func @evaluate(%arg0: !runtime.scope, %arg1: !V, %arg2: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["evaluate", []]} {
+      %0 = "exec.collect"(%arg0, %arg1) <{body = @body, domain = @items, site = "collect"}> : (!runtime.scope, !V) -> !exec.outcome<(!V)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!V)>) -> ()
+    ^bb1(%1: !V):  // pred: ^bb0
+      %2 = "exec.fold"(%arg0, %1, %arg2) <{domain = @items, site = "fold", step = @step}> : (!runtime.scope, !V, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    ^bb3(%5: !F):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!F) -> !exec.outcome<(!F)>
+      return %6 : !exec.outcome<(!F)>
+    }
+  }) : () -> ()
+}

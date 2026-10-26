@@ -126,7 +126,7 @@ class ScopedExpander {
   }
   func::FuncOp region(func::FuncOp original, ArrayRef<unsigned> indices,
                       ValueRange captured, const Assignments &path,
-                      unsigned depth) {
+                      unsigned depth, bool &stopped) {
     OpBuilder::InsertionGuard guard(builder);
     std::string name;
     do {
@@ -170,7 +170,9 @@ class ScopedExpander {
       function->setAttr("data.preconditions",
                         builder.getArrayAttr(transported));
     }
-    function.addEntryBlock();
+    builder.createBlock(
+        &function.getBody(), function.getBody().end(), inputs,
+        SmallVector<Location>(inputs.size(), original.getLoc()));
     builder.setInsertionPointToEnd(&function.front());
     Environment env;
     for (unsigned i = 0; i < prefix; ++i)
@@ -179,8 +181,54 @@ class ScopedExpander {
       env[original.getArgument(1 + prefix + i)] =
           function.getArgument(1 + prefix + index);
     exec::ScopedExecutionBuilder control(builder, function);
-    body(original, std::move(env), control, path, depth, false);
+    stopped =
+        body(original, std::move(env), control, path, depth, false).stopped;
     return valid ? function : func::FuncOp();
+  }
+  bool discardStoppedPayload(func::FuncOp function) {
+    // Only a proved stopping outline may lose its result payload. Its actual
+    // returns must all package failures; intermediate outcomes keep their ABI.
+    auto outcome = exec::OutcomeType::get(builder.getContext(), {});
+    auto checked = function.walk([&](func::ReturnOp returned) {
+      if (!charge(returned, 1) || returned.getNumOperands() != 1 ||
+          !returned.getOperand(0).getDefiningOp<exec::FailureOp>())
+        return WalkResult::interrupt();
+      return WalkResult::advance();
+    });
+    if (checked.wasInterrupted()) {
+      valid = false;
+      return false;
+    }
+    function.walk(
+        [&](exec::FailureOp failed) { failed.getOutcome().setType(outcome); });
+    function.setFunctionType(
+        builder.getFunctionType(function.getArgumentTypes(), {outcome}));
+    return true;
+  }
+  void unreachable(exec::ScopedExecutionBuilder &control) {
+    auto function =
+        cast<func::FuncOp>(builder.getInsertionBlock()->getParentOp());
+    llvm::StringSet<> sites;
+    function.walk([&](Operation *op) {
+      if (auto name = op->getAttrOfType<StringAttr>("site")) {
+        if (charge(op, 1 + name.getValue().size()))
+          sites.insert(name.getValue());
+      }
+    });
+    unsigned index = 0;
+    std::string name;
+    do {
+      name = "unreachable_" + std::to_string(index++);
+    } while (sites.contains(name));
+    if (!charge(function, 8) || name.size() > remainingBytes) {
+      if (capacity && valid)
+        *capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes, name.size(),
+                                  remainingBytes};
+      valid = false;
+      return;
+    }
+    remainingBytes -= name.size();
+    control.reject("abort", name);
   }
   Result body(func::FuncOp function, Environment env,
               exec::ScopedExecutionBuilder &control, const Assignments &path,
@@ -306,13 +354,32 @@ class ScopedExpander {
       auto *previous = insertion->empty() ? nullptr : &insertion->back();
       Values outputs;
       auto outputTypes = types(step.outputs);
+      bool terminal = false;
       if (!step.regions.empty()) {
         unsigned prefix = isa<exec::RangeOp>(op) ? 2 + step.outputs.size() : 1;
         Values unique;
         auto indices = captures(ArrayRef(inputs).drop_front(prefix), unique);
-        auto outline = [&](unsigned index) {
-          return region(step.regions[index], indices, unique, path, depth + 1);
-        };
+        SmallVector<func::FuncOp> regions;
+        bool allStopped = true;
+        for (auto original : step.regions) {
+          bool stopped = false;
+          auto generated =
+              region(original, indices, unique, path, depth + 1, stopped);
+          if (!generated)
+            return {};
+          regions.push_back(generated);
+          allStopped &= stopped;
+        }
+        // A range can execute zero iterations. Only exhaustive branch/match
+        // controls with no continuing arm eliminate the caller continuation.
+        terminal = !isa<exec::RangeOp>(op) && allStopped;
+        if (terminal) {
+          outputTypes.clear();
+          for (auto generated : regions)
+            if (!discardStoppedPayload(generated))
+              return {};
+        }
+        auto outline = [&](unsigned index) { return regions[index]; };
         if (isa<exec::TestOp>(op)) {
           outputs = control.conditional(inputs.front(), unique, outputTypes,
                                         occurrence, outline);
@@ -334,11 +401,17 @@ class ScopedExpander {
         outputs = control.invoke(op->getName().getStringRef(), outputTypes,
                                  control.scoped(inputs), attributes.getAttrs());
       }
-      if (!valid || outputs.size() != step.outputs.size()) {
+      if (!valid || (!terminal && outputs.size() != step.outputs.size())) {
         valid = false;
         return {};
       }
       record(op, previous ? previous->getNextNode() : &insertion->front());
+      if (terminal) {
+        // Required CFG terminator, unreachable after either stopped arm. It
+        // is not attributed to a source occurrence or treated as a new effect.
+        unreachable(control);
+        return {{}, true};
+      }
       for (auto [before, after] : zip(step.outputs, outputs))
         env[before] = after;
     }

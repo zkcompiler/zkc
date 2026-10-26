@@ -307,7 +307,9 @@ int main() {
           *mathematical->getOps<protocol_ir::ProtocolModuleOp>().begin();
       auto actual = parse(source);
       for (auto &op : owner.getBody().front())
-        if (isa<func::FuncOp, data::DomainOp>(op))
+        if (isa<data::DomainOp>(op) ||
+            (isa<func::FuncOp>(op) &&
+             !protocol::isScopedExecutionFunction(cast<func::FuncOp>(op))))
           actual->getBody()->push_back(op.clone());
       require(succeeded(verify(*actual)), "mixed domain closure formation");
       take(protocol::readSourceExecutionDefinitions(*actual));

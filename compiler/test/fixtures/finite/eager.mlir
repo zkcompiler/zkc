@@ -1,33 +1,54 @@
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
- "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : () -> ()
- "data.domain"() ({
- ^entry(%xs:!V,%ys:!V,%ignored:!V):
-   %x = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
-   %y = "data.domain_elements"(%ys) : (!V) -> !data.domain<!F>
-   %z = "data.domain_elements"(%ignored) : (!V) -> !data.domain<!F>
-   %d = "data.domain_zip"(%x,%y,%z) : (!data.domain<!F>,!data.domain<!F>,!data.domain<!F>) -> !data.domain<!F,!F,!F>
-   "data.domain_yield"(%d) : (!data.domain<!F,!F,!F>) -> ()
- }) {sym_name="items",sym_visibility="private",function_type=(!V,!V,!V)->!data.domain<!F,!F,!F>} : ()->()
- local.func private @step(%state:!F,%x:!F,%y:!F,%ignored:!F,%xs:!V,%ys:!V,%zs:!V) -> !F attributes {logical_origin=["step",[]]} {
-   %term = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,parameters=[],site="term"} : (!F,!F)->!F
-   %next = "algebra.exec.field_add"(%state,%term) {binding=@add,parameters=[],site="add"} : (!F,!F)->!F
-   local.return %next : !F
- }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!V,!V,!F)->!F,domain=@items,step=@step} : ()->()
- local.func private @eager(%s:!F)->!F attributes {logical_origin=["eager",[]]} {
-   "local.stop"() {reason="reject",site="eager"} : ()->()
- }
- local.func @work(%xs:!V,%ys:!V,%zs:!V,%init:!F) -> !F attributes {logical_origin=["work",[]]} {
-   %first = local.apply @eager(%init) {site="first"} : (!F)->!F
-   %r = local.apply @fold(%xs,%ys,%zs,%first) {site="fold"} : (!V,!V,!V,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({
- ^entry(%xs:!V,%ys:!V,%zs:!V,%init:!F):
-   %r = "protocol.local_call"(%xs,%ys,%zs,%init) {callee=@work,role="P",site="work"} : (!V,!V,!V,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.mul", implementation = "", sym_name = "mul"}> : () -> ()
+    "data.domain"() <{function_type = (!V, !V, !V) -> !data.domain<!F, !F, !F>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !V, %arg1: !V, %arg2: !V):
+      %0 = "data.domain_elements"(%arg0) : (!V) -> !data.domain<!F>
+      %1 = "data.domain_elements"(%arg1) : (!V) -> !data.domain<!F>
+      %2 = "data.domain_elements"(%arg2) : (!V) -> !data.domain<!F>
+      %3 = "data.domain_zip"(%0, %1, %2) : (!data.domain<!F>, !data.domain<!F>, !data.domain<!F>) -> !data.domain<!F, !F, !F>
+      "data.domain_yield"(%3) : (!data.domain<!F, !F, !F>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = (!V, !V, !V, !F) -> !F, input_roles = [["P"], ["P"], ["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
+    ^bb0(%arg0: !V, %arg1: !V, %arg2: !V, %arg3: !F):
+      %0 = "protocol.local_call"(%arg0, %arg1, %arg2, %arg3) <{callee = @work, role = "P", site = "work"}> : (!V, !V, !V, !F) -> !F
+      "protocol.return"(%0) : (!F) -> ()
+    }) : () -> ()
+    func.func private @step(%arg0: !runtime.scope, %arg1: !F, %arg2: !F, %arg3: !F, %arg4: !F, %arg5: !V, %arg6: !V, %arg7: !V) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["step", []]} {
+      %0 = "exec.apply"(%arg0, %arg2, %arg3) <{binding = @mul, parameters = [], site = "term"}> : (!runtime.scope, !F, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb1(%1: !F):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @add, parameters = [], site = "add"}> : (!runtime.scope, !F, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    ^bb3(%5: !F):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!F) -> !exec.outcome<(!F)>
+      return %6 : !exec.outcome<(!F)>
+    }
+    func.func private @eager(%arg0: !runtime.scope, %arg1: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["eager", []]} {
+      %0 = "exec.reject"(%arg0) <{reason = "reject", site = "eager"}> : (!runtime.scope) -> !exec.stop
+      cf.br ^bb1(%0 : !exec.stop)
+    ^bb1(%1: !exec.stop):  // pred: ^bb0
+      %2 = "exec.failed"(%1) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    }
+    func.func @work(%arg0: !runtime.scope, %arg1: !V, %arg2: !V, %arg3: !V, %arg4: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = call @eager(%arg0, %arg4) {runtime.site = "first"} : (!runtime.scope, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb1(%1: !F):  // pred: ^bb0
+      %2 = "exec.fold"(%arg0, %arg1, %arg2, %arg3, %1) <{domain = @items, site = "fold", step = @step}> : (!runtime.scope, !V, !V, !V, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    ^bb3(%5: !F):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!F) -> !exec.outcome<(!F)>
+      return %6 : !exec.outcome<(!F)>
+    }
+  }) : () -> ()
+}

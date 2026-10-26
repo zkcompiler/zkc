@@ -84,6 +84,18 @@ function, including physical port and binding contracts when selected. This
 subset check does not establish the entry contract of a complete executable
 program; complete program admission separately checks participants and entries.
 
+Ordinary helper expansion can expose an exhaustive conditional or match whose
+every arm stops. Such a control has no produced payload, even if its original
+helper signatures declared results. Expansion removes those control results
+and the unreachable caller continuation. Stopping outlined bodies retain their
+scope entry, failure propagation and cleanup; their return types become empty
+outcomes only when every return packages a failure. The enclosing CFG ends with
+an unreachable `abort` terminator at a fresh `unreachable_` site. This terminator
+has no source occurrence and cannot create a reached observation. Independent
+comparison must establish stopping for every original arm under actual helper
+substitution before accepting the removed payload or continuation. A range with
+a stopping body still retains its zero-iteration continuation and initial state.
+
 ## Runtime scope and transfer views
 
 `!runtime.scope` denotes an active execution scope. A function's scope arguments

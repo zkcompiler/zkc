@@ -2,35 +2,60 @@
 !G = !algebra.group<"bls12-381.g1">
 !V = !algebra.field_vector<"bls12-381.fr">
 !GS = !algebra.group_vector<"bls12-381.g1">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="generator",contract="curve.generator",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="empty",contract="curve.empty",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="append",contract="curve.append",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="add",contract="curve.add",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="equal",contract="curve.equal",arguments=["bls12-381.g1"],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%points:!GS,%scalars:!V):
-   %p = "data.domain_elements"(%points) : (!GS)->!data.domain<!G>
-   %s = "data.domain_elements"(%scalars) : (!V)->!data.domain<!F>
-   %d = "data.domain_zip"(%p,%s) : (!data.domain<!G>,!data.domain<!F>)->!data.domain<!G,!F>
-   "data.domain_yield"(%d) : (!data.domain<!G,!F>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!GS,!V)->!data.domain<!G,!F>} : ()->()
- local.func private @step(%state:!G,%point:!G,%scalar:!F,%points:!GS,%scalars:!V) -> !G attributes {logical_origin=["step",[]]} {
-   %term = "algebra.exec.group_scale"(%point,%scalar) {binding=@scale,parameters=[],site="term"} : (!G,!F)->!G
-   %next = "algebra.exec.group_add"(%state,%term) {binding=@add,parameters=[],site="add"} : (!G,!G)->!G
-   local.return %next : !G
- }
- "local.finite_fold"() {sym_name="fold",function_type=(!GS,!V,!G)->!G,domain=@items,step=@step} : ()->()
- local.func @work(%points:!GS,%scalars:!V,%init:!F,%expected:!F) -> i1 attributes {logical_origin=["work",[]]} {
-   %g = "algebra.exec.group_generator"() {binding=@generator,parameters=[],site="generator"} : ()->!G
-   %initial = "algebra.exec.group_scale"(%g,%init) {binding=@scale,parameters=[],site="init"} : (!G,!F)->!G
-   %r = local.apply @fold(%points,%scalars,%initial) {site="fold"} : (!GS,!V,!G)->!G
-   %wanted = "algebra.exec.group_scale"(%g,%expected) {binding=@scale,parameters=[],site="expected"} : (!G,!F)->!G
-   %ok = "algebra.exec.group_equal"(%r,%wanted) {binding=@equal,parameters=[],site="equal"} : (!G,!G)->i1
-   local.return %ok : i1
- }
- "protocol.func"() ({ ^entry(%points:!GS,%scalars:!V,%init:!F,%expected:!F):
-   %r = "protocol.local_call"(%points,%scalars,%init,%expected) {callee=@work,role="P",site="work"} : (!GS,!V,!F,!F)->i1
-   "protocol.return"(%r) : (i1)->()
- }) {sym_name="main",function_type=(!GS,!V,!F,!F)->i1,roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.generator", implementation = "", sym_name = "generator"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.empty", implementation = "", sym_name = "empty"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.append", implementation = "", sym_name = "append"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.scale", implementation = "", sym_name = "scale"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.add", implementation = "", sym_name = "add"}> : () -> ()
+    "runtime.binding"() <{arguments = ["bls12-381.g1"], contract = "curve.equal", implementation = "", sym_name = "equal"}> : () -> ()
+    "data.domain"() <{function_type = (!GS, !V) -> !data.domain<!G, !F>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !GS, %arg1: !V):
+      %0 = "data.domain_elements"(%arg0) : (!GS) -> !data.domain<!G>
+      %1 = "data.domain_elements"(%arg1) : (!V) -> !data.domain<!F>
+      %2 = "data.domain_zip"(%0, %1) : (!data.domain<!G>, !data.domain<!F>) -> !data.domain<!G, !F>
+      "data.domain_yield"(%2) : (!data.domain<!G, !F>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = (!GS, !V, !F, !F) -> i1, input_roles = [["P"], ["P"], ["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
+    ^bb0(%arg0: !GS, %arg1: !V, %arg2: !F, %arg3: !F):
+      %0 = "protocol.local_call"(%arg0, %arg1, %arg2, %arg3) <{callee = @work, role = "P", site = "work"}> : (!GS, !V, !F, !F) -> i1
+      "protocol.return"(%0) : (i1) -> ()
+    }) : () -> ()
+    func.func private @step(%arg0: !runtime.scope, %arg1: !G, %arg2: !G, %arg3: !F, %arg4: !GS, %arg5: !V) -> !exec.outcome<(!G)> attributes {no_inline, runtime.origin = ["step", []]} {
+      %0 = "exec.apply"(%arg0, %arg2, %arg3) <{binding = @scale, parameters = [], site = "term"}> : (!runtime.scope, !G, !F) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb1(%1: !G):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %arg1, %1) <{binding = @add, parameters = [], site = "add"}> : (!runtime.scope, !G, !G) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!G)>
+      return %4 : !exec.outcome<(!G)>
+    ^bb3(%5: !G):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!G) -> !exec.outcome<(!G)>
+      return %6 : !exec.outcome<(!G)>
+    }
+    func.func @work(%arg0: !runtime.scope, %arg1: !GS, %arg2: !V, %arg3: !F, %arg4: !F) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = "exec.apply"(%arg0) <{binding = @generator, parameters = [], site = "generator"}> : (!runtime.scope) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb1(%1: !G):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1, %arg3) <{binding = @scale, parameters = [], site = "init"}> : (!runtime.scope, !G, !F) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb2(%3: !exec.stop):  // 5 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
+      return %4 : !exec.outcome<(i1)>
+    ^bb3(%5: !G):  // pred: ^bb1
+      %6 = "exec.fold"(%arg0, %arg1, %arg2, %5) <{domain = @items, site = "fold", step = @step}> : (!runtime.scope, !GS, !V, !G) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb4(%7: !G):  // pred: ^bb3
+      %8 = "exec.apply"(%arg0, %1, %arg4) <{binding = @scale, parameters = [], site = "expected"}> : (!runtime.scope, !G, !F) -> !exec.outcome<(!G)>
+      "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(!G)>) -> ()
+    ^bb5(%9: !G):  // pred: ^bb4
+      %10 = "exec.apply"(%arg0, %7, %9) <{binding = @equal, parameters = [], site = "equal"}> : (!runtime.scope, !G, !G) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%10)[^bb6, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb6(%11: i1):  // pred: ^bb5
+      %12 = "exec.returned"(%11) : (i1) -> !exec.outcome<(i1)>
+      return %12 : !exec.outcome<(i1)>
+    }
+  }) : () -> ()
+}

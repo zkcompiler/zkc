@@ -1,28 +1,44 @@
-
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : () -> ()
- "data.domain"() ({
- ^entry(%xs:!V):
-   %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
-   "data.domain_yield"(%d) : (!data.domain<!F>) -> ()
- }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @body(%item:!F,%xs:!V) -> !F attributes {logical_origin=["body",[]]} {
-   "local.stop"() {site="body",reason="abort"} : ()->()
- }
- "local.finite_collect"() {sym_name="collect",function_type=(!V)->!V,domain=@items,body=@body} : ()->()
- local.func private @reduce(%xs:!V,%init:!F) -> !F attributes {logical_origin=["reduce",[]]} {
-   "local.stop"() {site="reducer",reason="reject"} : ()->()
- }
- local.func @work(%xs:!V,%init:!F) -> !F attributes {logical_origin=["work",[]]} {
-   %collected = local.apply @collect(%xs) {site="collect"} : (!V)->!V
-   %r = local.apply @reduce(%collected,%init) {site="reduce"} : (!V,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({
- ^entry(%xs:!V,%init:!F):
-   %r = "protocol.local_call"(%xs,%init) {callee=@work,role="P",site="work"} : (!V,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = ["bls12-381.fr"], contract = "field.add", implementation = "", sym_name = "add"}> : () -> ()
+    "data.domain"() <{function_type = (!V) -> !data.domain<!F>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !V):
+      %0 = "data.domain_elements"(%arg0) : (!V) -> !data.domain<!F>
+      "data.domain_yield"(%0) : (!data.domain<!F>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = (!V, !F) -> !F, input_roles = [["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
+    ^bb0(%arg0: !V, %arg1: !F):
+      %0 = "protocol.local_call"(%arg0, %arg1) <{callee = @work, role = "P", site = "work"}> : (!V, !F) -> !F
+      "protocol.return"(%0) : (!F) -> ()
+    }) : () -> ()
+    func.func private @body(%arg0: !runtime.scope, %arg1: !F, %arg2: !V) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["body", []]} {
+      %0 = "exec.reject"(%arg0) <{reason = "abort", site = "body"}> : (!runtime.scope) -> !exec.stop
+      cf.br ^bb1(%0 : !exec.stop)
+    ^bb1(%1: !exec.stop):  // pred: ^bb0
+      %2 = "exec.failed"(%1) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    }
+    func.func private @reduce(%arg0: !runtime.scope, %arg1: !V, %arg2: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["reduce", []]} {
+      %0 = "exec.reject"(%arg0) <{reason = "reject", site = "reducer"}> : (!runtime.scope) -> !exec.stop
+      cf.br ^bb1(%0 : !exec.stop)
+    ^bb1(%1: !exec.stop):  // pred: ^bb0
+      %2 = "exec.failed"(%1) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    }
+    func.func @work(%arg0: !runtime.scope, %arg1: !V, %arg2: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = "exec.collect"(%arg0, %arg1) <{body = @body, domain = @items, site = "collect"}> : (!runtime.scope, !V) -> !exec.outcome<(!V)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!V)>) -> ()
+    ^bb1(%1: !V):  // pred: ^bb0
+      %2 = call @reduce(%arg0, %1, %arg2) {runtime.site = "reduce"} : (!runtime.scope, !V, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    ^bb3(%5: !F):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!F) -> !exec.outcome<(!F)>
+      return %6 : !exec.outcome<(!F)>
+    }
+  }) : () -> ()
+}

@@ -369,6 +369,105 @@ int main(int argc, char **argv) {
                                                            checking)),
             "zero-state stop was erased without refusal");
   });
+  for (bool match : {false, true})
+    for (unsigned mutation : {0u, 1u, 2u, 3u})
+      cases.run(
+          (match ? "exhaustive stopping match "
+                 : "exhaustive stopping branch ") +
+              std::to_string(mutation),
+          [&] {
+            auto bytes = llvm::MemoryBuffer::getFile(
+                std::string(ZKC_FINITE_FIXTURES) +
+                (match ? "/match.mlir" : "/stopping-branches.mlir"));
+            require(bool(bytes), "stopping fixture missing");
+            auto source =
+                parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+            require(bool(source), "stopping source refused");
+            if (match) {
+              OpBuilder builder(&context);
+              builder.setInsertionPointToEnd(&unit(*source).getBody().front());
+              auto field = algebra::FieldType::get(&context, "bls12-381.fr");
+              auto halt = func::FuncOp::create(
+                  builder, builder.getUnknownLoc(), "halt",
+                  builder.getFunctionType(
+                      {runtime::ScopeType::get(&context), field},
+                      {exec::OutcomeType::get(&context, {field})}));
+              halt.setPrivate();
+              halt.setNoInline(true);
+              halt->setAttr("runtime.origin",
+                            builder.getArrayAttr({builder.getStringAttr("halt"),
+                                                  builder.getArrayAttr({})}));
+              builder.setInsertionPointToEnd(halt.addEntryBlock());
+              exec::ScopedExecutionBuilder stop(builder, halt);
+              stop.reject("abort", "halt");
+              func::FuncOp arm;
+              source->walk([&](exec::CompleteOp op) {
+                arm = op->getParentOfType<func::FuncOp>();
+              });
+              require(bool(arm), "missing returning match arm");
+              arm.getBody().dropAllReferences();
+              arm.getBody().getBlocks().clear();
+              builder.setInsertionPointToEnd(arm.addEntryBlock());
+              exec::ScopedExecutionBuilder control(builder, arm);
+              auto result = control.invoke(
+                  "func.call", {field}, control.scoped(arm.getArgument(1)),
+                  {builder.getNamedAttr(
+                       "callee", FlatSymbolRefAttr::get(&context, "halt")),
+                   builder.getNamedAttr("runtime.site",
+                                        builder.getStringAttr("left"))});
+              control.complete(result);
+            }
+            require(succeeded(verify(*source)),
+                    "stopping call source is malformed");
+            mathematical::RealizationWork work;
+            uint64_t copy = 1000000, bytesLeft = 16 * 1024 * 1024;
+            std::optional<CapacityCause> capacity;
+            auto candidate = protocol::prepareScopedFinite(*source, work, copy,
+                                                           bytesLeft, capacity);
+            require(bool(candidate) &&
+                        succeeded(protocol::verifyScopedFinitePreparation(
+                            *source, *candidate, work)),
+                    "stopping control did not independently correspond");
+            exec::RejectOp unreachable, reached;
+            candidate->walk([&](exec::RejectOp op) {
+              if (op.getSite().starts_with("unreachable_"))
+                unreachable = op;
+              else if (op->getParentOfType<func::FuncOp>()->hasAttr(
+                           "runtime.region") &&
+                       cast<exec::OutcomeType>(
+                           op->getParentOfType<func::FuncOp>()
+                               .getResultTypes()[0])
+                           .getPayload()
+                           .empty())
+                reached = op;
+            });
+            require(bool(unreachable) && bool(reached),
+                    "stopped arms or unreachable continuation missing");
+            if (!mutation)
+              return;
+            if (mutation == 1)
+              reached.setReason(reached.getReason() == "abort" ? "reject"
+                                                               : "abort");
+            else if (mutation == 2)
+              unreachable.setReason("reject");
+            else {
+              auto arm = reached->getParentOfType<func::FuncOp>();
+              arm.getBody().dropAllReferences();
+              arm.getBody().getBlocks().clear();
+              OpBuilder builder(&context);
+              builder.setInsertionPointToEnd(arm.addEntryBlock());
+              exec::ScopedExecutionBuilder control(builder, arm);
+              control.complete({});
+            }
+            require(succeeded(verify(*candidate)),
+                    "stopping mutation did not form");
+            ScopedDiagnosticHandler quiet(
+                &context, [](Diagnostic &) { return success(); });
+            mathematical::RealizationWork checking;
+            require(failed(protocol::verifyScopedFinitePreparation(
+                        *source, *candidate, checking)),
+                    "changed stopped control escaped independent comparison");
+          });
   for (StringRef fixture :
        {"total-state", "total-predicate", "total-collect", "nested-total"})
     cases.run("full direct source/candidate correspondence " + fixture, [&] {

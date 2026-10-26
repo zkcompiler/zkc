@@ -182,7 +182,8 @@ class ScopedCorrespondence {
   }
   bool control(const SourceExecutionStep &before,
                const SourceExecutionStep &after, const Environment &env,
-               const Assignments &path, StringRef definition, unsigned depth) {
+               const Assignments &path, StringRef definition, unsigned depth,
+               bool &terminal) {
     const bool loop = isa<exec::RangeOp>(before.operation);
     unsigned prefix = loop ? 2 + before.outputs.size() : 1;
     auto inputs = mapped(before.inputs, env);
@@ -205,12 +206,18 @@ class ScopedCorrespondence {
     }
     if (!equal(expected, ArrayRef(after.inputs).drop_front(prefix)))
       return false;
+    bool allStopped = true, changedType = false;
+    auto empty = exec::OutcomeType::get(before.operation->getContext(), {});
     for (auto pair : zip(before.regions, after.regions)) {
       func::FuncOp left = std::get<0>(pair), right = std::get<1>(pair);
       unsigned formals = left.getNumArguments() - 1 - positions.size();
-      if (right.getNumArguments() != 1 + formals + expected.size() ||
-          left.getResultTypes() != right.getResultTypes())
+      if (right.getNumArguments() != 1 + formals + expected.size())
         return false;
+      if (left.getResultTypes() != right.getResultTypes()) {
+        if (loop || !equal(right.getResultTypes(), TypeRange{empty}))
+          return false;
+        changedType = true;
+      }
       Environment inner;
       if (!bind(left.getArguments().slice(1, formals),
                 right.getArguments().slice(1, formals), inner))
@@ -263,7 +270,15 @@ class ScopedCorrespondence {
                  depth + 1, false, returned, stopped) ||
           cursor != body.size())
         return false;
+      allStopped &= stopped;
     }
+    terminal = !loop && allStopped;
+    if (changedType && !terminal)
+      return false;
+    if (terminal)
+      for (auto function : after.regions)
+        if (!equal(function.getResultTypes(), TypeRange{empty}))
+          return false;
     return true;
   }
   // Walk the original under virtual substitution and consume actual candidate
@@ -311,12 +326,25 @@ class ScopedCorrespondence {
       if (cursor == actual.size())
         return false;
       const auto &observed = actual[cursor++];
-      if (!attrs(op, observed.operation, path, origin) ||
-          step.outputs.size() != observed.outputs.size())
+      if (!attrs(op, observed.operation, path, origin))
         return false;
       if (!step.regions.empty()) {
-        if (!control(step, observed, env, path, origin, depth))
+        bool terminal = false;
+        if (!control(step, observed, env, path, origin, depth, terminal))
           return false;
+        if (terminal) {
+          if (!observed.outputs.empty() || cursor == actual.size())
+            return false;
+          const auto &end = actual[cursor++];
+          auto reject = dyn_cast<exec::RejectOp>(end.operation);
+          if (!reject || reject.getReason() != "abort" ||
+              !reject.getSite().starts_with("unreachable_") ||
+              !end.inputs.empty() || !end.outputs.empty() ||
+              !end.regions.empty())
+            return false;
+          stopped = true;
+          return true;
+        }
       } else if (!observed.regions.empty() ||
                  mapped(step.inputs, env) != observed.inputs) {
         return false;
