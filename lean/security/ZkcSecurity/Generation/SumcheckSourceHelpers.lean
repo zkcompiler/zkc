@@ -10,7 +10,7 @@ Private realization names come from actual dependency edges. Selection is
 untrusted: every emitted association checks membership, full ABI and body.
 No root name, historical ordinal or generated-name prefix selects a helper. -/
 set_option autoImplicit false
-namespace ZkcTools.StructuredSource.SumcheckHelpers
+namespace ZkcSecurity.Generation.SumcheckSourceHelpers
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open ZkcTools.StructuredSource.Presentation
 
@@ -66,4 +66,4 @@ def source (definitions : List CheckedDefinition) (table : String) : Except Stri
     "                     check := by bind_structured_bodies\n" ++
     "                     checkTable := by bind_structured_bodies }⟩\n\n"
 
-end ZkcTools.StructuredSource.SumcheckHelpers
+end ZkcSecurity.Generation.SumcheckSourceHelpers

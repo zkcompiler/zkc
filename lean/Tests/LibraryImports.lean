@@ -968,7 +968,6 @@ import ZkcTools.StructuredSource.OpenValues
 import ZkcTools.StructuredSource.OriginalRoot
 import ZkcTools.StructuredSource.Presentation
 import ZkcTools.StructuredSource.Root
-import ZkcTools.StructuredSource.SumcheckHelpers
 import ZkcTools.StructuredSource.WireTypes
 import ZkcTools.ConstructionBindings.Analysis
 import ZkcTools.ConstructionBindings.Source
