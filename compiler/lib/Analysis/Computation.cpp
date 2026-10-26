@@ -195,9 +195,26 @@ class NumericalBodyReader {
     return outputs;
   }
 
-  // This is optional recognition storage. Only laws with an explicit total
-  // mathematical counterpart may cross the scoped boundary. Every source
-  // operation is visited; an unused guard, pin or stop still declines it.
+  SmallVector<Value> opaque(Operation *source, ValueRange inputs,
+                            ValueRange outputs, Block &target) {
+    OpBuilder::InsertionGuard restore(builder);
+    builder.setInsertionPointToEnd(result.storage->getBody());
+    auto declaration = func::FuncOp::create(
+        source->getLoc(), "_source_operation",
+        builder.getFunctionType(inputs.getTypes(), outputs.getTypes()));
+    declaration.setPrivate();
+    targetSymbols.insert(declaration);
+    builder.setInsertionPointToEnd(&target);
+    auto call =
+        func::CallOp::create(builder, source->getLoc(), declaration, inputs);
+    result.sources[call] = source;
+    return SmallVector<Value>(call.getResults());
+  }
+
+  // This is optional structural storage, never executable lowering. Only
+  // primitives with an admitted mathematical counterpart receive a law;
+  // other value-producing applications retain opaque source observations.
+  // Every operation is visited. Stops and ordered control decline the view.
   FailureOr<SmallVector<Value>>
   copyScoped(func::FuncOp source, ValueRange arguments, Block &target) {
     if (!scopedSource || active.size() >= 64 || !active.insert(source).second)
@@ -254,22 +271,8 @@ class NumericalBodyReader {
         continue;
       }
       if (isComputation(op)) {
-        // An uninterpreted typed call retains the nested occurrence in this
-        // private SSA view. Its source association, not its temporary symbol,
-        // supplies the descriptor, callback and scoped execution contract.
-        OpBuilder::InsertionGuard restore(builder);
-        builder.setInsertionPointToEnd(result.storage->getBody());
-        auto declaration = func::FuncOp::create(
-            op->getLoc(), "_nested_computation",
-            builder.getFunctionType(ValueRange(inputs).getTypes(),
-                                    ValueRange(step.outputs).getTypes()));
-        declaration.setPrivate();
-        targetSymbols.insert(declaration);
-        builder.setInsertionPointToEnd(&target);
-        auto call =
-            func::CallOp::create(builder, op->getLoc(), declaration, inputs);
-        result.sources[call] = op;
-        values.map(step.outputs, call.getResults());
+        auto projected = opaque(op, inputs, step.outputs, target);
+        values.map(step.outputs, projected);
         continue;
       }
       auto apply = dyn_cast<exec::ApplyOp>(op);
@@ -286,18 +289,6 @@ class NumericalBodyReader {
         llvm::consumeError(decoded.takeError());
         return failure();
       }
-      SmallVector<protocol::BoundType> inputTypes, outputTypes;
-      for (auto [ports, types] :
-           {std::pair{ValueRange(step.inputs), &inputTypes},
-            std::pair{ValueRange(step.outputs), &outputTypes}})
-        for (Type type : ports.getTypes()) {
-          auto encoded = protocol::encodeBoundType(type, false);
-          if (!encoded) {
-            llvm::consumeError(encoded.takeError());
-            return failure();
-          }
-          types->push_back(std::move(*encoded));
-        }
       SmallVector<std::string> parameters;
       for (Attribute attr : apply.getParameters()) {
         auto text = dyn_cast<StringAttr>(attr);
@@ -305,9 +296,13 @@ class NumericalBodyReader {
           return failure();
         parameters.push_back(text.getValue().str());
       }
-      if (!protocol::admitMathematicalMeaning(decoded->application, inputTypes,
-                                              outputTypes, parameters))
-        return failure();
+      if (!semantics(op)) {
+        // Retain typed dataflow and source identity without assigning a total
+        // law to a checked or effectful operation. The uninterpreted call has
+        // no mathematical facet, so equation recognition cannot erase it.
+        values.map(step.outputs, opaque(op, inputs, step.outputs, target));
+        continue;
+      }
       StringRef contract = decoded->application.contract;
       StringRef name =
           contract == "field.constant"
@@ -353,7 +348,9 @@ public:
     if (failed(outputs))
       return failure();
     builder.setInsertionPointToEnd(body);
-    func::ReturnOp::create(builder, source.getLoc(), *outputs);
+    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
+    result.sources[end] =
+        scopedSource->bodies.at(source.getSymName().str()).back().operation;
     return success();
   }
   LogicalResult read(local::FuncOp source) {

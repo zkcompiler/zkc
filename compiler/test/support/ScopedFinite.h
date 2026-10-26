@@ -2,12 +2,14 @@
 #define ZKC_TEST_SCOPEDFINITE_H
 
 #include "../../lib/Transforms/ScopedPreparation.h"
+#include "ComputationFixture.h"
 #include "NativeCases.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include <functional>
 #include <memory>
 
 namespace zkc::test::scopedFinite {
@@ -42,20 +44,37 @@ inline exec::ApplyOp application(mlir::Operation *owner, llvm::StringRef name) {
   require(!result.empty(), "missing invocation " + name);
   return result.front();
 }
-struct AdmittedComputation : finite::Computation {
-  std::shared_ptr<protocol::SourceExecutionClosure> source;
-};
-inline AdmittedComputation computation(mlir::ModuleOp module,
-                                       mlir::Operation *operation = nullptr) {
-  AdmittedComputation result;
-  result.source = std::make_shared<protocol::SourceExecutionClosure>(
-      take(protocol::readSourceExecutionClosure(&module.getBody()->front())));
+// Enumerate actual invocation paths through a prepared scoped root. Retained
+// dormant helper definitions are not occurrences of this execution.
+inline llvm::SmallVector<exec::ApplyOp>
+executionApplications(mlir::ModuleOp module, llvm::StringRef root,
+                      llvm::StringRef name) {
+  auto closure =
+      take(protocol::readSourceExecutionClosure(&module.getBody()->front()));
+  llvm::SmallVector<exec::ApplyOp> result;
+  std::function<void(llvm::StringRef, unsigned)> visit =
+      [&](llvm::StringRef function, unsigned depth) {
+        require(depth < 64, "excessive test execution depth");
+        for (const auto &step : closure.bodies.at(function.str())) {
+          if (auto apply = mlir::dyn_cast<exec::ApplyOp>(step.operation))
+            if (contract(apply) == name)
+              result.push_back(apply);
+          for (auto region : step.regions)
+            visit(region.getSymName(), depth + 1);
+          if (auto call = mlir::dyn_cast<mlir::func::CallOp>(step.operation))
+            if (closure.bodies.count(call.getCallee().str()))
+              visit(call.getCallee(), depth + 1);
+        }
+      };
+  visit(root, 0);
+  return result;
+}
+inline OwnedComputation computation(mlir::ModuleOp module,
+                                    mlir::Operation *operation = nullptr) {
   if (!operation)
     module.walk([&](exec::CollectOp found) { operation = found; });
-  require(operation && mlir::succeeded(finite::describe(operation, result)),
-          "missing admitted computation");
-  result.scopedSource = result.source.get();
-  return result;
+  require(operation, "missing scoped collection");
+  return readComputation(module, operation);
 }
 inline mlir::OwningOpRef<mlir::ModuleOp>
 prepare(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {}) {

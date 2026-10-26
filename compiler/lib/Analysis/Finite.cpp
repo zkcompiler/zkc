@@ -427,7 +427,7 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
 }
 namespace {
 bool entryShape(const Computation &c) {
-  if (!c.signature || !c.domain ||
+  if ((c.total && c.scoped) || !c.signature || !c.domain ||
       c.signature.getNumInputs() != c.arguments + c.states + c.captures ||
       (c.collect ? c.states != 0 || c.signature.getNumResults() != 1
                  : c.states != c.signature.getNumResults()))

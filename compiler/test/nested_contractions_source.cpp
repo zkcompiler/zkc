@@ -73,29 +73,19 @@ Operation *product(ModuleOp module) {
   require(result, "missing retained raw multiplication");
   return result;
 }
-sf::AdmittedComputation outerCollection(ModuleOp module) {
+OwnedComputation outerCollection(ModuleOp module) {
   return sf::computation(module);
 }
 unsigned matvecs(ModuleOp module) {
   protocol_ir::LocalCallOp root;
   module.walk([&](protocol_ir::LocalCallOp call) { root = call; });
   require(bool(root), "missing protocol-root invocation");
-  auto closure =
-      take(protocol::readSourceExecutionClosure(&module.getBody()->front()));
-  unsigned count = 0;
-  std::function<void(StringRef, unsigned)> visit = [&](StringRef name,
-                                                       unsigned depth) {
-    require(depth < 64, "excessive test region depth");
-    for (const auto &step : closure.bodies.at(name.str())) {
-      if (auto operation = dyn_cast<exec::ApplyOp>(step.operation))
-        count += sf::contract(operation) == "matrix.mul_vector" ||
-                 sf::contract(operation) == "matrix.transpose_mul_vector";
-      for (auto region : step.regions)
-        visit(region.getSymName(), depth + 1);
-    }
-  };
-  visit(root.getCallee(), 0);
-  return count;
+  return sf::executionApplications(module, root.getCallee(),
+                                   "matrix.mul_vector")
+             .size() +
+         sf::executionApplications(module, root.getCallee(),
+                                   "matrix.transpose_mul_vector")
+             .size();
 }
 // Return a scalar through a nonzero result coordinate and retain another exact
 // coordinate. No numerical normalization or additional scalar work is involved.

@@ -475,11 +475,17 @@ fragment, after the complete reached domain admission and shape guards.
 Recognition uses invocation-local mathematical SSA storage derived from the
 already admitted immutable source closure. It substitutes actual data ports
 through ordinary scoped helper calls and numerical requests. It visits unused
-operations too, preserves original numerical-call policies, and declines stops,
-controls, guards and pinned implementations. Explicit physical binding
-requests constrain the producer and independent reader in the same way,
-including requests on unused callback operations. This temporary storage changes no
-source definition and is not replacement evidence. Indexed-access replacement
+operations too and preserves original numerical-call policies, callback return
+coordinates and source instruction associations. A value-producing application
+without an admitted mathematical law remains a typed uninterpreted call in this
+private storage. It contributes dataflow and iteration structure but grants no
+algebraic replacement permission, including when its result is unused. Source
+attributes pass the same strict meaning check as direct selection; projecting
+an operation cannot discard unsupported metadata to obtain a law. Stops and
+ordered control decline the structural view. Implementation pins and explicit
+physical binding requests constrain selection and independent checking,
+including requests on unused callback operations. This temporary storage changes
+no source definition and is not replacement evidence. Indexed-access replacement
 additionally requires the actual bound and extent premises.
 
 The independent bulk reader interprets the original scoped callback and plain
