@@ -1,13 +1,18 @@
 #include "../lib/Transforms/MathematicalComparison.h"
+#include "../lib/Transforms/ScopedCandidate.h"
+#include "../lib/Transforms/ScopedPreparation.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Finite.h"
@@ -134,6 +139,60 @@ Operation *bound(ModuleOp module, StringRef functionName, StringRef contract) {
   require(false, "missing bound operation " + contract);
   return nullptr;
 }
+func::FuncOp scopedFunction(ModuleOp module, StringRef name = "work") {
+  auto owner = &module.getBody()->front();
+  auto function = SymbolTable(owner).lookup<func::FuncOp>(name);
+  require(function && protocol::isScopedExecutionFunction(function),
+          "missing scoped function " + name);
+  return function;
+}
+Operation *scopedBound(ModuleOp module, StringRef contract,
+                       StringRef function = "work") {
+  Operation *result = nullptr;
+  scopedFunction(module, function).walk([&](exec::ApplyOp op) {
+    auto declaration = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        op, op.getBindingAttr());
+    if (!result && declaration && declaration.getContract() == contract)
+      result = op;
+  });
+  require(result, "missing scoped binding " + contract);
+  return result;
+}
+Value payload(Operation *operation) {
+  auto dispatch = dyn_cast_or_null<exec::DispatchOp>(operation->getNextNode());
+  require(dispatch && dispatch.getReturned()->getNumArguments() == 1,
+          "missing scoped outcome payload");
+  return dispatch.getReturned()->getArgument(0);
+}
+void omitScoped(Operation *operation, ValueRange replacements = {}) {
+  auto dispatch = cast<exec::DispatchOp>(operation->getNextNode());
+  auto *next = dispatch.getReturned(), *before = operation->getBlock();
+  IRRewriter rewriter(operation->getContext());
+  dispatch.erase();
+  operation->erase();
+  rewriter.mergeBlocks(next, before, replacements);
+}
+exec::ReturnOp returned(func::FuncOp function) {
+  exec::ReturnOp result;
+  function.walk([&](exec::ReturnOp op) { result = op; });
+  require(bool(result), "missing scoped return");
+  return result;
+}
+OwningOpRef<ModuleOp> prepare(ModuleOp source,
+                              MathematicalSelectionPolicy policy = {}) {
+  mathematical::RealizationWork work;
+  uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
+  std::optional<CapacityCause> capacity;
+  auto result = protocol::prepareScopedFinite(source, work, copies, bytes,
+                                              capacity, policy);
+  require(bool(result), "scoped finite preparation refused");
+  return result;
+}
+bool corresponds(ModuleOp source, ModuleOp candidate) {
+  mathematical::RealizationWork work;
+  return succeeded(
+      protocol::verifyScopedFinitePreparation(source, candidate, work));
+}
 std::string fixture(StringRef name) {
   std::ifstream stream(std::string(ZKC_FINITE_FIXTURES) + "/" + name.str() +
                        ".mlir");
@@ -212,31 +271,141 @@ void pruneAddedBindings(ModuleOp before, ModuleOp after) {
       binding.erase();
   }
 }
-std::string largeOrderedFold(bool calls, bool total = false) {
-  std::string text = fixture("sum");
-  text = edit(text, " \"data.domain\"()", R"mlir(
- "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+// Rebuild a test candidate from its admitted domain prefix and a separately
+// authored payload. Preserve actual guards and canonical occurrence sites.
+// No producer recipe or recognition summary supplies the replacement.
+template <class Build> void replaceScopedPayload(ModuleOp module, Build build) {
+  auto *owner = &module.getBody()->front();
+  auto view = take(mathematical::ScopedCandidate::read(owner));
+  auto old = scopedFunction(module);
+  OpBuilder builder(old);
+  auto replacement = func::FuncOp::create(builder, old.getLoc(), "replacement",
+                                          old.getFunctionType());
+  replacement->setAttrs(old->getAttrs());
+  replacement.setSymName("replacement");
+  replacement.addEntryBlock();
+  IRMapping mapping;
+  mapping.map(old.getArguments(), replacement.getArguments());
+  builder.setInsertionPointToEnd(&replacement.front());
+  exec::ScopedExecutionBuilder control(builder, replacement);
+  auto *cursor = view->first(&old.front());
+  auto *boundary = scopedBound(module, "index.constant");
+  unsigned ordinal = 0;
+  while (cursor != boundary) {
+    require(cursor && isa<exec::ApplyOp>(cursor), "nonlinear domain prefix");
+    const auto *step = view->get(cursor);
+    SmallVector<Value> inputs;
+    for (auto value : step->inputs)
+      inputs.push_back(mapping.lookup(value));
+    auto outputs =
+        control.invoke("exec.apply", ValueRange(step->outputs).getTypes(),
+                       control.scoped(inputs), cursor->getAttrs());
+    mapping.map(step->outputs, outputs);
+    cursor = view->next(cursor);
+    ++ordinal;
+  }
+  auto emit = [&](StringRef contract, ValueRange inputs, Type output) {
+    auto site = "fold_finite_" + std::to_string(ordinal++);
+    auto name = "test_" + site;
+    {
+      OpBuilder::InsertionGuard restore(builder);
+      builder.setInsertionPointToStart(&owner->getRegion(0).front());
+      runtime::BindingOp::create(builder, module.getLoc(), name, contract,
+                                 builder.getStrArrayAttr({"bls12-381.fr"}), "",
+                                 ArrayAttr{});
+    }
+    return control
+        .invoke(
+            "exec.apply", output, control.scoped(inputs),
+            {builder.getNamedAttr(
+                 "binding", FlatSymbolRefAttr::get(module.getContext(), name)),
+             builder.getNamedAttr("site", builder.getStringAttr(site)),
+             builder.getNamedAttr("parameters", builder.getArrayAttr({}))})
+        .front();
+  };
+  auto result =
+      build(emit, ValueRange(replacement.getArguments()).drop_front());
+  control.returned(result);
+  auto name = old.getSymName().str();
+  old.erase();
+  replacement.setSymName(name);
+  // The old loop bodies were removed with this payload. Their original source
+  // callbacks remain ordinary functions and are independently compared too.
+  for (auto function : llvm::make_early_inc_range(
+           owner->getRegion(0).front().getOps<func::FuncOp>()))
+    if (function->hasAttr("runtime.region"))
+      function.erase();
+}
+std::string largeOrderedFold(bool calls, bool total = false,
+                             unsigned fanout = 16) {
+  require(!calls || !total, "the total control has no executable helper calls");
+  std::string text = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+module { "protocol.module"() ({
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "data.domain"())mlir");
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%d) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+)mlir";
   std::string body;
-  std::vector<std::string> layer;
   unsigned nodes = 0;
+  auto scopedCall = [&](StringRef invocation, StringRef name) {
+    auto tag = "block" + name.drop_front().str();
+    body += "   %out" + name.drop_front().str() + " = " + invocation.str() +
+            "\n   \"exec.dispatch\"(%out" + name.drop_front().str() + ")[^" +
+            tag + ",^failed] : (!exec.outcome<(!F)>)->()\n ^" + tag + "(" +
+            name.str() + ":!F):\n";
+  };
   auto binary = [&](StringRef contract, StringRef left, StringRef right) {
-    std::string name = "%n" + std::to_string(nodes++);
-    body += "   " + name + " = \"algebra.exec.field_" +
-            (contract == "mul" ? "multiply" : "add") + "\"(" + left.str() +
-            "," + right.str() + ") {binding=@" + contract.str() +
-            ",parameters=[],site=\"n" + std::to_string(nodes) +
-            "\"} : (!F,!F)->!F\n";
+    auto name = "%n" + std::to_string(nodes++);
+    if (total)
+      body += "   " + name + " = \"algebra.field_" +
+              (contract == "mul" ? "multiply" : "add") + "\"(" + left.str() +
+              "," + right.str() + ") : (!F,!F)->!F\n";
+    else
+      scopedCall("\"exec.apply\"(%scope," + left.str() + "," + right.str() +
+                     ") {binding=@" + contract.str() +
+                     ",parameters=[],site=\"n" + std::to_string(nodes) +
+                     "\"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>",
+                 name);
     return name;
   };
+  auto finish = [&](StringRef value) {
+    if (total)
+      body += "   func.return " + value.str() + " : !F\n";
+    else
+      body += "   %done = \"exec.returned\"(" + value.str() +
+              ") : (!F)->!exec.outcome<(!F)>\n"
+              "   func.return %done : !exec.outcome<(!F)>\n"
+              " ^failed(%stop:!exec.stop):\n"
+              "   %failure = \"exec.failed\"(%stop) : "
+              "(!exec.stop)->!exec.outcome<(!F)>\n"
+              "   func.return %failure : !exec.outcome<(!F)>\n";
+  };
+  auto function = [&](StringRef name, StringRef arguments) {
+    return " func.func private @" + name.str() + "(" +
+           (total ? "" : "%scope:!runtime.scope,") + arguments.str() + ")" +
+           (total ? "->!F {\n"
+                  : "->!exec.outcome<(!F)> attributes "
+                    "{no_inline,runtime.origin=[\"" +
+                        name.str() + "\",[]]} {\n");
+  };
+  std::vector<std::string> layer;
   for (unsigned i = 0; i < (calls ? 1024u : 2048u); ++i) {
-    std::string constant = "%c" + std::to_string(i);
-    body += "   " + constant +
-            " = \"algebra.exec.field_constant\"() "
-            "{binding=@constant,parameters=[\"" +
-            std::to_string(i + 1) + "\"],site=\"c" + std::to_string(i) +
-            "\"} : ()->!F\n";
+    auto constant = "%c" + std::to_string(i);
+    if (total)
+      body += "   " + constant + " = \"algebra.constant\"() {value=\"" +
+              std::to_string(i + 1) + "\"} : ()->!F\n";
+    else
+      scopedCall("\"exec.apply\"(%scope) {binding=@constant,parameters=[\"" +
+                     std::to_string(i + 1) + "\"],site=\"c" +
+                     std::to_string(i) +
+                     "\"} : (!runtime.scope)->!exec.outcome<(!F)>",
+                 constant);
     layer.push_back(binary("mul", "%item", constant));
   }
   while (layer.size() > 1) {
@@ -245,71 +414,45 @@ std::string largeOrderedFold(bool calls, bool total = false) {
       next.push_back(binary("add", layer[i], layer[i + 1]));
     layer = std::move(next);
   }
-  std::string payload = layer[0];
+  auto payload = layer[0];
   if (calls) {
-    text = edit(text, " local.func private @step",
-                " local.func private @payload(%item:!F)->!F attributes "
-                "{logical_origin=[\"payload\",[]]} {\n" +
-                    body + "   local.return " + payload +
-                    " : !F\n }\n local.func private @step");
+    finish(payload);
+    text += function("payload", "%item:!F") + body + " }\n";
     body.clear();
-    for (unsigned i = 0; i < 16; ++i)
-      body += "   %call" + std::to_string(i) +
-              " = local.apply @payload(%item) {site=\"call" +
-              std::to_string(i) + "\"} : (!F)->!F\n";
-    payload = "%call15";
+    for (unsigned i = 0; i < fanout; ++i) {
+      payload = "%call" + std::to_string(i);
+      scopedCall("func.call @payload(%scope,%item) {runtime.site=\"call" +
+                     std::to_string(i) +
+                     "\"} : (!runtime.scope,!F)->!exec.outcome<(!F)>",
+                 payload);
+    }
   }
-  // State occurs twice inside a multiplication: this is deliberately outside
-  // the supported one-occurrence fold reductions despite pure arithmetic.
+  // The carried state occurs twice in a multiplication. No supported reduction
+  // law may turn this recurrence into an identity-based aggregate.
   auto squared = binary("mul", "%state", "%state");
   auto result = binary("add", squared, payload);
-  body += "   local.return " + result + " : !F\n";
-  auto begin = text.find("   %next ="), end = text.find("\n }", begin);
-  require(begin != std::string::npos && end != std::string::npos,
-          "missing ordered step");
-  text.replace(begin, end - begin, body);
-  if (total) {
-    // The same graph in a total helper exercises the inline finite reader.
-    for (StringRef operation :
-         {"field_constant", "field_multiply", "field_add"}) {
-      std::string from = "algebra.exec." + operation.str();
-      while (text.find(from) != std::string::npos)
-        text =
-            edit(text, from,
-                 operation == "field_constant" ? "algebra.constant"
-                                               : "algebra." + operation.str());
-    }
-    for (auto at = text.find(" {binding=@"); at != std::string::npos;
-         at = text.find(" {binding=@")) {
-      auto finish = text.find('}', at);
-      auto literal = text.find("parameters=[\"", at);
-      std::string attrs;
-      if (literal < finish) {
-        literal += StringRef("parameters=[\"").size();
-        auto close = text.find('"', literal);
-        attrs = " {value=\"" + text.substr(literal, close - literal) + "\"}";
-      }
-      text.replace(at, finish + 1 - at, attrs);
-    }
-    text = edit(text, "local.func private @step", "func.func private @step");
-    text = edit(text, " attributes {logical_origin=[\"step\",[]]}", "");
-    text = edit(text,
-                " \"local.finite_fold\"() "
-                "{sym_name=\"fold\",function_type=(!V,!F)->!F,domain=@items,"
-                "step=@step} : ()->()",
-                "");
-    text = edit(text, "local.func @work", "func.func private @work");
-    text = edit(text, " attributes {logical_origin=[\"work\",[]]}", "");
-    text =
-        edit(text, "local.apply @fold(%xs,%init) {site=\"fold\"}",
-             "\"algebra.finite_fold\"(%xs,%init) {domain=@items,step=@step}");
-    text = edit(text,
-                "\"protocol.local_call\"(%xs,%init) "
-                "{callee=@work,role=\"P\",site=\"work\"}",
-                "func.call @work(%xs,%init)");
-    while (text.find("local.return") != std::string::npos)
-      text = edit(text, "local.return", "func.return");
-  }
+  finish(result);
+  text += function("step", "%state:!F,%item:!F,%xs:!V") + body + " }\n";
+  body.clear();
+  if (total)
+    body = "   %value = \"algebra.finite_fold\"(%xs,%init) "
+           "{domain=@items,step=@step} : (!V,!F)->!F\n";
+  else
+    scopedCall("\"exec.fold\"(%scope,%xs,%init) "
+               "{domain=@items,step=@step,site=\"fold\"} : "
+               "(!runtime.scope,!V,!F)->!exec.outcome<(!F)>",
+               "%value");
+  finish("%value");
+  text += function("work", "%xs:!V,%init:!F") + body + " }\n";
+  text += " \"protocol.func\"() ({ ^entry(%xs:!V,%init:!F):\n   %r = ";
+  text += total ? "func.call @work(%xs,%init)"
+                : "\"protocol.local_call\"(%xs,%init) "
+                  "{callee=@work,role=\"P\",site=\"work\"}";
+  text += R"mlir( : (!V,!F)->!F
+   "protocol.return"(%r) : (!F)->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
   return text;
 }
 // The expression realizer initially copies total scalar operations into the
@@ -723,101 +866,117 @@ int main() {
     cases.run(name + " commuted candidate independently accepted", [&] {
       auto before = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(before), "finite fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)),
-              "finite realization failed");
-      auto *add = bound(*after, "fold",
-                        name == "msm-direct" ? "curve.add" : "field.add");
-      Value left = add->getOperand(0), right = add->getOperand(1);
-      add->setOperand(0, right);
-      add->setOperand(1, left);
+      auto after = prepare(*before);
+      auto *add =
+          scopedBound(*after, name == "msm-direct" ? "curve.add" : "field.add");
+      Value left = add->getOperand(1), right = add->getOperand(2);
+      add->setOperand(1, right);
+      add->setOperand(2, left);
       if (name == "dot") {
-        auto *dot = bound(*after, "fold", "vector.dot");
-        left = dot->getOperand(0);
-        right = dot->getOperand(1);
-        dot->setOperand(0, right);
-        dot->setOperand(1, left);
+        auto *dot = scopedBound(*after, "vector.dot");
+        left = dot->getOperand(1);
+        right = dot->getOperand(2);
+        dot->setOperand(1, right);
+        dot->setOperand(2, left);
       }
-      require(succeeded(finite::verifyRealizations(*before, *after)),
+      require(corresponds(*before, *after),
               "semantic reader required producer operand order");
     });
   for (StringRef mutation : {"input", "seed", "check", "helper", "output"})
     cases.run("finite mutation " + mutation, [&] {
       auto before = parseSourceString<ModuleOp>(fixture("dot"), &context);
       require(bool(before), "finite fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)),
-              "finite realization failed");
-      auto target = function(*after, "fold");
+      auto after = prepare(*before);
+      auto target = scopedFunction(*after);
       if (mutation == "input")
-        bound(*after, "fold", "vector.dot")
-            ->setOperand(1, target.getArgument(2));
+        scopedBound(*after, "vector.dot")->setOperand(2, target.getArgument(3));
       else if (mutation == "seed") {
-        auto *add = bound(*after, "fold", "field.add");
-        add->setOperand(0, add->getOperand(1));
+        auto *add = scopedBound(*after, "field.add");
+        add->setOperand(1, add->getOperand(2));
       } else if (mutation == "check")
-        bound(*after, "fold", "control.require")->erase();
+        omitScoped(scopedBound(*after, "control.require"));
       else if (mutation == "helper") {
-        auto helper = function(*after, "step");
-        helper.getBody().front().back().setOperand(0, helper.getArgument(0));
+        auto helper = scopedFunction(*after, "step");
+        returned(helper)->setOperand(0, helper.getArgument(1));
       } else
-        target.getBody().front().back().setOperand(0, target.getArgument(3));
+        returned(target)->setOperand(0, target.getArgument(4));
       ScopedDiagnosticHandler silence(&context,
                                       [](Diagnostic &) { return success(); });
-      require(failed(finite::verifyRealizations(*before, *after)),
+      require(!corresponds(*before, *after),
               "actual candidate mutation was accepted");
     });
   for (StringRef name : {"matrix-row", "matrix-column"})
     cases.run(name + " selector mutation", [&] {
       auto before = parseSourceString<ModuleOp>(fixture(name), &context);
       require(bool(before), "finite fixture refused");
-      OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-      require(succeeded(finite::realizeLocals(*after)),
-              "finite realization failed");
+      auto after = prepare(*before);
       auto *dot =
-          bound(*after, "fold",
-                name == "matrix-row" ? "matrix.row_dot" : "matrix.column_dot");
-      auto *dimension = bound(*after, "fold", "matrix.dimension");
-      dot->setOperand(2, dimension->getResult(0));
+          scopedBound(*after, name == "matrix-row" ? "matrix.row_dot"
+                                                   : "matrix.column_dot");
+      auto *dimension = scopedBound(*after, "matrix.dimension");
+      dot->setOperand(3, payload(dimension));
       ScopedDiagnosticHandler silence(&context,
                                       [](Diagnostic &) { return success(); });
-      require(failed(finite::verifyRealizations(*before, *after)),
+      require(!corresponds(*before, *after),
               "selected matrix index mutation was accepted");
     });
+  cases.run("expanded callback fan-out respects program body capacity", [&] {
+    auto source = parseSourceString<ModuleOp>(largeOrderedFold(true), &context);
+    require(source && succeeded(verify(*source)),
+            "unexpanded fan-out source refused");
+    // Sixteen 3071-operation callbacks exceed the program's 32768-item body
+    // limit after mandatory helper expansion. The former declaration-only
+    // fixture retained helper calls and never exercised this boundary.
+    bool capacity = false;
+    ScopedDiagnosticHandler diagnostics(&context, [&](Diagnostic &diagnostic) {
+      capacity |= diagnostic.str().find("source-limit") != std::string::npos;
+      return success();
+    });
+    mathematical::RealizationWork work;
+    uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> cause;
+    auto candidate = protocol::prepareScopedFinite(*source, work, copies, bytes,
+                                                   cause, {false, false});
+    require(!candidate && capacity && succeeded(verify(*source)),
+            "oversized expanded body was published or changed its source");
+  });
   for (bool calls : {false, true})
     cases.run(
         calls ? "ordered fallback with helper call fan-out"
               : "ordered fallback with a large arithmetic step",
         [&] {
-          auto before =
-              parseSourceString<ModuleOp>(largeOrderedFold(calls), &context);
+          auto before = parseSourceString<ModuleOp>(
+              largeOrderedFold(calls, false, 4), &context);
           require(bool(before), "large ordered source refused");
-          OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-          require(succeeded(finite::realizeLocals(*after)),
-                  "optional semantic comparison prevented ordered realization");
-          auto target = function(*after, "fold");
-          Operation *cursor = bound(*after, "fold", "index.constant");
+          auto after = prepare(*before);
+          auto target = scopedFunction(*after);
+          Operation *cursor = scopedBound(*after, "index.constant");
           auto *saved = cursor;
           SymbolTable symbols(&after->getBody()->front());
           require(!mathematical::hasFinitePayloadContract(cursor, symbols),
                   "ordered loop entered optional semantic comparison");
-          SymbolTable originalSymbols(&before->getBody()->front());
+          auto sourceClosure = take(protocol::readSourceExecutionClosure(
+              &before->getBody()->front()));
+          exec::FoldOp source;
+          before->walk([&](exec::FoldOp op) { source = op; });
           finite::Computation computation;
-          require(succeeded(finite::describe(originalSymbols.lookup("fold"),
-                                             computation)),
+          require(succeeded(finite::describe(source, computation)),
                   "finite description failed");
+          computation.scopedSource = &sourceClosure;
+          auto candidate = take(
+              mathematical::ScopedCandidate::read(&after->getBody()->front()));
           llvm::DenseSet<Operation *> bindings{symbols.lookup("add")};
           auto savedBindings = bindings;
           uint64_t work = 10;
           auto result = mathematical::compareFinitePayload(
-              computation, target.getArguments(),
-              bound(*after, "fold", "vector.length")->getResult(0), cursor,
-              symbols, bindings, work);
+              computation, target.getArguments().drop_front(),
+              payload(scopedBound(*after, "vector.length")), cursor, symbols,
+              bindings, work, nullptr, nullptr, nullptr, candidate.get());
           require(failed(result) && work == 0 && cursor == saved &&
                       bindings == savedBindings,
                   "exhausted optional comparison changed caller state");
           require(
-              succeeded(finite::verifyRealizations(*before, *after)),
+              corresponds(*before, *after),
               "ordered reader failed after an exhausted optional comparison");
         });
   cases.run(
@@ -977,19 +1136,27 @@ int main() {
           }
         });
   cases.run("zipped nested product is diagonal, not bilinear", [&] {
-    auto text =
-        edit(fixture("bilinear"), "   %d = \"data.domain_product\"(%a,%b)",
-             "   %nested = \"data.domain_product\"(%b) : "
-             "(!data.domain<ui64,!F>)->!data.domain<ui64,!F>\n"
-             "   %d = \"data.domain_zip\"(%a,%nested)");
-    auto before = parseSourceString<ModuleOp>(text, &context);
-    require(bool(before), "diagonal domain fixture refused");
-    OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after, {false, false})) &&
-                succeeded(finite::verifyRealizations(*before, *after)),
+    auto before = parseSourceString<ModuleOp>(fixture("bilinear"), &context);
+    require(bool(before), "bilinear source refused");
+    data::DomainProductOp product;
+    before->walk([&](data::DomainProductOp op) { product = op; });
+    require(product && product->getNumOperands() == 2,
+            "missing Cartesian domain");
+    OpBuilder builder(product);
+    auto right = product->getOperand(1);
+    auto nested = data::DomainProductOp::create(
+        builder, product.getLoc(), right.getType(), ValueRange{right});
+    auto zipped = data::DomainZipOp::create(
+        builder, product.getLoc(), product->getResult(0).getType(),
+        ValueRange{product->getOperand(0), nested->getResult(0)});
+    product->getResult(0).replaceAllUsesWith(zipped->getResult(0));
+    product.erase();
+    require(succeeded(verify(*before)), "diagonal domain fixture refused");
+    auto after = prepare(*before, {false, false});
+    require(corresponds(*before, *after),
             "ordered diagonal traversal was refused");
-    // M is the 2x2 all-ones matrix and both vectors are [1,1]. The
-    // zip visits two cells; the independent Cartesian product visits four.
+    // M is all ones and both vectors are [1,1]. Zip visits two cells;
+    // the independently iterated Cartesian product visits four.
     unsigned diagonal = 0, bilinear = 0;
     for (unsigned i = 0; i < 2; ++i) {
       ++diagonal;
@@ -997,21 +1164,16 @@ int main() {
         ++bilinear;
     }
     require(diagonal == 2 && bilinear == 4, "counterexample collapsed");
-    auto target = function(*after, "fold");
-    eraseOrderedPayload(target);
-    OpBuilder builder(&target.getBody().front().back());
-    Value product = emitBound(*after, builder, "matrix.bilinear",
-                              target.getArguments().take_front(3),
-                              target.getArgument(3).getType(), "bilinear");
-    Value result =
-        emitBound(*after, builder, "field.add",
-                  {target.getArgument(3), product}, product.getType(), "seed");
-    target.getBody().front().back().setOperand(0, result);
+    replaceScopedPayload(*after, [&](auto emit, ValueRange args) {
+      auto product =
+          emit("matrix.bilinear", args.take_front(3), args[3].getType());
+      return emit("field.add", {args[3], product}, product.getType());
+    });
     pruneAddedBindings(*before, *after);
     require(succeeded(verify(*after)), "bilinear mutation must be valid IR");
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(finite::verifyRealizations(*before, *after)),
+    require(!corresponds(*before, *after),
             "zipped diagonal was accepted as a bilinear contraction");
   });
   for (bool row : {true, false})
@@ -1022,87 +1184,97 @@ int main() {
                : selectorCase == 1 ? "with selector admission"
                                    : "with a different admitted selector"),
           [&] {
-            bool selected = selectorCase != 0;
-            auto text = fixture(row ? "matrix-row" : "matrix-column");
-            text = edit(
-                text,
-                "   %term = \"algebra.exec.field_multiply\"(%x,%y) "
-                "{binding=@mul,parameters=[],site=\"term\"} : (!F,!F)->!F\n",
-                "");
-            text = edit(text, "(%state,%term)", "(%state,%y)");
-            if (!selected) {
-              text = edit(
-                  text,
-                  row ? "\"data.domain_matrix_row\"(%xs,%selected) : "
-                        "(!M,ui64) -> !data.domain<!F>"
-                      : "\"data.domain_matrix_column\"(%xs,%selected) : "
-                        "(!M,ui64) -> !data.domain<!F>",
-                  std::string("\"data.domain_indices\"(%xs) {axis=") +
-                      (row ? "1" : "0") + ":i64} : (!M) -> !data.domain<ui64>");
-              text = edit(text, "(%state:!F,%x:!F,", "(%state:!F,%x:ui64,");
-              text = edit(
-                  text, "(!data.domain<!F>,!data.domain<!F>,!data.domain<!F>)",
-                  "(!data.domain<ui64>,!data.domain<!F>,!data.domain<!F>)");
-              while (text.find("!data.domain<!F,!F,!F>") != std::string::npos)
-                text = edit(text, "!data.domain<!F,!F,!F>",
-                            "!data.domain<ui64,!F,!F>");
+            auto before = parseSourceString<ModuleOp>(
+                fixture(row ? "matrix-row" : "matrix-column"), &context);
+            require(bool(before), "dead contraction source refused");
+            auto step = scopedFunction(*before, "step");
+            auto *add = scopedBound(*before, "field.add", "step");
+            add->setOperand(2, step.getArgument(3));
+            omitScoped(scopedBound(*before, "field.mul", "step"),
+                       step.getArgument(3));
+            auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+            if (selectorCase == 0) {
+              auto domain = SymbolTable(&before->getBody()->front())
+                                .lookup<data::DomainOp>("items");
+              auto &body = domain.getBody().front();
+              auto *selected = &body.front();
+              OpBuilder builder(selected);
+              auto indices = data::DomainIndicesOp::create(
+                  builder, selected->getLoc(),
+                  data::DomainType::get(&context, {index}),
+                  selected->getOperand(0), row ? 1 : 0);
+              selected->getResult(0).replaceAllUsesWith(indices->getResult(0));
+              selected->erase();
+              auto *zip = body.back().getOperand(0).getDefiningOp();
+              auto field = step.getArgument(3).getType();
+              auto result =
+                  data::DomainType::get(&context, {index, field, field});
+              zip->getResult(0).setType(result);
+              domain.setFunctionType(FunctionType::get(
+                  &context, domain.getFunctionType().getInputs(), result));
+              step.getArgument(2).setType(index);
+              step.setFunctionType(
+                  FunctionType::get(&context, step.front().getArgumentTypes(),
+                                    step.getResultTypes()));
             }
             if (selectorCase == 2) {
-              text = edit(text, "%zs:!V,%selected:ui64)",
-                          "%zs:!V,%selected:ui64,%other:ui64)");
-              while (text.find("%selected:ui64,%init:!F)") != std::string::npos)
-                text = edit(text, "%selected:ui64,%init:!F)",
-                            "%selected:ui64,%init:!F,%other:ui64)");
-              while (text.find("(!M,!V,!V,ui64,!F)") != std::string::npos)
-                text =
-                    edit(text, "(!M,!V,!V,ui64,!F)", "(!M,!V,!V,ui64,!F,ui64)");
-              while (text.find("(%xs,%ys,%zs,%selected,%init)") !=
-                     std::string::npos)
-                text = edit(text, "(%xs,%ys,%zs,%selected,%init)",
-                            "(%xs,%ys,%zs,%selected,%init,%other)");
-              text = edit(
-                  text, "input_roles=[[\"P\"],[\"P\"],[\"P\"],[\"P\"],[\"P\"]]",
-                  "input_roles=[[\"P\"],[\"P\"],[\"P\"],[\"P\"],[\"P\"],[\"P\"]"
-                  "]");
+              auto work = scopedFunction(*before);
+              require(succeeded(work.insertArgument(work.getNumArguments(),
+                                                    index, DictionaryAttr{},
+                                                    work.getLoc())),
+                      "extra work selector refused");
+              require(succeeded(step.insertArgument(step.getNumArguments(),
+                                                    index, DictionaryAttr{},
+                                                    step.getLoc())),
+                      "extra step selector refused");
+              work.walk([&](exec::FoldOp fold) {
+                fold->insertOperands(fold->getNumOperands(),
+                                     work.getArguments().back());
+              });
+              before->walk([&](protocol_ir::MathematicalOp function) {
+                auto &body = function.getBody().front();
+                body.addArgument(index, function.getLoc());
+                auto signature = function.getFunctionType();
+                function.setFunctionType(FunctionType::get(
+                    &context, body.getArgumentTypes(), signature.getResults()));
+                SmallVector<Attribute> roles(
+                    function.getInputRoles().getValue());
+                roles.push_back(
+                    ArrayAttr::get(&context, {StringAttr::get(&context, "P")}));
+                function.setInputRolesAttr(ArrayAttr::get(&context, roles));
+                function.walk([&](protocol_ir::LocalCallOp call) {
+                  call->insertOperands(call->getNumOperands(),
+                                       body.getArguments().back());
+                });
+              });
             }
-            auto before = parseSourceString<ModuleOp>(text, &context);
-            require(bool(before), "dead contraction fixture refused");
-            OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-            require(succeeded(finite::realizeLocals(*after, {false, false})),
-                    "ordered sum fixture refused");
-            auto target = function(*after, "fold");
-            eraseOrderedPayload(target);
-            OpBuilder builder(&target.getBody().front().back());
-            auto args = target.getArguments();
-            emitBound(*after, builder,
-                      row ? "matrix.row_dot" : "matrix.column_dot",
-                      {args[0], args[1], args[selectorCase == 2 ? 5 : 3]},
-                      args[4].getType(), "dead");
-            Value sum = emitBound(*after, builder, "vector.sum", args[1],
-                                  args[4].getType(), "sum");
-            Value result = emitBound(*after, builder, "field.add",
-                                     {args[4], sum}, sum.getType(), "seed");
-            target.getBody().front().back().setOperand(0, result);
+            require(succeeded(verify(*before)),
+                    "dead contraction fixture refused");
+            auto after = prepare(*before, {false, false});
+            replaceScopedPayload(*after, [&](auto emit, ValueRange args) {
+              emit(row ? "matrix.row_dot" : "matrix.column_dot",
+                   {args[0], args[1], args[selectorCase == 2 ? 5 : 3]},
+                   args[4].getType());
+              auto sum = emit("vector.sum", args[1], args[4].getType());
+              return emit("field.add", {args[4], sum}, sum.getType());
+            });
             pruneAddedBindings(*before, *after);
             require(succeeded(verify(*after)),
                     "dead contraction is invalid IR");
             ScopedDiagnosticHandler silence(
                 &context, [](Diagnostic &) { return success(); });
-            require(succeeded(finite::verifyRealizations(*before, *after)) ==
-                        (selectorCase == 1),
+            require(corresponds(*before, *after) == (selectorCase == 1),
                     "unused contraction selector admission was not enforced");
           });
   cases.run("module reduction preserves the group seed", [&] {
     auto before = parseSourceString<ModuleOp>(fixture("msm-direct"), &context);
     require(bool(before), "module fixture refused");
-    OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after)),
-            "module realization failed");
-    auto *combine = bound(*after, "fold", "curve.add");
-    combine->setOperand(0, combine->getOperand(1));
+    auto after = prepare(*before);
+    auto *combine = scopedBound(*after, "curve.add");
+    combine->setOperand(1, combine->getOperand(2));
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(finite::verifyRealizations(*before, *after)),
+    require(!corresponds(*before, *after),
             "module comparison discarded the source seed");
   });
   return cases.result();
