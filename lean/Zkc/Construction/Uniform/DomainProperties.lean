@@ -82,4 +82,18 @@ theorem runK_mapOutcome {A R S : Type} (key : Origin → Origin) (initial : Hist
             | returned value => exact ih value proof
           · simp [mapOutcome]
 
+/-- Select any pure returned observation while retaining every stop and unread
+proof suffix. This is a law of the process handler, independent of artifacts. -/
+theorem run_map {A B : Type} (key : Origin → Origin) (initial : History F G)
+    (challenge : History F G → m F)
+    (process : PIR.Process (Domain.effects (Source.Structured.uniformCarriers F G)) A)
+    (project : A → B) (proof : Proof F G) :
+    (fun result => (mapOutcome project result.1, result.2)) <$>
+        run key initial challenge process proof =
+      runK key initial challenge process proof
+        (fun value unread => pure (.returned (project value), unread)) := by
+  simpa only [run, map_pure, mapOutcome] using
+    (runK_mapOutcome key initial challenge project process proof
+      (fun value unread => pure (.returned value, unread)))
+
 end Zkc.Construction.Uniform.DomainAdapter

@@ -2,7 +2,7 @@ module
 
 public import Zkc.Construction.OriginProjection
 public import Zkc.Construction.Compiled
-public import Zkc.Construction.Uniform.SourceProcess
+public import Zkc.Construction.Uniform.DomainHandler
 
 @[expose] public section
 
@@ -114,6 +114,6 @@ theorem verify_eq_runK {m : Type → Type} [Monad m] [LawfulMonad m]
       (Domain.participant (ringModel F G) program context artifact frame) frame messages)
   simp only [Functor.map_map, observation_embed] at installed
   rw [installed]
-  exact Zkc.Construction.Uniform.SourceProcess.run_map (origin artifact) initial challenge _ (acceptance position) messages
+  exact Zkc.Construction.Uniform.DomainAdapter.run_map (origin artifact) initial challenge _ (acceptance position) messages
 
 end Zkc.Construction.ScalarVerifier

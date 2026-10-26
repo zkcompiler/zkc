@@ -212,20 +212,6 @@ theorem sourceView_transform (context : Context) (challenge : History F G → m 
           simpa only [List.append_assoc] using
             ih answer _ _ (readback_challenge history suffix mapped _) proof
 
-/-- Select any pure returned observation while retaining every stop and unread
-proof suffix. This is a law of the process handler, independent of artifacts. -/
-theorem run_map {B : Type} (key : Origin → Origin) (initial : History F G)
-    (challenge : History F G → m F)
-    (process : PIR.Process (Domain.effects (Structured.uniformCarriers F G)) A)
-    (project : A → B) (proof : Proof F G) :
-    (fun result => (mapOutcome project result.1, result.2)) <$>
-        run key initial challenge process proof =
-      runK key initial challenge process proof
-        (fun value unread => pure (.returned (project value), unread)) := by
-  simpa only [run, map_pure, mapOutcome] using
-    (runK_mapOutcome key initial challenge project process proof
-      (fun value unread => pure (.returned value, unread)))
-
 theorem sourceView_transform_map {B : Type} (context : Context) (challenge : History F G → m F)
     (process : PIR.Process (Actions F G) A) (project : A → B)
     (initial : History F G) (proof : Proof F G) :
