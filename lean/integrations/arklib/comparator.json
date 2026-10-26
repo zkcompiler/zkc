@@ -2,6 +2,10 @@
   "challenge_module": "LockedStatements",
   "solution_module": "LockedStatements",
   "theorem_names": [
+    "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.certify_native",
+    "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.registered_extractor",
+    "ZkcArkLib.Kzg.averageSuccess_eq_bindingExperiment",
+    "ZkcArkLib.Kzg.scoped_bound",
     "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness",
     "ZkcSecurity.ArkLib.Fri.soundness_generalizedJohnson",
     "ZkcSecurity.ArkLib.Fri.soundness_uniqueDecoding",

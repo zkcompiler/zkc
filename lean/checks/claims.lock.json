@@ -25,17 +25,53 @@
       "structural": "96448e4b6e36a7da",
       "explicit": "fc194d8c3dccc9cd"
     },
+    "TestsSecurity.PrivateProducerWP.randomizedSchnorr_complete": {
+      "package": "security",
+      "module": "TestsSecurity.PrivateProducerWP",
+      "structural": "483ddfc4478794cf",
+      "explicit": "366dd12dbb42433d"
+    },
+    "Zkc.Construction.Domain.Payload.ofValue_value": {
+      "package": "main",
+      "module": "Zkc.Construction.DomainTranscript",
+      "structural": "271be75918d546b1",
+      "explicit": "50d753fd31de941d"
+    },
+    "Zkc.Construction.Domain.Payload.value_ofValue": {
+      "package": "main",
+      "module": "Zkc.Construction.DomainTranscript",
+      "structural": "51e7a07d1eff6192",
+      "explicit": "e97baec122e9cb32"
+    },
+    "Zkc.Construction.Domain.PublicBinding.encodeRow_injective": {
+      "package": "main",
+      "module": "Zkc.Construction.DomainPublicBinding",
+      "structural": "0df83916aba6c60b",
+      "explicit": "3ed0ba22e103e2ce"
+    },
+    "Zkc.Executable.CanonicalNormalization.accepted_sound": {
+      "package": "main",
+      "module": "Zkc.Executable.DomainNormalizationSoundness",
+      "structural": "325dab65bc62e526",
+      "explicit": "526d9e1494b03dce"
+    },
+    "Zkc.Executable.DomainVM.checked_execute_metered": {
+      "package": "main",
+      "module": "Zkc.Executable.DomainNativeExecution",
+      "structural": "c1e1183d9bd9c0ee",
+      "explicit": "e75f7b7867db860f"
+    },
+    "Zkc.Executable.DomainVM.checked_validate_prunes": {
+      "package": "main",
+      "module": "Zkc.Executable.DomainNativeByteTransport",
+      "structural": "0ddf931d7f434152",
+      "explicit": "99633a9fb59a49c4"
+    },
     "Zkc.Executable.checkHelpers_sound": {
       "package": "main",
       "module": "Zkc.Executable.HelperSoundness",
       "structural": "770ecda66738ebfb",
       "explicit": "8babecf768d19e59"
-    },
-    "Zkc.Executable.checkNormalized_sound": {
-      "package": "main",
-      "module": "Zkc.Executable.NormalizationSoundness",
-      "structural": "8b26b0259e666336",
-      "explicit": "35f97014474c0b1b"
     },
     "Zkc.Protocols.Schnorr.Common.VerifierContract.perfect_completeness": {
       "package": "main",
@@ -103,6 +139,30 @@
       "structural": "f0429d280e132dd2",
       "explicit": "c0d2089731e865c6"
     },
+    "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.certify_native": {
+      "package": "arklib",
+      "module": "ZkcArkLib.Knowledge.RegisteredFiniteRecovery",
+      "structural": "6451c0f003b23ad3",
+      "explicit": "75b1f9e07fb94f2f"
+    },
+    "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.registered_extractor": {
+      "package": "arklib",
+      "module": "ZkcArkLib.Knowledge.RegisteredFiniteRecovery",
+      "structural": "e8075d8c001fb47e",
+      "explicit": "34cae5708d92f05b"
+    },
+    "ZkcArkLib.Kzg.averageSuccess_eq_bindingExperiment": {
+      "package": "arklib",
+      "module": "ZkcArkLib.Kzg.EvaluationBinding",
+      "structural": "df09371824982e6b",
+      "explicit": "0cb35c7a3bc9fdd5"
+    },
+    "ZkcArkLib.Kzg.scoped_bound": {
+      "package": "arklib",
+      "module": "ZkcArkLib.Kzg.EvaluationBinding",
+      "structural": "07bafeaf4c1ca7c9",
+      "explicit": "7eef414582c91490"
+    },
     "ZkcClean.guarantees_of_export": {
       "package": "clean",
       "module": "ZkcClean.Specification",
@@ -121,53 +181,71 @@
       "structural": "6a20208767185e71",
       "explicit": "e17a48bffd459c78"
     },
+    "ZkcExamples.Construction.BatchOpeningByteConnection.produce_encoded": {
+      "package": "main",
+      "module": "ZkcExamples.Construction.BatchOpeningByteConnection",
+      "structural": "28736a82783fde40",
+      "explicit": "4c4f279c3c6fc53e"
+    },
+    "ZkcExamples.Construction.BatchOpeningByteConnection.validate_equation": {
+      "package": "main",
+      "module": "ZkcExamples.Construction.BatchOpeningByteConnection",
+      "structural": "99bf585354f9590d",
+      "explicit": "04ed280f2f5b2547"
+    },
+    "ZkcExamples.Construction.BatchOpeningByteConnection.validate_malformed": {
+      "package": "main",
+      "module": "ZkcExamples.Construction.BatchOpeningByteConnection",
+      "structural": "2f6e5a15e4da5f53",
+      "explicit": "03f685a34e3ede08"
+    },
     "ZkcExamples.Construction.ChaumPedersenProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ChaumPedersenProof",
-      "structural": "61158e7a24050173",
-      "explicit": "4a574de00e568bad"
+      "structural": "ea8d269d08a4bd5c",
+      "explicit": "a0c6ebb2a2f496f8"
     },
     "ZkcExamples.Construction.ComposedSumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ComposedSumcheckProof",
-      "structural": "3b01a2b3ca565ab4",
-      "explicit": "1f21dd4053e5281f"
+      "structural": "cbd07010f9299309",
+      "explicit": "e6c8e9445e86d62e"
     },
     "ZkcExamples.Construction.GkrProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.GkrProof",
-      "structural": "6ddb3498b64067bf",
-      "explicit": "24ec7b3cb289db05"
+      "structural": "051341703edf1a42",
+      "explicit": "f3bf6fe90ea36d77"
     },
     "ZkcExamples.Construction.OkamotoProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.OkamotoProof",
-      "structural": "8713495435c958c1",
-      "explicit": "591aa7c41bcf8b2f"
+      "structural": "ab1d6c37cc5f7a52",
+      "explicit": "7b266b7fbebc1219"
     },
     "ZkcExamples.Construction.SchnorrAndProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SchnorrAndProof",
-      "structural": "dd96723f0e72e3df",
-      "explicit": "03c16cdc50b11017"
+      "structural": "6b14909025eca3fb",
+      "explicit": "1ad3059f445cff4e"
     },
     "ZkcExamples.Construction.SchnorrProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SchnorrProof",
-      "structural": "111704ae01942fac",
-      "explicit": "a653884e5a3c148c"
+      "structural": "97e67b835bc167b1",
+      "explicit": "8c7f02c16f8e7aae"
     },
     "ZkcExamples.Construction.SumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SumcheckProof",
-      "structural": "100bbe1127c637bb",
-      "explicit": "8407d908aa86bcd2"
+      "structural": "3266c05fd914d1fd",
+      "explicit": "b75b4a6bf4ad6013"
     },
     "ZkcExamples.Executable.DeferredRounds.executable_validate": {
       "package": "main",
       "module": "ZkcExamples.Executable.DeferredRounds",
-      "structural": "7940714cb4b5ab14",
-      "explicit": "800467fc8faaccaf"
+      "structural": "eafb1426421cb580",
+      "explicit": "d4a38a5a0eaeca6c"
     },
     "ZkcExamples.Executable.SchnorrProof.executable_transform": {
       "package": "main",
@@ -184,8 +262,8 @@
     "ZkcExamples.Executable.SumcheckFamily.honest_accepted": {
       "package": "main",
       "module": "ZkcExamples.Executable.SumcheckFamily",
-      "structural": "1a416c67708cfd16",
-      "explicit": "e8a7737c812a1a52"
+      "structural": "aba68b964edb2ddd",
+      "explicit": "a5335dfdbda12e94"
     },
     "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes": {
       "package": "main",
@@ -325,6 +403,12 @@
       "structural": "e7051ec100b08bec",
       "explicit": "c20073950024470c"
     },
+    "ZkcSecurity.Claims.HonestPair.perfect_of_private_producer_wp": {
+      "package": "security",
+      "module": "ZkcSecurity.Claims.PrivateCompleteness",
+      "structural": "c1653c0f246517ad",
+      "explicit": "6d806626584ea9aa"
+    },
     "ZkcSecurity.Commitment.soundness": {
       "package": "security",
       "module": "ZkcSecurity.Commitment.Soundness",
@@ -409,6 +493,18 @@
       "structural": "0a22390484690abb",
       "explicit": "b3ed22fdaf445aee"
     },
+    "ZkcSecurity.Examples.Components.GkrFiniteGate.binding": {
+      "package": "security",
+      "module": "ZkcSecurity.Examples.Components.GkrFiniteGate",
+      "structural": "71f7c187daa91bc2",
+      "explicit": "4c23a653a4373d66"
+    },
+    "ZkcSecurity.Examples.Components.GkrFiniteGate.honest_run": {
+      "package": "security",
+      "module": "ZkcSecurity.Examples.Components.GkrFiniteGate",
+      "structural": "cc09f38e0b9e6216",
+      "explicit": "9a83eec0d424e3c8"
+    },
     "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness": {
       "package": "security",
       "module": "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir",
@@ -474,6 +570,24 @@
       "module": "ZkcArkLib.Examples.SumcheckFiatShamir",
       "structural": "60416965fb460bda",
       "explicit": "30c53a4b39587424"
+    },
+    "ZkcSecurity.Examples.TableMembership.Completeness.completeReceipt": {
+      "package": "security",
+      "module": "ZkcSecurity.Examples.TableMembership.Claims",
+      "structural": "69fc4fcad11b32db",
+      "explicit": "517f760b79ccc6e5"
+    },
+    "ZkcSecurity.Examples.TableMembership.Soundness.chargedReceipt": {
+      "package": "security",
+      "module": "ZkcSecurity.Examples.TableMembership.Claims",
+      "structural": "c50b1a031bc323ac",
+      "explicit": "5dd8f516914e5be5"
+    },
+    "ZkcSecurity.Examples.TableMembership.Soundness.soundReceipt": {
+      "package": "security",
+      "module": "ZkcSecurity.Examples.TableMembership.Claims",
+      "structural": "3fbba3c5d23ca328",
+      "explicit": "a757e16ebd879f9b"
     },
     "ZkcSecurity.FiatShamir.Obligations.not_determines": {
       "package": "security",
