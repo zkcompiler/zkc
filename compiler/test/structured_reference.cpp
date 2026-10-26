@@ -2103,8 +2103,8 @@ class Reference {
 
   Expected<Outcome> block(Block &body, ArrayRef<Datum> inputs, unsigned depth,
                           const ProtocolContext *context = nullptr) {
-    if (auto failure = tick(depth))
-      return failure;
+    // The CFG loop charges each entered block, including the entry exactly
+    // once. A second entry debit would change straight-line observer fuel.
     if (body.getNumArguments() != inputs.size())
       return error("structured-reference-signature", "block inputs");
     // Each invocation owns a fresh map. Missing SSA values are errors, never

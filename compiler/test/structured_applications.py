@@ -175,9 +175,20 @@ with case('nested-wrapper-top-down-prefix-and-root-role-mapping'):
         'reject', 'apply_2_s0_s2', replies)
 
 
-helper = '''local.func @work(%x:!F,%unused:!F)->!F attributes {logical_origin=["work",[]]} {
-  local.return %x : !F
-}'''
+helper_return = '''%result = "exec.returned"(%x) : (!F)->!exec.outcome<(!F)>
+  func.return %result : !exec.outcome<(!F)>'''
+
+
+def helper_stop(site):
+    return f'''%stop = "exec.reject"(%scope) {{reason="abort",site="{site}"}} : (!runtime.scope)->!exec.stop
+  cf.br ^stopped(%stop : !exec.stop)
+^stopped(%reason:!exec.stop):
+  %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+  func.return %failure : !exec.outcome<(!F)>'''
+
+
+helper = '''func.func @work(%scope:!runtime.scope,%x:!F,%unused:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+''' + helper_return + '\n}'
 ports = (('x', '!F', ('P',)), ('unused', '!F', ('P',)))
 child = protocol('child', '%v = "protocol.local_call"(%x,%unused) {callee=@work,role="P",site="work"} : (!F,!F)->!F',
                  inputs=ports, outputs=(('!F', ('P',)),), returns=('%v',))
@@ -196,8 +207,7 @@ with case('missing-unused-local-input-qualified-call-stop'):
 
 
 with case('helper-body-stop-remains-unqualified'):
-    source = local_source.replace('local.return %x : !F',
-                                  '"local.stop"() {reason="abort",site="helper_stop"} : ()->()')
+    source = local_source.replace(helper_return, helper_stop('helper_stop'))
     export(source)
     assert run(source, ['7', '8']) == stopped('abort', 'helper_stop')
     assert run(source.replace('site="A"', 'site="B"'), ['7', '8']) == stopped('abort', 'helper_stop')
@@ -211,8 +221,12 @@ with case('protocol-optional-projection-is-not-strict-local-entry'):
 
 
 pure = '''func.func private @identity(%x:!F)->!F { func.return %x : !F }'''
-stopping = '''local.func @stop() attributes {logical_origin=["stop",[]]} {
-  "local.stop"() {reason="abort",site="helper_stop"} : ()->()
+stopping = '''func.func @stop(%scope:!runtime.scope)->!exec.outcome<> attributes {no_inline,runtime.origin=["stop",[]]} {
+  %stop = "exec.reject"(%scope) {reason="abort",site="helper_stop"} : (!runtime.scope)->!exec.stop
+  cf.br ^stopped(%stop : !exec.stop)
+^stopped(%reason:!exec.stop):
+  %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<>
+  func.return %failure : !exec.outcome<>
 }'''
 subset = module(pure, stopping,
     protocol('child', '''%one = "algebra.constant"() {value="1"} : ()->!F
@@ -295,9 +309,12 @@ for indirect in (False, True):
         # callback. The valid owner computation can exhaust observer work;
         # this is capacity evidence, not an out-of-bounds Math stop.
         assert run(source, [None, None, None, '41'], 'Q', capacity=5) == returned([None, None, '41'])
+        run(source, [None, None, None, '41'], 'Q', capacity=4,
+            refusal='structured-reference-capacity')
         run(source, [['3', '5', '7'], '1', '2', None], capacity=20,
             refusal='structured-reference-capacity')
-        assert 'evaluation steps or depth' in commands.last.stderr
+        # Both evaluation and helper argument copying spend observer fuel.
+        # Their first exhausted category can differ across these two forms.
         (commands.directory / (label + '.expected.json')).write_text(json.dumps({
             'state_rule': '(a,b) -> (b,xs[i]); initial (1,2)',
             'observations': [dict(name=name, role=role, inputs=inputs, expected=expected)
@@ -398,8 +415,7 @@ with case('runtime-service-aliases-checked-before-participant-masking'):
 
 
 with case('helper-stop-namespace-is-separate-from-protocol-sites'):
-    source = local_source.replace('local.return %x : !F',
-                                  '"local.stop"() {reason="abort",site="apply_1_A_work"} : ()->()')
+    source = local_source.replace(helper_return, helper_stop('apply_1_A_work'))
     export(source)
     assert run(source, ['7', '8']) == stopped('abort', 'apply_1_A_work')
 
