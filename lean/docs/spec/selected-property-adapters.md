@@ -62,6 +62,30 @@ contains no algorithm or witness-search function. The query-bound theorem proves
 the two-query scope. No witness validity restriction shrinks the input oracle
 universe.
 
+`ZkcSecurity.Claims.FiniteRecovery` registers the separate model-level profile
+`extractors.finite_two_cell_sum@0`, with schema
+`zkc.extractor.finite-two-cell-sum/0`. Its registry uses `Zkc.Claims.Registry`;
+lookup refuses missing keys, unknown versions and duplicate entries, including
+externally assembled duplicates. A known entry without a definition remains
+incomplete. The carrier is a closed profile token whose interpretation is fixed
+by the library. Registry entries and evidence cannot contain a replacement
+relation, access handler, algorithm or proposition.
+
+The typed evaluator takes the original `Commitment.FiniteRecovery.Request F`
+directly and requires the resource coordinate to be exactly two cell queries
+before selecting evidence. It checks the canonical identifier and schema even
+when a caller supplies the registry. `Evaluation.meaning_eq` pins every successful
+evaluation to `Guarantee request queries`. That proposition requires recovery of
+the actual ordered pair for every input, the exact operational query law
+`IsQueryBoundP request.extract (fun _ => True) bound ↔ 2 ≤ bound`, and equality of
+acceptance and recovery probabilities for every sender of type
+`ProbComp (F × F)`. The model run retains the sent cells and the verdict of the
+fixed verifier under `answers cells`. The success event is that verdict being
+true; recovery uses the same sent cells. Only addition and decidable equality on
+`F` are required, with no field, validity-support or computational-admission
+assumption. Evidence supplies proofs of this proposition, with no algorithm
+field. `certify` is a direct proof method for the evaluated model meaning.
+
 Here, the native runner means ArkLib's actual interaction interpreter, without
 a claim about the zkc native compiler or runtime.
 `ZkcArkLib.Knowledge.FiniteRecovery` uses the pinned oracle-send protocol and
@@ -82,13 +106,29 @@ probabilistic senders. This single-stage consumer needs no sequential knowledge
 composition theorem, although it uses the existing native execution API exposed
 with `KnowledgeComposition`.
 
+`ZkcArkLib.Knowledge.RegisteredFiniteRecovery` is the optional integration for
+that registered meaning. `observations_eq` projects the actual runner's received
+cells and verdict to the model run, using `nativeRun_eq` and its
+`closed_verifier` binding. `registered_extractor` uses `extract_eq_native` on
+every payload, without a relation premise. `acceptance_of_evaluation` transports
+evidence for the fixed evaluated proposition to actual upstream acceptance for
+an arbitrary probabilistic sender. Conversely, `certify_native` proves the
+same evaluated meaning using the existing `acceptance_eq_recovery`. The security
+model module does not import ArkLib; the adapter cannot change its meaning.
+
 A fully finite `ZMod 7` sender ranges over all 49 two-cell messages; the checked
 native acceptance and recovery probability is exactly `1 / 7`.
-Controls reject a one-query budget, a one-cell access substitution, a changed
-sum relation, and a constant valid witness substituted for the requested
-recovery. This property is separate from registered response-difference forking
-in `Claims.Extractor` and from KZG evaluation binding. It assumes access to both
-immutable cells and establishes only this finite oracle relation. It does not
+Controls cover positive registered evaluation, missing/undefined/duplicate and
+wrong-version entries, schema mismatch, one-query refusal and exact two-query
+cost. Concrete pairs refute a one-cell access substitution, a changed sum
+relation and a constant valid witness substituted for the requested recovery;
+a first-query observation also distinguishes reversed read order. Registration
+controls check that the straight-line profile and response-difference forking
+cannot be selected as each other's meaning. This supplies separately registered
+extraction for this typed model. The property is separate from registered
+response-difference forking in `Claims.Extractor` and from KZG evaluation binding.
+It assumes access to both immutable cells and establishes only this finite oracle
+relation. It does not
 supply a KZG extractor, an extraction cost calculus, a new canonical claim wire
 schema, or a native/compiler receipt.
 
