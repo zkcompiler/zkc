@@ -9,8 +9,9 @@ public import Zkc.Construction.SourceOccurrences
 /-! Request-owned selection of actual compiled artifacts. Association checks
 complete instruction trees, not their digest strings. The original snapshot is
 an index: helper interpretation cannot be replaced independently. Admission
-includes the existing validator construction/projection theorem. It does not
-assert the still separate producer compilation or domain transport theorem.
+checks the producer and validator construction and projection structurally.
+Consumers additionally supply the semantic Process bindings and the
+property-specific laws for the selected domain and execution stage.
 -/
 set_option autoImplicit false
 namespace Zkc.Construction.AuthoredPair

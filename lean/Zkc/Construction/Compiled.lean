@@ -8,8 +8,8 @@ public import Zkc.Source.Structured.OutputSelection
 
 /-! Admission of exact constructed participants in either explicit profile.
 The structural rule and projection check retain the original subject. Generic
-semantic evidence uses full nominal Process equations (`Domain.Correspondence`),
-not the retired uniform evaluator. The legacy selected interpreted-byte claims
+semantic evidence uses full nominal Process equations (`Domain.Correspondence`).
+The retained scalar interpreted-byte claims
 continue to use `Uniform.checkCompiled` and its own scoped theorem. -/
 set_option autoImplicit false
 namespace Zkc.Construction
