@@ -1,9 +1,10 @@
 module
 
-public import ZkcExamples.Executable.DeferredRoundsFacts
-public import Zkc.Executable.DomainNormalization
-public import Zkc.Construction.DomainCorrespondence
-public import Zkc.Construction.Uniform.SourceProcess
+public import ZkcExamples.Executable.DeferredRoundsProgramData
+public import ZkcExamples.Construction.DeferredRounds
+public import Zkc.Executable.Installed
+public import Zkc.Executable.Reading
+public import Zkc.Executable.DomainNormalizationSoundness
 
 @[expose] public section
 
@@ -15,8 +16,21 @@ set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Executable.DeferredRounds
 open Zkc Zkc.Construction Zkc.Source Zkc.Executable
-open Zkc.Executable.DomainVM Zkc.Construction.Uniform.SourceProcess
+open Zkc.Executable.DomainVM
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+set_option maxRecDepth 20000 in
+/-- Read the actual native artifact without the retired normalization proof. -/
+def checkedReading : Lowered :=
+  (Validator.read installed [] DeferredRoundsProgramData.validator).toOption.get (by decide +kernel)
+
+/-- The reader certificate fixes the native Code, receive plan and return refs. -/
+theorem reading_checked :
+    Validator.read installed [] DeferredRoundsProgramData.validator = .ok checkedReading :=
+  ok_of_isSome _ _
+
+set_option maxRecDepth 20000 in
+theorem reading_total : checkedReading.total? = some 35 := by decide +kernel
 
 /-- Concrete context checked against the actual exported artifact. -/
 def readingContext : Context :=
@@ -161,157 +175,41 @@ def readingInstructions : List Instruction :=
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 4000000 in
-theorem reading_instructions : Code.instructions lowered.code = readingInstructions := by
+theorem reading_instructions : Code.instructions checkedReading.code = readingInstructions := by
   rw [← Code.instructionList_eq]
   decide +kernel
 
 set_option maxRecDepth 20000 in
-theorem reading_returned : lowered.returned = [23, 17] := by decide +kernel
+theorem reading_returned : checkedReading.returned = [23, 17] := by decide +kernel
 
 set_option maxRecDepth 20000 in
 theorem schedule_differs : readingInstructions ≠ ZkcExamples.Construction.DeferredRounds.participant.instructions := by
   decide +kernel
 
 set_option maxRecDepth 20000 in
-private def readingView (program : Structured.Program) :
-    {view : Domain.View.Block (Structured.uniformCarriers F G) //
-      Domain.Correspondence.Block (model := Structured.ringModel F G) (program := program)
-        (context := readingContext) readingInstructions view} := by
-  exact ⟨_, Domain.Correspondence.sequence (Domain.Correspondence.receive "label_6d30_0"
-                  "label_6d30_0"
-                  "role00000000"
-                  (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6d30_0", "label_6d30_0", "role00000000", "role00000001"] } 1 2 3 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.challenge "merlin3.bls12-381.fr64be/0"
-                  "bls12-381.fr"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["query", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6330", "input_2", "random.bls12-381.fr/0", "draw", "role00000001"] } 4 5 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
-               Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6430_0", "label_6430_0", "role00000001", "role00000000"] } 7 6 8 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.receive "label_6d31_0"
-                  "label_6d31_0"
-                  "role00000000"
-                  (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6d31_0", "label_6d31_0", "role00000000", "role00000001"] } 9 10 11 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.challenge "merlin3.bls12-381.fr64be/0"
-                  "bls12-381.fr"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["query", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6331", "input_2", "random.bls12-381.fr/0", "draw", "role00000001"] } 12 13 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
-               Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6431_0", "label_6431_0", "role00000001", "role00000000"] } 15 14 16 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([2, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([18, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([19, 0]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([10, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 0]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([20, 22]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-      (Domain.Correspondence.empty))))))))))))))))))))⟩
-
-set_option maxRecDepth 20000 in
-private def exportedView (program : Structured.Program) :
-    {view : Domain.View.Block (Structured.uniformCarriers F G) //
-      Domain.Correspondence.Block (model := Structured.ringModel F G) (program := program)
-        (context := readingContext) ZkcExamples.Construction.DeferredRounds.participant.instructions view} := by
-  exact ⟨_, Domain.Correspondence.sequence (Domain.Correspondence.receive "label_6d30_0"
-                  "label_6d30_0"
-                  "role00000000"
-                  (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6d30_0", "label_6d30_0", "role00000000", "role00000001"] } 1 2 3 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.challenge "merlin3.bls12-381.fr64be/0"
-                  "bls12-381.fr"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["query", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6330", "input_2", "random.bls12-381.fr/0", "draw", "role00000001"] } 4 5 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
-               Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6430_0", "label_6430_0", "role00000001", "role00000000"] } 7 6 8 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([2, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.receive "label_6d31_0"
-                  "label_6d31_0"
-                  "role00000000"
-                  (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6d31_0", "label_6d31_0", "role00000000", "role00000001"] } 9 11 12 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.challenge "merlin3.bls12-381.fr64be/0"
-                  "bls12-381.fr"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["query", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6331", "input_2", "random.bls12-381.fr/0", "draw", "role00000001"] } 13 14 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),
-               Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.observe "merlin3.bls12-381.fr64be/0"
-                  { entry := "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                    steps := [],
-                    event := ["message", "zkl_2c85a03e4ef7c48412e5b5f9549ac1046d606d881fe23614fbad9f174aebe56b",
-                              "label_6431_0", "label_6431_0", "role00000001", "role00000000"] } 16 15 17 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([10, 15]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([19, 0]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([11, 15]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 0]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-      (Domain.Correspondence.sequence (Domain.Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([20, 22]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-      (Domain.Correspondence.empty))))))))))))))))))))⟩
+set_option maxHeartbeats 4000000 in
+theorem normalization_checked :
+    (CanonicalNormalization.check
+      ZkcExamples.Construction.DeferredRounds.participant.inputs
+      ZkcExamples.Construction.DeferredRounds.participant.outputs
+      ZkcExamples.Construction.DeferredRounds.participant.instructions
+      ZkcExamples.Construction.DeferredRounds.participant.returned
+      readingInstructions [23, 17]).toOption.isSome = true := by
+  decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 4000000 in
 theorem normalized_schedule (program : Structured.Program) (x : F)
     (history : Domain.History (Structured.uniformCarriers F G)) :
     observation program ZkcExamples.Construction.DeferredRounds.context
-      (Code.instructions lowered.code) lowered.returned
+      (Code.instructions checkedReading.code) checkedReading.returned
       [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] =
     observation program ZkcExamples.Construction.DeferredRounds.context
       ZkcExamples.Construction.DeferredRounds.participant.instructions
       ZkcExamples.Construction.DeferredRounds.participant.returned
       [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] := by
-  rw [reading_instructions, reading_returned, reading_context]
-  unfold DomainVM.observation outcome
-  rw [(readingView (F := F) (G := G) program).property,
-    (exportedView (F := F) (G := G) program).property]
-  normalize_scalar_connection unfolding [readback, readingView, exportedView, readingContext,
-    ZkcExamples.Construction.DeferredRounds.participant,
-    ZkcExamples.Construction.DeferredRoundsParticipant.participant]
+  rw [reading_instructions, reading_returned]
+  exact CanonicalNormalization.accepted_sound program _ normalization_checked _ rfl
 
 variable {m : Type → Type} [Monad m]
 variable (program : Structured.Program) (key : Origin → Origin) (initial : History F G)
@@ -320,33 +218,33 @@ variable (program : Structured.Program) (key : Origin → Origin) (initial : His
 
 theorem metered_normalized (sufficient : 35 ≤ budget) :
     DomainVM.metered program ZkcExamples.Construction.DeferredRounds.context key initial challenge cost budget
-      lowered [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof =
+      checkedReading [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof =
     Uniform.DomainAdapter.run key initial challenge
       (DomainVM.observation program ZkcExamples.Construction.DeferredRounds.context
         ZkcExamples.Construction.DeferredRounds.participant.instructions
         ZkcExamples.Construction.DeferredRounds.participant.returned
         [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history]) proof := by
-  exact (metered_static_observation program _ key initial challenge cost budget
-    (lowered := lowered) total sufficient _ proof).trans
-      (congrArg (fun process => Uniform.DomainAdapter.run key initial challenge process proof)
-        (normalized_schedule program x history))
+  apply CanonicalNormalization.metered_checked program _ key initial challenge cost budget
+    (inputs := ZkcExamples.Construction.DeferredRounds.participant.inputs)
+    (outputs := ZkcExamples.Construction.DeferredRounds.participant.outputs)
+    (total := 35) ?_ reading_total sufficient _ rfl proof
+  rw [reading_instructions, reading_returned]
+  exact normalization_checked
 
 theorem metered_prunes_normalized :
     Prunes Stopped
       (DomainVM.metered program ZkcExamples.Construction.DeferredRounds.context key initial challenge cost budget
-        lowered [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof)
+        checkedReading [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof)
       (Uniform.DomainAdapter.run key initial challenge
         (DomainVM.observation program ZkcExamples.Construction.DeferredRounds.context
           ZkcExamples.Construction.DeferredRounds.participant.instructions
           ZkcExamples.Construction.DeferredRounds.participant.returned
           [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history]) proof) := by
-  have result := metered_prunes_observation program ZkcExamples.Construction.DeferredRounds.context
-    key initial challenge cost budget lowered
-    [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof
-  exact (congrArg (fun process => Prunes Stopped
-    (DomainVM.metered program ZkcExamples.Construction.DeferredRounds.context key initial challenge cost budget
-      lowered [.data (.field "bls12-381.fr" x), .transcript "merlin3.bls12-381.fr64be/0" history] proof)
-    (Uniform.DomainAdapter.run key initial challenge process proof))
-    (normalized_schedule program x history)).mp result
+  apply CanonicalNormalization.metered_prunes_checked program _ key initial challenge cost budget
+    (inputs := ZkcExamples.Construction.DeferredRounds.participant.inputs)
+    (outputs := ZkcExamples.Construction.DeferredRounds.participant.outputs)
+    checkedReading ?_ _ rfl proof
+  rw [reading_instructions, reading_returned]
+  exact normalization_checked
 
 end ZkcExamples.Executable.DeferredRounds
