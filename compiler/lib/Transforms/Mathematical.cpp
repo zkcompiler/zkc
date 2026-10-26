@@ -4,6 +4,8 @@
 #include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
 #include "RealizationTrace.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
@@ -1145,7 +1147,8 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     // when the source has no Algebra operations or types.
     registry.insert<runtime::RuntimeDialect, local::LocalDialect,
                     kernel::KernelDialect, exec::ExecDialect,
-                    algebra::AlgebraDialect, func::FuncDialect>();
+                    algebra::AlgebraDialect, func::FuncDialect,
+                    cf::ControlFlowDialect, arith::ArithDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1239,7 +1242,8 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
     registry.insert<runtime::RuntimeDialect, zkc::protocol_ir::ProtocolDialect,
                     zkc::local::LocalDialect, zkc::kernel::KernelDialect,
                     exec::ExecDialect, zkc::algebra::AlgebraDialect,
-                    func::FuncDialect>();
+                    func::FuncDialect, cf::ControlFlowDialect,
+                    arith::ArithDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

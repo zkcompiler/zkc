@@ -2,6 +2,8 @@
 #include "Kernel/Support.h"
 #include "MathematicalSupport.h"
 #include "RealizationTrace.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
@@ -360,7 +362,8 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<runtime::RuntimeDialect, local::LocalDialect,
                     algebra::AlgebraDialect, kernel::KernelDialect,
-                    exec::ExecDialect, func::FuncDialect>();
+                    exec::ExecDialect, func::FuncDialect,
+                    cf::ControlFlowDialect, arith::ArithDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-math"; }
   StringRef getDescription() const final {

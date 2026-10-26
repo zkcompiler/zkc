@@ -5,6 +5,7 @@
 #include "../ScopedSubstitution.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
@@ -314,7 +315,7 @@ struct LowerKernelsPass
     registry.insert<runtime::RuntimeDialect, local::LocalDialect,
                     algebra::AlgebraDialect, kernel::KernelDialect,
                     exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
-                    arith::ArithDialect>();
+                    arith::ArithDialect, cf::ControlFlowDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-kernels"; }
   StringRef getDescription() const final {
