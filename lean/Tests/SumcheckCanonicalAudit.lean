@@ -27,6 +27,20 @@ private def dependencyClosure (root : Name) : CoreM (Array Name) := do
             unless visited.contains used do pending := used :: pending
   return order
 
+private theorem dependencyMarker : True := True.intro
+private theorem bodyWitness : True := dependencyMarker
+
+open Lean in
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let witness ← dependencyClosure ``bodyWitness
+  unless witness.contains ``dependencyMarker do
+    throwError "proof-body traversal failed its marker control"
+  let refusedMissing ← try
+    let _ ← dependencyClosure `Tests.SumcheckCanonicalAudit.intentionallyAbsent
+    pure false
+  catch _ => pure true
+  unless refusedMissing do throwError "dependency traversal accepted an unresolved name"
+
 open Lean in
 run_cmd Lean.Elab.Command.liftTermElabM do
   let roots := #[
