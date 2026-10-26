@@ -415,7 +415,8 @@ def construction_only_glue(subject, entry, modules):
     typed = binders(names, types)
     inputs_body = "[" + ", ".join(value_term(ty, name) for name, ty in zip(names, types)) + "]"
     doc = subject.get("construction", "doc") or default_glue_doc(subject, modules)
-    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured"]), doc=doc) + f"""
+    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured",
+                                         "Zkc.Construction.Scalar"]), doc=doc) + f"""
 namespace {namespace}
 open Zkc.Construction
 

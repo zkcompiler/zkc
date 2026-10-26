@@ -60,7 +60,7 @@ import Zkc.Construction.Structured
 import Zkc.Construction.TargetElaboration
 import Zkc.Construction.TransportReduction
 import Zkc.Construction.Uniform.Compiled
-import Zkc.Construction.Uniform.DomainAdapter
+import Zkc.Construction.ScalarAdapter
 import Zkc.Construction.Uniform.DomainExecution
 import Zkc.Construction.Uniform.DomainHandler
 import Zkc.Construction.Uniform.DomainIteration

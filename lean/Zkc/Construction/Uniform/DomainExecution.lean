@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Uniform.DomainAdapter
+public import Zkc.Construction.ScalarAdapter
 public import Zkc.Construction.DomainBinding
 public import Zkc.Construction.OriginalSimulation
 

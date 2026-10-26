@@ -1,6 +1,6 @@
-import Zkc.Construction.Uniform.DomainAdapter
+import Zkc.Construction.ScalarAdapter
 
-/-! Controls for the partial legacy operand adapter and its execution boundary. -/
+/-! Controls for the partial scalar operand adapter and nominal execution. -/
 set_option autoImplicit false
 namespace Tests.UniformDomainAdapter
 open Zkc.Source Zkc.Construction
@@ -54,18 +54,12 @@ example :
     Zkc.Construction.calculate (F := F) (G := G) (.indexConstant 0) [.index 0] =
       .stopped .refused := rfl
 
--- These two equations witness why an unconditional instruction migration would
--- change the existing claim: Domain checks declared guard results, legacy does not.
+-- A guard with an invalid result declaration must refuse even on a true input.
 example (program : Structured.Program) (context : Context) :
     Domain.step (Structured.ringModel F G) program context
         ⟨.guard "guard", [0], [.data .boolean], []⟩ [.data (.boolean true)] =
       .halt .refused := by
   simp [Domain.step]
-
-example (context : Context) :
-    idealStep (F := F) (G := G) (m := Id) context (fun _ => 0) []
-        ⟨.guard "guard", [0], [.data .boolean], []⟩ [.data (.boolean true)] []
-        (fun _ unread => pure (.returned (), unread)) = (.returned (), []) := rfl
 
 end Execution
 end Tests.UniformDomainAdapter
