@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Executable.Lowering
+public import Zkc.Executable.Decoding
 
 @[expose] public section
 

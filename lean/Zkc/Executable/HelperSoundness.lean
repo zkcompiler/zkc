@@ -1,8 +1,8 @@
 module
 
-public import Zkc.Construction.Uniform.DomainAdapter
+public import Zkc.Construction.ScalarAdapter
 public import Zkc.Executable.Helpers
-public import Zkc.Executable.Soundness
+public import Zkc.Executable.NativeLaws
 public import Zkc.Source.Structured.Linking
 
 @[expose] public section

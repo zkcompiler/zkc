@@ -5,7 +5,7 @@ meta import Lean.Meta.Eqns
 
 public import Zkc.Executable.Program
 public import Zkc.Executable.Numerical
-public import Zkc.Construction.Semantics
+public import Zkc.Construction.Scalar
 
 @[expose] public section
 
