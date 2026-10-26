@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Compiled
+public import Zkc.Construction.Uniform.Compiled
 public import Zkc.Executable.Soundness
 
 @[expose] public section
@@ -19,14 +19,14 @@ that every endpoint needs: the admitted original, the composed
 transcript-construction and participant projection check accepting the export
 against it, and the selection of the export's inputs and acceptance output,
 constructed in Lean from the admitted original and the policy and checked
-against the export (`Zkc.Construction.select`, `Uniform.Selection.check`). The
+against the export (`Zkc.Construction.Uniform.select`, `Uniform.Selection.check`). The
 generated per-Entry modules provide each fact by kernel evaluation.
 
 From these facts alone, `Compiled.transform_eq` states the compiled verifier's
 ideal meaning on a statement (`Compiled.verifier`) as the Fiat–Shamir transform
 of the admitted original validator on that statement (`Compiled.original`),
 for every challenge function in any lawful monad, service handle, initial
-transcript and proof. It is `Zkc.Construction.compiled_selected`, whose
+transcript and proof. It is `Zkc.Construction.Uniform.compiled_selected`, whose
 positional premises the checked selection discharges; no equation specific to
 an Entry is involved.
 

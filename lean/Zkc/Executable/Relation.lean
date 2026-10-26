@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Executable.Lowering
-public import Zkc.Construction.Soundness
+public import Zkc.Construction.Uniform.Soundness
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Sampling
-public import Zkc.Construction.Soundness
+public import Zkc.Construction.Uniform.Soundness
 public import ZkcSecurity.VCVio.Pruning
 
 @[expose] public section

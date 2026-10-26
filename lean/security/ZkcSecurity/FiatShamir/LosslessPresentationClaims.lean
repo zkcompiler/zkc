@@ -36,8 +36,8 @@ theorem losslessBridge (statement : art.Statement model) (initial : Domain.Histo
     DomainReduction.Bridge installation.absorb
       (fun reached b => ∃ a, installation.Post reached a ∧ installation.returns a b) initial
       (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context
-        art.participant (installation.inputs statement ++
-          [.transcript subject.compiled.selection.context.suite initial]))
+        art.participant (Domain.inputFrame subject.compiled.selection.context
+          (installation.inputs statement) initial))
       (installation.losslessPresented lossless statement initial) :=
   (Classical.choose_spec ((installation.bridge statement initial).exists_lossless_presentation lossless)).2
 

@@ -5,7 +5,7 @@ public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckHelperLaws
 public import ZkcExamples.Structured.MapSourceExpansions
 public import Zkc.Source.Structured.MapLaws
-public import Zkc.Construction.ProjectionSoundness
+public import Zkc.Construction.Uniform.ProjectionSoundness
 public import Zkc.Polynomial.Multilinear.ListRestriction
 public import Zkc.Polynomial.Multilinear.Line
 

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Construction.Compiled
+public import Zkc.Construction.Uniform.Compiled
 public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.Structured.GkrSourceData
 public import ZkcExamples.Construction.GkrProofParticipant
@@ -193,7 +193,7 @@ theorem original_verifier (inputsValue outputsValue add mul : List F) (layers se
 function in any lawful monad, is the Fiat–Shamir transform of the original
 Proof Entry's validator: equal acceptance outcomes, stops and unread proof
 suffixes, for every published input, initial transcript, proof and service
-handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
+handle. An instance of `Zkc.Construction.Uniform.compiled_selected`, whose positional
 premises the checked selection discharges. -/
 theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) (initial : History F G)

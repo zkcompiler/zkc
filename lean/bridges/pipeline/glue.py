@@ -227,7 +227,7 @@ def construction_glue(subject, entry, modules):
     draws = "[" + ", ".join(f"({text(query)}, {text(delivery)})" for query, delivery in entry.draws) + "]"
     context_literal = (f"Context.fiatShamir {data}.snapshot.entry {roles} {entry.producer} {validator} {entry.service} "
                        f"{text(entry.contract)} ({entry.request}) participant.policy.suite {draws}")
-    module_imports = ["Zkc.Construction.Compiled", "Zkc.Source.Structured.CommonAdapter", data,
+    module_imports = ["Zkc.Construction.Uniform.Compiled", "Zkc.Source.Structured.CommonAdapter", data,
                       participant_module]
     if admission == "views":
         module_imports.insert(0, "Zkc.Source.Structured.UnitViews")
@@ -424,7 +424,7 @@ theorem original_verifier {typed} (handle : Nat) :
 function in any lawful monad, is the Fiat–Shamir transform of the original
 Proof Entry's validator: equal acceptance outcomes, stops and unread proof
 suffixes, for every published input, initial transcript, proof and service
-handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
+handle. An instance of `Zkc.Construction.Uniform.compiled_selected`, whose positional
 premises the checked selection discharges. -/
 theorem compiled_transform {{m : Type → Type}} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) {typed} (handle : Nat) (initial : History F G)

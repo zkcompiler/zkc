@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Structured.UnitViews
-public import Zkc.Construction.Compiled
+public import Zkc.Construction.Uniform.Compiled
 public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.Construction.ComposedSumcheckProofData
 public import ZkcExamples.Construction.ComposedSumcheckProofParticipant
@@ -195,7 +195,7 @@ theorem original_verifier (left right : List F) (leftSum rightSum : F) (rounds :
 function in any lawful monad, is the Fiat–Shamir transform of the original
 Proof Entry's validator: equal acceptance outcomes, stops and unread proof
 suffixes, for every published input, initial transcript, proof and service
-handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
+handle. An instance of `Zkc.Construction.Uniform.compiled_selected`, whose positional
 premises the checked selection discharges. -/
 theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) (left right : List F) (leftSum rightSum : F) (rounds : Nat) (handle : Nat) (initial : History F G)
