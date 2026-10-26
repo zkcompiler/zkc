@@ -141,7 +141,7 @@ for operand, label in [(1, "commitment"), (3, "claimed value"), (4, "proof")]:
         src, policy = OUT / "product_0.mlir", OUT / "product_0.policy"
         original = commands.run([compiler, "protocol-construct-proof", src, policy])
         calls = list(re.finditer(
-            r'local\.call @check\(([^)]+)\) \{site = "[^"\n]*open_[TU]_check"\}',
+            r'"protocol\.local_call"\(([^)]+)\) <\{callee = @check, role = "V", site = "[^"\n]*open_[TU]_check"\}>',
             original,
         ))
         assert len(calls) == 2

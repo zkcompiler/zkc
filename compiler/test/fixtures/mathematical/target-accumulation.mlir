@@ -5,10 +5,17 @@
 module { "protocol.module"() ({
 "runtime.binding"() {sym_name="field_from_index",contract="field.from_index",arguments=["bn254.fr"],implementation=""} : ()->()
 
-local.func @count_scalar(%count:ui64)->(!f) attributes {logical_origin=["count_scalar",[]]} {
-  %scalar = "algebra.exec.field_from_index"(%count) {binding=@field_from_index,parameters=[],site="scalar"} : (ui64)->(!f)
-  local.return %scalar : !f
-}
+    func.func @count_scalar(%arg0: !runtime.scope, %arg1: ui64) -> !exec.outcome<(!f)> attributes {no_inline, runtime.origin = ["count_scalar", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @field_from_index, parameters = [], site = "scalar"}> : (!runtime.scope, ui64) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb1(%1: !f):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!f) -> !exec.outcome<(!f)>
+      return %2 : !exec.outcome<(!f)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f)>
+      return %4 : !exec.outcome<(!f)>
+    }
+
 "protocol.func"() ({ ^entry(%a:!g1,%b:!g2,%x:!f,%n:ui64):
  %zero = "algebra.constant"() {value="0"} : ()->!f
  %base = algebra.pairing %a,%b : (!g1,!g2)->!gt

@@ -11,38 +11,98 @@ module { "protocol.module"() ({
  "runtime.binding"() {sym_name="at",contract="vector.at",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
 
- local.func @cross_terms(%a:!v,%b:!v) -> (!f,!f) attributes {logical_origin=["cross_terms",[]]} {
-   %aSplit:2 = "algebra.exec.vector_split"(%a) {binding=@split,parameters=[],site="splitA"} : (!v)->(!v,!v)
-   %bSplit:2 = "algebra.exec.vector_split"(%b) {binding=@split,parameters=[],site="splitB"} : (!v)->(!v,!v)
-   %L = "algebra.exec.vector_dot"(%aSplit#0,%bSplit#1) {binding=@dot,parameters=[],site="left"} : (!v,!v)->!f
-   %R = "algebra.exec.vector_dot"(%aSplit#1,%bSplit#0) {binding=@dot,parameters=[],site="right"} : (!v,!v)->!f
-   local.return %L,%R : !f,!f
- }
- local.func @invert(%x:!f) -> !f attributes {logical_origin=["invert",[]]} {
-   %v = "algebra.exec.field_inverse"(%x) {binding=@inverse,parameters=[],site="nonzero"} : (!f)->!f
-   local.return %v : !f
- }
- local.func @weighted_fold(%a:!v,%b:!v,%x:!f) -> (!v,!v) attributes {logical_origin=["weighted_fold",[]]} {
-   %ix = "algebra.exec.field_inverse"(%x) {binding=@inverse,parameters=[],site="nonzero"} : (!f)->!f
-   %aSplit:2 = "algebra.exec.vector_split"(%a) {binding=@split,parameters=[],site="splitA"} : (!v)->(!v,!v)
-   %bSplit:2 = "algebra.exec.vector_split"(%b) {binding=@split,parameters=[],site="splitB"} : (!v)->(!v,!v)
-   %aL = "algebra.exec.vector_scale"(%aSplit#0,%x) {binding=@scale,parameters=[],site="scaleAL"} : (!v,!f)->!v
-   %aR = "algebra.exec.vector_scale"(%aSplit#1,%ix) {binding=@scale,parameters=[],site="scaleAR"} : (!v,!f)->!v
-   %bL = "algebra.exec.vector_scale"(%bSplit#0,%ix) {binding=@scale,parameters=[],site="scaleBL"} : (!v,!f)->!v
-   %bR = "algebra.exec.vector_scale"(%bSplit#1,%x) {binding=@scale,parameters=[],site="scaleBR"} : (!v,!f)->!v
-   %nextA = "algebra.exec.vector_add"(%aL,%aR) {binding=@add,parameters=[],site="addA"} : (!v,!v)->!v
-   %nextB = "algebra.exec.vector_add"(%bL,%bR) {binding=@add,parameters=[],site="addB"} : (!v,!v)->!v
-   local.return %nextA,%nextB : !v,!v
- }
- local.func @terminal_values(%a:!v,%b:!v) -> (!f,!f) attributes {logical_origin=["terminal_values",[]]} {
-   %aOne = "algebra.exec.vector_length_check"(%a) {binding=@length,parameters=["1"],site="lengthA"} : (!v)->i1
-   "local.exec.require"(%aOne) {binding=@require,parameters=[],site="shapeA"} : (i1)->()
-   %bOne = "algebra.exec.vector_length_check"(%b) {binding=@length,parameters=["1"],site="lengthB"} : (!v)->i1
-   "local.exec.require"(%bOne) {binding=@require,parameters=[],site="shapeB"} : (i1)->()
-   %a0 = "algebra.exec.vector_at"(%a) {binding=@at,parameters=["0"],site="valueA"} : (!v)->!f
-   %b0 = "algebra.exec.vector_at"(%b) {binding=@at,parameters=["0"],site="valueB"} : (!v)->!f
-   local.return %a0,%b0 : !f,!f
- }
+    func.func @cross_terms(%arg0: !runtime.scope, %arg1: !v, %arg2: !v) -> !exec.outcome<(!f, !f)> attributes {no_inline, runtime.origin = ["cross_terms", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @split, parameters = [], site = "splitA"}> : (!runtime.scope, !v) -> !exec.outcome<(!v, !v)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!v, !v)>) -> ()
+    ^bb1(%1: !v, %2: !v):  // pred: ^bb0
+      %3 = "exec.apply"(%arg0, %arg2) <{binding = @split, parameters = [], site = "splitB"}> : (!runtime.scope, !v) -> !exec.outcome<(!v, !v)>
+      "exec.dispatch"(%3)[^bb3, ^bb2] : (!exec.outcome<(!v, !v)>) -> ()
+    ^bb2(%4: !exec.stop):  // 4 preds: ^bb0, ^bb1, ^bb3, ^bb4
+      %5 = "exec.failed"(%4) : (!exec.stop) -> !exec.outcome<(!f, !f)>
+      return %5 : !exec.outcome<(!f, !f)>
+    ^bb3(%6: !v, %7: !v):  // pred: ^bb1
+      %8 = "exec.apply"(%arg0, %1, %7) <{binding = @dot, parameters = [], site = "left"}> : (!runtime.scope, !v, !v) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%8)[^bb4, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb4(%9: !f):  // pred: ^bb3
+      %10 = "exec.apply"(%arg0, %2, %6) <{binding = @dot, parameters = [], site = "right"}> : (!runtime.scope, !v, !v) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%10)[^bb5, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb5(%11: !f):  // pred: ^bb4
+      %12 = "exec.returned"(%9, %11) : (!f, !f) -> !exec.outcome<(!f, !f)>
+      return %12 : !exec.outcome<(!f, !f)>
+    }
+    func.func @invert(%arg0: !runtime.scope, %arg1: !f) -> !exec.outcome<(!f)> attributes {no_inline, runtime.origin = ["invert", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @inverse, parameters = [], site = "nonzero"}> : (!runtime.scope, !f) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb1(%1: !f):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!f) -> !exec.outcome<(!f)>
+      return %2 : !exec.outcome<(!f)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f)>
+      return %4 : !exec.outcome<(!f)>
+    }
+    func.func @weighted_fold(%arg0: !runtime.scope, %arg1: !v, %arg2: !v, %arg3: !f) -> !exec.outcome<(!v, !v)> attributes {no_inline, runtime.origin = ["weighted_fold", []]} {
+      %0 = "exec.apply"(%arg0, %arg3) <{binding = @inverse, parameters = [], site = "nonzero"}> : (!runtime.scope, !f) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb1(%1: !f):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %arg1) <{binding = @split, parameters = [], site = "splitA"}> : (!runtime.scope, !v) -> !exec.outcome<(!v, !v)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!v, !v)>) -> ()
+    ^bb2(%3: !exec.stop):  // 9 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6, ^bb7, ^bb8, ^bb9
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!v, !v)>
+      return %4 : !exec.outcome<(!v, !v)>
+    ^bb3(%5: !v, %6: !v):  // pred: ^bb1
+      %7 = "exec.apply"(%arg0, %arg2) <{binding = @split, parameters = [], site = "splitB"}> : (!runtime.scope, !v) -> !exec.outcome<(!v, !v)>
+      "exec.dispatch"(%7)[^bb4, ^bb2] : (!exec.outcome<(!v, !v)>) -> ()
+    ^bb4(%8: !v, %9: !v):  // pred: ^bb3
+      %10 = "exec.apply"(%arg0, %5, %arg3) <{binding = @scale, parameters = [], site = "scaleAL"}> : (!runtime.scope, !v, !f) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%10)[^bb5, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb5(%11: !v):  // pred: ^bb4
+      %12 = "exec.apply"(%arg0, %6, %1) <{binding = @scale, parameters = [], site = "scaleAR"}> : (!runtime.scope, !v, !f) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%12)[^bb6, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb6(%13: !v):  // pred: ^bb5
+      %14 = "exec.apply"(%arg0, %8, %1) <{binding = @scale, parameters = [], site = "scaleBL"}> : (!runtime.scope, !v, !f) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%14)[^bb7, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb7(%15: !v):  // pred: ^bb6
+      %16 = "exec.apply"(%arg0, %9, %arg3) <{binding = @scale, parameters = [], site = "scaleBR"}> : (!runtime.scope, !v, !f) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%16)[^bb8, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb8(%17: !v):  // pred: ^bb7
+      %18 = "exec.apply"(%arg0, %11, %13) <{binding = @add, parameters = [], site = "addA"}> : (!runtime.scope, !v, !v) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%18)[^bb9, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb9(%19: !v):  // pred: ^bb8
+      %20 = "exec.apply"(%arg0, %15, %17) <{binding = @add, parameters = [], site = "addB"}> : (!runtime.scope, !v, !v) -> !exec.outcome<(!v)>
+      "exec.dispatch"(%20)[^bb10, ^bb2] : (!exec.outcome<(!v)>) -> ()
+    ^bb10(%21: !v):  // pred: ^bb9
+      %22 = "exec.returned"(%19, %21) : (!v, !v) -> !exec.outcome<(!v, !v)>
+      return %22 : !exec.outcome<(!v, !v)>
+    }
+    func.func @terminal_values(%arg0: !runtime.scope, %arg1: !v, %arg2: !v) -> !exec.outcome<(!f, !f)> attributes {no_inline, runtime.origin = ["terminal_values", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @length, parameters = ["1"], site = "lengthA"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1) <{binding = @require, parameters = [], site = "shapeA"}> : (!runtime.scope, i1) -> !exec.outcome<>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<>) -> ()
+    ^bb2(%3: !exec.stop):  // 6 preds: ^bb0, ^bb1, ^bb3, ^bb4, ^bb5, ^bb6
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f, !f)>
+      return %4 : !exec.outcome<(!f, !f)>
+    ^bb3:  // pred: ^bb1
+      %5 = "exec.apply"(%arg0, %arg2) <{binding = @length, parameters = ["1"], site = "lengthB"}> : (!runtime.scope, !v) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%5)[^bb4, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb4(%6: i1):  // pred: ^bb3
+      %7 = "exec.apply"(%arg0, %6) <{binding = @require, parameters = [], site = "shapeB"}> : (!runtime.scope, i1) -> !exec.outcome<>
+      "exec.dispatch"(%7)[^bb5, ^bb2] : (!exec.outcome<>) -> ()
+    ^bb5:  // pred: ^bb4
+      %8 = "exec.apply"(%arg0, %arg1) <{binding = @at, parameters = ["0"], site = "valueA"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%8)[^bb6, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb6(%9: !f):  // pred: ^bb5
+      %10 = "exec.apply"(%arg0, %arg2) <{binding = @at, parameters = ["0"], site = "valueB"}> : (!runtime.scope, !v) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%10)[^bb7, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb7(%11: !f):  // pred: ^bb6
+      %12 = "exec.returned"(%9, %11) : (!f, !f) -> !exec.outcome<(!f, !f)>
+      return %12 : !exec.outcome<(!f, !f)>
+    }
+
+
+
+
  "protocol.func"() ({ ^entry(%n:ui64,%a:!v,%b:!v,%claim:!f,%coins:!rng):
    %done:3 = "protocol.repeat"(%n,%a,%b,%claim,%coins) ({
    ^round(%i:ui64,%av:!v,%bv:!v,%current:!f,%random:!rng):

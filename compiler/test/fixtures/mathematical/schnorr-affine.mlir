@@ -5,17 +5,37 @@ module {
 "runtime.binding"() {sym_name="at", contract="curve.at", arguments=["bls12-381.g1"], implementation=""} : () -> ()
 "runtime.binding"() {sym_name="commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
 "runtime.binding"() {sym_name="respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-local.func @nonce_commit(%g: !algebra.group<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) attributes {logical_origin=["nonce_commit", []]} {
-%empty = "algebra.exec.group_empty"() {binding=@empty, parameters=[], site="empty"} : () -> !algebra.group_vector<"bls12-381.g1">
-%bases = "algebra.exec.group_append"(%empty, %g) {binding=@append, parameters=[], site="append"} : (!algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !algebra.group_vector<"bls12-381.g1">
-%ready:2 = "crypto.exec.curve_commit"(%bases, %nonce) {binding=@commit, parameters=[], site="commit"} : (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)
-%r = "algebra.exec.group_at"(%ready#0) {binding=@at, parameters=["0"], site="at"} : (!algebra.group_vector<"bls12-381.g1">) -> !algebra.group<"bls12-381.g1">
-local.return %r, %ready#1 : !algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">
-}
-local.func @nonce_respond(%x: !algebra.field<"bls12-381.fr">, %c: !algebra.field<"bls12-381.fr">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> !algebra.field<"bls12-381.fr"> attributes {logical_origin=["nonce_respond", []]} {
-%z = "crypto.exec.curve_response"(%x, %c, %nonce) {binding=@respond, parameters=[], site="respond"} : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<"nonce:bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
-local.return %z : !algebra.field<"bls12-381.fr">
-}
+    func.func @nonce_commit(%arg0: !runtime.scope, %arg1: !algebra.group<"bls12-381.g1">, %arg2: !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)> attributes {no_inline, runtime.origin = ["nonce_commit", []]} {
+      %0 = "exec.apply"(%arg0) <{binding = @empty, parameters = [], site = "empty"}> : (!runtime.scope) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>) -> ()
+    ^bb1(%1: !algebra.group_vector<"bls12-381.g1">):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1, %arg1) <{binding = @append, parameters = [], site = "append"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">)>) -> ()
+    ^bb2(%3: !exec.stop):  // 4 preds: ^bb0, ^bb1, ^bb3, ^bb4
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      return %4 : !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+    ^bb3(%5: !algebra.group_vector<"bls12-381.g1">):  // pred: ^bb1
+      %6 = "exec.apply"(%arg0, %5, %arg2) <{binding = @commit, parameters = [], site = "commit"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      "exec.dispatch"(%6)[^bb4, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>) -> ()
+    ^bb4(%7: !algebra.group_vector<"bls12-381.g1">, %8: !runtime.capability<"nonce:bls12-381.fr">):  // pred: ^bb3
+      %9 = "exec.apply"(%arg0, %7) <{binding = @at, parameters = ["0"], site = "at"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">)>
+      "exec.dispatch"(%9)[^bb5, ^bb2] : (!exec.outcome<(!algebra.group<"bls12-381.g1">)>) -> ()
+    ^bb5(%10: !algebra.group<"bls12-381.g1">):  // pred: ^bb4
+      %11 = "exec.returned"(%10, %8) : (!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      return %11 : !exec.outcome<(!algebra.group<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+    }
+    func.func @nonce_respond(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">, %arg2: !algebra.field<"bls12-381.fr">, %arg3: !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["nonce_respond", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2, %arg3) <{binding = @respond, parameters = [], site = "respond"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
+    ^bb1(%1: !algebra.field<"bls12-381.fr">):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %2 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %4 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    }
+
+
 relation.declare @schnorr_relation {kind="external", key="example/schnorr", revision="0", signature=(!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, purposes=["parameter", "statement", "witness"]}
 "protocol.func"() ({
 ^entry(%g: !algebra.group<"bls12-381.g1">, %x: !algebra.field<"bls12-381.fr">, %y: !algebra.group<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">, %challenge_service: !protocol.service_ref<"random.bls12-381.fr/0">):

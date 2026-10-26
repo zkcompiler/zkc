@@ -44,8 +44,12 @@ for family in ['r1cs', 'air']:
                      refuses='native-proof-correspondence')
         changed = candidate.replace('relation_revision = "0"', 'relation_revision = "other"')
         commands.verified(changed, 'mathematical-projection')
-        changed, count = re.subn(r'("algebra.exec.field_equal"\()(%\w+), (%\w+)',
-                                r'\1\3, \3', candidate, count=1)
+        binding = re.search(r'contract = "field.equal"[^\n]*sym_name = "([^"]+)"', candidate)
+        assert binding
+        changed, count = re.subn(
+            r'("exec\.apply"\(%\w+, )(%\w+), (%\w+)(\) <\{binding = @' + re.escape(binding[1]) + r'[,}])',
+            r'\1\3, \3\4', candidate, count=1,
+        )
         assert count == 1
         path.write_text(changed)
         commands.run([compiler, 'protocol-check-proof', source, policy, path],

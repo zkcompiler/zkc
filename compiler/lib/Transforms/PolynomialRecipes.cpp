@@ -3,11 +3,14 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <map>
 using namespace mlir;
 using namespace llvm;
@@ -23,6 +26,7 @@ class Realizer {
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
   unsigned nextName = 0, nextSite = 0;
+  exec::ScopedExecutionBuilder *scope = nullptr;
   Location loc;
   algebra::FieldType field;
   Type index, boolean, vector, table, point;
@@ -60,17 +64,15 @@ class Realizer {
     if (length)
       arguments.push_back(std::to_string(*length));
     auto reference = binding(contract, arguments);
-    OperationState state(loc, protocol::boundOperationName(contract));
-    state.addOperands(inputs);
-    state.addTypes(outputs);
-    state.addAttribute("binding", reference);
-    state.addAttribute("site", builder.getStringAttr(site()));
-    SmallVector<Attribute> attrs;
+    SmallVector<Attribute> parametersAttrs;
     for (const auto &param : parameters)
-      attrs.push_back(builder.getStringAttr(param));
-    state.addAttribute("parameters", builder.getArrayAttr(attrs));
-    auto *op = builder.create(state);
-    return SmallVector<Value>(op->result_begin(), op->result_end());
+      parametersAttrs.push_back(builder.getStringAttr(param));
+    return scope->invoke(
+        exec::ApplyOp::getOperationName(), outputs, scope->scoped(inputs),
+        {builder.getNamedAttr("binding", reference),
+         builder.getNamedAttr("site", builder.getStringAttr(site())),
+         builder.getNamedAttr("parameters",
+                              builder.getArrayAttr(parametersAttrs))});
   }
   Value one(StringRef contract, ValueRange inputs, Type output,
             ArrayRef<std::string> params = {}) {
@@ -95,12 +97,13 @@ class Realizer {
   Value pack(poly::RecipeOp recipe, Value pointValue, ValueRange factors) {
     SmallVector<Value> values{pointValue};
     llvm::append_range(values, factors);
-    OperationState state(loc, local::VariantInjectOp::getOperationName());
-    state.addOperands(values);
-    state.addTypes(poly::residualStateType(recipe));
-    state.addAttribute("site", builder.getStringAttr(site()));
-    state.addAttribute("alternative", builder.getStringAttr("state"));
-    return builder.create(state)->getResult(0);
+    return scope
+        ->invoke(exec::VariantOp::getOperationName(),
+                 {poly::residualStateType(recipe)}, scope->scoped(values),
+                 {builder.getNamedAttr("site", builder.getStringAttr(site())),
+                  builder.getNamedAttr("alternative",
+                                       builder.getStringAttr("state"))})
+        .front();
   }
   using Coefficients = SmallVector<Value>;
   Coefficients expression(poly::RecipeOp recipe, ArrayRef<Coefficients> slots,
@@ -156,61 +159,74 @@ class Realizer {
     auto half = one("index.div", {length, natural(2)}, index);
     auto zero = scalar("0");
     unsigned width = *poly::recipeDegree(recipe) + 1;
-    SmallVector<Value> inputs{zeroIndex, half};
-    inputs.append(width, zero);
-    // Captures are unique immutable values. half and zero are also explicit
-    // because isolated regions cannot refer to the enclosing SSA environment.
-    llvm::append_range(inputs, vectors);
-    inputs.push_back(half);
-    inputs.push_back(zero);
+    SmallVector<Value> seeds(width, zero), captures(vectors);
+    captures.push_back(half);
+    captures.push_back(zero);
     SmallVector<Type> outputs(width, field);
-    OperationState state(loc, local::LocalForOp::getOperationName());
-    state.addOperands(inputs);
-    state.addTypes(outputs);
-    state.addAttribute("site", builder.getStringAttr(site()));
-    state.addRegion();
-    auto *loop = builder.create(state);
-    auto *body = new Block();
-    loop->getRegion(0).push_back(body);
-    body->addArgument(index, loc);
-    for (auto type : outputs)
-      body->addArgument(type, loc);
-    for (unsigned i = 0; i < vectors.size(); ++i)
-      body->addArgument(vector, loc);
-    body->addArgument(index, loc);
-    body->addArgument(field, loc);
-    {
-      OpBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPointToEnd(body);
-      unsigned start = 1 + width;
-      Value i = body->getArgument(0),
-            h = body->getArgument(start + vectors.size());
-      Value z = body->getArguments().back();
-      Value high = one("index.add", {i, h}, index);
-      SmallVector<Coefficients> slots;
-      for (unsigned j = 0; j < vectors.size(); ++j) {
-        Value data = body->getArgument(start + j);
-        Value a = one("vector.get", {data, i}, field),
-              b = one("vector.get", {data, high}, field);
-        slots.push_back({a, one("field.sub", {b, a}, field)});
-      }
-      auto coefficients = expression(recipe, slots, z);
-      SmallVector<Value> yielded;
-      for (unsigned j = 0; j < width; ++j)
-        yielded.push_back(one("field.add",
-                              {body->getArgument(1 + j),
-                               j < coefficients.size() ? coefficients[j] : z},
-                              field));
-      llvm::append_range(yielded, body->getArguments().drop_front(start));
-      local::LocalYieldOp::create(builder, loc, yielded);
-    }
-    return coefficientArray(loop->getResults());
+    SmallVector<Type> inputs{index};
+    llvm::append_range(inputs, outputs);
+    llvm::append_range(inputs, ValueRange(captures).getTypes());
+    auto results =
+        scope->loop(zeroIndex, half, seeds, captures, outputs, false, site(),
+                    [&](unsigned) {
+                      auto function = outlined(inputs, outputs);
+                      builder.setInsertionPointToStart(&function.front());
+                      exec::ScopedExecutionBuilder control(builder, function);
+                      SaveAndRestore saved(scope, &control);
+                      auto arguments = function.getArguments().drop_front();
+                      unsigned start = 1 + width;
+                      Value i = arguments[0],
+                            h = arguments[start + vectors.size()];
+                      Value z = arguments.back();
+                      Value high = one("index.add", {i, h}, index);
+                      SmallVector<Coefficients> slots;
+                      for (unsigned j = 0; j < vectors.size(); ++j) {
+                        Value data = arguments[start + j];
+                        Value a = one("vector.get", {data, i}, field),
+                              b = one("vector.get", {data, high}, field);
+                        slots.push_back({a, one("field.sub", {b, a}, field)});
+                      }
+                      auto coefficients = expression(recipe, slots, z);
+                      SmallVector<Value> yielded;
+                      for (unsigned j = 0; j < width; ++j)
+                        yielded.push_back(
+                            one("field.add",
+                                {arguments[1 + j],
+                                 j < coefficients.size() ? coefficients[j] : z},
+                                field));
+                      control.complete(yielded);
+                      return function;
+                    });
+    return coefficientArray(results);
   }
+  func::FuncOp function(StringRef name, TypeRange inputs, TypeRange outputs) {
+    SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};
+    llvm::append_range(arguments, inputs);
+    auto result = exec::OutcomeType::get(builder.getContext(),
+                                         SmallVector<Type>(outputs));
+    auto fn = func::FuncOp::create(
+        builder, loc, name, builder.getFunctionType(arguments, {result}));
+    fn.setNoInline(true);
+    fn.addEntryBlock();
+    return fn;
+  }
+  func::FuncOp outlined(TypeRange inputs, TypeRange outputs) {
+    std::string name;
+    do {
+      name = "_poly_body_" + std::to_string(nextName++);
+    } while (!names.insert(name).second);
+    builder.setInsertionPointToEnd(&unit.getBody().front());
+    auto fn = function(name, inputs, outputs);
+    fn.setPrivate();
+    fn->setAttr("runtime.region", builder.getUnitAttr());
+    return fn;
+  }
+
   SmallVector<Value> stateBody(poly::RealizeOp realization,
-                               poly::RecipeOp recipe, Block &body) {
-    Value p = body.getArgument(0);
+                               poly::RecipeOp recipe, ValueRange arguments) {
+    Value p = arguments[0];
     unsigned slots = recipe.getBody().front().getNumArguments();
-    auto tables = body.getArguments().slice(1, slots);
+    auto tables = arguments.slice(1, slots);
     Value n = shapes(tables);
     auto kind = realization.getKind();
     if (kind == "arity")
@@ -219,7 +235,7 @@ class Realizer {
       return {round(recipe, tables, n)};
     if (kind == "bind") {
       require(one("index.less", {natural(0), n}, boolean));
-      Value challenge = body.getArguments().back();
+      Value challenge = arguments.back();
       SmallVector<Value> fixed;
       for (auto factor : tables)
         fixed.push_back(one("poly.fold", {factor, challenge}, table));
@@ -256,54 +272,49 @@ public:
     point = poly::PointType::get(context, field.getDomain());
     auto name = realization.getSymName().str();
     builder.setInsertionPoint(realization);
-    auto fn = local::FuncOp::create(builder, loc, name,
-                                    realization.getFunctionType());
-    fn->setAttr("logical_origin",
+    auto type = realization.getFunctionType();
+    auto fn = function(name, type.getInputs(), type.getResults());
+    fn->setAttr("runtime.origin",
                 builder.getArrayAttr(
                     {builder.getStringAttr(name), builder.getArrayAttr({})}));
-    auto *entry = fn.addEntryBlock();
-    builder.setInsertionPointToEnd(entry);
+    builder.setInsertionPointToStart(&fn.front());
+    exec::ScopedExecutionBuilder control(builder, fn);
+    SaveAndRestore saved(scope, &control);
+    auto arguments = fn.getArguments().drop_front();
     auto kind = realization.getKind();
     SmallVector<Value> returned;
     if (kind == "init") {
-      shapes(entry->getArguments().drop_front(), entry->getArgument(0));
+      shapes(arguments.drop_front(), arguments[0]);
       auto empty = one("poly.empty_point", {}, point);
-      returned = {pack(recipe, empty, entry->getArguments().drop_front())};
+      returned = {pack(recipe, empty, arguments.drop_front())};
     } else if (kind == "evaluate") {
-      auto coordinates =
-          one("vector.from_point", entry->getArgument(0), vector);
+      auto coordinates = one("vector.from_point", arguments[0], vector);
       auto length = one("vector.length", coordinates, index);
-      shapes(entry->getArguments().drop_front(), length);
+      shapes(arguments.drop_front(), length);
       SmallVector<Coefficients> values;
-      for (auto factor : entry->getArguments().drop_front())
-        values.push_back(
-            {one("poly.evaluate", {factor, entry->getArgument(0)}, field)});
+      for (auto factor : arguments.drop_front())
+        values.push_back({one("poly.evaluate", {factor, arguments[0]}, field)});
       returned = {expression(recipe, values, scalar("0")).front()};
     } else {
-      OperationState state(loc, local::LocalMatchOp::getOperationName());
-      state.addOperands(entry->getArguments());
-      state.addTypes(fn.getResultTypes());
-      state.addAttribute("site", builder.getStringAttr(site()));
-      state.addAttribute("alternatives", builder.getArrayAttr(
-                                             {builder.getStringAttr("state")}));
-      state.addRegion();
-      auto *match = builder.create(state);
-      auto *body = new Block();
-      match->getRegion(0).push_back(body);
-      body->addArgument(point, loc);
-      for (unsigned i = 0; i < recipe.getBody().front().getNumArguments(); ++i)
-        body->addArgument(table, loc);
+      SmallVector<Type> inputs{point};
+      inputs.append(recipe.getBody().front().getNumArguments(), table);
       if (kind == "bind")
-        body->addArgument(field, loc);
-      {
-        OpBuilder::InsertionGuard guard(builder);
-        builder.setInsertionPointToEnd(body);
-        auto values = stateBody(realization, recipe, *body);
-        local::LocalYieldOp::create(builder, loc, values);
-      }
-      llvm::append_range(returned, match->getResults());
+        inputs.push_back(field);
+      returned =
+          control.match(arguments[0], arguments.drop_front(), type.getResults(),
+                        {"state"}, site(), [&](unsigned) {
+                          auto body = outlined(inputs, type.getResults());
+                          builder.setInsertionPointToStart(&body.front());
+                          exec::ScopedExecutionBuilder nested(builder, body);
+                          SaveAndRestore saved(scope, &nested);
+                          auto values =
+                              stateBody(realization, recipe,
+                                        body.getArguments().drop_front());
+                          nested.complete(values);
+                          return body;
+                        });
     }
-    local::ReturnOp::create(builder, loc, returned);
+    control.returned(returned);
     realization.erase();
   }
 };
@@ -348,7 +359,10 @@ static LogicalResult realizeRecipes(ModuleOp module) {
         widths[expression.getResult(0)] = width;
       }
     }
-    work += cost;
+    // Each primitive expands to bounded outcome/dispatch administration;
+    // outlined control adds a bounded CFG per loop or match. Reserve that
+    // construction before allocating it, independently of runtime arity.
+    work += 16 * cost;
     if (work > 100000)
       return diagnostics::emit(
           op.emitOpError(), "mathematical-expansion-limit",
@@ -359,7 +373,7 @@ static LogicalResult realizeRecipes(ModuleOp module) {
   for (auto op : routines)
     realizer.run(op);
   // Declarations have no runtime representation. Their exact expansion remains
-  // in local definitions and the compiler invocation retains the source bytes.
+  // in scoped definitions and the compiler invocation retains the source bytes.
   for (auto recipe :
        make_early_inc_range(unit.getBody().front().getOps<poly::RecipeOp>()))
     recipe.erase();

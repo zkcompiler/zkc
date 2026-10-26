@@ -16,20 +16,54 @@ module { "protocol.module"() ({
  "poly.realize"() {sym_name="finish",recipe=@product,kind="finish",function_type=(!state)->(!p,!f)} : ()->()
  "poly.realize"() {sym_name="evaluate",recipe=@product,kind="evaluate",function_type=(!p,!t,!t)->!f} : ()->()
  "runtime.binding"() {sym_name="arity_kernel",contract="poly.table_arity",arguments=["bls12-381.fr"],implementation=""} : ()->()
- local.func @table_arity(%t:!t) -> ui64 attributes {logical_origin=["table_arity",[]]} {
-   %n = "poly.exec.table_arity"(%t) {binding=@arity_kernel,parameters=[],site="arity"} : (!t)->ui64
-   local.return %n : ui64
- }
+    func.func @table_arity(%arg0: !runtime.scope, %arg1: !t) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["table_arity", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @arity_kernel, parameters = [], site = "arity"}> : (!runtime.scope, !t) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb1(%1: ui64):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (ui64) -> !exec.outcome<(ui64)>
+      return %2 : !exec.outcome<(ui64)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %4 : !exec.outcome<(ui64)>
+    }
+    func.func @empty_point(%arg0: !runtime.scope) -> !exec.outcome<(!p)> attributes {no_inline, runtime.origin = ["empty_point", []]} {
+      %0 = "exec.apply"(%arg0) <{binding = @empty, parameters = [], site = "empty"}> : (!runtime.scope) -> !exec.outcome<(!p)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!p)>) -> ()
+    ^bb1(%1: !p):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!p) -> !exec.outcome<(!p)>
+      return %2 : !exec.outcome<(!p)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!p)>
+      return %4 : !exec.outcome<(!p)>
+    }
+    func.func @append_point(%arg0: !runtime.scope, %arg1: !p, %arg2: !f) -> !exec.outcome<(!p)> attributes {no_inline, runtime.origin = ["append_point", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @append, parameters = [], site = "append"}> : (!runtime.scope, !p, !f) -> !exec.outcome<(!p)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!p)>) -> ()
+    ^bb1(%1: !p):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!p) -> !exec.outcome<(!p)>
+      return %2 : !exec.outcome<(!p)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!p)>
+      return %4 : !exec.outcome<(!p)>
+    }
+    func.func @equality_table(%arg0: !runtime.scope, %arg1: !p) -> !exec.outcome<(!t)> attributes {no_inline, runtime.origin = ["equality_table", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @weights, parameters = [], site = "weights"}> : (!runtime.scope, !p) -> !exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field_vector<"bls12-381.fr">)>) -> ()
+    ^bb1(%1: !algebra.field_vector<"bls12-381.fr">):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1) <{binding = @table, parameters = [], site = "table"}> : (!runtime.scope, !algebra.field_vector<"bls12-381.fr">) -> !exec.outcome<(!t)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(!t)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!t)>
+      return %4 : !exec.outcome<(!t)>
+    ^bb3(%5: !t):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (!t) -> !exec.outcome<(!t)>
+      return %6 : !exec.outcome<(!t)>
+    }
+
  "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- local.func @empty_point() -> !p attributes {logical_origin=["empty_point",[]]} {
-   %p = "poly.exec.empty_point"() {binding=@empty,parameters=[],site="empty"} : ()->!p
-   local.return %p : !p
- }
- local.func @append_point(%p:!p,%r:!f) -> !p attributes {logical_origin=["append_point",[]]} {
-   %out = "poly.exec.append_point"(%p,%r) {binding=@append,parameters=[],site="append"} : (!p,!f)->!p
-   local.return %out : !p
- }
+
+
  "protocol.func"() ({ ^entry(%n:ui64,%T:!t,%U:!t,%TV:!t,%UV:!t,%claim:!f,%coins:!rng):
    %count = protocol.exchange %n {sender="P",receiver="V",site="arity"} : ui64
    %initial = "protocol.local_call"(%n,%T,%U) {callee=@init,role="P",site="initialize"} : (ui64,!t,!t)->!state
@@ -64,11 +98,7 @@ module { "protocol.module"() ({
 
  "runtime.binding"() {sym_name="weights",contract="poly.equality_weights",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="table",contract="vector.to_table",arguments=["bls12-381.fr"],implementation=""} : ()->()
- local.func @equality_table(%point:!p) -> !t attributes {logical_origin=["equality_table",[]]} {
-   %weights = "poly.exec.equality_weights"(%point) {binding=@weights,parameters=[],site="weights"} : (!p)->!algebra.field_vector<"bls12-381.fr">
-   %table = "poly.exec.table_from_vector"(%weights) {binding=@table,parameters=[],site="table"} : (!algebra.field_vector<"bls12-381.fr">)->!t
-   local.return %table : !t
- }
+
  "protocol.func"() ({ ^entry(%layers:ui64,%coins:!rng):
    %pP = "protocol.local_call"() {callee=@empty_point,role="P",site="emptyP"} : ()->!p
    %pV = "protocol.local_call"() {callee=@empty_point,role="V",site="emptyV"} : ()->!p

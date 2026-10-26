@@ -1,14 +1,28 @@
 module { "protocol.module"() ({
 "runtime.binding"() {sym_name="binding_commit", contract="curve.commit", arguments=["bls12-381.g1"], implementation=""} : () -> ()
 "runtime.binding"() {sym_name="binding_respond", contract="curve.response", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-local.func @commit(%bases: !algebra.group_vector<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) attributes {logical_origin=["commit", []]} {
-%v:2 = "crypto.exec.curve_commit"(%bases, %nonce) {binding=@binding_commit, parameters=[], site="commit"} : (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)
-local.return %v#0, %v#1 : !algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">
-}
-local.func @respond(%secret: !algebra.field<"bls12-381.fr">, %challenge: !algebra.field<"bls12-381.fr">, %nonce: !runtime.capability<"nonce:bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">) attributes {logical_origin=["respond", []]} {
-%v = "crypto.exec.curve_response"(%secret, %challenge, %nonce) {binding=@binding_respond, parameters=[], site="respond"} : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<"nonce:bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
-local.return %v : !algebra.field<"bls12-381.fr">
-}
+    func.func @commit(%arg0: !runtime.scope, %arg1: !algebra.group_vector<"bls12-381.g1">, %arg2: !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)> attributes {no_inline, runtime.origin = ["commit", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @binding_commit, parameters = [], site = "commit"}> : (!runtime.scope, !algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>) -> ()
+    ^bb1(%1: !algebra.group_vector<"bls12-381.g1">, %2: !runtime.capability<"nonce:bls12-381.fr">):  // pred: ^bb0
+      %3 = "exec.returned"(%1, %2) : (!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      return %3 : !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+    ^bb2(%4: !exec.stop):  // pred: ^bb0
+      %5 = "exec.failed"(%4) : (!exec.stop) -> !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+      return %5 : !exec.outcome<(!algebra.group_vector<"bls12-381.g1">, !runtime.capability<"nonce:bls12-381.fr">)>
+    }
+    func.func @respond(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">, %arg2: !algebra.field<"bls12-381.fr">, %arg3: !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["respond", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2, %arg3) <{binding = @binding_respond, parameters = [], site = "respond"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !runtime.capability<"nonce:bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
+    ^bb1(%1: !algebra.field<"bls12-381.fr">):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %2 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %4 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    }
+
+
 
 "protocol.func"() ({
 ^entry(%bases: !algebra.group_vector<"bls12-381.g1">, %nonce: !runtime.capability<"nonce:bls12-381.fr">, %secret: !algebra.field<"bls12-381.fr">, %challenge: !algebra.field<"bls12-381.fr">, %go: i1):

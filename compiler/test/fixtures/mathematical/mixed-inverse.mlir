@@ -1,9 +1,16 @@
 module { "protocol.module"() ({
 "runtime.binding"() {sym_name="binding_inverse", contract="field.inverse", arguments=["bls12-381.fr"], implementation=""} : () -> ()
-local.func @inverse(%x: !algebra.field<"bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">) attributes {logical_origin=["inverse", []]} {
-%v = "algebra.exec.field_inverse"(%x) {binding=@binding_inverse, parameters=[], site="inverse"} : (!algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
-local.return %v : !algebra.field<"bls12-381.fr">
-}
+    func.func @inverse(%arg0: !runtime.scope, %arg1: !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)> attributes {no_inline, runtime.origin = ["inverse", []]} {
+      %0 = "exec.apply"(%arg0, %arg1) <{binding = @binding_inverse, parameters = [], site = "inverse"}> : (!runtime.scope, !algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!algebra.field<"bls12-381.fr">)>) -> ()
+    ^bb1(%1: !algebra.field<"bls12-381.fr">):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!algebra.field<"bls12-381.fr">) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %2 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+      return %4 : !exec.outcome<(!algebra.field<"bls12-381.fr">)>
+    }
+
 
 "protocol.func"() ({
 ^entry(%x: !algebra.field<"bls12-381.fr">, %reply: !algebra.field<"bls12-381.fr">, %go: i1):
