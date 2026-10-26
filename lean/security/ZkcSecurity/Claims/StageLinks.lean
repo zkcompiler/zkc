@@ -36,7 +36,7 @@ def LoweringChecked (subject : Subject F G art .executableBytes) : Prop :=
   (∀ name ∈ Zkc.Executable.Instruction.helpers art.participant.instructions,
     Zkc.Executable.Prepared Zkc.Executable.installed subject.lowering.validator
       (helperTable subject.compiled.imported.program F G) name) ∧
-  (∀ call ∈ Zkc.Executable.Instruction.callList art.participant.instructions,
+  (∀ call ∈ Zkc.Construction.Instruction.callList art.participant.instructions,
     Zkc.Executable.HelperSorted (helperTable subject.compiled.imported.program F G) call.1 call.2) ∧
   (∀ statement : art.Statement F G, subject.lowering.validator.admits (encodeValues statement) = true) ∧
   BytePruning art subject.compiled F G subject.lowering.validator subject.lowering.lowered

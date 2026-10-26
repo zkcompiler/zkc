@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Endpoint.DomainCompiled
 public import Zkc.Construction.ScalarVerifier
+public import Zkc.Source.Structured.CommonAdapter
 public import Zkc.Executable.Program
 
 @[expose] public section

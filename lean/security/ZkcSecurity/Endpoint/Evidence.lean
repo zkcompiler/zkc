@@ -5,7 +5,9 @@ public import ZkcSecurity.Endpoint.Contract
 public import ZkcSecurity.Endpoint.Binding
 public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcSecurity.FiatShamir.Binding
-public import Zkc.Executable.NormalizationSoundness
+public import Zkc.Executable.HelperSchemas
+public import Zkc.Executable.NativeLaws
+public import Zkc.Executable.Observations
 public import Zkc.Executable.Installed
 
 @[expose] public section
@@ -204,7 +206,7 @@ structure LoweringEvidence (art : Artifacts) (c : Compiled art) (F G : Type) [Fi
   accepted : Zkc.Executable.checkLowering Zkc.Executable.installed art.participant validator = .ok lowered
   prepared : ∀ name ∈ Zkc.Executable.Instruction.helpers art.participant.instructions,
     Zkc.Executable.Prepared Zkc.Executable.installed validator (helperTable c.imported.program F G) name
-  sorted : ∀ call ∈ Zkc.Executable.Instruction.callList art.participant.instructions,
+  sorted : ∀ call ∈ Zkc.Construction.Instruction.callList art.participant.instructions,
     Zkc.Executable.HelperSorted (helperTable c.imported.program F G) call.1 call.2
   admits : ∀ statement : art.Statement F G, validator.admits (encodeValues statement) = true
   /-- Actual all-budget byte/Domain transport, separately proved from the static
