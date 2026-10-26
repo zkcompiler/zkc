@@ -131,10 +131,10 @@ def main():
     # admitted by its own success marker or by other valid property aliases.
     import verify as implementation
     original_generator = implementation.generate
-    for name, proposal in [('candidate-not-object', '.done none'),
-                           ('candidate-missing-process', {'program': '.ret .nil'}),
-                           ('candidate-extra-field', {'program': '.ret .nil',
-                                                       'process': '.done none', 'extra': True})]:
+    for name, proposal in [('candidate-not-object', '.ret .here'),
+                           ('candidate-missing-program', {}),
+                           ('candidate-extra-field', {'program': '.ret .here', 'extra': True}),
+                           ('candidate-retired-process', {'program': '.ret .here', 'process': '.done none'})]:
         implementation.generate = lambda _data, _request, proposal=proposal: proposal
         try:
             check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'candidate-shape')
@@ -142,7 +142,7 @@ def main():
             implementation.generate = original_generator
     def corrupted_generator(data, request):
         candidate = original_generator(data, request)
-        candidate['process'] = 'by sorry'
+        candidate['program'] = 'by sorry'
         return candidate
     implementation.generate = corrupted_generator
     try:
@@ -153,11 +153,11 @@ def main():
     for name, payload in [
             ('generator-exit-control', 'run_cmd Lean.logInfo "PROOF-REQUEST-KERNEL-PASS"\n'
              'run_cmd Lean.logInfo "PROOF-REQUEST-BOUNDARY-PASS"\n#exit'),
-            ('generator-comment-control', '.done none /-'),
-            ('generator-line-comment-control', '.done none --'),
-            ('generator-command-control', '.done none\ndef approvedContract := true')]:
+            ('generator-comment-control', '.ret .here /-'),
+            ('generator-line-comment-control', '.ret .here --'),
+            ('generator-command-control', '.ret .here\ndef approvedContract := true')]:
         def active_generator(data, request, payload=payload):
-            return {'program': original_generator(data, request)['program'], 'process': payload}
+            return {'program': payload}
         implementation.generate = active_generator
         try:
             check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'candidate-syntax')

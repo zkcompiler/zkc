@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.NativePrograms.Variants.FactorHornerData
 public import ZkcSecurity.Families.Sumcheck.FactorOpening.Security
-public import Zkc.Source.Common.Import
+public import Zkc.Source.Common.ProcessView
 public import Zkc.Protocols.Sumcheck.FactorOpening.Execution
 public import Mathlib.Tactic.Ring
 public import Mathlib.Tactic.Abel
@@ -166,47 +166,16 @@ def inputs (statement : Statement F) (claim : F) (service : Nat) :
 def verifier (statement : Statement F) (claim : F) (service : Nat) : PIR.Process (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
   imported.denote (scalarMeaning F F) id 1 (inputs (F := F) statement claim service)
 
-def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Process (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
-  (
-    .call (.receive (.field "bls12-381.fr") "label_666972737430_0" 0) fun reply0 =>
-    .call (.receive (.field "bls12-381.fr") "label_666972737431_0" 0) fun reply1 =>
-    .call (.receive (.field "bls12-381.fr") "label_666972737432_0" 0) fun reply2 =>
-    if (decide ((((reply0 + reply0) + reply1) + reply2) = claim)) then
-      .call (.query "label_6472617730" "bls12-381.fr" (.cons service .nil)) fun reply4 =>
-      .call (.send (ty := .field "bls12-381.fr") "label_64656c6976657230_0" 0 reply4) fun _ =>
-      .call (.receive (.field "bls12-381.fr") "label_7365636f6e6430_0" 0) fun reply6 =>
-      .call (.receive (.field "bls12-381.fr") "label_7365636f6e6431_0" 0) fun reply7 =>
-      .call (.receive (.field "bls12-381.fr") "label_7365636f6e6432_0" 0) fun reply8 =>
-      if (decide ((((reply6 + reply6) + reply7) + reply8) = (reply0 + (reply4 * (reply1 + (reply4 * reply2)))))) then
-        .call (.query "label_6472617731" "bls12-381.fr" (.cons service .nil)) fun reply10 =>
-        .call (.send (ty := .field "bls12-381.fr") "label_64656c6976657231_0" 0 reply10) fun _ =>
-        .call (.receive (.field "bls12-381.fr") "label_6c656674_0" 0) fun reply12 =>
-        if (decide (reply12 = ((statement.left.constant + (reply10 * statement.left.second)) + (reply4 * (statement.left.first + (reply10 * statement.left.mixed)))))) then
-          .call (.receive (.field "bls12-381.fr") "label_7269676874_0" 0) fun reply14 =>
-          .done (some ((decide (reply14 = ((statement.right.constant + (reply10 * statement.right.second)) + (reply4 * (statement.right.first + (reply10 * statement.right.mixed)))))) && (decide ((reply6 + (reply10 * (reply7 + (reply10 * reply8)))) = (reply12 * reply14)))))
-        else .halt .reject
-      else .halt .reject
-    else .halt .reject
-  )
+noncomputable def processView (statement : Statement F) (claim : F) (service : Nat) : PIR.Process (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
+  common_process% (verifier (F := F) statement claim service)
 
-theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
-    verifier (F := F) statement claim service = sourceProcess (F := F) statement claim service := by
-  change (imported.program.denote (scalarMeaning F F) id 1
-    (inputs (F := F) statement claim service).get).bind PIR.Process.done = _
-  rw [PIR.Process.bind_done]
-  repeat' first
-    | (apply PIR.Process.call_congr; intro reply)
-    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _
-       rw [PIR.Process.bind_ite]
-       simp only [↓reduceIte])
-    | rfl
-    | fail_if_no_progress congr 1
-
+theorem process_view_eq (statement : Statement F) (claim : F) (service : Nat) :
+    verifier (F := F) statement claim service = processView (F := F) statement claim service := rfl
 
 theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :
-    sourceProcess (F := F) statement claim service = experiment (F := F) wiring statement claim service := by
+    processView (F := F) statement claim service = experiment (F := F) wiring statement claim service := by
   aesop (rule_sets := [-builtin, -default]) (config := { enableSimp := false })
-    (add norm tactic (by fail_if_no_progress dsimp +instances [sourceProcess, wiring, Zkc.Protocols.Sumcheck.FactorOpening.experiment, Zkc.Protocols.Sumcheck.FactorOpening.experimentWith, Zkc.Protocols.Sumcheck.FactorOpening.terminal, Zkc.Protocols.Sumcheck.FactorOpening.publicChecks, Zkc.Protocols.Sumcheck.FactorOpening.value, Zkc.Protocols.Sumcheck.Common.rounds, Zkc.Protocols.Sumcheck.Common.roundsWith, Zkc.Protocols.Sumcheck.Common.standardArithmetic, Zkc.Protocols.Sumcheck.Common.wireBoundary, Zkc.Protocols.Sumcheck.Common.wireEvaluate, PIR.Process.bind, terminal, publicChecks, value]))
+    (add norm tactic (by fail_if_no_progress dsimp +instances [processView, wiring, Zkc.Protocols.Sumcheck.FactorOpening.experiment, Zkc.Protocols.Sumcheck.FactorOpening.experimentWith, Zkc.Protocols.Sumcheck.FactorOpening.terminal, Zkc.Protocols.Sumcheck.FactorOpening.publicChecks, Zkc.Protocols.Sumcheck.FactorOpening.value, Zkc.Protocols.Sumcheck.Common.rounds, Zkc.Protocols.Sumcheck.Common.roundsWith, Zkc.Protocols.Sumcheck.Common.standardArithmetic, Zkc.Protocols.Sumcheck.Common.wireBoundary, Zkc.Protocols.Sumcheck.Common.wireEvaluate, PIR.Process.bind, terminal, publicChecks, value]))
     (add norm tactic (by rw [PIR.Process.bind_ite]))
     (add safe tactic (by apply PIR.Process.call_congr; intro reply))
     (add safe tactic (by rfl))
@@ -215,7 +184,7 @@ theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :
     (add 50% tactic (by fail_if_no_progress congr 1))
 
 theorem contract : VerifierContract wiring publicChecks (verifier (F := F)) :=
-  ⟨fun statement claim service => ⟨(source_expansion (F := F) statement claim service).trans
+  ⟨fun statement claim service => ⟨(process_view_eq (F := F) statement claim service).trans
     (correspondence (F := F) statement claim service)⟩⟩
 
 /-- Premises: honest abstract strategy; two independent uniform full-field coins. -/

@@ -9,7 +9,7 @@ import json
 import subprocess
 
 from snapshot import render
-from symbolic import program, indent
+from program_syntax import program, indent
 from request_support import require
 from verify import validate, VERSION
 

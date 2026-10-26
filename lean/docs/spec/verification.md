@@ -405,11 +405,15 @@ accepted by the actual imported relation.
 
 ## Contract proof and property application
 
-The bounded generator symbolically expands the selected role and proposes pure
-source and process expressions. A restricted vocabulary admits constructor and
-scalar terms, with no commands, comments, imports, macros or tactics. The reviewed
-renderer owns the Lean declarations, subject bindings, normalization proofs and
-audits. Lean checks admission and the verifier-contract equality.
+The bounded generator proposes only typed source constructors, without evaluating
+operations or selecting runtime branches. Its sole `program` proposal field uses
+a restricted constructor vocabulary, with no commands, comments, imports, macros
+or tactics. The reviewed renderer owns the Lean declarations, subject bindings,
+normalization proofs and audits. Lean's `common_process%` elaborator simplifies
+the actual admitted program's denotation by unfolding the existing interpreter,
+checks definitional equality, and emits a process view connected by `rfl`.
+It supplies no independent runtime semantics. Lean checks admission and the
+verifier-contract equality, including arbitrary replies, guards and stops.
 A separate request interpreter reconstructs the inputs, role, sites and actual
 program denotation. It checks the candidate contract against that subject and
 re-derives the requested properties. A separate relation-subject check does the
