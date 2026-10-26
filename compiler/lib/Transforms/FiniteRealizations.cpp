@@ -321,7 +321,8 @@ class Realizer {
         body.setPrivate();
         body.setNoInline(true);
         body->setAttr("runtime.region", builder.getUnitAttr());
-        body.addEntryBlock();
+        builder.createBlock(&body.getBody(), body.getBody().end(), arguments,
+                            SmallVector<Location>(arguments.size(), loc));
         regionReturns[body] = outputs.size();
         result.bodies.push_back(body);
         return body;

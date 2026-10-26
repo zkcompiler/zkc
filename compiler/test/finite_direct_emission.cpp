@@ -1,14 +1,17 @@
+#include "../lib/Transforms/FiniteVerification.h"
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "../lib/Transforms/ScopedCandidate.h"
+#include "../lib/Transforms/ScopedPreparation.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
-#include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Finite.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -25,16 +28,28 @@ module { "protocol.module"() ({
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- func.func private @step(%a:!F,%b:!F,%item:!F,%xs:!V,%copy:!V,%factor:!F,%enabled:i1)->(!F,!F) {
-   func.return %b,%factor : !F,!F
+ func.func private @step(%scope:!runtime.scope,%a:!F,%b:!F,%item:!F,%xs:!V,%copy:!V,%factor:!F,%enabled:i1)->!exec.outcome<(!F,!F)> attributes {no_inline,runtime.origin=["step",[]]} {
+   %r = "exec.returned"(%b,%factor) : (!F,!F)->!exec.outcome<(!F,!F)>
+   func.return %r : !exec.outcome<(!F,!F)>
  }
- func.func private @predicate(%item:!F,%xs:!V,%copy:!V,%factor:!F,%enabled:i1)->i1 {
-   func.return %enabled : i1
+ func.func private @predicate(%scope:!runtime.scope,%item:!F,%xs:!V,%copy:!V,%factor:!F,%enabled:i1)->!exec.outcome<(i1)> attributes {no_inline,runtime.origin=["predicate",[]]} {
+   %r = "exec.returned"(%enabled) : (i1)->!exec.outcome<(i1)>
+   func.return %r : !exec.outcome<(i1)>
+ }
+ func.func @work(%scope:!runtime.scope,%xs:!V,%a:!F,%b:!F,%enabled:i1)->!exec.outcome<(!F,!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %r = "exec.fold"(%scope,%xs,%a,%b,%xs,%a,%enabled) {domain=@items,step=@step,predicate=@predicate,site="direct"} : (!runtime.scope,!V,!F,!F,!V,!F,i1)->!exec.outcome<(!F,!F)>
+   "exec.dispatch"(%r)[^done,^failed] : (!exec.outcome<(!F,!F)>)->()
+ ^done(%a1:!F,%b1:!F):
+   %result = "exec.returned"(%a1,%b1) : (!F,!F)->!exec.outcome<(!F,!F)>
+   func.return %result : !exec.outcome<(!F,!F)>
+ ^failed(%cause:!exec.stop):
+   %failed = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<(!F,!F)>
+   func.return %failed : !exec.outcome<(!F,!F)>
  }
  "protocol.func"() ({ ^entry(%xs:!V,%a:!F,%b:!F,%enabled:i1):
-   %r:2 = "algebra.finite_fold"(%xs,%a,%b,%xs,%a,%enabled) {domain=@items,step=@step,predicate=@predicate} : (!V,!F,!F,!V,!F,i1)->(!F,!F)
+   %r:2 = "protocol.local_call"(%xs,%a,%b,%enabled) {callee=@work,role="P",site="work"} : (!V,!F,!F,i1)->(!F,!F)
    "protocol.return"(%r#0,%r#1) : (!F,!F)->()
- }) {sym_name="main",function_type=(!V,!F,!F,i1)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(!V,!F,!F,i1)->(!F,!F),roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 const char *rangeAliasSource = R"mlir(
@@ -50,7 +65,7 @@ module { "protocol.module"() ({
  "protocol.func"() ({ ^entry(%bound:ui64,%seed:!F):
    %r = "algebra.finite_fold"(%bound,%bound,%seed,%seed) {domain=@items,step=@step} : (ui64,ui64,!F,!F)->!F
    "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(ui64,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
+ }) {sym_name="main",origin=["main",[]],function_type=(ui64,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
@@ -66,20 +81,11 @@ void lower(ModuleOp module) {
   passes.addPass(protocol::createLowerMathPass({false, false}));
   require(succeeded(passes.run(module)), "direct lowering failed");
 }
-Operation *expression(ModuleOp module) {
-  Operation *result = nullptr;
-  module.walk([&](Operation *op) {
-    if (finite::isComputation(op) && !finite::isDeclaration(op))
-      result = op;
-  });
-  require(result, "missing expression");
-  return result;
-}
 struct Insertions : OpBuilder::Listener {
   unsigned operations = 0, blocks = 0, functions = 0, temporary = 0;
   void notifyOperationInserted(Operation *op, OpBuilder::InsertPoint) override {
     ++operations;
-    functions += isa<local::FuncOp>(op);
+    functions += isa<func::FuncOp>(op);
     auto name = SymbolTable::getSymbolName(op);
     temporary += name && name.getValue().starts_with("_finite_expression_");
   }
@@ -87,6 +93,116 @@ struct Insertions : OpBuilder::Listener {
     ++blocks;
   }
 };
+// The callbacks in this fixture only forward arguments. Interpret their
+// immutable returned payload directly, without consulting emitted bindings,
+// the realizer's environments, or its recipe selections.
+FailureOr<finite::ScopedCallbackResult> forward(func::FuncOp helper,
+                                                ValueRange args) {
+  if (!helper.getBody().hasOneBlock() ||
+      helper.front().getOperations().size() != 2)
+    return failure();
+  auto returned = dyn_cast<exec::ReturnOp>(helper.front().front());
+  auto end = dyn_cast<func::ReturnOp>(helper.front().back());
+  if (!returned || !end || end.getNumOperands() != 1 ||
+      end.getOperand(0) != returned->getResult(0))
+    return failure();
+  SmallVector<Value> results;
+  for (Value value : returned->getOperands()) {
+    auto formal = dyn_cast<BlockArgument>(value);
+    if (!formal || formal.getOwner() != &helper.front() ||
+        formal.getArgNumber() == 0 || formal.getArgNumber() > args.size())
+      return failure();
+    results.push_back(args[formal.getArgNumber() - 1]);
+  }
+  return finite::ScopedCallbackResult{std::move(results), false};
+}
+struct DirectBody {
+  OwningOpRef<ModuleOp> module;
+  func::FuncOp function;
+  SmallVector<Value> inputs, emitted;
+  Insertions insertions;
+  mathematical::RealizationWork work;
+  uint64_t construction = 1000000, siteBytes = 16 * 1024 * 1024;
+  std::optional<CapacityCause> capacity;
+
+  explicit DirectBody(exec::FoldOp source) {
+    auto *context = source.getContext();
+    auto location = source.getLoc();
+    module = ModuleOp::create(location);
+    OpBuilder builder(context, &insertions);
+    builder.setInsertionPointToEnd(module->getBody());
+    auto output = protocol_ir::ProtocolModuleOp::create(
+        builder, location, protocol_ir::Profile::Exec);
+    output.getBody().emplaceBlock();
+    builder.setInsertionPointToEnd(&output.getBody().front());
+    SmallVector<Value> unique;
+    for (Value value : source.getInputs())
+      if (!llvm::is_contained(unique, value))
+        unique.push_back(value);
+    SmallVector<Type> types{runtime::ScopeType::get(context)};
+    llvm::append_range(types, ValueRange(unique).getTypes());
+    function = func::FuncOp::create(
+        builder, location, "direct_test",
+        builder.getFunctionType(types, source->getResultTypes()));
+    function.setNoInline(true);
+    function->setAttr(
+        "runtime.origin",
+        builder.getArrayAttr(
+            {builder.getStringAttr("direct_test"), builder.getArrayAttr({})}));
+    auto *block = function.addEntryBlock();
+    builder.setInsertionPointToEnd(block);
+    IRMapping arguments;
+    arguments.map(unique, block->getArguments().drop_front());
+    for (Value value : source.getInputs())
+      inputs.push_back(arguments.lookup(value));
+    auto callback = [](func::FuncOp helper, ValueRange arguments, StringRef,
+                       exec::ScopedExecutionBuilder &) {
+      return forward(helper, arguments);
+    };
+    exec::ScopedExecutionBuilder control(builder, function);
+    // Reset setup counts: only realizer insertions are under observation.
+    insertions.operations = insertions.blocks = insertions.functions =
+        insertions.temporary = 0;
+    finite::ScopedEmissionBudget budget{construction, siteBytes, capacity};
+    auto result = finite::realizeScopedExpression(
+        source, inputs, builder, control, callback, work, {false, false},
+        nullptr, {}, &budget);
+    require(succeeded(result), "direct scoped emission failed");
+    emitted = std::move(*result);
+    control.returned(emitted);
+  }
+
+  bool corresponds(exec::FoldOp source) {
+    // Every invocation reads a fresh immutable view, including after mutation.
+    auto view = take(mathematical::ScopedCandidate::read(unit(*module)));
+    finite::VerificationLimits limits;
+    auto reader = [](func::FuncOp helper, ValueRange arguments, StringRef,
+                     Operation *&) { return forward(helper, arguments); };
+    limits.candidate = view.get();
+    limits.callback = reader;
+    limits.finiteSite = source.getSite();
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    auto pure = [](Operation *, ValueRange,
+                   Operation *&) -> FailureOr<SmallVector<Value>> {
+      return failure();
+    };
+    auto *cursor = view->first(&function.front());
+    auto checked =
+        finite::verifyExpression(source, inputs, cursor, pure,
+                                 SymbolTable::getNearestSymbolTable(source),
+                                 limits, outcome, {false, false});
+    return succeeded(checked) && *checked == emitted && cursor &&
+           isa<exec::ReturnOp>(cursor) &&
+           cursor->getOperands() == ValueRange(emitted) && !view->next(cursor);
+  }
+};
+exec::FoldOp fold(ModuleOp module) {
+  exec::FoldOp result;
+  module.walk([&](exec::FoldOp op) { result = op; });
+  require(bool(result), "missing scoped fold");
+  return result;
+}
 } // namespace
 int main(int argc, char **argv) {
   bool measure = argc == 2 && StringRef(argv[1]) == "--measure";
@@ -96,184 +212,99 @@ int main(int argc, char **argv) {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
-  cases.run(
-      "direct inline aliases use tracked blocks and fresh reader ABI", [&] {
-        auto source = parseSourceString<ModuleOp>(aliasSource, &context);
-        require(bool(source), "alias source admission failed");
-        prepare(*source);
-        auto candidate = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));
-        auto *original = expression(*source);
-        // The public emitter operates inside an existing Local candidate,
-        // after the parent phase has assigned an occurrence site.
-        SmallVector<Value> unique;
-        for (Value value : original->getOperands())
-          if (!llvm::is_contained(unique, value))
-            unique.push_back(value);
-        OpBuilder setup(&context);
-        setup.setInsertionPointToEnd(&unit(*candidate).getBody().front());
-        auto function = local::FuncOp::create(
-            setup, original->getLoc(), "direct_test",
-            setup.getFunctionType(ValueRange(unique).getTypes(),
-                                  original->getResultTypes()));
-        function->setAttr(
-            "logical_origin",
-            setup.getArrayAttr(
-                {setup.getStringAttr("direct_test"), setup.getArrayAttr({})}));
-        auto *block = function.addEntryBlock();
-        setup.setInsertionPointToEnd(block);
-        IRMapping mapping;
-        for (auto [before, after] : llvm::zip(unique, block->getArguments()))
-          mapping.map(before, after);
-        auto *op = setup.clone(*original, mapping);
-        auto after = local::ReturnOp::create(setup, original->getLoc(),
-                                             op->getResults());
-        SmallVector<Value> inputs(op->getOperands());
-        op->setAttr("site", StringAttr::get(&context, "direct"));
-        Insertions listener;
-        OpBuilder builder(&context, &listener);
-        builder.setInsertionPoint(op);
-        mathematical::RealizationWork work;
-        auto emitted = finite::realizeExpression(op, inputs, builder,
-                                                 {false, false}, &work);
-        require(succeeded(emitted), "direct body emission failed");
-        Operation *begin = &block->front();
-        IRRewriter rewriter(&context);
-        rewriter.replaceOp(op, *emitted);
-        require(
-            listener.operations && listener.blocks >= 3 &&
-                !listener.functions && !listener.temporary,
+  cases.run("direct aliases preserve scoped state and tracked outlines", [&] {
+    auto source = parseSourceString<ModuleOp>(aliasSource, &context);
+    require(bool(source), "alias source admission failed");
+    auto original = fold(*source);
+    DirectBody candidate(original);
+    unsigned blocks = 0, functions = 0;
+    candidate.module->walk([&](func::FuncOp function) {
+      ++functions;
+      blocks += function.getBody().getBlocks().size();
+    });
+    // The entry function and its entry block existed before observation.
+    require(candidate.insertions.operations && blocks > 3 && functions >= 4 &&
+                candidate.insertions.blocks == blocks - 1 &&
+                candidate.insertions.functions == functions - 1 &&
+                !candidate.insertions.temporary,
             "emission bypassed listener or constructed a temporary function");
-        require(work.helperOperations < 100000 && succeeded(verify(*candidate)),
-                "direct candidate lost shared work or isolated ownership");
-        // This fixture's callbacks only forward formals. Interpret the
-        // immutable source return directly, never the emitter's environments or
-        // selections.
-        auto reader = [&](Operation *helper, ValueRange args,
-                          Operation *&) -> FailureOr<SmallVector<Value>> {
-          auto &body = helper->getRegion(0).front();
-          if (body.getOperations().size() != 1 ||
-              !isa<func::ReturnOp>(body.back()))
-            return failure();
-          SmallVector<Value> results;
-          for (Value value : body.back().getOperands()) {
-            auto formal = dyn_cast<BlockArgument>(value);
-            if (!formal || formal.getOwner() != &body ||
-                formal.getArgNumber() >= args.size())
-              return failure();
-            results.push_back(args[formal.getArgNumber()]);
-          }
-          return results;
-        };
-        auto *cursor = begin;
-        auto checked = finite::verifyExpression(original, inputs, cursor,
-                                                reader, unit(*source));
-        require(succeeded(checked) && *checked == *emitted && cursor == after,
-                "independent inline reader refused direct body");
-        local::LocalForOp loop;
-        candidate->walk([&](local::LocalForOp value) {
-          if (value->getNumResults() == 2)
-            loop = value;
-        });
-        require(bool(loop), "missing state loop");
-        // Two states stay separate from one shared invariant seed capture.
-        require(loop->getNumOperands() == 8 &&
-                    loop->getRegion(0).front().getNumArguments() == 7,
-                "aliased invariant captures were not canonicalized");
-        require(loop->getOperand(2) == inputs[1] &&
-                    loop->getOperand(3) == inputs[2],
-                "zero-trip state no longer uses exact ordered seeds");
-        loop->setOperand(2, inputs[2]);
-        require(succeeded(verify(*candidate)), "changed seed is not admitted");
-        cursor = begin;
-        require(failed(finite::verifyExpression(original, inputs, cursor,
-                                                reader, unit(*source))),
-                "changed zero-trip seed escaped correspondence");
-        loop->setOperand(2, inputs[1]);
-        local::LocalIfOp branch;
-        loop.walk([&](local::LocalIfOp value) { branch = value; });
-        require(bool(branch), "missing predicate branch");
-        auto &returned = branch->getRegion(0).front().back();
-        Value first = returned.getOperand(0), second = returned.getOperand(1);
-        returned.setOperands({second, first});
-        require(succeeded(verify(*candidate)),
-                "return permutation is not admitted");
-        cursor = begin;
-        require(failed(finite::verifyExpression(original, inputs, cursor,
-                                                reader, unit(*source))),
-                "same-typed state permutation escaped actual inline reading");
-      });
+    require(candidate.construction < 1000000 &&
+                candidate.siteBytes < 16 * 1024 * 1024 && !candidate.capacity &&
+                succeeded(verify(*candidate.module)),
+            "direct candidate lost shared work or scoped ownership");
+    require(candidate.corresponds(original),
+            "fresh reader refused direct body");
+    auto view =
+        take(mathematical::ScopedCandidate::read(unit(*candidate.module)));
+    exec::RangeOp loop;
+    candidate.module->walk([&](exec::RangeOp op) {
+      if (view->get(op)->outputs.size() == 2)
+        loop = op;
+    });
+    require(bool(loop), "missing state loop");
+    auto *step = view->get(loop);
+    // Two states stay separate from the shared invariant seed capture.
+    require(step->inputs.size() == 8 &&
+                view->arguments(view->body(loop, 0)).size() == 7,
+            "aliased invariant captures were not canonicalized");
+    require(step->inputs[2] == candidate.inputs[1] &&
+                step->inputs[3] == candidate.inputs[2],
+            "zero-trip state no longer uses exact ordered seeds");
+    runtime::BorrowTransferOp transfer;
+    candidate.function.walk([&](runtime::BorrowTransferOp op) {
+      if (op->getNumOperands() == 3)
+        transfer = op;
+    });
+    require(bool(transfer), "missing initial state transfer");
+    // The transfer's scope is followed by the actual ordered state payload.
+    view.reset();
+    transfer->setOperand(1, candidate.inputs[2]);
+    require(succeeded(verify(*candidate.module)), "changed seed is malformed");
+    require(!candidate.corresponds(original),
+            "changed zero-trip seed escaped reader");
+    transfer->setOperand(1, candidate.inputs[1]);
+    view = take(mathematical::ScopedCandidate::read(unit(*candidate.module)));
+    exec::TestOp branch;
+    auto *body = view->body(loop, 0);
+    cast<func::FuncOp>(body->getParentOp()).walk([&](exec::TestOp op) {
+      branch = op;
+    });
+    require(bool(branch), "missing predicate branch");
+    exec::CompleteOp returned;
+    cast<func::FuncOp>(view->body(branch, 0)->getParentOp())
+        .walk([&](exec::CompleteOp op) { returned = op; });
+    require(bool(returned) && returned->getNumOperands() == 3,
+            "missing predicate state completion");
+    Value first = returned->getOperand(1), second = returned->getOperand(2);
+    view.reset();
+    returned->setOperand(1, second);
+    returned->setOperand(2, first);
+    require(succeeded(verify(*candidate.module)),
+            "state permutation is malformed");
+    require(!candidate.corresponds(original),
+            "same-typed permutation escaped reader");
+  });
   cases.run(
-      "source helpers and emitted bindings have independent symbol roots", [&] {
+      "source callbacks and emitted bindings have independent roots", [&] {
         auto source = parseSourceString<ModuleOp>(aliasSource, &context);
         require(bool(source), "separate source admission failed");
-        prepare(*source);
-        auto *original = expression(*source);
-        original->setAttr("site", StringAttr::get(&context, "separate"));
         std::string before;
         llvm::raw_string_ostream(before) << *source;
-
-        SmallVector<Value> unique;
-        for (Value value : original->getOperands())
-          if (!llvm::is_contained(unique, value))
-            unique.push_back(value);
-        OwningOpRef<ModuleOp> candidate(ModuleOp::create(original->getLoc()));
-        OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
-        auto output = protocol_ir::ProtocolModuleOp::create(
-            builder, original->getLoc(), protocol_ir::Profile::Exec);
-        output.getBody().emplaceBlock();
-        builder.setInsertionPointToEnd(&output.getBody().front());
-        auto function = local::FuncOp::create(
-            builder, original->getLoc(), "separate",
-            builder.getFunctionType(ValueRange(unique).getTypes(),
-                                    original->getResultTypes()));
-        function->setAttr(
-            "logical_origin",
-            builder.getArrayAttr(
-                {builder.getStringAttr("separate"), builder.getArrayAttr({})}));
-        auto *block = function.addEntryBlock();
-        builder.setInsertionPointToEnd(block);
-        IRMapping arguments;
-        arguments.map(unique, block->getArguments());
-        SmallVector<Value> inputs;
-        for (Value value : original->getOperands())
-          inputs.push_back(arguments.lookup(value));
-        mathematical::RealizationWork work;
-        auto emitted = finite::realizeExpression(original, inputs, builder,
-                                                 {false, false}, &work);
-        require(succeeded(emitted), "separate-root finite emission failed");
-        auto after =
-            local::ReturnOp::create(builder, original->getLoc(), *emitted);
-        require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+        auto original = fold(*source);
+        DirectBody candidate(original);
+        require(succeeded(kernel::verifyRecipeOutput(*candidate.module)),
                 "separate-root output is malformed");
-        require(!SymbolTable::lookupSymbolIn(output, "step") &&
-                    !SymbolTable::lookupSymbolIn(output, "items"),
-                "emission copied source helper declarations into the target");
-        auto reader = [&](Operation *helper, ValueRange args,
-                          Operation *&) -> FailureOr<SmallVector<Value>> {
-          auto &body = helper->getRegion(0).front();
-          if (body.getOperations().size() != 1 ||
-              !isa<func::ReturnOp>(body.back()))
-            return failure();
-          SmallVector<Value> results;
-          for (Value value : body.back().getOperands()) {
-            auto formal = dyn_cast<BlockArgument>(value);
-            if (!formal || formal.getOwner() != &body ||
-                formal.getArgNumber() >= args.size())
-              return failure();
-            results.push_back(args[formal.getArgNumber()]);
-          }
-          return results;
-        };
-        Operation *cursor = &block->front();
-        auto checked = finite::verifyExpression(original, inputs, cursor,
-                                                reader, unit(*source));
-        require(succeeded(checked) && *checked == *emitted && cursor == after,
-                "independent reader conflated source and target symbol roots");
+        require(
+            !SymbolTable::lookupSymbolIn(unit(*candidate.module), "step") &&
+                !SymbolTable::lookupSymbolIn(unit(*candidate.module), "items"),
+            "emission copied source declarations into its target");
+        require(candidate.corresponds(original),
+                "reader conflated source and target roots");
         std::string unchanged;
         llvm::raw_string_ostream(unchanged) << *source;
         require(before == unchanged, "direct emission mutated its source");
       });
-  cases.run("aliased range bounds canonicalize admission branch captures", [&] {
+  cases.run("aliased range bounds canonicalize admission captures", [&] {
     auto source = parseSourceString<ModuleOp>(rangeAliasSource, &context);
     require(bool(source), "aliased range source refused");
     prepare(*source);
@@ -286,44 +317,57 @@ int main(int argc, char **argv) {
     require(succeeded(kernel::lowerKernels(*candidate)) &&
                 succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
             "aliased range recipes did not correspond");
+    auto view = take(mathematical::ScopedCandidate::read(unit(*candidate)));
     unsigned branches = 0;
-    candidate->walk([&](local::LocalIfOp branch) {
+    candidate->walk([&](exec::TestOp branch) {
       ++branches;
-      require(branch->getNumOperands() == 2 &&
-                  branch->getRegion(0).front().getNumArguments() == 1,
+      require(view->get(branch)->inputs.size() == 2 &&
+                  view->arguments(view->body(branch, 0)).size() == 1,
               "aliased admission bounds became duplicate captures");
     });
     require(branches == 1, "range admission disappeared");
   });
-  cases.run("zero-state Local stop survives declaration body emission", [&] {
+  cases.run("zero-state callback stop survives scoped preparation", [&] {
     auto bytes = llvm::MemoryBuffer::getFile(std::string(ZKC_FINITE_FIXTURES) +
                                              "/unit-state.mlir");
     require(bool(bytes), "unit-state fixture missing");
     auto source = parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
     require(bool(source), "zero-state source admission failed");
-    auto candidate = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));
-    require(succeeded(finite::realizeLocals(*candidate, {false, false})) &&
-                succeeded(finite::verifyRealizations(*source, *candidate)),
-            "zero-state stop realization or independent reading failed");
-    auto function = dyn_cast_or_null<local::FuncOp>(
-        SymbolTable::lookupSymbolIn(unit(*candidate), "fold"));
-    require(bool(function) && function.getFunctionType().getNumResults() == 0,
-            "zero-state fold became a collect");
-    local::ApplyOp step;
-    function.walk([&](local::ApplyOp call) {
-      if (call.getCallee() == "step")
-        step = call;
+    mathematical::RealizationWork work;
+    uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> capacity;
+    auto candidate =
+        protocol::prepareScopedFinite(*source, work, copy, siteBytes, capacity);
+    require(bool(candidate) &&
+                succeeded(protocol::verifyScopedFinitePreparation(
+                    *source, *candidate, work)),
+            "zero-state preparation or independent reading failed");
+    exec::RejectOp stop;
+    candidate->walk([&](exec::RejectOp op) {
+      if (op->getParentOfType<func::FuncOp>()->hasAttr("runtime.region"))
+        stop = op;
     });
-    require(bool(step), "effectful zero-result step was dropped");
-    // The remaining loop still forms after dropping the zero-result call,
-    // but correspondence must observe that the terminal effect disappeared.
-    step.erase();
+    require(bool(stop), "effectful zero-result callback was dropped");
+    auto body = stop->getParentOfType<func::FuncOp>();
+    require(
+        cast<exec::OutcomeType>(body.getResultTypes()[0]).getPayload().empty(),
+        "zero-state callback acquired a value result");
+    // Replace stopped execution with a successful zero-result completion.
+    // Both bodies form, but only the original preserves the reached effect.
+    body.getBody().dropAllReferences();
+    body.getBody().getBlocks().clear();
+    OpBuilder builder(&context);
+    builder.setInsertionPointToEnd(body.addEntryBlock());
+    exec::ScopedExecutionBuilder control(builder, body);
+    control.complete({});
     require(succeeded(verify(*candidate)),
-            "zero-result call removal did not form");
+            "zero-result completion did not form");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(finite::verifyRealizations(*source, *candidate)),
-            "zero-state stop was erased without correspondence refusal");
+    mathematical::RealizationWork checking;
+    require(failed(protocol::verifyScopedFinitePreparation(*source, *candidate,
+                                                           checking)),
+            "zero-state stop was erased without refusal");
   });
   for (StringRef fixture :
        {"total-state", "total-predicate", "total-collect", "nested-total"})
@@ -376,7 +420,7 @@ int main(int argc, char **argv) {
                      << " correspondence_p95_us=" << correspondence[29] << '\n';
       }
       unsigned temporary = 0;
-      candidate->walk([&](local::FuncOp function) {
+      candidate->walk([&](func::FuncOp function) {
         temporary += function.getSymName().starts_with("_finite_expression_");
       });
       require(!temporary, "temporary emission function retained");

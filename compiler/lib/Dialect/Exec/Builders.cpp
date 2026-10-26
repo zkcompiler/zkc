@@ -34,11 +34,10 @@ NamedAttribute ScopedExecutionBuilder::text(StringRef name, StringRef value) {
   return builder.getNamedAttr(name, builder.getStringAttr(value));
 }
 Block *ScopedExecutionBuilder::block(TypeRange types) {
-  auto *block = new Block;
-  function.getBody().push_back(block);
-  for (auto type : types)
-    block->addArgument(type, location);
-  return block;
+  OpBuilder::InsertionGuard guard(builder);
+  return builder.createBlock(&function.getBody(), function.getBody().end(),
+                             types,
+                             SmallVector<Location>(types.size(), location));
 }
 Block *ScopedExecutionBuilder::failed() {
   if (!failure) {
