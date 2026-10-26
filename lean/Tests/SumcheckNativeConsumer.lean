@@ -67,8 +67,8 @@ theorem zero_budget (values : List F) (claim : F) (rounds : Nat) (bytes : List U
       (ZkcExamples.Construction.SumcheckProof.inputs values claim rounds) initial bytes) =
         (.stopped .exhausted, true) := by
   have exactRun := SumcheckProof.executable_metered (m := Id) oracle decode 0 values claim rounds initial bytes
-  rw [SumcheckFamily.lowered_eq] at exactRun
-  simpa [SumcheckFamily.lowered, SumcheckShape.code, DomainVM.metered, DomainVM.meteredK,
+  rw [SumcheckCharges.lowered_eq] at exactRun
+  simpa [SumcheckCharges.lowered, SumcheckShape.code, DomainVM.metered, DomainVM.meteredK,
     DomainVM.meteredStep, Functor.map, Pure.pure, Id.instMonad] using exactRun
 
 end Tests.SumcheckNativeConsumer

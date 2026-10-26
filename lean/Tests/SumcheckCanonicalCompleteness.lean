@@ -63,17 +63,17 @@ theorem variable_budget (maximum rounds : Nat) (small : maximum < 64)
     (proof : Proof F G) (shaped : values.length = 2 ^ rounds) :
     DomainVM.Sufficient ZkcExamples.Construction.SumcheckProof.program
       ZkcExamples.Construction.SumcheckProof.context SumcheckCharges.cost (68 + 59 * rounds)
-      (SumcheckFamily.lowered maximum) (frame values claim rounds history) proof :=
-  SumcheckFamily.sufficient_family maximum small _ values claim rounds history proof shaped
-    (by rw [SumcheckFamily.charge_eq])
+      (SumcheckCharges.lowered maximum) (frame values claim rounds history) proof :=
+  SumcheckCharges.sufficient_family maximum small _ values claim rounds history proof shaped
+    (by rw [SumcheckCharges.charge_eq])
 
 /-- Insufficient budget stops before even the empty-point helper. -/
 theorem zero_budget (oracle : History F G → F) (values : List F) (claim : F)
     (rounds : Nat) (proof : Proof F G) :
     run oracle 0 values claim rounds proof = (.stopped .exhausted, proof) := by
   unfold run
-  rw [SumcheckFamily.lowered_eq]
-  simp [SumcheckFamily.lowered, SumcheckShape.code, DomainVM.metered,
+  rw [SumcheckCharges.lowered_eq]
+  simp [SumcheckCharges.lowered, SumcheckShape.code, DomainVM.metered,
     DomainVM.meteredK, DomainVM.meteredStep]
   rfl
 
@@ -101,8 +101,19 @@ theorem false_claim (oracle : History F G → F) (value claim : F) (wrong : valu
     Origin.withoutCoordinates [] oracle SumcheckCharges.cost 68 SumcheckProof.lowered
     (frame [value] claim 0 []) proof _
     (SumcheckCharges.sufficient (F := F) (G := G) 68 [value] claim 0 [] proof (by simp)
-      (by rw [SumcheckFamily.charge_eq]))
-    (SumcheckDomainHonest.of_root_passes (F := F) (G := G) oracle [] [value] claim 0 [] proof _ passes)
+      (by rw [SumcheckCharges.charge_eq]))
+    (by
+      have instructions : Code.instructions SumcheckProof.lowered.code =
+          ZkcExamples.Construction.SumcheckProof.participant.instructions := by
+        rw [← Code.instructionList_eq]
+        decide +kernel
+      have returned : SumcheckProof.lowered.returned =
+          ZkcExamples.Construction.SumcheckProof.participant.returned := by kernel_rfl
+      rw [instructions, returned]
+      apply DomainVM.Passes.participant_observation
+      change DomainVM.Passes Origin.withoutCoordinates [] oracle (rootProjection [value] claim 0 []) _ _
+      rw [root_projection]
+      exact passes)
   rcases good with ⟨rfl, rfl⟩
   exact executed
 

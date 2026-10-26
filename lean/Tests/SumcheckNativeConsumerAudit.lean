@@ -243,6 +243,9 @@ import all ZkcExamples.Executable.SumcheckCharges
 import all ZkcExamples.Executable.SumcheckCompleteness
 import all ZkcExamples.Executable.SumcheckDomainHonest
 import all ZkcExamples.Executable.SumcheckFamily
+import all ZkcExamples.Executable.SumcheckFamilyBudget
+import all ZkcExamples.Executable.SumcheckFamilySource
+import all ZkcExamples.Executable.SumcheckFamilyResources
 import all ZkcExamples.Executable.SumcheckHelpers
 import all ZkcExamples.Executable.SumcheckMessages
 import all ZkcExamples.Executable.SumcheckMetadata
@@ -370,9 +373,9 @@ run_cmd do
     `ZkcExamples.Executable.SumcheckProof.executable_transform_prunes,
     `ZkcExamples.Executable.SumcheckFamily.ProgramShape.sufficient,
     `ZkcExamples.Executable.SumcheckFamily.ProgramShape.honest_success,
-    `ZkcExamples.Executable.SumcheckFamily.programContract,
-    `ZkcExamples.Executable.SumcheckFamily.sufficient_family,
-    `ZkcExamples.Executable.SumcheckFamily.sufficient,
+    `ZkcExamples.Executable.SumcheckCharges.programContract,
+    `ZkcExamples.Executable.SumcheckCharges.sufficient_family,
+    `ZkcExamples.Executable.SumcheckCharges.sufficient,
     `ZkcExamples.Executable.SumcheckCharges.sufficient,
     `ZkcExamples.Executable.SumcheckDomainHonest.observation_passes,
     `ZkcExamples.Executable.SumcheckCompleteness.honest_metered,

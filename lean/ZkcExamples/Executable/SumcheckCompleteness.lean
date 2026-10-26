@@ -116,28 +116,9 @@ theorem honest_accepted (oracle : History F G → F)
       ZkcExamples.Construction.SumcheckProof.acceptancePosition
       (ZkcExamples.Construction.SumcheckProof.inputs values values.sum rounds) initial
       (honestBytes encode binding (honestRounds oracle initial values rounds)) = true := by
-  obtain ⟨history, suffix, executed, mapped⟩ := honest_metered_bytes oracle decode encode roundtrip bounded
-    budget binding bindingLength values rounds admitted shaped initial fits
-  rw [DomainVM.checked_validate_metered (m := Id) ZkcExamples.Construction.SumcheckProof.program context initial oracle
-    installed ZkcExamples.Construction.SumcheckProof.participant SumcheckProof.validator decode budget
-    SumcheckProof.domain_prepared SumcheckProof.lowered SumcheckProof.nativeScope SumcheckProof.native_checked
-    binding ZkcExamples.Construction.SumcheckProof.acceptancePosition
-    (ZkcExamples.Construction.SumcheckProof.inputs values values.sum rounds)
-    (honestBytes encode binding (honestRounds oracle initial values rounds))
-    (SumcheckProof.admitted values values.sum rounds) (SumcheckProof.nominalInputs values values.sum rounds)
-    (SumcheckProof.embedded values values.sum rounds), honest_header encode binding bindingLength,
-    ite_eq_left rfl]
-  dsimp only [SumcheckCharges.cost, SumcheckFamily.cost, SumcheckCharges.context,
-    SumcheckProof.nominalInputs, ZkcExamples.Construction.SumcheckDomainConnection.frame] at executed ⊢
-  simp only [List.cons_append, List.nil_append]
-  rw [executed]
-  change DomainVM.byteAcceptance ZkcExamples.Construction.SumcheckProof.acceptancePosition
-    (DomainVM.nativeObservation ZkcExamples.Construction.SumcheckProof.context.suite Origin.withoutCoordinates initial
-      (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], [])) = true
-  simp [DomainVM.byteAcceptance, DomainVM.nativeObservation, Executable.observation,
-    Uniform.DomainAdapter.readbackOutcome, Uniform.DomainAdapter.readbackValues,
-    Uniform.DomainAdapter.readbackValue, Uniform.DomainAdapter.readbackData,
-    mapped, selectedTrue,
-    ZkcExamples.Construction.SumcheckProof.acceptancePosition_eq]
+  rw [ZkcExamples.Construction.SumcheckProof.acceptancePosition_eq]
+  apply SumcheckFamily.honest_accepted SumcheckDomainHonest.artifact 2 SumcheckDomainHonest.realization
+    oracle decode encode roundtrip bounded budget binding bindingLength values rounds admitted shaped initial
+  simpa only [SumcheckFamily.Artifact.charge, SumcheckCharges.charge_eq] using fits
 
 end ZkcExamples.Executable.SumcheckCompleteness
