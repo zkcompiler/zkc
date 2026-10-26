@@ -4,7 +4,7 @@ meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
 public import Zkc.Construction.FiatShamir
-public import Zkc.Source.Structured.Evaluation
+public import Zkc.Source.Structured.DomainEvaluation
 public import Zkc.Source.Structured.Participant
 
 @[expose] public section
@@ -110,33 +110,36 @@ def closedOutcome {A : Type} : PIR.Process Structured.closedInterface A → PIR.
 namespace Calculation
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-/-- The structured meaning of a carrier calculation. -/
-def evaluate : (calculation : Calculation) → Values (Structured.assignment F G) calculation.op.arguments →
-    PIR.Outcome (Values (Structured.assignment F G) calculation.op.results)
-  | .indexConstant value, .nil => .returned (.cons value .nil)
-  | .indexEqual, .cons a (.cons b .nil) => .returned (.cons (decide (a = b)) .nil)
-  | .fieldConstant _ value, .nil => .returned (.cons (value : F) .nil)
-  | .fieldAdd _, .cons a (.cons b .nil) => .returned (.cons (a + b) .nil)
-  | .fieldSubtract _, .cons a (.cons b .nil) => .returned (.cons (a - b) .nil)
-  | .fieldMultiply _, .cons a (.cons b .nil) => .returned (.cons (a * b) .nil)
-  | .fieldEmbed _ _, .cons value .nil => .returned (.cons value .nil)
-  | .fieldEqual _, .cons a (.cons b .nil) => .returned (.cons (decide (a = b)) .nil)
-  | .groupIdentity _, .nil => .returned (.cons 0 .nil)
-  | .groupAdd _, .cons a (.cons b .nil) => .returned (.cons (a + b) .nil)
-  | .groupScale _ _, .cons point (.cons scalar .nil) => .returned (.cons (scalar • point) .nil)
-  | .groupEqual _, .cons a (.cons b .nil) => .returned (.cons (decide (a = b)) .nil)
-  | .booleanConstant value, .nil => .returned (.cons value .nil)
-  | .booleanAnd, .cons a (.cons b .nil) => .returned (.cons (a && b) .nil)
-  | .booleanOr, .cons a (.cons b .nil) => .returned (.cons (a || b) .nil)
-  | .booleanXor, .cons a (.cons b .nil) => .returned (.cons (xor a b) .nil)
-  | .booleanEqual, .cons a (.cons b .nil) => .returned (.cons (a == b) .nil)
-  | .booleanNotEqual, .cons a (.cons b .nil) => .returned (.cons (a != b) .nil)
-  | .select _, .cons condition (.cons yes (.cons no .nil)) =>
-      .returned (.cons (if condition then yes else no) .nil)
-  | .boundedAt _, .cons container (.cons index .nil) =>
-      match (show List F from container)[index]? with
+/-- The selected calculation is an adapter to the authoritative nominal
+operation evaluator at the uniform model. It has no separate arithmetic cases. -/
+def evaluate (calculation : Calculation)
+    (arguments : Values (Structured.assignment F G) calculation.op.arguments) :
+    PIR.Outcome (Values (Structured.assignment F G) calculation.op.results) :=
+  closedOutcome (Structured.Evaluation.operationOn (Structured.ringModel F G)
+    Structured.SiteObservations.closed [] calculation.op arguments
+    (by cases calculation <;> exact .nil))
+
+/-- Operational equations for retained executable clients, proved by the
+shared evaluator rather than a separate calculation interpreter. -/
+theorem evaluate_indexEqual (a b : Nat) :
+    (Calculation.indexEqual).evaluate (F := F) (G := G) (.cons a (.cons b .nil)) =
+      .returned (.cons (decide (a = b)) .nil) := rfl
+
+theorem evaluate_fieldEqual (domain : String) (a b : F) :
+    (Calculation.fieldEqual domain).evaluate (G := G) (.cons a (.cons b .nil)) =
+      .returned (.cons (decide (a = b)) .nil) := rfl
+
+theorem evaluate_fieldConstant (domain : String) (value : Nat) :
+    (Calculation.fieldConstant domain value).evaluate (F := F) (G := G) .nil =
+      .returned (.cons (value : F) .nil) := rfl
+
+theorem evaluate_boundedAt (domain : String) (values : List F) (index : Nat) :
+    (Calculation.boundedAt domain).evaluate (G := G) (.cons values (.cons index .nil)) =
+      match values[index]? with
       | some value => .returned (.cons value .nil)
-      | none => .stopped .refused
+      | none => .stopped .refused := by
+  simp only [evaluate, Calculation.op, Structured.Evaluation.operationOn_boundedAt]
+  cases values[index]? <;> rfl
 
 /-- The structured evaluator agrees with the carrier meaning, under every
 effect interface, site observation and helper table. -/
@@ -149,14 +152,8 @@ theorem operation_eq {I : PIR.Signature} (observations : Structured.SiteObservat
   cases calculation <;> cases bodies
   case boundedAt domain =>
     rcases arguments with _ | ⟨container, _ | ⟨index, _ | _⟩⟩
-    change (match (show List F from container)[index]? with
-      | some value => PIR.Process.done (Values.cons (Value := Structured.assignment F G)
-          (ty := .field domain) value Values.nil)
-      | none => PIR.Process.halt PIR.Stop.refused) =
-        ofOutcome (match (show List F from container)[index]? with
-          | some value => PIR.Outcome.returned (Values.cons (Value := Structured.assignment F G)
-              (ty := .field domain) value Values.nil)
-          | none => PIR.Outcome.stopped PIR.Stop.refused)
+    simp only [Calculation.op, Structured.Evaluation.operation_boundedAt,
+      evaluate, Structured.Evaluation.operationOn_boundedAt]
     cases container[index]? <;> rfl
   all_goals
     rcases arguments with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩

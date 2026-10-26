@@ -155,6 +155,20 @@ observation of a message the validator sends is the delivery of that message to
 the producer, and transcript values are computed as inert histories. Both
 meanings are written in continuation style.
 
+The retained scalar/vector calculation adapter (`Calculation.evaluate`) uses
+`Structured.Evaluation.operationOn` at `ringModel`; it has no independent
+arithmetic interpreter. `Uniform.DomainAdapter.calculate_embed` proves that
+the nominal calculation runner commutes with the partial operand embedding,
+including malformed operand refusal and stopped calculations, when result
+types belong to the retained data fragment. Nominal field identities remain
+checked, and transcript capabilities have no data embedding.
+
+This calculation equation does not identify `spec` or `ideal` with
+`Domain.participant`. Their instruction checks and observation effects differ
+on unchecked inputs. The selected scalar byte claims retain their existing
+transcript, decoder, budget and unread-proof meanings until a reached-state
+simulation and transcript correspondence justify replacing those interpreters.
+
 ## The rule
 
 In the Fiat–Shamir branch, `check context participant` walks the instructions with the current transcript

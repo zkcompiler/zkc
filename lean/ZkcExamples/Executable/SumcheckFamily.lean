@@ -194,7 +194,8 @@ theorem calculate_equal (domain : String) (x y : F) :
 theorem calculate_one (domain : String) :
     Zkc.Construction.calculate (F := F) (G := G) (.fieldConstant domain 1) [] =
       .returned [.data (.field domain 1)] := by
-  simp only [Zkc.Construction.calculate, decodeValues, Calculation.op, Structured.Op.arguments, Calculation.evaluate,
+  simp only [Zkc.Construction.calculate, decodeValues, Calculation.op, Structured.Op.arguments,
+    Calculation.evaluate_fieldConstant,
     Nat.cast_one]
   rfl
 

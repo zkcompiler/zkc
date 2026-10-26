@@ -779,7 +779,7 @@ theorem localK_metered (data : List (Value F G)) (call : String × String) :
           · have fits : s.used + 1 ≤ budget := by omega
             simp only [tick, ite_true, fits, idealStep, Construction.read, List.mapM_nil, Option.pure_def,
               Calculation.op, Structured.Op.arguments, decodeValues, Calculation.evaluate,
-              Zkc.Construction.calculate]
+              Structured.Evaluation.operationOn, Construction.closedOutcome, Zkc.Construction.calculate]
             change Run.observe <$> _ = idealObservation <$> meteredK context challenge table cost budget codes'
               (env ++ [.data (.boolean value)]) proof (s.used + 1) k
             apply ih _ _ _ _ _ bodyRead

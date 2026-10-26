@@ -102,6 +102,16 @@ nonvacuity evidence remain checked against the fixed subject.
 | Authored DSL target | Imported Schnorr relation denotes discrete-log; two accepting imported verifier transcripts yield a witness accepted by that relation | Bounded scalar formula adapter and tested interface selector binding |
 | Clean | Admitted lookup/channel-free flat AIR export preserves constraints and selected source specification; native control fixture retained | Finite rows/field/ring interpretation; native agreement is differential, not decoder correctness |
 
+The retained scalar/vector construction calculations delegate to the nominal
+structured operation evaluator at `ringModel`. The partial operand adapter's
+`Uniform.DomainAdapter.calculate_embed` theorem preserves calculation returns
+and stops, including failed decodes, for its declared result fragment.
+`Executable.sound_calculation` consumes that shared operation equation.
+This is calculation reuse; the selected executable Sumcheck byte claims still
+depend on the retained `ideal`/metered instruction interpreters and scalar
+transcript. Whole-execution and game correspondence with `Domain.participant`
+remain separate obligations.
+
 Scalar source forms include original, helper-based, reordered and Horner implementations.
 The scalar exporter inlines helpers before Lean import. Structured
 helper proofs retain the definitions and invoke checked prefix-linking laws.

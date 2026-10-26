@@ -191,14 +191,14 @@ theorem equal_true {a b : Nat} (same : a = b) :
       .returned [.data (.boolean true)] := by
   subst same
   simp [Resolved.evaluate, Zkc.Construction.calculate, decodeValues, Value.decode, Calculation.op,
-    Op.arguments, Calculation.evaluate]
+    Op.arguments, Calculation.evaluate_indexEqual]
   rfl
 
 theorem equal_false {a b : Nat} (different : a ≠ b) :
     (Resolved.calculate .indexEqual).evaluate [(.index a : Value F G), .index b] =
       .returned [.data (.boolean false)] := by
   simp [Resolved.evaluate, Zkc.Construction.calculate, decodeValues, Value.decode, Calculation.op,
-    Op.arguments, Calculation.evaluate, different]
+    Op.arguments, Calculation.evaluate_indexEqual, different]
   rfl
 
 theorem get_returns {xs : List F} {index : Nat} (bound : index < xs.length) :
@@ -206,7 +206,7 @@ theorem get_returns {xs : List F} {index : Nat} (bound : index < xs.length) :
       [(.vector "bls12-381.fr" xs : Value F G), .index index] =
       .returned [.data (.field "bls12-381.fr" xs[index])] := by
   simp [Resolved.evaluate, Zkc.Construction.calculate, decodeValues, Value.decode, Calculation.op,
-    Op.arguments, Calculation.evaluate, bound]
+    Op.arguments, Calculation.evaluate_boundedAt, bound]
   rfl
 
 theorem split_returns {xs : List F} (positive : 0 < xs.length) (even : xs.length % 2 = 0) :
@@ -278,7 +278,7 @@ theorem fieldEqual_returns {a b : F} :
       [(.data (.field "bls12-381.fr" a) : Value F G), .data (.field "bls12-381.fr" b)] =
       .returned [.data (.boolean (decide (a = b)))] := by
   simp [Resolved.evaluate, Zkc.Construction.calculate, decodeValues, Value.decode, Calculation.op,
-    Op.arguments, Calculation.evaluate]
+    Op.arguments, Calculation.evaluate_fieldEqual]
   rfl
 
 end Operations

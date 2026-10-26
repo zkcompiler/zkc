@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Construction.Uniform.DomainAdapter
 public import Zkc.Executable.Helpers
 public import Zkc.Executable.Soundness
 public import Zkc.Source.Structured.Linking
@@ -451,7 +452,7 @@ theorem sound_calculation (table : Structured.Meanings F G) (calculation : Calcu
     (Resolved.calculate calculation).evaluate (encodeValues arguments) =
       mapOutcome encodeValues (Construction.closedOutcome
         (Evaluation.operation SiteObservations.closed table calculation.op arguments callbacks)) := by
-  rw [Calculation.operation_eq]
+  rw [Evaluation.operation_eq_operationOn, Uniform.DomainAdapter.operationOn_calculation]
   simp only [Resolved.evaluate, Zkc.Construction.calculate, decodeValues_encodeValues arguments data]
   cases calculation.evaluate arguments <;> rfl
 
