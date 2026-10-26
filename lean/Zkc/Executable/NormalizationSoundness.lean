@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Executable.Completeness
+public import Zkc.Executable.HelperSchemas
 
 @[expose] public section
 
@@ -63,11 +64,6 @@ def indexOf : Value F G → Option Nat
   | .index value => some value
   | _ => none
 
-/-- Values of a list of terms at their sorts. -/
-@[reducible] def SortedValues (values : List (Value F G)) (sorts : List ValueSort) : Prop :=
-  values.length = sorts.length ∧
-    ∀ (index : Nat) (value : Value F G) (sort : ValueSort), values[index]? = some value →
-      sorts[index]? = some sort → HasSort value sort
 
 section Eval
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -822,11 +818,6 @@ theorem idealStep_local {R : Type} {operation : Operation} {operands : List Nat}
         simp [idealStep, transcriptAt, dataAt, va, vb]
       · rfl
 
-/-- A helper returns values of the declared result sorts. -/
-def HelperSorted (table : Structured.Evaluation.Meanings F G Structured.closedInterface) (name : String)
-    (declared : List ValueSort) : Prop :=
-  ∀ (arguments values : List (Value F G)), callHelper table name arguments = .returned values →
-    values.length = declared.length → SortedValues values declared
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem stopped_always {α : Type} (stop : PIR.Stop) (unread : Proof F G) :
@@ -2141,30 +2132,6 @@ theorem admits_sorted {validator : Validator} {data : List (Value F G)} (admitte
         trivial
     | succ k => simp [offset] at found
 
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- A helper of a closed table returns values of its declared output types. -/
-theorem helperSorted_of_outputs {table : Structured.Evaluation.Meanings F G Structured.closedInterface}
-    {name : String} {declared : List ValueSort}
-    (outputs : ∀ entry, table.find? (fun entry => entry.helper.name == name) = some entry →
-      entry.helper.outputs.map .data = declared) :
-    HelperSorted table name declared := by
-  intro arguments values called lengths
-  unfold callHelper at called
-  cases found : table.find? (fun entry => entry.helper.name == name) with
-  | none => simp [found] at called
-  | some entry =>
-      simp only [found] at called
-      cases decoded : decodeValues entry.helper.inputs arguments with
-      | none => simp [decoded] at called
-      | some decodedValues =>
-          simp only [decoded] at called
-          cases invoked : closedOutcome (entry.invoke decodedValues) with
-          | stopped => simp [invoked] at called
-          | returned results =>
-              simp only [invoked, PIR.Outcome.returned.injEq] at called
-              subst called
-              rw [← outputs entry found]
-              exact ⟨by simp [Zkc.Construction.Uniform.encodeValues_length], encodeValues_sorted results⟩
 
 /-- What the per-compile rule establishes when it accepts: the reading, the
 agreeing interface, and equal ideal meanings of the reading and the constructed
