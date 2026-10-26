@@ -73,6 +73,7 @@ struct MetadataVerifier {
   llvm::DenseMap<std::pair<Attribute, Attribute>, StringAttr> queryPorts;
   llvm::DenseSet<Operation *> seenParticipants, entries;
   unsigned remaining = 1000000;
+  std::optional<protocol::SourceExecutionClosure> closure;
   using Occurrences =
       llvm::DenseMap<Attribute, std::pair<unsigned, Operation *>>;
   llvm::DenseMap<Operation *, Occurrences> occurrences;
@@ -89,26 +90,43 @@ struct MetadataVerifier {
     return success();
   }
 
-  LogicalResult checkTranscriptHelper(local::FuncOp function) {
-    if (!function.getBody().hasOneBlock())
+  LogicalResult execution() {
+    if (closure)
+      return success();
+    auto value = unit.getProfile() == protocol_ir::Profile::Physical
+                     ? protocol::readExecutionClosure(unit, true)
+                     : protocol::readSourceExecutionClosure(unit);
+    if (!value)
+      return diagnostics::emit(record.emitOpError(), value.takeError());
+    closure = std::move(*value);
+    return success();
+  }
+  LogicalResult checkTranscriptHelper(func::FuncOp function) {
+    if (failed(execution()))
+      return failure();
+    auto found = closure->bodies.find(function.getSymName().str());
+    if (found == closure->bodies.end())
       return refuse(record, "invalid inserted transcript helper");
-    auto &body = function.getBody().front();
-    Operation *transition = nullptr;
+    const auto &body = found->second;
+    auto arguments = function.getArguments().drop_front();
+    const protocol::SourceExecutionStep *transition = nullptr;
     Value coordinates, bound;
     SmallVector<Value> indices;
-    for (auto &op : body) {
+    for (const auto &step : body) {
+      auto &op = *step.operation;
+      ValueRange inputs(step.inputs), outputs(step.outputs);
       if (failed(charge(1)))
         return failure();
-      if (auto release = dyn_cast<plan::ReleaseOp>(op)) {
-        if (any_of(release.getOperands(), [&](Value value) {
+      if (isa<runtime::ReleaseBindingsOp>(op)) {
+        if (any_of(inputs, [&](Value value) {
               return isa<runtime::CapabilityType>(logicalType(value.getType()));
             }))
           return refuse(record, "invalid inserted transcript helper");
         continue;
       }
-      if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-        if (!transition || &op != &body.back() ||
-            !llvm::equal(returned.getOperands(), transition->getResults()))
+      if (isa<exec::ReturnOp, exec::CompleteOp>(op)) {
+        if (!transition || &step != &body.back() ||
+            !llvm::equal(inputs, transition->outputs))
           return refuse(record, "invalid inserted transcript helper");
         continue;
       }
@@ -120,31 +138,29 @@ struct MetadataVerifier {
       if (transition || !declaration)
         return refuse(record, "invalid inserted transcript helper");
       auto contract = declaration.getContract();
-      if (!isa<plan::ApplyOp>(op) &&
-          op.getName().getStringRef() != protocol::boundOperationName(contract))
+      if (!isa<exec::ApplyOp>(op))
         return refuse(record, "invalid inserted transcript helper");
       // A UniformIndex helper first materializes its static domain.
       if (contract == "index.constant" && !bound && !coordinates &&
-          op.getNumOperands() == 0 && op.getNumResults() == 1) {
+          inputs.size() == 0 && outputs.size() == 1) {
         auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
         auto value = parameters && parameters.size() == 1
                          ? dyn_cast<StringAttr>(parameters[0])
                          : StringAttr();
         if (!value || !protocol::parseUniformIndexBound(value.getValue()))
           return refuse(record, "invalid inserted transcript helper");
-        bound = op.getResult(0);
+        bound = outputs[0];
         continue;
       }
-      if (contract == "indices.empty" && !coordinates &&
-          op.getNumOperands() == 0 && op.getNumResults() == 1) {
-        coordinates = op.getResult(0);
+      if (contract == "indices.empty" && !coordinates && inputs.size() == 0 &&
+          outputs.size() == 1) {
+        coordinates = outputs[0];
         continue;
       }
-      if (contract == "indices.append" && coordinates &&
-          op.getNumOperands() == 2 && op.getOperand(0) == coordinates &&
-          op.getNumResults() == 1) {
-        indices.push_back(op.getOperand(1));
-        coordinates = op.getResult(0);
+      if (contract == "indices.append" && coordinates && inputs.size() == 2 &&
+          inputs[0] == coordinates && outputs.size() == 1) {
+        indices.push_back(inputs[1]);
+        coordinates = outputs[0];
         continue;
       }
       bool index = contract == "transcript.native.indexed.index";
@@ -154,21 +170,21 @@ struct MetadataVerifier {
         return refuse(record, "invalid inserted transcript helper");
       unsigned ordinary = contract.ends_with(".observe.data") ? 2 : 1;
       {
-        if (op.getNumOperands() != ordinary + unsigned(index) + 1 ||
-            (index && op.getOperand(1) != bound) ||
-            op.getOperands().back() != coordinates ||
-            body.getNumArguments() != ordinary + indices.size() ||
-            !llvm::equal(op.getOperands().take_front(ordinary),
-                         body.getArguments().take_front(ordinary)) ||
-            !llvm::equal(indices, body.getArguments().drop_front(ordinary)) ||
+        if (inputs.size() != ordinary + unsigned(index) + 1 ||
+            (index && inputs[1] != bound) || inputs.back() != coordinates ||
+            arguments.size() != ordinary + indices.size() ||
+            !llvm::equal(inputs.take_front(ordinary),
+                         arguments.take_front(ordinary)) ||
+            !llvm::equal(indices, arguments.drop_front(ordinary)) ||
             any_of(indices, [&](Value value) {
               return !logicalType(value.getType()).isUnsignedInteger(64);
             }))
           return refuse(record, "invalid inserted transcript coordinates");
       }
-      transition = &op;
+      transition = &step;
     }
-    if (!transition || body.empty() || !isa<local::ReturnOp>(body.back()))
+    if (!transition || body.empty() ||
+        !isa<exec::ReturnOp, exec::CompleteOp>(body.back().operation))
       return refuse(record, "invalid inserted transcript helper");
     return success();
   }
@@ -289,7 +305,8 @@ struct MetadataVerifier {
       for (auto item : helpers) {
         auto ref = dyn_cast<FlatSymbolRefAttr>(item);
         if (!ref || !constructionHelpers.insert(ref).second ||
-            !tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref))
+            !protocol::scopedDataSignature(
+                tables.lookupNearestSymbolFrom<func::FuncOp>(record, ref)))
           return refuse(record, "invalid construction helper selection");
       }
       if (codec) {
@@ -664,8 +681,8 @@ struct MetadataVerifier {
             return refuse(record, "unsupported inserted construction action");
           auto ref = action.getAs<FlatSymbolRefAttr>("callee");
           auto function =
-              ref ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref)
-                  : local::FuncOp();
+              ref ? tables.lookupNearestSymbolFrom<func::FuncOp>(record, ref)
+                  : func::FuncOp();
           if (!function || !constructionHelpers.contains(ref))
             return refuse(record, "missing constructed helper");
           if (insertedCallees.insert(ref).second && !programmable &&
@@ -925,15 +942,8 @@ struct MetadataVerifier {
                       "calculation origin does not name one invocation");
     }
 
-    std::optional<protocol::SourceExecutionClosure> closure;
-    if (!requiredCalculations.empty()) {
-      auto value = unit.getProfile() == protocol_ir::Profile::Physical
-                       ? protocol::readExecutionClosure(unit, true)
-                       : protocol::readSourceExecutionClosure(unit);
-      if (!value)
-        return diagnostics::emit(record.emitOpError(), value.takeError());
-      closure = std::move(*value);
-    }
+    if (!requiredCalculations.empty() && failed(execution()))
+      return failure();
     for (auto occurrence : requiredCalculations) {
       if (!calculations.count(occurrence))
         return refuse(record,
@@ -1181,6 +1191,7 @@ LogicalResult zkc::protocol_ir::ProjectionOp::verifySymbolUses(
     return mathematical::refuse(*this,
                                 "cannot enumerate projection references");
   unsigned remaining = 1000000;
+  std::optional<protocol::SourceExecutionClosure> closure;
   for (const auto &use : *uses) {
     if (!remaining--)
       return mathematical::refuse(*this, "projection symbol work limit");

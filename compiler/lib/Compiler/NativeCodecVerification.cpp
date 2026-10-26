@@ -2,7 +2,8 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
@@ -28,6 +29,7 @@ class CodecCorrespondence {
   const protocol::ConstructionPlan &plan;
   const protocol::ConstructionCodec &codec;
   SymbolTable symbols;
+  const protocol::SourceExecutionClosure &execution;
   Type bytes;
   StringMap<CodecMessage> messages;
   StringMap<CodecMessage *> leaves, observerMessages;
@@ -114,14 +116,15 @@ class CodecCorrespondence {
     return matches;
   }
 
-  bool kernel(Operation *op, StringRef contract, ValueRange inputs,
-              unsigned results) {
-    if (!op || !charge() ||
-        op->getName().getStringRef() !=
-            protocol::boundOperationName(contract) ||
-        op->getAttrs().size() != 3 || !op->getAttrOfType<StringAttr>("site") ||
-        op->getOperands() != inputs || op->getNumResults() != results ||
-        op->getNumRegions())
+  using Step = protocol::SourceExecutionStep;
+  bool kernel(const Step &step, StringRef contract, ValueRange inputs,
+              unsigned results, StringRef site) {
+    auto *op = step.operation;
+    if (!charge(1 + inputs.size()) || !isa<exec::ApplyOp>(op) ||
+        op->getAttrs().size() != 3 ||
+        op->getAttrOfType<StringAttr>("site").getValue() != site ||
+        ValueRange(step.inputs) != inputs || step.outputs.size() != results ||
+        !step.regions.empty())
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
@@ -136,17 +139,35 @@ class CodecCorrespondence {
     allowedBindings.insert(binding.getSymName());
     return true;
   }
-  local::FuncOp generated(FlatSymbolRefAttr reference) {
-    auto f = symbols.lookup<local::FuncOp>(reference.getValue());
-    auto origin =
-        f ? f->getAttrOfType<ArrayAttr>("logical_origin") : ArrayAttr();
-    if (!f || !f.getBody().hasOneBlock() || f->getAttrs().size() != 3 ||
-        !origin || origin.size() != 2 ||
-        origin[0] != StringAttr::get(f.getContext(), f.getSymName()) ||
-        !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
+  func::FuncOp generated(FlatSymbolRefAttr reference, bool region = false) {
+    auto f = symbols.lookup<func::FuncOp>(reference.getValue());
+    if (!f || f->getAttrs().size() != 5 || !f.isPrivate() ||
+        !f->getAttrOfType<UnitAttr>("no_inline") ||
+        !execution.bodies.count(f.getSymName().str()))
       return {};
+    if (region) {
+      if (!f->getAttrOfType<UnitAttr>("runtime.region"))
+        return {};
+    } else {
+      auto origin = f->getAttrOfType<ArrayAttr>("runtime.origin");
+      if (!origin || origin.size() != 2 ||
+          origin[0] != StringAttr::get(f.getContext(), f.getSymName()) ||
+          !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty() ||
+          !protocol::scopedDataSignature(f))
+        return {};
+    }
     allowedFunctions.insert(f.getSymName());
     return f;
+  }
+  const std::vector<Step> &body(func::FuncOp f) const {
+    return execution.bodies.at(f.getSymName().str());
+  }
+  bool returned(const Step &step, ValueRange values, bool region = false) {
+    return charge(1 + values.size()) &&
+           (region ? isa<exec::CompleteOp>(step.operation)
+                   : isa<exec::ReturnOp>(step.operation)) &&
+           ValueRange(step.inputs) == values && step.outputs.empty() &&
+           step.regions.empty();
   }
   bool slice(FlatSymbolRefAttr reference, unsigned count) {
     auto f = generated(reference);
@@ -154,87 +175,85 @@ class CodecCorrespondence {
         IntegerType::get(bytes.getContext(), 64, IntegerType::Unsigned);
     SmallVector<Type> inputs{bytes}, outputs(count, bytes);
     inputs.append(2 * count, index);
-    if (!f || f.getArgumentTypes() != ArrayRef<Type>(inputs) ||
-        f.getResultTypes() != ArrayRef<Type>(outputs))
+    auto signature = protocol::scopedDataSignature(f);
+    if (!signature || signature.getInputs() != ArrayRef<Type>(inputs) ||
+        signature.getResults() != ArrayRef<Type>(outputs) ||
+        body(f).size() != count + 1)
       return false;
-    auto &body = f.getBody().front();
-    Operation *cursor = &body.front();
-    auto args = body.getArguments();
+    auto args = f.getArguments().drop_front();
     SmallVector<Value> chunks;
     for (unsigned i = 0; i < count; ++i) {
-      if (!kernel(cursor, "bytes.slice",
-                  {args[0], args[1 + 2 * i], args[2 + 2 * i]}, 1))
+      const auto &step = body(f)[i];
+      if (!kernel(step, "bytes.slice",
+                  {args[0], args[1 + 2 * i], args[2 + 2 * i]}, 1,
+                  "slice_" + std::to_string(i)))
         return false;
-      chunks.push_back(cursor->getResult(0));
-      cursor = cursor->getNextNode();
+      chunks.push_back(step.outputs.front());
     }
-    auto returned = dyn_cast_or_null<local::ReturnOp>(cursor);
-    return returned && returned->getAttrs().empty() &&
-           returned.getInputs() == ValueRange(chunks) && !cursor->getNextNode();
+    return returned(body(f).back(), chunks);
   }
   bool conditional(FlatSymbolRefAttr reference, FlatSymbolRefAttr method,
                    bool writing) {
     auto f = generated(reference);
-    auto source = symbols.lookup<local::FuncOp>(method.getValue());
-    if (!f || !source || !source.getBody().hasOneBlock())
+    auto source = symbols.lookup<func::FuncOp>(method.getValue());
+    auto handler = protocol::scopedDataSignature(source);
+    auto signature = protocol::scopedDataSignature(f);
+    if (!signature || !handler || body(f).size() != 2)
       return false;
     SmallVector<Type> inputs{IntegerType::get(bytes.getContext(), 1)};
-    append_range(inputs, source.getArgumentTypes());
-    if (f.getArgumentTypes() != ArrayRef<Type>(inputs) ||
-        f.getResultTypes() != source.getResultTypes())
+    append_range(inputs, handler.getInputs());
+    if (signature.getInputs() != ArrayRef<Type>(inputs) ||
+        signature.getResults() != handler.getResults())
       return false;
-    auto &body = f.getBody().front();
-    auto branch = dyn_cast<local::LocalIfOp>(body.front());
-    if (!branch || branch->getAttrs().size() != 1 || !branch.getSiteAttr() ||
-        branch.getInputs() != ValueRange(body.getArguments()) ||
-        branch.getResultTypes() != source.getResultTypes())
+    const auto &branch = body(f).front();
+    auto test = dyn_cast<exec::TestOp>(branch.operation);
+    if (!test || test->getAttrs().size() != 1 || test.getSite() != "finish" ||
+        ValueRange(branch.inputs) !=
+            ValueRange(f.getArguments().drop_front()) ||
+        branch.regions.size() != 2)
       return false;
-    auto &taken = branch.getThenRegion().front();
-    Env env;
-    if (!bind(source.getBody().front().getArguments(), taken.getArguments(),
-              env))
-      return false;
-    auto cursor = taken.begin();
-    for (auto &op : source.getBody().front()) {
-      if (cursor == taken.end())
+    for (auto [i, selected] : enumerate(branch.regions)) {
+      auto region = selected;
+      if (!generated(FlatSymbolRefAttr::get(region), true) ||
+          region.getArgumentTypes().drop_front() != handler.getInputs() ||
+          cast<exec::OutcomeType>(region.getResultTypes().front())
+                  .getPayload() != handler.getResults())
         return false;
-      if (auto ret = dyn_cast<local::ReturnOp>(op)) {
-        auto yield = dyn_cast<local::LocalYieldOp>(*cursor);
-        if (!yield || !yield->getAttrs().empty() ||
-            !operands(ret.getInputs(), yield.getInputs(), env))
+      const auto &steps = body(region);
+      if (steps.size() != ((!i || writing) ? 2u : 1u))
+        return false;
+      SmallVector<Value> outputs;
+      if (!i) {
+        const auto &step = steps.front();
+        auto call = dyn_cast<func::CallOp>(step.operation);
+        auto site = call ? call->getAttrOfType<StringAttr>("runtime.site")
+                         : StringAttr();
+        if (!call || call->getAttrs().size() != 2 ||
+            call.getCalleeAttr() != method || !site ||
+            site.getValue() != "handler" ||
+            ValueRange(step.inputs) !=
+                ValueRange(region.getArguments().drop_front()) ||
+            !step.regions.empty())
           return false;
-      } else if (!exact(op, *cursor, env, 0))
+        outputs = step.outputs;
+      } else if (writing) {
+        if (!kernel(steps.front(), "bytes.empty", {}, 1, "empty"))
+          return false;
+        outputs = steps.front().outputs;
+      }
+      if (!returned(steps.back(), outputs, true))
         return false;
-      ++cursor;
     }
-    if (cursor != taken.end())
-      return false;
-    auto &untaken = branch.getElseRegion().front();
-    if (untaken.getArgumentTypes() != source.getArgumentTypes())
-      return false;
-    Operation *otherwise = &untaken.front();
-    SmallVector<Value> empty;
-    if (writing) {
-      if (!kernel(otherwise, "bytes.empty", {}, 1))
-        return false;
-      empty.push_back(otherwise->getResult(0));
-      otherwise = otherwise->getNextNode();
-    }
-    auto yield = dyn_cast_or_null<local::LocalYieldOp>(otherwise);
-    auto returned = dyn_cast_or_null<local::ReturnOp>(branch->getNextNode());
-    return yield && yield->getAttrs().empty() &&
-           yield.getInputs() == ValueRange(empty) &&
-           !otherwise->getNextNode() && returned &&
-           returned->getAttrs().empty() &&
-           returned.getInputs() == branch.getResults() &&
-           !returned->getNextNode();
+    return returned(body(f).back(), branch.outputs);
   }
-  local::CallOp invoke(Operation *&cursor, FlatSymbolRefAttr reference,
-                       ValueRange inputs) {
-    auto call = dyn_cast_or_null<local::CallOp>(cursor);
-    if (!call || !charge() || call->getAttrs().size() != 2 ||
+  pir::LocalCallOp invoke(Operation *&cursor, FlatSymbolRefAttr reference,
+                          ValueRange inputs) {
+    auto call = dyn_cast_or_null<pir::LocalCallOp>(cursor);
+    if (!call || !charge() || call->getAttrs().size() != 3 ||
         !call.getSiteAttr() || call.getCalleeAttr() != reference ||
-        call.getInputs() != inputs)
+        call.getInputs() != inputs ||
+        call.getRoleAttr() !=
+            call->getParentOfType<pir::ParticipantOp>().getRoleAttr())
       return {};
     usedHelpers.insert(reference.getValue());
     cursor = cursor->getNextNode();
@@ -247,7 +266,7 @@ class CodecCorrespondence {
       return false;
     struct Occurrences {
       SmallVector<Operation *> transport;
-      SmallVector<local::CallOp> observations;
+      SmallVector<pir::LocalCallOp> observations;
     };
     llvm::DenseMap<const CodecMessage *, Occurrences> occurrences;
     for (auto &op : source) {
@@ -257,7 +276,7 @@ class CodecCorrespondence {
         auto site = op.getAttrOfType<StringAttr>("site");
         if (auto *message = site ? leaves.lookup(site.getValue()) : nullptr)
           occurrences[message].transport.push_back(&op);
-      } else if (auto call = dyn_cast<local::CallOp>(op)) {
+      } else if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
         if (auto *message = observerMessages.lookup(call.getCallee()))
           occurrences[message].observations.push_back(call);
       }
@@ -424,7 +443,7 @@ class CodecCorrespondence {
           if (!between || !charge())
             return false;
           if (is_contained(transport, between) ||
-              is_contained(observations, dyn_cast<local::CallOp>(between)))
+              is_contained(observations, dyn_cast<pir::LocalCallOp>(between)))
             continue;
           if (!mathematical::isTotal(between))
             return false;
@@ -445,7 +464,7 @@ class CodecCorrespondence {
         }
       } else {
         if (writing) {
-          auto call = dyn_cast<local::CallOp>(op);
+          auto call = dyn_cast<pir::LocalCallOp>(op);
           bool pending = call && observerMessages.count(call.getCallee());
           if (pending) {
             postponed.insert(&op);
@@ -465,8 +484,10 @@ class CodecCorrespondence {
 public:
   CodecCorrespondence(pir::ProtocolModuleOp candidate,
                       const NativeProofPolicy &policy,
-                      const protocol::ConstructionPlan &plan)
-      : policy(policy), plan(plan), codec(*plan.codec), symbols(candidate) {
+                      const protocol::ConstructionPlan &plan,
+                      const protocol::SourceExecutionClosure &execution)
+      : policy(policy), plan(plan), codec(*plan.codec), symbols(candidate),
+        execution(execution) {
     bytes = data::BytesType::get(candidate.getContext());
   }
   bool check(pir::ProtocolModuleOp source, pir::ProtocolModuleOp candidate,
@@ -669,7 +690,7 @@ public:
         continue;
       auto name = op.getAttrOfType<StringAttr>("sym_name");
       if (!name || (!originals.contains(name.getValue()) &&
-                    !(isa<local::FuncOp>(op) &&
+                    !(isa<func::FuncOp>(op) &&
                       allowedFunctions.contains(name.getValue())) &&
                     !(isa<runtime::BindingOp>(op) &&
                       allowedBindings.contains(name.getValue()))))
@@ -722,7 +743,10 @@ Error verifyNativeCodec(ModuleOp transcript, ModuleOp encoded,
     return error("native-codec-subject");
   auto source = cast<pir::ProtocolModuleOp>(transcript.getBody()->front());
   auto candidate = cast<pir::ProtocolModuleOp>(encoded.getBody()->front());
-  CodecCorrespondence checker(candidate, policy, plan);
+  auto execution = protocol::readSourceExecutionClosure(candidate);
+  if (!execution)
+    return execution.takeError();
+  CodecCorrespondence checker(candidate, policy, plan, *execution);
   if (!checker.check(source, candidate, events, transcriptPlan, codecPlan))
     return error(checker.exhausted() ? "native-codec-limit"
                                      : "native-codec-correspondence",

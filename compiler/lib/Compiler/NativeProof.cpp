@@ -12,6 +12,9 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
@@ -592,9 +595,10 @@ Error admitConstruction(pir::MathematicalOp source,
           (previous && (*previous + 1 != found->second || next != operation)))
         return error("native-proof-construction-message-group");
       if (query) {
-        auto handler = symbols.lookup<local::FuncOp>(rule.handler.getValue());
-        if (!handler ||
-            handler.getFunctionType().getNumInputs() !=
+        auto handler = symbols.lookup<func::FuncOp>(rule.handler.getValue());
+        auto signature = protocol::scopedDataSignature(handler);
+        if (!signature ||
+            signature.getNumInputs() !=
                 plan.state.size() + unsigned(event.bound.has_value()))
           return error("native-proof-construction-request");
       }
@@ -782,154 +786,115 @@ class Emitter {
     bindings.try_emplace(key, ref);
     return ref;
   }
-  Operation *kernel(StringRef contract, FlatSymbolRefAttr binding,
-                    ValueRange inputs, TypeRange outputs, StringRef site,
-                    ArrayRef<Attribute> parameters = {}) {
-    OperationState state(module.getLoc(),
-                         protocol::boundOperationName(contract));
-    state.addOperands(inputs);
-    state.addTypes(outputs);
-    state.addAttribute("binding", binding);
-    state.addAttribute("site", builder.getStringAttr(site));
-    state.addAttribute("parameters", builder.getArrayAttr(parameters));
-    return builder.create(state);
+  SmallVector<Value> kernel(exec::ScopedExecutionBuilder &control,
+                            FlatSymbolRefAttr selected, ValueRange inputs,
+                            TypeRange outputs, StringRef site,
+                            ArrayRef<Attribute> parameters = {}) {
+    return control.invoke(
+        "exec.apply", outputs, control.scoped(inputs),
+        {builder.getNamedAttr("binding", selected),
+         builder.getNamedAttr("site", builder.getStringAttr(site)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
   }
   Expected<FlatSymbolRefAttr> helper(const Event &event, TypeRange stateTypes) {
-    if (auto *rule = rules.lookup(event.site)) {
-      auto source = symbols.lookup<local::FuncOp>(rule->handler.getValue());
-      if (!source || !source.getBody().hasOneBlock())
-        return error("native-proof-construction-handler");
-      SmallVector<Type> inputs(stateTypes), outputs;
-      if (event.query)
-        outputs.push_back(event.payload);
-      else if (event.startInputs)
-        append_range(inputs, *event.startInputs);
-      else
-        append_range(inputs, rule->payload);
-      unsigned dataInputs = inputs.size();
-      inputs.append(event.depth, builder.getIntegerType(64, false));
-      append_range(outputs, stateTypes);
-      builder.setInsertionPointToEnd(&module.getBody().front());
-      auto function =
-          local::FuncOp::create(builder, module.getLoc(), fresh(),
-                                builder.getFunctionType(inputs, outputs));
-      symbols.insert(function);
-      function->setAttr(
-          "logical_origin",
-          builder.getArrayAttr({builder.getStringAttr(function.getSymName()),
-                                builder.getArrayAttr({})}));
-      auto *body = function.addEntryBlock();
-      builder.setInsertionPointToEnd(body);
-      llvm::StringSet<> sites;
-      source.walk([&](Operation *op) {
-        if (auto site = op->getAttrOfType<StringAttr>("site"))
-          sites.insert(site.getValue());
-      });
-      auto site = [&](StringRef prefix) {
-        std::string selected = prefix.str();
-        for (unsigned i = 0; !sites.insert(selected).second; ++i)
-          selected = (prefix + "_" + Twine(i)).str();
-        return selected;
-      };
-      SmallVector<Value> arguments(body->getArguments().take_front(dataInputs));
-      if (event.bound)
-        arguments.push_back(
-            kernel("index.constant", binding("index.constant", {}), {},
-                   {event.payload}, site("bound"),
-                   {builder.getStringAttr(std::to_string(*event.bound))})
-                ->getResult(0));
-      IRMapping mapping;
-      mapping.map(source.getBody().front().getArguments(), arguments);
-      for (auto &op : source.getBody().front()) {
-        if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-          SmallVector<Value> values;
-          if (event.query)
-            values.push_back(mapping.lookup(returned.getInputs().back()));
-          for (Value value : returned.getInputs().take_front(stateTypes.size()))
-            values.push_back(mapping.lookup(value));
-          if (event.bound) {
-            auto valid = kernel("index.less", binding("index.less", {}),
-                                {values.front(), arguments.back()},
-                                {builder.getI1Type()}, site("range"));
-            kernel("control.require", binding("control.require", {}),
-                   {valid->getResult(0)}, {}, site("require_range"));
-          }
-          local::ReturnOp::create(builder, module.getLoc(), values);
-        } else {
-          builder.clone(op, mapping);
-        }
-      }
-      return FlatSymbolRefAttr::get(function);
+    auto *rule = rules.lookup(event.site);
+    auto source = rule ? symbols.lookup<func::FuncOp>(rule->handler.getValue())
+                       : func::FuncOp();
+    auto signature = protocol::scopedDataSignature(source);
+    if (rule && !signature)
+      return error("native-proof-construction-handler");
+    if (!rule) {
+      if (event.startInputs)
+        return error("native-proof-construction-start");
+      if (event.query && !event.bound &&
+          event.payload != algebra::FieldType::get(
+                               module.getContext(),
+                               protocol::nativeChallengeField(policy.suite)))
+        return error("native-proof-construction-signature",
+                     "native query domain differs from the transcript suite");
+      if (event.bound && !isPowerOf2_64(*event.bound))
+        return error("native-proof-index-bound",
+                     "native sampling requires a power-of-two bound");
     }
-    if (event.startInputs)
-      return error("native-proof-construction-start");
-    if (event.query && !event.bound &&
-        event.payload != algebra::FieldType::get(
-                             module.getContext(),
-                             protocol::nativeChallengeField(policy.suite)))
-      return error(
-          "native-proof-construction-signature",
-          "native fallback query domain differs from the transcript suite");
-    if (event.bound && !isPowerOf2_64(*event.bound))
-      return error("native-proof-index-bound",
-                   "the native sampler requires a power-of-two bound; "
-                   "select an explicit query handler for other ranges");
-    auto type = wire(event.payload);
-    if (!type)
-      return type.takeError();
-    std::string contract =
-        !event.query  ? "transcript.native.indexed.observe.data"
-        : event.bound ? "transcript.native.indexed.index"
-                      : "transcript.native.indexed.challenge";
-    SmallVector<Attribute> args{builder.getStringAttr(policy.suite)};
-    if (!event.query)
-      args.push_back(builder.getStringAttr(type->spelling()));
-    auto selected = binding(contract, args);
-    SmallVector<Type> inputs(stateTypes), outputs;
+    SmallVector<Type> inputs{runtime::ScopeType::get(module.getContext())};
+    append_range(inputs, stateTypes);
+    SmallVector<Type> outputs;
     if (event.query)
       outputs.push_back(event.payload);
+    else if (event.startInputs)
+      append_range(inputs, *event.startInputs);
+    else if (rule)
+      append_range(inputs, rule->payload);
     else
       inputs.push_back(event.payload);
-    auto dataInputs = inputs.size();
+    unsigned dataInputs = inputs.size() - 1;
     inputs.append(event.depth, builder.getIntegerType(64, false));
     append_range(outputs, stateTypes);
     builder.setInsertionPointToEnd(&module.getBody().front());
-    auto function =
-        local::FuncOp::create(builder, module.getLoc(), fresh(),
-                              builder.getFunctionType(inputs, outputs));
-    symbols.insert(function);
+    auto function = func::FuncOp::create(
+        builder, module.getLoc(), fresh(),
+        builder.getFunctionType(
+            inputs, {exec::OutcomeType::get(module.getContext(), outputs)}));
+    function.setPrivate();
+    function->setAttr("no_inline", builder.getUnitAttr());
     function->setAttr(
-        "logical_origin",
+        "runtime.origin",
         builder.getArrayAttr({builder.getStringAttr(function.getSymName()),
                               builder.getArrayAttr({})}));
+    symbols.insert(function);
     auto *body = function.addEntryBlock();
     builder.setInsertionPointToEnd(body);
-    SmallVector<Value> operands(body->getArguments().take_front(dataInputs));
+    exec::ScopedExecutionBuilder control(builder, function);
+    auto data = function.getArguments().drop_front();
+    SmallVector<Value> operands(data.take_front(dataInputs));
     if (event.bound)
-      operands.push_back(
-          kernel("index.constant", binding("index.constant", {}), {},
-                 {event.payload}, "bound",
-                 {builder.getStringAttr(std::to_string(*event.bound))})
-              ->getResult(0));
-    {
+      operands.push_back(kernel(
+          control, binding("index.constant", {}), {}, {event.payload}, "bound",
+          {builder.getStringAttr(std::to_string(*event.bound))})[0]);
+    if (rule) {
+      // Preserve the original handler as an ordinary borrowed-scope call.
+      // Checked helper substitution consumes its actual control later.
+      auto values = control.invoke(
+          "func.call", signature.getResults(), control.scoped(operands),
+          {builder.getNamedAttr("callee", rule->handler),
+           builder.getNamedAttr("runtime.site",
+                                builder.getStringAttr("handler"))});
+      SmallVector<Value> results;
+      if (event.query)
+        results.push_back(values.back());
+      append_range(results, ArrayRef(values).take_front(stateTypes.size()));
+      if (event.bound) {
+        auto valid = kernel(control, binding("index.less", {}),
+                            {results.front(), operands.back()},
+                            {builder.getI1Type()}, "range");
+        kernel(control, binding("control.require", {}), valid, {},
+               "require_range");
+      }
+      control.returned(results);
+    } else {
+      auto type = wire(event.payload);
+      if (!type)
+        return type.takeError();
+      std::string contract =
+          !event.query  ? "transcript.native.indexed.observe.data"
+          : event.bound ? "transcript.native.indexed.index"
+                        : "transcript.native.indexed.challenge";
+      SmallVector<Attribute> arguments{builder.getStringAttr(policy.suite)};
+      if (!event.query)
+        arguments.push_back(builder.getStringAttr(type->spelling()));
       auto indices = algebra::IndicesType::get(builder.getContext());
-      auto empty = binding("indices.empty", {});
-      Value coordinates =
-          kernel("indices.empty", empty, {}, {indices}, "coordinates")
-              ->getResult(0);
-
-      for (auto [i, argument] :
-           enumerate(body->getArguments().drop_front(dataInputs)))
-        coordinates = kernel("indices.append", binding("indices.append", {}),
+      Value coordinates = kernel(control, binding("indices.empty", {}), {},
+                                 {indices}, "coordinates")[0];
+      for (auto [i, argument] : enumerate(data.drop_front(dataInputs)))
+        coordinates = kernel(control, binding("indices.append", {}),
                              {coordinates, argument}, {indices},
-                             "coordinate_" + std::to_string(i))
-                          ->getResult(0);
+                             "coordinate_" + std::to_string(i))[0];
       operands.push_back(coordinates);
+      auto values =
+          kernel(control, binding(contract, arguments), operands, outputs,
+                 "transition", {builder.getStringAttr(event.origin)});
+      control.returned(values);
     }
-    auto *operation =
-        kernel(contract, selected, operands, outputs, "transition",
-               {builder.getStringAttr(event.origin)});
-    local::ReturnOp::create(builder, module.getLoc(), operation->getResults());
     return FlatSymbolRefAttr::get(function);
   }
 
@@ -979,14 +944,15 @@ public:
         !plan || plan->root == protocol::ConstructionPlan::Root::Host;
     if (plan) {
       if (plan->initializer &&
-          !symbols.lookup<local::FuncOp>(plan->initializer.getValue()))
+          !symbols.lookup<func::FuncOp>(plan->initializer.getValue()))
         return error("native-proof-construction-handler");
       for (const auto &rule : plan->rules)
-        if (!symbols.lookup<local::FuncOp>(rule.handler.getValue()))
+        if (!symbols.lookup<func::FuncOp>(rule.handler.getValue()))
           return error("native-proof-construction-handler");
     }
     // Source admission bounds the original program. Charge repeated handler
-    // copies separately before generating adapters or threading participants.
+    // expansion work separately before generating adapters or threading
+    // participants.
     uint64_t remaining = 1000000;
     llvm::DenseMap<Operation *, uint64_t> bodyCosts;
     for (const auto &event : admitted.events) {
@@ -996,7 +962,7 @@ public:
                              : rule            ? rule->payload.size()
                                                : 1));
       if (rule && rule->sites.back() == event.site) {
-        auto function = symbols.lookup<local::FuncOp>(rule->handler.getValue());
+        auto function = symbols.lookup<func::FuncOp>(rule->handler.getValue());
         if (!function)
           return error("native-proof-construction-handler");
         auto found = bodyCosts.find(function);
@@ -1124,19 +1090,21 @@ public:
       SmallVector<StringRef> reached;
       SmallVector<Value> coordinates;
       auto invoke = [&](FlatSymbolRefAttr reference, ValueRange operands,
-                        StringRef anchor) -> local::CallOp {
-        auto function = symbols.lookup<local::FuncOp>(reference.getValue());
-        auto invocation = local::CallOp::create(
-            builder, participant.getLoc(), function.getResultTypes(), operands,
-            reference, builder.getStringAttr(fresh()));
+                        StringRef anchor) -> pir::LocalCallOp {
+        auto function = symbols.lookup<func::FuncOp>(reference.getValue());
+        auto invocation = pir::LocalCallOp::create(
+            builder, participant.getLoc(),
+            protocol::scopedDataSignature(function).getResults(), operands,
+            reference, builder.getStringAttr(fresh()),
+            participant.getRoleAttr());
         state.clear();
         append_range(state,
                      invocation.getResults().take_back(stateTypes.size()));
         auto target = builder.getDictionaryAttr(
             {builder.getNamedAttr("participant",
                                   FlatSymbolRefAttr::get(participant)),
-             builder.getNamedAttr("operation",
-                                  builder.getStringAttr("local.call"))});
+             builder.getNamedAttr(
+                 "operation", builder.getStringAttr("protocol.local_call"))});
         addedActions[anchor.str()].push_back(builder.getDictionaryAttr(
             {builder.getNamedAttr("site", invocation.getSiteAttr()),
              builder.getNamedAttr("kind",
@@ -1146,7 +1114,7 @@ public:
         return invocation;
       };
       auto call = [&](const Event &event, StringRef anchor,
-                      ValueRange payload = {}) -> local::CallOp {
+                      ValueRange payload = {}) -> pir::LocalCallOp {
         reached.push_back(event.origin);
         SmallVector<Value> operands(state);
         append_range(operands, payload);
@@ -1443,24 +1411,24 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
   if (!occurrenceMap)
     return occurrenceMap.takeError();
   // Only the selected construction closure can consume the managed root.
-  // Protocol data ports and unrelated Local code cannot introduce one.
+  // Protocol data ports and unrelated scoped functions cannot introduce one.
   llvm::DenseSet<Operation *> authorized;
   if (construction &&
       construction->root == protocol::ConstructionPlan::Root::Host) {
-    SmallVector<local::FuncOp> pending;
+    SmallVector<func::FuncOp> pending;
     for (const auto &rule : construction->rules)
       pending.push_back(
-          originalSymbols.lookup<local::FuncOp>(rule.handler.getValue()));
+          originalSymbols.lookup<func::FuncOp>(rule.handler.getValue()));
     for (const auto &invocation : invocations)
       pending.push_back(
-          originalSymbols.lookup<local::FuncOp>(invocation.handler.getValue()));
+          originalSymbols.lookup<func::FuncOp>(invocation.handler.getValue()));
     while (!pending.empty()) {
       auto function = pending.pop_back_val();
       if (!function || !authorized.insert(function).second)
         continue;
-      function.walk([&](local::ApplyOp apply) {
+      function.walk([&](func::CallOp apply) {
         pending.push_back(
-            originalSymbols.lookup<local::FuncOp>(apply.getCallee()));
+            originalSymbols.lookup<func::FuncOp>(apply.getCallee()));
       });
     }
   }
@@ -1475,9 +1443,9 @@ prepareProof(ModuleOp source, const NativeProofPolicy &policy,
     });
   };
   original.walk([&](Operation *op) {
-    auto function = dyn_cast<local::FuncOp>(op);
+    auto function = dyn_cast<func::FuncOp>(op);
     if (!function)
-      function = op->getParentOfType<local::FuncOp>();
+      function = op->getParentOfType<func::FuncOp>();
     allowed = (function && authorized.contains(function)) ||
               (isa<pir::ConstructionOp>(op) && construction &&
                construction->root == protocol::ConstructionPlan::Root::Host);

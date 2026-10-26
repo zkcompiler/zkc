@@ -6,7 +6,7 @@
 #include "llvm/Support/Error.h"
 
 namespace zkc::protocol {
-/// Checked, immutable selection over ordinary Local definitions. Message
+/// Checked, immutable selection over ordinary scoped functions. Message
 /// sites are the ordered leaves of one source payload; a handler runs once.
 struct ConstructionRule {
   using Kind = ConstructionRuleKind;

@@ -33,6 +33,21 @@ bool isScopedExecutionFunction(func::FuncOp function) {
   return llvm::any_of(type.getInputs(), executionType) ||
          llvm::any_of(type.getResults(), executionType);
 }
+FunctionType scopedDataSignature(func::FuncOp function) {
+  if (!function || function->hasAttr("runtime.region"))
+    return {};
+  auto raw = function->getAttrOfType<TypeAttr>("function_type");
+  auto type = raw ? dyn_cast<FunctionType>(raw.getValue()) : FunctionType();
+  auto outcome = type && type.getNumResults() == 1
+                     ? dyn_cast<exec::OutcomeType>(type.getResult(0))
+                     : exec::OutcomeType();
+  if (!type || !type.getNumInputs() || !outcome ||
+      !isa<runtime::ScopeType>(type.getInput(0)))
+    return {};
+  return FunctionType::get(function.getContext(), type.getInputs().drop_front(),
+                           outcome.getPayload());
+}
+
 namespace {
 bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
   return llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {

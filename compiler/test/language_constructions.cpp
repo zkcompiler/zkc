@@ -7,6 +7,9 @@
 #include "support/NativeCases.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Registry.h"
@@ -613,17 +616,18 @@ construction Base<N:nat> for First<N>{base authored;}
         parsed->getBody()->front());
     if (collideSites) {
       unsigned count = 0;
-      unit.walk([&](zkc::local::FuncOp function) {
+      unit.walk([&](mlir::func::FuncOp function) {
         bool changed = false;
         function.walk([&](mlir::Operation *op) {
-          if (!changed && op->hasAttr("site")) {
+          if (!changed && mlir::isa<zkc::exec::ApplyOp, zkc::exec::BooleanOp,
+                                    zkc::exec::ComputeOp>(op)) {
             op->setAttr("site", mlir::StringAttr::get(&context, "bound"));
             changed = true;
             ++count;
           }
         });
       });
-      require(count != 0, "raw Local functions contain sites to collide");
+      require(count != 0, "scoped functions contain sites to collide");
       text.clear();
       raw_string_ostream stream(text);
       parsed->print(stream);
@@ -691,14 +695,33 @@ construction Base<N:nat> for First<N>{base authored;}
         }
         compileSource(source, false, "m::Packed");
       });
+  auto withCompletion = [&](std::string source) {
+    auto at = source.find("->(ok:bool@V){");
+    require(at != std::string::npos, "completion protocol exists");
+    source.replace(at, StringRef("->(ok:bool@V){").size(),
+                   "->(ok:bool@V) completes {");
+    at = source.find("return last==first+c;");
+    require(at != std::string::npos, "completion return exists");
+    source.replace(at, StringRef("return last==first+c;").size(),
+                   "let ()=finish_if @P(true) ();"
+                   "let ok=finish_if @V(last==first+c) (ok=true);return ok;");
+    return source;
+  };
+  cases.run("record codecs preserve conditional participant completion", [&] {
+    compileSource(withCompletion((program + deployment + codec).str()), false,
+                  "m::Packed");
+  });
   for (StringRef mutation :
        {"provider", "record", "layout", "group", "slice", "helper",
         "calculation", "large-body", "action-order", "helper-selection",
-        "unknown-metadata", "reader-calculation"})
+        "unknown-metadata", "reader-calculation", "conditional-call",
+        "conditional-arms"})
     cases.run(
         ("independent record checker refuses changed " + mutation).str(),
         [&, mutation] {
           auto input = (program + deployment + codec).str();
+          if (mutation.starts_with("conditional-"))
+            input = withCompletion(std::move(input));
           if (mutation == "reader-calculation") {
             for (auto change :
                  {std::pair<StringRef, StringRef>{
@@ -855,6 +878,41 @@ construction Base<N:nat> for First<N>{base authored;}
             interface.set("construction", construction.getDictionary(&context));
             projection.setInterfacesAttr(
                 builder.getArrayAttr({interface.getDictionary(&context)}));
+          } else if (mutation.starts_with("conditional-")) {
+            auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+                candidate->getBody()->front());
+            auto view = take(zkc::protocol::readSourceExecutionClosure(module));
+            auto name = *transport[7].getAsString();
+            const auto &branch = view.bodies.at(name.str()).front();
+            require(branch.regions.size() == 2,
+                    "codec has both conditional arms");
+            if (mutation == "conditional-call") {
+              auto region = branch.regions.front();
+              auto *call =
+                  view.bodies.at(region.getSymName().str()).front().operation;
+              require(mlir::isa<mlir::func::CallOp>(call),
+                      "taken codec arm calls its source method");
+              call->setAttr("runtime.site",
+                            mlir::StringAttr::get(&context, "changed"));
+            } else {
+              auto f =
+                  mlir::SymbolTable(module).lookup<mlir::func::FuncOp>(name);
+              auto first = mlir::FlatSymbolRefAttr::get(branch.regions[0]);
+              auto second = mlir::FlatSymbolRefAttr::get(branch.regions[1]);
+              unsigned changed = 0;
+              f.walk([&](mlir::func::CallOp call) {
+                if (call.getCalleeAttr() == first) {
+                  call.setCalleeAttr(second);
+                  ++changed;
+                } else if (call.getCalleeAttr() == second) {
+                  call.setCalleeAttr(first);
+                  ++changed;
+                }
+              });
+              require(changed == 2, "both actual codec arms were exchanged");
+            }
+            require(mlir::succeeded(mlir::verify(*candidate)),
+                    "changed conditional remains admitted");
           } else if (mutation == "provider")
             transport[0] = "different-provider";
           else if (mutation == "record")
@@ -869,20 +927,26 @@ construction Base<N:nat> for First<N>{base authored;}
                             ->str();
             auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
                 candidate->getBody()->front());
-            auto f = mlir::SymbolTable(module).lookup<zkc::local::FuncOp>(name);
+            auto f = mlir::SymbolTable(module).lookup<mlir::func::FuncOp>(name);
             auto &op = f.getBody().front().front();
-            op.setOperand(1, op.getOperand(2));
+            op.setOperand(2, op.getOperand(3));
           } else if (mutation == "helper") {
             auto module = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
                 candidate->getBody()->front());
-            auto f = mlir::SymbolTable(module).lookup<zkc::local::FuncOp>(
+            auto f = mlir::SymbolTable(module).lookup<mlir::func::FuncOp>(
                 plan.codec->finish.getValue());
-            // Preserve the function type and add an unrelated data operation.
+            // Preserve the data signature while changing the actual reached
+            // body.
+            f.getBody().dropAllReferences();
+            f.getBody().getBlocks().clear();
             mlir::OpBuilder builder(&context);
-            builder.setInsertionPoint(&f.getBody().front().back());
-            zkc::local::BoolConstantOp::create(
-                builder, f.getLoc(), builder.getI1Type(),
-                builder.getBoolAttr(true), builder.getStringAttr("extra"));
+            builder.setInsertionPointToEnd(f.addEntryBlock());
+            zkc::exec::ScopedExecutionBuilder control(builder, f);
+            control.invoke(
+                "exec.boolean", {builder.getI1Type()}, control.scoped({}),
+                {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+                 builder.getNamedAttr("site", builder.getStringAttr("extra"))});
+            control.returned({});
           } else {
             bool changed = false;
             candidate->walk([&](zkc::protocol_ir::ParticipantOp participant) {
@@ -905,9 +969,8 @@ construction Base<N:nat> for First<N>{base authored;}
                                                : "native-codec-correspondence"),
                   "independent codec checker refuses mutation");
         });
-  cases.run("index adapters allocate fresh sites around existing Local code",
-            [&] {
-              compileSource(R"(module m;
+  cases.run("index adapters keep handler occurrence sites separate", [&] {
+    compileSource(R"(module m;
       domain F=field("koala-bear.ext8-binomial3");
       math fn less(x:index,y:index)->bool=primitive("index.less");
       interface ProviderType {type State:Copy+Drop;fn initialize()->State effects(stop, opaque);}
@@ -928,8 +991,8 @@ construction Base<N:nat> for First<N>{base authored;}
       }
       proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
     )",
-                            true);
-            });
+                  true);
+  });
   cases.run("managed methods retain selected handler authority", [&] {
     auto source =
         program.take_front(program.find("construction Derived")).str();
@@ -957,8 +1020,8 @@ construction Base<N:nat> for First<N>{base authored;}
     auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
     mlir::SymbolTable table(unit);
     auto handler =
-        table.lookup<zkc::local::FuncOp>(plan.rules.front().handler.getValue());
-    auto clone = mlir::cast<zkc::local::FuncOp>(handler->clone());
+        table.lookup<mlir::func::FuncOp>(plan.rules.front().handler.getValue());
+    auto clone = mlir::cast<mlir::func::FuncOp>(handler->clone());
     mlir::SymbolTable::setSymbolName(clone, "unselected_managed_handler");
     unit.getBody().front().push_back(clone);
     require(mlir::succeeded(mlir::verify(*original)),
@@ -1034,7 +1097,8 @@ construction Base<N:nat> for First<N>{base authored;}
                             .front()
                             .getOps<zkc::protocol_ir::ParticipantOp>()
                             .begin();
-    auto calls = participant.getBody().front().getOps<zkc::local::CallOp>();
+    auto calls =
+        participant.getBody().front().getOps<zkc::protocol_ir::LocalCallOp>();
     auto iterator = calls.begin();
     auto factory = *iterator++;
     auto start = *iterator++;
@@ -1056,13 +1120,14 @@ construction Base<N:nat> for First<N>{base authored;}
             "independent checker refuses bypassed start state");
     observation->setOperand(0, start.getResult(0));
     mlir::SymbolTable table(unit);
-    auto helper = table.lookup<zkc::local::FuncOp>(observation.getCallee());
-    auto returned =
-        mlir::cast<zkc::local::ReturnOp>(helper.getBody().front().back());
+    auto helper = table.lookup<mlir::func::FuncOp>(observation.getCallee());
+    zkc::exec::ReturnOp returned;
+    helper.walk([&](zkc::exec::ReturnOp op) { returned = op; });
+    require(bool(returned), "adapter has a scoped source return");
     require(returned.getNumOperands() == 2 &&
-                returned.getInputs()[0] != returned.getInputs()[1],
+                returned.getValues()[0] != returned.getValues()[1],
             "handler returns two distinct state slots");
-    returned->setOperand(0, returned.getInputs()[1]);
+    returned->setOperand(0, returned.getValues()[1]);
     require(mlir::succeeded(mlir::verify(*built.module)),
             "changed copyable handler remains well typed");
     error = zkc::detail::verifyNativeTranscript(*before, *built.module, policy,
@@ -1084,72 +1149,80 @@ construction Base<N:nat> for First<N>{base authored;}
     limits.work = project.checkedWork() - 1;
     refuses(checked(source, limits), "source.limit");
   });
-  cases.run("repeated handler copies have a separate construction budget", [&] {
-    std::string messages, labels;
-    for (unsigned i = 0; i < 24; ++i) {
-      auto label = "extra" + std::to_string(i);
-      messages += "#[site(" + label + ")] let ignored" + std::to_string(i) +
-                  "=send P->V(secret);";
-      labels += "," + label;
-    }
-    auto source =
-        replace("return last==first+c;", messages + "return last==first+c;");
-    auto at = source.find("{commitment,response}");
-    require(at != std::string::npos, "message selectors exist");
-    source.replace(at, StringRef("{commitment,response}").size(),
-                   "{commitment,response" + labels + "}");
-    auto project = take(checked(source + deployment.str()));
-    auto closed = take(closeEntry(project, "m::Demo"));
-    auto parsed = mlir::parseSourceString<mlir::ModuleOp>(
-        take(emitOriginal(closed, context)), &context);
-    require(bool(parsed), "budget fixture parses");
-    auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
-        parsed->getBody()->front());
-    auto record = *unit.getBody()
-                       .front()
-                       .getOps<zkc::protocol_ir::ConstructionOp>()
-                       .begin();
-    mlir::SymbolTableCollection symbols;
-    auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
-    mlir::SymbolTable table(unit);
-    auto message = llvm::find_if(plan.rules, [](const auto &rule) {
-      return rule.kind == zkc::protocol::ConstructionRuleKind::Message;
-    });
-    require(message != plan.rules.end(), "message handler exists");
-    auto handler =
-        table.lookup<zkc::local::FuncOp>(message->handler.getValue());
-    mlir::OpBuilder builder(&context);
-    builder.setInsertionPoint(&handler.getBody().front().back());
-    for (unsigned i = 0; i < 12000; ++i) {
-      zkc::local::BoolConstantOp::create(
-          builder, handler.getLoc(), builder.getBoolAttr(false),
-          builder.getStringAttr("cost" + std::to_string(i)));
-    }
-    SmallVector<mlir::Attribute> rules;
-    for (auto item : record.getRules()) {
-      mlir::NamedAttrList rule(mlir::cast<mlir::DictionaryAttr>(item));
-      if (rule.get("kind") == builder.getStringAttr("message"))
-        rule.set("handler", message->handler);
-      rules.push_back(rule.getDictionary(&context));
-    }
-    record.setRulesAttr(builder.getArrayAttr(rules));
-    require(mlir::succeeded(mlir::verify(*parsed)),
-            "one large handler remains well formed before repeated copying");
-    zkc::NativeProofPolicy policy;
-    policy.entry = plan.target.getValue().str();
-    policy.construction = plan.symbol.getValue().str();
-    policy.services.assign(plan.services.begin(), plan.services.end());
-    policy.publicInputs = {0};
-    auto protocol =
-        table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
-    policy.producer =
-        mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
-    policy.validator =
-        mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
-    auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
-    refuses(zkc::constructNativeProof(*parsed, selected),
-            "native-proof-construction-limit");
-  });
+  cases.run(
+      "repeated handler expansion has a separate construction budget", [&] {
+        std::string messages, labels;
+        for (unsigned i = 0; i < 24; ++i) {
+          auto label = "extra" + std::to_string(i);
+          messages += "#[site(" + label + ")] let ignored" + std::to_string(i) +
+                      "=send P->V(secret);";
+          labels += "," + label;
+        }
+        auto source = replace("return last==first+c;",
+                              messages + "return last==first+c;");
+        auto at = source.find("{commitment,response}");
+        require(at != std::string::npos, "message selectors exist");
+        source.replace(at, StringRef("{commitment,response}").size(),
+                       "{commitment,response" + labels + "}");
+        auto project = take(checked(source + deployment.str()));
+        auto closed = take(closeEntry(project, "m::Demo"));
+        auto parsed = mlir::parseSourceString<mlir::ModuleOp>(
+            take(emitOriginal(closed, context)), &context);
+        require(bool(parsed), "budget fixture parses");
+        auto unit = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
+            parsed->getBody()->front());
+        auto record = *unit.getBody()
+                           .front()
+                           .getOps<zkc::protocol_ir::ConstructionOp>()
+                           .begin();
+        mlir::SymbolTableCollection symbols;
+        auto plan = take(zkc::protocol::readConstructionPlan(record, symbols));
+        mlir::SymbolTable table(unit);
+        auto message = llvm::find_if(plan.rules, [](const auto &rule) {
+          return rule.kind == zkc::protocol::ConstructionRuleKind::Message;
+        });
+        require(message != plan.rules.end(), "message handler exists");
+        auto handler =
+            table.lookup<mlir::func::FuncOp>(message->handler.getValue());
+        handler.getBody().dropAllReferences();
+        handler.getBody().getBlocks().clear();
+        mlir::OpBuilder builder(&context);
+        builder.setInsertionPointToEnd(handler.addEntryBlock());
+        zkc::exec::ScopedExecutionBuilder control(builder, handler);
+        for (unsigned i = 0; i < 12000; ++i)
+          control.invoke(
+              "exec.boolean", {builder.getI1Type()}, control.scoped({}),
+              {builder.getNamedAttr("value", builder.getBoolAttr(false)),
+               builder.getNamedAttr(
+                   "site", builder.getStringAttr("cost" + std::to_string(i)))});
+        control.returned(
+            handler.getArguments().drop_front().take_front(plan.state.size()));
+        SmallVector<mlir::Attribute> rules;
+        for (auto item : record.getRules()) {
+          mlir::NamedAttrList rule(mlir::cast<mlir::DictionaryAttr>(item));
+          if (rule.get("kind") == builder.getStringAttr("message"))
+            rule.set("handler", message->handler);
+          rules.push_back(rule.getDictionary(&context));
+        }
+        record.setRulesAttr(builder.getArrayAttr(rules));
+        require(
+            mlir::succeeded(mlir::verify(*parsed)),
+            "one large handler remains well formed before repeated expansion");
+        zkc::NativeProofPolicy policy;
+        policy.entry = plan.target.getValue().str();
+        policy.construction = plan.symbol.getValue().str();
+        policy.services.assign(plan.services.begin(), plan.services.end());
+        policy.publicInputs = {0};
+        auto protocol =
+            table.lookup<zkc::protocol_ir::MathematicalOp>(policy.entry);
+        policy.producer =
+            mlir::cast<mlir::StringAttr>(protocol.getRoles()[0]).str();
+        policy.validator =
+            mlir::cast<mlir::StringAttr>(protocol.getRoles()[1]).str();
+        auto selected = take(zkc::selectNativeProofDraws(*parsed, policy));
+        refuses(zkc::constructNativeProof(*parsed, selected),
+                "native-proof-construction-limit");
+      });
   cases.run("selectors descend through labelled protocol applications", [&] {
     auto text = replace("protocol Round<T:", "protocol Child<T:");
     const auto declaration = text.find("construction Derived");

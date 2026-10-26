@@ -11,6 +11,10 @@ namespace zkc::protocol {
 /// Select the execution checking owner from the signature or execution
 /// markers, including malformed partial signatures. This is not admission.
 bool isScopedExecutionFunction(mlir::func::FuncOp function);
+/// Logical data signature of an ordinary scoped helper: exclude its borrowed
+/// scope and expose the outcome payload. Returns null for malformed signatures
+/// and outlined control bodies. This is shape inspection, not body admission.
+mlir::FunctionType scopedDataSignature(mlir::func::FuncOp function);
 /// Reconstruct native local definitions from the bounded Func/CF execution
 /// profile. Read actual bodies, scopes, bindings and outcome edges; refuse
 /// unconsumed blocks and unchecked callees. The returned model is independently

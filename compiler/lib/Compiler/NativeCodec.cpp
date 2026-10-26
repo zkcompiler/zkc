@@ -1,6 +1,7 @@
 #include "NativeCodec.h"
-#include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
@@ -54,25 +55,34 @@ class CodecEmitter {
     symbols.insert(op);
     return FlatSymbolRefAttr::get(op);
   }
-  Operation *kernel(StringRef contract, ValueRange inputs, TypeRange outputs) {
-    auto selected = binding(contract);
-    OperationState state(module.getLoc(),
-                         protocol::boundOperationName(contract));
-    state.addOperands(inputs);
-    state.addTypes(outputs);
-    state.addAttribute("binding", selected);
-    state.addAttribute("site", builder.getStringAttr(fresh()));
-    state.addAttribute("parameters", builder.getArrayAttr({}));
-    return builder.create(state);
+  SmallVector<Value> kernel(exec::ScopedExecutionBuilder &control,
+                            StringRef contract, ValueRange inputs,
+                            TypeRange outputs, StringRef site) {
+    return control.invoke(
+        "exec.apply", outputs, control.scoped(inputs),
+        {builder.getNamedAttr("binding", binding(contract)),
+         builder.getNamedAttr("site", builder.getStringAttr(site)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
   }
-  local::FuncOp function(TypeRange inputs, TypeRange outputs) {
+  func::FuncOp function(TypeRange inputs, TypeRange outputs,
+                        bool region = false) {
     builder.setInsertionPointToEnd(&module.getBody().front());
-    auto f = local::FuncOp::create(builder, module.getLoc(), fresh(),
-                                   builder.getFunctionType(inputs, outputs));
+    SmallVector<Type> scoped{runtime::ScopeType::get(module.getContext())};
+    append_range(scoped, inputs);
+    auto f = func::FuncOp::create(
+        builder, module.getLoc(), fresh(),
+        builder.getFunctionType(
+            scoped, {exec::OutcomeType::get(module.getContext(),
+                                            SmallVector<Type>(outputs))}));
+    f.setPrivate();
+    f.setNoInline(true);
+    if (region)
+      f->setAttr("runtime.region", builder.getUnitAttr());
+    else
+      f->setAttr("runtime.origin",
+                 builder.getArrayAttr({builder.getStringAttr(f.getSymName()),
+                                       builder.getArrayAttr({})}));
     symbols.insert(f);
-    f->setAttr("logical_origin",
-               builder.getArrayAttr({builder.getStringAttr(f.getSymName()),
-                                     builder.getArrayAttr({})}));
     builder.setInsertionPointToEnd(f.addEntryBlock());
     return f;
   }
@@ -83,86 +93,70 @@ class CodecEmitter {
     SmallVector<Type> inputs{bytes}, outputs(count, bytes);
     inputs.append(2 * count, index);
     auto f = function(inputs, outputs);
-    auto args = f.getBody().front().getArguments();
+    exec::ScopedExecutionBuilder control(builder, f);
+    auto args = f.getArguments().drop_front();
     SmallVector<Value> values;
     for (unsigned i = 0; i < count; ++i)
-      values.push_back(kernel("bytes.slice",
+      values.push_back(kernel(control, "bytes.slice",
                               {args[0], args[1 + 2 * i], args[2 + 2 * i]},
-                              {bytes})
-                           ->getResult(0));
-    local::ReturnOp::create(builder, module.getLoc(), values);
+                              {bytes}, "slice_" + std::to_string(i))[0]);
+    control.returned(values);
     auto result = FlatSymbolRefAttr::get(f);
     slices.emplace(count, result);
     return result;
   }
   Expected<FlatSymbolRefAttr> conditional(FlatSymbolRefAttr method,
                                           bool writing) {
-    auto source = symbols.lookup<local::FuncOp>(method.getValue());
-    if (!source || !source.getBody().hasOneBlock())
+    auto source = symbols.lookup<func::FuncOp>(method.getValue());
+    auto signature = protocol::scopedDataSignature(source);
+    if (!signature)
       return error("native-proof-codec-function");
     SmallVector<Type> inputs{builder.getI1Type()};
-    append_range(inputs, source.getArgumentTypes());
-    auto f = function(inputs, source.getResultTypes());
-    auto branch = local::LocalIfOp::create(
-        builder, module.getLoc(), source.getResultTypes(),
-        f.getBody().front().getArguments(), fresh());
-    for (bool taken : {true, false}) {
-      auto &region = taken ? branch.getThenRegion() : branch.getElseRegion();
-      auto *body = new Block;
-      region.push_back(body);
-      body->addArguments(
-          source.getArgumentTypes(),
-          SmallVector<Location>(source.getNumArguments(), module.getLoc()));
-      builder.setInsertionPointToEnd(body);
-      if (taken) {
-        IRMapping env;
-        env.map(source.getBody().front().getArguments(), body->getArguments());
-        for (auto &op : source.getBody().front()) {
-          auto walked = op.walk([&](Operation *) {
-            if (!remaining)
-              return WalkResult::interrupt();
-            --remaining;
-            return WalkResult::advance();
-          });
-          if (walked.wasInterrupted())
-            return error("native-proof-codec-limit");
-          if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-            SmallVector<Value> outputs;
-            for (Value value : returned.getInputs())
-              outputs.push_back(env.lookup(value));
-            local::LocalYieldOp::create(builder, module.getLoc(), outputs);
-          } else
-            builder.clone(op, env);
-        }
-      } else {
-        SmallVector<Value> outputs;
-        if (writing)
-          outputs.push_back(kernel("bytes.empty", {}, {bytes})->getResult(0));
-        local::LocalYieldOp::create(builder, module.getLoc(), outputs);
-      }
-    }
-    builder.setInsertionPointAfter(branch);
-    local::ReturnOp::create(builder, module.getLoc(), branch.getResults());
+    append_range(inputs, signature.getInputs());
+    auto f = function(inputs, signature.getResults());
+    exec::ScopedExecutionBuilder control(builder, f);
+    auto args = f.getArguments().drop_front();
+    auto values = control.conditional(
+        args.front(), args.drop_front(), signature.getResults(), "finish",
+        [&](unsigned arm) {
+          auto body =
+              function(signature.getInputs(), signature.getResults(), true);
+          exec::ScopedExecutionBuilder nested(builder, body);
+          SmallVector<Value> returned;
+          if (!arm)
+            returned = nested.invoke(
+                "func.call", signature.getResults(),
+                nested.scoped(body.getArguments().drop_front()),
+                {builder.getNamedAttr("callee", method),
+                 builder.getNamedAttr("runtime.site",
+                                      builder.getStringAttr("handler"))});
+          else if (writing)
+            returned = kernel(nested, "bytes.empty", {}, {bytes}, "empty");
+          nested.complete(returned);
+          return body;
+        });
+    control.returned(values);
     return FlatSymbolRefAttr::get(f);
   }
-  local::CallOp invoke(pir::ParticipantOp participant,
-                       FlatSymbolRefAttr reference, ValueRange inputs,
-                       StringRef anchor, bool following = false) {
-    auto f = symbols.lookup<local::FuncOp>(reference.getValue());
+  pir::LocalCallOp invoke(pir::ParticipantOp participant,
+                          FlatSymbolRefAttr reference, ValueRange inputs,
+                          StringRef anchor, bool following = false) {
+    auto f = symbols.lookup<func::FuncOp>(reference.getValue());
     auto location =
         builder.getInsertionPoint() == builder.getInsertionBlock()->end()
             ? participant.getLoc()
             : builder.getInsertionPoint()->getLoc();
-    auto call =
-        local::CallOp::create(builder, location, f.getResultTypes(), inputs,
-                              reference, builder.getStringAttr(fresh()));
+    auto call = pir::LocalCallOp::create(
+        builder, location, protocol::scopedDataSignature(f).getResults(),
+        inputs, reference, builder.getStringAttr(fresh()),
+        participant.getRoleAttr());
     if (!is_contained(helpers, reference))
       helpers.push_back(reference);
     auto target = builder.getDictionaryAttr(
         {builder.getNamedAttr("participant",
                               FlatSymbolRefAttr::get(participant)),
          builder.getNamedAttr("operation",
-                              builder.getStringAttr("local.call"))});
+                              builder.getStringAttr("protocol.local_call"))});
     auto action = builder.getDictionaryAttr(
         {builder.getNamedAttr("site", call.getSiteAttr()),
          builder.getNamedAttr("kind",
@@ -229,7 +223,7 @@ class CodecEmitter {
   Error message(pir::ParticipantOp participant, Message &selected,
                 ArrayRef<Operation *> transport, SmallVectorImpl<Value> &record,
                 Value proof,
-                const StringMap<SmallVector<local::CallOp>> &calls) {
+                const StringMap<SmallVector<pir::LocalCallOp>> &calls) {
     if (transport.size() != selected.encode->sites.size() ||
         !llvm::equal(
             transport, selected.encode->sites,
@@ -238,7 +232,7 @@ class CodecEmitter {
             }))
       return error("native-proof-codec-group");
     bool writing = participant.getRole() == policy.producer;
-    SmallVector<local::CallOp> observations;
+    SmallVector<pir::LocalCallOp> observations;
     for (auto reference : selected.observations) {
       auto found = calls.find(reference.getValue());
       if (found == calls.end() || found->second.size() != 1)
@@ -303,11 +297,11 @@ class CodecEmitter {
               SmallVector<Value> record, Value proof, unsigned depth) {
     if (depth > 64)
       return error("native-proof-codec-limit");
-    StringMap<SmallVector<local::CallOp>> calls;
+    StringMap<SmallVector<pir::LocalCallOp>> calls;
     for (auto &op : body) {
       if (!remaining--)
         return error("native-proof-codec-limit");
-      if (auto call = dyn_cast<local::CallOp>(op))
+      if (auto call = dyn_cast<pir::LocalCallOp>(op))
         calls[call.getCallee()].push_back(call);
     }
     SmallVector<Operation *> transport;
@@ -474,7 +468,7 @@ public:
             return rule.kind == Rule::Kind::Start;
           });
       for (unsigned i = 0; i < roots; ++i) {
-        auto call = dyn_cast_or_null<local::CallOp>(position);
+        auto call = dyn_cast_or_null<pir::LocalCallOp>(position);
         if (!call)
           return error("native-proof-codec-root");
         anchor = call.getSite();

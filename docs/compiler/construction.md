@@ -77,7 +77,7 @@ Canonical receive decoding precedes observation. [Structured frames](../spec/for
 bind complete types, tags, lengths and payloads. Records, alternatives, nominal
 numerical collections, bytes and sequences use the same typed codec. Copyability
 alone grants neither wire permission nor cross-role availability. A selected
-record codec uses ordinary Local functions for encoding, range selection,
+record codec uses ordinary scoped functions for encoding, range selection,
 decoding and finalization. Compiler-owned slices preserve the exact proof bytes
 observed by optional wire handlers. Decoded values feed mathematical handlers.
 The common Host transports one bounded raw buffer and executes no codec-specific
