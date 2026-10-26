@@ -270,8 +270,9 @@ class Driver(Runner):
                        f"  ⟨{imported}.program, by rw [original_retained]; exact {imported}.admitted⟩",
                        "theorem actual_accepted : Zkc.Construction.checkCompiled freshImported "
                        "Fresh.Actual.participant = .ok () := by decide +kernel",
-                       "theorem actual_selected : Zkc.Construction.checkSelection freshImported "
-                       "Fresh.Actual.participant = true := by decide +kernel"]
+                       "theorem actual_selected : (Zkc.Construction.select freshImported "
+                       "Fresh.Actual.participant).any (fun selection => "
+                       "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel"]
         else:
             proofs.append("theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
                           "Fresh.Actual.participant = .ok () := by decide +kernel")
