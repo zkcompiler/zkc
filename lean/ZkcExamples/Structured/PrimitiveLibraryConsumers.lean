@@ -12,7 +12,6 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
 set_option smartUnfolding false
-set_option linter.unusedSimpArgs false
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]

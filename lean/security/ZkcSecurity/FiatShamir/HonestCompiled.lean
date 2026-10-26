@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.PairAcceptance
 public import ZkcSecurity.FiatShamir.TranscriptOracle
 public import ZkcSecurity.FiatShamir.Honest
+public import Zkc.Semantics.WeakestPrecondition
 
 @[expose] public section
 
@@ -13,6 +14,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.FiatShamir.HonestCompiled
 open Zkc.Source Zkc.Construction
 open OracleComp OracleSpec
+open Std.WP
 
 /-- Domain's explicit oracle-state parameter is Unit because the coherent
 cache belongs to the outer StateT simulation, not to either participant. -/
@@ -117,5 +119,61 @@ theorem eval_computation (model : Structured.DomainModel) (program : Structured.
   case stopped =>
     rfl
 
+/-- Pointwise completeness of both actual participants on the same answer
+table. Validation receives the producer's actual proof and oracle post-state.
+Both phases must return, and the validator must consume the whole proof.
+Each phase has its own event list, as in `Domain.PairExecution`. -/
+def pairWP (model : Structured.DomainModel) (program : Structured.Program)
+    (context : Context) (producer validator : Participant)
+    (producerInputs validatorInputs : Domain.Environment model.toCarriers)
+    (position : Nat)
+    (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) : Prop :=
+  letI := PIR.WeakestPrecondition.wpMonad (Domain.handler .producer (tableOracle answers))
+  Std.WP.wp (Domain.participant model program context producer producerInputs)
+    (fun _ produced _ =>
+      letI := PIR.WeakestPrecondition.wpMonad (Domain.handler .validator (tableOracle answers))
+      Std.WP.wp (Domain.participant model program context validator validatorInputs)
+        (fun result validated _ => validated.proof = [] ∧
+          Domain.acceptanceAt position result.values = some true)
+        estack⟨fun _ _ _ => False⟩
+        ⟨validatorInputs, produced.proof, produced.oracle⟩ [])
+    estack⟨fun _ _ _ => False⟩ ⟨producerInputs, [], ()⟩ []
+
+/-- The pointwise WP is precisely the existing whole-pair success event.
+No probability law or new acceptance policy is introduced. -/
+theorem pair_success_iff_wp (model : Structured.DomainModel) (program : Structured.Program)
+    (context : Context) (producer validator : Participant)
+    (producerInputs validatorInputs : Domain.Environment model.toCarriers)
+    (position : Nat)
+    (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
+    Domain.PairExecution.Success position
+      (Domain.executePair (m := Id) model program context producer validator
+        producerInputs validatorInputs (tableOracle answers) ()) ↔
+      pairWP model program context producer validator producerInputs validatorInputs position answers := by
+  have produceLaw := PIR.runM_pure (m := Id)
+    (Domain.handler .producer (tableOracle answers))
+    (Domain.participant model program context producer producerInputs) ⟨producerInputs, [], ()⟩
+  have validateLaw (proof : Domain.Proof model.toCarriers) := PIR.runM_pure (m := Id)
+    (Domain.handler .validator (tableOracle answers))
+    (Domain.participant model program context validator validatorInputs) ⟨validatorInputs, proof, ()⟩
+  change Domain.produce model program context producer producerInputs (tableOracle answers) () = _ at produceLaw
+  change ∀ proof, Domain.validate model program context validator validatorInputs proof
+    (tableOracle answers) () = _ at validateLaw
+  simp only [Domain.executePair, produceLaw]
+  unfold pairWP
+  simp only [PIR.WeakestPrecondition.wp_eq_run]
+  generalize (Domain.participant model program context producer producerInputs).run
+    (Domain.handler .producer (tableOracle answers)) ⟨producerInputs, [], ()⟩ = produced
+  rcases produced with ⟨outcome, ⟨environment, proof, oracleState⟩, events⟩
+  cases oracleState
+  cases outcome with
+  | stopped reason => simp [Domain.PairExecution.Success, PIR.WeakestPrecondition.satisfies]
+  | returned value =>
+    simp only [Bind.bind, Pure.pure, validateLaw]
+    simp only [PIR.WeakestPrecondition.satisfies]
+    generalize (Domain.participant model program context validator validatorInputs).run
+      (Domain.handler .validator (tableOracle answers)) ⟨validatorInputs, proof, ()⟩ = validated
+    rcases validated with ⟨outcome, state, events⟩
+    cases outcome <;> simp [Domain.PairExecution.Success]
 
 end ZkcSecurity.FiatShamir.HonestCompiled

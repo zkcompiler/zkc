@@ -6,6 +6,7 @@ public import Zkc.Construction.DomainCalculations
 @[expose] public section
 set_option autoImplicit false
 -- Callback hooks are deliberately unused in the refusal/terminal controls.
+-- Negative tactic controls deliberately supply callbacks that must remain unexecuted.
 set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
 set_option linter.unusedVariables false

@@ -19,7 +19,7 @@ As in `ZkcSecurity.HashChain.simulatedExperiment_eq_translated`, the comparison 
 ahead (`fillJoint`): the chain part as `ZkcSecurity.HashChain.fillAll` fills it, with the joint
 cache holding the filled history answers at the chain histories of transcript keys and the hash
 answers as they are (`combine`). Each step commutes with the fill
-(`ZkcSecurity.VCVio.Deferral.evalSPMF_simulateQ_fill`):
+(`ZkcSecurity.VCVio.Deferral.evalDistEq_simulateQ_fill`):
 
 - a chain input by `ZkcSecurity.HashChain.adversary_commute`, since on a chain input the joint
   simulator's step is the chain simulator's (`flatJoint_run_chain`);
@@ -152,7 +152,7 @@ theorem adversary_eq {α : Type} (adversary : OracleComp (ByteHash S) α) {calls
     (fillJoint width length slots state >>= fun filled =>
         (simulateQ (flatJoint encoding width length) adversary).run filled) =ᵈ ((simulateQ (splitSimulator encoding width) adversary).run state >>= fun result =>
         (fun filled => (result.1, filled)) <$> fillJoint width length slots result.2) :=
-  evalSPMF_simulateQ_fill (splitSimulator encoding width) (flatJoint encoding width length)
+  evalDistEq_simulateQ_fill (splitSimulator encoding width) (flatJoint encoding width length)
     (fillJoint width length slots)
     (fun remaining current => Organized current.1 ∧ current.1.consumed.length + remaining ≤ length ∧
       current.1.touched.length + remaining ≤ slots)
@@ -239,7 +239,7 @@ theorem verifier_eq (positive : 0 < width) {β : Type}
     (rows : Query → Option S) (organized : Organized tables)
     (room : tables.touched.length + queries ≤ slots) :
     (fillCache width slots (tables, rows) >>= fun cache => (simulateQ randomOracle reading).run' cache) =ᵈ ((simulateQ (lazyJoint width) reading).run' (tables, rows)) := by
-  have filled := evalSPMF_simulateQ_fill (lazyJoint width) randomOracle (fillCache width slots)
+  have filled := evalDistEq_simulateQ_fill (lazyJoint width) randomOracle (fillCache width slots)
     (fun remaining current => Organized current.1 ∧ current.1.touched.length + remaining ≤ slots)
     (fun _ key current inv => by
       cases key with
@@ -339,7 +339,7 @@ theorem lazy_eq_translated (positive : 0 < width)
         (simulateQ (flatJoint encoding width calls) adversary.withQueryLog).run state) >>= finish) := by
     simp only [translatedExperiment, right, fillJoint, fillAll, completed_empty, completedWith_empty,
       combine_empty, map_bind, map_pure, bind_assoc, pure_bind]
-    exact (evalSPMF_uniform_drop _).symm
+    exact (OracleComp.EvalDistEq.bind_const _ _).symm
   symm
   refine filled.trans (((adversary_eq encoding width calls slots adversary.withQueryLog logged
     (Simulated.empty width, fun _ => none) (fun _ _ absent => absurd rfl absent)
@@ -365,7 +365,7 @@ theorem lazy_eq_translated (positive : 0 < width)
     simp only [bind_map_left, finish, fillJoint, fillAll, fillCache, fillHistory, bind_assoc, pure_bind,
       map_bind]
     refine EvalDistEq.bind_right _ fun rowsTable => ?_
-    exact evalSPMF_uniform_drop _
+    exact OracleComp.EvalDistEq.bind_const _ _
   simpa only [bind_pure_comp] using
     dropped.trans (verified.map (assemble encoding width started.1))
 

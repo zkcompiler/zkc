@@ -12,7 +12,6 @@ namespace ZkcExamples.Structured.MapFirstLaws
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstBodies
 open Zkc.Polynomial.Multilinear (restrictValues)
 set_option smartUnfolding true
-set_option linter.unusedSimpArgs false
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -60,11 +59,9 @@ theorem first_body (table : Meanings F G) (halves : HalvesLaw table) (map : MapL
       Nat.lt_of_le_of_lt (by simp only [List.length_take]; exact Nat.min_le_right _ _) lengthBound
     have mapped := map (xs.take (xs.length / 2)) (xs.drop (xs.length / 2)) r sameLength lowBound
     have subBound : dimension - 1 < indexLimit := Nat.lt_of_le_of_lt (Nat.sub_le _ _) dimensionBound
-    simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get, mapped,
-      Primitive.evaluate, checkedIndices, dimensionBound,
+    simp only [positive, splitShape, ite_true, PIR.Process.bind, Values.get, Primitive.evaluate, checkedIndices, dimensionBound,
       show 1 < indexLimit by decide +kernel, and_self, ite_true, primitiveOutcome]
-    simp only [show 1 ≤ dimension by omega, subBound, ite_true, primitiveOutcome,
-      PIR.Process.bind, Values.get_cons, Environment.push, Values.get, inputs, restrictValues]
+    simp only [show 1 ≤ dimension by omega, ite_true, PIR.Process.bind, Values.get, inputs, restrictValues]
     change (invoke table mapHelper
       (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) (.cons r .nil)))).bind
       (fun result => .done (inputs (result.get .here) (dimension - 1) columns)) =
@@ -82,7 +79,7 @@ theorem restrict_shape (xs : List F) (dimension columns : Nat) (r : F)
     have dim : dimension = dimension - 1 + 1 := by omega
     rw [shape.length]
     conv_lhs => rw [dim, Nat.pow_succ]
-    simp only [Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+    simp only [Nat.mul_left_comm, Nat.mul_comm]
   exact hasShape_of_length _ _ _ shape.1 (by have := shape.2.1; omega)
     (Zkc.Polynomial.Multilinear.restrictValues_length xs r size)
 
@@ -123,20 +120,20 @@ theorem wrapper_body (table : Meanings F G)
   dsimp only [inputs, vector] at tableLaw
   rw [tableLaw]
   by_cases shape : HasShape xs dimension columns
-  · simp only [shape, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+  · simp only [shape, ite_true, PIR.Process.bind, Values.get]
     have firstLaw := firstLaw xs dimension columns r shape lengthBound
     change (invoke table firstHelper (firstInputs xs dimension columns r)).bind _ = _
     rw [firstLaw]
     by_cases positive : 0 < dimension
-    · simp only [positive, ite_true, PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+    · simp only [positive, ite_true, PIR.Process.bind]
       change (invoke table valuesRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [valuesLaw]
-      simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+      simp only [PIR.Process.bind, Values.get]
       change (invoke table variablesRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [variablesLaw]
-      simp only [PIR.Process.bind, Values.get_cons, Environment.push, Values.get]
+      simp only [PIR.Process.bind, Values.get]
       change (invoke table widthRealizationHelper
         (inputs (restrictValues xs r) (dimension - 1) columns)).bind _ = _
       rw [widthLaw]

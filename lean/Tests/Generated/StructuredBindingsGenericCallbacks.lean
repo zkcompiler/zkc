@@ -37,8 +37,7 @@ def protocol0Role0Callback0Pattern : InputPattern [.index, .index] := (.cons .op
 noncomputable def protocol0Role0Callback0Form : (Form [] [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
   (.done (.cons (.input (.there .here)) .nil))
 
-set_option linter.unusedVariables false in
-noncomputable def protocol0Role0Callback0Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
+noncomputable def protocol0Role0Callback0Process (_ctx : ProtocolContext) (_b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   .done ((.cons (b1) .nil) : (Values (Component (assignment F G)) [.index]))
 
@@ -80,24 +79,19 @@ theorem protocol0Role0Callback0_function (ctx : ProtocolContext)
   funext input
   exact protocol0Role0Callback0_source ctx distinct input
 
-set_option linter.unusedVariables false in
 noncomputable def protocol0Role0ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 0)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role0Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
--- Reflexivity is a fallback when simplification leaves a definitionally equal goal.
-set_option linter.unusedTactic false in
-set_option linter.unusedSimpArgs false in
-set_option linter.unreachableTactic false in
 theorem protocol0Role0_readable (ctx : ProtocolContext)
     (distinct : RosterDistinct ctx 0 2) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (protocol0Role0Process (F := F) (G := G) ctx b0 b1) = (protocol0Role0ReadableProcess (F := F) (G := G) ctx b0 b1) := by
-  unfold protocol0Role0Process protocol0Role0ReadableProcess
+  have equation := Eq.refl (protocol0Role0Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role0Callback0_function (F := F) (G := G) ctx distinct
   unfold protocol0Role0Callback0Body at callback0
-  simp only [callback0]
-  all_goals rfl
+  conv_rhs at equation => unfold protocol0Role0Process; simp only [callback0]
+  exact equation
 
 noncomputable def protocol0Role0ReadableView (ctx : ProtocolContext)
     (input : Values (Component (assignment F G)) definition0.inputs) :
@@ -126,8 +120,7 @@ def protocol0Role1Callback0Pattern : InputPattern [.index, .index] := (.cons .op
 noncomputable def protocol0Role1Callback0Form : (Form [] [(⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 0, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey), (⟨(⟨"counter", ["Alice", "Bob"], [.index, .index], [.index], [[0, 1], [0, 1]], [[0, 1]]⟩ : ProtocolSignature), 1, (.cons .optional (.cons .optional .nil)), []⟩ : CalleeKey)] [(.component .index), (.component .index)] [.index]) :=
   (.done (.cons (.input (.there .here)) .nil))
 
-set_option linter.unusedVariables false in
-noncomputable def protocol0Role1Callback0Process (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
+noncomputable def protocol0Role1Callback0Process (_ctx : ProtocolContext) (_b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   .done ((.cons (b1) .nil) : (Values (Component (assignment F G)) [.index]))
 
@@ -169,24 +162,19 @@ theorem protocol0Role1Callback0_function (ctx : ProtocolContext)
   funext input
   exact protocol0Role1Callback0_source ctx distinct input
 
-set_option linter.unusedVariables false in
 noncomputable def protocol0Role1ReadableProcess (ctx : ProtocolContext) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (PIR.Process (Interface (ringModel F G)) (Values (Component (assignment F G)) [.index])) :=
   ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)).run (⟨[.index], [], [0, 1], [[0, 1]], 3⟩ : RepeatSpec) (b0) (.cons (b1) .nil) .nil (fun (input : Values (Component (assignment F G)) [.index, .index]) => (protocol0Role1Callback0Process ctx (input.get .here) (input.get (.there .here))))).bind fun (b2 : (Values (Component (assignment F G)) [.index])) =>
   .done ((.cons ((b2).get .here) .nil) : (Values (Component (assignment F G)) [.index]))
 
--- Reflexivity is a fallback when simplification leaves a definitionally equal goal.
-set_option linter.unusedTactic false in
-set_option linter.unusedSimpArgs false in
-set_option linter.unreachableTactic false in
 theorem protocol0Role1_readable (ctx : ProtocolContext)
     (distinct : RosterDistinct ctx 1 2) (b0 : (Option (Nat))) (b1 : (Option (Nat))) :
     (protocol0Role1Process (F := F) (G := G) ctx b0 b1) = (protocol0Role1ReadableProcess (F := F) (G := G) ctx b0 b1) := by
-  unfold protocol0Role1Process protocol0Role1ReadableProcess
+  have equation := Eq.refl (protocol0Role1Process (F := F) (G := G) ctx b0 b1)
   have callback0 := protocol0Role1Callback0_function (F := F) (G := G) ctx distinct
   unfold protocol0Role1Callback0Body at callback0
-  simp only [callback0]
-  all_goals rfl
+  conv_rhs at equation => unfold protocol0Role1Process; simp only [callback0]
+  exact equation
 
 noncomputable def protocol0Role1ReadableView (ctx : ProtocolContext)
     (input : Values (Component (assignment F G)) definition0.inputs) :

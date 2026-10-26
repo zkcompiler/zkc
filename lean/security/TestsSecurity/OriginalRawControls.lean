@@ -6,7 +6,6 @@ import ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 2000000
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 namespace TestsSecurity.OriginalRawControls
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured

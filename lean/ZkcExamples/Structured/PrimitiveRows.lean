@@ -17,7 +17,6 @@ open PrimitiveShapeViews (lessBody lessHelper rowsBody rowsHelper shapeBody shap
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
 -- Uniform source-reduction lists are reused across different checked bodies.
-set_option linter.unusedSimpArgs false
 
 abbrev vector : Ty := .vector "bls12-381.fr"
 abbrev scalar : Ty := .field "bls12-381.fr"
@@ -62,7 +61,7 @@ theorem less_body (table : Meanings F G) (a b : Nat)
     lessBody.denote (meaning F G table) (Values.cons a (.cons b .nil)).get =
       .done (boolResult (decide (a < b))) := by
   simp [lessBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push,
+    Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
     SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate, primitiveOutcome, checkedIndices, aBound, bBound, boolResult]
 
@@ -87,16 +86,14 @@ theorem rows_body (table : Meanings F G) (less : LessLaw table) (dimension : Nat
     exact Nat.lt_trans bound (by decide +kernel)
   have comparison := less dimension 64 dimensionBound (by decide +kernel)
   simp only [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push, indexResult,
+    Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, indexResult,
     SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate, primitiveOutcome]
   simp only [show 64 < indexLimit by decide +kernel, show 1 < indexLimit by decide +kernel,
-    show 0 < indexLimit by decide +kernel, ite_true, primitiveOutcome, PIR.Process.bind,
-    comparison, boolResult, decide_eq_true bound, Evaluation.invokeCallback, Values.get_cons, Values.get,
-    Environment.prepend, Environment.push, Operands.eval, Values.split, Values.append]
+    show 0 < indexLimit by decide +kernel, ite_true, PIR.Process.bind,
+    comparison, boolResult, decide_eq_true bound, Evaluation.invokeCallback, Environment.prepend, Environment.push, Values.split]
   simp only [Evaluation.denoteLoop, Evaluation.invokeCallback, Finite.execute,
-    Finite.Domain.admit, Finite.admitThen, Nat.sub_zero, Values.split, Values.append,
-    PIR.Process.bind]
+    Finite.Domain.admit, Finite.admitThen, Nat.sub_zero]
   have folded := Finite.fold_range_state
     (I := closedInterface)
     (fun (current : Values (assignment F G) [.index]) (_ : Nat) =>
@@ -108,12 +105,12 @@ theorem rows_body (table : Meanings F G) (less : LessLaw table) (dimension : Nat
       have nextBound : i + 1 < 64 := by omega
       have multiplyBound : 2 ^ i * 2 < indexLimit := by
         simpa only [Nat.pow_succ] using power_bound (i + 1) nextBound
-      simp [indexResult, Values.get_cons, Values.get, Primitive.evaluate, checkedIndices,
+      simp [indexResult, Values.get, Primitive.evaluate, checkedIndices,
         power_bound i iBound, show 2 < indexLimit by decide +kernel, multiplyBound,
         primitiveOutcome, Nat.pow_succ])
   simp only [indexResult, Values.get_cons, Values.get, show 2 < indexLimit by decide +kernel,
     primitiveOutcome, PIR.Process.bind, Nat.pow_zero, Environment.prepend, Environment.push,
-    Values.get_cons, Values.append, Values.split, Primitive.evaluate, checkedIndices,
+    Values.get_cons, Primitive.evaluate, checkedIndices,
     singleton_prepend, singleton_eta, singleton_append, singleton_split, PIR.Process.bind_done, ite_true, and_true, Nat.zero_add] at folded ⊢
   refine Eq.trans ?_ folded
   congr 1
@@ -127,7 +124,7 @@ theorem rows_rejected (table : Meanings F G) (less : LessLaw table) (dimension :
     rowsBody.denote (meaning F G table) (indexResult dimension).get = .halt .reject := by
   have comparison := less dimension 64 bound (by decide +kernel)
   simp [rowsBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
+    Operands.eval, Regions.denote, Values.get_cons, Environment.prepend,
     Environment.push, indexResult, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate, primitiveOutcome, comparison, boolResult, large,
     Evaluation.invokeCallback, show 64 < indexLimit by decide +kernel]
@@ -157,7 +154,7 @@ theorem hasShape_of_length {A : Type} (xs : List A) (dimension columns : Nat)
     (length : xs.length = 2 ^ dimension * columns) : HasShape xs dimension columns := by
   refine ⟨positive, small, ?_, ?_⟩
   · simp [length]
-  · simp [length, Nat.mul_div_cancel, positive]
+  · simp [length, positive]
 
 /-- A positive-dimensional shaped table has a positive even flattened length. -/
 theorem HasShape.split_valid {A : Type} {xs : List A} {dimension columns : Nat}
@@ -166,7 +163,7 @@ theorem HasShape.split_valid {A : Type} {xs : List A} {dimension columns : Nat}
   have dimensionEq : dimension = dimension - 1 + 1 := by omega
   have size : xs.length = (2 ^ (dimension - 1) * columns) * 2 := by
     rw [shape.length, dimensionEq, Nat.pow_succ]
-    simp [Nat.mul_assoc, Nat.mul_comm, Nat.mul_left_comm]
+    simp [Nat.mul_comm, Nat.mul_left_comm]
   constructor
   · rw [shape.length]
     exact Nat.mul_pos (Nat.pow_pos (by decide)) shape.1
@@ -181,7 +178,7 @@ theorem HasShape.halves {A : Type} {xs : List A} {dimension columns : Nat}
   have dimensionEq : dimension = dimension - 1 + 1 := by omega
   have size : xs.length = (2 ^ (dimension - 1) * columns) * 2 := by
     rw [shape.length, dimensionEq, Nat.pow_succ]
-    simp [Nat.mul_assoc, Nat.mul_comm, Nat.mul_left_comm]
+    simp [Nat.mul_comm, Nat.mul_left_comm]
   have half : xs.length / 2 = 2 ^ (dimension - 1) * columns := by simp [size]
   have low : (xs.take (xs.length / 2)).length = 2 ^ (dimension - 1) * columns := by
     rw [List.length_take, Nat.min_eq_left (Nat.div_le_self _ _), half]
@@ -199,7 +196,7 @@ theorem less_generic_body_all (table : Meanings F G) (a b : Nat) :
       else .halt .refused := by
   simp only [lessBody, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-    Values.get_cons, Values.get, Environment.prepend, Environment.push,
+    Values.get_cons, Environment.prepend, Environment.push,
     SiteObservations.closed, SiteObservations.silent, Primitive.evaluate, checkedIndices,
     PIR.Process.bind]
   split <;> rfl

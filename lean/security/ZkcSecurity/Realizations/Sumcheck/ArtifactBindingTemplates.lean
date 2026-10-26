@@ -8,7 +8,6 @@ instruction syntax, View body and typed output association before applying this 
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -125,8 +124,5 @@ def validatorRound (program : Structured.Program)
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
       | (unfold VerifierReturns
          refine ⟨_, _, rfl, ?_⟩
-         simp (disch := omega) [verifierOutputs, SumcheckVerifierLaws.embedV,
-           Zkc.Construction.ArtifactBinding.Captures, List.append_assoc,
-           List.getElem?_append_right, size, Nat.add_sub_cancel_left,
-           List.getElem?_cons_zero, List.getElem?_cons_succ]))
+         simp (disch := omega) [verifierOutputs, List.getElem?_append_right, size, List.getElem?_cons_zero, List.getElem?_cons_succ]))
 end ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates

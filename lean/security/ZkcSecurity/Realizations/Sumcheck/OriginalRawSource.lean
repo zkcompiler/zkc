@@ -11,7 +11,6 @@ only inspected by the root's terminal helper. Neither this state nor the
 Reduce equation requires an honest table, claim, or callback reply. -/
 set_option autoImplicit false
 set_option maxRecDepth 10000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open SumcheckVerifierBodies

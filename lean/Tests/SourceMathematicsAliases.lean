@@ -12,6 +12,14 @@ namespace Tests.SourceMathematicsAliases
 open Zkc.Source Zkc.Source.Structured
 open ZkcExamples.Structured.Generated.Mathematics.TwoSums
 
+/- Repeated dependency edges cannot repeat a namespace component, even when
+the path already contains the first disambiguating candidate. -/
+#guard ZkcTools.StructuredSource.MathematicsAliases.childPath
+    "target.callee.foldStep" "callee" = "target.callee.foldStep.calleeDependency0"
+
+#guard ZkcTools.StructuredSource.MathematicsAliases.childPath
+    "target.callee.calleeDependency0" "callee" = "target.callee.calleeDependency0.calleeDependency1"
+
 example : ZkcTools.StructuredSource.MathematicsAliases.target imported.program "missing_target" =
     .error "source-mathematics-target-clause" := by kernel_rfl
 

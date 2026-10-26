@@ -1,6 +1,6 @@
 {
   "package": "Clean",
-  "revision": "b449bf590f93e13827c3c7e747e392d6969aa380",
+  "revision": "1a6c28426372bb99af79e533aa7b9a0788eff0d7",
   "patch": "compatibility.patch",
   "patch_sha256": "6b4c9c9767cbdd704aeaf058562b466e36f7709a57cc3e8db9b297190114cbd4",
   "files": {

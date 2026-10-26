@@ -80,7 +80,7 @@ theorem challengeFirst_eq [SampleableType Chal] (simulate : Stmt → Chal → Pr
 
 /-- The honest commitment is drawn independently of the uniform challenge that
 follows it, so the real transcript can draw the challenge first. -/
-theorem evalSPMF_realTranscript [SampleableType Chal]
+theorem evalDistEq_realTranscript [SampleableType Chal]
     (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
     (witness : Wit) :
     σ.realTranscript statement witness =ᵈ (($ᵗ Chal) >>= fun challenge =>
@@ -98,7 +98,7 @@ theorem SpecialHVZK.perfectHVZK [SampleableType Chal]
     σ.PerfectHVZK (challengeFirst simulate) := by
   intro statement witness valid
   rw [challengeFirst_eq]
-  refine (evalSPMF_realTranscript σ statement witness).trans ?_
+  refine (evalDistEq_realTranscript σ statement witness).trans ?_
   refine EvalDistEq.bind_right _ fun challenge => ?_
   exact EvalDistEq.map (special statement witness valid challenge) _
 
@@ -127,7 +127,7 @@ theorem SpecialHVZK.of_perfectHVZK [SampleableType Chal] [Fintype Chal]
     (perfect : σ.PerfectHVZK (challengeFirst simulate)) : SpecialHVZK σ simulate := by
   intro statement witness valid challenge
   classical
-  have total := (evalSPMF_realTranscript σ statement witness).symm.trans
+  have total := (evalDistEq_realTranscript σ statement witness).symm.trans
     (perfect statement witness valid)
   rw [challengeFirst_eq] at total
   apply EvalDistEq.of_forall_prEvent_eq

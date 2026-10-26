@@ -241,7 +241,6 @@ theorem round_passes (admitted : History F G → F → Prop) (stopped : PIR.Outc
   simp only [roundBody]
   -- The first message.
   refine Passes.cons _ _ (PassesStep.receive _ _ (common := .field a.names.scalar) rfl ?_ ?_ ?_)
-  try simp only [List.cons_append, List.nil_append]
   · intro payload rest found typed
     refine malformed (fun low high rest' same => ?_) _
     rw [found] at same
@@ -260,7 +259,6 @@ theorem round_passes (admitted : History F G → F → Prop) (stopped : PIR.Outc
     rfl messageOne rfl ?_)
   -- The second message.
   refine Passes.cons _ _ (PassesStep.receive _ _ (common := .field a.names.scalar) rfl ?_ ?_ ?_)
-  try simp only [List.cons_append, List.nil_append]
   · intro payload rest found' typed'
     refine malformed (fun low' high rest' same => ?_) _
     rw [found, found'] at same
@@ -285,7 +283,6 @@ theorem round_passes (admitted : History F G → F → Prop) (stopped : PIR.Outc
   refine Passes.cons _ _ (PassesStep.calculate _ _ rfl (calculate_equal a.names.scalar current (low + high)) ?_)
   try simp only [List.cons_append, List.nil_append]
   refine Passes.cons _ _ (PassesStep.guard _ _ (decision := decide (current = low + high)) rfl ?_ ?_)
-  try simp only [List.cons_append, List.nil_append]
   · intro failed
     exact rejected low high rest proofEq (by simpa using failed)
   intro checked

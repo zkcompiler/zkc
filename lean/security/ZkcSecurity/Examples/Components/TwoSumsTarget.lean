@@ -31,7 +31,7 @@ theorem target_step (raw : List F) (a value : F) :
   erw [public_sums.callee.foldStep.association.invoke TwoSumsInputs.unit.linked]
   simp only [public_sums.callee.foldStep.body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Values.get, Regions.denote]
-  erw [public_sums.callee.foldStep.callee.association.invoke TwoSumsInputs.unit.linked]
+  erw [public_sums.callee.foldStep.calleeDependency0.association.invoke TwoSumsInputs.unit.linked]
   rfl
 
 theorem target_total (raw : List F) (bounded : raw.length < indexLimit) :
@@ -62,7 +62,6 @@ theorem target_equation (left right : List F) (leftClaim rightClaim : F)
   change (PIR.Process.done (I := closedInterface)
     (Values.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum))
       .nil : Values (assignment F G) [.boolean])) = _
-  congr 3
-  simp only [Bool.decide_and, eq_comm]
+  simp only [← Bool.decide_and, eq_comm]
 
 end ZkcSecurity.Examples.Components.TwoSums

@@ -105,6 +105,46 @@ theorem perfect_of_all_tables (subject : Subject model original imported selecte
   intro inputs related honest
   exact (HonestSampling.failure_zero_of_all_tables _ _ (agreement inputs related honest)).le
 
+/-- Deterministic honest participants can establish the existing cached
+experiment pointwise, using the exact runner WP on every shared answer table.
+The empty-service premises are essential: fixing the public table alone does
+not resolve fresh private samples. Preparation and nonvacuity are unchanged. -/
+theorem perfect_of_pointwise_wp (subject : Subject model original imported selected)
+    [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
+    (nonvacuous : Nonvacuous subject)
+    (noProducerServices : selected.artifacts.producer.servicePorts = [])
+    (noValidatorServices : selected.artifacts.validator.servicePorts = [])
+    (agreement : ∀ inputs, subject.Relation inputs → subject.HonestInput inputs →
+      ∀ producer validator, subject.runtimeInputs inputs = some (producer, validator) →
+      ∀ answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id,
+        HonestCompiled.pairWP model imported.program subject.selection.context
+          selected.artifacts.producer selected.artifacts.validator producer validator
+          subject.selection.position answers) :
+    CanonicalCompleteness subject 0 := by
+  apply perfect_of_all_tables subject nonvacuous
+  intro inputs related honest answers
+  obtain ⟨producer, validator, prepared, _⟩ := honest.2.2
+  have succeeds := (HonestCompiled.pair_success_iff_wp model imported.program
+    subject.selection.context selected.artifacts.producer selected.artifacts.validator
+    producer validator subject.selection.position answers).mpr
+      (agreement inputs related honest producer validator prepared answers)
+  simp only [Subject.computation, prepared, SampledCompiled.computation_no_services
+    model imported.program subject.selection.context selected.artifacts.producer
+    selected.artifacts.validator producer validator noProducerServices noValidatorServices]
+  unfold unifFwdAnswerImpl
+  rw [QueryImpl.passthrough_add, QueryImpl.liftTarget_self]
+  simp only [simulateQ_map, QueryImpl.simulateQ_add_liftM_right,
+    simulateQ_liftTarget, prEvent_map]
+  change Pr{let observed ← (pure (evalWithAnswerFn answers
+    (HonestCompiled.computation model imported.program subject.selection.context
+      selected.artifacts.producer selected.artifacts.validator producer validator)) : ProbComp _)}[
+        subject.Success (some observed)] = 1
+  rw [HonestCompiled.eval_computation]
+  have accepted := (show subject.Success (some (Domain.executePair model imported.program
+    subject.selection.context selected.artifacts.producer selected.artifacts.validator
+    producer validator (HonestCompiled.tableOracle answers) ())) from ⟨_, rfl, succeeds⟩)
+  simp [accepted]
+
 theorem not_perfect_of_failed_input (subject : Subject model original imported selected)
     [∀ event : Domain.Event model.toCarriers, SampleableType (Domain.Raw event)]
     (inputs : subject.Inputs) (related : subject.Relation inputs) (honest : subject.HonestInput inputs)

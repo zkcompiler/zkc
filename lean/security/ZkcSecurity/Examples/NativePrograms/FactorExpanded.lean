@@ -8,6 +8,7 @@ public import Mathlib.Tactic.Ring
 public import Mathlib.Tactic.Abel
 public import Mathlib.Tactic.FailIfNoProgress
 public import Lean
+public import Aesop
 
 @[expose] public section
 
@@ -15,10 +16,6 @@ public import Lean
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1500000
-set_option linter.unusedSimpArgs false
-set_option linter.defProp false
-set_option linter.unusedTactic false
-set_option linter.unreachableTactic false
 
 
 
@@ -213,24 +210,23 @@ theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
 
 theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :
     sourceProcess (F := F) statement claim service = experiment (F := F) wiring statement claim service := by
-  dsimp +instances [sourceProcess, wiring, Zkc.Protocols.Sumcheck.FactorOpening.experiment, Zkc.Protocols.Sumcheck.FactorOpening.experimentWith, Zkc.Protocols.Sumcheck.FactorOpening.terminal, Zkc.Protocols.Sumcheck.FactorOpening.publicChecks, Zkc.Protocols.Sumcheck.FactorOpening.value, Zkc.Protocols.Sumcheck.Common.rounds, Zkc.Protocols.Sumcheck.Common.roundsWith, Zkc.Protocols.Sumcheck.Common.standardArithmetic, Zkc.Protocols.Sumcheck.Common.wireBoundary, Zkc.Protocols.Sumcheck.Common.wireEvaluate]
-  simp only [PIR.Process.bind_ite, PIR.Process.bind]
-  dsimp +instances [terminal, publicChecks, value]
-  all_goals repeat' first
-    | rfl
-    | (apply PIR.Process.call_congr; intro reply)
-    | (solve | ring1)
-    | (solve | abel1)
-    | fail_if_no_progress congr 1
+  aesop (rule_sets := [-builtin, -default]) (config := { enableSimp := false })
+    (add norm tactic (by fail_if_no_progress dsimp +instances [sourceProcess, wiring, Zkc.Protocols.Sumcheck.FactorOpening.experiment, Zkc.Protocols.Sumcheck.FactorOpening.experimentWith, Zkc.Protocols.Sumcheck.FactorOpening.terminal, Zkc.Protocols.Sumcheck.FactorOpening.publicChecks, Zkc.Protocols.Sumcheck.FactorOpening.value, Zkc.Protocols.Sumcheck.Common.rounds, Zkc.Protocols.Sumcheck.Common.roundsWith, Zkc.Protocols.Sumcheck.Common.standardArithmetic, Zkc.Protocols.Sumcheck.Common.wireBoundary, Zkc.Protocols.Sumcheck.Common.wireEvaluate, PIR.Process.bind, terminal, publicChecks, value]))
+    (add norm tactic (by rw [PIR.Process.bind_ite]))
+    (add safe tactic (by apply PIR.Process.call_congr; intro reply))
+    (add safe tactic (by rfl))
+    (add safe tactic (by apply funext; intro reply))
+    (add safe tactic (by ring1))
+    (add 50% tactic (by fail_if_no_progress congr 1))
 
 theorem contract : VerifierContract wiring publicChecks (verifier (F := F)) :=
   ⟨fun statement claim service => ⟨(source_expansion (F := F) statement claim service).trans
     (correspondence (F := F) statement claim service)⟩⟩
 
 /-- Premises: honest abstract strategy; two independent uniform full-field coins. -/
-noncomputable def property_perfect_completeness [Fintype F] := (contract (F := F)).perfect_completeness
+theorem property_perfect_completeness [Fintype F] : type_of% ((contract (F := F)).perfect_completeness) := (contract (F := F)).perfect_completeness
 
 /-- Premises: false public sum claim; arbitrary fixed causal strategy; two independent uniform full-field coins. -/
-noncomputable def property_interactive_soundness [Fintype F] := (contract (F := F)).soundness
+theorem property_interactive_soundness [Fintype F] : type_of% ((contract (F := F)).soundness) := (contract (F := F)).soundness
 
 end ZkcExamples.NativePrograms.FactorExpanded

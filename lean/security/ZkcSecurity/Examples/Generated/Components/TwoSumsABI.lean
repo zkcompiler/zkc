@@ -107,12 +107,11 @@ theorem source_clauses (values : subject.Inputs) :
     (∀ index isInput, subject.inputClause values index isInput) ↔ inputCondition values :=
   by source_input_clauses
 
-set_option linter.unusedSimpArgs false in
 set_option backward.isDefEq.respectTransparency false in
 theorem representable_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     inputsRepresentable (inputs input0 input1 input2 input3 input4 input5) ↔ (input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) := by
   change inputsRepresentable (sourceInputs (some input0) (some input1) (some input2) (some input3) (some input4) input5) ↔ _
-  simp [inputsRepresentable, inputRepresentable, sourceInputs, and_assoc]
+  simp [inputsRepresentable, inputRepresentable, sourceInputs]
 
 theorem honestInput_iff (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input4 : (model.Value (Zkc.Source.Structured.Ty.index))) (input5 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.HonestInput (inputs input0 input1 input2 input3 input4 input5) ↔ ((input0.length < indexLimit ∧ input1.length < indexLimit ∧ input4 < indexLimit) ∧ (source_input_condition subject on (inputs input0 input1 input2 input3 input4 input5))) := by

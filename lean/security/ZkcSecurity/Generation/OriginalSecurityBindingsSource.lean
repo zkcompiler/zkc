@@ -16,7 +16,7 @@ def preamble (output : Output) (suffix : String) (imports : List String) : Strin
   "module\n\n" ++ String.join (imports.map fun name => "public import " ++ name ++ "\n") ++
     "\n@[expose] public section\nset_option autoImplicit false\nset_option maxRecDepth 50000\n" ++
     "set_option maxHeartbeats 8000000\nset_option backward.isDefEq.respectTransparency false\n" ++
-    "set_option linter.unusedSimpArgs false\nnoncomputable section\nnamespace " ++ output.moduleName ++ suffix ++ "\n" ++
+    "noncomputable section\nnamespace " ++ output.moduleName ++ suffix ++ "\n" ++
     "open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured\n" ++
     "open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck TableComponent\n" ++
     "open ZkcSecurity.Realizations.Sumcheck\nopen ZkcSecurity.Realizations.Sumcheck.OriginalRaw\n" ++

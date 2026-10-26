@@ -13,7 +13,6 @@ open Zkc.Source Zkc.Source.Structured
 open PrimitiveShapeViews (shapeBody shapeHelper)
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option linter.unusedSimpArgs false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
@@ -40,25 +39,18 @@ theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw
       simp only [indexResult] at rowResult
       have rowBound := power_bound dimension dimensionSmall
       by_cases divisible : xs.length % columns = 0 <;>
-        simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-          Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
-          Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
+        simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
           PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices,
-          first, second, rowResult, boolResult, indexResult, HasShape, positive, nonzero,
+          first, second, rowResult, boolResult, HasShape, positive, nonzero,
           dimensionSmall, divisible, lengthBound, columnsBound, modBound, divBound, rowBound,
-          Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel,
+          show 0 < indexLimit by decide +kernel,
           show 64 < indexLimit by decide +kernel]
-    · simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-        Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
-        Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
+    · simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
         PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, second, boolResult,
-        HasShape, positive, dimensionSmall, Evaluation.invokeCallback,
-        show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
-  · simp [vector, scalar, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-      Operands.eval, Regions.denote, Values.get_cons, Values.get, Environment.prepend,
-      Environment.push, inputs, SiteObservations.closed, SiteObservations.silent,
+        HasShape, positive, dimensionSmall, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
+  · simp [meaning, Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent,
       PIR.Process.bind, Primitive.evaluate, primitiveOutcome, first, boolResult,
-      HasShape, positive, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
+      HasShape, positive, show 0 < indexLimit by decide +kernel]
 
 
 /-- A zero column guard returns false without observing the vector or dimension. -/
@@ -69,11 +61,11 @@ theorem shape_zero_columns (table : Meanings F G) (less : LessLaw table)
   dsimp only [inputs, vector]
   rw [PrimitiveExpansions.shape_body]
   have first := less 0 0 (by decide +kernel) (by decide +kernel)
-  simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    Environment.prepend, Environment.push, inputs, SiteObservations.closed,
+  simp [meaning, Evaluation.meaning,
+    Values.get,
+    SiteObservations.closed,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
-    first, boolResult, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
+    first, boolResult, show 0 < indexLimit by decide +kernel]
 
 /-- The high-dimension guard also precedes every length, division and loop. -/
 theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
@@ -86,12 +78,11 @@ theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
   rw [PrimitiveExpansions.shape_body]
   have first := less 0 columns (by decide +kernel) columnsBound
   have second := less dimension 64 dimensionBound (by decide +kernel)
-  simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    Environment.prepend, Environment.push, inputs, SiteObservations.closed,
+  simp [meaning, Evaluation.meaning,
+    Values.get,
+    SiteObservations.closed,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
-    first, second, boolResult, positive, large, Evaluation.invokeCallback,
-    show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
+    first, second, boolResult, positive, large, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
 /-- An unrepresentable vector length exhausts only after both initial guards. -/
 theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
@@ -103,12 +94,11 @@ theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
   rw [PrimitiveExpansions.shape_body]
   have first := less 0 columns (by decide +kernel) columnsBound
   have second := less dimension 64 (Nat.lt_trans dimensionSmall (by decide +kernel)) (by decide +kernel)
-  simp [vector, scalarDomain, shapeBody, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    Environment.prepend, Environment.push, inputs, SiteObservations.closed,
+  simp [meaning, Evaluation.meaning,
+    Values.get,
+    SiteObservations.closed,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate, primitiveOutcome,
-    first, second, boolResult, positive, dimensionSmall, lengthInvalid, Evaluation.invokeCallback,
-    show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
+    first, second, boolResult, positive, dimensionSmall, lengthInvalid, show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
 /-- The table constructor returns the original ordered tuple or rejects. -/
 theorem table_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (valid : Bool)
@@ -119,11 +109,9 @@ theorem table_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
   rw [PrimitiveExpansions.table_body]
   simp only [inputs] at shape
   cases valid <;>
-    simp [vector, scalarDomain, PrimitiveTableViews.tableBody, Region.denote, meaning,
-      Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-      Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-      SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
-      shape, boolResult, Evaluation.invokeCallback]
+    simp [meaning,
+      Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+      shape, boolResult]
 
 /-- Halves checks positive dimension before executing the two-result split.
 Columns are retained source inputs, but this helper itself never validates them. -/
@@ -140,19 +128,15 @@ theorem halves_body (table : Meanings F G) (less : LessLaw table)
   have comparison := less 0 dimension (by decide +kernel) dimensionBound
   by_cases positive : 0 < dimension
   · by_cases divisible : 0 < xs.length ∧ xs.length % 2 = 0 <;>
-      simp [vector, scalarDomain, PrimitiveHalvesViews.halvesBody, Region.denote, meaning,
-        Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-        Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-        SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+      simp [meaning,
+        Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
         Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive, divisible,
-        Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
+        show 0 < indexLimit by decide +kernel]
     all_goals rfl
-  · simp [vector, scalarDomain, PrimitiveHalvesViews.halvesBody, Region.denote, meaning,
-      Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-      Values.get_cons, Values.get, Environment.prepend, Environment.push, inputs,
-      SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+  · simp [meaning,
+      Evaluation.meaning, Values.get, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
       Primitive.evaluate, primitiveOutcome, comparison, boolResult, positive,
-      Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
+      show 0 < indexLimit by decide +kernel]
 
 
 /-- Source halves refuses an unrepresentable dimension before the positive guard. -/
@@ -164,8 +148,7 @@ theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table
   have comparison := less 0 dimension
   simp only [show 0 < indexLimit by decide +kernel, true_and, invalid, ite_false] at comparison
   simp only [Primitive.evaluate, show 0 < indexLimit by decide +kernel, ite_true,
-    primitiveOutcome, PIR.Process.bind, Values.get_cons, Values.get, Environment.push,
-    comparison]
+    primitiveOutcome, PIR.Process.bind, Values.get, comparison]
 
 /-- No raw table triple is excluded; width is unused and vector split has its own guard. -/
 theorem halves_generic_body_all (table : Meanings F G) (less : LessAllLaw table)

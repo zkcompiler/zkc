@@ -14,7 +14,6 @@ set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 800000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalHonest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -112,7 +111,7 @@ theorem round (payload : UnitPayload) (bodies : SumcheckUnitContracts.Bodies pay
     [.message origins.low (.field "bls12-381.fr" (endpoints state).1),
      .message origins.high (.field "bls12-381.fr" (endpoints state).2)] ++
     [.challenge origins.draw] ++ [.message origins.delivery (.field "bls12-381.fr" challenge)], ?_, ?_⟩
-  · simp only [producerValues, PrefixState.advance_entries, PrefixState.advance_point,
+  · simp only [PrefixState.advance_entries, PrefixState.advance_point,
       Nat.add_sub_cancel, challenge]
     rfl
   · rfl

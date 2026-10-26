@@ -41,11 +41,17 @@ def check(output, lake):
              "\x00\x08\x0c\x1f\x7f", "증명_α_🙂", "α" * 256,
              '"\nend Rendered\naxiom injected : False\n--']
     modules = []
+    for kind in ["protocol", "local"]:
+        try:
+            renderer.function_origin(kind, [])
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a missing function origin")
     for index, name in enumerate(names):
         helper = ["function", name, "math", "private", [["bool"]], [["bool"]], [], [], [],
                   ["block", [], ["return", [0]]]]
         entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
-                 ["protocol", ["P"], [["P"]], [["P"]]], [], [],
+                 ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []],
                  ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                 "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS]
@@ -94,7 +100,7 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
             [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"], None]], [],
             [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
-              ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], [],
+              ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], ["main", []],
               ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS]
     source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
     points = str([ord(char) for char in name])
@@ -143,7 +149,7 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     get = ["function", "get", "math", "private", [product], [sequence], [], [], [],
            ["block", [[["product.get", 1], [0], [sequence], [], ""]], ["return", [0]]]]
     entry = ["function", "main", "protocol", "public", [nested], [nested],
-             ["protocol", ["P"], [["P"]], [["P"]]], [], [], ["block", [], ["return", [0]]]]
+             ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []], ["block", [], ["return", [0]]]]
     aggregate_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                       "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS]
     source = renderer.render(aggregate_data, "RenderedAggregates").replace("module\n\n", "", 1)
@@ -234,7 +240,7 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
              ["block", [[["exec", "algebra.exec.index_constant", "max_index", [maximum]],
                          [], [["index"]], [], "maximum"]], ["return", [0]]]]
     entry = ["function", "main", "protocol", "public", [], [["bool"]],
-             ["protocol", ["P"], [], [["P"]]], [], [],
+             ["protocol", ["P"], [], [["P"]]], [], ["main", []],
              ["block", [
                  [["index.constant", maximum], [], [["index"]], [], ""],
                  [["local_call", "limit", "P"], [], [["index"]], [], "limit_call"],
@@ -307,7 +313,7 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
                  [["apply", "realized"], [0], [vector], [], "realize"],
              ], ["return", [0]]]]
     entry = ["function", "main", "protocol", "public", inputs, [vector],
-             ["protocol", ["P"], [["P"]] * 4, [["P"]]], [], [],
+             ["protocol", ["P"], [["P"]] * 4, [["P"]]], [], ["main", []],
              ["block", [[["local_call", "work", "P"], [0, 1, 2, 3], [vector], [], "work"]],
               ["return", [0]]]]
     preparation_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
@@ -341,10 +347,10 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
             continue
         raise AssertionError("renderer accepted a malformed preparation record")
     child = ["function", "child", "protocol", "public", [["bool"]], [["bool"]],
-             ["protocol", ["A", "B"], [["A", "B"]], [["A", "B"]]], [], [],
+             ["protocol", ["A", "B"], [["A", "B"]], [["A", "B"]]], [], ["child", []],
              ["block", [], ["return", [0]]]]
     entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
-             ["protocol", ["P", "V"], [["P", "V"]], [["P", "V"]]], [], [],
+             ["protocol", ["P", "V"], [["P", "V"]], [["P", "V"]]], [], ["main", []],
              ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
                          [["bool"]], [], "nested"]], ["return", [0]]]]
     application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
@@ -448,6 +454,7 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
             continue
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
+              "missing_origin_refusal_cases": 2,
               "open_metadata_kernel_cases": 3,
               "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),
               "contract_metadata_kernel_cases": 2,

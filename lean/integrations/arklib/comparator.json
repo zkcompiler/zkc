@@ -1,0 +1,32 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "ZkcSecurity.ArkLib.Fri.RoundByRound.soundness",
+    "ZkcSecurity.ArkLib.Fri.soundness_generalizedJohnson",
+    "ZkcSecurity.ArkLib.Fri.soundness_uniqueDecoding",
+    "ZkcSecurity.ArkLib.Sumcheck.Multilinear.publicTable_soundness",
+    "ZkcSecurity.ArkLib.Sumcheck.Multilinear.residual_soundness",
+    "ZkcSecurity.Examples.CausalSumcheck.Iteration.repeat_uniform_residual_soundness",
+    "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.reduction_residual_bound",
+    "ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.source_returned_true_bound",
+    "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness",
+    "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness_charged",
+    "ZkcSecurity.Examples.CompiledGuessFiatShamir.soundness",
+    "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness",
+    "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.soundness",
+    "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness",
+    "ZkcSecurity.Examples.FriFiatShamir.fiatShamir_soundness",
+    "ZkcSecurity.Examples.GkrFiatShamir.soundness",
+    "ZkcSecurity.Examples.GkrFiatShamir.soundness_charged",
+    "ZkcSecurity.Examples.SumcheckFiatShamir.compiled_adaptive_soundness",
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted",
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_soundness"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}

@@ -44,7 +44,6 @@ theorem reduce_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (
     SumcheckRepackedViews.unit.protocols SumcheckRepackedViews.unit.protocolsLinked SumcheckRepackedViews.reduceDefinition
     SumcheckRepackedViews.reduce_member (SumcheckVerifierBodies.reduceBody reduceMaximum) SumcheckRepackedViews.reduce_raw ctx self args
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem reduce_verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -59,9 +58,8 @@ theorem reduce_verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 
             cases values with | cons value5 values =>
               cases values
               simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                Participant.restrict, separate, Ne.symm separate, Values.get]
+                Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem reduce_prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -76,7 +74,7 @@ theorem reduce_prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 �
             cases values with | cons value5 values =>
               cases values
               simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                Participant.restrict, separate, Ne.symm separate, Values.get]
+                Participant.restrict, Ne.symm separate, Values.get]
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def runFn (ctx : ProtocolContext) (self : Nat) :
@@ -105,7 +103,6 @@ def verifierProcess (ctx : ProtocolContext) (claim : Option F) (count service : 
   (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) claim count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) (.cons none (.cons none .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem reduce_verifierReduce_returned (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -119,10 +116,9 @@ theorem reduce_verifierReduce_returned (ctx : ProtocolContext) (separate : ctx.r
           cases values with | cons value4 values =>
             cases values with | cons value5 values =>
               cases values
-              simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                Participant.restrict, separate, Ne.symm separate, Values.get]
+              simp [maskValues, ProtocolContext.mapScopes,
+                Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The `reduce` callee at role 1: its invocation in this unit at any child context. -/
 theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckRepackedViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (claim : Option F) (count service : Option Nat) (input0 : Option (List F)) (input1 input2 : Option Nat) :
@@ -131,7 +127,7 @@ theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies Su
       (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit reduceMaximum ctx claim count service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there .here))))) (.cons (out.get (.there (.there (.there (.there (.there .here)))))) .nil))))))) := by
   refine (reduce_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 7 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
     (SumcheckRoundNormalForms.verifierReduce_process (U := SumcheckRepackedViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (count := count) (service := service))).trans ?_
   apply congrArg (PIR.Process.bind _)
@@ -225,7 +221,6 @@ theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckRepack
     (verifier_environment claim count service) (verifier_laws bodies claim count service) (verifier_callees bodies claim count service)).trans
     (verifier_presentation ctx claim count service)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -237,10 +232,9 @@ theorem verifier_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx
       cases values with | cons value2 values =>
         cases values with | cons value3 values =>
           cases values
-          simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-            Participant.restrict, separate, Ne.symm separate, Values.get]
+          simp [maskValues, ProtocolContext.mapScopes,
+            Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The verifier's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckRepackedViews.unit.definitions)
@@ -253,7 +247,7 @@ theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckRepacke
   refine (run_view ctx self _ (.cons claim (.cons count (.cons none (.cons none (.cons service .nil))))) ?_).trans ?_
   · subst self
     iterate 6 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (verifier_process (bodies := bodies) (claim := claim) (count := count) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
@@ -279,7 +273,6 @@ def proverProcess (ctx : ProtocolContext) (rounds count : Nat) (raw : List F) :
   (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) raw count rounds).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons none (.cons none (.cons (reduceReturned.get (.there .here)) (.cons (reduceReturned.get .here) .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem reduce_proverReduce_returned (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -293,10 +286,9 @@ theorem reduce_proverReduce_returned (ctx : ProtocolContext) (separate : ctx.rol
           cases values with | cons value4 values =>
             cases values with | cons value5 values =>
               cases values
-              simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                Participant.restrict, separate, Ne.symm separate, Values.get]
+              simp [maskValues, ProtocolContext.mapScopes,
+                Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The `reduce` callee at role 0: its invocation in this unit at any child context. -/
 theorem reduce_proverReduce_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckRepackedViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
     (raw : List F) (count rounds : Nat) (input3 : Option F) (input5 : Option Nat) (shape : HasShape raw count 1) (enough : rounds ≤ count) :
@@ -305,7 +297,7 @@ theorem reduce_proverReduce_invoke (bodies : SumcheckUnitContracts.Bodies Sumche
       (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit reduceMaximum ctx raw count rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons none (.cons none .nil))))))) := by
   refine (reduce_view ctx (ctx.roles 0) _ (.cons (some raw) (.cons (some count) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
   · iterate 7 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
     (SumcheckRoundNormalForms.proverReduce_process (U := SumcheckRepackedViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (entries := raw) (count := count) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_of_le_of_lt enough (Nat.lt_trans shape.2.1 (by decide +kernel))) (enough := enough))).trans ?_
   apply congrArg (PIR.Process.bind _)
@@ -410,7 +402,6 @@ theorem prover_process (bodies : SumcheckUnitContracts.Bodies SumcheckRepackedVi
     (prover_environment rounds count raw) (prover_laws bodies rounds count raw shape bound) (prover_callees bodies rounds count raw shape enough)).trans
     (prover_presentation ctx rounds count raw)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -422,10 +413,9 @@ theorem prover_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.r
       cases values with | cons value2 values =>
         cases values with | cons value3 values =>
           cases values
-          simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-            Participant.restrict, separate, Ne.symm separate, Values.get]
+          simp [maskValues, ProtocolContext.mapScopes,
+            Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The prover's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem prover_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckRepackedViews.unit.definitions)
@@ -438,7 +428,7 @@ theorem prover_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckRepackedVie
   refine (run_view ctx self _ (.cons none (.cons (some rounds) (.cons (some count) (.cons (some raw) (.cons none .nil))))) ?_).trans ?_
   · subst self
     iterate 6 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (prover_process (bodies := bodies) (rounds := rounds) (count := count) (raw := raw) (shape := shape) (bound := bound) (enough := enough) (ctx := ctx) (self := ctx.roles 0) (role := rfl)

@@ -2,6 +2,7 @@ module
 
 public import Zkc.Construction.ArtifactBinding
 public meta import Lean.Elab.Tactic
+public meta import Zkc.Construction.TransportReduction
 
 @[expose] public meta section
 
@@ -126,6 +127,7 @@ macro "normalize_artifact_operations " "[" laws:term,* "]"
     List.getElem?_cons_zero, List.getElem?_cons_succ,
     List.cons_append, List.nil_append, Domain.sortsMatch, Domain.Value.sort,
     Domain.Payload.ty, Domain.Value.encode, Domain.Payload.ofValue, Domain.dataType,
+    ↓reduceTransport,
     List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil,
     List.filter_cons, List.filter_nil, List.all_cons, List.all_nil,
     List.length_cons, List.length_nil, List.length_append,

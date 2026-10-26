@@ -13,7 +13,6 @@ from the admitted Reduce body. Origin equations are individual action-routing
 obligations, independently checked against the original snapshot. -/
 set_option autoImplicit false
 set_option maxRecDepth 10000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured
@@ -199,8 +198,8 @@ theorem original_round (payload : UnitPayload)
     rfl separate index (some handle) (some point) (some scalar), Zkc.Construction.Original.fold_bind, Zkc.Construction.Original.fold_actions]
   simp only [SumcheckVerifierLaws.roundPlain, PIR.Process.interpretState,
     Zkc.Construction.Original.operations, Zkc.Construction.Original.receive, Zkc.Construction.Original.send, Zkc.Construction.Original.query, routes.mode, routes.low, routes.high,
-    routes.draw, routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue,
-    PIR.Process.bind, PIR.Process.bind_assoc, verifier, List.append_assoc]
+    Zkc.Construction.Original.record, Domain.Payload.ofValue,
+    PIR.Process.bind, verifier, List.append_assoc]
   congr 1
   funext low
   congr 1
@@ -212,10 +211,8 @@ theorem original_round (payload : UnitPayload)
   have request := Zkc.Construction.Original.Routing.draw_request routes.draw
   by_cases passed : scalar = low + high <;>
     simp only [passed, ite_true, ite_false, PIR.Process.interpretState,
-      Zkc.Construction.Original.operations, Zkc.Construction.Original.query,
-      Zkc.Construction.Original.send, routes.mode, routes.draw, routes.delivery,
-      Zkc.Construction.Original.queryField, request, Zkc.Construction.Original.record,
-      Domain.Payload.ofValue, PIR.Process.bind, Zkc.Construction.Original.fold,
+      routes.draw, routes.delivery,
+      Zkc.Construction.Original.queryField, request, PIR.Process.bind, Zkc.Construction.Original.fold,
       ↓reduceDIte, List.cons_append, List.nil_append]
 
 end ZkcSecurity.Realizations.Sumcheck.ArtifactBinding

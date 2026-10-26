@@ -7,7 +7,6 @@ public import ZkcExamples.Structured.OriginalSumcheckReduce
 set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 1000000
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalProducer
@@ -131,7 +130,7 @@ def ProducerCallback.step (program : Structured.Program)
       ↓reduceIte, List.dropLast_singleton, PIR.Process.bind,
       SumcheckProverLaws.mask_embedP _ _ rfl maximum]
     simp only [Outputs.references, Domain.read, List.mapM_cons, List.mapM_nil, rawRead, dimensionRead,
-      widthRead, pointRead, historyRead, Bind.bind, Pure.pure, Option.bind, instMonadOption]
+      widthRead, pointRead, historyRead, Bind.bind, Pure.pure, Option.bind]
     simp only [Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.map_cons,
       List.map_nil, beq_self_eq_true, ↓reduceIte]
     exact .done ⟨_, _, _, _, rfl, rfl,

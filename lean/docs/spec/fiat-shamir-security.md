@@ -1482,7 +1482,7 @@ The stages of the Fiat–Shamir path are relations:
   cell, or answers it locally when its answer type has a single value, and reads
   target answers back by an equivalence. An adversary translated through it has
   the law of the source adversary's lazily sampled execution
-  (`Renaming.evalSPMF_translate`), arbitrary, malformed and empty keys included,
+  (`Renaming.evalDistEq_translate`), arbitrary, malformed and empty keys included,
   no more queries and the source weight of each key's target cell
   (`translate_queryBound`, `translate_costBound`), so it is a zero-loss stage.
   Pairs `(preceding, occurrence)` over event histories and the typed engine's

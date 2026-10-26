@@ -8,8 +8,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedVariables false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcExamples.Structured.Generated.OriginalArtifacts.TwoSumsProducerSource
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
@@ -58,9 +56,9 @@ abbrev step4 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := 
 def process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
   (step0 tables input0 input4).bind fun out0 =>
-  (step1 protocols input2 input4 input5 out0).bind fun out1 =>
+  (step1 protocols input2 input4 input5 out0).bind fun _out1 =>
   (step2 tables input1 input4).bind fun out2 =>
-  (step3 protocols input3 input4 input5 out2).bind fun out3 =>
+  (step3 protocols input3 input4 input5 out2).bind fun _out3 =>
   (step4 tables).bind fun out4 =>
   .done (.cons ((out4).get .here) .nil)
 
@@ -73,15 +71,15 @@ theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F
 abbrev realized (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
   let tables := helpers (F := F) (G := G) payload
   (step0 tables input0 input4).bind fun out0 =>
-  (step1Realized (G := G) input2 input4 input5 out0).bind fun out1 =>
+  (step1Realized (G := G) input2 input4 input5 out0).bind fun _out1 =>
   (step2 tables input1 input4).bind fun out2 =>
-  (step3Realized (G := G) input3 input4 input5 out2).bind fun out3 =>
+  (step3Realized (G := G) input3 input4 input5 out2).bind fun _out3 =>
   (step4 tables).bind fun out4 =>
   .done (.cons ((out4).get .here) .nil)
 
 theorem realization_binding (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
     process (helpers (F := F) (G := G) payload) protocolPrefix1 input0 input1 input2 input3 input4 input5 = realized (G := G) input0 input1 input2 input3 input4 input5 := by
-  simp only [process, realized, singleton_eta, PIR.Process.bind_done]
+  unfold process realized
   apply congrArg₂ PIR.Process.bind
   · rfl
   · funext out0

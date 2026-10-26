@@ -14,7 +14,6 @@ set_option maxRecDepth 8192
 set_option maxHeartbeats 1200000
 set_option smartUnfolding false
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSectionVars false
 namespace ZkcSecurity.Examples.Subjects.Guess.Registration
 open Zkc.Construction Zkc.Claims ZkcSecurity.Claims ZkcSecurity.Endpoint ZkcSecurity.FiatShamir
 open ZkcSecurity.Tools.ClaimConstruction
@@ -60,6 +59,7 @@ def scalarRequest (application : String) :
 noncomputable def endpointEvidence (application : String) :=
   soundness (F := F) (G := G) .idealMeaning .adaptive ⟨application⟩ PUnit.unit
 
+omit [Field F] [DecidableEq F] [SampleableType F] in
 theorem error_eq : error (F := F) = 1 / (Fintype.card F : ENNReal) := by
   simp [error, one_div]
 
@@ -93,6 +93,7 @@ def requestedSchedule : ChargeSchedule (subjectIdeal (F := F) (G := G)) where
   unique := by simp
   nativeUnique := by simp
 
+omit [Inhabited F] [SampleableType F] in
 theorem requestedCharge (queries : Nat) (history : History F G) (event : Zkc.Construction.Event F G) :
     (requestedSchedule (F := F) (G := G)).charge queries history event =
       1 / (Fintype.card F : ENNReal) := by
@@ -130,6 +131,7 @@ theorem proveCharged (application : String) :
 
 @[simp] theorem admittedField : artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field := rfl
 
+omit [Field F] [DecidableEq F] [SampleableType F] in
 /-- The nominal field is admitted by this actual snapshot, not an alias table. -/
 @[simp] theorem elaborateFieldDivision (budgetSymbol : String) (numerator : Wire.Expr) :
     Bound.elaborate F artifacts.original budgetSymbol

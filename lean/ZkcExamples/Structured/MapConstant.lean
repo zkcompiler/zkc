@@ -10,7 +10,6 @@ public import Zkc.Source.Structured.ClosedProjection
 requires all owned inputs. Its formula is derived from the exact Math body. -/
 namespace ZkcExamples.Structured.MapConstant
 open Zkc.Source Zkc.Source.Structured MapConstantViews
-set_option linter.unusedSimpArgs false
 set_option smartUnfolding false
 
 private theorem prepend_one {Value : Ty → Type} {types : List Ty} {type : Ty}
@@ -64,9 +63,9 @@ theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (a b : List F) (unusedScalar : F) :
     mapBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
       Evaluation.denoteMap table mapSpec (inputs a b unusedScalar) := by
-  simp only [mapBody, inputs, mapSpec, MapSpec.arguments, List.map_cons, List.map_nil, ↓reduceIte, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
-    Environment.prepend, Environment.push, PIR.Process.bind]
+  simp only [mapBody, inputs, mapSpec, Region.denote, Evaluation.meaning, Evaluation.operation,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
+    Environment.push]
   exact singleton_return _
 
 theorem map_invocation (a b : List F) (unusedScalar : F) :
@@ -81,7 +80,7 @@ theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
     wrapperBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
       (sites.mark "s0").bind (fun _ => invoke table mapHelper (inputs a b unusedScalar)) := by
   simp only [wrapperBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
     Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
@@ -93,7 +92,7 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
     ownerBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
       (sites.mark "s0").bind (fun _ => invoke table wrapperHelper (inputs a b unusedScalar)) := by
   simp only [ownerBody, inputs, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Op.arguments, Op.results, Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_one,
+    Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
     Environment.prepend, Environment.push, PIR.Process.bind, PIR.Process.bind_assoc]
   congr 1
   funext _
@@ -142,7 +141,7 @@ theorem observed_expansion (a b : List F) (unusedScalar : F) :
     owner_projection.denote_present _ program.payload.tables_adequate]
   set_option smartUnfolding true in
     rw [owner_body]
-    simp only [PIR.Process.bind_assoc, PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
+    simp only [PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
 
 
 /-- The complete retained protocol preserves both reached source marks. -/

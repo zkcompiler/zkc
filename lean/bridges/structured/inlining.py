@@ -89,10 +89,12 @@ def subject_cases(suite, stem, module, proof):
                       returned(str((2 - 3 * 5) % MODULUS)))
     # Refresh imported constructor objects before elaborating the proof source.
     # In particular, --write-fixtures must not prove an older cached subject.
-    suite.command(f"{stem}:build-proof", [suite.args.lake, "--dir", ROOT / "lean",
-        "build", f"ZkcExamples.Structured.{proof}"], timeout=LAKE_TIMEOUT)
-    suite.command(f"{stem}:kernel-proof", [suite.args.lake, "--dir", ROOT / "lean",
-        "lean", EXAMPLES / f"{proof}.lean"], timeout=LAKE_TIMEOUT)
+    # Elan selects the toolchain before Lake processes arguments: --dir alone
+    # would select the host default and could overwrite this package's objects.
+    suite.command(f"{stem}:build-proof", [suite.args.lake,
+        "build", f"ZkcExamples.Structured.{proof}"], cwd=ROOT / "lean", timeout=LAKE_TIMEOUT)
+    suite.command(f"{stem}:kernel-proof", [suite.args.lake,
+        "lean", EXAMPLES / f"{proof}.lean"], cwd=ROOT / "lean", timeout=LAKE_TIMEOUT)
     suite.sources.append({"proof": str((EXAMPLES / f"{proof}.lean").relative_to(ROOT)),
                           "sha256": digest(EXAMPLES / f"{proof}.lean")})
 
@@ -103,8 +105,8 @@ def run_cases(suite):
         "affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
         "threads": {key: os.environ.get(key) for key in
                     ("LEAN_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")},
-        "toolchain": suite.command("lean-version", [args.lake, "--dir", ROOT / "lean",
-                                                    "env", "lean", "--version"]).strip(),
+        "toolchain": suite.command("lean-version", [args.lake, "env", "lean", "--version"],
+                                    cwd=ROOT / "lean").strip(),
     })
     for stem, module, proof in SUBJECTS:
         suite.case(stem, lambda s=stem, m=module, p=proof: subject_cases(suite, s, m, p))

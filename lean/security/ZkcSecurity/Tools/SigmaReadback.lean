@@ -7,6 +7,7 @@ public import ZkcSecurity.Claims.SubjectABI
 public meta import ZkcSecurity.Tools.InputLaws
 public meta import ZkcSecurity.Tools.ProcessView
 public meta import Lean.Elab.Tactic
+public meta import Zkc.Construction.TransportReduction
 public meta import Mathlib.Tactic.Linter.UnusedTactic
 public meta import Batteries.Linter.UnreachableTactic
 
@@ -46,6 +47,7 @@ macro "normalize_sigma_process " "[" definitions:term,* "]" : tactic => do
     `(Parser.Tactic.simpLemma| Domain.Payload.ty),
     `(Parser.Tactic.simpLemma| Domain.Value.encode),
     `(Parser.Tactic.simpLemma| Domain.Payload.value),
+    `(Parser.Tactic.simpLemma| ↓reduceTransport),
     `(Parser.Tactic.simpLemma| Domain.Payload.ofValue),
     `(Parser.Tactic.simpLemma| Domain.dataType),
     `(Parser.Tactic.simpLemma| Domain.localOrigin),

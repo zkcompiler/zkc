@@ -12,7 +12,6 @@ survive the connection. No second polynomial reference or reduction engine is
 introduced. -/
 set_option autoImplicit false
 set_option maxHeartbeats 2000000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Families.Sumcheck.TableComponent.Execution
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript Zkc.Obligations
 open ZkcSecurity.Obligations ZkcSecurity.FiatShamir
@@ -51,7 +50,7 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
     congr 1
     funext high
     by_cases boundary : state.scalar = low + high
-    · simp only [boundary, eq_comm, ite_true, PIR.Process.bind]
+    · simp only [boundary, ite_true, PIR.Process.bind]
       congr 1
       funext challenge
       congr 1

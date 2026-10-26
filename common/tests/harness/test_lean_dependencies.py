@@ -99,7 +99,7 @@ def test_separated_boundaries_are_enforced(owner, dependency):
         policy().audit_graph({owner: [dependency]}, [owner])
 
 
-@pytest.mark.parametrize('dependency', ['Examples.Schnorr.SigmaProtocol', 'VCVio.CryptoFoundations',
+@pytest.mark.parametrize('dependency', ['VCVio.Schemes.Schnorr.SigmaProtocol', 'VCVio.CryptoFoundations',
                                        'Zkc.Protocols.Sumcheck.Verifier'])
 def test_generic_security_reuses_actual_vcvio_and_core_providers(dependency):
     assert policy().permitted('ZkcSecurity.Families.Schnorr', dependency)

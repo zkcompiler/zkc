@@ -216,7 +216,7 @@ def main():
             ('security-optional-adapter', 'ZkcSecurity.GuardFixture',
              'ZkcArkLib.GuardFixture', 'type', False),
             ('security-vcvio-example-provider', 'ZkcSecurity.Families.GuardFixture',
-             'Examples.Schnorr.SigmaProtocol', 'body', True),
+             'VCVio.Schemes.Schnorr.SigmaProtocol', 'body', True),
             ('core-probability-body', 'Zkc.Source.GuardFixture',
              'ZkcSecurity.Probability.GuardFixture', 'body', False),
             ('security-example-type', 'ZkcSecurity.HashChain.GuardFixture',

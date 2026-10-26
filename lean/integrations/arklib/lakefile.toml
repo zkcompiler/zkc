@@ -9,22 +9,22 @@ warningAsError = true
 [[require]]
 name = "Arklib"
 git = "https://github.com/Verified-zkEVM/ArkLib.git"
-rev = "a93ee1ebbbf7b6b939ba3dd1c6115d33c92a4253"
+rev = "1e0241333c18d8b22cb68f9522da5f9fb88f9a06"
 
 [[require]]
 name = "VCVio"
 git = "https://github.com/Verified-zkEVM/VCVio"
-rev = "afa6593f15e1e79ecb3cf22fc56191cecb452bb0"
+rev = "96754a37e739270ac5bb8fe7deaeafef6964b688"
 
 [[require]]
 name = "CompPoly"
 git = "https://github.com/Verified-zkEVM/CompPoly"
-rev = "df591bb8c6745126d1d72f5243faae3022b0432a"
+rev = "1cb8f5cd0e22a8c9ec165000915c21d0f8e12525"
 
 [[require]]
 name = "PolyFun"
 git = "https://github.com/Verified-zkEVM/PolyFun"
-rev = "3710d71b28404a151b8d1f0ce080ea448778dec0"
+rev = "a5edfe2dd24d9d76f9a13cc1f131b220617ad534"
 
 [[require]]
 name = "zkc_security"
@@ -37,7 +37,7 @@ path = "../.."
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+rev = "56a005855ea17e0b0958f73ec801ae140b0a1679"
 
 [[lean_lib]]
 name = "ZkcArkLibTests"

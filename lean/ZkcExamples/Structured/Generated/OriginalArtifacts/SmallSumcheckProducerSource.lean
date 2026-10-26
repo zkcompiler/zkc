@@ -8,8 +8,6 @@ set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedVariables false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
@@ -44,7 +42,7 @@ theorem step1_binding (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (O
 def process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
   (step0 tables input0 input2).bind fun out0 =>
-  (step1 protocols input1 input2 input3 out0).bind fun out1 =>
+  (step1 protocols input1 input2 input3 out0).bind fun _out1 =>
   .done (.cons (none) .nil)
 
 theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
@@ -56,12 +54,12 @@ theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F
 abbrev realized (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
   let tables := helpers (F := F) (G := G) payload
   (step0 tables input0 input2).bind fun out0 =>
-  (step1Realized (G := G) input1 input2 input3 out0).bind fun out1 =>
+  (step1Realized (G := G) input1 input2 input3 out0).bind fun _out1 =>
   .done (.cons (none) .nil)
 
 theorem realization_binding (input0 : (Option (List F))) (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Option Nat)) :
     process (helpers (F := F) (G := G) payload) protocolPrefix1 input0 input1 input2 input3 = realized (G := G) input0 input1 input2 input3 := by
-  simp only [process, realized, singleton_eta, PIR.Process.bind_done]
+  unfold process realized
   apply congrArg₂ PIR.Process.bind
   · rfl
   · funext out0

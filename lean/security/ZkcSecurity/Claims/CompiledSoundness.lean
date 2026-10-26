@@ -15,7 +15,6 @@ No source-specific statement constructor, site path or validator is selected. -/
 set_option autoImplicit false
 set_option maxHeartbeats 1000000
 set_option maxRecDepth 10000
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 namespace ZkcSecurity.Claims.CompiledSoundness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
@@ -40,7 +39,7 @@ theorem charge_constant (schedule : Claims.Domain.ChargeSchedule subject)
     | cons first rest ih =>
       intro nonempty prices
       cases rest with
-      | nil => simp [prices first (by simp), max_eq_left (bot_le : (0 : ENNReal) ≤ value)]
+      | nil => simp [prices first (by simp)]
       | cons second tail =>
         have tailEq := ih (by simp) (fun entry member => prices entry (List.mem_cons_of_mem _ member))
         change max (first.2.value queries)

@@ -156,8 +156,8 @@ noncomputable def simulation (model : LeafHashing Row Query Digest) (accepts : R
       (· = true) adversary).trans (le_of_eq ?_)
     simp only [Joint.oracleMixture, bind_assoc, pure_bind]
     rw [← taggedSimulator_translate]
-    exact (ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq
-      (ZkcSecurity.VCVio.Deferral.evalSPMF_uniform_drop (A := Unit) _) _).symm
+    exact (_root_.EvalDistEq.prEvent_eq
+      (OracleComp.EvalDistEq.bind_const ($ᵗ Unit) _) _).symm
 
 /-- The tags of the primitive's inputs: a transcript key and a hash call, jointly injective. -/
 def namespaces {Row Query Digest : Type} :

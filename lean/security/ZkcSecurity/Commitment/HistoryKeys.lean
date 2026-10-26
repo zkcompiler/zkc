@@ -25,7 +25,7 @@ Two renamings relate the forms (`ZkcSecurity.Oracle.Renaming`):
   a root locally (`historyCell_nil`, `historyCell_root`), whatever the adversary asks there.
 
 Through either renaming the lazily sampled executions have the same law
-(`Renaming.evalSPMF_translate`; for the bridge's joint games `prEvent_jointToHistory`), queries
+(`Renaming.evalDistEq_translate`; for the bridge's joint games `prEvent_jointToHistory`), queries
 transport unchanged (`Renaming.translate_queryBound`), and charges transport through the weights:
 the history charge of a joint charge (`historyCharge`) weighs a pair as the joint charge does
 (`jointToHistory_weight`, `jointToHistory_costBound`), and the joint charge weighs a history as
@@ -73,7 +73,7 @@ theorem eq_of_lastEvent {history : List (Absorbed E Shape Y)} {event : E}
         rw [carries]
     | root _ _ => cases carries
   rw [entryIs] at found
-  exact (Oracle.dropLast_append_of_getLast? found).symm
+  exact (List.dropLast_append_getLast? _ found).symm
 
 /-- The answer type after an event, `Unit` without one. -/
 def EventRange : Option E → Type

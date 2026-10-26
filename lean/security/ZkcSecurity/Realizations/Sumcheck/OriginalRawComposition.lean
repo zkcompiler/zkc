@@ -8,11 +8,11 @@ public import ZkcSecurity.Realizations.Sumcheck.OriginalRawSoundness
 next call, and every stop suppresses its suffix. The second call starts with
 the actual first call's reached construction state. -/
 set_option autoImplicit false
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript Zkc.Obligations
 open ZkcSecurity.FiatShamir ZkcSecurity.Obligations
 open ZkcSecurity.Families.Sumcheck TableComponent
+open Std.WP ZkcSecurity.Obligations.WeakestPrecondition
 
 variable {F G : Type} [Field F] [DecidableEq F]
 
@@ -143,6 +143,7 @@ noncomputable def twoRoots_rejected
     exact both_rejected first second reached (Or.inl rejected)
 
 omit [∀ event, SampleableType (@Domain.Raw (uniformCarriers F G) event)] in
+set_option experimental.vcgen true in
 theorem twoRoots_cost (price : ENNReal)
     (priced : ∀ history origin, charge history (.challenge origin) ≤ price)
     (maximum : Nat) (leftSchedule rightSchedule : Nominal.Schedule "bls12-381.fr")
@@ -151,15 +152,18 @@ theorem twoRoots_cost (price : ENNReal)
     Typed.ChargedCostBound (Nominal.interface (G := G) "bls12-381.fr") charge
       (twoRoots maximum leftSchedule rightSchedule left right leftClaim rightClaim count construction)
       history ((maximum + maximum) • price) := by
-  rw [add_nsmul]
-  apply CostComposition.bind _ _ _ _
-    (root_cost price priced maximum leftSchedule left leftClaim count construction history)
-  intro first reached
-  have tail := CostComposition.bind
-    (root maximum rightSchedule right rightClaim count first.2)
-    (fun second => (both first.1 second.1).bind fun result => .done (result, second.2))
-    (maximum • price) 0 (root_cost price priced maximum rightSchedule right rightClaim count first.2 reached)
-    (fun second reached => by trivial)
-  simpa only [add_zero] using tail
+  let absorb := Nominal.interface (F := F) (G := G) "bls12-381.fr"
+  let := costMonad absorb charge
+  apply cost_of_triple absorb charge
+    (pre := fun _ credit => (maximum + maximum) • price ≤ credit) ?_ history _ le_rfl
+  have first := bound_spec absorb charge
+    (root maximum leftSchedule left leftClaim count construction) (maximum • price) (maximum • price)
+    (root_cost price priced maximum leftSchedule left leftClaim count construction)
+  have second (state : ConstructionState (F := F) (G := G)) := bound_spec absorb charge
+    (root maximum rightSchedule right rightClaim count state) (maximum • price) 0
+    (root_cost price priced maximum rightSchedule right rightClaim count state)
+  unfold twoRoots
+  vcgen [first, second, both]
+  all_goals simp_all only [add_nsmul, add_zero]
 
 end ZkcSecurity.Realizations.Sumcheck.OriginalRaw

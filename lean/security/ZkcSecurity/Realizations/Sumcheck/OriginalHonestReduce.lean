@@ -7,7 +7,6 @@ set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 800000
 set_option backward.isDefEq.respectTransparency false
-set_option linter.unusedSimpArgs false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalHonest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
@@ -56,9 +55,9 @@ theorem reduce (payload : UnitPayload) (bodies : SumcheckUnitContracts.Bodies pa
   simp only [Original.fold_bind]
   rw [Original.fold_repeat, Original.fold_repeat]
   have producerActive : ((repeatSpec maximum).roles.map context.roles).contains (context.roles 0) = true := by
-    simp [repeatSpec]
+    simp []
   have validatorActive : ((repeatSpec maximum).roles.map context.roles).contains (context.roles 1) = true := by
-    simp [repeatSpec]
+    simp []
   dsimp only at producerActive validatorActive
   simp only [producerActive, validatorActive, admitted, ↓reduceIte,
     SumcheckProverLaws.mask_embedP _ _ rfl maximum,

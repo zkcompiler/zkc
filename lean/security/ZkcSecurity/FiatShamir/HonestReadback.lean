@@ -187,9 +187,30 @@ theorem run {Post : A → B → Prop}
 
 end Readback
 
+/-- Read-back discharges pointwise completeness through the exact runner WP.
+The full returned states and events supplied by `run` justify both local
+instances; neither phase may stop, and the generated proof must be consumed. -/
+theorem Readback.pair_wp (model : Structured.DomainModel) (program : Structured.Program)
+    (context : Context) (producer validator : Participant)
+    (producerInputs validatorInputs : Domain.Environment model.toCarriers)
+    (position : Nat)
+    (aligned : Readback
+      (fun _ result => Domain.acceptanceAt position result.values = some true)
+      (Domain.participant model program context producer producerInputs)
+      (Domain.participant model program context validator validatorInputs))
+    (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
+    HonestCompiled.pairWP model program context producer validator
+      producerInputs validatorInputs position answers := by
+  obtain ⟨left, right, leftFinal, rightFinal, leftEvents, rightEvents, proof,
+    produced, validated, accepted⟩ := aligned.run answers producerInputs validatorInputs [] []
+  simp only [List.nil_append, List.append_nil] at produced validated
+  unfold HonestCompiled.pairWP
+  simp only [PIR.WeakestPrecondition.wp_eq_run]
+  simp only [PIR.WeakestPrecondition.satisfies, produced, validated]
+  exact ⟨trivial, accepted⟩
+
 /-- Successful read-back is a full compiled pair execution on one keyed
-answer table. The producer starts with empty output and the validator consumes
-exactly that output; the result retains both actual final frames and events. -/
+answer table, by pointwise WP adequacy for the existing success event. -/
 theorem Readback.pair_success (model : Structured.DomainModel) (program : Structured.Program)
     (context : Context) (producer validator : Participant)
     (producerInputs validatorInputs : Domain.Environment model.toCarriers)
@@ -201,26 +222,9 @@ theorem Readback.pair_success (model : Structured.DomainModel) (program : Struct
     (answers : QueryImpl (TranscriptOracle.DomainSpec model.toCarriers) Id) :
     Domain.PairExecution.Success position
       (Domain.executePair (m := Id) model program context producer validator producerInputs validatorInputs
-        (HonestCompiled.tableOracle answers) ()) := by
-  obtain ⟨left, right, leftFinal, rightFinal, leftEvents, rightEvents, proof,
-    produced, validated, accepted⟩ := aligned.run answers producerInputs validatorInputs [] []
-  simp only [List.nil_append, List.append_nil] at produced validated
-  have produceLaw : Domain.produce model program context producer producerInputs
-      (HonestCompiled.tableOracle answers) () =
-      ⟨.returned left, ⟨leftFinal, proof, ()⟩, leftEvents⟩ := by
-    exact (PIR.runM_pure (m := Id)
-      (Domain.handler .producer (HonestCompiled.tableOracle answers))
-      (Domain.participant model program context producer producerInputs)
-      ⟨producerInputs, [], ()⟩).trans produced
-  have validateLaw : Domain.validate model program context validator validatorInputs proof
-      (HonestCompiled.tableOracle answers) () =
-      ⟨.returned right, ⟨rightFinal, [], ()⟩, rightEvents⟩ := by
-    exact (PIR.runM_pure (m := Id)
-      (Domain.handler .validator (HonestCompiled.tableOracle answers))
-      (Domain.participant model program context validator validatorInputs)
-      ⟨validatorInputs, proof, ()⟩).trans validated
-  simp only [Domain.executePair, produceLaw, Bind.bind, Pure.pure]
-  rw [validateLaw]
-  exact ⟨left, _, right, rfl, rfl, rfl, rfl, accepted⟩
+        (HonestCompiled.tableOracle answers) ()) :=
+  (HonestCompiled.pair_success_iff_wp model program context producer validator
+    producerInputs validatorInputs position answers).mpr
+      (aligned.pair_wp model program context producer validator producerInputs validatorInputs position answers)
 
 end ZkcSecurity.FiatShamir

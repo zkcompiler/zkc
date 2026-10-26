@@ -1,0 +1,15 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "ZkcClean.guarantees_of_export",
+    "ZkcClean.holds_iff",
+    "ZkcClean.table_spec"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}

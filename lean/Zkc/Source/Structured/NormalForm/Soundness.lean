@@ -471,7 +471,6 @@ end Facts
 
 /-! Calculations. -/
 
-set_option linter.unnecessarySeqFocus false in
 theorem operationOn_total (model : DomainModel) {I : PIR.Signature} (observations : SiteObservations I)
     (table : Evaluation.MeaningsOn model.toCarriers I) (op : Op) (total : op.total = true)
     (args : Values model.Value op.arguments) (bodies : Values (RegionFunction model.Value I) op.regions) :
@@ -479,7 +478,7 @@ theorem operationOn_total (model : DomainModel) {I : PIR.Signature} (observation
   cases op <;> simp [Op.total] at total
   case makeProduct => cases bodies; rfl
   all_goals
-    (rcases bodies with _ | _) <;> (rcases args with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩) <;> rfl
+    (rcases bodies with _ | _); (rcases args with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩); rfl
 
 theorem componentOperationOn_total (model : DomainModel) {I : PIR.Signature}
     (observations : SiteObservations I) (tables : Evaluation.ComponentTablesOn model.toCarriers I)

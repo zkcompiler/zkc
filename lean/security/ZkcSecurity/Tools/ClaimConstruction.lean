@@ -22,7 +22,7 @@ Names in `Library` locate Lean exports; they never define property meanings.
 universe u
 
 namespace ZkcSecurity.Tools.ClaimConstruction
-open Lean Meta Elab Tactic Command
+open Lean Meta Elab Tactic Command Parser.Term
 open Zkc.Claims ZkcSecurity.Claims ZkcSecurity.Endpoint
 
 meta initialize registerTraceClass `zkc.claimConstruction
@@ -48,23 +48,25 @@ structure Library where
   receiptMethods : List (Identifier × Name) := []
   deriving Inhabited
 
-/-- Kernel checked normalization of a reflexive symbolic comparison. -/
-@[simp] theorem naturalReflexiveRec {α : Sort u} (value : Nat)
-    (no : (¬ value = value) → α) (yes : (value = value) → α) :
-    @Decidable.rec (value = value) (fun _ => α) no yes (instDecidableEqNat value value) =
-      yes rfl := by
-  cases decision : instDecidableEqNat value value with
-  | isFalse impossible => exact (impossible rfl).elim
-  | isTrue proof => rfl
+/-- Normalize a reflected decision without evaluating its carrier. The resolver
+can expose this dependent Boolean eliminator while reducing an `Except` bind;
+rewriting its discriminator alone would change the type of the reflection proof. -/
+theorem reflectedTrue {p : Prop} [Decidable p] {α : Sort u}
+    (no : ¬ p → α) (yes : p → α) (holds : p) :
+    @Bool.rec (fun b => b.Reflects p → α) no yes (decide p)
+      (Decidable.reflects_decide p) = yes holds := by
+  cases ‹Decidable p› with
+  | isFalse noProof => exact (noProof holds).elim
+  | isTrue _ => rfl
 
-/-- Reflexive Boolean comparisons can occur after reducing an `Except` bind. -/
-@[simp] theorem naturalBneRec {α : Sort u} (value : Nat)
-    (no : (¬ (value != value) = true) → α) (yes : ((value != value) = true) → α) :
-    @Decidable.rec ((value != value) = true) (fun _ => α) no yes
-      (instDecidableEqBool (value != value) true) = no (by simp) := by
-  cases decision : instDecidableEqBool (value != value) true with
-  | isFalse proof => rfl
-  | isTrue impossible => simp at impossible
+/-- The negative branch preserves the same reflection evidence. -/
+theorem reflectedFalse {p : Prop} [Decidable p] {α : Sort u}
+    (no : ¬ p → α) (yes : p → α) (fails : ¬ p) :
+    @Bool.rec (fun b => b.Reflects p → α) no yes (decide p)
+      (Decidable.reflects_decide p) = no fails := by
+  cases ‹Decidable p› with
+  | isFalse _ => rfl
+  | isTrue proof => exact (fails proof).elim
 
 /-- Admit a carrier cardinality as symbolic arithmetic before evaluating any
 finite enumeration. The selected carrier still supplies the cardinality. -/
@@ -188,7 +190,7 @@ private meta def normalizationNames : List Name :=
     ``decodeSoundnessParameters, ``requireExactSoundness,
     ``checkDefaultRelation, ``defaultRelationHelper, ``defaultRelationOperation,
     ``HonestPair.resolveHonestModel, ``HonestPair.honestModelEntry, ``HonestPair.honestModelSchema,
-    ``forking, ``naturalReflexiveRec, ``naturalBneRec, ``ModelContext.parameter, ``ModelContext.resolveApplication,
+    ``forking, ``reflectedTrue, ``reflectedFalse, ``beq_self_eq_true, ``decide_true, ``decide_false, ``ModelContext.parameter, ``ModelContext.resolveApplication,
     ``Fintype.card_ne_zero, ``NeZero.ne, ``Domain.Capabilities.cardinality, ``Bound.elaborateWith, ``Except.map]
 
 -- Lean otherwise creates shared unfolding equations lazily in each client,
@@ -660,14 +662,21 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
       return
     let endpoint ← if wire.subject.stage == .compiledIdeal then `(.idealMeaning) else `(.executableBytes)
     elabCommand (← `(section))
-    elabCommand (← `(set_option linter.unusedSectionVars false))
     let field := mkIdent `F
     let group := mkIdent `G
-    elabCommand (← `(variable {$field $group : Type} [Field $field] [Fintype $field] [DecidableEq $field]
-      [Inhabited $field] [SampleableType $field] [AddCommGroup $group] [Module $field $group]
-      [DecidableEq $group] [SampleableType $group]))
+    -- These declarations share the uniform library's complete model telescope.
+    -- State it explicitly instead of suppressing unused-section diagnostics or
+    -- guessing which instances an author-defined property might require.
+    let modelBinders : Array (TSyntax ``Parser.Term.bracketedBinder) := #[
+      ← `(bracketedBinderF| {$field $group : Type}),
+      ← `(bracketedBinderF| [Field $field]), ← `(bracketedBinderF| [Fintype $field]),
+      ← `(bracketedBinderF| [DecidableEq $field]), ← `(bracketedBinderF| [Inhabited $field]),
+      ← `(bracketedBinderF| [SampleableType $field]), ← `(bracketedBinderF| [AddCommGroup $group]),
+      ← `(bracketedBinderF| [Module $field $group]), ← `(bracketedBinderF| [DecidableEq $group]),
+      ← `(bracketedBinderF| [SampleableType $group])]
+    elabCommand (← `(variable $modelBinders*))
     let modelAdmission := name "ModelAdmission"
-    let failed ← checkedCommand (← `(theorem $modelAdmission ($application : String) :
+    let failed ← checkedCommand (← `(theorem $modelAdmission $modelBinders* ($application : String) :
         ∃ actual, modelResolution ($models $endpoint $application)
           ($subject (F := $field) (G := $group)) $data = .ok (.ok actual) := by
         claim_model normalizing [$normalization,*]))
@@ -684,7 +693,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
       elabCommand (← `(end))
       return
     let resolution := name "Resolution"
-    elabCommand (← `(theorem $resolution ($application : String) :
+    elabCommand (← `(theorem $resolution $modelBinders* ($application : String) :
       resolveRequest ($properties (F := $field) (G := $group) $endpoint $application)
         ($models $endpoint $application) ($subject (F := $field) (G := $group)) $data =
           .ok (.ok ($resolved (F := $field) (G := $group) $application)) :=
@@ -703,7 +712,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
     unless (← getEnv).contains (currentNamespace ++ selectedModel.getId) do
       elabCommand (← `(def $modelContext ($application : String) : ModelContext := by
         claim_context ($models $endpoint $application), $data))
-      let failed ← checkedCommand (← `(theorem $selectedModel ($application : String) :
+      let failed ← checkedCommand (← `(theorem $selectedModel $modelBinders* ($application : String) :
           CanonicalModelAdmission (CanonicalAuthority.ofUniformSubject ($subject (F := $field) (G := $group))) ($models $endpoint $application) ($modelContext $application)
             ($subject (F := $field) (G := $group)) ($data).model := by
           exact ⟨rfl, $modelAdmission (F := $field) (G := $group) $application⟩))
@@ -769,7 +778,7 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
                 "zkc.method.author-library/0", some ⟨fun supplied =>
                   if supplied.arguments.isEmpty then .ok (.proved (($receipt (F := $field) (G := $group) $application).receipt))
                   else .error (.schema "method takes no parameters")⟩⟩]⟩))
-            elabCommand (← `(theorem $executed ($application : String) :
+            elabCommand (← `(theorem $executed $modelBinders* ($application : String) :
               runMethod ($methods (F := $field) (G := $group) $application)
                 ⟨⟨$(quote plan.identifier.name), $(quote plan.identifier.version)⟩, []⟩ =
                 .ok (.proved (($receipt (F := $field) (G := $group) $application).receipt)) := rfl))

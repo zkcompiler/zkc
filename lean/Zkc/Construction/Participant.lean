@@ -249,23 +249,21 @@ structure Instruction where
   deriving Repr
 
 mutual
+/-- Equality decisions expose Boolean computation to kernel admission checks. -/
 def Instruction.decide : (left right : Instruction) → Decidable (left = right)
   | ⟨operation, operands, results, body⟩, ⟨operation', operands', results', body'⟩ =>
-      if same : operation = operation' ∧ operands = operands' ∧ results = results' then
-        match Instruction.decideList body body' with
-        | isTrue bodies => isTrue (by obtain ⟨rfl, rfl, rfl⟩ := same; subst bodies; rfl)
-        | isFalse bodies => isFalse (by intro equal; cases equal; exact bodies rfl)
-      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl, rfl⟩)
+      letI : Decidable (body = body') := Instruction.decideList body body'
+      decidable_of_iff (operation = operation' ∧ operands = operands' ∧
+        results = results' ∧ body = body') (by simp only [Instruction.mk.injEq])
 
 def Instruction.decideList : (left right : List Instruction) → Decidable (left = right)
   | [], [] => isTrue rfl
   | [], _ :: _ => isFalse (by simp)
   | _ :: _, [] => isFalse (by simp)
   | head :: tail, head' :: tail' =>
-      match Instruction.decide head head', Instruction.decideList tail tail' with
-      | isTrue heads, isTrue tails => isTrue (by subst heads tails; rfl)
-      | isFalse heads, _ => isFalse (by intro equal; cases equal; exact heads rfl)
-      | _, isFalse tails => isFalse (by intro equal; cases equal; exact tails rfl)
+      letI := Instruction.decide head head'
+      letI := Instruction.decideList tail tail'
+      decidable_of_iff (head = head' ∧ tail = tail') (by simp only [List.cons.injEq])
 end
 
 instance : DecidableEq Instruction := Instruction.decide

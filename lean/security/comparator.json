@@ -1,0 +1,36 @@
+{
+  "challenge_module": "LockedStatements",
+  "solution_module": "LockedStatements",
+  "theorem_names": [
+    "TestsSecurity.Counterexamples.Couplings.chain_collision",
+    "TestsSecurity.Counterexamples.Laws.correlated_not_realized",
+    "TestsSecurity.Counterexamples.Openings.depth_not_fixed",
+    "TestsSecurity.Counterexamples.Operands.count_not_authenticated",
+    "Zkc.Protocols.Sumcheck.Common.VerifierContract.soundness",
+    "ZkcSecurity.Commitment.soundness",
+    "ZkcSecurity.Commitment.soundness_weighted",
+    "ZkcSecurity.Examples.ChaumPedersenSigma.knowledge_soundness",
+    "ZkcSecurity.Examples.CommittedOpening.intendedBound",
+    "ZkcSecurity.Examples.CommittedOpeningBridge.soundness",
+    "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness",
+    "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness",
+    "ZkcSecurity.Examples.SchnorrAndSigma.knowledge_soundness",
+    "ZkcSecurity.Examples.StructuredSchnorrSigma.fresh_challenge_hvzk",
+    "ZkcSecurity.Examples.Subjects.ChaumPedersen.knowledge_soundness",
+    "ZkcSecurity.Examples.Subjects.Okamoto.knowledge_soundness",
+    "ZkcSecurity.Examples.Subjects.SchnorrAnd.knowledge_soundness",
+    "ZkcSecurity.FiatShamir.Obligations.not_determines",
+    "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged",
+    "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_weighted",
+    "ZkcSecurity.FiatShamir.adaptive_soundness",
+    "ZkcSecurity.HashChain.Encoding.frame_prefixFree",
+    "ZkcSecurity.HashChain.concrete_le_simulated",
+    "ZkcSecurity.HashChain.concrete_soundness"
+  ],
+  "definition_names": [],
+  "permitted_axioms": [
+    "propext",
+    "Classical.choice",
+    "Quot.sound"
+  ]
+}

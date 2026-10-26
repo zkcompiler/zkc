@@ -33,7 +33,6 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixLaw
 open MapPrefixBodies GkrSourceViews
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 
-set_option linter.unusedSimpArgs false
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
@@ -109,8 +108,8 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
   simp only [GkrSourceBodies.evaluateBody, inputs, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
+    SumcheckHelperLaws.prepend_three,
+    Environment.push, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate, pointBound, ite_true, primitiveOutcome,
     show 1 < indexLimit by decide +kernel, ← List.sum_eq_foldl]
   congr 1
@@ -197,8 +196,8 @@ theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : Li
   simp only [GkrSourceBodies.evaluateWiringBody, inputs, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
     Values.get_cons, Values.get, SumcheckHelperLaws.prepend_empty, SumcheckHelperLaws.prepend_one,
-    SumcheckHelperLaws.prepend_two, SumcheckHelperLaws.prepend_three,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
+    SumcheckHelperLaws.prepend_three,
+    Environment.push, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate, checkedIndices, gateBound, leftBound, rightBound, pairBound,
     sumBound, and_self, ite_true, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     ← List.sum_eq_foldl]
@@ -560,8 +559,7 @@ theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponen
       .done (.cons (2 ^ exponent) .nil) := by
   have exponentBound : exponent < indexLimit := Nat.lt_trans small (by decide +kernel)
   simp only [GkrSourceBodies.helper18Body, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
+    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate, primitiveOutcome, show 1 < indexLimit by decide +kernel,
     show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.index] [] _ exponent _ .nil
@@ -576,10 +574,7 @@ theorem powerOfTwo_body (table : Meanings F G) (exponent : Nat) (small : exponen
     have product : 2 ^ index * 2 < indexLimit := by
       rw [← Nat.pow_succ]
       exact Nat.pow_lt_pow_right (by decide) (by omega : index + 1 < 64)
-    simp only [Evaluation.invokeCallback, Region.denote, meaning, Evaluation.meaning,
-      Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-      Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-      PIR.Process.bind, Primitive.evaluate, primitiveOutcome, checkedIndices, current, product,
+    simp only [Evaluation.invokeCallback, Values.get_cons, Environment.prepend, Environment.push, PIR.Process.bind, checkedIndices, current, product,
       show 2 < indexLimit by decide +kernel, and_self, ite_true, Values.append, Nat.pow_succ]
 
 theorem powerOfTwo_equation (exponent : Nat) (small : exponent < 64) :
@@ -734,7 +729,7 @@ theorem selectBlock_equation (xs : List F) (position bits size : Nat)
   refine (selectBlock_association.invoke unit.linked _).trans ?_
   rw [selectBlockBody_eq]
   simp only [Region.denote, meaning, Evaluation.meaning, Evaluation.operation, Operands.eval,
-    Regions.denote, Values.get_cons, Values.get, Environment.prepend, Environment.push,
+    Regions.denote, Values.get_cons, Environment.prepend, Environment.push,
     SiteObservations.closed, SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
     primitiveOutcome, show 0 < indexLimit by decide +kernel, ite_true, Values.split]
   rw [denoteLoop_states (F := F) (G := G) [.vector "bls12-381.fr", .index] [.index] _ bits _
@@ -787,15 +782,14 @@ theorem selectBlock_equation (xs : List F) (position bits size : Nat)
     rw [selectLoop_body]
     simp only [Primitive.evaluate, primitiveOutcome, checkedIndices, PIR.Process.bind, Values.get,
       show 1 < indexLimit by decide +kernel, show 2 < indexLimit by decide +kernel, remaining,
-      remainingBound, power, powerSmall, powerPositive, positionBound, quotientBound, bitBound,
-      blockLength, blockPositive, blockEven, half, and_self, ite_true, ite_false, next,
-      gt_iff_lt, true_and, and_true]
+      remainingBound, power, powerSmall, powerPositive, positionBound, quotientBound, blockLength, blockPositive, blockEven, half, and_self, ite_true, ite_false, next,
+      true_and, and_true]
     by_cases bit : position / 2 ^ (bits - index - 1) % 2 = 1
-    · simp only [bit, decide_true, ite_true] at step ⊢
+    · simp only [bit, ite_true] at step ⊢
       rw [← step]
       simp [PIR.Process.bind, Values.get, show (1 : Nat) < indexLimit by decide +kernel]
       rfl
-    · simp only [bit, decide_false, ite_false, Bool.false_eq_true] at step ⊢
+    · simp only [bit, ite_false] at step ⊢
       rw [← step]
       simp [PIR.Process.bind, Values.get, bit, bitBound]
 

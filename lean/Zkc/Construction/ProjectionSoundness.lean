@@ -2292,7 +2292,7 @@ theorem Value.decode_some {ty : Ty} {v : Value F G} {x : assignment F G ty}
   cases ty <;> cases v <;> simp [Value.decode] at decoded
   all_goals
     first
-    | (rename_i payload; cases payload <;> simp at decoded <;> (obtain ⟨rfl, rfl⟩ := decoded; rfl))
+    | (rename_i payload; cases payload <;> simp at decoded; (obtain ⟨rfl, rfl⟩ := decoded; rfl))
     | (subst decoded; rfl)
     | (obtain ⟨rfl, rfl⟩ := decoded; rfl)
 

@@ -32,9 +32,10 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 def lean_checks():
-    # These tools emit or compare explicitly supplied migration snapshots. They
-    # are not checks of the current checkout and have no default input selection.
-    snapshot_tools = {"check_migration.py", "source_responsibility.py"}
+    # These tools require explicitly selected snapshots or compiler exports.
+    # They have no default input selection for checking the current checkout.
+    snapshot_tools = {"check_independent.py", "check_migration.py", "check_subject_roots.py",
+                      "source_responsibility.py"}
     # These checks need the native compiler and run in lean-native instead.
     native_checks = {"check_local_service_admission.py"}
     return sorted(path for path in (ROOT / "lean/checks").glob("*.py")

@@ -781,7 +781,6 @@ section Local
 variable {m : Type → Type} [Monad m] (context : Context) (challenge : History F G → m F)
   (helpers : Structured.Evaluation.Meanings F G Structured.closedInterface)
 
-set_option linter.unusedSimpArgs false in
 /-- An anchor reads its environment only through its operands and only appends
 its results: renumbered over its operand values it takes the same step. -/
 theorem idealStep_local {R : Type} {operation : Operation} {operands : List Nat} {results : List ValueSort}
@@ -811,16 +810,16 @@ theorem idealStep_local {R : Type} {operation : Operation} {operands : List Nat}
       · rfl
       · have va : env[a]? = some x := by simpa using values 0 a rfl
         show _ = idealStep context challenge helpers ⟨_, [0], _, []⟩ [x] proof _
-        simp [idealStep, transcriptAt, dataAt, indicesAt, indexAt, va]
+        simp [idealStep, va]
       · have va : env[a]? = some x := by simpa using values 0 a rfl
         have vb : env[b]? = some y := by simpa using values 1 b rfl
         show _ = idealStep context challenge helpers ⟨_, [0, 1], _, []⟩ [x, y] proof _
-        simp [idealStep, transcriptAt, dataAt, indicesAt, indexAt, va, vb]
+        simp [idealStep, transcriptAt, indicesAt, indexAt, va, vb]
       · have va : env[a]? = some x := by simpa using values 0 a rfl
         have vb : env[b]? = some y := by simpa using values 1 b rfl
         have vc : env[c]? = some z := by simpa using values 2 c rfl
         show _ = idealStep context challenge helpers ⟨_, [0, 1, 2], _, []⟩ [x, y, z] proof _
-        simp [idealStep, transcriptAt, dataAt, indicesAt, indexAt, va, vb, vc]
+        simp [idealStep, transcriptAt, dataAt, va, vb]
       · rfl
 
 /-- A helper returns values of the declared result sorts. -/

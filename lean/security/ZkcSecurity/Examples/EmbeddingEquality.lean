@@ -181,5 +181,6 @@ theorem compiled_verifier_eq {m : Type → Type} [Monad m] [LawfulMonad m]
         addition_calculation, embedding_call, equality_calculation, conjunction_calculation,
         Endpoint.Domain.readExecution, PIR.Process.bind,
         Endpoint.Domain.Compiled.acceptance, Zkc.Transcript.mapOutcome, decision]
+      rfl
 
 end ZkcSecurity.Examples.EmbeddingEquality

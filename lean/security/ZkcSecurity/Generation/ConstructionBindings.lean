@@ -29,7 +29,7 @@ def preamble (name : String) (imports : List String) (search : Bool := true) : S
   "\n@[expose] public section\nset_option autoImplicit false\nset_option maxRecDepth 50000\n" ++
   "set_option maxHeartbeats 8000000\n" ++
   (if search then "set_option backward.isDefEq.respectTransparency false\n" else "") ++
-  "set_option linter.unusedSimpArgs false\nnoncomputable section\nnamespace " ++ name ++ "\n" ++
+  "noncomputable section\nnamespace " ++ name ++ "\n" ++
   "open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured\n" ++
   "open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding\n" ++
   "variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]\n\n"
@@ -38,8 +38,10 @@ def occurrenceName (index : Nat) : String := "occurrence" ++ toString index
 
 def occurrenceNames (layout : Layout) : List String := (List.range layout.calls.length).map occurrenceName
 
+/-- Symbolic routing normalization. Explicit checked label equations close UTF-8
+computations without a native evaluator or protocol-specific global simp rules. -/
 def nominalSimp (layout : Layout) : String :=
-  ", ".intercalate (occurrenceNames layout ++ (occurrenceNames layout).map (· ++ "_decimal") ++ ["Occurrence.low", "Occurrence.high", "Occurrence.draw",
+  ", ".intercalate ((occurrenceNames layout).map (· ++ "_decimal") ++ ["Occurrence.low", "Occurrence.high", "Occurrence.draw",
     "Occurrence.delivery", "Occurrence.message", "Occurrence.steps", "Occurrence.protocol",
     "SourceOccurrences.repeatSites", "Template.origin", "Domain.templateOrigin",
     "Template.repeats", "Template.qualify", "Template.applicationPrefix", "context",
@@ -53,14 +55,18 @@ def routes (layout : Layout) (index : Nat) : String := Id.run do
   let occurrence := occurrenceName index
   let valid := (occurrenceNames layout).flatMap fun name =>
     ["low", "high", "draw", "delivery"].map fun kind => name ++ "_" ++ kind ++ "_valid"
+  -- Routing concatenates message lists only when another call follows. Select
+  -- structural normalization from that emitted syntax, for any number of calls.
+  let messageAppendRules := if layout.calls.tail.isEmpty then "" else
+    "List.cons_append, List.nil_append, "
   return "theorem " ++ occurrence ++ "_routes (handle index : Nat) :\n" ++
     "    Routes (routing handle) " ++ occurrence ++ ".protocol\n" ++
     "      [⟨qualifyProtocolSite " ++ occurrence ++ ".protocol.applicationPrefix \"s15\", index⟩]\n" ++
     "      handle (" ++ occurrence ++ ".origins context index) := by\n" ++
     "  constructor\n  · rfl\n  all_goals\n" ++
-    "    simp only [Original.Routing.message, Original.Routing.draw, routing, Occurrence.messages,\n" ++
-    "      Occurrence.origins, OccurrenceResolution.resolve, List.cons_append, List.nil_append,\n" ++
-    "      List.filter_cons, List.filter_nil, ite_eq_left rfl]\n" ++
+    "    simp only [Original.Routing.message, Original.Routing.draw, Occurrence.messages,\n" ++
+    "      Occurrence.origins, OccurrenceResolution.resolve, " ++ messageAppendRules ++
+    "List.filter_cons, List.filter_nil]\n" ++
     "    simp only [OccurrenceResolution.matchesOccurrence, " ++ ", ".intercalate valid ++ "]\n" ++
     "    simp [" ++ nominalSimp layout ++ "]\n\n"
 
@@ -97,11 +103,10 @@ def checkApplicability (method : ProofMethod) (producer : Bool)
         (if producer then "Producer" else "Validator") ++ " call " ++ toString index)
 
 /-- Print the four local origin equations once per source occurrence. -/
-def originLaws (layout : Layout) (index : Nat) : String :=
+def originLaws (index : Nat) : String :=
   "theorem " ++ occurrenceName index ++ "_origins :\n" ++
   "    ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.OriginLaws context " ++ occurrenceName index ++ " := by\n" ++
-  "  constructor <;> intro index <;>\n" ++
-  "    simp [Domain.queryOrigin, Occurrence.origins, " ++ nominalSimp layout ++ "]\n\n"
+  "  constructor <;> intro index <;> kernel_rfl\n\n"
 
 def source (program : Program) (validator producer : Participant)
     (moduleName sourceModule pairModule : String)
@@ -137,7 +142,7 @@ def source (program : Program) (validator producer : Participant)
     -- inventing authority when its installed local paths no longer fit source.
     text := text ++ "theorem " ++ occurrence ++ "_query : " ++ occurrence ++ ".draw = " ++ literal call.query ++ " := by kernel_rfl\n" ++
       "theorem " ++ occurrence ++ "_messages : " ++ occurrence ++ ".messages = " ++ literal call.messages ++ " := by kernel_rfl\n"
-  for index in List.range layout.calls.length do text := text ++ originLaws layout index
+  for index in List.range layout.calls.length do text := text ++ originLaws index
   let names := occurrenceNames layout
   text := text ++ "\nabbrev routing (handle : Nat) : Original.Routing :=\n" ++
     "  ⟨program.snapshot, context, .validator, handle, " ++
@@ -185,7 +190,7 @@ def source (program : Program) (validator producer : Participant)
             "$VALID_DELIVERY" (occurrenceName index ++ "_delivery_valid")).replace
             "$VALID_DRAW" (occurrenceName index ++ "_draw_valid")).replace
             "$VALIDATOR_ROUTES" (occurrenceName index ++ "_routes")).replace
-            "$OCCURRENCES" (nominalSimp layout)) ++ "\n"
+            "$OCCURRENCE_DECIMAL" (occurrenceName index ++ "_decimal")) ++ "\n"
       else text := text ++ "abbrev routes := " ++ occurrenceName index ++ "_routes\n"
       let owner := if role == "Validator" then
         "ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates" else

@@ -16,7 +16,7 @@ them. A kernel `fill` completes a state of the first simulation into a state of
 the second by sampling the values the first has not read yet. If one step of the
 second simulation after filling has the same law as one step of the first
 followed by filling (`commute`), then so do the whole simulations of every
-computation (`evalSPMF_simulateQ_fill`). Steps need to commute only from states
+computation (`evalDistEq_simulateQ_fill`). Steps need to commute only from states
 satisfying an invariant indexed by the remaining queries, which bounds the
 values the fill must provide.
 -/
@@ -30,7 +30,7 @@ variable {ι : Type} {spec : OracleSpec ι} {σ₁ σ₂ : Type}
 
 /-- The simulations from a state of the first and from its filling have the same
 law, up to filling the first's final state. -/
-theorem evalSPMF_simulateQ_fill
+theorem evalDistEq_simulateQ_fill
     (impl₁ : QueryImpl spec (StateT σ₁ ProbComp)) (impl₂ : QueryImpl spec (StateT σ₂ ProbComp))
     (fill : σ₁ → ProbComp σ₂) (Inv : ℕ → σ₁ → Prop)
     (commute : ∀ (remaining : ℕ) query state, Inv (remaining + 1) state →
@@ -128,48 +128,16 @@ end Flatten
 
 section Laws
 
-/-- Equal laws give equal event probabilities. -/
-theorem prEvent_eq_of_evalSPMF_eq {α : Type} {first second : ProbComp α}
-    (same : first =ᵈ second) (event : α → Prop) :
-    Pr{let result ← first}[event result] = Pr{let result ← second}[event result] := by
-  exact same.prEvent_eq event
-
-/-- Equal measures on a type with measurable singletons give equal laws. -/
-theorem evalSPMF_eq_of_evalDist_eq {α : Type} [MeasurableSpace α] [MeasurableSingletonClass α]
-    {first second : ProbComp α} (same : 𝒟[first] = 𝒟[second]) : first =ᵈ second := by
-  apply OracleComp.evalDistEq_of_forall_prEvent_eq_output
-  intro value
-  rw [prEvent_eq_evalDist_singleton, prEvent_eq_evalDist_singleton, same]
-
 /-- Resampling one cell of a uniform table with an independent uniform value
 keeps the table uniform, whatever is computed from it. -/
-theorem evalSPMF_uniform_update {D R α : Type} [Fintype D] [DecidableEq D] [SampleableType R]
+theorem evalDistEq_uniform_update {D R α : Type} [Fintype D] [DecidableEq D] [SampleableType R]
     [SampleableType (D → R)] (cell : D) (continuation : (D → R) → ProbComp α) :
     (($ᵗ R) >>= fun value => ($ᵗ (D → R)) >>= fun table =>
         continuation (Function.update table cell value)) =ᵈ (($ᵗ (D → R)) >>= continuation) := by
   let : MeasurableSpace R := ⊤
   let : MeasurableSpace α := ⊤
-  have : MeasurableSingletonClass α := ⟨fun _ => trivial⟩
-  have : MeasurableSingletonClass R := ⟨fun _ => trivial⟩
-  exact evalSPMF_eq_of_evalDist_eq (evalDist_bind_bind_update ($ᵗ R) ($ᵗ (D → R))
+  exact _root_.EvalDistEq.of_evalDist_eq (evalDist_bind_bind_update ($ᵗ R) ($ᵗ (D → R))
     SampleableType.evalDist_uniformSample SampleableType.evalDist_uniformSample cell continuation)
-
-/-- Independent uniform draws commute. -/
-theorem evalSPMF_uniform_swap {A B α : Type} [SampleableType A] [SampleableType B]
-    (continuation : A → B → ProbComp α) :
-    (($ᵗ A) >>= fun first => ($ᵗ B) >>= fun second => continuation first second) =ᵈ (($ᵗ B) >>= fun second => ($ᵗ A) >>= fun first => continuation first second) := by
-  let : MeasurableSpace A := ⊤
-  let : MeasurableSpace B := ⊤
-  let : MeasurableSpace α := ⊤
-  have : MeasurableSingletonClass α := ⟨fun _ => trivial⟩
-  have : MeasurableSingletonClass A := ⟨fun _ => trivial⟩
-  have : MeasurableSingletonClass B := ⟨fun _ => trivial⟩
-  exact evalSPMF_eq_of_evalDist_eq (evalDist_bind_bind_swap_of_countable _ _ continuation)
-
-/-- An unread uniform draw can be dropped. -/
-theorem evalSPMF_uniform_drop {A α : Type} [SampleableType A] (computation : ProbComp α) :
-    (($ᵗ A) >>= fun _ => computation) =ᵈ computation := by
-  exact OracleComp.EvalDistEq.bind_const _ computation
 
 end Laws
 

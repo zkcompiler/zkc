@@ -279,6 +279,10 @@ def entries : List Entry := [
     "The queries on every path charge at most a cost, each the error of its occurrence."⟩,
   ⟨"budget.typed-charged-cost", .budget, some `ZkcSecurity.FiatShamir.Typed.ChargedCostBound,
     "The queries on every path charge at most a cost, each the charge of its key."⟩,
+  ⟨"budget.process-cost-wp", .budget,
+    some `ZkcSecurity.Obligations.WeakestPrecondition.CostTriple,
+    "The process satisfies the selected cost precondition and return/stop postconditions, \
+    charging each reached query at its actual history against remaining ENNReal credit."⟩,
   ⟨"budget.committed-charge", .budget, some `ZkcSecurity.Commitment.Charged,
     "Every path of a verifier with committed tables charges at most a budget, with \
     admissible committed shapes."⟩,
@@ -303,6 +307,10 @@ def entries : List Entry := [
     some `ZkcSecurity.FiatShamir.Typed.ChargedStepTo,
     "The local obligation of a history-indexed doomed set of sub-validator residuals with a \
     postcondition on returned values, with a charge per key."⟩,
+  ⟨"family.process-charged-wp", .familyProperty,
+    some `ZkcSecurity.Obligations.WeakestPrecondition.ChargedTriple,
+    "The process satisfies the selected charged precondition and return/stop postconditions, \
+    retaining decoded message paths and the explicit escape obligation at each query."⟩,
   ⟨"family.typed-uniform-event-step", .familyProperty,
     some `ZkcSecurity.FiatShamir.Typed.UniformEventStep,
     "The uniform-sort local obligation of a doomed set that ignores the history."⟩,
@@ -469,6 +477,11 @@ def entries : List Entry := [
     some `ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies,
     "The admitted source program contains the exact sumcheck, prefix, terminal-check \
     and table-check helper bodies with their complete checked dependencies."⟩,
+  ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
+    some `ZkcSecurity.FiatShamir.HonestCompiled.pairWP,
+    "On one fixed shared answer table, the actual producer and validator both return, \
+    the validator consumes exactly the generated proof and accepts at the selected position. \
+    This pointwise runner property supplies no probabilistic or adversarial assumption."⟩,
   ⟨"wellformed.honest-readback", .wellFormedness,
     some `ZkcSecurity.FiatShamir.Readback,
     "A derivation aligns producer sends with typed validator receives and identical \

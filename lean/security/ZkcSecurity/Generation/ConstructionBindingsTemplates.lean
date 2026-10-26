@@ -100,13 +100,10 @@ def producerRoutes : String :=
             SumcheckVerifierLaws.deliverySite occurrence.protocol))) =
         [⟨occurrence.draw, occurrence.delivery⟩] := by
       decide +kernel
-    have deliverySite : occurrence.delivery.qualify
-        (occurrence.delivery.event[2]?.getD "") =
-        SumcheckVerifierLaws.deliverySite occurrence.protocol := by decide +kernel
     have drawSite : occurrence.draw.qualify (occurrence.draw.event[2]?.getD "") =
         SumcheckVerifierLaws.challengeSite occurrence.protocol := by decide +kernel
-    simp only [Original.Routing.delivery, show (routing handle).context = context from rfl,
-      policy, Bool.false_eq_true, ↓reduceIte, candidates, deliverySite, drawSite]
+    simp only [Original.Routing.delivery,
+      policy, Bool.false_eq_true, ↓reduceIte, candidates, drawSite]
     change ((OccurrenceResolution.resolve program.snapshot context
       (context.message (SumcheckVerifierLaws.deliverySite occurrence.protocol) 1 0)
       [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
@@ -123,26 +120,28 @@ def producerRoutes : String :=
       simp only [OccurrenceResolution.resolve, List.filter_cons, List.filter_nil,
         OccurrenceResolution.matchesOccurrence,
         $VALID_DELIVERY]
-      simp [occurrence, context, $OCCURRENCES,
+      simp [$OCCURRENCE_DECIMAL,
         Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol,
-        SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin,
+        Template.origin, Domain.templateOrigin,
         Template.repeats, Template.qualify, Template.applicationPrefix,
-        ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
+        ProtocolContext.enter, qualifyProtocolSite,
         SumcheckVerifierLaws.deliverySite, Occurrence.origins, Context.message,
-        Context.role, Origin.message, Domain.atCoordinates, decimal, decimalDigit]
+        Context.role, Origin.message, Domain.atCoordinates]
+      kernel_rfl
     have drawSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol) (.draw "bls12-381.fr"))
         [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
         [occurrence.draw] = some (occurrence.origins context index).draw := by
       simp only [OccurrenceResolution.resolve, List.filter_cons, List.filter_nil,
         OccurrenceResolution.matchesOccurrence, $VALID_DRAW]
-      simp [occurrence, context, $OCCURRENCES,
-        Occurrence.draw, Occurrence.message, Occurrence.steps, Occurrence.protocol,
-        SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin,
+      simp [$OCCURRENCE_DECIMAL,
+        Occurrence.draw, Occurrence.steps, Occurrence.protocol,
+        Template.origin, Domain.templateOrigin,
         Template.repeats, Template.qualify, Template.applicationPrefix,
-        ProtocolContext.enter, qualifyProtocolSite, roleSubstitution,
+        ProtocolContext.enter, qualifyProtocolSite,
         SumcheckVerifierLaws.challengeSite, Occurrence.origins, Context.query,
-        Context.role, Origin.query, Domain.atCoordinates, decimal, decimalDigit]
+        Context.role, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw]
+      kernel_rfl
     rw [messageSingleton, Option.bind_some, drawSingleton]
     rfl
   · exact Original.Routing.draw_request ($VALIDATOR_ROUTES handle index).draw

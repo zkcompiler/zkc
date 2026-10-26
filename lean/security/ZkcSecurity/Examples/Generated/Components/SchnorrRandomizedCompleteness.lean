@@ -18,7 +18,6 @@ set_option autoImplicit false
 set_option backward.isDefEq.respectTransparency false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 8000000
-set_option linter.unusedSimpArgs false
 namespace ZkcSecurity.Examples.Generated.Components.SchnorrRandomizedCompleteness
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.Claims.HonestPair ZkcSecurity.FiatShamir

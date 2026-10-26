@@ -55,7 +55,6 @@ def loopInvariant (field suite : String) (original : List F) (count : Nat) (indi
     state.original = original ∧ indices.length ≤ count ∧
       state.scalar = state.entries.sum ∧ left = producerCarried field suite state ∧ right = validatorCarried field suite state
 
-set_option linter.unusedSimpArgs false in
 theorem loop_readback (plan : Plan) (program : Structured.Program)
     (helpers : HelperLaws (F := F) (G := G) program plan)
     (context : Context) (sites : ∀ index, Sites plan context index)

@@ -9,7 +9,7 @@ warningAsError = true
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
+rev = "56a005855ea17e0b0958f73ec801ae140b0a1679"
 
 [[lean_lib]]
 name = "Zkc"

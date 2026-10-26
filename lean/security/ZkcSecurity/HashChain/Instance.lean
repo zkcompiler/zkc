@@ -103,7 +103,7 @@ noncomputable def simulation (positive : 0 < width) (absorb : Typed.Interface I 
     refine (concrete_le_simulated absorb validator initial nonempty adversary total callBudget
       callBounded within event).trans (le_of_eq ?_)
     congr 1
-    have same := ZkcSecurity.VCVio.Deferral.prEvent_eq_of_evalSPMF_eq
+    have same := _root_.EvalDistEq.prEvent_eq
       (simulatedExperiment_eq_translated positive absorb validator initial queryBounded adversary
         total) event
     simpa only [idealEvent, prEvent_norm] using same

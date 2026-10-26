@@ -89,7 +89,6 @@ structure HelperLaws (program : Structured.Program) (plan : Plan) : Prop where
       [.data (.vector plan.field point), .data (.field plan.field challenge)] =
       .returned [.data (.vector plan.field (point ++ [challenge]))]
 
-set_option linter.unusedSimpArgs false in
 theorem readback (plan : Plan) (program : Structured.Program)
     (helpers : HelperLaws (F := F) (G := G) program plan)
     (context : Context) (index : Nat)
@@ -149,10 +148,9 @@ theorem readback (plan : Plan) (program : Structured.Program)
         lowFound, highFound, queryFound, deliveryFound, lowMessage, highMessage, deliveryMessage, request,
         boundary, PIR.Process.bind, List.mapM_cons, List.mapM_nil, List.getElem?_cons_zero, List.getElem?_cons_succ,
         List.cons_append, List.nil_append, Bind.bind, Option.bind, Option.pure_def, Option.map_some,
-        List.map_cons, List.map_nil, beq_self_eq_true, ite_true, and_self, decide_true,
-        decide_false, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT, and_true, true_and,
-        CompiledRound.lookup_suffix, CompiledRound.lookup_first_suffix,
-        getInternal_suffix, getInternal_zero, getInternal_succ, ↓reduceIte, ↓reduceDIte,
+        List.map_cons, List.map_nil, beq_self_eq_true, and_self, decide_true,
+        and_true, CompiledRound.lookup_suffix, CompiledRound.lookup_first_suffix,
+        ↓reduceIte, ↓reduceDIte,
         ])
     | fail_if_no_progress (dsimp only [Bind.bind, Pure.pure, instMonadOption,
         Option.bind, GetElem?.getElem?, List.instGetElem?NatLtLength, List.get?Internal])
@@ -172,20 +170,12 @@ theorem readback (plan : Plan) (program : Structured.Program)
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldSubtract (F := F) (G := G)])
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldMultiply (F := F) (G := G)])
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldAdd (F := F) (G := G)])
-    | fail_if_no_progress (simp only [Domain.View.helper, Domain.View.indicesEmpty, Domain.View.indicesAppend,
-        Domain.View.observe, Domain.View.calculation, Domain.View.empty, Domain.View.append, Domain.read,
-        Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.append_assoc,
-        deliveryFound, deliveryMessage, request, PIR.Process.bind, List.mapM_cons, List.mapM_nil, List.getElem?_cons_zero, List.getElem?_cons_succ,
-        List.cons_append, List.nil_append, Bind.bind, Option.bind, Option.pure_def, Option.map_some,
-        List.map_cons, List.map_nil, beq_self_eq_true, ite_true, and_self, decide_true,
-        decide_false, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT, and_true, true_and,
-        CompiledRound.lookup_suffix, CompiledRound.lookup_first_suffix,
-        getInternal_suffix, getInternal_zero, getInternal_succ, ↓reduceIte, ↓reduceDIte,
-        ])
+    | fail_if_no_progress (simp only [Domain.Value.sort, Domain.Payload.ty, List.append_assoc,
+        PIR.Process.bind, List.cons_append, List.nil_append, List.map_cons, List.map_nil, beq_self_eq_true, getInternal_suffix, getInternal_zero, getInternal_succ, ↓reduceIte, ])
     | fail_if_no_progress (dsimp only [Bind.bind, Pure.pure, instMonadOption,
         Option.bind, GetElem?.getElem?, List.instGetElem?NatLtLength, List.get?Internal])
   apply Readback.done
   refine ⟨challenge, ?_, ?_⟩ <;>
-    simp [Domain.read, TableComponent.Execution.finalHistory, TableComponent.Execution.receivedHistory, List.append_assoc, challenge]
+    simp [TableComponent.Execution.finalHistory, TableComponent.Execution.receivedHistory, List.append_assoc, challenge]
 
 end ZkcSecurity.Families.Sumcheck.TableComponent.ReadbackRound

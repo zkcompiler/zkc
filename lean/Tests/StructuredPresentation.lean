@@ -11,6 +11,16 @@ namespace Tests.StructuredPresentation
 open Lean Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
 open ZkcTools.StructuredSource.Presentation
 
+/- Parameter use is token based and does not count quoted site names. -/
+#guard explicitParameters "(b1 : Nat) (b10 : Nat) (ctx : ProtocolContext)"
+    ["b1", "b10", "ctx"] "(b10, \"ctx\\\"b1\")" =
+    "(_b1 : Nat) (b10 : Nat) (_ctx : ProtocolContext)"
+
+-- A binder used only by a later parameter's type must retain its name.
+#guard explicitParameters "(n : Nat) (x : Fin n) (y : Fin (x.val + 1))"
+    ["n", "x", "y"] ".halt .abort" =
+    "(n : Nat) (x : Fin n) (_y : Fin (x.val + 1))"
+
 def scalar : Ty := .field "bls12-381.fr"
 def service : Ty := .service "random.bls12-381.fr/0"
 
@@ -200,8 +210,12 @@ def optionalFinish : (out : List Ty) → Values (fun _ => Carried) out
 does not count: its diagnostics must identify the kernel's type mismatch. -/
 def reject (directory : System.FilePath) (name source : String) : IO Unit := do
   let path := directory / (name ++ ".lean")
-  IO.FS.writeFile path (header ++ source ++ "\nend GeneratedPresentation\n")
-  let result ← IO.Process.output {cmd := "lean", args := #[path.toString]}
+  -- An intentionally wrong callee can make its generated type-ascription
+  -- tactic redundant. This negative control must reach the kernel equation;
+  -- positive generated modules keep all linters enabled.
+  IO.FS.writeFile path (header ++ "set_option linter.unusedTactic false\n" ++
+    source ++ "\nend GeneratedPresentation\n")
+  let result ← IO.Process.output {cmd := "lean", args := #["-DwarningAsError=true", path.toString]}
   IO.FS.writeFile (directory / (name ++ ".log")) (result.stdout ++ result.stderr)
   let errors := result.stdout.splitOn "\n" |>.filter fun line => (line.splitOn ": error").length > 1
   require (result.exitCode != 0 && !errors.isEmpty && errors.all fun line =>
@@ -259,13 +273,19 @@ def run (directory : System.FilePath) : IO Unit := do
   let uniform ← emit "uniform" receivedForm .outputs uniformNaming (some uniformDecl)
   let stops ← ([PIR.Stop.reject, .abort, .exhausted, .incomplete, .refused].zipIdx).mapM fun (stop, i) =>
     emit ("stop" ++ toString i) (.halt stop : Form [] [] [] [])
+  let dependentDecl := genericDeclaration [] [] "dependent"
+  let dependentDecl := { dependentDecl with
+    parameters := dependentDecl.parameters ++ " (n : Nat) (x : Fin n)"
+    arguments := dependentDecl.arguments ++ ["n", "x"] }
+  let dependent ← emit "dependent" (.halt .abort : Form [] [] [] [])
+    .outputs {} (some dependentDecl)
   let escapedString := "example : " ++ quoted unusual ++ " = unusual := by kernel_rfl\n"
   let positive := header ++ String.intercalate "\n" ([strictSource, keptSource, callbackSource, escaping,
-    privateState, embedding, compute, calculation, law, readableLaw, received, helperBody, uniform, escapedString] ++ stops) ++
+    privateState, embedding, compute, calculation, law, readableLaw, received, helperBody, uniform, dependent, escapedString] ++ stops) ++
     "\nend GeneratedPresentation\n"
   let positivePath := directory / "Positive.lean"
   IO.FS.writeFile positivePath positive
-  let result ← IO.Process.output {cmd := "lean", args := #[positivePath.toString]}
+  let result ← IO.Process.output {cmd := "lean", args := #["-DwarningAsError=true", positivePath.toString]}
   IO.FS.writeFile (directory / "Positive.log") (result.stdout ++ result.stderr)
   require (result.exitCode == 0) ("generated positive module failed:\n" ++ result.stdout ++ result.stderr)
   -- Changing a typed receive binder's use preserves parsing and typing but not

@@ -91,16 +91,12 @@ theorem iterateM_mono {R : Type}
           exact iterateM_mono body bodyMono env yielded rest carried' unread next next' post post' continues stops found
 
 variable (challenge : History F G → Always F)
-  (challengeMono : ∀ history (post post' : F → Prop), (∀ answer, post answer → post' answer) →
-    challenge history post → challenge history post')
 
-include challengeMono
-
-set_option linter.unusedSectionVars false in
 mutual
 /-- The ideal meaning read in `Always` is monotone in its continuation and its
 postcondition. -/
-theorem idealK_mono {R : Type} :
+theorem idealK_mono (challengeMono : ∀ history (post post' : F → Prop), (∀ answer, post answer → post' answer) →
+    challenge history post → challenge history post') {R : Type} :
     ∀ (instructions : List Instruction) (env : List (Value F G)) (proof : Proof F G)
       (next next' : List (Value F G) → Proof F G → Always (PIR.Outcome R × Proof F G))
       (post post' : PIR.Outcome R × Proof F G → Prop),
@@ -110,10 +106,11 @@ theorem idealK_mono {R : Type} :
   | [], env, proof, _, _, _, _, continues, _, holds => continues env proof holds
   | instruction :: rest, env, proof, next, next', post, post', continues, stops, holds => by
       simp only [idealK] at holds ⊢
-      exact idealStep_mono instruction env proof _ _ post post'
-        (fun env' unread found => idealK_mono rest env' unread next next' post post' continues stops found) stops holds
+      exact idealStep_mono challengeMono instruction env proof _ _ post post'
+        (fun env' unread found => idealK_mono challengeMono rest env' unread next next' post post' continues stops found) stops holds
 
-theorem idealStep_mono {R : Type} :
+theorem idealStep_mono (challengeMono : ∀ history (post post' : F → Prop), (∀ answer, post answer → post' answer) →
+    challenge history post → challenge history post') {R : Type} :
     ∀ (instruction : Instruction) (env : List (Value F G)) (proof : Proof F G)
       (next next' : List (Value F G) → Proof F G → Always (PIR.Outcome R × Proof F G))
       (post post' : PIR.Outcome R × Proof F G → Prop),
@@ -137,7 +134,7 @@ theorem idealStep_mono {R : Type} :
                       by_cases bounded : bound ≤ maximum
                       · simp only [bounded, ite_true] at holds ⊢
                         exact iterateM_mono _
-                          (fun start unread k k' q q' kk qq h => idealK_mono body start unread k k' q q' kk qq h)
+                          (fun start unread k k' q q' kk qq h => idealK_mono challengeMono body start unread k k' q q' kk qq h)
                           env yielded _ _ proof _ _ post post' (fun final unread found => continues _ _ found) stops
                           holds
                       · simp only [bounded, ite_false] at holds ⊢
@@ -231,7 +228,6 @@ theorem idealStep_mono {R : Type} :
       | unsupported => exact stops _ holds
 end
 
-omit challengeMono
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem answers_mono (admitted : History F G → F → Prop) :
@@ -407,7 +403,6 @@ theorem iterateM_oracle
           simp only [iterateM, run, readEq]
           exact run' R next'
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- A reading that never stops under the answers of a deterministic challenge
 function passes on, in `Id`, to an environment and unread proof its
@@ -592,7 +587,6 @@ theorem FitsIterate.mono
           FitsIterate.mono bodyMono env yielded rest carried' unread _ holds holds' weaker (found.2 carried' readEq)⟩)
         fits
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- The charge bound is monotone in what the continuation needs. -/
 theorem FitsK.mono :
@@ -929,7 +923,6 @@ def Stepped.cost : Stepped F G → Nat
   | .next _ cost => cost
   | .done result => result.cost
 
-set_option linter.unusedSectionVars false in
 mutual
 theorem evalSteps_cost_le :
     ∀ (steps : List Step) (bound : Nat) (env : Env F G), Steps.costBound steps = some bound →
@@ -1084,7 +1077,6 @@ end
 section Transfer
 variable (vocabulary : Vocabulary)
 
-set_option linter.unusedSectionVars false in
 mutual
 /-- A local body evaluates alike under two validators that resolve its
 bindings alike. -/

@@ -52,14 +52,13 @@ def round (a m l r : List F) :
     (.cons ((high.get .here).sum - (low.get .here).sum - (q.get .here).sum)
       (.cons (q.get .here).sum .nil)))
 
-set_option linter.unusedSimpArgs false in
 theorem round_equation (a m l r : List F) :
     invoke (table (G := G)) roundMessageHelper (.cons a (.cons m (.cons l (.cons r .nil)))) =
       round a m l r := by
   rw [round_message_body]
   simp only [roundMessageBody, Region.denote, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
-    prepend_one, prepend_two, prepend_three, Environment.prepend, Environment.push,
+    prepend_one, prepend_two, Environment.push,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
     ← List.sum_eq_foldl, map_values, map_quadratics, linear]
   rfl
@@ -82,13 +81,12 @@ def fix (xs : List F) (r : F) :
     invoke table interpolationsHelper (.cons (halves.get .here)
       (.cons (halves.get (.there .here)) (.cons r .nil)))
 
-set_option linter.unusedSimpArgs false in
 theorem fix_equation (xs : List F) (r : F) :
     invoke (table (G := G)) factorRestrictionHelper (.cons xs (.cons r .nil)) = fix xs r := by
   rw [factor_restriction_body]
   simp only [factorRestrictionBody, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
-    prepend_one, prepend_two, Environment.prepend, Environment.push, SiteObservations.silent, PIR.Process.bind]
+    Operands.eval, Regions.denote, Values.get_cons, prepend_empty,
+    prepend_one, prepend_two, Environment.push, SiteObservations.silent, PIR.Process.bind]
   unfold fix split
   congr 1
   funext halves
@@ -103,15 +101,14 @@ def fixGates (a m l r : List F) (challenge : F) :
   (fix l challenge).bind fun l => (fix r challenge).bind fun r =>
   .done (.cons (a.get .here) (.cons (m.get .here) (.cons (l.get .here) (.cons (r.get .here) .nil))))
 
-set_option linter.unusedSimpArgs false in
 theorem fixGates_equation (a m l r : List F) (challenge : F) :
     invoke (table (G := G)) gateRestrictionHelper
       (.cons a (.cons m (.cons l (.cons r (.cons challenge .nil))))) =
       fixGates a m l r challenge := by
   rw [gate_restriction_body]
   simp only [gateRestrictionBody, Region.denote, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
-    prepend_one, Environment.prepend, Environment.push, SiteObservations.silent, PIR.Process.bind, fix_equation]
+    Operands.eval, Regions.denote, Values.get_cons, prepend_empty,
+    prepend_one, Environment.push, SiteObservations.silent, PIR.Process.bind, fix_equation]
   rfl
 
 /-- Source map capacity is checked before scalar interpolation. -/

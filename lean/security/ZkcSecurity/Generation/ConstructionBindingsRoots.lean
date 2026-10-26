@@ -81,6 +81,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
   let mut sourceCalls : List String := []
   let mut callIndex := 0
   let mut helperIndex := 0
+  let mut sourceFinished := false
   let mut mathLaws : List String := []
   let mut sourceLaws : List String := []
   for (instruction, instructionIndex) in artifact.instructions.zipIdx do
@@ -125,7 +126,9 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
         let [entries, point, scalar] := read | throw "construction-binding-check-abi"
         let name := "terminalRule" ++ toString helperIndex
         localRules := localRules ++ "  have " ++ name ++ " " ++ params dynamic ++ " :=\n    terminal (F := F) (G := G) program " ++ bindingModule ++ ".helper_bodies (routing handle) ⟨[], " ++ (← symbolAt frame (frame.length - 1)).term ++ "⟩ 1\n      " ++ entries.term ++ " " ++ point.term ++ " " ++ scalar.term ++ " " ++ env frame ++ " " ++ natsText instruction.operands ++ " rfl\n"
-        rules := rules ++ [(if instructionIndex + 1 == artifact.instructions.length then "finish (" else "Original.Simulation.bind (") ++ name ++ " " ++ holes dynamic ++ ")"]
+        let finishes := instructionIndex + 1 == artifact.instructions.length
+        sourceFinished := sourceFinished || finishes
+        rules := rules ++ [(if finishes then "finish (" else "Original.Simulation.bind (") ++ name ++ " " ++ holes dynamic ++ ")"]
         let checked := "checked" ++ toString helperIndex
         results := [← data .boolean checked]
         dynamic := dynamic ++ [(checked, "Bool")]
@@ -175,16 +178,16 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     let form ← NormalForm.normalize sig root.body 1 root.roles.length (Bindings.optionalPattern root.inputs)
     let binders := root.inputs.zipIdx.map fun (ty, index) => ZkcTools.StructuredSource.OriginalRoot.Binder.mk ("input" ++ toString index) (.component ty) index
     pure (binders, ← ZkcTools.StructuredSource.OriginalRoot.assemble program keys root.inputs binders form 0)
-  let sourceDefinitions := [sourceModule ++ ".realized"] ++ sourceAssembly.steps.flatMap fun step =>
-    [sourceModule ++ "." ++ step.name] ++ if step.callee.isSome then [sourceModule ++ "." ++ step.name ++ "Realized"] else []
+  -- The realized spine uses the realized alias for calls and the ordinary alias
+  -- for helper steps. Select the definitions from that spine, for any layout.
+  let sourceDefinitions := [sourceModule ++ ".realized"] ++ sourceAssembly.steps.map fun step =>
+    sourceModule ++ "." ++ step.name ++ if step.callee.isSome then "Realized" else ""
   let selectedHelpers := (sourceAssembly.steps.filterMap (·.helper)).eraseDups
-  let mut helperIdentities := []
   for selected in selectedHelpers do
     let index ← ZkcTools.StructuredSource.OriginalRoot.uniqueIndex (program.payload.definitions.map (·.helper)) selected
     let name := "sourceHelper" ++ toString index ++ "_identity"
     text := text ++ "theorem " ++ name ++ " : " ++ originalModule ++ ".sourceHelper" ++ toString index ++
       ".helper = " ++ literal selected ++ " := by kernel_rfl\n\n"
-    helperIdentities := helperIdentities ++ [name]
   let both := sourceAssembly.steps.filterMap fun step => step.helper.filter (·.kind == .math)
   let mut booleanLaws := []
   for selected in both.eraseDups do
@@ -200,7 +203,12 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     booleanLaws := booleanLaws ++ [name]
   if !producer then text := text ++ "theorem mask_outputs (site : String) (point : List F) (scalar : F) :\n    (show Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs from\n    maskValues ((({} : ProtocolContext).enter site [0, 1]).roles 1)\n      ((({} : ProtocolContext).enter site [0, 1]).mapScopes " ++ originalModule ++ ".sourceProtocol0.outputScopes)\n      (.cons none (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) .nil))))))) =\n      (.cons none (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) .nil)))))) := by kernel_rfl\n\n"
   let rootParams := params inputParams ++ " " ++ params shapeParams
-  let normalSource := sourceDefinitions ++ helperIdentities ++ ["ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall", "ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall"] ++ booleanLaws ++ sourceLaws
+  -- Producer source assembly is already normalized by producer_source. Only
+  -- validators still expose the realized source spine inside the simulation.
+  let normalSource := if producer then [] else sourceDefinitions ++
+    ["ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall"] ++ booleanLaws ++
+    ["Values.get", "SumcheckVerifierBodies.reduceReturnValues", "SumcheckVerifierLaws.embedV",
+      "SumcheckRoundNormalForms.verifierState", "PIR.Process.bind", "PIR.Process.bind_assoc"]
   if producer then
     let simplified := sourceCalls.foldr (fun call rest => "(" ++ call ++ ").bind fun _ =>\n  " ++ rest) ".done (.cons none .nil)"
     text := text ++ "theorem producer_source " ++ rootParams ++ " :\n    Occurrence.participant (ringModel F G) program 0 (" ++ originalValues ++ ") =\n  " ++ simplified ++ " := by\n  rw [" ++ sourceModule ++ ".participant_binding]\n  simp only [" ++ ", ".intercalate (sourceDefinitions ++ ["ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall"]) ++ "]\n" ++
@@ -229,16 +237,24 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
   text := text ++ (if producer then
     "      try (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; apply Classical.choice; obtain ⟨nextRaw, width, point, reached, rfl, rfl, nextShape, nextBound⟩ := returned; refine ⟨?_⟩)\n"
     else "      try (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨point, scalar, reached, rfl, rfl⟩ := returned; refine ⟨?_⟩)\n      try (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨value, rfl, rfl⟩ := returned; refine ⟨?_⟩)\n")
-  text := text ++ "      try simp only [" ++ ", ".intercalate normalSource ++ (if producer then "" else ", mask_outputs") ++ ", Values.get, Values.present, SumcheckVerifierBodies.reduceReturnValues, SumcheckVerifierLaws.embedV, SumcheckRoundNormalForms.verifierState, Original.fold_bind, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind, PIR.Process.bind_assoc]\n" ++
+  -- finish already consumes the source return. Other spines retain a folded
+  -- done node, independently of the number or ordering of preceding calls.
+  let foldRules := ["Original.fold_bind"] ++ if sourceFinished then [] else
+    ["Zkc.Construction.ArtifactBinding.fold_done"]
+  text := text ++ "      try simp only [" ++ ", ".intercalate (normalSource ++ foldRules) ++ "]\n" ++
     "      try normalize_artifact_operations [" ++ ", ".intercalate (mathLaws.eraseDups ++ ["boolean_and"]) ++ "] unfolding [" ++ constructed ++ ".inputSorts, " ++ constructed ++ ".outputSorts, " ++ constructed ++ ".returned, inputs, " ++ ", ".intercalate (captures ++ ["carried", "context", bindingModule ++ ".context"]) ++ "]\n" ++
-    "      try simp only [Nat.lt_irrefl, decide_false, Nat.sub_self, List.cons_append, List.nil_append, List.getElem?_cons_zero, List.getElem?_cons_succ, PIR.Process.bind, PIR.Process.bind_assoc]\n      try dsimp only\n      change Original.Simulation _ _ _ _)\n" ++
+    (if producer then "      try simp only [Nat.lt_irrefl, decide_false, Nat.sub_self]\n" else "") ++
+    "      change Original.Simulation _ _ _ _)\n" ++
     "    solving (first\n"
   text := text ++ (if producer then
-    "      | (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; obtain ⟨nextRaw, width, point, reached, sourceEq, frameEq, nextShape, nextBound⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.append_assoc, List.take_append])\n"
-    else "      | (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; obtain ⟨point, scalar, reached, sourceEq, frameEq⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.append_assoc, List.take_append])\n      | (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; obtain ⟨value, sourceEq, frameEq⟩ := returned; rw [frameEq]; simp [Zkc.Construction.ArtifactBinding.Captures, inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.append_assoc, List.take_append])\n")
-  text := text ++ "      | rfl\n      | solve | simp_all [Zkc.Construction.ArtifactBinding.Captures, inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.append_assoc, List.take_append]\n" ++
-    "      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); simp [Zkc.Construction.ArtifactBinding.Captures, inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.append_assoc, List.take_append])\n" ++
-    "      | (unfold RootReturns " ++ (if producer then "ProducerReturns; " else "ValidatorReturns; refine ⟨_, rfl, ?_⟩; ") ++ "simp [inputs, " ++ ", ".intercalate captures ++ ", carried, context, " ++ bindingModule ++ ".context, List.cons_append, List.nil_append]))\n\nend " ++ moduleName ++ "\n"
+    "      | (rename_i source final returned; change ReduceReturns _ _ _ _ _ at returned; obtain ⟨nextRaw, width, point, reached, sourceEq, frameEq, nextShape, nextBound⟩ := returned; rw [frameEq]; rfl)\n"
+    else "      | (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; obtain ⟨point, scalar, reached, sourceEq, frameEq⟩ := returned; rw [frameEq]; rfl)\n      | (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; obtain ⟨value, sourceEq, frameEq⟩ := returned; rw [frameEq]; rfl)\n")
+  -- Terminal helper certificates expose frame equality; loop certificates
+  -- instead expose capture retention and use captures_trans below.
+  text := text ++ "      | rfl\n" ++
+    (if helperIndex == 0 then "" else "      | (intro process frame equation; subst frame; rfl)\n") ++
+    "      | (intro process frame retained; apply Zkc.Construction.ArtifactBinding.captures_trans (inner := retained); rfl)\n" ++
+    "      | (unfold RootReturns " ++ (if producer then "ProducerReturns; exact ⟨rfl, rfl, rfl, rfl, rfl⟩" else "ValidatorReturns; exact ⟨_, rfl, rfl, rfl, rfl, rfl⟩") ++ "))\n\nend " ++ moduleName ++ "\n"
   return if producer then text.replace ", carried," ", ZkcSecurity.Realizations.Sumcheck.OriginalProducer.carried," else text
 
 end ZkcSecurity.Generation.ConstructionBindingsRoots

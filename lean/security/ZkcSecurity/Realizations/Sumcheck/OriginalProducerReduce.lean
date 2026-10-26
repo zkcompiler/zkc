@@ -8,7 +8,6 @@ public import ZkcExamples.Structured.OriginalSumcheckReduce
 set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 1000000
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalProducer
@@ -63,8 +62,7 @@ theorem source_reduce (payload : UnitPayload)
     (invoke (helpers (F := F) (G := G) payload).closed MapFirstBodies.lessHelper)
     (.cons (some dimension) (.cons (some count) .nil))).bind _ = _
   simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence,
-    Bind.bind, Pure.pure, Option.bind, instMonadOption,
-    less_lift payload bodies dimension count dimensionBound countBound, PIR.Process.bind]
+    Bind.bind, Pure.pure, Option.bind, less_lift payload bodies dimension count dimensionBound countBound, PIR.Process.bind]
   have notLess : ¬ dimension < count := by omega
   try simp only [notLess, decide_false]
   change (((Participant.guard (services := services) (Value := assignment F G)
@@ -75,7 +73,7 @@ theorem source_reduce (payload : UnitPayload)
     (invoke (helpers (F := F) (G := G) payload).closed SumcheckHelperBodies.emptyHelper)
     .nil).bind _ = _
   simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence, empty_lift payload verifierBodies,
-    Bind.bind, Pure.pure, Option.bind, instMonadOption, PIR.Process.bind]
+    PIR.Process.bind]
   change (Participant.owned (context.roles 0) (context.roles 1)
     (invoke (helpers (F := F) (G := G) payload).closed SumcheckHelperBodies.emptyHelper)
     .nil).bind _ = _
@@ -137,7 +135,7 @@ def ProducerCallback.reduce (program : Structured.Program)
   rw [Original.fold_bind, Original.fold_repeat]
   have active : (((repeatSpec maximum).roles.map occurrence.protocol.roles).contains
       (occurrence.protocol.roles 0)) = true := by
-    simp [repeatSpec]
+    simp []
   simp only [active, ↓reduceIte, SumcheckProverLaws.mask_embedP _ _ rfl maximum]
   simp only [Domain.View.loop, countRead, initialRead, carried, Domain.sortsMatch,
     Domain.Value.sort, Domain.Payload.ty, List.map_cons, List.map_nil,

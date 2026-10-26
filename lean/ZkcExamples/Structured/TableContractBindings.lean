@@ -95,9 +95,6 @@ theorem membership_formula_law : (membershipTarget (F := F) (G := G)
   change membershipFormula.invokeRelation (.cons table (.cons queries .nil)) = _
   erw [membership_formula_equation, ite_eq_left admissible]
   congr 2
-  apply Bool.eq_iff_iff.mpr
-  simp only [decide_eq_true_eq, PIR.Relation.Table.membership_exact]
-  rfl
 
 theorem read_formula_law : (readTarget (F := F) (G := G)
     (readEnvironment := readEnvironment)).interpretation.FormulaLaw := by
@@ -109,8 +106,5 @@ theorem read_formula_law : (readTarget (F := F) (G := G)
   change readFormula.invokeRelation (.cons table (.cons position (.cons value .nil))) = _
   erw [read_formula_equation, ite_eq_left admissible]
   congr 2
-  apply Bool.eq_iff_iff.mpr
-  simp only [decide_eq_true_eq, PIR.Relation.Table.indexedRead_exact]
-  rfl
 
 end ZkcExamples.Structured.TableContractBindings

@@ -142,13 +142,16 @@ theorem propertyLinks {S : Type 1} (authority : CanonicalAuthority S)
   cases authority with
   | uniform art endpoint =>
     cases key <;> simp only [propertyEntry, canonicalPropertyEntry] at defined
-    all_goals cases defined <;> rfl
+    all_goals cases defined
+    all_goals rfl
   | domains art capabilities =>
     cases key <;> simp only [propertyEntry] at defined
-    all_goals cases defined <;> rfl
+    all_goals cases defined
+    all_goals rfl
   | authoredPair imported selected capabilities =>
     cases key <;> simp only [propertyEntry] at defined
-    all_goals cases defined <;> rfl
+    all_goals cases defined
+    all_goals rfl
 
 end CanonicalAuthority
 end ZkcSecurity.Claims

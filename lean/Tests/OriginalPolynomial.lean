@@ -8,7 +8,6 @@ This is a symbolic all-input interpretation test, not a security endpoint or a
 claim that an arbitrary ring realizes the source catalogue's concrete field. -/
 set_option autoImplicit false
 set_option smartUnfolding false
-set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000
@@ -81,9 +80,9 @@ private def certificate (value claim : F) (history : Domain.History (model (F :=
   unfold Domain.participant
   dsimp only [artifact]
   derive_artifact_binding
-    normalizing (try simp [artifact, inputs, Domain.evaluate, Domain.step, Domain.read,
+    normalizing (try simp [inputs, Domain.evaluate, Domain.read,
       Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, PIR.Process.bind,
-      Domain.Calculations.fieldMultiply, Domain.Calculations.fieldEqual])
+      ])
     solving (simp [returns, Zkc.Construction.ArtifactBinding.Captures, inputs])
 
 #print axioms certificate

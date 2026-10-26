@@ -48,7 +48,6 @@ theorem nonvacuous : Nonvacuous subject :=
   ⟨inputs 0 0 none none, (relation_iff 0 0 none none).mpr rfl,
     (honestInput_iff 0 0 none none).mpr trivial⟩
 
-set_option linter.unusedSimpArgs false in
 /-- Exact failure of the source-admitted pair. Missing service values in the
 source ABI are handles, not a supplied coin or a restriction on the draw. -/
 theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat) :
@@ -95,19 +94,16 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
       Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, Domain.Raw,
-      PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
+      Domain.Value.sort, Domain.Payload.ty, PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
       Subject.Success, Domain.PairExecution.Success]
   · simp [zero, Domain.Calculations.fieldConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, Domain.Raw,
+      Domain.Value.sort, Domain.Payload.ty, Domain.Raw,
       PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
       Domain.drawRequest, SampledCompiled.oracle, HonestCompiled.oracle,
-      Domain.Payload.value, Domain.Value.encode, Domain.Payload.ofValue,
-      Domain.read, Domain.localCoordinates, Domain.Value.sort, Domain.sortsMatch,
-      Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,
+      Domain.Payload.value, Domain.Value.sort, Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,
       simulateQ_bind, simulateQ_map, StateT.run_bind, StateT.run_map]
     rw [← map_bind, prEvent_false]
 

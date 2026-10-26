@@ -570,7 +570,6 @@ theorem verifierRounds_process
     (verifierRounds_environment claim rounds service) (verifierRounds_laws claim rounds service) (NormalForm.noCallees_hold _ _)).trans
     (verifierRounds_presentation ctx claim rounds service)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
 theorem verifierRounds_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
@@ -585,10 +584,9 @@ theorem verifierRounds_outputs (ctx : ProtocolContext) (separate : ctx.roles 0 �
             cases values with | cons value5 values =>
               cases values with | cons value6 values =>
                 cases values
-                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                simp [maskValues, ProtocolContext.mapScopes,
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The verifierRounds's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem verifierRounds_invoke
@@ -601,7 +599,7 @@ theorem verifierRounds_invoke
   refine (rounds_view ctx self _ (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil))))))) ?_).trans ?_
   · subst self
     iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (verifierRounds_process (claim := claim) (rounds := rounds) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
@@ -681,7 +679,6 @@ theorem proverRounds_process
     (proverRounds_environment add mul left right rounds) (proverRounds_laws add mul left right rounds) (NormalForm.noCallees_hold _ _)).trans
     (proverRounds_presentation ctx add mul left right rounds)
 
-set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 0; the others are masked away. -/
 theorem proverRounds_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
@@ -696,10 +693,9 @@ theorem proverRounds_outputs (ctx : ProtocolContext) (separate : ctx.roles 1 ≠
             cases values with | cons value5 values =>
               cases values with | cons value6 values =>
                 cases values
-                simp [maskValues, ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
-                  Participant.restrict, separate, Ne.symm separate, Values.get]
+                simp [maskValues, ProtocolContext.mapScopes,
+                  Participant.restrict, Ne.symm separate, Values.get]
 
-set_option linter.unusedSimpArgs false in
 /-- The proverRounds's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
 theorem proverRounds_invoke
@@ -712,7 +708,7 @@ theorem proverRounds_invoke
   refine (rounds_view ctx self _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil))))))) ?_).trans ?_
   · subst self
     iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, separate, Ne.symm separate]
+    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
     (proverRounds_process (add := add) (mul := mul) (left := left) (right := right) (rounds := rounds) (ctx := ctx) (self := ctx.roles 0) (role := rfl)

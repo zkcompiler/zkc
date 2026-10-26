@@ -8,6 +8,7 @@ public import Mathlib.Tactic.Ring
 public import Mathlib.Tactic.Abel
 public import Mathlib.Tactic.FailIfNoProgress
 public import Lean
+public import Aesop
 
 @[expose] public section
 
@@ -15,10 +16,6 @@ public import Lean
 set_option autoImplicit false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 1500000
-set_option linter.unusedSimpArgs false
-set_option linter.defProp false
-set_option linter.unusedTactic false
-set_option linter.unreachableTactic false
 
 
 

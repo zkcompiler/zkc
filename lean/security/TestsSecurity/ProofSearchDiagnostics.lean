@@ -6,6 +6,8 @@ public meta import ZkcSecurity.Tools.ComponentDerivation
 
 @[expose] public section
 set_option autoImplicit false
+-- Failure-injection probes restore tactic state and intentionally discard binders
+-- and usage traces; these options apply only to diagnostic controls.
 set_option linter.unusedVariables false
 set_option linter.unusedTactic false
 set_option linter.unreachableTactic false

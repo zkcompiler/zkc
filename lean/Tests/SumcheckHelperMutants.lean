@@ -80,21 +80,18 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 theorem sums_swapped_expansion (table : Meanings F G) (xs : List F) (dimension columns : Nat) :
     sumsSwappedBody.denote (meaning F G table) (inputs xs dimension columns).get =
       (invoke table halvesHelper (inputs xs dimension columns)).bind fun halves =>
         .done (messageResult (halves.get (.there .here)).sum (halves.get .here).sum) := by
   simp only [sumsSwappedBody, inputs, messageResult, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+    prepend_empty, prepend_one, prepend_two, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate, primitiveOutcome, ← List.sum_eq_foldl]
 
   rfl
 
 set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkPermutedBody.denote (meaning F G table) (checkInputs xs point claim).get =
       if point.length < indexLimit then
@@ -105,25 +102,22 @@ theorem check_permuted_expansion (table : Meanings F G) (xs point : List F) (cla
   simp only [checkPermutedBody, checkTrueBody, checkFalseBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+    prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
-      ite_true, Values.get_cons, Values.get, Environment.push, Evaluation.invokeCallback]
+      ite_true, Values.get, Evaluation.invokeCallback]
     congr 1
     funext valid
     cases valid with
     | cons b rest =>
       cases rest
       cases b <;> simp only [Bool.false_eq_true, ite_false, ite_true,
-        PIR.Process.bind, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-        singleton_eta, PIR.Process.bind_done]
+        Values.get, singleton_eta, PIR.Process.bind_done]
       rfl
   · rfl
 
 set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkAcceptMalformedBody.denote (meaning F G table) (checkInputs xs point claim).get =
       if point.length < indexLimit then
@@ -134,24 +128,21 @@ theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List
   simp only [checkAcceptMalformedBody, checkTrueBody, checkFalseAcceptBody, checkInputs, inputs, boolResult,
     Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
+    prepend_empty, prepend_one, Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Process.bind,
     Primitive.evaluate]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
-      ite_true, Values.get_cons, Values.get, Environment.push, Evaluation.invokeCallback]
+      ite_true, Values.get, Evaluation.invokeCallback]
     congr 1
     funext valid
     cases valid with
     | cons b rest =>
       cases rest
       cases b <;> simp only [Bool.false_eq_true, ite_false, ite_true,
-        PIR.Process.bind, Values.get_cons, Values.get, Environment.prepend, Environment.push,
-        singleton_eta, PIR.Process.bind_done]
+        Values.get, singleton_eta, PIR.Process.bind_done]
       rfl
   · rfl
 
-set_option linter.unusedSimpArgs false in
 theorem check_ignore_claim_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkTableIgnoreClaimBody.denote (meaning F G table) (checkInputs xs point claim).get =
       if point.length < indexLimit then
@@ -162,12 +153,11 @@ theorem check_ignore_claim_expansion (table : Meanings F G) (xs point : List F) 
       else .halt .exhausted := by
   simp only [checkTableIgnoreClaimBody, checkInputs, inputs, boolResult, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
-    Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
+    Values.get_cons, Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
     PIR.Process.bind, Primitive.evaluate]
   split
   · simp only [primitiveOutcome, PIR.Process.bind, show 1 < indexLimit by decide +kernel,
-      ite_true, Values.get_cons, Values.get, Environment.push, ← List.sum_eq_foldl]
+      ite_true, ← List.sum_eq_foldl]
     congr 1
     funext constructed
     cases constructed with
