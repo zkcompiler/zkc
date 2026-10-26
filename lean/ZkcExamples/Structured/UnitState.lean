@@ -13,12 +13,13 @@ the resulting equality is of complete imported logical processes. -/
 
 namespace ZkcExamples.Structured.UnitState
 open Zkc.Source Zkc.Source.Structured
+set_option backward.isDefEq.respectTransparency false
 
 abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"items", [vector], (.vector "bls12-381.fr"), .here, false⟩,
+  ⟨DomainSpec.elements "items" [vector] (.vector "bls12-381.fr") .here,
     [], [.boolean], "step", "predicate", .local⟩
 
 def stepBody : Region dialect [scalar, vector, .boolean] [] :=
@@ -27,7 +28,7 @@ def stepBody : Region dialect [scalar, vector, .boolean] [] :=
 def predicateBody : Region dialect [scalar, vector, .boolean] [.boolean] :=
   .ret (.cons (.there (.there .here)) .nil)
 
-abbrev foldHelper : Helper := ⟨"fold", .local, [vector, .boolean], []⟩
+abbrev foldHelper : Helper := ⟨"_finite_admission_0", .local, [vector, .boolean], []⟩
 abbrev workHelper : Helper := ⟨"work", .local, [vector, .boolean], [.boolean]⟩
 
 def foldBody : Region dialect [vector, .boolean] [] :=
@@ -169,16 +170,16 @@ private theorem process_fold (xs : List F) (enabled : Bool) :
 
 private theorem transition (xs : List F) (enabled : Bool) (item : F)
     (state : Values (assignment F G) []) :
-    Evaluation.foldTransition (table F G) foldSpec (.cons xs .nil) (.cons enabled .nil) state item =
+    Evaluation.foldTransition (table F G) foldSpec (.cons xs .nil) (.cons enabled .nil) state (.cons item .nil) =
       if enabled then .halt .abort else .done state := by
   cases state
   cases enabled with
   | false =>
     exact Evaluation.foldTransition_false (table F G) foldSpec (by rfl) (.cons xs .nil)
-      (.cons false .nil) .nil item (invoke_predicate xs false item)
+      (.cons false .nil) .nil (.cons item .nil) (invoke_predicate xs false item)
   | true =>
     exact (Evaluation.foldTransition_true (table F G) foldSpec (by rfl) (.cons xs .nil)
-      (.cons true .nil) .nil item (invoke_predicate xs true item)).trans
+      (.cons true .nil) .nil (.cons item .nil) (invoke_predicate xs true item)).trans
       (invoke_step xs true item)
 
 /-- A zero-state callback still stops; the caller's Boolean is returned only
@@ -197,13 +198,10 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [Evaluation.denoteFold_pack]
   have domainAdmitted :
-      (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
-        .returned xs := by
-    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
-      (.elements xs)).admit = _
-    simp [Finite.Domain.admit, lengthValid]
-    rfl
-  simp only [Finite.execute, domainAdmitted, Finite.admitThen]
+      foldSpec.domain.admit (.cons xs (.nil : Values (assignment F G) [])) =
+        .returned (xs.map fun item => .cons item .nil) :=
+    Evaluation.elements_admit _ _ _ _ _ lengthValid
+  simp only [domainAdmitted, Finite.admitThen, Finite.fold_map]
   cases enabled with
   | false =>
     erw [Finite.fold_total _ (fun state _ => state) (fun state item => transition (G := G) xs false item state)]
@@ -225,13 +223,11 @@ theorem process_exhausted (xs : List F) (enabled : Bool)
     ((Values.cons xs Values.nil).append
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [Evaluation.denoteFold_pack]
-  have refused : (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
+  have refused : foldSpec.domain.admit (.cons xs (.nil : Values (assignment F G) [])) =
       .stopped .exhausted := by
-    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
-      (.elements xs)).admit = _
-    simp [Finite.Domain.admit, lengthInvalid]
-    rfl
-  simp [Finite.execute, refused, Finite.admitThen, PIR.Process.bind]
+    rw [DomainSpec.admit_elements]
+    exact ite_eq_right lengthInvalid
+  simp [refused, Finite.admitThen, PIR.Process.bind]
 
 theorem process_eq_checked_reference (xs : List F) (enabled : Bool) :
     process (G := G) xs enabled =
