@@ -1,6 +1,8 @@
 #include "../lib/Transforms/CollectFold.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "support/NumericalLoops.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <utility>
 
@@ -10,6 +12,8 @@ using namespace zkc::test;
 using namespace zkc::test::loops;
 
 namespace {
+namespace sc = scopedComputation;
+namespace sf = scopedFinite;
 FailureOr<finite::CollectFold> pair(mlir::ModuleOp unit, uint64_t &remaining) {
   auto &body = mathematical::getComputationEntry(unit).front();
   return finite::readCollectFold(&body.front(), body.front().getNextNode(),
@@ -17,15 +21,50 @@ FailureOr<finite::CollectFold> pair(mlir::ModuleOp unit, uint64_t &remaining) {
 }
 void assertMaterialized(mlir::ModuleOp candidate) {
   require(stateLoops(candidate).size() >= 2 &&
-              !operations(candidate, "algebra.exec.vector_append").empty(),
+              !sf::applications(candidate, "vector.append").empty(),
           "declined pair did not retain collection followed by reduction");
 }
 void assertFused(mlir::ModuleOp candidate) {
   auto loops = stateLoops(candidate);
-  require(loops.size() == 1 && loops.front()->getNumResults() == 2 &&
-              operations(candidate, "algebra.exec.vector_append").empty() &&
-              operations(candidate, "algebra.exec.vector_empty").empty(),
+  require(loops.size() == 1 &&
+              loopStep(candidate, loops.front()).outputs.size() == 2 &&
+              sf::applications(candidate, "vector.append").empty() &&
+              sf::applications(candidate, "vector.empty").empty(),
           "eligible pair did not become one two-state streaming traversal");
+}
+exec::CompleteOp completion(func::FuncOp function) {
+  exec::CompleteOp found;
+  function.walk([&](exec::CompleteOp op) { found = op; });
+  require(bool(found), "missing outlined loop completion");
+  return found;
+}
+// Swap actual SSA inputs wherever the scoped control uses them, keeping its
+// transfer and outlined invocation frame coherent.
+void swapInputs(func::FuncOp function, Value left, Value right) {
+  require(left != right, "input mutation needs distinct values");
+  function.walk([&](Operation *op) {
+    for (auto &input : op->getOpOperands())
+      if (input.get() == left)
+        input.set(right);
+      else if (input.get() == right)
+        input.set(left);
+  });
+}
+void duplicate(exec::ApplyOp original) {
+  IRRewriter rewriter(original.getContext());
+  auto function = original->getParentOfType<func::FuncOp>();
+  auto *before = original->getBlock();
+  auto *tail = rewriter.splitBlock(before, original->getIterator());
+  OpBuilder builder(original.getContext());
+  builder.setInsertionPointToEnd(before);
+  exec::ScopedExecutionBuilder control(builder, function);
+  NamedAttrList attributes(original->getAttrs());
+  attributes.set("site",
+                 builder.getStringAttr(original.getSite().str() + "_extra"));
+  control.invoke("exec.apply", original.getOutcome().getType().getPayload(),
+                 original->getOperands(), attributes.getAttrs(),
+                 cast<exec::DispatchOp>(original->getNextNode()).getStopped());
+  rewriter.mergeBlocks(tail, builder.getInsertionBlock());
 }
 } // namespace
 
@@ -35,7 +74,7 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
-  cases.run("fixed Local implementation retains ordered materialization", [&] {
+  cases.run("fixed scoped implementation retains ordered materialization", [&] {
     auto bytes = llvm::MemoryBuffer::getFile(std::string(ZKC_LOOP_FIXTURES) +
                                              "/collect-fold-fixed.mlir");
     require(bool(bytes), "missing fixed implementation fixture");
@@ -43,18 +82,18 @@ int main() {
         parseSourceString<mlir::ModuleOp>((*bytes)->getBuffer(), &context);
     require(bool(original), "fixed implementation fixture refused");
     auto saved = clone(*original);
-    auto candidate = clone(*original);
-    require(succeeded(finite::realizeLocals(*candidate, fused)) &&
-                succeeded(finite::verifyRealizations(*original, *candidate)),
+    auto candidate = sf::prepare(*original, fused);
+    mathematical::RealizationWork work;
+    require(succeeded(protocol::verifyScopedFinitePreparation(
+                *original, *candidate, work, fused)),
             "fixed implementation lost its ordinary finite path");
-    auto *owner = &candidate->getBody()->front();
-    auto collect = SymbolTable(owner).lookup<local::FuncOp>("collect");
-    auto fold = SymbolTable(owner).lookup<local::FuncOp>("fold");
-    require(collect && fold &&
-                !operations(collect, "algebra.exec.vector_append").empty() &&
-                !operations(fold, "local.for").empty(),
-            "fixed Local collect/fold was replaced by composition");
-    auto binding = SymbolTable(owner).lookup<runtime::BindingOp>("multiply");
+    unsigned loops = 0;
+    candidate->walk([&](exec::RangeOp) { ++loops; });
+    require(loops >= 2 &&
+                !sf::applications(*candidate, "vector.append").empty(),
+            "fixed collection/fold was replaced by composition");
+    auto binding = SymbolTable(&candidate->getBody()->front())
+                       .lookup<runtime::BindingOp>("multiply");
     require(binding && binding.getImplementation() == "arkworks/field.mul" &&
                 same(*original, *saved),
             "fixed implementation or original source changed");
@@ -83,8 +122,8 @@ int main() {
         auto unit = source(context, name, field, true);
         auto candidate = realize(*unit);
         assertFused(*candidate);
-        require(operations(*candidate, "data.exec.sequence_append").empty() &&
-                    operations(*candidate, "data.exec.sequence_empty").empty(),
+        require(sf::applications(*candidate, "sequence.append").empty() &&
+                    sf::applications(*candidate, "sequence.empty").empty(),
                 "Sequence composition retained materialization");
         accepts(*unit, *candidate);
       });
@@ -95,8 +134,12 @@ int main() {
     assertFused(*candidate);
     accepts(*unit, *candidate);
     auto traversal = stateLoops(*candidate).front();
-    require(traversal->getResult(0).getType().isSignlessInteger(1) &&
-                isa<algebra::FieldType>(traversal->getResult(1).getType()),
+    require(loopStep(*candidate, traversal)
+                    .outputs[0]
+                    .getType()
+                    .isSignlessInteger(1) &&
+                isa<algebra::FieldType>(
+                    loopStep(*candidate, traversal).outputs[1].getType()),
             "mixed native state coordinates lost their nominal types");
   });
   cases.run("literal nonzero seeds retain exact ordered values", [&] {
@@ -107,12 +150,13 @@ int main() {
     auto traversal = stateLoops(*candidate).front();
     for (auto [position, literal] :
          {std::pair<unsigned, StringRef>{2, "7"}, {3, "11"}}) {
-      auto *seed = traversal->getOperand(position).getDefiningOp();
-      require(seed &&
-                  seed->getName().getStringRef() ==
-                      "algebra.exec.field_constant" &&
-                  seed->getAttrOfType<ArrayAttr>("parameters") ==
-                      Builder(&context).getStrArrayAttr({literal}),
+      auto value = loopStep(*candidate, traversal).inputs[position];
+      exec::ApplyOp seed;
+      for (auto call : sf::applications(*candidate, "field.constant"))
+        if (sc::payload(call)[0] == value)
+          seed = call;
+      require(seed && seed.getParameters() ==
+                          Builder(&context).getStrArrayAttr({literal}),
               "nonzero seed value was synthesized, reordered or reset");
     }
   });
@@ -123,9 +167,9 @@ int main() {
     auto candidate = realize(*unit);
     accepts(*unit, *candidate);
     require(
-        operations(*candidate, "algebra.exec.vector_append").empty() &&
-            operations(*candidate, "algebra.exec.field_multiply").size() == 2 &&
-            operations(*candidate, "algebra.exec.field_subtract").size() == 1,
+        sf::applications(*candidate, "vector.append").empty() &&
+            sf::applications(*candidate, "field.mul").size() == 2 &&
+            sf::applications(*candidate, "field.sub").size() == 1,
         "zero state dropped dead callback work or retained materialization");
   });
   cases.run("unused nested strict zip check retains conditional entry", [&] {
@@ -136,11 +180,21 @@ int main() {
     auto candidate = realize(*unit);
     assertMaterialized(*candidate);
     accepts(*unit, *candidate);
-    auto checks = operations(*candidate, "local.exec.require");
+    auto checks = sf::applications(*candidate, "control.require");
     require(!checks.empty(), "unused nested zip lost its strict shape check");
-    for (auto *check : checks)
-      require(bool(check->getParentOfType<local::LocalForOp>()),
+    auto closure = take(
+        protocol::readSourceExecutionClosure(kernelRecipeOutput(*candidate)));
+    for (auto check : checks) {
+      auto parent = check->getParentOfType<func::FuncOp>();
+      bool nested = false;
+      for (const auto &[name, steps] : closure.bodies)
+        for (const auto &step : steps)
+          if (isa<exec::RangeOp>(step.operation) &&
+              llvm::is_contained(step.regions, parent))
+            nested = true;
+      require(nested,
               "nested zip admission escaped its conditional outer traversal");
+    }
   });
   for (StringRef name : {"elements", "indices"}) {
     cases.run(
@@ -160,13 +214,13 @@ int main() {
           require(same(*unit, *saved),
                   "composition modified original callbacks");
           auto loop = stateLoops(*output).front();
-          auto args = entry(*output).getArguments();
-          require(loop->getOperand(2) == args[3] &&
-                      loop->getOperand(3) == args[4],
+          auto args = entry(*output).getArguments().drop_front();
+          require(loopStep(*output, loop).inputs[2] == args[3] &&
+                      loopStep(*output, loop).inputs[3] == args[4],
                   "ordered nonzero seed inputs were replaced or interchanged");
-          auto &body = loop->getRegion(0).front();
+          auto body = loopStep(*output, loop).regions.front();
           // The first backedge is the CURRENT second state, not the entry seed.
-          require(body.back().getOperand(0) == body.getArgument(2),
+          require(completion(body).getValues()[0] == body.getArgument(3),
                   "state rotation does not use the current iteration state");
           auto disabled = realize(*unit, ordered);
           assertMaterialized(*disabled);
@@ -185,46 +239,37 @@ int main() {
         accepts(*unit, *original);
         auto candidate = clone(*original);
         auto loop = stateLoops(*candidate).front();
-        auto &body = loop->getRegion(0).front();
-        auto multiply = operations(loop, "algebra.exec.field_multiply");
+        auto step = loopStep(*candidate, loop);
+        auto body = step.regions.front();
+        auto multiply = sf::applications(body, "field.mul");
         require(multiply.size() >= 2, "missing independent body instructions");
         OpBuilder builder(&context);
         if (mutation == "seed") {
-          auto first = loop->getOperand(2);
-          loop->setOperand(2, loop->getOperand(3));
-          loop->setOperand(3, first);
+          swapInputs(entry(*candidate), step.inputs[2], step.inputs[3]);
         } else if (mutation == "state") {
-          auto first = body.back().getOperand(0);
-          body.back().setOperand(0, body.back().getOperand(1));
-          body.back().setOperand(1, first);
+          auto end = completion(body);
+          auto first = end.getValues()[0];
+          end.getValuesMutable()[0].set(end.getValues()[1]);
+          end.getValuesMutable()[1].set(first);
         } else if (mutation == "capture") {
-          // Swap distinct field captures, retaining a valid, unique capture
-          // frame while changing the callback inputs.
-          auto args = entry(*candidate).getArguments();
-          bool changed = false;
-          for (unsigned i = 4; i < loop->getNumOperands(); ++i)
-            if (loop->getOperand(i) == args[1]) {
-              loop->setOperand(i, args[2]);
-              changed = true;
-            } else if (loop->getOperand(i) == args[2])
-              loop->setOperand(i, args[1]);
-          require(changed, "factor capture mutation did not apply");
+          auto args = entry(*candidate).getArguments().drop_front();
+          require(llvm::is_contained(ValueRange(step.inputs).drop_front(4),
+                                     args[1]) &&
+                      llvm::is_contained(ValueRange(step.inputs).drop_front(4),
+                                         args[2]),
+                  "factor capture mutation did not apply");
+          swapInputs(entry(*candidate), args[1], args[2]);
         } else if (mutation == "operand") {
-          multiply[1]->setOperand(1, multiply[1]->getOperand(0));
+          multiply[1].getInputsMutable()[1].set(multiply[1].getInputs()[0]);
         } else if (mutation == "missing body") {
-          require(multiply.front()->use_empty(), "dead body work is now live");
-          multiply.front()->erase();
+          require(sc::payload(multiply.front())[0].use_empty(),
+                  "dead body work is now live");
+          sc::omit(multiply.front());
         } else if (mutation == "extra body") {
-          builder.setInsertionPoint(multiply.front());
-          auto extra = builder.clone(*multiply.front());
-          extra->setAttr(
-              "site",
-              builder.getStringAttr(
-                  multiply.front()->getAttrOfType<StringAttr>("site").str() +
-                  "_extra"));
+          duplicate(multiply.front());
         } else if (mutation == "return") {
-          auto &returned = entry(*candidate).getBody().front().back();
-          returned.setOperand(0, returned.getOperand(1));
+          auto returned = sc::returned(entry(*candidate));
+          returned.getValuesMutable()[0].set(returned.getValues()[1]);
         } else {
           auto binding = primitiveBinding(multiply[1]);
           if (mutation == "fixed implementation")
@@ -236,7 +281,7 @@ int main() {
         }
         if (mutation != "nominal domain")
           require(succeeded(kernel::verifyRecipeOutput(*candidate)),
-                  "semantic mutation must remain an admitted Local fragment");
+                  "semantic mutation must remain an admitted scoped fragment");
         mismatch(*unit, *candidate);
         accepts(*unit, *original);
       });
@@ -392,8 +437,8 @@ int main() {
                 "optional retry changed source path or replenished discovery");
         accepts(*unit, *retried, policy);
         auto changed = clone(*bulk);
-        auto &returned = entry(*changed).getBody().front().back();
-        returned.setOperand(0, entry(*changed).getArgument(3));
+        auto returned = sc::returned(entry(*changed));
+        returned.getValuesMutable()[0].set(entry(*changed).getArgument(4));
         mismatch(*unit, *changed, policy);
       });
   for (auto policy : {ordered, fused})
