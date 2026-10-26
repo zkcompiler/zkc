@@ -6,6 +6,7 @@
 #include "RealizationTrace.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/CSE.h"
@@ -1275,6 +1276,49 @@ PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
 OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
   return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
                 : OwningOpRef<ModuleOp>();
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
+  auto prepared = std::move(module);
+  if (!prepared)
+    return {};
+  auto owner =
+      cast<protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
+  // A numerical Host fragment has no protocol, participant, statement,
+  // projection, relation, construction or deployment declarations. Refuse a
+  // role-bearing source rather than silently discarding its obligations.
+  if (owner.getProfile() != protocol_ir::Profile::Protocol ||
+      owner->getAttrs().size() != 1 ||
+      any_of(owner.getBody().front(), [](Operation &op) {
+        return !isa<func::FuncOp, data::DomainOp, runtime::BindingOp>(op);
+      })) {
+    (void)diagnostics::emit(owner.emitOpError(), "numerical-execution-profile",
+                            "expected role-free numerical declarations");
+    return {};
+  }
+  auto expanded = protocol::expandScopedHelpers(*prepared);
+  if (!expanded)
+    return {};
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*expanded)->clone()));
+  auto before =
+      cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front());
+  auto after =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  after.setProfile(protocol_ir::Profile::Exec);
+  // The only new edge is profile selection. Compare every actual declaration
+  // in order; helper substitution was checked against the prepared source.
+  if (failed(verify(*candidate)) ||
+      expanded->getOperation()->getAttrDictionary() !=
+          candidate->getOperation()->getAttrDictionary() ||
+      before.getBody().front().getOperations().size() !=
+          after.getBody().front().getOperations().size())
+    return {};
+  for (auto [original, actual] :
+       zip(before.getBody().front(), after.getBody().front()))
+    if (!OperationEquivalence::isEquivalentTo(
+            &original, &actual, OperationEquivalence::IgnoreLocations))
+      return {};
+  return candidate;
 }
 
 OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {

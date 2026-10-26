@@ -1620,8 +1620,10 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   }
   bool hasKernels = false, hasMaps = false, hasFinite = false;
   root.walk([&](Operation *op) {
-    hasKernels |=
-        (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
+    hasKernels |= (mathematical::isComputationUnit(op) ||
+                   isa<exec::ComputeOp, data::DomainOp>(op) ||
+                   (isa<func::FuncOp>(op) &&
+                    !isScopedExecutionFunction(cast<func::FuncOp>(op))));
     hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
     hasFinite |= isa<exec::FoldOp, exec::CollectOp>(op);
   });

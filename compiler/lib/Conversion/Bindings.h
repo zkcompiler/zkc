@@ -2,6 +2,7 @@
 #define ZKC_PROTOCOL_BINDING_PHYSICAL_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Target/Selection.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 namespace zkc {
 struct LinearContractionStats;
 }
@@ -28,6 +29,7 @@ mlir::LogicalResult lowerBoundPhysical(
     llvm::ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats,
     bool releaseStorage = false,
-    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
+    MathematicalSelectionPolicy numericalPolicy = {});
 } // namespace zkc::protocol
 #endif

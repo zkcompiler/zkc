@@ -24,6 +24,11 @@ struct LocalRealization {
 llvm::Error
 admitNativeLocalDefinitions(const program::LocalDefinitions &,
                             llvm::ArrayRef<LocalRealization> realizations = {});
+/// Admit an execution definition subset, including an empty one, without
+/// inventing a participant entry. Physical ports and bindings are checked when
+/// selected. Unresolved mathematical calls are not permitted.
+llvm::Error admitExecutionDefinitions(const program::LocalDefinitions &,
+                                      bool physical = false);
 /// Check executable formation and local definitions.
 /// The model interface does not require an MLIR context.
 llvm::Error admit(const program::Participants &);

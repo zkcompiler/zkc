@@ -130,8 +130,8 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   PassManager physical(module.getContext());
   if (observations)
     observations->instrument(physical);
-  auto selection = protocol::createSelectPhysicalPass({}, false, releaseStorage,
-                                                      &statistics);
+  auto selection = protocol::createSelectPhysicalPass(
+      {}, false, releaseStorage, &statistics, {}, mathematicalSelection);
   if (stages)
     stages->push_back(selection->getArgument().str());
   physical.addPass(std::move(selection));

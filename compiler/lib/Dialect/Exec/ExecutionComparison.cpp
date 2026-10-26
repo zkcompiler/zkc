@@ -418,12 +418,7 @@ Error verifyLocalExecution(ModuleOp module,
                            bool physical) {
   if (!module || failed(verify(module)) || !module->getAttrs().empty())
     return error("execution-correspondence-subject");
-  program::Participants admitted;
-  admitted.stage = physical ? program::Participants::Stage::Physical
-                            : program::Participants::Stage::Logical;
-  admitted.bindings = expected.bindings;
-  admitted.functions = expected.functions;
-  if (auto e = admit(admitted))
+  if (auto e = admitExecutionDefinitions(expected, physical))
     return e;
   Comparison checker(module, physical);
   if (!checker.run(expected))
@@ -435,12 +430,7 @@ Error verifyExecutionDefinitions(Operation *symbolTable,
                                  bool physical) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
     return error("execution-correspondence-subject");
-  program::Participants admitted;
-  admitted.stage = physical ? program::Participants::Stage::Physical
-                            : program::Participants::Stage::Logical;
-  admitted.bindings = expected.bindings;
-  admitted.functions = expected.functions;
-  if (auto e = admit(admitted))
+  if (auto e = admitExecutionDefinitions(expected, physical))
     return e;
   Comparison checker(symbolTable, physical);
   if (!checker.run(expected, /*mixed=*/true))

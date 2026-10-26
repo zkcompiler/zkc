@@ -865,6 +865,12 @@ class Admission {
   }
 
 public:
+  Error executionDefinitions(const program::LocalDefinitions &module,
+                             bool selected) {
+    target = true;
+    physical = selected;
+    return run(module);
+  }
   Error nativeLocals(const program::LocalDefinitions &module,
                      ArrayRef<LocalRealization> realizations) {
     if (realizations.size() > 4096 ||
@@ -906,6 +912,10 @@ public:
 Error admitNativeLocalDefinitions(const program::LocalDefinitions &value,
                                   ArrayRef<LocalRealization> realizations) {
   return Admission().nativeLocals(value, realizations);
+}
+Error admitExecutionDefinitions(const program::LocalDefinitions &value,
+                                bool physical) {
+  return Admission().executionDefinitions(value, physical);
 }
 Error admit(const program::Participants &value) {
   return Admission().run(value);

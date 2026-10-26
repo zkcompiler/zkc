@@ -67,6 +67,23 @@ The selected branch interfaces expose CFG edges; they do not license reordering
 an invocation. See the upstream [side-effect rationale](https://mlir.llvm.org/docs/Rationale/SideEffectsAndSpeculation/)
 and [control-flow interface](https://mlir.llvm.org/docs/Interfaces/#branchopinterface).
 
+## Role-free numerical preparation
+
+Host numerical fragments retain ordinary scoped helpers and their complete
+mathematical/domain closure. Preparation checks that the fragment contains only
+these definitions and runtime bindings, expands ordinary calls with independent
+source/candidate comparison, and selects the execution profile while preserving
+the declaration inventory and order. It does not create participant projection
+metadata. A protocol, statement, relation, construction or deployment declaration
+refuses this route. The shared numerical and physical pipeline then consumes
+actual computation requests and selects represented execution.
+
+An execution definition subset may be empty: a participant can forward inputs
+without invoking a helper. Its admission checks every retained binding and
+function, including physical port and binding contracts when selected. This
+subset check does not establish the entry contract of a complete executable
+program; complete program admission separately checks participants and entries.
+
 ## Runtime scope and transfer views
 
 `!runtime.scope` denotes an active execution scope. A function's scope arguments

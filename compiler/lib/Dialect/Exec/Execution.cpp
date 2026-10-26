@@ -916,12 +916,7 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
       return std::move(e);
     return result;
   }
-  program::Participants admitted;
-  admitted.stage = physical ? program::Participants::Stage::Physical
-                            : program::Participants::Stage::Logical;
-  admitted.bindings = result.bindings;
-  admitted.functions = result.functions;
-  if (auto e = admit(admitted))
+  if (auto e = admitExecutionDefinitions(result, physical))
     return std::move(e);
   return result;
 }

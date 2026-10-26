@@ -45,7 +45,8 @@ std::unique_ptr<mlir::Pass> createExpandAlgorithmsPass();
 std::unique_ptr<mlir::Pass> createSelectPhysicalPass(
     protocol::Assignments selections = {}, bool linearContractions = false,
     bool releaseStorage = false, LinearContractionStats *statistics = nullptr,
-    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
+    MathematicalSelectionPolicy numericalPolicy = {});
 } // namespace protocol
 namespace kernel {
 /// Realize logical numerical units into existing Local execution before

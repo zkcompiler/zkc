@@ -1,4 +1,5 @@
 #include "zkc/Compiler/Host.h"
+#include "../Transforms/PreparedProtocol.h"
 #include "LanguageInterface.h"
 #include "LanguagePackageReader.h"
 #include "NativeDeployment.h"
@@ -8,9 +9,6 @@
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Compiler/Observation.h"
-#include "zkc/Dialect/Algebra/Mathematical.h"
-#include "zkc/Dialect/Data/IR/DataOps.h"
-#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Names.h"
@@ -18,7 +16,6 @@
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
-#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -40,57 +37,24 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
     observations->phase("protocol", original);
   mathematical::RealizationTrace trace;
   trace.eventLimit = 4096;
-  auto prepared = mathematical::prepareProtocol(
-      original, options.simplify, options.mathematicalSelection, {},
-      observations ? &trace : nullptr);
+  auto preparation = mathematical::PreparedProtocol::prepare(
+      original, options.mathematicalSelection, observations ? &trace : nullptr);
   if (observations)
     observations->decisions(original, trace);
-  if (!prepared)
+  if (!preparation)
     return error("entry.numeric", "numerical helper preparation failed");
+  auto prepared = std::move(*preparation).execute();
+  if (!prepared)
+    return error("entry.numeric", "numerical execution preparation failed");
   if (observations)
-    observations->phase("participant", *prepared);
-  auto owner = *prepared->getOps<protocol_ir::ProtocolModuleOp>().begin();
-  auto source = mlir::OwningOpRef<mlir::ModuleOp>(
-      mlir::cast<mlir::ModuleOp>(prepared->getOperation()->clone()));
-  auto sourceOwner = *source->getOps<protocol_ir::ProtocolModuleOp>().begin();
-  SmallVector<local::FuncOp> calculations;
-  for (auto f : owner.getBody().front().getOps<local::FuncOp>()) {
-    bool total = true, hasMath = false;
-    for (auto &op : f.getBody().front().without_terminator()) {
-      bool math =
-          mathematical::isTotal(&op) || mlir::isa<mlir::func::CallOp>(op);
-      hasMath |= math;
-      total &= math || mlir::isa<local::GuardOp>(op);
-    }
-    if (total && hasMath)
-      calculations.push_back(f);
-  }
-  for (auto f : calculations)
-    if (mlir::failed(kernel::formCalculation(f, sourceOwner,
-                                             options.mathematicalSelection)))
-      return error("entry.numeric", "numerical Kernel formation failed");
-  llvm::DenseSet<mlir::Operation *> mapHelpers;
-  if (mlir::failed(algebra::collectMapHelpers(owner, mapHelpers)))
-    return error("entry.numeric", "map closure failed");
-  for (auto &op : make_early_inc_range(owner.getBody().front()))
-    if (mlir::isa<mlir::func::FuncOp, data::DomainOp>(op) &&
-        !mapHelpers.contains(&op))
-      op.erase();
-  owner.setProfile(protocol_ir::Profile::Exec);
-  if (observations)
-    observations->phase("exec", *prepared);
+    observations->phase("execution", *prepared);
   mlir::PassManager pipeline(prepared->getContext());
   if (observations)
     observations->instrument(pipeline);
-  mathematical::RealizationTrace loweringTrace;
-  loweringTrace.eventLimit = 4096;
-  pipeline.addPass(kernel::createLowerKernelsPass(
-      options.mathematicalSelection, observations ? &loweringTrace : nullptr));
-  pipeline.addPass(
-      protocol::createSelectPhysicalPass({}, false, options.releaseStorage));
+  pipeline.addPass(protocol::createSelectPhysicalPass(
+      {}, false, options.releaseStorage, nullptr, {},
+      options.mathematicalSelection));
   auto outcome = pipeline.run(*prepared);
-  if (observations)
-    observations->decisions(*prepared, loweringTrace);
   if (mlir::failed(outcome))
     return error("entry.numeric", "numerical physical lowering failed");
   if (observations)

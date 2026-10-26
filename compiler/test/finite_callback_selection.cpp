@@ -1,6 +1,7 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationEmission.h"
+#include "../lib/Transforms/ScopedCandidate.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -8,7 +9,9 @@
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
 
@@ -41,13 +44,8 @@ module { "protocol.module"() ({
    %r = "algebra.finite_fold"(%xs,%seed) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %r : !F
  }
- local.realize @realized = @total : (!V,!F)->!F
- local.func @work(%xs:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%xs,%seed) {site="realized"} : (!V,!F)->!F
-   local.return %r : !F
- }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
-   %r = "protocol.local_call"(%xs,%seed) {callee=@work,role="P",site="work"} : (!V,!F)->!F
+   %r = func.call @total(%xs,%seed) : (!V,!F)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
@@ -193,15 +191,15 @@ Operation *fold(ModuleOp source) {
               .front()
               .front();
 }
-local::FuncOp selected(ModuleOp candidate) {
+func::FuncOp selected(ModuleOp candidate) {
   auto function = SymbolTable(kernelRecipeOutput(candidate))
-                      .lookup<local::FuncOp>("selected");
+                      .lookup<func::FuncOp>("selected");
   require(bool(function), "missing selected recipe entry");
   return function;
 }
-bool hasLoop(local::FuncOp function) {
+bool hasLoop(func::FuncOp function) {
   bool found = false;
-  function.walk([&](local::LocalForOp) { found = true; });
+  function->getParentOp()->walk([&](exec::RangeOp) { found = true; });
   return found;
 }
 OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
@@ -228,18 +226,52 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
             "source helper changed");
   return candidate;
 }
+StringRef contract(Operation *operation) {
+  auto apply = dyn_cast<exec::ApplyOp>(operation);
+  if (!apply)
+    return {};
+  SymbolTableCollection symbols;
+  auto binding = symbols.lookupNearestSymbolFrom<runtime::BindingOp>(
+      apply, apply.getBindingAttr());
+  return binding ? binding.getContract() : StringRef();
+}
+Value input(Operation *operation, unsigned index) {
+  return cast<exec::ApplyOp>(operation).getInputs()[index];
+}
+void setInput(Operation *operation, unsigned index, Value value) {
+  require(isa<exec::ApplyOp>(operation), "expected a scoped primitive");
+  operation->setOperand(index + 1, value);
+}
+Value output(Operation *operation) {
+  auto dispatch = dyn_cast<exec::DispatchOp>(operation->getNextNode());
+  require(bool(dispatch), "missing scoped payload continuation");
+  return dispatch.getReturned()->getArgument(0);
+}
+Value argument(ModuleOp candidate, unsigned index) {
+  return selected(candidate).getArgument(index + 1);
+}
 bool compare(ModuleOp source, ModuleOp candidate) {
+  auto view = ScopedCandidate::read(kernelRecipeOutput(candidate));
+  if (!view) {
+    llvm::consumeError(view.takeError());
+    return false;
+  }
+  CandidatePorts ports(view->get());
   auto function = selected(candidate);
-  auto *cursor = &function.getBody().front().front();
-  // Bulk correspondence must interpret the original func.call closure itself.
+  auto *cursor = ports.first(&function.front());
+  // Bulk correspondence interprets the original func.call closure itself.
   auto noOrderedReader = [](Operation *, ValueRange,
                             Operation *&) -> FailureOr<SmallVector<Value>> {
     return failure();
   };
-  auto result = finite::verifyExpression(fold(source), function.getArguments(),
-                                         cursor, noOrderedReader, unit(source));
-  if (failed(result) || cursor != &function.getBody().front().back() ||
-      result->size() != 1 || (*result)[0] != cursor->getOperand(0))
+  finite::VerificationLimits limits;
+  limits.candidate = view->get();
+  finite::VerificationResult checked{finite::VerificationStatus::Mismatch, {}};
+  auto result = finite::verifyExpression(
+      fold(source), ports.arguments(&function.front()), cursor, noOrderedReader,
+      unit(source), limits, checked);
+  if (failed(result) || !isa_and_nonnull<exec::ReturnOp>(cursor) ||
+      ports.next(cursor) || ValueRange(*result) != ports.inputs(cursor))
     return false;
   auto numerical = kernelRecipeSource(unit(source), "total", "selected");
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
@@ -340,13 +372,12 @@ int main() {
                 "lane capacity lost checked ordered fallback");
         auto malformed = copy(*candidate);
         bool changed = false;
-        Value seed = selected(*malformed).getArgument(1);
-        selected(*malformed).walk([&](Operation *operation) {
-          if (!changed &&
-              operation->getName().getStringRef() == "algebra.exec.field_add") {
+        Value seed = argument(*malformed, 1);
+        malformed->walk([&](Operation *operation) {
+          if (!changed && contract(operation) == "field.add") {
             for (unsigned i = 0; i < 2; ++i)
-              if (operation->getOperand(i) == seed) {
-                operation->setOperand(i, operation->getOperand(1 - i));
+              if (input(operation, i) == seed) {
+                setInput(operation, i, input(operation, 1 - i));
                 changed = true;
                 break;
               }
@@ -357,11 +388,10 @@ int main() {
                 "wrong seed survived independent pointwise comparison");
         malformed = copy(*candidate);
         changed = false;
-        selected(*malformed).walk([&](Operation *operation) {
+        malformed->walk([&](Operation *operation) {
           if (body == "polynomial" && !changed &&
-              operation->getName().getStringRef() ==
-                  "algebra.exec.vector_add") {
-            operation->setOperand(1, operation->getOperand(0));
+              contract(operation) == "vector.add") {
+            setInput(operation, 1, input(operation, 0));
             changed = true;
           }
         });
@@ -371,19 +401,25 @@ int main() {
         if (body == "uniform") {
           malformed = copy(*candidate);
           Operation *fill = nullptr;
-          selected(*malformed).walk([&](Operation *operation) {
-            if (operation->getName().getStringRef() ==
-                "algebra.exec.vector_fill")
+          malformed->walk([&](Operation *operation) {
+            if (contract(operation) == "vector.fill")
               fill = operation;
           });
           require(fill != nullptr, "uniform term did not use a broadcast");
-          OpBuilder builder(fill);
+          auto view =
+              take(ScopedCandidate::read(kernelRecipeOutput(*malformed)));
+          auto *length = view->producer(input(fill, 1));
+          require(length && contract(length) == "vector.length",
+                  "broadcast lacks its admitted extent query");
+          OpBuilder builder(length);
           RealizationEmitter emitter(kernelRecipeOutput(*malformed),
                                      "wrong_cardinality_");
-          auto *one = emitter.emit(builder, fill->getLoc(), "wrong_cardinality",
-                                   {"index.constant", {}, ""}, {},
-                                   fill->getOperand(1).getType(), {"1"});
-          fill->setOperand(1, one->getResult(0));
+          auto binding = emitter.binding(builder, length->getLoc(),
+                                         {"index.constant", {}, ""});
+          auto apply = cast<exec::ApplyOp>(length);
+          apply.setBindingAttr(binding);
+          apply.getInputsMutable().clear();
+          apply.setParametersAttr(builder.getStrArrayAttr({"1"}));
           require(succeeded(kernel::verifyRecipeOutput(*malformed)) &&
                       !compare(*source, *malformed),
                   "broadcast lost its admitted cardinality");
@@ -406,10 +442,9 @@ int main() {
     require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
             "indexed pointwise sum was not checked");
     bool changed = false;
-    selected(*candidate).walk([&](Operation *operation) {
-      if (!changed &&
-          operation->getName().getStringRef() == "algebra.exec.vector_mul") {
-        operation->setOperand(0, selected(*candidate).getArgument(2));
+    candidate->walk([&](Operation *operation) {
+      if (!changed && contract(operation) == "vector.mul") {
+        setInput(operation, 0, argument(*candidate, 2));
         changed = true;
       }
     });
@@ -544,9 +579,8 @@ module { "protocol.module"() ({
             }
           require(observed, "missing normalized callback observation");
           bool dot = false;
-          selected(*candidate).walk([&](Operation *op) {
-            dot |= op->getName().getStringRef() == "algebra.exec.vector_dot";
-          });
+          candidate->walk(
+              [&](Operation *op) { dot |= contract(op) == "vector.dot"; });
           require(dot == equality && hasLoop(selected(*candidate)) != equality,
                   "normalization changed the scope of extent evidence");
           if (equality)
@@ -646,17 +680,15 @@ module { "protocol.module"() ({
                     "reader imported a missing callback premise from the outer "
                     "caller");
             Operation *dot = nullptr;
-            selected(*candidate).walk([&](Operation *op) {
-              if (op->getName().getStringRef() == "algebra.exec.vector_dot")
+            candidate->walk([&](Operation *op) {
+              if (contract(op) == "vector.dot")
                 dot = op;
             });
             require(dot, "nested access did not select dot");
             // Same shape never permits replacing one captured container's
             // values.
-            dot->setOperand(0,
-                            selected(*candidate).getArgument(repeated ? 0 : 2));
-            dot->setOperand(1,
-                            selected(*candidate).getArgument(repeated ? 0 : 2));
+            setInput(dot, 0, argument(*candidate, repeated ? 0 : 2));
+            setInput(dot, 1, argument(*candidate, repeated ? 0 : 2));
             require(
                 succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                     !compare(*source, *candidate),
@@ -698,13 +730,13 @@ module { "protocol.module"() ({
                       compare(*source, *candidate),
                   "same-typed actuals or returned index lost their identities");
           Operation *dot = nullptr;
-          selected(*candidate).walk([&](Operation *op) {
-            if (op->getName().getStringRef() == "algebra.exec.vector_dot")
+          candidate->walk([&](Operation *op) {
+            if (contract(op) == "vector.dot")
               dot = op;
           });
           require(dot, "missing alias contraction");
-          dot->setOperand(0, selected(*candidate).getArgument(aliased ? 2 : 0));
-          dot->setOperand(1, selected(*candidate).getArgument(aliased ? 2 : 0));
+          setInput(dot, 0, argument(*candidate, aliased ? 2 : 0));
+          setInput(dot, 1, argument(*candidate, aliased ? 2 : 0));
           require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "alias mapping accepted a changed container");
@@ -761,17 +793,15 @@ module { "protocol.module"() ({
               !hasLoop(selected(*candidate)) && compare(*source, *candidate),
               "nested matrix access lost its axis or fixed selector premise");
           Operation *dot = nullptr, *length = nullptr;
-          selected(*candidate).walk([&](Operation *op) {
-            if (op->getName().getStringRef() ==
-                (row ? "algebra.exec.matrix_row_dot"
-                     : "algebra.exec.matrix_column_dot"))
+          candidate->walk([&](Operation *op) {
+            if (contract(op) == (row ? "matrix.row_dot" : "matrix.column_dot"))
               dot = op;
-            if (op->getName().getStringRef() == "algebra.exec.vector_length")
+            if (contract(op) == "vector.length")
               length = op;
           });
           require(dot && length,
                   "matrix contraction or domain admission missing");
-          dot->setOperand(2, length->getResult(0));
+          setInput(dot, 2, output(length));
           require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "reader accepted a different fixed selector");
@@ -859,14 +889,14 @@ module { "protocol.module"() ({
                 !work.helperSlots && !work.polynomial &&
                 same(*source, *original),
             "selection spent required reserves or changed original");
-    auto *result = selected(*candidate)
-                       .getBody()
-                       .front()
-                       .back()
-                       .getOperand(0)
-                       .getDefiningOp();
-    require(result && result->getNumOperands() == 2, "missing seed combiner");
-    result->setOperand(0, result->getOperand(1));
+    Operation *result = nullptr;
+    candidate->walk([&](Operation *op) {
+      if (contract(op) == "field.mul")
+        result = op;
+    });
+    require(result && cast<exec::ApplyOp>(result).getInputs().size() == 2,
+            "missing seed combiner");
+    setInput(result, 0, input(result, 1));
     require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                 !compare(*source, *candidate),
             "wrong seed escaped original callback comparison");
@@ -940,10 +970,10 @@ module { "protocol.module"() ({
     RealizationWork work;
     auto candidate = emit(*source, work);
     bool retained = false;
-    selected(*candidate).walk([&](Operation *op) {
+    candidate->walk([&](Operation *op) {
       retained |=
-          op->getName().getStringRef() == "algebra.exec.vector_product" &&
-          bool(op->getParentOfType<local::LocalForOp>());
+          contract(op) == "vector.product" &&
+          op->getParentOfType<func::FuncOp>()->hasAttr("runtime.region");
     });
     require(retained, "selection erased the unused conditional inner fold");
   });

@@ -426,8 +426,7 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
     source = *normalized;
   }
   auto subject = cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
-  if (llvm::any_of(subject.getBody().front().getOps<func::FuncOp>(),
-                   protocol::isScopedExecutionFunction))
+  if (subject.getBody().front().getOps<local::FuncOp>().empty())
     return verifyScopedNumericalContext(subject, after, before, policy, work,
                                         outcome);
   return Checker(subject, after, before, policy, selections, work, outcome,

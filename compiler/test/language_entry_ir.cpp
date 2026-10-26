@@ -120,14 +120,14 @@ entry fn 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
                 }))
           throw std::runtime_error(toString(std::move(error)));
         require(applications == 1, "nested Unicode application omitted");
-        for (StringRef operation : {"local.variant_inject", "local.match"}) {
+        for (StringRef operation : {"exec.variant", "exec.match"}) {
           auto module = parse(checked.bytes());
           bool changed = false;
           module->walk([&](mlir::Operation *op) {
             if (changed || op->getName().getStringRef() != operation)
               return;
             changed = true;
-            if (operation == "local.variant_inject")
+            if (operation == "exec.variant")
               op->setAttr("alternative",
                           mlir::StringAttr::get(&context, "case00000000"));
             else
@@ -139,7 +139,7 @@ entry fn 公開(inputs: 実行::Inputs) { return 実行::run(inputs); })zkc",
                        mlir::StringAttr::get(&context, "case00000000")}));
           });
           require(changed, "case mutation did not find its operation");
-          if (operation == "local.match") {
+          if (operation == "exec.match") {
             require(failed(mlir::verify(*module)),
                     "native match must reject reordered alternatives");
           } else {

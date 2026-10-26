@@ -53,6 +53,22 @@ int main() {
     require(bool(file), "missing comparison fixture");
     return (*file)->getBuffer().str();
   };
+  cases.run("empty execution subsets do not invent program entries", [&] {
+    auto empty = parse("module {}");
+    for (bool physical : {false, true}) {
+      auto definitions =
+          take(protocol::readExecutionDefinitions(*empty, physical));
+      require(definitions.functions.empty() && definitions.bindings.empty(),
+              "empty subset acquired executable definitions");
+      accepted(
+          protocol::verifyExecutionDefinitions(*empty, definitions, physical));
+      accepted(protocol::admitExecutionDefinitions(definitions, physical));
+      program::Participants complete;
+      complete.stage = physical ? program::Participants::Stage::Physical
+                                : program::Participants::Stage::Logical;
+      refused(protocol::admit(complete), "interactive-entry");
+    }
+  });
   auto source = fixture("conditional");
   auto module = parse(source);
   auto expected = take(protocol::readLocalExecution(*module, false));

@@ -3,6 +3,7 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/FiniteVerification.h"
 #include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/PreparedProtocol.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "../lib/Transforms/ScopedFinite.h"
 #include "../lib/Transforms/ScopedPreparation.h"
@@ -203,6 +204,9 @@ math fn sum(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(state,i)=>state+at(
 domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
 fn work(xs:Vector<Fr>,seed:Fr)->Fr{return fold(elements(xs),seed,fn(state,item)=>state+sum(xs));}
 protocol Run roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return work(xs,seed);}
+)"},
+    {"protocol forwarding has no numerical helper", R"(
+protocol Run roles(P,V)(x:Fr@(P,V))->(r:Fr@(P,V)){return x;}
 )"}};
 struct Fixture {
   CheckedProject checked;
@@ -237,6 +241,21 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("role-free preparation refuses protocol obligations", [&] {
+    Fixture fixture(context, samples[0]);
+    auto preparation = mathematical::PreparedProtocol::prepare(*fixture.module);
+    require(bool(preparation), "protocol preparation refused");
+    std::string diagnostic;
+    ScopedDiagnosticHandler capture(&context, [&](mlir::Diagnostic &value) {
+      llvm::raw_string_ostream output(diagnostic);
+      value.print(output);
+      return success();
+    });
+    require(!std::move(*preparation).execute() &&
+                StringRef(diagnostic).contains("numerical-execution-profile"),
+            "numerical preparation discarded protocol obligations");
+    take(compareOriginal(fixture.entry, *fixture.module));
+  });
   for (const auto &sample : samples) {
     cases.run(sample.name, [&] { Fixture fixture(context, sample); });
     cases.run((llvm::Twine("expand ") + sample.name).str(), [&] {
@@ -387,7 +406,10 @@ int main() {
         require(
             payloadArgument ||
                 sample.name ==
-                    StringRef("stopping ordinary helper truncates its caller"),
+                    StringRef(
+                        "stopping ordinary helper truncates its caller") ||
+                sample.name ==
+                    StringRef("protocol forwarding has no numerical helper"),
             "fixture did not exercise a CFG payload definition");
       }
     });

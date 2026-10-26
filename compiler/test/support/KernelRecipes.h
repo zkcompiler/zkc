@@ -5,6 +5,7 @@
 #include "NativeCases.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -23,13 +24,15 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
           "Kernel recipe output must use the Exec profile");
   unsigned entries = 0;
   for (auto &declaration : owner.getBody().front()) {
-    if (mlir::isa<local::FuncOp>(declaration))
-      ++entries;
-    else
+    if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(declaration)) {
+      require(protocol::isScopedExecutionFunction(function),
+              "recipe output retained a mathematical source function");
+      entries += !function->hasAttr("runtime.region");
+    } else
       require(mlir::isa<runtime::BindingOp>(declaration),
               "Kernel recipe output retained a source declaration");
   }
-  require(entries == 1, "Kernel recipe output must have one Local entry");
+  require(entries == 1, "Kernel recipe output must have one scoped entry");
   return owner;
 }
 

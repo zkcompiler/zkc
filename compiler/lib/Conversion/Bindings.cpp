@@ -285,13 +285,15 @@ Error materializePhysical(ModuleOp module,
 LogicalResult lowerBoundPhysical(
     ModuleOp original, ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats, bool releaseStorage,
-    ArrayRef<target::FunctionPortSelection> functionPorts) {
+    ArrayRef<target::FunctionPortSelection> functionPorts,
+    MathematicalSelectionPolicy numericalPolicy) {
   // One plan binds the original input with numerical requests through both
   // checked edges. Materialization owns the candidate and publishes only after
   // all admission, physical correspondence and projection checks succeed.
   Location failureLocation = original->getLoc();
   target::PhysicalPlanOptions options;
   options.linearContractions = linearContractions;
+  options.numericalPolicy = numericalPolicy;
   options.releaseStorage = releaseStorage;
   options.programCapacity = checkProgramCapacity;
   options.functionPorts.assign(functionPorts.begin(), functionPorts.end());
