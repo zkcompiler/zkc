@@ -123,7 +123,7 @@ structure Scope where
   bindingAllowed : Nat → {Aux : Type} → KzgBindingAdversary p G₁ G₂ n unifSpec Aux → Prop
   sdhAllowed : Nat → Groups.tSdhAdversary n (G₁ := G₁) (G₂ := G₂) (p := p) → Prop
   reductionClosed : ∀ {Aux} (adversary : KzgBindingAdversary p G₁ G₂ n unifSpec Aux),
-    bindingAllowed bindingBudget adversary → 
+    bindingAllowed bindingBudget adversary →
       sdhAllowed sdhBudget (bindingReduction (g₁ := g₁) (g₂ := g₂) pairing Aux adversary)
 
 /-- The only hardness premise ranges over the request's explicitly admitted

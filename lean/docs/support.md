@@ -8,6 +8,17 @@ bounds, preserving exhaustion elsewhere. The [model specification](spec/table-re
 records this source-model boundary separately from native VM correspondence and
 cryptographic lookup arguments.
 
+The [selected property adapters](spec/selected-property-adapters.md) add a pinned
+KZG evaluation-binding reduction with exact concrete opening-game equality and
+explicit admissibility/budget closure, a separate two-read finite oracle-recovery
+consumer of ArkLib Knowledge, and a private-producer concrete-verifier WP route
+for canonical honest completeness. The latter is exercised on the actual
+randomized Schnorr subject. KZG hardness is scoped to admitted algorithms; the
+upstream all-functions assumption is not used. The finite recovery claim is
+about an immutable two-cell sum relation, without KZG knowledge, native bytes,
+or a compiler-stage receipt. The WP consumer's verifier must have a returning
+deterministic table run; randomized validator continuations remain outside it.
+
 All results below concern stated mathematical models and exact selected imports.
 They do not certify arbitrary DSL programs or the full native lowering pipeline.
 

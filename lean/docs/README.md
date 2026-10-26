@@ -66,6 +66,7 @@ that all native behavior already has a Lean model.
 - [Assurance reports](spec/assurance-report.md): the `zkc.assurance-report/0`
   format, declaration records, the registry, the claims ledger and the
   generated tables.
+- [Selected property adapters](spec/selected-property-adapters.md): scoped KZG evaluation binding, request-fixed finite oracle recovery, and private-producer verifier WP.
 - [Support](support.md): theorem scope, assumptions, proved subjects and tested
   boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
