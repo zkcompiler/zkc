@@ -20,21 +20,21 @@ abbrev Statement := Values carriers.Value types
 def statement (data : List Bool) (count : Nat) : Statement := .cons data (.cons count .nil)
 
 theorem binding_contains_vector_and_count (data : List Bool) (count : Nat) :
-    (policyCodec (carriers := carriers) types [0, 1] rfl "application").encode (statement data count) =
-      [.publicBinding ⟨"application", [(toString (0 : Nat), .vector (data.map (.field "scalar"))), (toString (1 : Nat), .count count)]⟩] :=
+    (publicCodec (carriers := carriers) types [0, 1] rfl rfl "application").encode (statement data count) =
+      [.publicBinding ⟨"application", [(0, .vector "scalar" data), (1, .index count)]⟩] :=
   rfl
 
 /-- A malformed empty table remains a distinct, representable statement. -/
 theorem malformed_not_erased :
-    (policyCodec (carriers := carriers) types [0, 1] rfl "application").encode (statement [] 1) ≠
-      (policyCodec (carriers := carriers) types [0, 1] rfl "application").encode (statement [false, true] 1) := by
+    (publicCodec (carriers := carriers) types [0, 1] rfl rfl "application").encode (statement [] 1) ≠
+      (publicCodec (carriers := carriers) types [0, 1] rfl rfl "application").encode (statement [false, true] 1) := by
   intro same
-  have equal := (policyCodec (carriers := carriers) types [0, 1] rfl "application").injective same
+  have equal := (publicCodec (carriers := carriers) types [0, 1] rfl rfl "application").injective same
   cases equal
 
 theorem binding_determines :
-    Typed.Determined (policyCodec (carriers := carriers) types [0, 1] rfl "application").encode :=
-  policyCodec_determined types [0, 1] rfl "application"
+    Typed.Determined (publicCodec (carriers := carriers) types [0, 1] rfl rfl "application").encode :=
+  (publicCodec types [0, 1] rfl rfl "application").determined
 
 /-- Resetting every statement to an empty history loses adaptive determination. -/
 theorem empty_binding_refused :
