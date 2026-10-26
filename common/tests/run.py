@@ -32,9 +32,9 @@ def run(arguments, *, cwd=ROOT, env=None, stdout=None):
 
 
 def lean_checks():
-    # These tools require explicitly selected snapshots or compiler exports.
+    # These tools require explicitly selected snapshots, exports, or build destinations.
     # They have no default input selection for checking the current checkout.
-    snapshot_tools = {"check_independent.py", "check_migration.py", "check_subject_roots.py",
+    snapshot_tools = {"build_replay_tools.py", "check_independent.py", "check_migration.py", "check_subject_roots.py",
                       "source_responsibility.py"}
     # These checks need the native compiler and run in lean-native instead.
     native_checks = {"check_local_service_admission.py"}
