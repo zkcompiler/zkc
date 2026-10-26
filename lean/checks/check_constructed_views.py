@@ -21,6 +21,9 @@ ROLES = (
     "SmallSumcheckValidator",
     "TwoSumsProducer",
     "TwoSumsValidator",
+    "ChaumPedersenValidator",
+    "OkamotoValidator",
+    "GuessValidator",
 )
 
 
@@ -99,6 +102,9 @@ def main() -> None:
         if imports[0] not in {
             "ZkcExamples.Construction.Generated.SmallSumcheckPair",
             "ZkcExamples.Construction.Generated.TwoSumsPair",
+            "ZkcExamples.Construction.ChaumPedersenProofParticipant",
+            "ZkcExamples.Construction.OkamotoProofParticipant",
+            "ZkcExamples.Construction.GuessProofParticipant",
         }:
             raise AssertionError('generated view imports an unexpected constructed pair')
         if re.search(r"\bDomain\.(?:evaluate|step)\b", text):
