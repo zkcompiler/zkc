@@ -171,7 +171,7 @@ theorem ignores_claim_lookup :
   rw [SumcheckSourceContracts.prefix_laws.fixPrefix _ _ _ _
     (by decide +kernel) (by decide +kernel) (by decide +kernel), ite_eq_left (by decide)]
   simp only [PIR.Process.bind]
-  change (invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) valuesRealizationHelper
+  change (invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ)) SumcheckSourceBodies.valuesRealizationHelper
     (inputs (restrictPrefixValues [1,2,3,4] [2,3]) 0 1)).bind _ = _
   rw [SumcheckSourceContracts.prefix_laws.values]
   rfl

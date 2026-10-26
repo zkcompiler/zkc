@@ -58,7 +58,7 @@ theorem input_order_rejected : rejected reorderedInputs "structured-helper-link"
   decide +kernel
 
 private abbrev emptyStateFold : FoldSpec :=
-  ⟨⟨"items", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩,
+  ⟨DomainSpec.elements "items" [.vector "bls12-381.fr"] (.vector "bls12-381.fr") .here,
     [], [], "step", "predicate", .math⟩
 
 private def foldRoot : CheckedDefinition := formed "main"

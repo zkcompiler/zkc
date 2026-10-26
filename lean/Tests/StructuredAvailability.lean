@@ -369,7 +369,7 @@ private def foldStep : CheckedDefinition := formed "fold-step" .math
   (.ret (.cons .here .nil) : Region dialect [scalar, scalar, vector] [scalar])
 
 private def foldSpec : FoldSpec :=
-  ⟨⟨"elements", [vector], (.vector "bls12-381.fr"), .here, false⟩,
+  ⟨DomainSpec.elements "elements" [vector] (.vector "bls12-381.fr") .here,
     [scalar], [], "fold-step", "", .math⟩
 
 private def foldHelper : CheckedDefinition := formed "fold" .math
