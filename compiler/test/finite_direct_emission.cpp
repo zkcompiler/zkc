@@ -468,6 +468,329 @@ int main(int argc, char **argv) {
                         *source, *candidate, checking)),
                     "changed stopped control escaped independent comparison");
           });
+  for (auto family :
+       {std::pair{"sum", "vector.sum"}, std::pair{"product", "vector.product"},
+        std::pair{"dot-large", "vector.dot"},
+        std::pair{"collect", "numerical.map"},
+        std::pair{"bilinear", "matrix.bilinear"},
+        std::pair{"msm", "curve.msm"}}) {
+    auto fixture = family.first;
+    auto contract = family.second;
+    for (unsigned mutation : {0u, 1u, 2u, 3u, 4u, 5u})
+      cases.run(
+          Twine("scoped bulk ") + fixture + " mutation " + Twine(mutation),
+          [&] {
+            auto bytes = llvm::MemoryBuffer::getFile(
+                (Twine(ZKC_FINITE_FIXTURES) + "/" + fixture + ".mlir").str());
+            require(bool(bytes), "bulk fixture missing");
+            auto source =
+                parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+            require(bool(source), "bulk source admission failed");
+            func::FuncOp helper;
+            source->walk([&](Operation *op) {
+              if (auto fold = dyn_cast<exec::FoldOp>(op))
+                helper = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+                    fold, fold.getStepAttr());
+              else if (auto collect = dyn_cast<exec::CollectOp>(op))
+                helper = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+                    collect, collect.getBodyAttr());
+            });
+            require(bool(helper), "bulk callback missing");
+            mathematical::RealizationWork work;
+            uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
+            std::optional<CapacityCause> capacity;
+            auto candidate = protocol::prepareScopedFinite(*source, work, copy,
+                                                           siteBytes, capacity);
+            require(bool(candidate), "bulk preparation failed");
+            bool selected = false;
+            candidate->walk([&](exec::ApplyOp op) {
+              auto binding =
+                  SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      op, op.getBindingAttr());
+              selected |= binding && binding.getContract() == contract;
+            });
+            require(selected, "expected bulk payload was not selected");
+            MathematicalSelectionPolicy policy;
+            if (mutation == 1) {
+              exec::ReturnOp end;
+              helper.walk([&](exec::ReturnOp op) { end = op; });
+              require(end && end->getNumOperands() == 1,
+                      "callback return missing");
+              Value replacement;
+              for (Value argument : helper.getArguments().drop_front())
+                if (argument.getType() == end->getOperand(0).getType()) {
+                  replacement = argument;
+                  break;
+                }
+              require(replacement && replacement != end->getOperand(0),
+                      "source mutation is vacuous");
+              end->setOperand(0, replacement);
+              // Keep the retained ordinary helper synchronized. Only the
+              // already generated bulk payload now disagrees with its actual
+              // source.
+              auto retained = SymbolTable::lookupSymbolIn(unit(*candidate),
+                                                          helper.getSymName());
+              require(bool(retained), "retained callback missing");
+              retained->erase();
+              unit(*candidate).getBody().front().push_back(helper->clone());
+            } else if (mutation == 2) {
+              auto function = cast<func::FuncOp>(
+                  SymbolTable::lookupSymbolIn(unit(*candidate), "work"));
+              exec::ReturnOp end;
+              function.walk([&](exec::ReturnOp op) { end = op; });
+              require(end && end->getNumOperands() == 1, "bulk return missing");
+              Value replacement;
+              for (Value argument : function.getArguments().drop_front())
+                if (argument.getType() == end->getOperand(0).getType()) {
+                  replacement = argument;
+                  break;
+                }
+              if (replacement) {
+                require(replacement != end->getOperand(0),
+                        "candidate mutation is vacuous");
+                end->setOperand(0, replacement);
+              } else {
+                exec::ApplyOp equality;
+                function.walk([&](exec::ApplyOp op) {
+                  auto binding =
+                      SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                          op, op.getBindingAttr());
+                  if (binding && binding.getContract() == "curve.equal")
+                    equality = op;
+                });
+                require(equality && equality.getInputs().size() == 2 &&
+                            equality.getInputs()[0] != equality.getInputs()[1],
+                        "candidate terminal equality missing");
+                equality->setOperand(2, equality.getInputs()[0]);
+              }
+            } else if (mutation == 3)
+              policy.finiteBulk = false;
+            else if (mutation == 4) {
+              exec::ApplyOp original;
+              helper.walk([&](exec::ApplyOp op) { original = op; });
+              require(bool(original), "source primitive missing");
+              auto binding =
+                  SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      original, original.getBindingAttr());
+              auto retained =
+                  cast<runtime::BindingOp>(SymbolTable::lookupSymbolIn(
+                      unit(*candidate), binding.getSymName()));
+              std::string implementation =
+                  "arkworks/" + binding.getContract().str();
+              binding.setImplementation(implementation);
+              retained.setImplementation(implementation);
+            } else if (mutation == 5) {
+              exec::ApplyOp payload;
+              candidate->walk([&](exec::ApplyOp op) {
+                auto binding =
+                    SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                        op, op.getBindingAttr());
+                if (binding && binding.getContract() == contract)
+                  payload = op;
+              });
+              require(bool(payload), "bulk occurrence missing");
+              payload.setSite("changed_bulk_occurrence");
+            }
+            require(succeeded(verify(*source)) && succeeded(verify(*candidate)),
+                    "bulk mutation is malformed");
+            ScopedDiagnosticHandler quiet(
+                &context, [](Diagnostic &) { return success(); });
+            mathematical::RealizationWork checking;
+            bool accepted = succeeded(protocol::verifyScopedFinitePreparation(
+                *source, *candidate, checking, policy));
+            require(accepted == (mutation == 0),
+                    "independent bulk correspondence accepted a changed "
+                    "obligation");
+          });
+  }
+  for (bool numerical : {false, true})
+    cases.run(
+        numerical ? "unused mathematical call retains bulk policy"
+                  : "unused primitive retains implementation pin",
+        [&] {
+          auto bytes = llvm::MemoryBuffer::getFile(
+              std::string(ZKC_FINITE_FIXTURES) + "/sum.mlir");
+          require(bool(bytes), "unused-operation fixture missing");
+          auto source =
+              parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+          require(bool(source), "unused-operation source refused");
+          auto owner = unit(*source);
+          auto step =
+              cast<func::FuncOp>(SymbolTable::lookupSymbolIn(owner, "step"));
+          auto add = cast<runtime::BindingOp>(
+              SymbolTable::lookupSymbolIn(owner, "add"));
+          auto field = step.getArgument(1).getType();
+          OpBuilder builder(&context);
+          builder.setInsertionPointToEnd(&owner.getBody().front());
+          if (numerical) {
+            auto helper = func::FuncOp::create(
+                builder, step.getLoc(), "unused_math",
+                builder.getFunctionType({field, field}, {field}));
+            helper.setPrivate();
+            builder.setInsertionPointToEnd(helper.addEntryBlock());
+            OperationState state(step.getLoc(),
+                                 algebra::FieldAddOp::getOperationName());
+            state.addOperands(helper.getArguments());
+            state.addTypes(field);
+            auto *value = builder.create(state);
+            func::ReturnOp::create(builder, step.getLoc(), value->getResults());
+          } else {
+            auto copied = cast<runtime::BindingOp>(builder.clone(*add));
+            copied.setSymName("unused_add");
+          }
+          step.getBody().dropAllReferences();
+          step.getBody().getBlocks().clear();
+          builder.setInsertionPointToEnd(step.addEntryBlock());
+          exec::ScopedExecutionBuilder control(builder, step);
+          auto args = step.getArguments().slice(1, 2);
+          SmallVector<NamedAttribute> attributes{
+              builder.getNamedAttr(
+                  numerical ? "callee" : "binding",
+                  FlatSymbolRefAttr::get(&context, numerical ? "unused_math"
+                                                             : "unused_add")),
+              builder.getNamedAttr("site", builder.getStringAttr("unused"))};
+          if (!numerical)
+            attributes.push_back(
+                builder.getNamedAttr("parameters", builder.getArrayAttr({})));
+          (void)control.invoke(numerical ? "exec.compute" : "exec.apply",
+                               {field}, control.scoped(args), attributes);
+          auto value = control.invoke(
+              "exec.apply", {field}, control.scoped(args),
+              {builder.getNamedAttr("binding",
+                                    FlatSymbolRefAttr::get(&context, "add")),
+               builder.getNamedAttr("parameters", builder.getArrayAttr({})),
+               builder.getNamedAttr("site", builder.getStringAttr("sum"))});
+          control.returned(value);
+          require(succeeded(verify(*source)),
+                  "unused-operation graph malformed");
+          auto prepareCandidate = [&]() {
+            mathematical::RealizationWork work;
+            uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
+            std::optional<CapacityCause> capacity;
+            return protocol::prepareScopedFinite(*source, work, copy, siteBytes,
+                                                 capacity);
+          };
+          auto candidate = prepareCandidate();
+          require(bool(candidate), "unrestricted unused work refused");
+          bool bulk = false;
+          candidate->walk([&](runtime::BindingOp binding) {
+            bulk |= binding.getContract() == "vector.sum";
+          });
+          require(bulk, "unrestricted unused work prevented the bulk control");
+          for (ModuleOp module : {*source, *candidate}) {
+            if (numerical) {
+              auto retained = cast<func::FuncOp>(
+                  SymbolTable::lookupSymbolIn(unit(module), "step"));
+              retained.walk([&](exec::ComputeOp call) {
+                call.setPolicyAttr(builder.getArrayAttr(
+                    {builder.getBoolAttr(false), builder.getBoolAttr(true),
+                     builder.getBoolAttr(true)}));
+              });
+            } else {
+              auto retained = cast<runtime::BindingOp>(
+                  SymbolTable::lookupSymbolIn(unit(module), "unused_add"));
+              retained.setImplementation("arkworks/field.add");
+            }
+            require(succeeded(verify(module)),
+                    "unused restriction mutation malformed");
+          }
+          ScopedDiagnosticHandler quiet(&context,
+                                        [](Diagnostic &) { return success(); });
+          mathematical::RealizationWork checking;
+          require(
+              failed(protocol::verifyScopedFinitePreparation(
+                  *source, *candidate, checking)),
+              "independent reader dropped an unused replacement restriction");
+          auto ordered = prepareCandidate();
+          require(bool(ordered),
+                  "restricted callback lost the ordered fallback");
+          bool loop = false;
+          ordered->walk([&](exec::RangeOp) { loop = true; });
+          require(loop, "producer erased an unused replacement restriction");
+        });
+  cases.run(
+      "physical requests independently restrict scoped bulk replacement", [&] {
+        auto bytes = llvm::MemoryBuffer::getFile(
+            std::string(ZKC_FINITE_FIXTURES) + "/sum.mlir");
+        require(bool(bytes), "physical-request fixture missing");
+        auto source =
+            parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+        require(bool(source), "physical-request source refused");
+        auto binding = SymbolTable::lookupSymbolIn(unit(*source), "add");
+        llvm::DenseSet<Operation *> fixed{binding};
+        auto propose = [&](bool restricted) {
+          mathematical::RealizationWork work;
+          uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
+          std::optional<CapacityCause> capacity;
+          return protocol::prepareScopedFinite(*source, work, copy, siteBytes,
+                                               capacity, {},
+                                               restricted ? &fixed : nullptr);
+        };
+        auto bulk = propose(false);
+        require(bool(bulk), "unrestricted bulk proposal failed");
+        ScopedDiagnosticHandler quiet(&context,
+                                      [](Diagnostic &) { return success(); });
+        mathematical::RealizationWork checking;
+        require(failed(protocol::verifyScopedFinitePreparation(
+                    *source, *bulk, checking, {}, nullptr, &fixed)),
+                "independent reader ignored an explicit physical request");
+        auto ordered = propose(true);
+        require(bool(ordered),
+                "explicit physical request lost ordered execution");
+        bool loop = false;
+        ordered->walk([&](exec::RangeOp) { loop = true; });
+        require(loop, "physical request was erased by bulk selection");
+      });
+  for (unsigned limit : {0u, 1u, 2u, 3u, 4u, 5u, 6u})
+    cases.run(Twine("scoped bulk cumulative capacity ") + Twine(limit), [&] {
+      auto bytes = llvm::MemoryBuffer::getFile(
+          std::string(ZKC_FINITE_FIXTURES) + "/collect.mlir");
+      require(bool(bytes), "capacity fixture missing");
+      auto source =
+          parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+      require(bool(source), "capacity source refused");
+      mathematical::RealizationWork work;
+      MathematicalSelectionPolicy policy;
+      if (limit == 0)
+        policy.finiteBulk = false;
+      else if (limit == 1)
+        work.matching.structural = 0;
+      else if (limit == 2)
+        work.matching.equations = 0;
+      else if (limit == 3)
+        work.lanes = 0;
+      else if (limit == 4)
+        work.optionalFiniteChecking = 0;
+      else if (limit == 5)
+        work.discardedRecipeCopy = 1;
+      else
+        work.requiredFiniteChecking = 0;
+      uint64_t copy = 1000000, siteBytes = 16 * 1024 * 1024;
+      std::optional<CapacityCause> capacity;
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      auto candidate = protocol::prepareScopedFinite(
+          *source, work, copy, siteBytes, capacity, policy);
+      if (limit == 6) {
+        require(!candidate, "required admission exhaustion was bypassed");
+        return;
+      }
+      require(bool(candidate), "optional capacity lost the ordered path");
+      bool loop = false;
+      candidate->walk([&](exec::RangeOp) { loop = true; });
+      require(loop, "optional refusal did not retain ordered traversal");
+      mathematical::RealizationWork checking;
+      require(succeeded(protocol::verifyScopedFinitePreparation(
+                  *source, *candidate, checking, policy)),
+              "ordered retry failed independent comparison");
+      if (limit == 1)
+        require(work.matching.structural == 0,
+                "structural work was replenished");
+      if (limit == 4)
+        require(work.optionalFiniteChecking == 0 &&
+                    work.discardedRecipeCopy < 1000000,
+                "discarded proposal was not cumulatively accounted");
+    });
   for (StringRef fixture :
        {"total-state", "total-predicate", "total-collect", "nested-total"})
     cases.run("full direct source/candidate correspondence " + fixture, [&] {

@@ -626,12 +626,21 @@ public:
       });
       mathematical::ComparisonCapacity capacity;
       std::optional<CapacityCause> debit;
+      auto *payload = cursor;
       if (auto compared = mathematical::compareFinitePayload(
               c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
               bindings, comparisonWork,
               inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
               &debit, limits.candidate);
           succeeded(compared)) {
+        // Mathematical equality does not authorize changing the actual
+        // occurrence identities. Account and check the complete consumed
+        // payload, including unused arithmetic admitted by the comparison.
+        for (auto *op = payload; op != cursor; op = ports.next(op))
+          if (!op || !charge() || !site(op)) {
+            fail();
+            return false;
+          }
         finish(ValueRange{*compared});
         return valid;
       }
@@ -807,6 +816,8 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
   SymbolTableCollection sourceSymbols;
   if (failed(describe(source, c, symbolRoot, &sourceSymbols)))
     return failure();
+  c.scopedSource = limits.sourceClosure;
+  c.fixedBindings = limits.fixedBindings;
   Reader reader(c, symbols, bindings, limits, policy.finiteBulk);
   auto result = reader.checkInline(inputs, cursor, helper);
   outcome = succeeded(result)

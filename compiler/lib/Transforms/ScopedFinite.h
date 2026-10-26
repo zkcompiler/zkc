@@ -4,7 +4,11 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Transforms/Finite.h"
+#include "llvm/ADT/DenseSet.h"
 
+namespace zkc::protocol {
+struct SourceExecutionClosure;
+}
 namespace zkc::finite {
 // A reached callback can stop without producing its result. This is separate
 // from construction failure and from a successful callback with no outputs.
@@ -39,7 +43,9 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedExpression(
     mathematical::RealizationWork &work,
     MathematicalSelectionPolicy policy = {},
     mathematical::RealizationTrace *trace = nullptr,
-    llvm::StringRef occurrence = {}, ScopedEmissionBudget *budget = nullptr);
+    llvm::StringRef occurrence = {}, ScopedEmissionBudget *budget = nullptr,
+    const protocol::SourceExecutionClosure *sourceClosure = nullptr,
+    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr);
 } // namespace zkc::finite
 
 #endif

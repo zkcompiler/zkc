@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
@@ -45,6 +46,8 @@ class ScopedExpander {
   mathematical::NumericalSelection *selection;
   std::optional<CapacityCause> *capacity;
   mathematical::RealizationWork *finiteWork;
+  MathematicalSelectionPolicy finitePolicy;
+  const llvm::DenseSet<Operation *> *fixedBindings;
   llvm::DenseSet<Operation *> replacedDefinitions;
 
   void record(Operation *before, Operation *after) {
@@ -297,11 +300,10 @@ class ScopedExpander {
         };
         std::optional<CapacityCause> cause;
         finite::ScopedEmissionBudget budget{remaining, remainingBytes, cause};
-        MathematicalSelectionPolicy ordered;
-        ordered.finiteBulk = false;
+
         auto result = finite::realizeScopedExpression(
-            op, inputs, builder, control, callback, *finiteWork, ordered,
-            nullptr, occurrence, &budget);
+            op, inputs, builder, control, callback, *finiteWork, finitePolicy,
+            nullptr, occurrence, &budget, &source, fixedBindings);
         if (failed(result) || result->size() != step.outputs.size()) {
           if (capacity && cause)
             *capacity = cause;
@@ -426,14 +428,17 @@ public:
       const llvm::DenseMap<Operation *, func::FuncOp> *replacements = nullptr,
       mathematical::NumericalSelection *selection = nullptr,
       std::optional<CapacityCause> *capacity = nullptr,
-      mathematical::RealizationWork *finiteWork = nullptr)
+      mathematical::RealizationWork *finiteWork = nullptr,
+      MathematicalSelectionPolicy finitePolicy = {},
+      const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
       : source(source), symbols(original), target(target),
         builder(target.getContext()),
         remaining(selection ? selection->remainingCopy : defaultRemaining),
         remainingBytes(selection ? selection->remainingSiteBytes
                                  : defaultBytes),
         replacements(replacements), selection(selection), capacity(capacity),
-        finiteWork(finiteWork) {
+        finiteWork(finiteWork), finitePolicy(finitePolicy),
+        fixedBindings(fixedBindings) {
     if (replacements)
       for (const auto &replacement : *replacements)
         replacedDefinitions.insert(replacement.second);
@@ -565,9 +570,10 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
 OwningOpRef<ModuleOp>
 prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                     uint64_t &copy, uint64_t &siteBytes,
-                    std::optional<CapacityCause> &capacity) {
-  if (failed(verify(source)) || !hasSingleElement(*source.getBody()) ||
-      !kernel::chargeCopy(source, copy, &capacity))
+                    std::optional<CapacityCause> &capacity,
+                    MathematicalSelectionPolicy policy,
+                    const llvm::DenseSet<Operation *> *fixedBindings) {
+  if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -578,25 +584,83 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     diagnostics::emit(owner.emitOpError(), closure.takeError());
     return {};
   }
-  OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
-  candidate->getOperation()->setAttrs(source->getAttrs());
-  OpBuilder builder(candidate->getBodyRegion());
-  auto target = protocol_ir::ProtocolModuleOp::create(builder, owner.getLoc(),
-                                                      owner.getProfileAttr());
-  target->setAttrs(owner->getAttrs());
-  target.getBody().push_back(new Block);
-  mathematical::NumericalSelection budgets;
-  budgets.remainingCopy = copy;
-  budgets.remainingSiteBytes = siteBytes;
-  auto result = ScopedExpander(*closure, owner, target, nullptr, &budgets,
-                               &capacity, &work)
-                    .run(owner);
-  copy = budgets.remainingCopy;
-  siteBytes = budgets.remainingSiteBytes;
-  if (failed(result) || failed(verify(*candidate)) ||
-      failed(verifyScopedFinitePreparation(source, *candidate, work)))
-    return {};
-  return candidate;
+  for (;;) {
+    mathematical::RecipeConstructionWork construction(work);
+    bool speculative = policy.finiteBulk && work.discardedRecipeCopy &&
+                       work.discardedRecipeSiteBytes &&
+                       construction.canDiscard(work);
+    if (!speculative)
+      policy.finiteBulk = false;
+    auto incomingCopy = copy, incomingBytes = siteBytes;
+    auto copyCeiling =
+        speculative ? std::min(copy, work.discardedRecipeCopy) : copy;
+    auto byteCeiling = speculative
+                           ? std::min(siteBytes, work.discardedRecipeSiteBytes)
+                           : siteBytes;
+    copy = copyCeiling;
+    siteBytes = byteCeiling;
+    auto settle = llvm::scope_exit([&] {
+      copy += incomingCopy - copyCeiling;
+      siteBytes += incomingBytes - byteCeiling;
+    });
+    capacity.reset();
+    mathematical::VerificationDecision outcome;
+    auto propose = [&]() -> OwningOpRef<ModuleOp> {
+      if (!kernel::chargeCopy(source, copy, &capacity))
+        return {};
+      OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
+      candidate->getOperation()->setAttrs(source->getAttrs());
+      OpBuilder builder(candidate->getBodyRegion());
+      auto target = protocol_ir::ProtocolModuleOp::create(
+          builder, owner.getLoc(), owner.getProfileAttr());
+      target->setAttrs(owner->getAttrs());
+      target.getBody().push_back(new Block);
+      mathematical::NumericalSelection budgets;
+      budgets.remainingCopy = copy;
+      budgets.remainingSiteBytes = siteBytes;
+      auto result = ScopedExpander(*closure, owner, target, nullptr, &budgets,
+                                   &capacity, &work, policy, fixedBindings)
+                        .run(owner);
+      copy = budgets.remainingCopy;
+      siteBytes = budgets.remainingSiteBytes;
+      if (failed(result) || failed(verify(*candidate)) ||
+          failed(verifyScopedFinitePreparation(source, *candidate, work, policy,
+                                               &outcome, fixedBindings)))
+        return {};
+      return candidate;
+    };
+    OwningOpRef<ModuleOp> candidate;
+    if (speculative) {
+      ScopedDiagnosticHandler quiet(source.getContext(),
+                                    [](Diagnostic &) { return success(); });
+      candidate = propose();
+    } else
+      candidate = propose();
+    if (candidate)
+      return candidate;
+    bool optionalCapacity =
+        outcome.outcome ==
+        mathematical::VerificationObservation::OptionalCapacity;
+    if (!speculative || (!capacity && !optionalCapacity)) {
+      if (speculative)
+        diagnostics::emit(source.emitOpError(), "finite-preparation",
+                          outcome.detail.empty()
+                              ? "candidate construction refused"
+                              : outcome.detail);
+      return {};
+    }
+    // The optional proposal was not published. Transfer only its performed
+    // construction to the discard reserve; matching and checking remain spent.
+    auto copied = copyCeiling - copy, bytes = byteCeiling - siteBytes;
+    if (copied > work.discardedRecipeCopy ||
+        bytes > work.discardedRecipeSiteBytes || !construction.discard(work))
+      return {};
+    work.discardedRecipeCopy -= copied;
+    work.discardedRecipeSiteBytes -= bytes;
+    copy = copyCeiling;
+    siteBytes = byteCeiling;
+    policy.finiteBulk = false;
+  }
 }
 
 } // namespace zkc::protocol

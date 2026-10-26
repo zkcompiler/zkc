@@ -3,7 +3,11 @@
 #include "zkc/Contracts/MathematicalFacts.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/DenseSet.h"
 
+namespace zkc::protocol {
+struct SourceExecutionClosure;
+}
 namespace zkc::finite {
 // A transient view of the verified typed IR. References never encode
 // expressions.
@@ -15,6 +19,12 @@ struct Computation {
   mlir::FunctionType signature;
   unsigned arguments = 0, states = 0, captures = 0;
   bool total = false, collect = false, scoped = false;
+  // Optional immutable source association, shared by the containing analysis.
+  // Mutation invalidates it. It is not a mathematical replacement certificate.
+  const protocol::SourceExecutionClosure *scopedSource = nullptr;
+  // Exact source declarations fixed by the containing physical request.
+  // This borrows the same immutable subject, independently of authored pins.
+  const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr;
 };
 enum class CallbackRole { Step, Body, Predicate };
 enum class CallbackExit { Return, Stop };

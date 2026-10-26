@@ -22,6 +22,8 @@ struct VerificationLimits {
   uint64_t *sharedSiteBytes = nullptr;
   // Borrowed actual scoped candidate; mutation invalidates the whole view.
   const mathematical::ScopedCandidate *candidate = nullptr;
+  const protocol::SourceExecutionClosure *sourceClosure = nullptr;
+  const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr;
   ScopedCallbackReader callback = {};
   // Required exact site sequence for ordered scoped preparation. Empty only
   // for readers whose enclosing numerical recipe checks occurrence names.

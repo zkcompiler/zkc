@@ -1578,6 +1578,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!requests.emplace(name, implementation).second)
       return error("binding-duplicate-selection");
   std::map<std::string, std::string> originalPins;
+  llvm::DenseSet<Operation *> fixedFiniteBindings;
   for (auto declaration :
        root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
@@ -1591,6 +1592,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     auto fixed = selectImplementation(binding->application, found->second);
     if (!fixed)
       return fixed.takeError();
+    fixedFiniteBindings.insert(declaration);
     requests.erase(found);
   }
   if (!requests.empty())
@@ -1654,9 +1656,10 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     std::optional<CapacityCause> capacity;
     input->finite = protocol::prepareScopedFinite(
         module, selection.numerical.work, selection.numerical.remainingCopy,
-        selection.numerical.remainingSiteBytes, capacity);
+        selection.numerical.remainingSiteBytes, capacity,
+        options.numericalPolicy, &fixedFiniteBindings);
     if (!input->finite)
-      return error("kernel-lowering", "ordered finite preparation refused");
+      return error("kernel-lowering", "finite preparation refused");
     numericalSource = *input->finite;
   }
   if (hasNumerical) {
@@ -2051,10 +2054,27 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   ModuleOp numericalSource = module;
   mathematical::RealizationWork numericalChecking;
   if (plan.input->finite) {
+    llvm::DenseSet<Operation *> fixedFiniteBindings;
+    auto sourceOwner =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+    for (const auto &[name, implementation] : plan.input->selections) {
+      auto binding = dyn_cast_or_null<runtime::BindingOp>(
+          SymbolTable::lookupSymbolIn(sourceOwner, name));
+      if (!binding)
+        return error("binding-unknown-selection");
+      auto decoded = readBinding(binding);
+      if (!decoded)
+        return decoded.takeError();
+      auto fixed = selectImplementation(decoded->application, implementation);
+      if (!fixed)
+        return fixed.takeError();
+      fixedFiniteBindings.insert(binding);
+    }
     if (failed(protocol::verifyScopedFinitePreparation(
-            module, *plan.input->finite, numericalChecking)))
+            module, *plan.input->finite, numericalChecking,
+            plan.input->numericalPolicy, nullptr, &fixedFiniteBindings)))
       return error("numerical-lowering-correspondence",
-                   "ordered finite preparation differs");
+                   "finite preparation differs");
     numericalSource = *plan.input->finite;
   }
   if (plan.input->numerical) {

@@ -31,6 +31,15 @@ namespace {
 // Read the actual admitted call target, including an owned numerical unit.
 // This reader never uses the producer's substituted callback or normalization.
 Operation *sourceCallee(Operation *op) {
+  if (auto call = dyn_cast<exec::ComputeOp>(op)) {
+    if (auto policy = call.getPolicyAttr())
+      if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+          !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
+          !cast<BoolAttr>(policy[0]).getValue())
+        return nullptr;
+    SymbolTableCollection symbols;
+    return call.resolveCallee(symbols);
+  }
   if (auto call = dyn_cast<kernel::CallOp>(op)) {
     if (auto policy = call.getPolicyAttr())
       if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
@@ -427,6 +436,68 @@ public:
   }
 };
 
+// A bounded borrowed view of actual source instructions. Scoped association
+// only recovers data ports from admitted CFG edges; it supplies no equations,
+// recipe choices or projected producer IR. Pure callees retain raw SSA ports.
+struct SourceInstruction {
+  Operation *operation;
+  ValueRange inputs, outputs;
+  const protocol::SourceExecutionStep *scoped = nullptr;
+};
+struct SourceBody {
+  ValueRange arguments, returned;
+  SmallVector<SourceInstruction> payload;
+  Block *plain = nullptr;
+  Operation *owner = nullptr;
+  ArrayRef<protocol::SourceExecutionStep> scoped;
+  bool read(Block &block, const protocol::SourceExecutionClosure *closure) {
+    owner = block.getParentOp();
+    auto function = dyn_cast<func::FuncOp>(block.getParentOp());
+    if (function && protocol::isScopedExecutionFunction(function)) {
+      if (!closure || function.empty() || &function.front() != &block ||
+          function->hasAttr("runtime.region"))
+        return false;
+      auto found = closure->bodies.find(function.getSymName().str());
+      if (found == closure->bodies.end() || found->second.empty())
+        return false;
+      scoped = found->second;
+      if (!isa<exec::ReturnOp>(scoped.back().operation))
+        return false;
+      arguments = block.getArguments().drop_front();
+      returned = scoped.back().inputs;
+    } else {
+      if (!block.getParent()->hasOneBlock() || block.empty() ||
+          !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
+          !block.back().getAttrs().empty())
+        return false;
+      plain = &block;
+      arguments = block.getArguments();
+      returned = block.back().getOperands();
+    }
+    return true;
+  }
+  // Memoized calls have already interpreted every instruction under this
+  // exact assignment. Charge and materialize payload only on a cache miss.
+  bool visit(Terms &work) {
+    if (plain) {
+      for (Operation &op : plain->without_terminator()) {
+        if (!work.charge(1 + op.getNumOperands() + op.getNumResults()))
+          return false;
+        payload.push_back({&op, op.getOperands(), op.getResults()});
+      }
+    } else {
+      for (const auto &step : scoped) {
+        if (!work.charge(1 + step.inputs.size() + step.outputs.size()) ||
+            step.operation->getParentOp() != owner || !step.regions.empty())
+          return false;
+        if (&step != &scoped.back())
+          payload.push_back({step.operation, step.inputs, step.outputs, &step});
+      }
+    }
+    return true;
+  }
+};
+
 struct Primitive {
   StringRef contract;
   SmallVector<StringRef> parameters;
@@ -434,8 +505,14 @@ struct Primitive {
 };
 // Read the actual operation and independently resolve its installed signature.
 // Explicit implementations are outside the law-replacement boundary.
-std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols,
-                                   CandidatePorts ports = CandidatePorts{}) {
+std::optional<Primitive>
+primitive(Operation &op, SymbolTable *symbols,
+          CandidatePorts ports = CandidatePorts{},
+          const protocol::SourceExecutionStep *source = nullptr,
+          const llvm::DenseSet<Operation *> *fixedBindings = nullptr) {
+  auto inputs = source ? ValueRange(source->inputs) : ports.inputs(&op);
+  auto outputs = source ? ValueRange(source->outputs) : ports.outputs(&op);
+  bool scoped = source || ports.isScoped();
   auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
@@ -444,14 +521,15 @@ std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols,
                         : SymbolTable::lookupNearestSymbolFrom(&op, reference))
           : runtime::BindingOp();
   auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
-  if (!binding || !binding.getImplementation().empty() || !parameters ||
+  if (!binding || !binding.getImplementation().empty() ||
+      (fixedBindings && fixedBindings->contains(binding)) || !parameters ||
       !op.getAttrOfType<StringAttr>("site") || op.getAttrs().size() != 3 ||
-      !ports.contains(&op) || ports.bodies(&op) ||
-      ports.outputs(&op).size() != 1 ||
-      (ports.isScoped()
-           ? !isa<exec::ApplyOp>(op)
-           : !protocol::operationSupportsContract(op.getName().getStringRef(),
-                                                  binding.getContract())))
+      (!source && !ports.contains(&op)) ||
+      (source ? !source->regions.empty() : ports.bodies(&op) != 0) ||
+      outputs.size() != 1 ||
+      (scoped ? !isa<exec::ApplyOp>(op)
+              : !protocol::operationSupportsContract(
+                    op.getName().getStringRef(), binding.getContract())))
     return std::nullopt;
   auto decoded = protocol::readBinding(binding);
   if (!decoded) {
@@ -463,15 +541,14 @@ std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols,
     consumeError(signature.takeError());
     return std::nullopt;
   }
-  if (signature->inputs.size() != ports.inputs(&op).size() ||
+  if (signature->inputs.size() != inputs.size() ||
       signature->outputs.size() != 1)
     return std::nullopt;
-  for (auto [expected, actual] :
-       zip(signature->inputs, ports.inputs(&op).getTypes()))
+  for (auto [expected, actual] : zip(signature->inputs, inputs.getTypes()))
     if (protocol::decodeBoundType(op.getContext(), expected) != actual)
       return std::nullopt;
   if (protocol::decodeBoundType(op.getContext(), signature->outputs[0]) !=
-      ports.outputs(&op)[0].getType())
+      outputs[0].getType())
     return std::nullopt;
   Primitive result{binding.getContract(), {}, binding};
   for (Attribute parameter : parameters) {
@@ -553,6 +630,8 @@ class Comparison {
   Terms terms;
   SymbolTable &symbols;
   CandidatePorts ports;
+  const protocol::SourceExecutionClosure *sourceClosure = nullptr;
+  const llvm::DenseSet<Operation *> *fixedBindings = nullptr;
   llvm::DenseSet<Operation *> usedBindings;
   llvm::DenseMap<Value, unsigned> identities;
   SmallVector<Dimension> dimensions;
@@ -647,15 +726,15 @@ class Comparison {
   }
   std::optional<SmallVector<Meaning>>
   readSource(Block &block, ArrayRef<Meaning> inputs, unsigned depth = 0) {
+    SourceBody body;
     if (!terms.charge(inputs.size() + 1) ||
         !terms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
-        inputs.size() != block.getNumArguments() || block.empty() ||
-        !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
-        !block.back().getAttrs().empty())
+        !body.read(block, sourceClosure) ||
+        inputs.size() != body.arguments.size())
       return {};
     if (depth == 0) {
       rootArguments.clear();
-      for (auto [argument, meaning] : zip(block.getArguments(), inputs))
+      for (auto [argument, meaning] : zip(body.arguments, inputs))
         rootArguments.emplace_back(argument, meaning);
     }
     std::vector<uint64_t> key;
@@ -668,24 +747,30 @@ class Comparison {
     auto &memo = helpers[&block];
     if (auto found = memo.find(key); found != memo.end())
       return found->second;
+    if (!body.visit(terms))
+      return {};
     // Extent evidence consumes bounded work while visiting these entries.
     // Preserve source order so pointer hashes cannot change which proof fits.
     llvm::MapVector<Value, Meaning> values;
-    for (auto [argument, meaning] : zip(block.getArguments(), inputs))
+    for (auto [argument, meaning] : zip(body.arguments, inputs))
       values[argument] = meaning;
-    for (Operation &op : block.without_terminator()) {
+    for (const auto &step : body.payload) {
+      Operation &op = *step.operation;
+      auto operands = step.inputs;
+      auto outputs = step.outputs;
       if (!terms.charge() || op.getNumRegions())
         return {};
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
       // assignments and a shared work/depth bound, including unused calls.
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp, exec::ComputeOp>(
+              op)) {
         auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
-            helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+            helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return {};
         SmallVector<Meaning> arguments;
-        for (Value operand : op.getOperands()) {
+        for (Value operand : operands) {
           auto found = values.find(operand);
           if (found == values.end())
             return {};
@@ -693,9 +778,9 @@ class Comparison {
         }
         auto returned =
             readSource(helper->getRegion(0).front(), arguments, depth + 1);
-        if (!returned || returned->size() != op.getNumResults())
+        if (!returned || returned->size() != outputs.size())
           return {};
-        for (auto [value, meaning] : zip(op.getResults(), *returned))
+        for (auto [value, meaning] : zip(outputs, *returned))
           values[value] = meaning;
         continue;
       } else if (auto pack = dyn_cast<algebra::ArrayFromElementsOp>(op)) {
@@ -722,7 +807,7 @@ class Comparison {
           return {};
         result = arrays[array.term][index];
       } else {
-        if (op.getNumResults() != 1)
+        if (outputs.size() != 1)
           return {};
         StringRef contract;
         SmallVector<StringRef> parameters;
@@ -737,29 +822,30 @@ class Comparison {
         } else if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op) &&
                    op.getAttrs().empty())
           contract = isa<data::BoundedAtOp>(op) ? "vector.get" : "matrix.get";
-        else if (auto bound = primitive(op, nullptr)) {
+        else if (auto bound = primitive(op, nullptr, CandidatePorts{},
+                                        step.scoped, fixedBindings)) {
           contract = bound->contract;
           parameters = bound->parameters;
         } else
           return {};
         if (contract == "field.constant") {
-          auto field = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
-          if (!field || parameters.size() != 1 || op.getNumOperands())
+          auto field = dyn_cast<algebra::FieldType>(outputs[0].getType());
+          if (!field || parameters.size() != 1 || operands.size())
             return {};
           result = {Meaning::Scalar,
                     terms.literal(field.getDomain(), parameters[0])};
         } else if (!parameters.empty())
           return {};
-        else if (fieldArithmetic(contract) && op.getNumOperands() == 2)
-          result = arithmetic(contract, values.lookup(op.getOperand(0)),
-                              values.lookup(op.getOperand(1)));
-        else if ((contract == "vector.get" && op.getNumOperands() == 2) ||
-                 (contract == "matrix.get" && op.getNumOperands() == 3)) {
-          auto container = values.lookup(op.getOperand(0));
+        else if (fieldArithmetic(contract) && operands.size() == 2)
+          result = arithmetic(contract, values.lookup(operands[0]),
+                              values.lookup(operands[1]));
+        else if ((contract == "vector.get" && operands.size() == 2) ||
+                 (contract == "matrix.get" && operands.size() == 3)) {
+          auto container = values.lookup(operands[0]);
           if (container.kind != Meaning::Container)
             return {};
           SmallVector<Index> indices;
-          for (Value operand : op.getOperands().drop_front()) {
+          for (Value operand : operands.drop_front()) {
             auto position = values.lookup(operand);
             if (position.kind != Meaning::Position)
               return {};
@@ -781,7 +867,7 @@ class Comparison {
                           terms.evidence(
                               [&, selectedAxis = axis](uint64_t &work) {
                                 return finite::equalExtentStatus(
-                                    op.getOperand(0), selectedAxis, entry.first,
+                                    operands[0], selectedAxis, entry.first,
                                     extent.axis, work);
                               })) {
                         equal = true;
@@ -808,9 +894,9 @@ class Comparison {
                 // bound must already follow from source formation before an
                 // eager scalar contraction is permitted.
                 if (!terms.evidence([&, selectedAxis = axis](uint64_t &work) {
-                      return finite::boundStatus(
-                          op.getOperand(selectedAxis + 1), op.getOperand(0),
-                          selectedAxis, work);
+                      return finite::boundStatus(operands[selectedAxis + 1],
+                                                 operands[0], selectedAxis,
+                                                 work);
                     }))
                   return {};
                 selectedBounds.insert(key);
@@ -825,10 +911,10 @@ class Comparison {
           ((result.kind == Meaning::Scalar || result.kind == Meaning::Lane) &&
            result.term == invalidTerm))
         return {};
-      values[op.getResult(0)] = result;
+      values[outputs[0]] = result;
     }
     SmallVector<Meaning> result;
-    for (Value value : block.back().getOperands()) {
+    for (Value value : body.returned) {
       auto found = values.find(value);
       if (found == values.end() || found->second.kind == Meaning::Unknown)
         return {};
@@ -1194,11 +1280,13 @@ public:
                           Operation *&cursor,
                           llvm::DenseSet<Operation *> &bindings,
                           Operation *end) {
+    sourceClosure = source.scopedSource;
+    fixedBindings = source.fixedBindings;
     if (source.predicate || !source.helper ||
         source.signature.getNumResults() != 1 ||
         inputs.size() != source.signature.getNumInputs() ||
         (!source.collect && source.states != 1) ||
-        !source.helper->getRegion(0).hasOneBlock())
+        (!source.scoped && !source.helper->getRegion(0).hasOneBlock()))
       return failure();
     Type resultType = source.signature.getResult(0);
     auto field = scalarField(resultType);
@@ -1272,6 +1360,8 @@ class ModuleComparison {
   };
   SymbolTable &symbols;
   CandidatePorts ports;
+  const protocol::SourceExecutionClosure *sourceClosure = nullptr;
+  const llvm::DenseSet<Operation *> *fixedBindings = nullptr;
   Terms fieldTerms;
   std::vector<Node> nodes{{Unknown}};
   std::map<std::tuple<Kind, unsigned, unsigned>, unsigned> shared;
@@ -1330,34 +1420,39 @@ class ModuleComparison {
     return result;
   }
   unsigned source(Block &block, ArrayRef<unsigned> args, unsigned depth = 0) {
+    SourceBody body;
     if (!fieldTerms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
-        block.empty() || args.size() != block.getNumArguments() ||
-        !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
-        block.back().getNumOperands() != 1)
+        !body.read(block, sourceClosure) || !body.visit(fieldTerms) ||
+        args.size() != body.arguments.size() || body.returned.size() != 1)
       return 0;
     llvm::DenseMap<Value, unsigned> values;
-    for (auto [argument, term] : zip(block.getArguments(), args))
+    for (auto [argument, term] : zip(body.arguments, args))
       values[argument] = term;
-    for (Operation &op : block.without_terminator()) {
-      if (!charge() || op.getNumRegions() || op.getNumResults() != 1)
+    for (const auto &step : body.payload) {
+      Operation &op = *step.operation;
+      auto operands = step.inputs;
+      auto results = step.outputs;
+      if (!charge() || op.getNumRegions() || results.size() != 1)
         return 0;
       unsigned result = 0;
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp, exec::ComputeOp>(
+              op)) {
         auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
-            helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+            helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return 0;
         SmallVector<unsigned> arguments;
-        for (Value operand : op.getOperands())
+        for (Value operand : operands)
           arguments.push_back(values.lookup(operand));
         result = source(helper->getRegion(0).front(), arguments, depth + 1);
       } else {
         StringRef contract;
-        if (auto bound = primitive(op, nullptr)) {
+        if (auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
+                                   fixedBindings)) {
           if (!bound->parameters.empty() && bound->contract != "field.constant")
             return 0;
           contract = bound->contract;
-        } else if (op.getAttrs().empty() && op.getNumOperands() == 2) {
+        } else if (op.getAttrs().empty() && operands.size() == 2) {
           if (isa<algebra::GroupAddOp>(op))
             contract = "curve.add";
           else if (isa<algebra::GroupScaleOp>(op))
@@ -1368,20 +1463,20 @@ class ModuleComparison {
                      : isa<algebra::FieldAddOp>(op)      ? "field.add"
                      : isa<algebra::SubtractFieldOp>(op) ? "field.sub"
                                                          : "field.mul";
-        if (auto field =
-                dyn_cast<algebra::FieldType>(op.getResult(0).getType())) {
+        if (auto field = dyn_cast<algebra::FieldType>(results[0].getType())) {
           Term term = invalidTerm;
           if (contract == "field.constant") {
             auto literal = op.getAttrOfType<StringAttr>("value");
-            auto bound = primitive(op, nullptr);
+            auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
+                                   fixedBindings);
             if (literal)
               term = fieldTerms.literal(field.getDomain(), literal.getValue());
             else if (bound && bound->parameters.size() == 1)
               term =
                   fieldTerms.literal(field.getDomain(), bound->parameters[0]);
-          } else if (fieldArithmetic(contract) && op.getNumOperands() == 2) {
-            unsigned left = values.lookup(op.getOperand(0)),
-                     right = values.lookup(op.getOperand(1));
+          } else if (fieldArithmetic(contract) && operands.size() == 2) {
+            unsigned left = values.lookup(operands[0]),
+                     right = values.lookup(operands[1]);
             if (left && right && nodes[left].kind == Scalar &&
                 nodes[right].kind == Scalar)
               term = fieldTerms.arithmetic(contract, nodes[left].left,
@@ -1389,14 +1484,14 @@ class ModuleComparison {
           }
           if (term == invalidTerm)
             return 0;
-          values[op.getResult(0)] = node(Scalar, term);
+          values[results[0]] = node(Scalar, term);
           continue;
         }
-        auto group = dyn_cast<algebra::GroupType>(op.getResult(0).getType());
+        auto group = dyn_cast<algebra::GroupType>(results[0].getType());
         if (!group)
           return 0;
         SmallVector<protocol::BoundType> inputs, outputs;
-        for (Value operand : op.getOperands()) {
+        for (Value operand : operands) {
           auto type = protocol::encodeBoundType(operand.getType(), false);
           if (!type) {
             consumeError(type.takeError());
@@ -1414,10 +1509,10 @@ class ModuleComparison {
             {contract.str(), {group.getDomain().str()}, ""}, inputs, outputs);
         if (!facet ||
             facet->law.algebra != protocol::ComputationAlgebra::GroupModule ||
-            !facet->law.total || op.getNumOperands() != 2)
+            !facet->law.total || operands.size() != 2)
           return 0;
-        unsigned left = values.lookup(op.getOperand(0)),
-                 right = values.lookup(op.getOperand(1));
+        unsigned left = values.lookup(operands[0]),
+                 right = values.lookup(operands[1]);
         if (!left || !right)
           return 0;
         if (contract == "curve.add" && facet->law.commutative)
@@ -1427,9 +1522,9 @@ class ModuleComparison {
       }
       if (!result)
         return 0;
-      values[op.getResult(0)] = result;
+      values[results[0]] = result;
     }
-    return values.lookup(block.back().getOperand(0));
+    return values.lookup(body.returned[0]);
   }
   bool elements(Value value, const llvm::DenseMap<Value, Value> &mapping,
                 SmallVectorImpl<unsigned> &items,
@@ -1474,6 +1569,8 @@ public:
                          ValueRange inputs, Operation *&cursor,
                          llvm::DenseSet<Operation *> &bindings,
                          Operation *end) {
+    sourceClosure = computation.scopedSource;
+    fixedBindings = computation.fixedBindings;
     if (computation.collect || computation.predicate ||
         computation.states != 1 || computation.signature.getNumResults() != 1 ||
         !isa<algebra::GroupType>(computation.signature.getResult(0)) ||

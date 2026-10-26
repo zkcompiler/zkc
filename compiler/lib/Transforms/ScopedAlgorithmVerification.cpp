@@ -27,6 +27,9 @@ class ScopedCorrespondence {
   uint64_t defaultRemaining = 1000000, defaultBytes = 16 * 1024 * 1024;
   uint64_t &remaining, &remainingBytes;
   mathematical::RealizationWork *finiteWork;
+  MathematicalSelectionPolicy finitePolicy;
+  const llvm::DenseSet<Operation *> *fixedBindings;
+  mathematical::VerificationDecision *finiteOutcome;
   const mathematical::ScopedCandidate *view;
   Operation *sourceRoot;
   llvm::DenseMap<Operation *, unsigned> positions;
@@ -115,10 +118,10 @@ class ScopedCorrespondence {
     limits.sharedComparison = &finiteWork->optionalFiniteChecking;
     limits.sharedSiteBytes = &remainingBytes;
     limits.candidate = view;
+    limits.sourceClosure = &source;
+    limits.fixedBindings = fixedBindings;
     limits.callback = callback;
     limits.finiteSite = *rootSite;
-    MathematicalSelectionPolicy ordered;
-    ordered.finiteBulk = false;
     auto pure = [](Operation *, ValueRange, Operation *&) -> FailureOr<Values> {
       return failure();
     };
@@ -128,8 +131,23 @@ class ScopedCorrespondence {
                                        {}};
     auto result =
         finite::verifyExpression(op, mapped(step.inputs, env), at, pure,
-                                 sourceRoot, limits, outcome, ordered);
-    if (failed(result) || !bind(step.outputs, *result, env))
+                                 sourceRoot, limits, outcome, finitePolicy);
+    if (failed(result)) {
+      if (finiteOutcome) {
+        using Observation = mathematical::VerificationObservation;
+        finiteOutcome->outcome =
+            outcome.status == finite::VerificationStatus::OptionalCapacity
+                ? Observation::OptionalCapacity
+            : outcome.status == finite::VerificationStatus::RequiredCapacity
+                ? Observation::RequiredCapacity
+                : Observation::Mismatch;
+        finiteOutcome->detail = outcome.detail.str();
+        finiteOutcome->capacity = outcome.capacity;
+        finiteOutcome->subject = outcome.subject;
+      }
+      return false;
+    }
+    if (!bind(step.outputs, *result, env))
       return false;
     mathematical::CandidatePorts ports(view);
     for (auto *node = begin; node != at; node = ports.next(node)) {
@@ -365,15 +383,19 @@ class ScopedCorrespondence {
 
 public:
   std::vector<AlgorithmOrigin> takeOrigins() { return std::move(origins); }
-  ScopedCorrespondence(const SourceExecutionClosure &source,
-                       const SourceExecutionClosure &candidate,
-                       Operation *original,
-                       mathematical::RealizationWork *work = nullptr,
-                       const mathematical::ScopedCandidate *view = nullptr)
+  ScopedCorrespondence(
+      const SourceExecutionClosure &source,
+      const SourceExecutionClosure &candidate, Operation *original,
+      mathematical::RealizationWork *work = nullptr,
+      const mathematical::ScopedCandidate *view = nullptr,
+      MathematicalSelectionPolicy policy = {},
+      mathematical::VerificationDecision *outcome = nullptr,
+      const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
       : source(source), candidate(candidate), symbols(original),
         remaining(work ? work->numericalContextChecking : defaultRemaining),
         remainingBytes(work ? work->numericalCheckSiteBytes : defaultBytes),
-        finiteWork(work), view(view), sourceRoot(original) {
+        finiteWork(work), finitePolicy(policy), fixedBindings(fixedBindings),
+        finiteOutcome(outcome), view(view), sourceRoot(original) {
     for (const auto &[name, steps] : candidate.bodies)
       for (auto [index, step] : enumerate(steps))
         positions[step.operation] = index;
@@ -466,9 +488,14 @@ verifyScopedHelperExpansionPreserved(ModuleOp source, ModuleOp candidate,
     *origins = checker.takeOrigins();
   return success();
 }
-LogicalResult
-verifyScopedFinitePreparation(ModuleOp source, ModuleOp candidate,
-                              mathematical::RealizationWork &work) {
+LogicalResult verifyScopedFinitePreparation(
+    ModuleOp source, ModuleOp candidate, mathematical::RealizationWork &work,
+    MathematicalSelectionPolicy policy,
+    mathematical::VerificationDecision *outcome,
+    const llvm::DenseSet<Operation *> *fixedBindings) {
+  if (outcome)
+    *outcome = {mathematical::VerificationObservation::Mismatch,
+                "scoped finite preparation differs"};
   if (failed(verify(source)) || failed(verify(candidate)) ||
       !hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*candidate.getBody()) ||
@@ -501,8 +528,13 @@ verifyScopedFinitePreparation(ModuleOp source, ModuleOp candidate,
   });
   if (unresolved)
     return failure();
-  return ScopedCorrespondence(*original, *actual, before, &work, view->get())
-      .run(before, after);
+  auto checked =
+      ScopedCorrespondence(*original, *actual, before, &work, view->get(),
+                           policy, outcome, fixedBindings)
+          .run(before, after);
+  if (succeeded(checked) && outcome)
+    *outcome = {mathematical::VerificationObservation::Verified, {}};
+  return checked;
 }
 
 } // namespace zkc::protocol

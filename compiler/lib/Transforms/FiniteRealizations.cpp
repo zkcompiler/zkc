@@ -150,6 +150,8 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
 class Realizer {
   Operation *unit;
   Operation *sourceRoot = nullptr;
+  const protocol::SourceExecutionClosure *sourceClosure;
+  const llvm::DenseSet<Operation *> *fixedBindings;
   OpBuilder &builder;
   SymbolTableCollection symbols;
   Location loc;
@@ -726,8 +728,11 @@ public:
            ScopedCallbackEmitter scopedCallback = {},
            exec::ScopedExecutionBuilder *entryControl = nullptr,
            StringRef scopedOccurrence = {},
-           ScopedEmissionBudget *budget = nullptr)
-      : unit(unit), builder(builder), loc(unit->getLoc()),
+           ScopedEmissionBudget *budget = nullptr,
+           const protocol::SourceExecutionClosure *sourceClosure = nullptr,
+           const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
+      : unit(unit), sourceClosure(sourceClosure), fixedBindings(fixedBindings),
+        builder(builder), loc(unit->getLoc()),
         index(IntegerType::get(unit->getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
         work(work), recipes(recipes), observation(observation),
@@ -746,6 +751,8 @@ public:
     if (!sourceRoot ||
         failed(describe(source, computation, sourceRoot, &symbols)))
       return failure();
+    computation.scopedSource = sourceClosure;
+    computation.fixedBindings = fixedBindings;
     emitter.reserveNames(sourceRoot);
     auto partitions = partitionEntry(computation, entry);
     if (failed(partitions))
@@ -1092,7 +1099,9 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     exec::ScopedExecutionBuilder &control, ScopedCallbackEmitter callback,
     mathematical::RealizationWork &work, MathematicalSelectionPolicy policy,
     mathematical::RealizationTrace *trace, StringRef occurrenceName,
-    ScopedEmissionBudget *budget) {
+    ScopedEmissionBudget *budget,
+    const protocol::SourceExecutionClosure *sourceClosure,
+    const llvm::DenseSet<Operation *> *fixedBindings) {
   auto *block = builder.getInsertionBlock();
   auto function =
       block ? dyn_cast<func::FuncOp>(block->getParentOp()) : func::FuncOp();
@@ -1109,7 +1118,8 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
                                        policy, &work);
   Realizer realizer(owner, builder, work, mathematical::mathematicalRecipes(),
                     &scope, false, policy.numericalExpressions, callback,
-                    &control, occurrenceName, budget);
+                    &control, occurrenceName, budget, sourceClosure,
+                    fixedBindings);
   auto result = realizer.emitBody(source, inputs, policy.finiteBulk);
   if (succeeded(result))
     scope.complete();

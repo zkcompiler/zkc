@@ -456,13 +456,34 @@ leaves the original and caller-owned occurrence output unchanged. This edge
 does not select a numerical implementation, add native participant completion,
 or admit an unresolved source helper as a native executable.
 
-## Checked ordered finite preparation
+## Checked finite preparation
 
-Ordered scoped folds and collections are expanded before optional numerical
-selection. Their callbacks may stop or carry affine state; a total numerical
-formula has a separate contract. Each callback occurrence receives its own
-actual mathematical requests and qualified sites. Selection can then choose or
-fall back independently for those occurrences.
+Scoped folds and collections have ordered callback semantics, including stops
+and affine state. Preparation preserves this route for arbitrary admitted
+callbacks. It can select bulk payloads only for the checked mathematical
+fragment, after the complete reached domain admission and shape guards.
+
+Recognition uses invocation-local mathematical SSA storage derived from the
+already admitted immutable source closure. It substitutes actual data ports
+through ordinary scoped helper calls and numerical requests. It visits unused
+operations too, preserves original numerical-call policies, and declines stops,
+controls, guards and pinned implementations. Explicit physical binding
+requests constrain the producer and independent reader in the same way,
+including requests on unused callback operations. This temporary storage changes no
+source definition and is not replacement evidence. Indexed-access replacement
+additionally requires the actual bound and extent premises.
+
+The independent bulk reader interprets the original scoped callback and plain
+mathematical callees into its own ring or module terms. It reads actual operands,
+returned coordinates, contract arguments, implementation pins and call policies;
+it does not consume the producer's projected SSA, selected equation or access
+classification. Replacement laws preserve the stated values and shape refusals
+under their primitive contracts and sufficient capacity, rather than identical
+allocation or exhaustion behavior.
+
+Callbacks that remain ordered receive their own actual mathematical requests
+and qualified sites. Subsequent numerical selection can choose or fall back
+independently for those occurrences.
 
 The producer substitutes callbacks under the borrowed scope and preserves
 reached descriptor admission, predicate ordering, zero-trip seed return,
@@ -470,7 +491,11 @@ collection construction, outlined completion and first-stop behavior. Nested
 requests use the same construction and occurrence-byte accounts. Each emitted
 instruction reserves a conservative allowance for its CFG plumbing before
 allocation; domain visits and callback copies also debit shared work. Refusal
-discards the private candidate without modifying the source.
+discards the private candidate without modifying the source. Optional
+construction is capped by the separate discard reserve. An optional comparison-capacity refusal may discard
+the proposal and retry the ordered route with independent checking; only
+performed construction transfers to that reserve. Matching and checking remain
+cumulative. Required admission exhaustion and semantic mismatches refuse.
 
 The physical transaction retains the actual finite-prepared module alongside
 the selected numerical module. Its independent validation checks both edges:
