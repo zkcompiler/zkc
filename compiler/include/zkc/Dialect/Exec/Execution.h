@@ -76,6 +76,10 @@ struct SourceExecutionClosure {
 };
 llvm::Expected<SourceExecutionClosure>
 readSourceExecutionClosure(mlir::Operation *symbolTable);
+/// Read the fully realized native profile with its actual SSA/control
+/// association. No ordinary helper or mathematical requests are admitted.
+llvm::Expected<SourceExecutionClosure>
+readExecutionClosure(mlir::Operation *symbolTable, bool physical);
 /// Independently compare current actual CFG with admitted native definitions.
 /// Allows SSA renaming; checks all actual bodies and bindings without calling
 /// the reconstruction reader or replaying emission. No source theorem is

@@ -8,6 +8,8 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Relation/IR/Assets.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -192,6 +194,17 @@ class ExecutionModelReader {
   }
   bool callTypes(Operation *op, StringRef callee) {
     Operation *definition = SymbolTable::lookupSymbolIn(root, callee);
+    if (isa<protocol_ir::LocalCallOp>(op)) {
+      auto function = dyn_cast_or_null<func::FuncOp>(definition);
+      auto type = function ? function.getFunctionType() : FunctionType();
+      auto outcome = type && type.getNumResults() == 1
+                         ? dyn_cast<exec::OutcomeType>(type.getResult(0))
+                         : exec::OutcomeType();
+      return (function && isScopedExecutionFunction(function) && outcome &&
+              op->getOperandTypes() == type.getInputs().drop_front() &&
+              op->getResultTypes() == outcome.getPayload()) ||
+             (fail("interactive-call-type"), false);
+    }
     bool kind =
         isa_and_nonnull<zkc::local::FuncOp>(definition) ||
         (isa<zkc::local::ApplyOp>(op) &&
@@ -320,6 +333,18 @@ class ExecutionModelReader {
         out.push_back({site, program::LocalApply{call.getCallee().str(),
                                                  names(op->getOperands(), env),
                                                  results(op, env)}});
+      } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
+        auto participant = op->getParentOfType<protocol_ir::ParticipantOp>();
+        if (local || !participant ||
+            call.getRoleAttr() != participant.getRoleAttr() ||
+            !attributes(op, {"site", "callee", "role"}) ||
+            !callTypes(op, call.getCallee())) {
+          fail("interactive-local-symbol");
+          return {};
+        }
+        out.push_back({site, program::LocalCall{call.getCallee().str(),
+                                                names(op->getOperands(), env),
+                                                results(op, env)}});
       } else if (auto call = dyn_cast<zkc::local::CallOp>(op)) {
         if (local || !attributes(op, {"site", "callee"}) ||
             !callTypes(op, call.getCallee())) {
@@ -758,7 +783,32 @@ public:
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;
+    bool scoped =
+        (allowLogicalKernels && !physical) ||
+        any_of(root->getRegion(0).front().getOps<func::FuncOp>(),
+               [](func::FuncOp f) { return isScopedExecutionFunction(f); });
+    if (scoped) {
+      if (allowLogicalKernels && !physical) {
+        auto closure = readSourceExecutionClosure(root);
+        if (!closure)
+          return closure.takeError();
+        participants.functions = std::move(closure->definitions.functions);
+        append_range(kernelRealizations, closure->computations);
+      } else {
+        auto definitions = readExecutionDefinitions(root, physical);
+        if (!definitions)
+          return definitions.takeError();
+        participants.functions = std::move(definitions->functions);
+      }
+    }
     for (auto &op : root->getRegion(0).front()) {
+      if (scoped && isa<func::FuncOp, data::DomainOp>(op)) {
+        // The complete source closure checks every mathematical/domain
+        // declaration. Publication accepts only the resolved native profile.
+        if (isa<data::DomainOp>(op) && (!allowLogicalKernels || physical))
+          return error("execution-unresolved-domain");
+        continue;
+      }
       if (isa<algebra::MapRealizeOp>(op)) {
         if (!allowMapRequests)
           return error("algebra-map-context");

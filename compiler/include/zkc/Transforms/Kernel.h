@@ -15,6 +15,10 @@ namespace zkc::kernel {
 mlir::LogicalResult formCalculation(local::FuncOp wrapper,
                                     mlir::Operation *sourceOwner,
                                     MathematicalSelectionPolicy policy);
+/// Form the scoped Func/CF calculation and retain its mathematical closure.
+mlir::LogicalResult formCalculation(mlir::func::FuncOp wrapper,
+                                    mlir::Operation *sourceOwner,
+                                    MathematicalSelectionPolicy policy);
 /// Materialize logical invocations into the existing Local execution
 /// vocabulary, retaining each call's policy. Numerical alternatives belong to
 /// individual source occurrences; the reader checks their actual payloads.

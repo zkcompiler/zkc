@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
@@ -781,7 +782,7 @@ struct MetadataVerifier {
         StringRef expected = operation.getValue();
         if (kind.getValue() == "protocol.guard" &&
             unit.getProfile() != protocol_ir::Profile::Participant)
-          expected = "local.call";
+          expected = "protocol.local_call";
         auto found = occurrences[participant].find(site);
         if (found == occurrences[participant].end() ||
             found->second.second->getName().getStringRef() != expected ||
@@ -891,64 +892,77 @@ struct MetadataVerifier {
               : protocol_ir::ParticipantOp();
       auto callee =
           calleeRef
-              ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, calleeRef)
-              : local::FuncOp();
+              ? tables.lookupNearestSymbolFrom<func::FuncOp>(record, calleeRef)
+              : func::FuncOp();
       if (!participant || !seenParticipants.count(participant) || !callee ||
-          !site || !calculations.insert({participant, site}).second)
+          callee.getNumArguments() == 0 || callee.getNumResults() != 1 ||
+          !isa<runtime::ScopeType>(callee.getArgumentTypes().front()) ||
+          !isa<exec::OutcomeType>(callee.getResultTypes().front()) || !site ||
+          !calculations.insert({participant, site}).second)
         return refuse(record, "invalid calculation symbol reference");
       if ((retainedActions.count({participant, site}) &&
            !requiredCalculations.count({participant, site})) ||
           authoredCallees.count(calleeRef))
         return refuse(record, "calculation origin overlaps authored execution");
-      for (auto type : callee.getArgumentTypes()) {
+      for (auto type : callee.getArgumentTypes().drop_front()) {
         auto policy = types.get(logicalType(type));
         if (!policy || !policy->total)
           return refuse(record, "calculation has a non-total input type");
       }
-      for (auto type : callee.getResultTypes()) {
+      for (auto type : cast<exec::OutcomeType>(callee.getResultTypes().front())
+                           .getPayload()) {
         auto policy = types.get(logicalType(type));
         if (!policy || !policy->total)
           return refuse(record, "calculation has a non-total result type");
       }
       auto found = occurrences[participant].find(site);
-      auto call = found == occurrences[participant].end()
-                      ? local::CallOp()
-                      : dyn_cast<local::CallOp>(found->second.second);
+      auto call =
+          found == occurrences[participant].end()
+              ? protocol_ir::LocalCallOp()
+              : dyn_cast<protocol_ir::LocalCallOp>(found->second.second);
       if (!call || call.getCalleeAttr() != calleeRef)
         return refuse(record,
                       "calculation origin does not name one invocation");
+    }
+
+    std::optional<protocol::SourceExecutionClosure> closure;
+    if (!requiredCalculations.empty()) {
+      auto value = unit.getProfile() == protocol_ir::Profile::Physical
+                       ? protocol::readExecutionClosure(unit, true)
+                       : protocol::readSourceExecutionClosure(unit);
+      if (!value)
+        return diagnostics::emit(record.emitOpError(), value.takeError());
+      closure = std::move(*value);
     }
     for (auto occurrence : requiredCalculations) {
       if (!calculations.count(occurrence))
         return refuse(record,
                       "guard is missing its generated calculation origin");
-      auto call = cast<local::CallOp>(
+      auto call = cast<protocol_ir::LocalCallOp>(
           occurrences[occurrence.first].lookup(occurrence.second).second);
-      auto function = tables.lookupNearestSymbolFrom<local::FuncOp>(
-          call, call.getCalleeAttr());
-      if (!function || !hasSingleElement(function.getBody()))
+      auto found = closure->bodies.find(call.getCallee().str());
+      if (found == closure->bodies.end())
         return refuse(record,
-                      "guard calculation requires an executable function");
-      SmallVector<Operation *> body;
-      for (auto &op : function.getBody().front())
-        if (!isa<plan::ReleaseOp>(op))
-          body.push_back(&op);
-      auto guard = body.size() >= 2
-                       ? dyn_cast<local::LocalIfOp>(body[body.size() - 2])
-                       : local::LocalIfOp();
-      if (!guard || !isa<local::ReturnOp>(body.back()) ||
-          guard.getNumOperands() != 1 || guard.getNumResults() ||
-          !hasSingleElement(guard.getThenRegion()) ||
-          !hasSingleElement(guard.getElseRegion()))
+                      "guard calculation requires an admitted scoped function");
+      SmallVector<const protocol::SourceExecutionStep *> body;
+      for (const auto &step : found->second)
+        if (!isa<runtime::ReleaseBindingsOp>(step.operation))
+          body.push_back(&step);
+      auto *guard = body.size() >= 2 ? body[body.size() - 2] : nullptr;
+      if (!guard || !isa<exec::TestOp>(guard->operation) ||
+          !isa<exec::ReturnOp, exec::CompleteOp>(body.back()->operation) ||
+          guard->inputs.size() != 1 || !guard->outputs.empty() ||
+          guard->regions.size() != 2)
         return refuse(record,
                       "guard calculation lost its final conditional rejection");
-      auto &yes = guard.getThenRegion().front(),
-           &no = guard.getElseRegion().front();
-      if (!hasSingleElement(yes) || !hasSingleElement(no) ||
-          !isa<local::LocalYieldOp>(yes.front()) ||
-          !isa<local::StopOp>(no.front()))
+      func::FuncOp yesRegion = guard->regions[0], noRegion = guard->regions[1];
+      const auto &yes = closure->bodies.at(yesRegion.getSymName().str());
+      const auto &no = closure->bodies.at(noRegion.getSymName().str());
+      if (yes.size() != 1 || no.size() != 1 ||
+          !isa<exec::CompleteOp>(yes[0].operation) ||
+          !isa<exec::RejectOp>(no[0].operation))
         return refuse(record, "guard calculation changed its branch outcomes");
-      auto stop = cast<local::StopOp>(no.front());
+      auto stop = cast<exec::RejectOp>(no[0].operation);
       if (stop.getReason() != "reject" ||
           stop.getSiteAttr() != call.getSiteAttr())
         return refuse(record,
@@ -962,7 +976,7 @@ struct MetadataVerifier {
               record,
               "participant action is missing from retained occurrences");
         if (calculations.count({participant, site}) &&
-            !isa<local::CallOp>(occurrence.second))
+            !isa<protocol_ir::LocalCallOp>(occurrence.second))
           return refuse(record, "calculation origin names a non-call action");
       }
     return success();

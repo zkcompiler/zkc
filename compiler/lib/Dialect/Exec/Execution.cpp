@@ -113,9 +113,7 @@ public:
   auto takeBodies() { return std::move(sourceBodies); }
   void recordBody(func::FuncOp function,
                   std::vector<SourceExecutionStep> body) {
-    if (mathematicalCalls)
-      sourceBodies.insert_or_assign(function.getSymName().str(),
-                                    std::move(body));
+    sourceBodies.insert_or_assign(function.getSymName().str(), std::move(body));
   }
   bool computation(exec::ComputeOp call, std::string &name) {
     if (!source || !mathematicalCalls ||
@@ -939,6 +937,17 @@ readExecutionDefinitions(Operation *symbolTable, bool physical) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
     return error("execution-cfg", "invalid execution definition scope");
   return Reader(symbolTable, physical).run(/*mixed=*/true);
+}
+Expected<SourceExecutionClosure> readExecutionClosure(Operation *symbolTable,
+                                                      bool physical) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
+    return error("execution-cfg", "invalid execution definition scope");
+  Reader reader(symbolTable, physical);
+  auto definitions = reader.run(/*mixed=*/true);
+  if (!definitions)
+    return definitions.takeError();
+  return SourceExecutionClosure{
+      std::move(*definitions), {}, {}, reader.takeBodies()};
 }
 Expected<program::LocalDefinitions>
 readSourceExecutionDefinitions(Operation *symbolTable) {

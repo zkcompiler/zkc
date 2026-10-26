@@ -138,6 +138,13 @@ protocol Run roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return work(x,n);}
 fn fail(x:Fr)->Fr{stop "reject";}
 fn work(x:Fr)->Fr{let y=fail(x);return x+y;}
 protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
+)"},
+    {"participant mathematical demand", R"(
+math fn square(x:Fr)->Fr{return x*x;}
+protocol Run roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return square(x)+y;}
+)"},
+    {"participant direct and computed guards", R"(
+protocol Run roles(P)(x:Fr@P,y:Fr@P,go:bool@P)->(r:Fr@P){require @P go;require @P x==y;return x+y;}
 )"}};
 struct Fixture {
   CheckedProject checked;
@@ -204,6 +211,24 @@ int main() {
                   &candidate->getBody()->front())),
               "projection changed the authored closure");
     });
+    cases.run((llvm::Twine("prepare ") + sample.name).str(), [&] {
+      Fixture fixture(context, sample);
+      auto candidate = OwningOpRef<ModuleOp>(
+          cast<ModuleOp>(fixture.module->getOperation()->clone()));
+      PassManager manager(&context);
+      manager.addPass(protocol::createProjectProtocolPass());
+      require(succeeded(manager.run(*candidate)),
+              "preparation projection failed");
+      auto expanded = protocol::expandScopedHelpers(*candidate);
+      require(bool(expanded), "preparation helper expansion failed");
+      PassManager lowering(&context);
+      lowering.addPass(protocol::createLowerMathPass());
+      require(succeeded(lowering.run(*candidate)),
+              "scoped mathematical preparation failed");
+      require(succeeded(mathematical::verifyProjectionPreserved(*expanded,
+                                                                *candidate)),
+              "scoped preparation correspondence failed");
+    });
   }
   auto projected = [&](Fixture &fixture) {
     auto candidate = OwningOpRef<ModuleOp>(
@@ -227,6 +252,85 @@ int main() {
               "independent expansion check accepted a changed computation");
     });
   };
+  auto preparedMutation = [&](StringRef name, unsigned sample, auto edit,
+                              bool formed = true) {
+    cases.run(name, [&] {
+      Fixture fixture(context, samples[sample]);
+      auto projectedSource = projected(fixture);
+      auto original = protocol::expandScopedHelpers(*projectedSource);
+      require(bool(original), "preparation source fixture failed");
+      auto candidate =
+          OwningOpRef<ModuleOp>(cast<ModuleOp>((*original)->clone()));
+      PassManager lowering(&context);
+      lowering.addPass(protocol::createLowerMathPass());
+      require(succeeded(lowering.run(*candidate)),
+              "preparation fixture failed");
+      edit(*candidate);
+      ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+      if (formed) {
+        require(succeeded(verify(*candidate)),
+                "preparation mutation lost admission");
+        require(failed(mathematical::verifyProjectionPreserved(*original,
+                                                               *candidate)),
+                "preparation changed semantics without detection");
+      } else {
+        require(failed(verify(*candidate)),
+                "malformed calculation was admitted");
+      }
+    });
+  };
+  preparedMutation("prepared mathematical invocation swaps actual captures", 17,
+                   [&](ModuleOp module) {
+                     bool changed = false;
+                     module.walk([&](protocol_ir::LocalCallOp call) {
+                       if (!changed && call.getNumOperands() == 2) {
+                         auto first = call->getOperand(0);
+                         call->setOperand(0, call->getOperand(1));
+                         call->setOperand(1, first);
+                         changed = true;
+                       }
+                     });
+                     require(changed, "missing generated calculation");
+                   });
+  preparedMutation(
+      "prepared calculation changes its actual equation", 17,
+      [&](ModuleOp module) {
+        bool changed = false;
+        module.walk([&](mlir::Operation *op) {
+          auto unit = op->getParentOfType<ModuleOp>();
+          if (!changed && unit && unit->hasAttr("exec.computation") &&
+              op->getName().getStringRef() == "algebra.field_add") {
+            op->setOperand(1, op->getOperand(0));
+            changed = true;
+          }
+        });
+        require(changed, "missing retained equation");
+      });
+  preparedMutation("preparation retains original mathematical definitions", 17,
+                   [&](ModuleOp module) {
+                     auto &owner = module.getBody()->front();
+                     for (auto function :
+                          owner.getRegion(0).front().getOps<func::FuncOp>())
+                       if (!protocol::isScopedExecutionFunction(function)) {
+                         function.erase();
+                         return;
+                       }
+                     require(false, "missing original mathematical helper");
+                   });
+  preparedMutation(
+      "prepared guard cannot reverse its branch outcomes", 18,
+      [&](ModuleOp module) {
+        SmallVector<func::CallOp> calls;
+        module.walk([&](func::CallOp call) {
+          if (!call->hasAttr("runtime.site"))
+            calls.push_back(call);
+        });
+        require(calls.size() >= 2, "missing generated guard branches");
+        auto first = calls[0].getCalleeAttr();
+        calls[0].setCalleeAttr(calls[1].getCalleeAttr());
+        calls[1].setCalleeAttr(first);
+      },
+      false);
   expandedMutation("expanded primitive uses a different operand",
                    [&](ModuleOp module) {
                      bool changed = false;

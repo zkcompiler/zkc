@@ -70,8 +70,10 @@ control, and the independent Lean reader exercises fresh branches, loops,
 stops, mathematical calls and ordered finite callbacks. Preparation and
 participant projection retain the complete scoped/mathematical helper and
 domain closure, with actual-body preservation checks. Projected local calls
-remain Protocol actions and must match their participant's role. Executable
-preparation, physical selection and publication still require migration before
+remain Protocol actions and must match their participant's role. Participant
+mathematical preparation now expands scoped helpers and creates scoped
+calculations with typed mathematical requests and explicit guard outcomes.
+Numerical realization, physical selection and publication still require migration before
 this becomes a complete default source-to-executable path. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
@@ -79,8 +81,9 @@ Checked scoped helper expansion substitutes actual SSA bodies, preserves
 uncharged helper returns and charged control yields, and normalizes aliased
 immutable capture ports together. Its separate reader checks virtual source
 substitution against the actual candidate and recovers full occurrence paths.
-It is tested as a transformation component; default executable preparation
-still needs to consume this edge before selecting and publishing native work.
+Default participant preparation consumes this checked edge before outlining
+mathematical demands. Logical participant admission also checks retained finite
+callback edges and affine state roots; unresolved requests cannot be published.
 
 Typed `exec.compute` formation resolves actual private source mathematical
 helpers or sibling computation entries, checks logical ports, and borrows the

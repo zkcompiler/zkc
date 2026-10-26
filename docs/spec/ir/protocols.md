@@ -454,7 +454,7 @@ origins distinguish generated calculation sites from retained source action occu
 Retained interfaces are immutable through lowering and physical selection. A
 guard's retained target remains `local.guard`, describing the original projection.
 The checked profile derives whether its current implementation must be that guard
-or a generated `local.call`; lowering does not rewrite source facts. Only the
+or a generated `protocol.local_call`; lowering does not rewrite source facts. Only the
 separate generated-calculation list is added during lowering.
 
 The enclosing protocol module owns full metadata/profile verification. The
@@ -483,7 +483,7 @@ closed admission. Executable local bodies are outside that optimization scope.
 
 `zkc-project-protocol` produces `participant`. It clones demanded total
 expressions into each role, preserves all advertised ports, and creates
-`protocol.send`, `protocol.receive`, service queries, authored `local.call`, and `local.guard`
+`protocol.send`, `protocol.receive`, service queries, authored `protocol.local_call`, and `local.guard`
 occurrences. It creates no new executable calculation functions or bindings.
 Receive results are actual environment replies. The sender's exchange result
 aliases its sent component; that fact grants no equality at the receiver.
@@ -494,17 +494,20 @@ after role projection while preserving the original interface and ordered
 actions. Every resulting candidate must pass closed admission and the frozen
 interface postcondition.
 
-`zkc-lower-math` separately produces `exec` with logical Kernel units. For every local
+`zkc-lower-math` first applies independently checked scoped helper substitution.
+It then produces `exec` with retained mathematical computation units. For every local
 action or finish cut, it finds total dependencies not previously computed and
 schedules them in dependency order with source-order tie breaking. Work starts
 at its first consumer, so an earlier guard cannot trigger unrelated later
 calculations. A value needed at several cuts is computed once and passed as a
-participant SSA result to later calls. Each generated `local.func` has one invocation and takes and
-returns only total mathematical data. Unused result ports are removed after
+participant SSA result to later calls. Each generated scoped `func.func` has one
+`protocol.local_call` invocation and exposes only total mathematical data at that
+participant boundary. Unused result ports are removed after
 original participant expressions have been erased; this does not remove executable
 work inside the generated function. A guard ends its calculation segment
-with `local.if`: true continues through `local.yield`; false executes
-`local.stop` with explicit reason `reject`. The function can have no results.
+with `exec.test` and checked Func/CF branches: true continues through a charged
+`exec.complete`; false executes `exec.reject` with explicit reason `reject`.
+The scoped function may have an empty outcome payload.
 The false arm stops that participant before its next action. A failure to read the
 Boolean representation remains a backend failure.
 
@@ -520,11 +523,14 @@ Boolean kernels; selection uses local conditional control with already evaluated
 data captures. A literal uses the
 [native participant instruction](../formats/program.md).
 
-Each total calculation becomes an owned numerical entry invoked from its Local
-wrapper. The guard remains outside that unit. Verification checks this logical
-`exec` candidate before publication. `zkc-lower-kernels` subsequently applies
-checked recipes at each Local invocation and removes every numerical unit;
-physical selection invokes this edge before constructing its plan.
+Each total calculation becomes an owned numerical entry invoked by typed
+`exec.compute` from its scoped wrapper. The guard remains outside that unit.
+Root packaging uses `exec.returned`; native participant completion belongs to
+the subsequent checked executable realization. All original mathematical,
+scoped and domain definitions survive this preparation edge. Verification
+checks the logical candidate before publication. Numerical realization must
+consume every request before physical publication; the current migration
+coverage is recorded in [implementation status](../../status.md).
 
 The Transforms component then compares the verified `exec` candidate against its
 frozen `participant` input. This closed postcondition independently walks source
@@ -533,7 +539,8 @@ order. Kernel realization separately checks the generated executable recipes. It
 returned values, guard conditions and rejection, and ordered action operands.
 Entry arguments and actual receive/call/query results are distinct SSA anchors.
 Every generated calculation is a fresh symbol with one invocation and its own
-logical origin. Only these functions, their numerical units and accounted recipe bindings may be
+logical origin. Only these functions, their closed control bodies, their numerical
+units and accounted recipe bindings may be
 added to the frozen symbol table. Extra work, recomputation and
 work moved across an earlier cut refuse. The traversal uses explicit worklists
 and a shared limit of one million operation/operand comparison units for the

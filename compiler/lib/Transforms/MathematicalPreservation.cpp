@@ -172,12 +172,9 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
                                   profile == protocol_ir::Profile::Participant;
   auto retained = [&](Operation *op,
                       const llvm::DenseSet<Operation *> &mapHelpers) {
-    if (auto function = dyn_cast<func::FuncOp>(op))
-      return retainsMathematics ||
-             protocol::isScopedExecutionFunction(function) ||
-             mapHelpers.contains(op);
+    if (isa<func::FuncOp, data::DomainOp>(op))
+      return true;
     return mapHelpers.contains(op) ||
-           (retainsMathematics && isa<data::DomainOp>(op)) ||
            isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
                runtime::BindingOp>(op);
   };

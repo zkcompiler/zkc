@@ -240,6 +240,21 @@ int main() {
     refuse(protocol::admitNativeLocalDefinitions(model, {fold()}),
            "mathematical-formation");
   });
+  cases.run("logical participants preserve dormant finite callback roots", [&] {
+    auto definitions = fixture();
+    Participants model;
+    model.stage = Participants::Stage::Logical;
+    model.bindings = definitions.bindings;
+    model.functions = definitions.functions;
+    require(!protocol::admit(model, {fold()}),
+            "logical finite participant closure was refused");
+    model.functions[0].body = {
+        {"fresh", Operation{"create", {}, {}, {"fresh"}}},
+        {"", Return{{"fresh"}}}};
+    refuse(protocol::admit(model, {fold()}), "mathematical-formation");
+    model.stage = Participants::Stage::Physical;
+    refuse(protocol::admit(model, {fold()}), "local-realization-context");
+  });
   cases.run("finite fold cannot exchange equal-typed state slots", [&] {
     auto model = fixture();
     model.functions[0].arguments.push_back({"other", resource});

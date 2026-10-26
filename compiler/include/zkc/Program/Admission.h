@@ -27,9 +27,11 @@ admitNativeLocalDefinitions(const program::LocalDefinitions &,
 /// Check executable formation and local definitions.
 /// The model interface does not require an MLIR context.
 llvm::Error admit(const program::Participants &);
-/// Internal validation of logical Participants with admitted Total signatures.
-/// Only local.apply inside local functions may reference these realizations;
-/// this does not permit unresolved calls in physical programs or publication.
+/// Internal validation of logical Participants with admitted mathematical and
+/// finite signatures, including the actual callback edges and affine fold
+/// roots. Only local.apply inside local functions may reference these
+/// realizations; this does not permit unresolved calls in physical programs or
+/// publication.
 llvm::Error admit(const program::Participants &,
                   llvm::ArrayRef<LocalRealization> realizations);
 } // namespace zkc::protocol

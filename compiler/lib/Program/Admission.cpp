@@ -796,13 +796,10 @@ class Admission {
     return problem.empty();
   }
 
-  Error seedRealizations(ArrayRef<LocalRealization> realizations,
-                         bool totalOnly = false) {
+  Error seedRealizations(ArrayRef<LocalRealization> realizations) {
     unsigned typeWork = 200000;
     bool limited = false;
     for (const auto &realization : realizations) {
-      if (totalOnly && realization.kind != LocalRealization::Kind::Total)
-        return error("local-realization-signature");
       if (realization.kind == LocalRealization::Kind::Total
               ? !realization.callbacks.empty()
               : (realization.callbacks.empty() ||
@@ -888,12 +885,15 @@ public:
                                    realizations.size();
     if (realizations.size() > 4096 || definitionCount > 4096)
       return error("interactive-definition-limit");
-    if (auto e = seedRealizations(realizations, true))
+    if (auto e = seedRealizations(realizations))
       return e;
     logicalRealizations = true;
     if (auto e = program::detail::checkNativeIRStructure(module, true))
       return e;
-    return checkRoot(module);
+    if (auto e = checkRoot(module))
+      return e;
+    return program::detail::verifyFiniteResourceOrigins(
+        {module.bindings, module.functions}, realizations);
   }
   template <typename Root> Error run(const Root &root) {
     if (auto e = program::detail::checkNativeIRStructure(root))
