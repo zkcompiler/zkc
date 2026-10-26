@@ -99,11 +99,12 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     PIR.Process.runM, PIR.Execution.followM, PIR.Process.bind, sortsMatch,
     queryOrigin, templateOrigin, Template.origin, Template.qualify, Template.repeats,
     Template.applicationPrefix, atCoordinates, Context.query, Context.role, Origin.query,
-    Structured.qualifyProtocolSite, context, query, decimal, decimalDigit, Domain.read,
+    Structured.qualifyProtocolSite, context, Context.fiatShamir, query, decimal, decimalDigit, Domain.read,
     Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, drawRequest, Request.draw,
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
-    Domain.Payload.value, bind, pure,
+    Domain.Payload.value, Context.replacement?, Context.suite, Context.contract,
+    Context.request, Context.service, Structured.Ty.isService, bind, pure,
     Domain.PairExecution.Success, Domain.acceptanceAt]
 theorem perfect : Honest.failure computation (Domain.PairExecution.Success 0) = 0 := by
   classical

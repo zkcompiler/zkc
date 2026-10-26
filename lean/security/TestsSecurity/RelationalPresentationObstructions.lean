@@ -79,7 +79,10 @@ theorem collapsed_has_no_target_reading :
     have same : reply false = reply true := Subsingleton.elim _ _
     rw [same] at low
     have impossible := low.symm.trans high
-    simp [fullResult] at impossible
+    simp only [fullResult, PIR.Process.done.injEq, Domain.Result.mk.injEq,
+      List.cons.injEq, Domain.Value.data.injEq, and_true, true_and] at impossible
+    have same := (Domain.Payload.mk_inj (carriers := carriers) (ty := .boolean)).mp impossible
+    cases same
 
 abbrev sendSignature : PIR.Signature := ⟨Unit, fun _ => Bool⟩
 
