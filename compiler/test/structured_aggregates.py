@@ -23,7 +23,7 @@ with case('sequence fold retains exact nominal product and components'):
              [['bool'], ['field', 'bls12-381.fr']]]
     sequence = ['sequence', query]
     assert definitions['main'][4] == [sequence]
-    assert snapshot[4] == [['domain', 'queries', [sequence], ['elements', 0]]]
+    assert snapshot[4] == [['domain', 'queries', [sequence], [['elements', 0]], 0]]
     assert definitions['step'][4] == [['bool'], query, sequence]
     body = definitions['step'][9][1]
     assert body[0][:4] == [['product.get', 0], [1], [['bool']], []]

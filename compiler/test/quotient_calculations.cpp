@@ -4,6 +4,8 @@
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -12,6 +14,8 @@ using namespace mlir;
 using namespace llvm;
 using namespace zkc;
 using zkc::test::require;
+namespace sf = zkc::test::scopedFinite;
+namespace sc = zkc::test::scopedComputation;
 namespace {
 template <class T> T take(Expected<T> value) {
   if (!value) {
@@ -113,18 +117,23 @@ int main() {
       require(bool(candidate), "missing candidate");
       auto changed = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
       OpBuilder builder(&context);
-      auto *project = first(*changed, "poly.exec.quotient_project");
-      auto *product = first(*changed, "poly.exec.quotient_multiply");
+      auto project = sf::application(*changed, "quotient.project");
+      auto product = sf::application(*changed, "quotient.multiply");
       if (mutation == "modulus" || mutation == "degree") {
-        auto *constant =
-            project->getOperand(mutation == "modulus" ? 1 : 2).getDefiningOp();
+        auto value = project.getInputs()[mutation == "modulus" ? 1 : 2];
+        exec::ApplyOp constant;
+        for (auto op : sf::applications(*changed, "index.constant"))
+          if (sc::payload(op).front() == value)
+            constant = op;
+        require(bool(constant), "missing quotient parameter producer");
         constant->setAttr(
             "parameters",
             builder.getStrArrayAttr({mutation == "modulus" ? "19" : "8"}));
       } else if (mutation == "operand") {
-        product->setOperand(0, product->getOperand(1));
+        product.getInputsMutable()[0].set(product.getInputs()[1]);
       } else if (mutation == "return") {
-        first(*changed, "local.return")->setOperand(0, project->getResult(0));
+        first(*changed, "exec.returned")
+            ->setOperand(0, sc::payload(project).front());
       } else if (mutation == "site") {
         product->setAttr("site", builder.getStringAttr("unrelated"));
       } else {
@@ -132,7 +141,7 @@ int main() {
         auto binding = SymbolTable(owner).lookup<runtime::BindingOp>(
             product->getAttrOfType<FlatSymbolRefAttr>("binding").getValue());
         if (mutation == "contract") {
-          auto *difference = first(*changed, "poly.exec.quotient_subtract");
+          auto difference = sf::application(*changed, "quotient.subtract");
           product->setAttr("binding", difference->getAttr("binding"));
         } else {
           binding.setImplementation("native/quotient.multiply");
@@ -140,6 +149,7 @@ int main() {
       }
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
+      require(succeeded(verify(*changed)), "quotient mutation lost formation");
       require(failed(kernel::verifyEntryRecipes(*unit, *changed, "quotient")),
               "altered recipe accepted");
     });
