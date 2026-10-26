@@ -1,5 +1,6 @@
 """Retained primitive bindings, unchanged library closures, and independent SSA laws."""
 import hashlib
+import itertools
 import json
 from pathlib import Path
 
@@ -64,6 +65,33 @@ def binding(contract, name='operation', implementation=''):
             ',arguments=' + json.dumps(arguments) + ',implementation=' + json.dumps(implementation) + '} : ()->()')
 
 
+def invocation(operation, inputs, outputs, attributes, values=None, names=None, label='value'):
+    values = values if values is not None else [f'%a{i}' for i in range(len(inputs))]
+    names = names if names is not None else ['%r'] if len(outputs) == 1 else [f'%r{i}' for i in range(len(outputs))]
+    outcome = f'!exec.outcome<({",".join(outputs)})>' if outputs else '!exec.outcome<>'
+    operands = ','.join(['%scope', *values])
+    types = ','.join(['!runtime.scope', *inputs])
+    arguments = ','.join(f'{name}:{ty}' for name, ty in zip(names, outputs))
+    return f'''%{label}_attempt = "{operation}"({operands}) {{{attributes}}} : ({types})->{outcome}
+"exec.dispatch"(%{label}_attempt)[^{label},^failed] : ({outcome})->()
+^{label}({arguments}):'''
+
+
+def scoped_function(name, inputs, outputs, body, results, private=False):
+    args = ','.join(['%scope:!runtime.scope', *[f'%a{i}:{t}' for i, t in enumerate(inputs)]])
+    outs = ','.join(outputs)
+    outcome = f'!exec.outcome<({outs})>' if outputs else '!exec.outcome<>'
+    failure = f'''^failed(%reason:!exec.stop):
+%failure = "exec.failed"(%reason) : (!exec.stop)->{outcome}
+func.return %failure : {outcome}''' if '^failed' in body else ''
+    return f'''func.func {'private ' if private else ''}@{name}({args})->{outcome} attributes {{no_inline,runtime.origin=["{name}",[]]}} {{
+{body}
+%done = "exec.returned"({','.join(results)}) : ({outs})->{outcome}
+func.return %done : {outcome}
+{failure}
+}}'''
+
+
 def wrapped(inputs, outputs, body, results, declarations='', after=''):
     args = ','.join(f'%a{i}:{t}' for i, t in enumerate(inputs))
     actuals = ','.join(f'%a{i}' for i in range(len(inputs)))
@@ -73,10 +101,7 @@ def wrapped(inputs, outputs, body, results, declarations='', after=''):
     returned_results = '' if not outputs else '%result' if len(outputs) == 1 else ','.join(f'%result#{i}' for i in range(len(outputs)))
     return f'''module {{ "protocol.module"() ({{
 {declarations}
-"local.func"() ({{ ^entry({args}):
-{body}
-"local.return"({','.join(results)}) : ({outs})->()
-}}) {{sym_name="work",function_type=({ins})->({outs}),logical_origin=["work",[]]}} : ()->()
+{scoped_function('work', inputs, outputs, body, results)}
 "protocol.func"() ({{ ^entry({args}):
 {call_results}"protocol.local_call"({actuals}) {{callee=@work,role="P",site="call"}} : ({ins})->({outs})
 {after}
@@ -88,12 +113,9 @@ def wrapped(inputs, outputs, body, results, declarations='', after=''):
 def primitive(contract, parameters=(), drop=False, reverse=False, name='operation'):
     ins, outs = catalogue[contract]
     inputs, outputs = [ports[x] for x in ins], [ports[x] for x in outs]
-    actuals = ','.join(f'%a{i}' for i in range(len(inputs)))
-    result = '%r' if len(outputs) == 1 else f'%r:{len(outputs)}'
-    body = (f'{result} = "algebra.exec.{contract.replace(".", "_")}"({actuals}) '
-            f'{{binding=@{name},parameters={json.dumps(list(parameters))},site="primitive"}} : '
-            f'({",".join(inputs)})->({",".join(outputs)})')
-    results = ['%r'] if len(outputs) == 1 else [f'%r#{i}' for i in range(len(outputs))]
+    body = invocation('exec.apply', inputs, outputs,
+        f'binding=@{name},parameters={json.dumps(list(parameters))},site="primitive"')
+    results = ['%r'] if len(outputs) == 1 else [f'%r{i}' for i in range(len(outputs))]
     return wrapped(inputs, [] if drop else outputs, body,
                    [] if drop else list(reversed(results)) if reverse else results, binding(contract, name))
 
@@ -112,7 +134,7 @@ with case('all-fifteen-exact-bindings-and-descriptors'):
                                 [] if contract.startswith('index.') else ['bls12-381.fr'], '']]
         work = snapshot[7][0]
         op = work[9][1][0]
-        assert op[0] == ['exec', 'algebra.exec.' + contract.replace('.', '_'), 'operation', parameters]
+        assert op[0] == ['exec', 'exec.apply', 'operation', parameters]
         assert op[1] == list(range(len(inputs))) and len(op[2]) == len(outputs)
         assert op[3:] == [[], 'primitive']
         assert work[9][2] == ['return', list(range(len(outputs)))]
@@ -171,7 +193,7 @@ with case('renamed-binding-is-retained-without-helper-name-trust'):
     source = primitive('index.sub', name='index.mul')
     assert export(source)[6][0][1:3] == ['index.mul', 'index.sub']
     assert run(source, ['9', '2']) == returned(['7'])
-    changed = source.replace('index_sub', 'index_add').replace('contract="index.sub"', 'contract="index.add"')
+    changed = source.replace('contract="index.sub"', 'contract="index.add"')
     export(changed)
     assert run(changed, ['9', '2']) == returned(['11'])
 
@@ -205,7 +227,8 @@ with case('exact-binding-name-bound-and-table-bound'):
 
 base = primitive('index.add')
 for name, bad in [
-    ('kind-contract', base.replace('algebra.exec.index_add', 'algebra.exec.index_mul')),
+    ('binding-port-contract', base.replace('contract="index.add"', 'contract="index.less"')),
+    ('retired-per-primitive-operation', base.replace('exec.apply', 'algebra.exec.index_add')),
     ('domain-count', base.replace('arguments=[]', 'arguments=["bls12-381.fr"]')),
     ('missing-binding', base.replace('binding=@operation', 'binding=@missing')),
     ('wrong-symbol-kind', base.replace('binding=@operation', 'binding=@work')),
@@ -236,29 +259,27 @@ with case('nominal-domain-profile-on-unused-binding'):
 
 with case('binding-visibility-is-not-silently-dropped'):
     source = base.replace('implementation=""', 'implementation="",sym_visibility="private"')
-    export(source, refusal='interactive-unknown-attribute')
-    run(source, ['1', '2'], refusal='structured-reference-source')
+    reject_native(source, ['1', '2'])
 
-with case('exec-owner-and-pure-local-owner-remain-distinct'):
-    math = base.replace('"local.func"', '"func.func"').replace('"local.return"', '"func.return"')
-    math = math.replace('logical_origin=["work",[]]', 'sym_visibility="private"')
-    math = math.replace('"protocol.local_call"', '"func.call"').replace('callee=@work,role="P",site="call"', 'callee=@work')
+with case('scoped-invocations-and-pure-computations-remain-distinct'):
+    # A mathematical call cannot erase the implicit scope and outcome ABI.
+    math = base.replace('"protocol.local_call"', '"func.call"').replace('callee=@work,role="P",site="call"', 'callee=@work')
     reject_native(math, ['1', '2'])
     protocol = base.replace('"protocol.local_call"(%a0,%a1) {callee=@work,role="P",site="call"}',
-                            '"algebra.exec.index_add"(%a0,%a1) {binding=@operation,parameters=[],site="call"}')
+                            '"exec.apply"(%a0,%a1) {binding=@operation,parameters=[],site="call"}')
     reject_native(protocol, ['1', '2'])
-    pure = primitive('index.constant', ['0']).replace('"algebra.exec.index_constant"() {binding=@operation,parameters=["0"],site="primitive"}',
-                                                    '"data.index"() {value="0"}')
-    reject_native(pure, [])
+    pure = base.replace('%value_attempt =', '%unscoped = "data.index"() {value="0"} : ()->ui64\n%value_attempt =')
+    reject_native(pure, ['1', '2'])
 
 with case('primitive-sites-and-split-full-result-abi'):
-    duplicate = base.replace('"local.return"(%r)',
-        '%unused = "algebra.exec.index_add"(%a0,%a1) {binding=@operation,parameters=[],site="primitive"} : (ui64,ui64)->ui64\n"local.return"(%r)')
+    duplicate = base.replace('%done =', invocation('exec.apply', ['ui64', 'ui64'], ['ui64'],
+        'binding=@operation,parameters=[],site="primitive"', names=['%unused'], label='duplicate') + '\n%done =')
     reject_native(duplicate, ['1', '2'])
-    split = primitive('vector.split')
-    # Keep the helper/caller two-result signature but use a single-result exec.
-    bad = split.replace('%r:2 =', '%r =').replace(f'({vector})->({vector},{vector})', f'({vector})->({vector})', 1)
-    bad = bad.replace('"local.return"(%r#0,%r#1)', '"local.return"(%r,%r)')
+    # Keep the helper/caller two-result signature but use a single-result
+    # outcome and dispatch payload for the two-result primitive binding.
+    bad = wrapped([vector], [vector, vector],
+        invocation('exec.apply', [vector], [vector], 'binding=@operation,parameters=[],site="primitive"'),
+        ['%r', '%r'], binding('vector.split'))
     reject_native(bad, [['1', '2']])
 
 with case('same-helper-two-invocations-have-fresh-ssa-values'):
@@ -267,35 +288,73 @@ with case('same-helper-two-invocations-have-fresh-ssa-values'):
     export(source)
     assert run(source, ['7', '3']) == returned(['13'])
 
-with case('retained-unused-total-math-and-unsupported-dormant-local-arm'):
+with case('retained-unused-total-math-and-unsupported-dormant-scoped-arm'):
     unused = 'func.func private @dormant(%a:ui64,%b:ui64) -> i1 { %r = "data.index_less"(%a,%b) : (ui64,ui64)->i1\nreturn %r : i1 }'
     source = base.replace(binding('index.add'), unused + '\n' + binding('index.add'))
     export(source)
     assert run(source, ['1', '2']) == returned(['3'])
-    body = f'''"local.if"(%a0,%a1) ({{ ^yes(%xs:{vector}):
-      "local.yield"() : ()->()
-    }}, {{ ^no(%xs:{vector}):
-      %r = "algebra.exec.vector_product"(%xs) {{binding=@operation,parameters=[],site="dormant"}} : ({vector})->{field}
-      "local.yield"() : ()->()
-    }}) {{site="choose"}} : (i1,{vector})->()'''
-    source = wrapped(['i1', vector], [], body, [], binding('vector.product'))
-    export(source, refusal='structured-source-binding')
-    run(source, [True, []], refusal='structured-reference-binding')
+    path = commands.directory / 'dormant-arm.zkc'
+    path.write_text('''module dormant;
+domain Fr=field("bls12-381.fr");
+type Vector<F:Field>=builtin("vector",F);
+fn choose(go:bool,xs:Vector<Fr>,x:Fr)->Fr {
+  return if go {x} else {kernel<Fr>("vector.sum",xs)};
+}
+protocol Run roles(P)(go:bool@P,xs:Vector<Fr>@P,x:Fr@P)->(r:Fr@P){return choose(go,xs,x);}
+''')
+    source = commands.run([compiler, 'language-emit', '--source-format=zkc',
+        f'--module=dormant={path}', '--subject=dormant::Run'])
+    symbol = 's7h646f726d616e743h52756e'
+    snapshot = export(source, symbol)
+    role = next(row for row in snapshot[7] if row[1] == symbol)[6][1][0]
+    assert run(source, [True, [], '7'], symbol, role) == returned(['7'])
+    assert run(source, [False, ['3', '5'], '7'], symbol, role) == returned(['8'])
+    bad = source.replace('contract = "vector.sum"', 'contract = "vector.product"')
+    assert bad != source
+    commands.verified(bad)
+    export(bad, symbol, refusal='structured-source-binding')
+    run(bad, [True, [], '7'], symbol, role, refusal='structured-reference-binding')
 
-with case('dormant-map-declaration-is-not-filtered'):
-    declarations = (f'func.func private @formula(%x:{field}) -> {field} {{ return %x : {field} }}\n'
-                    f'algebra.map_realize @dormant = @formula [true] : ({vector})->{vector}\n')
+with case('dormant-collection-and-computation-are-not-filtered'):
+    formula = f'func.func private @formula(%x:{field}) -> {field} {{ return %x : {field} }}\n'
+    domain = f'''"data.domain"() ({{^entry(%xs:{vector}):
+      %items="data.domain_elements"(%xs):({vector})->!data.domain<{field}>
+      "data.domain_yield"(%items):(!data.domain<{field}>)->()
+    }}) {{sym_name="items",sym_visibility="private",function_type=({vector})->!data.domain<{field}>}}:()->()'''
+    callback = scoped_function('item', [field, vector], [field], '', ['%a0'], private=True)
+    collection = scoped_function('dormant', [vector], [vector],
+        invocation('exec.collect', [vector], [vector], 'domain=@items,body=@item,site="collect"'), ['%r'])
+    declarations = domain + callback + collection
     source = base.replace(binding('index.add'), declarations + binding('index.add'))
     snapshot = export(source)
-    assert any(row[1] == 'dormant' for row in snapshot[7])
+    assert any(row[0:2] == ['function', 'dormant'] for row in snapshot[7])
+    assert any(row[0] == 'collect' for row in snapshot[7])
     assert run(source, ['1', '2']) == returned(['3'])
-    source = source.replace(f'algebra.map_realize @dormant = @formula [true] : ({vector})->{vector}',
-                            f'local.realize @dormant = @formula : ({field})->{field}')
+    computation = scoped_function('dormant', [field], [field],
+        invocation('exec.compute', [field], [field],
+            'callee=@formula,site="compute",policy=[false,false,false]'), ['%r'])
+    source = base.replace(binding('index.add'), formula + computation + binding('index.add'))
     snapshot = export(source)
-    assert any(row[1] == 'dormant' for row in snapshot[7])
+    assert any(row[0:2] == ['function', 'dormant'] for row in snapshot[7])
+    assert any(row[0] == 'realize' and row[4] == 'formula' for row in snapshot[7])
     assert run(source, ['1', '2']) == returned(['3'])
 
-with case('strict-dropped-results-and-zero-result-local-stop'):
+with case('numerical-selection-policies-do-not-change-source-meaning'):
+    formula = f'func.func private @formula(%x:{field}) -> {field} {{ return %x : {field} }}'
+    source = wrapped([field], [field], invocation('exec.compute', [field], [field],
+        'callee=@formula,site="compute"'), ['%r'], formula)
+    definitions = export(source)[7]
+    assert run(source, ['7']) == returned(['7'])
+    for options in itertools.product([False, True], repeat=3):
+        policy = json.dumps(options)
+        selected = source.replace('site="compute"', f'site="compute",policy={policy}')
+        assert export(selected)[7] == definitions
+        assert run(selected, ['7']) == returned(['7'])
+    for policy in ['[]', '[true,false]', '[true,false,true,false]', '[true,false,1:i64]']:
+        reject_native(source.replace('site="compute"', f'site="compute",policy={policy}'), ['7'])
+    reject_native(source.replace('site="compute"', 'site="compute",unexpected=true'), ['7'])
+
+with case('strict-dropped-results-and-zero-result-scoped-stop'):
     for contract, inputs in [('index.div', ['1', '0']), ('vector.split', [[]])]:
         source = primitive(contract, drop=True)
         export(source)

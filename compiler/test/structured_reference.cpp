@@ -597,9 +597,18 @@ class Admission {
               op, code == Kind::Call
                       ? ArrayRef<StringRef>{"callee", "runtime.site"}
                   : code == Kind::Compute
-                      ? ArrayRef<StringRef>{"callee", "site"}
+                      ? ArrayRef<StringRef>{"callee", "site", "policy"}
                       : ArrayRef<StringRef>{"callee", "site", "role"}))
         return failure;
+      if (code == Kind::Compute)
+        if (auto attribute = op.getAttr("policy")) {
+          auto policy = dyn_cast<ArrayAttr>(attribute);
+          if (!policy || policy.size() != 3 ||
+              !llvm::all_of(
+                  policy, [](Attribute value) { return isa<BoolAttr>(value); }))
+            return error("structured-reference-unsupported",
+                         "computation policy");
+        }
       return reference(op, owner, "callee", "func.func");
     case Kind::Fold:
     case Kind::ScopedFold:
