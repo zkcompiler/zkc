@@ -137,19 +137,24 @@ def bound(value):
     return "⟨" + ", ".join(map(nat, (index, container, axis))) + "⟩"
 
 
+def domain_constructor(value):
+    if value[0] == "elements":
+        _, index = record(value, 2)
+        return ".elements " + nat(index)
+    if value[0] in ("indices", "range"):
+        tag, first, second = record(value, 3)
+        return f".{tag} {nat(first)} {nat(second)}"
+    if value[0] in ("zip", "product"):
+        tag, operands = record(value, 2)
+        return f".{tag} {seq(operands, nat)}"
+    raise ValueError("unsupported domain constructor")
+
+
 def domain(value):
-    tag, name, inputs, constructor = record(value, 4)
+    tag, name, inputs, constructors, result = record(value, 5)
     if tag != "domain":
         raise ValueError("invalid domain")
-    if constructor[0] == "elements":
-        _, index = record(constructor, 2)
-        operation = ".elements " + nat(index)
-    elif constructor[0] == "indices":
-        _, index, axis = record(constructor, 3)
-        operation = f".indices {nat(index)} {nat(axis)}"
-    else:
-        raise ValueError("unsupported domain constructor")
-    return f"⟨{text(name)}, {seq(inputs, ty)}, {operation}⟩"
+    return f"⟨{text(name)}, {seq(inputs, ty)}, {seq(constructors, domain_constructor)}, {nat(result)}⟩"
 
 
 def protocol_interface(value):
@@ -315,11 +320,11 @@ def definition(value):
             return str(value).lower()
         return (f".map ⟨{text(name)}, {seq(inputs, ty)}, {seq(outputs, ty)}, "
                 f"{text(helper)}, {seq(rowwise, boolean)}⟩")
-    if value[0] == "finite":
+    if value[0] in ("finite", "collect"):
         _, name, visibility, inputs, outputs, domain_name, step, predicate = record(value, 8)
         if visibility not in ("public", "private"):
             raise ValueError("invalid visibility")
-        return (f".finite ⟨{text(name)}, .{visibility}Def, {seq(inputs, ty)}, {seq(outputs, ty)}, "
+        return (f".{value[0]} ⟨{text(name)}, .{visibility}Def, {seq(inputs, ty)}, {seq(outputs, ty)}, "
                 f"{text(domain_name)}, {text(step)}, {text(predicate)}⟩")
     tag, name, kind, visibility, inputs, outputs, interface, premises, origin, body = record(value, 10)
     if tag != "function" or kind not in ("protocol", "math", "local") or visibility not in ("public", "private"):

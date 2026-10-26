@@ -89,6 +89,50 @@ theorem SiteObservations.closed_interpret :
 
 namespace Evaluation
 
+/-- Collection translation preserves predicate/body order and every stopped
+prefix, without a purity or totality assumption on either callback. -/
+theorem collectTransition_interpret {carriers : Carriers}
+    (operations : PIR.OperationInterpretation I J)
+    {left : HelperTable carriers.Value I} {right : HelperTable carriers.Value J}
+    (tables : HelperTable.Interprets operations left right) (spec : CollectSpec)
+    (arguments : Values carriers.Value spec.domain.inputs)
+    (captures : Values carriers.Value spec.captures)
+    (collected : List (carriers.Value spec.collection.element))
+    (item : Values carriers.Value spec.domain.items) :
+    (collectTransition left spec arguments captures collected item).interpret operations =
+      collectTransition right spec arguments captures collected item := by
+  unfold collectTransition
+  dsimp only [CollectSpec.predicateHelper, CollectSpec.bodyHelper]
+  rw [PIR.Process.interpret_bind]
+  have enabled :
+      ((if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
+        else invoke left spec.predicateHelper (item.append (arguments.append captures))).interpret operations) =
+      (if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
+        else invoke right spec.predicateHelper (item.append (arguments.append captures))) := by
+    dsimp only [CollectSpec.predicateHelper]
+    by_cases present : spec.predicate.isEmpty = true
+    · rw [ite_eq_left present, ite_eq_left present]; rfl
+    · rw [ite_eq_right present, ite_eq_right present]; exact tables _ _
+  dsimp only [CollectSpec.predicateHelper] at enabled
+  rw [enabled]
+  congr 1
+  funext result
+  by_cases enabled : result.get .here = true
+  · rw [ite_eq_left enabled, ite_eq_left enabled]
+    simp only [PIR.Process.interpret_bind, PIR.Process.interpret]
+    congr 1
+    exact tables _ _
+  · rw [ite_eq_right enabled, ite_eq_right enabled]; rfl
+
+theorem denoteCollect_interpret {carriers : Carriers}
+    (operations : PIR.OperationInterpretation I J)
+    {left : HelperTable carriers.Value I} {right : HelperTable carriers.Value J}
+    (tables : HelperTable.Interprets operations left right) (spec : CollectSpec)
+    (args : Values carriers.Value spec.arguments) :
+    (denoteCollect left spec args).interpret operations = denoteCollect right spec args := by
+  simp only [denoteCollect, Finite.interpret_admitThen, PIR.Process.interpret_bind,
+    Finite.interpret_fold, collectTransition_interpret operations tables, PIR.Process.interpret]
+
 variable {F G : Type}
 
 theorem foldTransition_interpret (operations : PIR.OperationInterpretation I J)
@@ -96,7 +140,7 @@ theorem foldTransition_interpret (operations : PIR.OperationInterpretation I J)
     (tables : HelperTable.Interprets operations left right) (spec : FoldSpec)
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
-    (state : Values (assignment F G) spec.state) (item : assignment F G spec.domain.item) :
+    (state : Values (assignment F G) spec.state) (item : Values (assignment F G) spec.domain.items) :
     (foldTransition left spec arguments captures state item).interpret operations =
       foldTransition right spec arguments captures state item := by
   unfold foldTransition
@@ -104,9 +148,9 @@ theorem foldTransition_interpret (operations : PIR.OperationInterpretation I J)
   rw [PIR.Process.interpret_bind]
   have enabled :
       ((if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
-        else invoke left spec.predicateHelper (.cons item (arguments.append captures))).interpret operations) =
+        else invoke left spec.predicateHelper (item.append (arguments.append captures))).interpret operations) =
       (if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
-        else invoke right spec.predicateHelper (.cons item (arguments.append captures))) := by
+        else invoke right spec.predicateHelper (item.append (arguments.append captures))) := by
     dsimp only [FoldSpec.predicateHelper]
     by_cases present : spec.predicate.isEmpty = true
     · rw [ite_eq_left present, ite_eq_left present]; rfl
@@ -124,7 +168,7 @@ theorem denoteFold_interpret (operations : PIR.OperationInterpretation I J)
     (tables : HelperTable.Interprets operations left right) (spec : FoldSpec)
     (args : Values (assignment F G) spec.arguments) :
     (denoteFold left spec args).interpret operations = denoteFold right spec args := by
-  simp only [denoteFold, Finite.interpret_execute, foldTransition_interpret operations tables]
+  simp only [denoteFold, Finite.interpret_admitThen, Finite.interpret_fold, foldTransition_interpret operations tables]
 
 theorem mapRow_interpret (operations : PIR.OperationInterpretation I J)
     {left : Meanings F G I} {right : Meanings F G J}
@@ -231,6 +275,7 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     cases primitive.evaluate args <;> rfl
   | invoke helper => cases bodies; exact tables helper args
   | fold spec => cases bodies; exact denoteFold_interpret operations tables spec args
+  | collect spec => cases bodies; exact denoteCollect_interpret operations tables spec args
   | map spec => cases bodies; exact denoteMap_interpret operations tables spec args
   | branch =>
     cases args with

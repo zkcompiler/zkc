@@ -16,7 +16,7 @@ set_option backward.isDefEq.respectTransparency false
 abbrev vector : Ty := .vector "koala-bear"
 abbrev scalar : Ty := .field "koala-bear"
 abbrev readFold : FoldSpec :=
-  ⟨⟨"finite_" ++ indexedReadHelper.name ++ "_s4_domain", [vector], .vector "koala-bear", .here, true⟩,
+  ⟨DomainSpec.indices ("finite_" ++ indexedReadHelper.name ++ "_s4_domain") [vector] (.vector "koala-bear") .here,
     [.boolean], [.index, scalar], readStepHelper.name, "", .math⟩
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -99,14 +99,13 @@ theorem indexedRead_bounded (table : List F) (position : Nat) (value : F)
   simp only [indexedReadBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Values.get, Regions.denote,
     PIR.Process.bind, Environment.prepend, Environment.push]
-  have admitted : (readFold.domain.denote (Values.cons table
-      (Values.nil : Values (assignment F G) []))).admit = .returned (List.range table.length) := by
-    change (Finite.Domain.check (table.length < indexLimit) .exhausted
-      (.elements (List.range table.length))).admit = _
-    simp [Finite.Domain.admit, bounded]
-  have folded := Evaluation.denoteFold_reference meanings readFold
+  have admitted : readFold.domain.admit (Values.cons table
+      (Values.nil : Values (assignment F G) [])) =
+      .returned ((List.range table.length).map fun item => .cons item .nil) := by
+    simp [readFold, DomainSpec.admit_indices, Collection.values, Values.get, bounded]
+  have folded := Evaluation.denoteFold_reference_map meanings readFold
     (.cons table .nil) (.cons false .nil) (.cons position (.cons value .nil))
-    (List.range table.length) admitted
+    (List.range table.length) (fun item => .cons item .nil) admitted
     (fun (state : Values (assignment F G) [.boolean]) coordinate =>
       Values.cons (step table position value (state.get .here) coordinate) .nil)
     (fun _ => True) trivial (by
@@ -132,9 +131,10 @@ theorem indexedRead_exhausted (table : List F) (position : Nat) (value : F)
   simp only [indexedReadBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Values.get, Regions.denote,
     PIR.Process.bind, Environment.prepend, Environment.push]
-  change (Finite.execute (Finite.Domain.check (decide (table.length < indexLimit))
-    .exhausted (.elements (List.range table.length))) _ _).bind _ = _
-  simp [Finite.execute, Finite.Domain.admit, unbounded, Finite.admitThen, PIR.Process.bind]
+  change (Finite.admitThen (readFold.domain.admit
+    (Values.cons table (.nil : Values (assignment F G) []))) _).bind _ = _
+  simp [readFold, DomainSpec.admit_indices, Collection.values, Values.get,
+    unbounded, Finite.admitThen, PIR.Process.bind]
 
 theorem indexedRead_equation (table : List F) (position : Nat) (value : F) :
     invoke (meanings (F := F) (G := G)) indexedReadHelper

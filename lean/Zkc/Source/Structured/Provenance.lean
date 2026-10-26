@@ -74,7 +74,7 @@ def Snapshot.identitySummaries (snapshot : Snapshot) : Except String IdentitySum
   let functions := snapshot.definitions.filterMap fun definition =>
     match definition with
     | .function function => if function.kind == .math then some function else none
-    | .finite _ | .realization _ | .map _ => none
+    | .finite _ | .collect _ | .realization _ | .map _ => none
   summarizeIdentities functions.length functions []
 
 end Zkc.Source.Structured

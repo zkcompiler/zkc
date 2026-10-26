@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Structured.RealizationValuesData
 public import ZkcExamples.Structured.PrimitiveTableViews
+public import Zkc.Source.Structured.UnitViews
 public import Zkc.Source.Structured.ComponentLinking
 public import Zkc.Source.Structured.ClosedProjection
 public import Zkc.Source.Participant
@@ -22,7 +23,7 @@ abbrev projectionHelper : Helper :=
   ⟨"zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33",
     .math, tableTypes, valueTypes⟩
 abbrev realizationHelper : Helper :=
-  ⟨"zkl_realization_0ce8d1f6fa18ecea2634e8a590d8d4d67ef3b2266fc521419daa7adb682a678a",
+  ⟨"_mathematical_admission_0",
     .local, tableTypes, valueTypes⟩
 abbrev valuesHelper : Helper :=
   ⟨"s12h6d61705f6578616d706c657314h7265616c697a655f76616c756573",
@@ -33,7 +34,7 @@ def realizationDeclaration : RealizationDeclaration :=
 
 theorem realization_retained :
     Definition.realization realizationDeclaration ∈ RealizationValuesData.snapshot.definitions :=
-  List.mem_cons_self
+  by structured_mem
 
 set_option smartUnfolding true in
 def projectionBody : Region dialect tableTypes valueTypes := .ret (.cons .here .nil)

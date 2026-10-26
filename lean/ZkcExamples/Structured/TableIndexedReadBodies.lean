@@ -32,14 +32,7 @@ abbrev indexedReadHelper : Helper :=
 
 def indexedReadBody : Region dialect indexedReadHelper.inputs indexedReadHelper.outputs :=
   .letOp (.booleanConstant false) .nil .nil <|
-  .letOp (.fold {domain := {name := "finite_zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a_s4_domain", inputs := [.vector "koala-bear"], collection := Collection.vector "koala-bear", container := .here, indices := true}, state := [.boolean], captures := [.index, .field "koala-bear"], step := "finite_zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a_s4_body", predicate := "", kind := .math}) (.cons (.there .here) (.cons .here (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here .nil)
-
-abbrev realizationHelper : Helper :=
-  ⟨"zkl_realization_f23e2cf91e13194bc53b5a53cc8b12fd546c4daae64d3751bb30899d04fa3be4", .local, [(.vector "koala-bear"), .index, (.field "koala-bear")], [.boolean]⟩
-
-def realizationBody : Region dialect realizationHelper.inputs realizationHelper.outputs :=
-  .letOp (.invoke {name := "zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a", kind := .math, inputs := [.vector "koala-bear", .index, .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.fold {domain := {name := "finite_zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a_s4_domain", inputs := [.vector "koala-bear"], items := [.index], body := DomainBody.letNode (DomainNode.indices (Collection.vector "koala-bear") .here) (DomainBody.ret .here)}, state := [.boolean], captures := [.index, .field "koala-bear"], step := "finite_zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a_s4_body", predicate := "", kind := .math}) (.cons (.there .here) (.cons .here (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here .nil)
 
 abbrev formulaHelper : Helper :=
@@ -49,12 +42,19 @@ def formulaBody : Region dialect formulaHelper.inputs formulaHelper.outputs :=
   .letOp (.invoke {name := "zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a", kind := .math, inputs := [.vector "koala-bear", .index, .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
+abbrev realizationHelper : Helper :=
+  ⟨"_mathematical_admission_0", .local, [(.vector "koala-bear"), .index, (.field "koala-bear")], [.boolean]⟩
+
+def realizationBody : Region dialect realizationHelper.inputs realizationHelper.outputs :=
+  .letOp (.invoke {name := "zkl_513fafc86f60e415471e1286479cbd64b87fc18d657412194e4e0974b61e260a", kind := .math, inputs := [.vector "koala-bear", .index, .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .ret (.cons .here .nil)
+
 abbrev checkReadHelper : Helper :=
   ⟨"zkl_f1d7fac3d3ce489e30442c70b43fb2fd1ecf6ba206d6f59492b3f75b72249a66", .local, [(.vector "koala-bear"), .index, (.field "koala-bear")], [.boolean]⟩
 
 def checkReadBody : Region dialect checkReadHelper.inputs checkReadHelper.outputs :=
   .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke {name := "zkl_realization_f23e2cf91e13194bc53b5a53cc8b12fd546c4daae64d3751bb30899d04fa3be4", kind := .local, inputs := [.vector "koala-bear", .index, .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.invoke {name := "_mathematical_admission_0", kind := .local, inputs := [.vector "koala-bear", .index, .field "koala-bear"], outputs := [.boolean]}) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
 def runSignature : ProtocolSignature where

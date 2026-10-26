@@ -54,8 +54,8 @@ def run_cases(suite):
         ('Last', [['11', '13'], '7', False], None),
     ]:
         label = f'{name}-{len(suite.checks)}'
-        suite.case(label, lambda n=name, l=label, v=values, e=expected:
-                   suite.evaluate(subjects[n], l, v, e))
+        suite.case(label, lambda n=name, label=label, v=values, e=expected:
+                   suite.evaluate(subjects[n], label, v, e))
     for i in range(suite.args.cases):
         x, y = (suite.rng.randrange(10000) for _ in range(2))
         count = suite.rng.randrange(8)
@@ -72,7 +72,7 @@ def run_cases(suite):
     ]:
         changed = copy.deepcopy(snapshot)
         mutate(definition(changed, local[1]))
-        suite.case(label, lambda l=label, s=changed: suite.refuse_snapshot(l, s))
+        suite.case(label, lambda label=label, s=changed: suite.refuse_snapshot(label, s))
 
 
 def main():

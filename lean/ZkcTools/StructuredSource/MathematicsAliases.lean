@@ -45,9 +45,7 @@ def declaration (path : String) (selected : CheckedDefinition) : String :=
     path ++ ".body := by bind_structured_bodies\n\n"
 
 def foldText (spec : FoldSpec) : String :=
-  "⟨⟨" ++ ", ".intercalate [quoted spec.domain.name, typesText spec.domain.inputs,
-    collectionText spec.domain.collection, positionText spec.domain.container.index, boolText spec.domain.indices] ++
-    "⟩, " ++ ", ".intercalate [typesText spec.state, typesText spec.captures, quoted spec.step,
+  "⟨" ++ domainText spec.domain ++ ", " ++ ", ".intercalate [typesText spec.state, typesText spec.captures, quoted spec.step,
     quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"
 
 /-- Avoid repeated namespace components without changing unambiguous edge names. -/

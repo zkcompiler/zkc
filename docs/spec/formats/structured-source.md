@@ -31,7 +31,7 @@ in the formal region's result tuple.
 
 Supported `exec.compute` and ordered `exec.fold` occurrences retain their actual
 mathematical helper or domain/callback references. Their logical signatures
-become private `realize` or `finite` declarations in the export; generated names
+become private `realize`, `finite` or `collect` declarations in the export; generated names
 identify these declarations and supply no mathematical evidence. The source
 hash still identifies the original, unexpanded MLIR. This checked export and
 independent Lean admission are not a native execution correspondence theorem.
@@ -108,8 +108,12 @@ unlisted operations require a separately specified extension.
 ## Declarations
 
 ```text
-["domain", name, input-types, ["elements", container-argument]]
-["domain", name, input-types, ["indices", container-argument, 0]]
+["domain", name, input-types, constructors, returned-domain]
+constructor := ["elements", container-argument]
+             | ["indices", container-argument, 0]
+             | ["range", lower-argument, upper-argument]
+             | ["zip", domain-references]
+             | ["product", domain-references]
 
 ["function", name, kind, visibility, input-types, output-types,
  interface, preconditions, origin, body]
@@ -124,20 +128,28 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 
 ["finite", name, visibility, input-types, output-types,
  domain-name, step-name, predicate-name]
+["collect", name, visibility, input-types, output-types,
+ domain-name, body-name, predicate-name]
 
 ["realize", name, input-types, output-types, math-helper]
 ["map", name, input-types, output-types, math-helper, rowwise]
 ```
 
-Finite domains select an exact field-vector or sequence input. `elements`
-retains its ordered elements and `indices` enumerates its ordered positions.
-Both check length representability before iteration, including empty bodies.
+Domain data references select exact input arguments. Domain references use a
+separate de Bruijn context: zero is the most recently constructed descriptor.
+Each constructor binds one descriptor; `returned-domain` selects the actual
+`data.domain_yield` operand after the complete sequence. At least one constructor
+is required. Every stored constructor contributes to the instruction budget,
+including unused ones, and a domain has at most 4096 constructors.
 
-A domain body consists of exactly one supported constructor and its matching
-yield. Additional constructors are refused, including unused ones. The selected
-input is a vector; other inputs remain part of the domain and callback ABI.
-Elements yield one field value; indices yield one index. Only axis zero is
-supported.
+Elements and indices select field vectors or sequences and check u64 length
+representability. Only axis zero is admitted. Ranges check both index bounds
+before enumerating the half-open interval; reversed bounds yield an empty list.
+Strict zip requires equal lengths and concatenates complete item tuples. Products
+enumerate the last factor fastest. Both require at least one descriptor and
+preserve argument order, duplicate factors and unused domain constructors.
+Admission of the complete sequence precedes the first callback. Matrix domains
+and other collection types remain outside this export profile.
 
 Function `kind` is `protocol`, `math` or `local`; visibility is `public` or
 `private`. Each protocol has 1 to 16 unique nonempty native role strings. Every
@@ -252,22 +264,25 @@ attribute, including an explicit `public`; its retained visibility is the
 default `public`. The general function record does not override that formation
 restriction or impose the Math helper's private-only rule on protocol calls.
 
-A finite declaration represents `local.finite_fold`. The empty predicate name
-means no predicate. There is no implicit Unit leaf for an empty state or result.
-The [finite ABI](../ir/finite.md) is retained: operands are `A ++ S ++ C`, the
-step receives `S ++ I ++ A ++ C`, and the predicate receives `I ++ A ++ C`.
-Callbacks are private and have the required Math or Local kind.
+A finite declaration records an admitted `exec.fold` occurrence, and a collect
+declaration records `exec.collect`. Their keys are private export-local identities
+associated with actual occurrences, not native declarations inferred from names.
+The empty predicate name means no predicate. The [finite ABI](../ir/finite.md)
+retains `A ++ S ++ C` for folds and `A ++ C` for collections. The step receives
+`S ++ I ++ A ++ C`; a collection body and predicate receive `I ++ A ++ C`.
+`I` is the complete ordered tuple of domain items. Callbacks are actual private
+scoped functions whose admitted CFG is exported through its data arguments and
+successful outcome payload. A collection returns one field vector or sequence;
+its body returns that collection's single element type. False predicates skip
+an item. Predicate and body stops retain the first reached stopping reason.
 
-Realization and map records retain original `local.realize` and
-`algebra.map_realize` declarations. Their exact native attributes are `sym_name`,
-`function_type`, `helper`, and, only for map, `rowwise`. They have no operands,
-results or regions. No visibility, origin, premise, site or function body is
-invented. The helper is an exact flat reference to a private defined Math sibling.
-The wire retains nonempty symbol strings within its 512-byte bound. Native Local
-formation additionally requires preparation names to match ASCII
-`[A-Za-z_][A-Za-z0-9_.-]*` within 128 bytes; the separate binding limit is 256.
-Math helper names retain the ordinary Math symbol bounds. Every declaration is
-checked, including unused ones.
+A realization record associates an actual `exec.compute` occurrence with its
+exact private Math helper and full data ABI. A map record retains an explicit
+`algebra.map_realize` declaration and its ordered row mask. Ordinary frontend
+maps instead export their actual collect, domain and scoped callback. Their
+scalar-map equations are proof obligations over those bodies, not an export
+classification inferred from a generated name. Every declaration and callback
+is checked, including dormant ones.
 
 A realization has exactly the helper's full ordered input/output ABI, including
 unused inputs and zero or multiple results. Its derived Local meaning is one
@@ -347,7 +362,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 |---|---|
 | `["index.constant", decimal-string]` | pure canonical u64 constant |
 | `["index.equal"]` | pure two-index equality to Boolean |
-| `["exec", native-operation, binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
+| `["exec", "exec.apply", binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
 | `["field.constant", domain, literal-string]` | canonical scalar constant: a decimal residue, or for a binary field a [bit-pattern literal](../domains/values.md#bit-pattern-literals) |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
@@ -363,7 +378,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["product.make", constructor]` | ordered components to the exact declared product |
 | `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
-| `["apply", name]` | Local function, finite, realization or map declaration call |
+| `["apply", name]` | Local function, finite, collect, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
 | `["protocol_repeat", carried, maximum, roles, carried_roles]` | Retained protocol repetition with one isolated optional-state callback |
@@ -567,36 +582,38 @@ are separate obligations; no protocol-specific intrinsic supplies their meaning.
 
 ## Primitive execution
 
-An `exec` descriptor retains both the native operation kind and binding name,
-plus the exact ordered array of string parameters. It has zero regions and a
-required nonempty site, unique within its enclosing Local definition. Each use
-checks kind/contract agreement, nominal domain arguments, full ordered operand
-and result types, parameters, and Local ownership. Binding names confer no
+An `exec` descriptor retains the actual `exec.apply` operation, its binding
+name and the exact ordered array of string parameters. It has zero regions and
+a required nonempty site, unique within its logical Local definition. The
+binding's contract selects the primitive. Each use checks nominal domain
+arguments, full ordered data operand and successful payload types, parameters,
+and Local ownership. Native scope/outcome ports belong to the admitted CFG;
+they are not logical value ports in this descriptor. Binding names confer no
 semantics by themselves. The exporter reuses the native logical catalogue for
-these ABI checks; the test reference independently admits this closed table.
+these ABI checks; Lean independently admits this closed table. There is no
+reader for retired per-primitive MLIR operation names.
 
-Here `I` is index, `B` Boolean, `F` Fr, and `V` a vector over Fr. The operation
-spellings are exact, not an extensible prefix convention.
+Here `I` is index, `B` Boolean, `F` the binding's nominal field, and `V` an
+ordered vector over that field. Every row uses the same `exec.apply` operation.
 
-| Native operation | Binding contract | Inputs → outputs | Parameters |
-|---|---|---|---|
-| `algebra.exec.index_constant` | `index.constant` | `[] → [I]` | `[n]` |
-| `algebra.exec.index_add` | `index.add` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_sub` | `index.sub` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_mul` | `index.mul` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_div` | `index.div` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_mod` | `index.mod` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_equal` | `index.equal` | `[I,I] → [B]` | `[]` |
-| `algebra.exec.index_less` | `index.less` | `[I,I] → [B]` | `[]` |
-| `algebra.exec.vector_empty` | `vector.empty` | `[] → [V]` | `[]` |
-| `algebra.exec.vector_length` | `vector.length` | `[V] → [I]` | `[]` |
-| `algebra.exec.vector_sum` | `vector.sum` | `[V] → [F]` | `[]` |
-| `algebra.exec.vector_split` | `vector.split` | `[V] → [V,V]` | `[]` |
-| `algebra.exec.vector_append` | `vector.append` | `[V,F] → [V]` | `[]` |
-| `algebra.exec.vector_equal` | `vector.equal` | `[V,V] → [B]` | `[]` |
-| `algebra.exec.vector_find_last` | `vector.find_last` | `[V,F] → [I]` | `[]` |
-| `algebra.exec.field_equal` | `field.equal` | `[F,F] → [B]` | `[]` |
-| `algebra.exec.field_embed` | `field.embed` | `[field:base] → [field:extension]` | `[]` |
+| Binding contract | Inputs → outputs | Parameters |
+|---|---|---|
+| `index.constant` | `[] → [I]` | `[n]` |
+| `index.add` | `[I,I] → [I]` | `[]` |
+| `index.sub` | `[I,I] → [I]` | `[]` |
+| `index.mul` | `[I,I] → [I]` | `[]` |
+| `index.div` | `[I,I] → [I]` | `[]` |
+| `index.mod` | `[I,I] → [I]` | `[]` |
+| `index.equal` | `[I,I] → [B]` | `[]` |
+| `index.less` | `[I,I] → [B]` | `[]` |
+| `vector.empty` | `[] → [V]` | `[]` |
+| `vector.length` | `[V] → [I]` | `[]` |
+| `vector.sum` | `[V] → [F]` | `[]` |
+| `vector.split` | `[V] → [V,V]` | `[]` |
+| `vector.append` | `[V,F] → [V]` | `[]` |
+| `vector.equal` | `[V,V] → [B]` | `[]` |
+| `field.equal` | `[F,F] → [B]` | `[]` |
+| `field.embed` | `[field:base] → [field:extension]` | `[]` |
 
 The `field.embed` binding takes one domain argument, the extension. Its
 `BaseField` member fixes the operand's domain. The existing `exec` descriptor
@@ -627,7 +644,7 @@ An owned Local call with absent required inputs stops `incomplete`; nonowners
 skip it. Pure `data.index` and `data.index_equal` export as the separate pure
 descriptors with empty sites and no bindings. Pure index equality propagates
 absent components. Pure scalar equality likewise remains distinct from Local
-`algebra.exec.field_equal`.
+`exec.apply` with a `field.equal` binding.
 
 Ordinary source wrappers capture the unchanged `multilinear::has_shape`,
 `table`, and `halves` helper closures, including the private rows loop and

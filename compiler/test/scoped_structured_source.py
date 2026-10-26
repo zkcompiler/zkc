@@ -4,7 +4,8 @@ import re
 
 from cases import case, counted
 from commands import Commands
-from tools import compiler, records
+from tools import ROOT, compiler, records
+from project import project_inputs
 
 out = records()
 commands = Commands(out)
@@ -114,6 +115,70 @@ protocol Run roles(P)(x:Fr@P,y:Fr@P)->(r:Fr@P){return work(x,y);}
     equation = next(d for d in snapshot[7] if d[1] == realized[4])
     assert equation[2] == 'math'
     assert equation[9][1][0][0] == ['field.add', 'bls12-381.fr']
+
+# One native invocation operation carries an explicit contract binding. A
+# same-port contract change must be reflected in the exported declaration.
+primitive = emit('primitive', '''
+fn plus(x:index,y:index)->index{return x+y;}
+protocol Run roles(P)(x:index@P,y:index@P)->(r:index@P){return plus(x,y);}
+''')
+with case('primitive identity comes from its binding and exact data ports'):
+    snapshot = export(primitive)
+    step = local(snapshot)[9][1][0]
+    assert step[0][0:2] == ['exec', 'exec.apply']
+    binding = next(row for row in snapshot[6] if row[1] == step[0][2])
+    assert binding[2:] == ['index.add', [], '']
+    assert step[1:4] == [[0, 1], [['index']], []]
+
+with case('same-port contract retargeting remains visible'):
+    changed = primitive.replace('contract = "index.add"', 'contract = "index.sub"')
+    assert changed != primitive
+    snapshot = export(changed)
+    step = local(snapshot)[9][1][0]
+    assert step[0][0:2] == ['exec', 'exec.apply']
+    binding = next(row for row in snapshot[6] if row[1] == step[0][2])
+    assert binding[2:] == ['index.sub', [], '']
+
+with case('retired per-primitive operation has no source reader'):
+    changed = primitive.replace('"exec.apply"', '"algebra.exec.index_add"')
+    assert changed != primitive
+    export(changed, 'structured-source-original')
+
+modules, assets = project_inputs(ROOT / 'compiler/test/fixtures/structured-source/map-callers.toml')
+assert not assets
+mapped = commands.run([compiler, 'language-emit', '--source-format=zkc',
+    '--subject=map_examples::LinearCombination',
+    *[f'--module={name}={path}' for name, path in sorted(modules.items())]])
+mapping = export(mapped)
+collection = next(d for d in mapping[7] if d[0] == 'collect')
+domain = next(d for d in mapping[4] if d[1] == collection[5])
+with case('collection preserves all zipped operands including an unused row'):
+    assert domain[3:] == [[['elements', 0], ['elements', 1], ['elements', 2],
+                          ['zip', [2, 1, 0]]], 0]
+    assert collection[4] == [['vector', 'bls12-381.fr']]
+    assert collection[7] == ''
+    callback = next(d for d in mapping[7] if d[1] == collection[6])
+    assert callback[2:4] == ['local', 'private']
+    assert callback[4][:3] == [['field', 'bls12-381.fr']] * 3
+    assert callback[4][3:] == collection[3]
+    computation = next(d for d in mapping[7] if d[1] == callback[9][1][0][0][1])
+    assert computation[0] == 'realize'
+
+with case('domain item order follows the actual SSA zip operands'):
+    zipped = re.search(r'"data.domain_zip"\(([^)]+)\)', mapped)
+    operands = zipped[1].split(', ')
+    changed = mapped.replace(zipped[0], '"data.domain_zip"(' + ', '.join(reversed(operands)) + ')')
+    actual = next(d for d in export(changed)[4] if d[1] == domain[1])
+    assert actual[3][-1] == ['zip', [0, 1, 2]]
+
+with case('unused domain constructors retain their ordered admission'):
+    element = re.search(r'"data.domain_elements"[^\n]+', mapped)[0]
+    terminal = mapped.index('"data.domain_yield"')
+    line = mapped.rfind('\n', 0, terminal) + 1
+    changed = mapped[:line] + '      %unused = ' + element + '\n' + mapped[line:]
+    actual = next(d for d in export(changed)[4] if d[1] == domain[1])
+    assert actual[3] == domain[3] + [['elements', 0]]
+    assert actual[4] == 1
 
 commands.save()
 print(f'scoped-structured-source: {counted()} cases')

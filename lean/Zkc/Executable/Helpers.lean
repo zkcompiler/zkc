@@ -89,6 +89,7 @@ def operationKind : Structured.Op → String
   | .invoke _ => "invoke"
   | .fold _ => "fold"
   | .map _ => "map"
+  | .collect _ => "collect"
   | .branch .. => "branch"
   | .loop .. => "loop"
   | .loopCondition .. => "loop-condition"

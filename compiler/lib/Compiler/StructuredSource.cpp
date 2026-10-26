@@ -5,7 +5,6 @@
 #include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -311,12 +310,6 @@ StringRef kind(Operation &op) {
     return "protocol";
   if (auto function = dyn_cast<func::FuncOp>(op))
     return isScopedExecutionFunction(function) ? "local" : "math";
-  if (isa<local::FuncOp>(op))
-    return "local";
-  if (isa<local::FiniteFoldOp>(op))
-    return "finite";
-  if (isa<local::RealizeOp>(op))
-    return "realize";
   if (isa<algebra::MapRealizeOp>(op))
     return "map";
   if (isa<data::DomainOp>(op))
@@ -403,9 +396,8 @@ class Exporter {
     auto domain = reference(op, "domain", {"domain"});
     if (!domain)
       return domain.takeError();
-    StringRef helperKind =
-        isa<local::FiniteFoldOp, exec::FoldOp>(op) ? "local" : "math";
-    auto step = reference(op, "step", {helperKind});
+    StringRef helperKind = isa<exec::FoldOp, exec::CollectOp>(op) ? "local" : "math";
+    auto step = reference(op, isa<exec::CollectOp>(op) ? "body" : "step", {helperKind});
     if (!step)
       return step.takeError();
     auto predicate = reference(op, "predicate", {helperKind}, true);
@@ -429,9 +421,8 @@ class Exporter {
       auto binding = primitiveBinding(symbols.lookup(apply.getBinding()), used);
       if (!binding)
         return binding.takeError();
-      return json::Array{"exec",
-                         boundOperationName(binding->application.contract),
-                         binding->name, names(apply.getParameters())};
+      return json::Array{"exec", apply->getName().getStringRef(), binding->name,
+                         names(apply.getParameters())};
     }
     if (auto boolean = dyn_cast<exec::BooleanOp>(op))
       return json::Array{"bool.constant", boolean.getValue()};
@@ -441,7 +432,7 @@ class Exporter {
         return target.takeError();
       return json::Array{"apply", target->str()};
     }
-    if (isa<exec::ComputeOp, exec::FoldOp>(op)) {
+    if (isa<exec::ComputeOp, exec::FoldOp, exec::CollectOp>(op)) {
       if (isa<exec::ComputeOp>(op)) {
         auto helper = reference(op, "callee", {"math"});
         if (!helper)
@@ -646,57 +637,6 @@ class Exporter {
       used.domains.insert(domain);
       return json::Array{"vector.length", domain};
     }
-    StringRef operation = op.getName().getStringRef();
-    if (operation.starts_with("algebra.exec.")) {
-      if (owner != "local")
-        return error("structured-source-operation");
-      if (auto e = attributes(op, {"binding", "parameters", "site"}))
-        return std::move(e);
-      auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-      auto binding = primitiveBinding(
-          ref ? symbols.lookup(ref.getValue()) : nullptr, used);
-      if (!binding)
-        return binding.takeError();
-      std::string expected = "algebra.exec." + binding->application.contract;
-      std::replace(expected.begin() + StringRef("algebra.exec.").size(),
-                   expected.end(), '.', '_');
-      if (operation != expected ||
-          operation != boundOperationName(binding->application.contract) ||
-          !operationSupportsContract(operation, binding->application.contract))
-        return error("structured-source-binding");
-      auto resolved = resolveLogicalBinding(binding->application);
-      if (!resolved)
-        return resolved.takeError();
-      auto ports = [&](TypeRange types, ArrayRef<BoundType> expected) -> Error {
-        if (types.size() != expected.size())
-          return error("structured-source-binding");
-        for (auto [type, port] : llvm::zip(types, expected)) {
-          auto encoded = encodeBoundType(type, false);
-          if (!encoded)
-            return encoded.takeError();
-          if (!(*encoded == port))
-            return error("structured-source-binding");
-        }
-        return Error::success();
-      };
-      if (auto e = ports(op.getOperandTypes(), resolved->inputs))
-        return std::move(e);
-      if (auto e = ports(op.getResultTypes(), resolved->outputs))
-        return std::move(e);
-      auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
-      if (!parameters)
-        return error("structured-source-binding");
-      std::vector<std::string> values;
-      for (Attribute parameter : parameters) {
-        auto text = dyn_cast<StringAttr>(parameter);
-        if (!text)
-          return error("structured-source-binding");
-        values.push_back(text.getValue().str());
-      }
-      if (auto e = checkParameters(binding->application, values))
-        return std::move(e);
-      return json::Array{"exec", operation, binding->name, names(parameters)};
-    }
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
       if (auto e = attributes(op, {"value"}))
         return std::move(e);
@@ -779,11 +719,6 @@ class Exporter {
       return json::Array{"bool.constant",
                          cast<IntegerAttr>(constant.getValue()).getInt() != 0};
     }
-    if (auto constant = dyn_cast<local::BoolConstantOp>(op)) {
-      if (auto e = attributes(op, {"value", "site"}))
-        return std::move(e);
-      return json::Array{"bool.constant", constant.getValue()};
-    }
     StringRef boolOpcode;
     if (isa<arith::AndIOp>(op))
       boolOpcode = "bool.and";
@@ -840,23 +775,18 @@ class Exporter {
         return error("structured-source-type");
       return json::Array{"bounded_at", vector.getDomain()};
     }
-    if (isa<func::CallOp, local::ApplyOp, protocol_ir::LocalCallOp>(op)) {
+    if (isa<func::CallOp, protocol_ir::LocalCallOp>(op)) {
       bool math = isa<func::CallOp>(op);
-      bool participant = isa<protocol_ir::LocalCallOp>(op);
+      bool participant = !math;
       if (auto e = attributes(
-              op, math          ? ArrayRef<StringRef>{"callee"}
-                  : participant ? ArrayRef<StringRef>{"callee", "site", "role"}
-                                : ArrayRef<StringRef>{"callee", "site"}))
+              op, math ? ArrayRef<StringRef>{"callee"}
+                       : ArrayRef<StringRef>{"callee", "site", "role"}))
         return std::move(e);
-      if ((math && owner != "math" && owner != "protocol") ||
-          (!math && !participant && owner != "local"))
+      if (math && owner != "math" && owner != "protocol")
         return error("structured-source-reference");
-      auto callee =
-          reference(op, "callee",
-                    math          ? ArrayRef<StringRef>{"math"}
-                    : participant ? ArrayRef<StringRef>{"local"}
-                                  : ArrayRef<StringRef>{"local", "finite",
-                                                        "realize", "map"});
+      auto callee = reference(op, "callee",
+                              math ? ArrayRef<StringRef>{"math"}
+                                   : ArrayRef<StringRef>{"local"});
       if (!callee)
         return callee.takeError();
       auto *target = symbols.lookup(*callee);
@@ -871,7 +801,7 @@ class Exporter {
           return error("structured-source-role");
         return json::Array{"local_call", *callee, ownerRole.getValue()};
       }
-      return json::Array{math ? "call" : "apply", *callee};
+      return json::Array{"call", *callee};
     }
     if (isa<algebra::FiniteFoldOp>(op)) {
       if (auto e = attributes(op, {"domain", "step", "predicate"}))
@@ -889,18 +819,6 @@ class Exporter {
       if (owner != "protocol" || !guardOwner || !hasRole(guardOwner.getValue()))
         return error("structured-source-role");
       return json::Array{"guard", guardOwner.getValue()};
-    }
-    if (isa<local::LocalIfOp, local::LocalForOp>(op)) {
-      if (auto e = attributes(op, {"site"}))
-        return std::move(e);
-      if (owner != "local")
-        return error("structured-source-operation");
-      if (isa<local::LocalIfOp>(op))
-        return json::Array{"if"};
-      return json::Array{
-          isa<local::LocalConditionOp>(op.getRegion(0).front().back())
-              ? "for_condition"
-              : "for"};
     }
     return error("structured-source-operation", op.getName().getStringRef());
   }
@@ -938,30 +856,12 @@ class Exporter {
       if (!args)
         return args.takeError();
       if (&op == &body.back()) {
-        if (isa<local::StopOp>(op)) {
-          if (auto e = attributes(op, {"reason", "site"}))
-            return std::move(e);
-          if (owner != "local")
-            return error("structured-source-operation");
-          auto occurrence = site(op);
-          if (!occurrence)
-            return occurrence.takeError();
-          auto reason = op.getAttrOfType<StringAttr>("reason");
-          if (!reason)
-            return error("structured-source-operation");
-          return json::Array{
-              "block", std::move(encoded),
-              json::Array{"stop", reason.getValue(), *occurrence}};
-        }
         bool valid =
             terminator == "return"
                 ? (owner == "math" ? isa<func::ReturnOp>(op)
-                   : owner == "local"
-                       ? isa<local::ReturnOp>(op)
-                       : isa<protocol_ir::MathematicalReturnOp>(op))
-            : terminator == "condition" ? isa<local::LocalConditionOp>(op)
-            : owner == "protocol"       ? isa<protocol_ir::ProtocolYieldOp>(op)
-                                        : isa<local::LocalYieldOp>(op);
+                                   : isa<protocol_ir::MathematicalReturnOp>(op))
+                : owner == "protocol" && terminator == "yield" &&
+                      isa<protocol_ir::ProtocolYieldOp>(op);
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
         if (auto e = attributes(op, {}))
@@ -984,11 +884,9 @@ class Exporter {
         return desc.takeError();
       StringRef occurrence;
       if (op.hasAttr("site") ||
-          op.getName().getStringRef().starts_with("algebra.exec.") ||
           isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
               protocol_ir::GuardOp, protocol_ir::LocalCallOp,
-              protocol_ir::RepeatOp, local::ApplyOp, local::LocalIfOp,
-              local::LocalForOp, local::BoolConstantOp>(op)) {
+              protocol_ir::RepeatOp>(op)) {
         auto checked = site(op);
         if (!checked)
           return checked.takeError();
@@ -996,58 +894,26 @@ class Exporter {
       }
       json::Array regions;
       if (op.getNumRegions()) {
-        bool loop = isa<local::LocalForOp>(op);
-        bool repeat = isa<protocol_ir::RepeatOp>(op);
-        if ((!loop && !repeat && !isa<local::LocalIfOp>(op)) ||
-            op.getNumRegions() != (loop || repeat ? 1u : 2u))
+        if (!isa<protocol_ir::RepeatOp>(op) || op.getNumRegions() != 1)
           return error("structured-source-region");
         for (Region &nested : op.getRegions()) {
           if (!llvm::hasSingleElement(nested) || nested.front().empty())
             return error("structured-source-region");
           Block &inner = nested.front();
-          SmallVector<Type> expectedInputs;
+          // Count becomes the induction argument; state and immutable captures
+          // retain their ordered types, without identifying their SSA values.
+          SmallVector<Type> expectedInputs(op.getOperandTypes());
           SmallVector<Type> expectedOutputs(op.getResultTypes());
-          StringRef end = "yield";
-          if (repeat) {
-            // The count operand becomes the induction argument; state and
-            // immutable captures retain their ordered types, not their SSA.
-            llvm::append_range(expectedInputs, op.getOperandTypes());
-          } else if (loop) {
-            expectedInputs.push_back(
-                IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned));
-            llvm::append_range(expectedInputs,
-                               op.getOperands().drop_front(2).getTypes());
-            auto captures = op.getOperands().drop_front(2 + op.getNumResults());
-            llvm::append_range(expectedOutputs, captures.getTypes());
-            Operation &last = inner.back();
-            bool conditional = isa<local::LocalConditionOp>(last);
-            if (conditional) {
-              end = "condition";
-              expectedOutputs.insert(expectedOutputs.begin(),
-                                     IntegerType::get(unit.getContext(), 1));
-            }
-            if (!isa<local::StopOp>(last)) {
-              if (last.getNumOperands() != expectedOutputs.size() ||
-                  inner.getNumArguments() != expectedInputs.size())
-                return error("structured-source-region");
-              for (unsigned i = 0; i < captures.size(); ++i)
-                if (last.getOperand(conditional + op.getNumResults() + i) !=
-                    inner.getArgument(1 + op.getNumResults() + i))
-                  return error("structured-source-capture");
-            }
-          } else {
-            llvm::append_range(expectedInputs,
-                               op.getOperands().drop_front().getTypes());
-          }
           if (inner.getArgumentTypes() != TypeRange(expectedInputs))
             return error("structured-source-region");
-          auto in = sorts(expectedInputs, repeat);
+          auto in = sorts(expectedInputs, true);
           if (!in)
             return in.takeError();
           auto out = sorts(expectedOutputs);
           if (!out)
             return out.takeError();
-          auto content = block(nested, expectedOutputs, owner, end, depth + 1);
+          auto content =
+              block(nested, expectedOutputs, owner, "yield", depth + 1);
           if (!content)
             return content.takeError();
           regions.push_back(json::Array{std::move(*in), std::move(*out),
@@ -1075,56 +941,93 @@ class Exporter {
         !llvm::hasSingleElement(op.getBody()))
       return error("structured-source-domain");
     Block &body = op.getBody().front();
-    if (body.getOperations().size() != 2)
+    if (body.empty() || !isa<data::DomainYieldOp>(body.back()))
       return error("structured-source-domain");
-    Operation &constructor = body.front();
+    auto input = [&](Value value) -> Expected<unsigned> {
+      auto argument = dyn_cast<BlockArgument>(value);
+      if (!argument || argument.getOwner() != &body)
+        return error("structured-source-domain");
+      return argument.getArgNumber();
+    };
+    llvm::DenseMap<Value, unsigned> refs;
+    json::Array constructors;
+    for (Operation &constructor : body.without_terminator()) {
+      if (++instructions > instructionLimit)
+        return error("structured-source-limit");
+      if (constructor.getNumResults() != 1)
+        return error("structured-source-domain");
+      auto result = dyn_cast<data::DomainType>(constructor.getResult(0).getType());
+      if (!result)
+        return error("structured-source-domain");
+      auto items = sorts(result.getItemTypes());
+      if (!items)
+        return items.takeError();
+      json::Array desc;
+      if (isa<data::DomainElementsOp, data::DomainIndicesOp>(constructor)) {
+        bool indices = isa<data::DomainIndicesOp>(constructor);
+        if (auto e = attributes(constructor, indices ? ArrayRef<StringRef>{"axis"}
+                                                     : ArrayRef<StringRef>{}))
+          return std::move(e);
+        auto arg = input(constructor.getOperand(0));
+        if (!arg)
+          return arg.takeError();
+        if (!isa<algebra::FieldVectorType, data::SequenceType>(
+                constructor.getOperand(0).getType()))
+          return error("structured-source-domain");
+        desc = json::Array{indices ? "indices" : "elements", *arg};
+        if (indices) {
+          if (cast<data::DomainIndicesOp>(constructor).getAxis() != 0)
+            return error("structured-source-domain");
+          desc.push_back(0);
+        }
+      } else if (isa<data::DomainRangeOp>(constructor)) {
+        if (auto e = attributes(constructor, {}))
+          return std::move(e);
+        auto lower = input(constructor.getOperand(0));
+        if (!lower)
+          return lower.takeError();
+        auto upper = input(constructor.getOperand(1));
+        if (!upper)
+          return upper.takeError();
+        desc = json::Array{"range", *lower, *upper};
+      } else if (isa<data::DomainZipOp, data::DomainProductOp>(constructor)) {
+        if (auto e = attributes(constructor, {}))
+          return std::move(e);
+        json::Array operands;
+        for (Value value : constructor.getOperands()) {
+          auto found = refs.find(value);
+          if (found == refs.end())
+            return error("structured-source-domain");
+          operands.push_back(found->second);
+        }
+        desc = json::Array{isa<data::DomainZipOp>(constructor) ? "zip" : "product",
+                           std::move(operands)};
+      } else {
+        return error("structured-source-domain", constructor.getName().getStringRef());
+      }
+      constructors.push_back(std::move(desc));
+      for (auto &entry : refs)
+        ++entry.second;
+      refs[constructor.getResult(0)] = 0;
+    }
     Operation &yield = body.back();
-    bool indices = isa<data::DomainIndicesOp>(constructor);
-    if ((!indices && !isa<data::DomainElementsOp>(constructor)) ||
-        !isa<data::DomainYieldOp>(yield) ||
-        yield.getOperand(0) != constructor.getResult(0))
-      return error("structured-source-domain");
-    if (auto e = attributes(constructor, indices ? ArrayRef<StringRef>{"axis"}
-                                                 : ArrayRef<StringRef>{}))
-      return std::move(e);
     if (auto e = attributes(yield, {}))
       return std::move(e);
-    auto arg = dyn_cast<BlockArgument>(constructor.getOperand(0));
-    Type container = constructor.getOperand(0).getType();
-    auto vector = dyn_cast<algebra::FieldVectorType>(container);
-    auto sequence = dyn_cast<data::SequenceType>(container);
-    if (!arg || arg.getOwner() != &body || (!vector && !sequence) ||
-        (indices &&
-         constructor.getAttrOfType<IntegerAttr>("axis").getInt() != 0))
-      return error("structured-source-domain");
-    auto items = cast<data::DomainType>(constructor.getResult(0).getType())
-                     .getItemTypes();
-    Type item = indices  ? Type(IntegerType::get(unit.getContext(), 64,
-                                                 IntegerType::Unsigned))
-                : vector ? Type(algebra::FieldType::get(unit.getContext(),
-                                                        vector.getDomain()))
-                         : sequence.getElementType();
-    if (items.size() != 1 || items[0] != item)
+    auto returned = refs.find(yield.getOperand(0));
+    if (returned == refs.end())
       return error("structured-source-domain");
     auto inputs = sorts(signature(*op).getInputs());
     if (!inputs)
       return inputs.takeError();
-    json::Array desc{indices ? "indices" : "elements", arg.getArgNumber()};
-    if (indices)
-      desc.push_back(0);
     return json::Array{"domain", op.getSymName(), std::move(*inputs),
-                       std::move(desc)};
+                       std::move(constructors), returned->second};
   }
 
-  Expected<json::Value> preparation(Operation &op) {
-    bool map = isa<algebra::MapRealizeOp>(op);
-    StringRef code =
-        map ? "structured-source-map" : "structured-source-realization";
-    if (auto e = attributes(
-            op,
-            map ? ArrayRef<StringRef>{"sym_name", "function_type", "helper",
-                                      "rowwise"}
-                : ArrayRef<StringRef>{"sym_name", "function_type", "helper"}))
+  Expected<json::Value> mapPreparation(algebra::MapRealizeOp map) {
+    Operation &op = *map;
+    StringRef code = "structured-source-map";
+    if (auto e =
+            attributes(op, {"sym_name", "function_type", "helper", "rowwise"}))
       return std::move(e);
     if (op.getNumOperands() || op.getNumResults() || op.getNumRegions())
       return error(code);
@@ -1147,36 +1050,29 @@ class Exporter {
         helper->getParentOp() != op.getParentOp())
       return error(code, "private sibling helper required");
     json::Array rowwise;
-    if (map) {
-      auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
-      auto lifted = type.getNumResults() == 1
-                        ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
-                        : algebra::FieldVectorType();
-      if (!lifted)
-        return error(code, "scalar helper ABI or row mask");
-      Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
-      Type vector = lifted;
-      if (!mask || mask.size() != type.getNumInputs() ||
-          !llvm::is_contained(mask.asArrayRef(), true) ||
-          type.getNumResults() != 1 || type.getResult(0) != vector ||
-          helper.getFunctionType() !=
-              FunctionType::get(op.getContext(),
-                                SmallVector<Type>(mask.size(), field), {field}))
-        return error(code, "scalar helper ABI or row mask");
-      for (auto [input, row] : llvm::zip(type.getInputs(), mask.asArrayRef())) {
-        if (input != (row ? vector : field))
-          return error(code, "lifted input type");
-        rowwise.push_back(row);
-      }
-    } else if (helper.getFunctionType() != type) {
-      return error(code, "full helper ABI");
+    auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
+    auto lifted = type.getNumResults() == 1
+                      ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
+                      : algebra::FieldVectorType();
+    if (!lifted)
+      return error(code, "scalar helper ABI or row mask");
+    Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
+    Type vector = lifted;
+    if (!mask || mask.size() != type.getNumInputs() ||
+        !llvm::is_contained(mask.asArrayRef(), true) ||
+        type.getNumResults() != 1 || type.getResult(0) != vector ||
+        helper.getFunctionType() !=
+            FunctionType::get(op.getContext(),
+                              SmallVector<Type>(mask.size(), field), {field}))
+      return error(code, "scalar helper ABI or row mask");
+    for (auto [input, row] : llvm::zip(type.getInputs(), mask.asArrayRef())) {
+      if (input != (row ? vector : field))
+        return error(code, "lifted input type");
+      rowwise.push_back(row);
     }
-    json::Array result{map ? "map" : "realize",
-                       SymbolTable::getSymbolName(&op).getValue(),
-                       std::move(*inputs), std::move(*outputs), *helperName};
-    if (map)
-      result.push_back(std::move(rowwise));
-    return result;
+    return json::Array{
+        "map",       map.getSymName(),  std::move(*inputs), std::move(*outputs),
+        *helperName, std::move(rowwise)};
   }
 
   // Whole-unit bodies have already passed ordinary instruction admission and
@@ -1251,19 +1147,15 @@ class Exporter {
       return Error::success();
     };
     for (Operation &op : unit.getBody().front()) {
-      if (!isa<local::RealizeOp, algebra::MapRealizeOp>(op))
+      if (!isa<algebra::MapRealizeOp>(op))
         continue;
-      Type field;
-      if (isa<algebra::MapRealizeOp>(op)) {
-        auto type = signature(op);
-        auto lifted =
-            type && type.getNumResults() == 1
-                ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
-                : algebra::FieldVectorType();
-        if (!lifted)
-          return error("structured-source-map", "scalar closure ABI");
-        field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
-      }
+      auto type = signature(op);
+      auto lifted = type && type.getNumResults() == 1
+                        ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
+                        : algebra::FieldVectorType();
+      if (!lifted)
+        return error("structured-source-map", "scalar closure ABI");
+      Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
       Operation *root = symbols.lookup(
           op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue());
       // A preparation has no caller-supplied premise. Internal helper premises
@@ -1272,9 +1164,7 @@ class Exporter {
         if (auto premises =
                 root->getAttrOfType<ArrayAttr>("data.preconditions");
             premises && !premises.empty())
-          return error(field ? "structured-source-map"
-                             : "structured-source-realization",
-                       "root preconditions");
+          return error("structured-source-map", "root preconditions");
       if (auto e = check(root, field))
         return e;
     }
@@ -1312,11 +1202,11 @@ class Exporter {
       return json::Array{"realize", name.str(), std::move(*inputs),
                          std::move(*outputs), *helper};
     }
-    if (isa<exec::FoldOp>(op)) {
+    if (isa<exec::FoldOp, exec::CollectOp>(op)) {
       auto refs = fold(op);
       if (!refs)
         return refs.takeError();
-      return json::Array{"finite",
+      return json::Array{isa<exec::CollectOp>(op) ? "collect" : "finite",
                          name.str(),
                          "private",
                          std::move(*inputs),
@@ -1329,8 +1219,8 @@ class Exporter {
   }
 
   Expected<json::Value> function(Operation &op) {
-    if (isa<local::RealizeOp, algebra::MapRealizeOp>(op))
-      return preparation(op);
+    if (auto map = dyn_cast<algebra::MapRealizeOp>(op))
+      return mapPreparation(map);
     StringRef owner = kind(op);
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))
@@ -1340,19 +1230,13 @@ class Exporter {
     if (owner == "math")
       allowed.push_back("data.preconditions");
     else if (owner == "local") {
-      if (scoped)
-        llvm::append_range(allowed,
-                           ArrayRef<StringRef>{"runtime.origin", "no_inline",
-                                               "data.preconditions"});
-      else
-        allowed.push_back("logical_origin");
+      llvm::append_range(allowed,
+                         ArrayRef<StringRef>{"runtime.origin", "no_inline",
+                                             "data.preconditions"});
     } else if (owner == "protocol")
       llvm::append_range(allowed, ArrayRef<StringRef>{"roles", "input_roles",
                                                       "output_roles",
                                                       "contracts", "origin"});
-    else if (owner == "finite")
-      llvm::append_range(allowed,
-                         ArrayRef<StringRef>{"domain", "step", "predicate"});
     else
       return error("structured-source-operation", op.getName().getStringRef());
     if (auto e = attributes(op, allowed))
@@ -1370,22 +1254,6 @@ class Exporter {
     if (!visible)
       return visible.takeError();
     StringRef name = SymbolTable::getSymbolName(&op).getValue();
-    if (owner == "finite") {
-      // The declaration lowers to one owned fold instruction in the reader.
-      if (++instructions > instructionLimit)
-        return error("structured-source-limit");
-      auto refs = fold(op);
-      if (!refs)
-        return refs.takeError();
-      return json::Array{"finite",
-                         name,
-                         *visible,
-                         std::move(*inputs),
-                         std::move(*outputs),
-                         std::move((*refs)[0]),
-                         std::move((*refs)[1]),
-                         std::move((*refs)[2])};
-    }
     json::Array ports;
     roles = {};
     if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
@@ -1426,8 +1294,7 @@ class Exporter {
       origin = std::move(*value->getAsArray());
     }
     if (owner == "local") {
-      auto attr = op.getAttrOfType<ArrayAttr>(scoped ? "runtime.origin"
-                                                     : "logical_origin");
+      auto attr = op.getAttrOfType<ArrayAttr>("runtime.origin");
       if (!attr || attr.size() != 2 || !isa<StringAttr>(attr[0]) ||
           !isa<ArrayAttr>(attr[1]))
         return error("structured-source-origin");

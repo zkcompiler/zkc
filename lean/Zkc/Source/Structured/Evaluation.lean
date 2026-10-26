@@ -1,6 +1,8 @@
 module
 
 public import Zkc.Source.Structured.MapEvaluation
+public import Zkc.Source.Structured.FiniteDomains
+public import Zkc.Source.Structured.CollectEvaluation
 public import Zkc.Source.Finite
 
 @[expose] public section
@@ -11,14 +13,6 @@ an arbitrary effect interface. Nested callbacks use the same closed-value meanin
 set_option autoImplicit false
 namespace Zkc.Source.Structured
 
-def DomainSpec.denote {F G : Type} : (domain : DomainSpec) →
-    Values (assignment F G) domain.inputs → Finite.Domain (assignment F G domain.item)
-  | ⟨_, _, collection, container, true⟩, arguments =>
-      let values := collection.values (arguments.get container)
-      .check (values.length < indexLimit) .exhausted (.elements (List.range values.length))
-  | ⟨_, _, collection, container, false⟩, arguments =>
-      let values := collection.values (arguments.get container)
-      .check (values.length < indexLimit) .exhausted (.elements values)
 
 namespace Evaluation
 
@@ -33,8 +27,8 @@ def foldTransition {F G : Type} {interface : PIR.Signature}
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item) : PIR.Process interface (Values (assignment F G) spec.state) :=
-  let callbackArguments := Values.cons item (arguments.append captures)
+    (item : Values (assignment F G) spec.domain.items) : PIR.Process interface (Values (assignment F G) spec.state) :=
+  let callbackArguments := item.append (arguments.append captures)
   let enabled : PIR.Process interface (Values (assignment F G) [.boolean]) :=
     if spec.predicate.isEmpty then .done (.cons true .nil)
     else invoke table spec.predicateHelper callbackArguments
@@ -48,7 +42,8 @@ def denoteFold {F G : Type} {interface : PIR.Signature}
     PIR.Process interface (Values (assignment F G) spec.state) :=
   let (arguments, rest) := values.split spec.domain.inputs
   let (initial, captures) := rest.split spec.state
-  Finite.execute (spec.domain.denote arguments) (foldTransition table spec arguments captures) initial
+  Finite.admitThen (spec.domain.admit arguments) fun items =>
+    Finite.fold (foldTransition table spec arguments captures) items initial
 
 /-- Closed callback invocation adapter; the operation observes only returned
 values and stopping, and never inspects callback process constructors. -/
@@ -122,6 +117,7 @@ def operation {F G : Type} {interface : PIR.Signature}
       | none => .halt .refused
   | .invoke helper, args, .nil => invoke table helper args
   | .fold spec, args, .nil => denoteFold table spec args
+  | .collect spec, args, .nil => denoteCollect table spec args
   | .map spec, args, .nil => denoteMap table spec args
   | .branch _ _, .cons condition captures, .cons yes (.cons no .nil) =>
       invokeCallback (if condition then yes else no) captures

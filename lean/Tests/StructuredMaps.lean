@@ -203,7 +203,7 @@ private def run : IO Unit := do
   test "finite-callback-realization-forbidden" (!(Definition.realization realization).acceptsEdge (.callback .local))
   test "protocol-finite-forbidden"
     (!(Definition.finite ⟨"finite", .privateDef, [], [], "d", "step", ""⟩).acceptsEdge .localCall)
-  let domain : Domain := ⟨"elements", [vector], .elements 0⟩
+  let domain : Domain := ⟨"elements", [vector], [.elements 0], 0⟩
   let step := math "step" [scalar, scalar, vector] [scalar] [] [0]
   let finiteRoot := math "finiteRoot" [vector, scalar] [scalar]
     [.instruction (.fold "elements" "step" "") [0, 1] [scalar] [] ""] [0]

@@ -23,7 +23,7 @@ private def binding (name contract : String) (domain : Bool := false) : Binding 
   ⟨name, contract, if domain then [scalarDomain] else [], ""⟩
 private def exec (name binding : String) (args : List Nat) (out : List Ty)
     (parameters : List String := []) : Instruction :=
-  .instruction (.exec ("algebra.exec." ++ name) binding parameters) args out [] name
+  .instruction (.exec "exec.apply" binding parameters) args out [] name
 private def constant (n : Nat) : Instruction :=
   exec "index_constant" "constant" [] [.index] [toString n]
 private def labelBlock : Nat → String → Block → Block
@@ -252,7 +252,7 @@ def run : IO Unit := do
      helper "predicate" [fieldTy, vectorTy, .boolean] [.boolean] (.block [] (.ret [2])),
      .finite ⟨"fold", .privateDef, [vectorTy, vectorTy, .boolean], [vectorTy],
        "elements", "step", "predicate"⟩]
-    with domains := [⟨"elements", [vectorTy], .elements 0⟩] }
+    with domains := [⟨"elements", [vectorTy], [.elements 0], 0⟩] }
   equal "fold step receives state item arguments captures"
     (runClosed folded [vector 1, vector 4095, arr [.str "bool", .bool true]]) (returned [vector 4096])
   refusal "fold-generated vector length" "structured-evaluation-value-limit"
