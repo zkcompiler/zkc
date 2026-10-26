@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.Components.GkrRoundsHelpers
 public import ZkcExamples.Structured.SumcheckHelperExpansions
+public import ZkcExamples.Structured.MultilinearCollectLaws
 public import Zkc.Polynomial.Multilinear.ListRestriction
 
 @[expose] public section
@@ -60,19 +61,31 @@ theorem round_equation (a m l r : List F) :
     Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty,
     prepend_one, prepend_two, Environment.push,
     SiteObservations.silent, PIR.Process.bind, Primitive.evaluate,
-    ← List.sum_eq_foldl, map_values, map_quadratics, linear]
+    ← List.sum_eq_foldl, map_values_left, map_values_right, map_quadratics, linear]
   rfl
+
+abbrev interpolationBindings : ZkcExamples.Structured.MultilinearCollectBodies.Bindings where
+  collection := interpolationsHelper.name
+  domain := interpolationsCollection.domain.name
+  callback := interpolationCallbackHelper.name
+  computation := interpolationRealizationHelper.name
 
 theorem map_interpolate (low high : List F) (r : F)
     (small : low.length < indexLimit) (same : high.length = low.length) :
     invoke (table (G := G)) interpolationsHelper (.cons low (.cons high (.cons r .nil))) =
       .done (.cons (List.zipWith (fun a b => a + (b - a) * r) low high) .nil) := by
   rw [interpolations_body]
-  change (Evaluation.denoteMap table
-    ⟨interpolationHelper.name, "bls12-381.fr", [true, true, false]⟩
-    (.cons low (.cons high (.cons r .nil)))).bind _ = _
-  rw [Evaluation.denoteMap_twoRows_broadcast _ _ _ low high r small same _
-    (fun a b => interpolate (G := G) a b r)]
+  change (ZkcExamples.Structured.MultilinearCollectBodies.mapBody interpolationBindings).denote
+    (Evaluation.meaning (.silent _) table) (Values.cons low (.cons high (.cons r .nil))).get = _
+  apply ZkcExamples.Structured.MultilinearCollectLaws.map_body table interpolationBindings low high r small same.symm
+  intro lo hi
+  change invoke table interpolationCallbackHelper
+    (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) = _
+  rw [interpolationCallback_body]
+  change (invoke table interpolationRealizationHelper (.cons lo (.cons hi (.cons r .nil)))).bind _ = _
+  rw [interpolationRealization_body]
+  change ((invoke table interpolationHelper (.cons lo (.cons hi (.cons r .nil)))).bind _).bind _ = _
+  rw [interpolate]
   rfl
 
 def fix (xs : List F) (r : F) :
@@ -117,10 +130,22 @@ theorem map_interpolate_exhausted (low high : List F) (r : F)
     invoke (table (G := G)) interpolationsHelper (.cons low (.cons high (.cons r .nil))) =
       .halt .exhausted := by
   rw [interpolations_body]
-  change (Evaluation.denoteMap table
-    ⟨interpolationHelper.name, "bls12-381.fr", [true, true, false]⟩
+  change (Evaluation.denoteCollect table interpolationsCollection
     (.cons low (.cons high (.cons r .nil)))).bind _ = _
-  rw [Evaluation.denoteMap_first_exhausted _ _ _ low.length [high.length] rfl large]
+  have stopped : interpolationsCollection.domain.admit (carriers := uniformCarriers F G)
+      (.cons low (.cons high .nil)) = .stopped .exhausted := by
+    change Finite.continueWith
+      (if low.length < indexLimit then
+        .returned (low.map fun x => (Values.cons x .nil : Values (assignment F G) [.field "bls12-381.fr"]))
+      else .stopped .exhausted) _ = _
+    rw [ite_eq_right large]
+    rfl
+  have halted : Evaluation.denoteCollect (table (F := F) (G := G)) interpolationsCollection
+      (.cons low (.cons high (.cons r .nil))) = .halt .exhausted := by
+    simpa only [Values.append] using
+      Evaluation.denoteCollect_admission_stop table interpolationsCollection
+        (.cons low (.cons high .nil)) (.cons r .nil) .exhausted stopped
+  rw [halted]
   rfl
 
 /-- Complete raw-input equation: malformed splits refuse; valid halves check

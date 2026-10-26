@@ -128,6 +128,11 @@ def domainText (spec : DomainSpec) : String :=
   "⟨" ++ ", ".intercalate [quoted spec.name, typesText spec.inputs, typesText spec.items,
     domainBodyText spec.body] ++ "⟩"
 
+def collectText (spec : CollectSpec) : String :=
+  "⟨" ++ ", ".intercalate [domainText spec.domain, collectionText spec.collection,
+    typesText spec.captures, quoted spec.body, quoted spec.predicate,
+    if spec.kind == .math then ".math" else ".local"] ++ "⟩"
+
 /-- Syntax serialization only: callback regions are retained, never executed here. -/
 def opText : Op → String
   | .exec primitive => app ".exec" [primitiveText primitive]
@@ -155,10 +160,7 @@ def opText : Op → String
   | .fold spec =>
     app ".fold" ["⟨" ++ ", ".intercalate [domainText spec.domain, typesText spec.state, typesText spec.captures,
       quoted spec.step, quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"]
-  | .collect spec =>
-    app ".collect" ["⟨" ++ ", ".intercalate [domainText spec.domain, collectionText spec.collection,
-      typesText spec.captures, quoted spec.body, quoted spec.predicate,
-      if spec.kind == .math then ".math" else ".local"] ++ "⟩"]
+  | .collect spec => app ".collect" [collectText spec]
   | .branch captures outputs => app ".branch" [typesText captures, typesText outputs]
   | .loop state captures => app ".loop" [typesText state, typesText captures]
   | .loopCondition state captures => app ".loopCondition" [typesText state, typesText captures]

@@ -199,7 +199,8 @@ theorem actual_cubic_off_cube :
 #print axioms GkrRoundsLayout.encode_replicate
 #print axioms GkrRoundsLayout.encode_tile
 #print axioms GkrRoundsLayout.admissible_state
-#print axioms GkrRoundsHelpers.map_values
+#print axioms GkrRoundsHelpers.map_values_left
+#print axioms GkrRoundsHelpers.map_values_right
 #print axioms GkrRoundsHelpers.map_quadratics
 #print axioms GkrRoundsProcesses.round_equation
 #print axioms GkrRoundsProcesses.fix_all

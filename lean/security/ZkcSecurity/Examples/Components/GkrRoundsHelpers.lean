@@ -1,7 +1,8 @@
 module
 
 public import ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
-public import Zkc.Source.Structured.MapLaws
+public import Zkc.Source.Structured.CollectionReferenceLaws
+public import Zkc.Source.TypedABI
 public import ZkcSecurity.Examples.Components.GkrRoundsLayout
 
 @[expose] public section
@@ -18,8 +19,9 @@ open Zkc.Protocols.AlgebraicRounds
 open Zkc.Polynomial.Multilinear
 
 export ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
-  (emptyHelper emptyBody appendHelper appendBody gateValueHelper gateValueBody gateValuesHelper gateValuesBody gateQuadraticHelper gateQuadraticBody gateQuadraticsHelper gateQuadraticsBody linearCoefficientHelper linearCoefficientBody linearWrapperHelper linearWrapperBody roundMessageHelper roundMessageBody interpolationHelper interpolationBody interpolationsHelper interpolationsBody factorRestrictionHelper factorRestrictionBody gateRestrictionHelper gateRestrictionBody)
+  (emptyHelper emptyBody appendHelper appendBody gateValueHelper gateValueBody gateValuesLeftHelper gateValuesLeftBody gateValuesRightHelper gateValuesRightBody gateValuesLeftCollection gateQuadraticsCollection gateValueCallbackHelper gateValueCallbackBody gateValueRealizationHelper gateValueRealizationBody gateQuadraticCallbackHelper gateQuadraticCallbackBody gateQuadraticRealizationHelper gateQuadraticRealizationBody interpolationCallbackHelper interpolationCallbackBody interpolationRealizationHelper interpolationRealizationBody interpolationsCollection gateQuadraticHelper gateQuadraticBody gateQuadraticsHelper gateQuadraticsBody linearCoefficientHelper linearCoefficientBody linearWrapperHelper linearWrapperBody roundMessageHelper roundMessageBody interpolationHelper interpolationBody interpolationsHelper interpolationsBody factorRestrictionHelper factorRestrictionBody gateRestrictionHelper gateRestrictionBody)
 
+set_option backward.isDefEq.respectTransparency false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 set_option smartUnfolding false
@@ -35,11 +37,6 @@ theorem gate_value_body (args : Values (assignment F G) gateValueHelper.inputs) 
     invoke table gateValueHelper args =
       gateValueBody.denote (Evaluation.meaning (.silent _) table) args.get :=
   ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValue_closed args
-
-theorem gate_values_body (args : Values (assignment F G) gateValuesHelper.inputs) :
-    invoke table gateValuesHelper args =
-      gateValuesBody.denote (Evaluation.meaning (.silent _) table) args.get :=
-  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValues_closed args
 
 theorem gate_quadratic_body (args : Values (assignment F G) gateQuadraticHelper.inputs) :
     invoke table gateQuadraticHelper args =
@@ -86,6 +83,46 @@ theorem gate_restriction_body (args : Values (assignment F G) gateRestrictionHel
       gateRestrictionBody.denote (Evaluation.meaning (.silent _) table) args.get :=
   ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateRestriction_closed args
 
+theorem gateValuesLeft_body (args : Values (assignment F G) gateValuesLeftHelper.inputs) :
+    invoke table gateValuesLeftHelper args =
+      gateValuesLeftBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValuesLeft_closed args
+
+theorem gateValuesRight_body (args : Values (assignment F G) gateValuesRightHelper.inputs) :
+    invoke table gateValuesRightHelper args =
+      gateValuesRightBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValuesRight_closed args
+
+theorem gateValueCallback_body (args : Values (assignment F G) gateValueCallbackHelper.inputs) :
+    invoke table gateValueCallbackHelper args =
+      gateValueCallbackBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValueCallback_closed args
+
+theorem gateValueRealization_body (args : Values (assignment F G) gateValueRealizationHelper.inputs) :
+    invoke table gateValueRealizationHelper args =
+      gateValueRealizationBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateValueRealization_closed args
+
+theorem gateQuadraticCallback_body (args : Values (assignment F G) gateQuadraticCallbackHelper.inputs) :
+    invoke table gateQuadraticCallbackHelper args =
+      gateQuadraticCallbackBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateQuadraticCallback_closed args
+
+theorem gateQuadraticRealization_body (args : Values (assignment F G) gateQuadraticRealizationHelper.inputs) :
+    invoke table gateQuadraticRealizationHelper args =
+      gateQuadraticRealizationBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.gateQuadraticRealization_closed args
+
+theorem interpolationCallback_body (args : Values (assignment F G) interpolationCallbackHelper.inputs) :
+    invoke table interpolationCallbackHelper args =
+      interpolationCallbackBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.interpolationCallback_closed args
+
+theorem interpolationRealization_body (args : Values (assignment F G) interpolationRealizationHelper.inputs) :
+    invoke table interpolationRealizationHelper args =
+      interpolationRealizationBody.denote (Evaluation.meaning (.silent _) table) args.get :=
+  ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.interpolationRealization_closed args
+
 theorem value (a m l r : F) :
     invoke (table (G := G)) gateValueHelper (.cons a (.cons m (.cons l (.cons r .nil)))) =
       .done (.cons (Gate.value a m l r) .nil) := by
@@ -115,40 +152,6 @@ theorem interpolate (a b r : F) :
 
 set_option smartUnfolding true
 
-/-- A successful source map has checked every row, in operand order. -/
-theorem remaining_shape {expected length : Nat} {rows : List Nat}
-    (ok : Evaluation.mapShapeRemaining expected rows = .returned length) :
-    length = expected ∧ ∀ k ∈ rows, k = expected ∧ k < indexLimit := by
-  induction rows with
-  | nil => exact ⟨(PIR.Outcome.returned.inj ok).symm, by simp⟩
-  | cons row rows ih =>
-    simp only [Evaluation.mapShapeRemaining] at ok
-    split at ok
-    · split at ok
-      · obtain ⟨rfl, rest⟩ := ih ok
-        refine ⟨rfl, ?_⟩
-        intro k member
-        rcases List.mem_cons.mp member with rfl | member
-        · exact ⟨by assumption, by assumption⟩
-        · exact rest k member
-      · contradiction
-    · contradiction
-
-theorem admitted_shape {rows : List Nat} {length : Nat}
-    (ok : Evaluation.mapShape rows = .returned length) :
-    ∀ k ∈ rows, k = length ∧ k < indexLimit := by
-  cases rows with
-  | nil => contradiction
-  | cons row rows =>
-    simp only [Evaluation.mapShape] at ok
-    split at ok
-    · obtain ⟨rfl, rest⟩ := remaining_shape ok
-      intro k member
-      rcases List.mem_cons.mp member with rfl | member
-      · exact ⟨rfl, by assumption⟩
-      · exact rest k member
-    · contradiction
-
 def mapped {I : PIR.Signature} (shape : PIR.Outcome Nat) (formula : Nat → F) :
     PIR.Process I (Values (assignment F G) [.vector "bls12-381.fr"]) :=
   Finite.admitThen shape fun length => .done (.cons ((List.range length).map formula) .nil)
@@ -156,67 +159,128 @@ def mapped {I : PIR.Signature} (shape : PIR.Outcome Nat) (formula : Nat → F) :
 def valuesFormula (v0 v1 v2 v3 : List F) (i : Nat) : F :=
   Gate.value (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0)
 
-theorem map_values (v0 v1 v2 v3 : List F) :
-    invoke (table (G := G)) gateValuesHelper (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.nil))))) =
-      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length]) (valuesFormula v0 v1 v2 v3) := by
-  have equation : Evaluation.denoteMap (table (G := G)) ⟨gateValueHelper.name, "bls12-381.fr", [true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.nil))))) =
-      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length]) (valuesFormula v0 v1 v2 v3) := by
-    cases shape : Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length] with
-    | stopped reason =>
-      exact Evaluation.denoteMap_shape_stops _ _ _ _ shape
-    | returned length =>
-      have bounds := admitted_shape shape
-      have selected : ∀ i < length, Evaluation.mapRowArguments (F := F) (G := G) "bls12-381.fr"
-          [true, true, true, true] (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.nil))))) i = some (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.nil))))) := by
-        intro i bound
-        have hv0 : i < v0.length := by have := (bounds v0.length (by simp)).1; omega
-        have hv1 : i < v1.length := by have := (bounds v1.length (by simp)).1; omega
-        have hv2 : i < v2.length := by have := (bounds v2.length (by simp)).1; omega
-        have hv3 : i < v3.length := by have := (bounds v3.length (by simp)).1; omega
-        simp only [Evaluation.mapRowArguments, List.getElem?_eq_getElem hv0, List.getElem?_eq_getElem hv1, List.getElem?_eq_getElem hv2, List.getElem?_eq_getElem hv3, Option.getD_some]
-        rfl
-      simpa only [mapped, shape, Finite.admitThen] using
-        Evaluation.denoteMap_reference (table (G := G)) ⟨gateValueHelper.name, "bls12-381.fr", [true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.nil))))) length shape
-          (fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.nil)))))) (valuesFormula v0 v1 v2 v3) selected
-          (fun i _ => value (G := G) (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0))
-  rw [gate_values_body]
-  change (Evaluation.denoteMap (table (G := G)) ⟨gateValueHelper.name, "bls12-381.fr", [true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.nil)))))).bind _ = _
-  rw [equation]
+theorem values_callback (x0 x1 x2 x3 : F) (v0 v1 v2 v3 : List F) :
+    invoke (table (G := G)) gateValueCallbackHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))))))) =
+      .done (.cons (Gate.value x0 x1 x2 x3) .nil) := by
+  rw [gateValueCallback_body]
+  change (invoke table gateValueRealizationHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 .nil))))).bind _ = _
+  rw [gateValueRealization_body]
+  change ((invoke table gateValueHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 .nil))))).bind _).bind _ = _
+  rw [value]
+  rfl
+
+omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- Every row's capacity check precedes its zip equality check and the next row. -/
+theorem values_domain (v0 v1 v2 v3 : List F) :
+    gateValuesLeftCollection.domain.admit (carriers := uniformCarriers F G) (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) =
+      Finite.continueWith (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length])
+        (fun n => .returned ((List.range n).map fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) .nil)))))) := by
+  simp only [gateValuesLeftCollection, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
+    Collection.values, Collection.type, Collection.element, TypedABI.get_cons_there, Values.get, Operands.eval]
+  rw [list_map_range v0 0, list_map_range v1 0, list_map_range v2 0, list_map_range v3 0]
+  simp only [Evaluation.mapShape, Evaluation.mapShapeRemaining]
+  all_goals by_cases small0 : v0.length < indexLimit <;> simp_all only [Finite.continueWith, ↓reduceIte, eq_comm]
+  all_goals by_cases small1 : v1.length < indexLimit <;> simp_all only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same1 : v1.length = v0.length <;> simp_all only [↓reduceIte, eq_comm]
+  all_goals by_cases small2 : v2.length < indexLimit <;> simp_all only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same2 : v2.length = v0.length <;> simp_all only [↓reduceIte, eq_comm]
+  all_goals by_cases small3 : v3.length < indexLimit <;> simp_all only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same3 : v3.length = v0.length <;> simp_all only [↓reduceIte, eq_comm]
+
+
+theorem collect_values (v0 v1 v2 v3 : List F) :
+    Evaluation.denoteCollect (table (G := G)) gateValuesLeftCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) =
+      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length]) (valuesFormula (F := F) v0 v1 v2 v3) := by
+  have domain := values_domain (G := G) v0 v1 v2 v3
+  cases shape : Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length] with
+  | stopped reason =>
+    simp only [shape, Finite.continueWith] at domain
+    simpa only [mapped, shape, Finite.admitThen, Values.append, Collection.pack] using
+      Evaluation.denoteCollect_admission_stop (table (G := G)) gateValuesLeftCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) .nil reason domain
+  | returned length =>
+    simp only [shape, Finite.continueWith] at domain
+    simpa only [mapped, shape, Finite.admitThen, Values.append, Collection.pack] using
+      Evaluation.denoteCollect_reference (table (G := G)) gateValuesLeftCollection
+        (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) .nil (List.range length) (fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) .nil))))) domain rfl
+        (valuesFormula (F := F) v0 v1 v2 v3) (fun i _ => values_callback (F := F) (G := G) (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0) v0 v1 v2 v3)
+
+theorem map_values_left (v0 v1 v2 v3 : List F) :
+    invoke (table (G := G)) gateValuesLeftHelper (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) =
+      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length]) (valuesFormula (F := F) v0 v1 v2 v3) := by
+  rw [gateValuesLeft_body]
+  change (Evaluation.denoteCollect table gateValuesLeftCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil))))).bind _ = _
+  rw [collect_values]
+  cases Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length] <;> rfl
+
+theorem map_values_right (v0 v1 v2 v3 : List F) :
+    invoke (table (G := G)) gateValuesRightHelper (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil)))) =
+      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length]) (valuesFormula (F := F) v0 v1 v2 v3) := by
+  rw [gateValuesRight_body]
+  change (Evaluation.denoteCollect table gateValuesLeftCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 .nil))))).bind _ = _
+  rw [collect_values]
   cases Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length] <;> rfl
 
 def quadraticsFormula (v0 v1 v2 v3 v4 v5 v6 v7 : List F) (i : Nat) : F :=
   Gate.quadratic (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0) (v4[i]?.getD 0) (v5[i]?.getD 0) (v6[i]?.getD 0) (v7[i]?.getD 0)
 
+theorem quadratics_callback (x0 x1 x2 x3 x4 x5 x6 x7 : F) (v0 v1 v2 v3 v4 v5 v6 v7 : List F) :
+    invoke (table (G := G)) gateQuadraticCallbackHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 (.cons x4 (.cons x5 (.cons x6 (.cons x7 (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))))))))))) =
+      .done (.cons (Gate.quadratic x0 x1 x2 x3 x4 x5 x6 x7) .nil) := by
+  rw [gateQuadraticCallback_body]
+  change (invoke table gateQuadraticRealizationHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 (.cons x4 (.cons x5 (.cons x6 (.cons x7 .nil))))))))).bind _ = _
+  rw [gateQuadraticRealization_body]
+  change ((invoke table gateQuadraticHelper (.cons x0 (.cons x1 (.cons x2 (.cons x3 (.cons x4 (.cons x5 (.cons x6 (.cons x7 .nil))))))))).bind _).bind _ = _
+  rw [quadratic]
+  rfl
+
+omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- Every row's capacity check precedes its zip equality check and the next row. -/
+theorem quadratics_domain (v0 v1 v2 v3 v4 v5 v6 v7 : List F) :
+    gateQuadraticsCollection.domain.admit (carriers := uniformCarriers F G) (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))) =
+      Finite.continueWith (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length])
+        (fun n => .returned ((List.range n).map fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.cons (v4[i]?.getD 0) (.cons (v5[i]?.getD 0) (.cons (v6[i]?.getD 0) (.cons (v7[i]?.getD 0) .nil)))))))))) := by
+  simp only [gateQuadraticsCollection, DomainSpec.admit, DomainBody.admit, DomainNode.admit,
+    Collection.values, Collection.type, Collection.element, TypedABI.get_cons_there, Values.get, Operands.eval]
+  rw [list_map_range v0 0, list_map_range v1 0, list_map_range v2 0, list_map_range v3 0, list_map_range v4 0, list_map_range v5 0, list_map_range v6 0, list_map_range v7 0]
+  simp only [Evaluation.mapShape, Evaluation.mapShapeRemaining]
+  all_goals by_cases small0 : v0.length < indexLimit <;> simp_all (maxSteps := 1000000) only [Finite.continueWith, ↓reduceIte, eq_comm]
+  all_goals by_cases small1 : v1.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same1 : v1.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small2 : v2.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same2 : v2.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small3 : v3.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same3 : v3.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small4 : v4.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same4 : v4.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small5 : v5.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same5 : v5.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small6 : v6.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same6 : v6.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+  all_goals by_cases small7 : v7.length < indexLimit <;> simp_all (maxSteps := 1000000) only [zipDomainRows_ranges, Values.append, ↓reduceIte]
+  all_goals by_cases same7 : v7.length = v0.length <;> simp_all (maxSteps := 1000000) only [↓reduceIte, eq_comm]
+
+theorem collect_quadratics (v0 v1 v2 v3 v4 v5 v6 v7 : List F) :
+    Evaluation.denoteCollect (table (G := G)) gateQuadraticsCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))) =
+      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length]) (quadraticsFormula (F := F) v0 v1 v2 v3 v4 v5 v6 v7) := by
+  have domain := quadratics_domain (G := G) v0 v1 v2 v3 v4 v5 v6 v7
+  cases shape : Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length] with
+  | stopped reason =>
+    simp only [shape, Finite.continueWith] at domain
+    simpa only [mapped, shape, Finite.admitThen, Values.append, Collection.pack] using
+      Evaluation.denoteCollect_admission_stop (table (G := G)) gateQuadraticsCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))) .nil reason domain
+  | returned length =>
+    simp only [shape, Finite.continueWith] at domain
+    simpa only [mapped, shape, Finite.admitThen, Values.append, Collection.pack] using
+      Evaluation.denoteCollect_reference (table (G := G)) gateQuadraticsCollection
+        (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))) .nil (List.range length) (fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.cons (v4[i]?.getD 0) (.cons (v5[i]?.getD 0) (.cons (v6[i]?.getD 0) (.cons (v7[i]?.getD 0) .nil))))))))) domain rfl
+        (quadraticsFormula (F := F) v0 v1 v2 v3 v4 v5 v6 v7) (fun i _ => quadratics_callback (F := F) (G := G) (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0) (v4[i]?.getD 0) (v5[i]?.getD 0) (v6[i]?.getD 0) (v7[i]?.getD 0) v0 v1 v2 v3 v4 v5 v6 v7)
+
 theorem map_quadratics (v0 v1 v2 v3 v4 v5 v6 v7 : List F) :
-    invoke (table (G := G)) gateQuadraticsHelper (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 (.nil))))))))) =
-      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length]) (quadraticsFormula v0 v1 v2 v3 v4 v5 v6 v7) := by
-  have equation : Evaluation.denoteMap (table (G := G)) ⟨gateQuadraticHelper.name, "bls12-381.fr", [true, true, true, true, true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 (.nil))))))))) =
-      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length]) (quadraticsFormula v0 v1 v2 v3 v4 v5 v6 v7) := by
-    cases shape : Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length] with
-    | stopped reason =>
-      exact Evaluation.denoteMap_shape_stops _ _ _ _ shape
-    | returned length =>
-      have bounds := admitted_shape shape
-      have selected : ∀ i < length, Evaluation.mapRowArguments (F := F) (G := G) "bls12-381.fr"
-          [true, true, true, true, true, true, true, true] (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 (.nil))))))))) i = some (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.cons (v4[i]?.getD 0) (.cons (v5[i]?.getD 0) (.cons (v6[i]?.getD 0) (.cons (v7[i]?.getD 0) (.nil))))))))) := by
-        intro i bound
-        have hv0 : i < v0.length := by have := (bounds v0.length (by simp)).1; omega
-        have hv1 : i < v1.length := by have := (bounds v1.length (by simp)).1; omega
-        have hv2 : i < v2.length := by have := (bounds v2.length (by simp)).1; omega
-        have hv3 : i < v3.length := by have := (bounds v3.length (by simp)).1; omega
-        have hv4 : i < v4.length := by have := (bounds v4.length (by simp)).1; omega
-        have hv5 : i < v5.length := by have := (bounds v5.length (by simp)).1; omega
-        have hv6 : i < v6.length := by have := (bounds v6.length (by simp)).1; omega
-        have hv7 : i < v7.length := by have := (bounds v7.length (by simp)).1; omega
-        simp only [Evaluation.mapRowArguments, List.getElem?_eq_getElem hv0, List.getElem?_eq_getElem hv1, List.getElem?_eq_getElem hv2, List.getElem?_eq_getElem hv3, List.getElem?_eq_getElem hv4, List.getElem?_eq_getElem hv5, List.getElem?_eq_getElem hv6, List.getElem?_eq_getElem hv7, Option.getD_some]
-        rfl
-      simpa only [mapped, shape, Finite.admitThen] using
-        Evaluation.denoteMap_reference (table (G := G)) ⟨gateQuadraticHelper.name, "bls12-381.fr", [true, true, true, true, true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 (.nil))))))))) length shape
-          (fun i => (.cons (v0[i]?.getD 0) (.cons (v1[i]?.getD 0) (.cons (v2[i]?.getD 0) (.cons (v3[i]?.getD 0) (.cons (v4[i]?.getD 0) (.cons (v5[i]?.getD 0) (.cons (v6[i]?.getD 0) (.cons (v7[i]?.getD 0) (.nil)))))))))) (quadraticsFormula v0 v1 v2 v3 v4 v5 v6 v7) selected
-          (fun i _ => quadratic (G := G) (v0[i]?.getD 0) (v1[i]?.getD 0) (v2[i]?.getD 0) (v3[i]?.getD 0) (v4[i]?.getD 0) (v5[i]?.getD 0) (v6[i]?.getD 0) (v7[i]?.getD 0))
+    invoke (table (G := G)) gateQuadraticsHelper (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil)))))))) =
+      mapped (Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length]) (quadraticsFormula (F := F) v0 v1 v2 v3 v4 v5 v6 v7) := by
   rw [gate_quadratics_body]
-  change (Evaluation.denoteMap (table (G := G)) ⟨gateQuadraticHelper.name, "bls12-381.fr", [true, true, true, true, true, true, true, true]⟩ (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 (.nil)))))))))).bind _ = _
-  rw [equation]
+  change (Evaluation.denoteCollect table gateQuadraticsCollection (.cons v0 (.cons v1 (.cons v2 (.cons v3 (.cons v4 (.cons v5 (.cons v6 (.cons v7 .nil))))))))).bind _ = _
+  rw [collect_quadratics]
   cases Evaluation.mapShape [v0.length, v1.length, v2.length, v3.length, v4.length, v5.length, v6.length, v7.length] <;> rfl
 
 end

@@ -14,7 +14,7 @@ set_option maxHeartbeats 8000000
 noncomputable section
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
-abbrev valuesBelowDefinition : CheckedDefinition := payload.definitions.get ⟨34, by decide +kernel⟩
+abbrev valuesBelowDefinition : CheckedDefinition := payload.definitions.get ⟨52, by decide +kernel⟩
 abbrev valuesBelowHelper := valuesBelowDefinition.helper
 theorem valuesBelow_body (args : Values (assignment F G) valuesBelowHelper.inputs) :
     invoke (closedMeanings payload.definitions) valuesBelowHelper args =
@@ -22,7 +22,7 @@ theorem valuesBelow_body (args : Values (assignment F G) valuesBelowHelper.input
   Evaluation.definitions_invoke_body_view_as SiteObservations.closed payload.definitions payload.linked
     valuesBelowDefinition (List.get_mem _ _) (⟨"zkl_8c63ad97d926a7762c597860addde408bcd2077ea9cda1b99df123dc13e64af6", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, .index, .index], [(.vector "bls12-381.fr")]⟩ : Helper) rfl valuesBelowDefinition.body rfl args
 
-abbrev layerGatesDefinition : CheckedDefinition := payload.definitions.get ⟨36, by decide +kernel⟩
+abbrev layerGatesDefinition : CheckedDefinition := payload.definitions.get ⟨53, by decide +kernel⟩
 abbrev layerGatesHelper := layerGatesDefinition.helper
 theorem layerGates_body (args : Values (assignment F G) layerGatesHelper.inputs) :
     invoke (closedMeanings payload.definitions) layerGatesHelper args =
@@ -30,7 +30,7 @@ theorem layerGates_body (args : Values (assignment F G) layerGatesHelper.inputs)
   Evaluation.definitions_invoke_body_view_as SiteObservations.closed payload.definitions payload.linked
     layerGatesDefinition (List.get_mem _ _) (⟨"zkl_d1f2756b99b17aad26e4b85a966eec4c9419609618b22e3ee7f8a3349cb1e33b", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr")]⟩ : Helper) rfl layerGatesDefinition.body rfl args
 
-abbrev evaluateDefinition : CheckedDefinition := payload.definitions.get ⟨17, by decide +kernel⟩
+abbrev evaluateDefinition : CheckedDefinition := payload.definitions.get ⟨39, by decide +kernel⟩
 abbrev evaluateHelper := evaluateDefinition.helper
 theorem evaluate_body (args : Values (assignment F G) evaluateHelper.inputs) :
     invoke (closedMeanings payload.definitions) evaluateHelper args =
@@ -41,7 +41,7 @@ theorem evaluate_body (args : Values (assignment F G) evaluateHelper.inputs) :
 abbrev outputSpec : RepeatSpec := (⟨[(.vector "bls12-381.fr"), (.vector "bls12-381.fr")], [(.service "random.bls12-381.fr/0")], [0, 1], [[1], [0]], 4⟩ : RepeatSpec)
 abbrev outputBody := protocol1Role1Callback0Body
 
-abbrev selectBlockDefinition : CheckedDefinition := payload.definitions.get ⟨19, by decide +kernel⟩
+abbrev selectBlockDefinition : CheckedDefinition := payload.definitions.get ⟨10, by decide +kernel⟩
 abbrev selectBlockHelper := selectBlockDefinition.helper
 
 abbrev protocol1Role0Callback1SetupFrame := Binders (ringModel F G) [(.tuple [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.vector "bls12-381.fr")]), (.tuple [(.vector "bls12-381.fr")]), (.tuple [(.vector "bls12-381.fr")]), (.tuple [(.vector "bls12-381.fr")]), (.component .index), (.component (.vector "bls12-381.fr")), (.component (.vector "bls12-381.fr")), (.component (.field "bls12-381.fr")), (.component (.vector "bls12-381.fr")), (.component (.vector "bls12-381.fr")), (.component (.vector "bls12-381.fr")), (.component .index), (.component .index), (.component .index), (.component (.service "random.bls12-381.fr/0"))]

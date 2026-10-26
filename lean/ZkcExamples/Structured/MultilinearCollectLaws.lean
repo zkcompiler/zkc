@@ -18,6 +18,7 @@ set_option smartUnfolding true
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
+variable {interface : PIR.Signature}
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem domain_admit (bindings : Bindings) (low high : List F)
@@ -41,31 +42,31 @@ theorem domain_admit (bindings : Bindings) (low high : List F)
     Function.comp_def, Prod.map_fst, Prod.map_snd]
 
 
-theorem callback_body (table : Meanings F G) (bindings : Bindings)
+theorem callback_body (table : HelperTable (assignment F G) interface) (bindings : Bindings)
     (lo hi r : F) (low high : List F) :
-    (mapCallbackBody bindings).denote (meaning F G table)
+    (mapCallbackBody bindings).denote (Evaluation.meaning (.silent interface) table)
       (Values.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))).get =
       (invoke table (interpolateRealizationHelper bindings)
         (.cons lo (.cons hi (.cons r .nil)))).bind fun result =>
           .done (.cons (result.get .here) .nil) := by
   derive_process
 
-theorem realization_body (table : Meanings F G) (bindings : Bindings)
+theorem realization_body (table : HelperTable (assignment F G) interface) (bindings : Bindings)
     (lo hi r : F) :
-    (interpolateRealizationBody bindings).denote (meaning F G table)
+    (interpolateRealizationBody bindings).denote (Evaluation.meaning (.silent interface) table)
       (Values.cons lo (.cons hi (.cons r .nil))).get =
       (invoke table interpolateHelper (.cons lo (.cons hi (.cons r .nil)))).bind fun result =>
         .done (.cons (result.get .here) .nil) := by
   derive_process
 
-theorem map_body (table : Meanings F G) (bindings : Bindings)
+theorem map_body (table : HelperTable (assignment F G) interface) (bindings : Bindings)
     (low high : List F) (r : F) (small : low.length < indexLimit)
     (sameLength : low.length = high.length)
     (callback : ∀ lo hi,
       invoke table (mapCallbackHelper bindings)
         (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) =
         .done (.cons (lo + (hi - lo) * r) .nil)) :
-    (mapBody bindings).denote (meaning F G table)
+    (mapBody bindings).denote (Evaluation.meaning (.silent interface) table)
       (Values.cons low (.cons high (.cons r .nil))).get =
       .done (.cons (List.zipWith (fun lo hi => lo + (hi - lo) * r) low high) .nil) := by
   have collected := Evaluation.denoteCollect_reference table (collectSpec bindings)
@@ -74,7 +75,7 @@ theorem map_body (table : Meanings F G) (bindings : Bindings)
     (domain_admit bindings low high small sameLength) rfl
     (fun pair => pair.1 + (pair.2 - pair.1) * r)
     (fun pair _ => callback pair.1 pair.2)
-  have expanded : (mapBody bindings).denote (meaning F G table)
+  have expanded : (mapBody bindings).denote (Evaluation.meaning (.silent interface) table)
       (Values.cons low (.cons high (.cons r .nil))).get =
       (Evaluation.denoteCollect table (collectSpec bindings)
         (.cons low (.cons high (.cons r .nil)))).bind fun result =>

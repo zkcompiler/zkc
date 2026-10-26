@@ -51,7 +51,7 @@ theorem step3_binding (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (O
   rw [sourceProtocol0_body]
   rfl
 abbrev step4 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))  : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (invoke tables.components sourceHelper31.helper (.cons (none) (.cons (none) .nil)))
+  (invoke tables.components sourceHelper21.helper (.cons (none) (.cons (none) .nil)))
 
 def process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=

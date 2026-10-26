@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.SumcheckProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:216a058ee684ce5174de347da3d6d015cbfbd576e7640e4d5f2a1f27018ece9c"
-  candidate := "sha256:d121c4bc84d3c9b85504addc4cacce00b3861f1c1077c4885d99c7696306c6dc"
+  source := "sha256:86cd9b93d888ee210793170516152638bc8f7b8af253f1a052aead232e386437"
+  candidate := "sha256:b14e394fa96696a641c820e30b5d4050a3f774b158a3832ea360daf71eab34fa"
   policy := ⟨"zkl_ba110e6c2c5207ba20905eec0c37f2bbf16736574645c8de8dee0d5abb5f2071", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [3], [0, 1, 2], [("apply_18_label_726564756365_label_6368616c6c656e6765", "apply_18_label_726564756365_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .data .index, .transcript "merlin3.bls12-381.fr64be/0"]

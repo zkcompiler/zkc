@@ -15,10 +15,10 @@ set_option smartUnfolding false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
 theorem helper_bodies : SumcheckVerifierHelpers.Bodies payload.definitions where
-  empty := ⟨payload.definitions.get ⟨17, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
-  append := ⟨payload.definitions.get ⟨23, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
-  width := ⟨payload.definitions.get ⟨15, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
-  «variables» := ⟨payload.definitions.get ⟨16, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
+  empty := ⟨payload.definitions.get ⟨16, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
+  append := ⟨payload.definitions.get ⟨20, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
+  width := ⟨payload.definitions.get ⟨14, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
+  «variables» := ⟨payload.definitions.get ⟨15, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
   values := ⟨payload.definitions.get ⟨9, by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩
 
 theorem protocol0Role1Callback0_body_template : protocol0Role1Callback0Body = SumcheckVerifierBodies.roundBody := by

@@ -59,7 +59,7 @@ theorem projectionLaws_hold {inputs : List Ty} (input : Values (Component (assig
   intro entry
   fin_cases entry
   · intro args values passed
-    have body := helper_body payload (payload.definitions.get ⟨15, by decide +kernel⟩)
+    have body := helper_body payload (payload.definitions.get ⟨8, by decide +kernel⟩)
       (List.get_mem _ _) args
     change _ = PIR.Process.done ((.cons (args.get .here) .nil) : Values (Component (assignment F G)) [(.vector "bls12-381.fr")]) at body
     have selected : passEntries args [(.vector "bls12-381.fr")] [0] = some (((.cons (args.get .here) .nil) : Values (Component (assignment F G)) [(.vector "bls12-381.fr")])) := by

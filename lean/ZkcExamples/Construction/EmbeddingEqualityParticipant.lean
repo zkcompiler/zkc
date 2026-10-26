@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.EmbeddingEqualityParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:3cf56d130e2775bfb3dcd336c540b091432f96d4521da89f951aba6948ca95fe"
-  candidate := "sha256:a2ca57b0992606b9a96139d519f29ea7e8874ce2e2f8bf103067bc4cf33e7c68"
+  source := "sha256:4108b5af3f1a8cefa37d521a1f90960d32df50a179801b7fe8335cc0289a5a3a"
+  candidate := "sha256:94c5da0d25626554224b498de33ffcafd5c297c5e9d3048bfa2500f0c9aa10fa"
   policy := ⟨"s7h6578616d706c6517h456d62656464696e67457175616c697479", "role00000000", "role00000001", 0, "merlin3.koala-bear.ext8-binomial3.rejection31le/0", [2], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.field "koala-bear"), .data (.field "koala-bear"), .transcript "merlin3.koala-bear.ext8-binomial3.rejection31le/0"]
