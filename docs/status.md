@@ -51,9 +51,12 @@ not a native correspondence theorem. A separate record-directed comparator
 checks current SSA against admitted native local definitions without reader or
 emitter replay. Both checks can inspect the complete immediate execution
 inventory inside a mixed symbol table; its other declarations and stage remain
-the enclosing profile's responsibility. These APIs are not yet the default executable Local-control path;
-the full publication pipeline and artifact comparator still use the existing
-consumer.
+the enclosing profile's responsibility. This scoped path is now the default for
+source emission, participant preparation, numerical realization, physical
+selection, publication and artifact comparison. The cutover is still under
+validation: migration of the remaining test consumers and removal of the
+replaced native Local/Plan/Kernel owners are incomplete. Those retained owners
+do not constitute a second supported publication route.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
 The logical source-scoped API additionally retains ordinary helper calls,
@@ -78,8 +81,9 @@ conversions, diagonal contraction checks, storage release scheduling, native
 publication and independent artifact comparison. The planner indexes semantic
 payload definitions and uses across administrative CFG blocks. Captures retain
 their producer layout; body-only conversions execute in their reached body.
-Numerical realization still requires migration before mathematical and retained
-finite requests complete the default source-to-executable path. See the
+Mathematical and retained finite requests are realized through this same scoped
+path. The physical transaction keeps the actual prepared and selected modules
+for independent checks of both edges. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
 Checked scoped helper expansion substitutes actual SSA bodies, preserves
@@ -99,9 +103,9 @@ CFG bodies. Mathematical closure, invoking the premise checker and realization
 comparison remain consumer duties. Source-closure admission checks actual
 mathematical bodies, selected modules, call premises and logical affine
 ownership before realization, including malformed dormant definitions. The
-scoped readers still
-refuse unresolved mathematical requests. This operation has not yet replaced
-the default `kernel.call` path. See
+execution readers refuse unresolved mathematical requests. This is the default
+mathematical invocation; the replaced `kernel.call` registration and its
+remaining test consumers still await removal. See
 [mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).
 
 Retained `exec.fold` and `exec.collect` have checked scoped callback ABIs,
@@ -114,14 +118,16 @@ expression views. Internal source adapters construct and independently compare
 scoped occurrences, array materialization, product/Unit packing and callback
 CFGs with bounded work. These controls isolate adapter correspondence; the
 enclosing source checker owns ordinary helper bodies and complete inventory.
-This is a pre-selection component: default source emission and
-realization still require migration before the Local finite route is replaced.
+Default source emission retains these requests until checked finite
+preparation. Ordered execution and supported bulk alternatives both produce
+scoped execution. The independent reader checks actual callbacks, complete
+domain admission, source policies and fixed implementations.
 The scoped source-closure API admits affine fold state only after the shared
 Program analysis checks exact state-root preservation over actual callbacks.
 Controls distinguish fresh replacements, exchanged slots, stopped paths, primitive
-successors and cached analysis limits. The existing Local finite route still
-uses its earlier root analysis; migrating Protocol repeat consumers and deleting
-that replaced path remain part of the execution cutover.
+successors and cached analysis limits. Protocol repeat consumers use that shared
+analysis. The replaced native Local finite implementation and its remaining
+test consumers still require retirement.
 Unresolved requests are refused by
 executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
 
@@ -143,18 +149,22 @@ computation authority remain in `zkc`. The
 
 Logical [numerical units](spec/ir/kernel.md) use named `builtin.module` with
 `exec.computation` and standard functions. Stage admission checks every retained
-definition; the marker alone is not admission evidence. `kernel.call` retains
-ordered Local invocation. Preparation and participant demand lowering form
-units; the physical plan retains those units alongside the selected Local
-candidate until independent numerical and physical checks permit publication.
-Export receives the resulting physical program without Kernel operations.
+definition; the marker alone is not admission evidence. `exec.compute` retains
+ordered scoped invocation. Preparation and participant demand lowering form
+units; the physical plan retains the mathematical source and actual finite
+preparation alongside the selected scoped candidate until independent numerical
+and physical checks permit publication. Export receives the resulting physical
+program without unresolved mathematical requests.
 Normalization and numerical recipe checking consume these standard
 functions directly, with separate structural facts and call-specific selection
 restrictions.
 Existing installed backends execute the resulting operations. The checked physical
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
-standard SCF loops and are independently checked before Local lowering.
+standard SCF loops and are independently checked before scoped execution
+lowering. Finite recipe, provider and conversion choices share one bounded
+search; actual emitted uses identify which eligible occurrences may change.
+Explicit requests remain fixed, and semantic comparison failures are terminal.
 Retained pointwise maps and selected sums now use a private
 [Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
 with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
