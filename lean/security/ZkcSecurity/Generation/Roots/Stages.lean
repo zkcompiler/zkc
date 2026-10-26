@@ -33,11 +33,13 @@ open ZkcSecurity.Generation
 def soundnessOutput (root : Selection) : OriginalEndpoint.Output where
   moduleName := root.componentModule "Soundness"
   subjectModule := root.subjectModule
-  fieldType := root.mathematics.fieldType
-  groupType := root.mathematics.groupType
-  sampling := root.mathematics.sampling
-  capabilities := root.mathematics.capabilities
-  soundnessNamespace := root.securityModule ++ ".Soundness"
+  methodModule := root.securityModule ++ ".Soundness"
+  sampling := root.mathematics.modelModule ++ "." ++ root.mathematics.sampling
+  capabilities := root.mathematics.modelModule ++ "." ++ root.mathematics.capabilities
+  schedule := root.securityModule ++ ".Soundness.schedule"
+  validatorCost := root.securityModule ++ ".Soundness.validatorCost"
+  chargedExport := root.securityModule ++ ".Soundness.reductionExport"
+  scalar := some ⟨root.securityModule ++ ".Soundness.scalarBound", root.securityModule ++ ".Soundness.scalar_bound"⟩
 
 def completenessSelection (root : Selection) : RootCompleteness.Selection where
   moduleName := root.componentModule "Completeness"
@@ -58,8 +60,10 @@ def claimLibraryOutput (root : Selection) : DomainClaimLibraryOutput :=
     applicationParameter := some "application"
     theoremMethods := [("fs.keyed_soundness", 0, proofs ++ ".scalar_meaning"),
       ("fs.keyed_charged", 0, proofs ++ ".charged_meaning")]
-    theoremNormalization := [proofs ++ ".price", proofs ++ ".priceBound", proofs ++ ".budget", proofs ++ ".schedule",
-      "ZkcSecurity.Claims.CompiledSoundness.uniformSchedule"] }
+    theoremNormalization := [proofs ++ ".schedule", proofs ++ ".validatorCost", proofs ++ ".scalarBound"] ++
+      ["schedule", "price", "priceBound", "budget", "validatorCost", "scalarBound"].map
+        (fun name => root.securityModule ++ ".Soundness." ++ name) ++
+      ["ZkcSecurity.Claims.CompiledSoundness.uniformSchedule"] }
 
 private meta def require {α : Type} : Except String α → Lean.Elab.Command.CommandElabM α
   | .ok value => pure value

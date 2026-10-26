@@ -18,7 +18,7 @@ theorem small_scalar (application : String) :
     (SmallSumcheckSoundnessClaims.request0Evaluated application).proposition := by
   dsimp only [SmallSumcheckSoundnessClaims.request0Evaluated]
   claim_apply_theorem SmallSumcheck.Soundness.scalar_meaning normalizing
-    [SmallSumcheck.Soundness.price, SmallSumcheck.Soundness.budget]
+    [SmallSumcheck.Soundness.scalarBound, SmallSumcheck.Soundness.validatorCost, SmallSumcheck.Soundness.price, SmallSumcheck.Soundness.budget]
 
 /-- No receipt or registration is replaced: the original charged proposition
 is proved directly by the new all-input artifact consumer. -/
@@ -26,20 +26,20 @@ theorem small_charged (application : String) :
     (SmallSumcheckSoundnessClaims.request1Evaluated application).proposition := by
   dsimp only [SmallSumcheckSoundnessClaims.request1Evaluated]
   claim_apply_theorem SmallSumcheck.Soundness.charged_meaning normalizing
-    [SmallSumcheck.Soundness.price, SmallSumcheck.Soundness.budget, SmallSumcheck.Soundness.priceBound, SmallSumcheck.Soundness.schedule,
+    [SmallSumcheck.Soundness.scalarBound, SmallSumcheck.Soundness.validatorCost, SmallSumcheck.Soundness.price, SmallSumcheck.Soundness.budget, SmallSumcheck.Soundness.priceBound, SmallSumcheck.Soundness.schedule,
       ZkcSecurity.Claims.CompiledSoundness.uniformSchedule]
 
 theorem two_scalar (application : String) :
     (TwoSumsSoundnessClaims.request0Evaluated application).proposition := by
   dsimp only [TwoSumsSoundnessClaims.request0Evaluated]
   claim_apply_theorem TwoSums.Soundness.scalar_meaning normalizing
-    [TwoSums.Soundness.price, TwoSums.Soundness.budget]
+    [TwoSums.Soundness.scalarBound, TwoSums.Soundness.validatorCost, TwoSums.Soundness.price, TwoSums.Soundness.budget]
 
 theorem two_charged (application : String) :
     (TwoSumsSoundnessClaims.request1Evaluated application).proposition := by
   dsimp only [TwoSumsSoundnessClaims.request1Evaluated]
   claim_apply_theorem TwoSums.Soundness.charged_meaning normalizing
-    [TwoSums.Soundness.price, TwoSums.Soundness.budget, TwoSums.Soundness.priceBound, TwoSums.Soundness.schedule,
+    [TwoSums.Soundness.scalarBound, TwoSums.Soundness.validatorCost, TwoSums.Soundness.price, TwoSums.Soundness.budget, TwoSums.Soundness.priceBound, TwoSums.Soundness.schedule,
       ZkcSecurity.Claims.CompiledSoundness.uniformSchedule]
 
 #print axioms SmallSumcheck.Installation.bridgeInputs

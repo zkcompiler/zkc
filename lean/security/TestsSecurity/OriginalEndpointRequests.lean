@@ -42,13 +42,13 @@ theorem two_complete : TwoSumsCompletenessClaims.completeEvaluated.proposition :
 example (queries : Nat) :
     ZkcSecurity.Claims.Domain.ChargedExport SmallSumcheck.validatorSubject
       Components.SmallSumcheckSoundness.schedule queries
-      (Components.SmallSumcheckSoundness.budget • Components.SmallSumcheckSoundness.price) :=
+      (Components.SmallSumcheckSoundness.validatorCost queries) :=
   Components.SmallSumcheckSoundness.reductionExport queries
 
 example (queries : Nat) :
     ZkcSecurity.Claims.Domain.ChargedExport TwoSums.validatorSubject
       Components.TwoSumsSoundness.schedule queries
-      (Components.TwoSumsSoundness.budget • Components.TwoSumsSoundness.price) :=
+      (Components.TwoSumsSoundness.validatorCost queries) :=
   Components.TwoSumsSoundness.reductionExport queries
 
 #print axioms SmallSumcheckSoundnessClaims.request0Receipt

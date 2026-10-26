@@ -110,6 +110,21 @@ full-size BLS12-381 scalar values with direct SSA execution and selected product
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
 
+Method-neutral charge assembly is checked by
+`TestsSecurity.MethodNeutralChargeAssembly` and
+`TestsSecurity.MethodNeutralEndpointClients`: a heterogeneous schedule with
+prices one and two retains the installed TwoSums whole-participant binding and
+uses a deliberately loose, query-dependent validator budget. Both scalar and
+charged common-printer consumers elaborate; wrong subject, schedule, cost and
+scalar conversion declarations refuse. A separate no-query constructed
+participant fixture supplies an actual rejection derivation to the existing
+Domain-handler soundness property at zero charge. Its always-accepting control
+has the same zero cost and cannot supply that derivation. This fixture asserts
+no compiled export, plain-profile admission, native security or new artifact
+root. The six maintained Sumcheck/TwoSums compiled-ideal receipts keep their
+exact requests; model-transition acceptance and independent replay remain
+separate review obligations.
+
 ## Original-component construction transport
 
 The SmallSumcheck and TwoSums canonical typed-history roots bind the admitted

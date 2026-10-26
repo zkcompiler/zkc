@@ -466,6 +466,8 @@ import TestsSecurity.LosslessPresentation
 import TestsSecurity.LosslessPresentationNominal
 import TestsSecurity.LosslessPresentationRefusal
 import TestsSecurity.LosslessPresentationRoots
+import TestsSecurity.MethodNeutralChargeAssembly
+import TestsSecurity.MethodNeutralEndpointClients
 import TestsSecurity.Obligations
 import TestsSecurity.OriginalEndpointGeneration
 import TestsSecurity.OriginalEndpointRequests

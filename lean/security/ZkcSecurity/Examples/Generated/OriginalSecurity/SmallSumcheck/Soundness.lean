@@ -69,30 +69,40 @@ theorem priceBound_value (queries : Nat) : priceBound.value queries = price := b
   simp only [priceBound, Bound.value, ennreal_nnrat_one, ennreal_nnrat_natural, price]
 def schedule : Claims.Domain.ChargeSchedule validatorSubject :=
   Claims.CompiledSoundness.uniformSchedule validatorSubject priceBound
-    (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) (by decide +kernel)
 theorem schedule_prices (queries : Nat) : ∀ entry ∈ schedule.entries, entry.2.value queries = price := by
   intro entry member
-  exact (Claims.CompiledSoundness.uniformSchedule_prices priceBound _ _ _ queries entry member).trans (priceBound_value queries)
+  exact (Claims.CompiledSoundness.uniformSchedule_prices priceBound _ _ queries entry member).trans (priceBound_value queries)
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport validatorSubject schedule queries (budget • price) :=
   installation.losslessChargedExport (Nominal.lossless "bls12-381.fr") schedule queries (budget • price)
-    (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (schedule_prices queries)]; exact rejected)
-    (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (schedule_prices queries)]; exact costs)
+    (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact rejected)
+    (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact costs)
+
+/-- The installed degree-one method owns its cost and scalar conversion. -/
+def validatorCost (_queries : Nat) : ENNReal := budget • price
+def scalarBound : Nat → ENNReal := fun queries =>
+  ((queries : ENNReal) + budget) / (Fintype.card Scalar : ENNReal)
+theorem scalar_bound (queries : Nat) :
+    (queries : ENNReal) * schedule.maximum queries + validatorCost queries ≤ scalarBound queries := by
+  rw [Claims.CompiledSoundness.maximum_constant schedule queries price (by decide +kernel) (schedule_prices queries)]
+  simp only [validatorCost, scalarBound, price, nsmul_eq_mul, div_eq_mul_inv, one_mul, add_mul]
+  exact le_rfl
 
 theorem scalar_meaning (selected : Model) (adaptiveForm : selected.form = .adaptive) :
     Claims.Domain.Soundness capabilities validatorSubject selected
-      (fun queries => ((queries : ENNReal) + budget) / (Fintype.card Scalar : ENNReal)) :=
+      (fun queries => scalarBound queries) :=
   Claims.CompiledSoundness.scalar_meaning (model := model) (art := validatorArtifacts)
-    (subject := validatorSubject) capabilities schedule (Fintype.card Scalar) budget
-    reductionExport schedule_prices selected adaptiveForm
+    (subject := validatorSubject) capabilities schedule validatorCost scalarBound
+    reductionExport scalar_bound selected adaptiveForm
 
 theorem charged_meaning (selected : Model) (adaptiveForm : selected.form = .adaptive)
-    (validatorCost : ∀ queries, selected.validatorCost.value queries = budget • price) :
+    (costLaw : ∀ queries, selected.validatorCost.value queries = validatorCost queries) :
     Claims.Domain.SoundnessArguments.meaning capabilities
       (⟨selected, .charged schedule⟩ : Claims.Domain.SoundnessArguments validatorSubject) :=
   Claims.CompiledSoundness.charged_meaning (model := model) (art := validatorArtifacts)
-    (subject := validatorSubject) capabilities schedule (budget • price)
-    reductionExport selected adaptiveForm validatorCost
+    (subject := validatorSubject) capabilities schedule validatorCost
+    reductionExport selected adaptiveForm costLaw
 
 end ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Soundness

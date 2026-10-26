@@ -18,7 +18,8 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction OracleComp OracleSpec
 open ZkcSecurity.FiatShamir
 open ZkcSecurity.Examples.Components
 open ZkcSecurity.Examples.Generated.Components
-open TwoSumsSoundness (Scalar carriers price)
+open TwoSumsSoundness (carriers)
+open ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness (Scalar price)
 open ZkcSecurity.Families.Sumcheck
 local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw event) :=
@@ -86,7 +87,8 @@ example : chooseStatement 2 = ZkcSecurity.Examples.Generated.Components.TwoSumsA
 
 example (history : Domain.History carriers) :
     TwoSumsSoundness.schedule.charge 2 history (.challenge { origin with entry := "unmapped" }) = price := by
-  rw [ZkcSecurity.Claims.CompiledSoundness.charge_constant TwoSumsSoundness.schedule 2 price (TwoSumsSoundness.schedule_prices 2)]
+  rw [ZkcSecurity.Claims.CompiledSoundness.charge_constant TwoSumsSoundness.schedule 2 price (by decide +kernel)
+    (ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Soundness.schedule_prices 2)]
 
 #print axioms TwoSumsSoundness.reductionExport
 #print axioms SmallSumcheckSoundness.reductionExport

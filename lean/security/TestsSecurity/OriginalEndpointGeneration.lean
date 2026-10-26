@@ -33,8 +33,17 @@ run_cmd do
       | Lean.throwError "valid original endpoint refused"
     refuses "original-endpoint-validator-interface-mismatch"
       (OriginalEndpoint.soundnessSource metadata { validator with inputs := [] } output)
-    refuses "original-endpoint-no-challenges"
-      (OriginalEndpoint.soundnessSource metadata { validator with instructions := [] } output)
+    let .ok emptySyntax := OriginalEndpoint.soundnessSource metadata { validator with instructions := [] } output
+      | Lean.throwError "common endpoint refused zero syntactic queries"
+    unless emptySyntax.contains "syntacticBudget : Nat := 0" do
+      Lean.throwError "zero syntax budget metadata lost"
+    let .ok chargedOnly := OriginalEndpoint.soundnessSource metadata validator { output with scalar := none }
+      | Lean.throwError "charged-only endpoint refused"
+    unless !chargedOnly.contains "scalar_meaning" && !chargedOnly.contains "scalarBound" do
+      Lean.throwError "charged-only endpoint gained a scalar conversion"
+    for forbidden in ["Fintype.card", "uniformSchedule", "priceBound", "schedule_prices", "1 /", "abbrev Scalar"] do
+      if generated.contains forbidden || chargedOnly.contains forbidden then
+        Lean.throwError "common endpoint still installs uniform pricing: {forbidden}"
     refuses "original-endpoint-private-target-requires-residual-contract"
       (OriginalEndpoint.soundnessSource { metadata with publicPositions := [] } validator output)
     let renamed := { root with name := "RenamedEndpoint" }

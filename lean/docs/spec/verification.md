@@ -265,6 +265,26 @@ the charged reduction at the requested prices. A successful scalar bound does
 not imply that capability. Registry-owned obligations determine required links;
 provenance cannot remove them.
 
+`Claims.Domain.ChargeSchedule` admits an empty list. It still refuses duplicate
+source labels and duplicate native construction occurrences. Empty schedules
+charge zero for every key, including unmapped keys; they establish neither
+rejection nor soundness. Charged request elaboration retains the ordinary
+weighted experiment and requires a `ChargedExport` at that exact empty schedule
+and requested validator cost. Nonempty declarations are a condition of the
+uniform method's constant-price equality, not the general request schema.
+
+`Generation.OriginalEndpoint` consumes declarations for the subject-indexed
+schedule, `validatorCost : Nat → ENNReal` and a full `ChargedExport` for every
+query bound. Generated annotations check their dependent types. Its conservative
+syntactic challenge count is metadata only. Optional scalar output additionally
+checks a theorem bounding the total-query contribution (the query count times
+the schedule maximum) plus validator cost by the selected scalar error.
+`CompiledSoundness` preserves the whole actual participant binding for these
+consumers, including all statements, histories, complete returns and unread
+proof values. The installed Sumcheck degree-one method owns its uniform field
+price, cardinality, validator budget and scalar fraction conversion. Common
+assembly does not infer mathematical prices from source types or query counts.
+
 The [assurance report](assurance-report.md) compares actual emitted typed indices
 and wire data against each bound source request and the pipeline's artifact
 bytes. Only structured registered-but-undefined interpretations are incomplete;
