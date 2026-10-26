@@ -47,6 +47,45 @@ module {
     return %failure : !O
   }
 })mlir";
+constexpr llvm::StringLiteral participant = R"mlir(
+!S = !runtime.scope
+!F = !algebra.field<"bls12-381.fr">
+!O = !exec.outcome<(!F)>
+module { "protocol.module"() <{profile = #protocol.profile<participant>}> ({
+  func.func private @twice(%x: !F) -> !F {
+    %v = algebra.field_add %x, %x : (!F, !F) -> !F
+    return %v : !F
+  }
+  func.func private @entry(%x: !F) -> !F {
+    %v = func.call @twice(%x) : (!F) -> !F
+    return %v : !F
+  }
+  func.func @work(%scope: !S, %x: !F) -> !O
+      attributes {no_inline, runtime.origin = ["work", []]} {
+    %call = "exec.compute"(%scope, %x) {callee = @entry, site = "numerical"} : (!S, !F) -> !O
+    "exec.dispatch"(%call)[^done, ^failed] : (!O) -> ()
+  ^done(%v: !F):
+    %result = "exec.returned"(%v) : (!F) -> !O
+    return %result : !O
+  ^failed(%cause: !exec.stop):
+    %failure = "exec.failed"(%cause) : (!exec.stop) -> !O
+    return %failure : !O
+  }
+  "protocol.participant"() ({
+  ^entry(%x: !F):
+    %v = "protocol.local_call"(%x) {callee = @work, role = "P", site = "work"} : (!F) -> !F
+    "protocol.finish"(%v) : (!F) -> ()
+  }) {sym_name = "endpoint", function_type = (!F) -> !F, instance = "main", role = "P"} : () -> ()
+  "protocol.entry"() {sym_name = "main", targets = [["P", @endpoint]]} : () -> ()
+  "protocol.projection"() {calculations = [], interfaces = [{
+    source = "main", entry = @main, original_type = (!F) -> !F, roles = ["P"],
+    input_roles = [["P"]], output_roles = [["P"]], statements = [],
+    participants = [{participant = @endpoint, role = "P", inputs = [0:i64], service_inputs = [], outputs = [0:i64]}],
+    actions = [{site = "work", kind = "protocol.local_call", callee = @work,
+                targets = [{participant = @endpoint, operation = "protocol.local_call"}]}]
+  }]} : () -> ()
+}) : () -> () }
+)mlir";
 constexpr llvm::StringLiteral bounded = R"mlir(
 !S = !runtime.scope
 !F = !algebra.field<"koala-bear">
@@ -120,6 +159,29 @@ int main() {
             "invocation did not borrow its scope");
     return module;
   };
+  for (bool policy : {false, true})
+    cases.run(
+        policy ? "scoped participant numerical selection policy"
+               : "scoped participant numerical admission",
+        [&] {
+          auto module = parse(participant);
+          exec::ComputeOp request;
+          module->walk([&](exec::ComputeOp op) { request = op; });
+          require(bool(request), "missing participant computation");
+          if (policy) {
+            OpBuilder builder(&context);
+            request.setPolicyAttr(
+                builder.getBoolArrayAttr({true, false, false}));
+          }
+          require(succeeded(verify(*module)),
+                  "scoped participant numerical source refused");
+          auto closure = take(protocol::readSourceExecutionClosure(
+              &module->getBody()->front()));
+          require(closure.bodies.at("work").front().operation == request &&
+                      !isMemoryEffectFree(request) && !isSpeculatable(request),
+                  "participant numerical invocation lost source identity or "
+                  "ordered semantics");
+        });
   cases.run("actual source body and ordered adapter interfaces", [&] {
     auto module = accept(source);
     SymbolTableCollection symbols;

@@ -111,17 +111,6 @@ std::string profileUnit(StringRef profile, StringRef locals = work) {
       }) {sym_name="endpoint",function_type=(!F)->!F,instance="main",role="P"} : ()->()
       "protocol.entry"() {sym_name="main",targets=[["P",@endpoint]]} : ()->()
     )mlir";
-    if (profile == "participant")
-      declarations += R"mlir(
-        "protocol.projection"() {calculations=[],interfaces=[{
-          source="main",entry=@main,original_type=(!F)->!F,roles=["P"],
-          input_roles=[["P"]],output_roles=[["P"]],statements=[],
-          participants=[{participant=@endpoint,role="P",inputs=[0:i64],
-                         service_inputs=[],outputs=[0:i64]}],
-          actions=[{site="work",kind="protocol.local_call",callee=@work,
-                    targets=[{participant=@endpoint,operation="local.call"}]}]
-        }]} : ()->()
-      )mlir";
   }
   return standalone("\"protocol.module\"() ({" + declarations +
                     "}) {profile=#protocol.profile<" + profile.str() +
@@ -184,10 +173,10 @@ int main() {
             "func.func @entry() attributes {exec.computation} {func.return}"),
         "computation-profile", context);
   });
-  for (StringRef profile : {"protocol", "participant", "exec"})
+  for (StringRef profile : {"protocol", "exec"})
     cases.run("logical Kernel admission in " + profile,
               [&] { accepts(profileUnit(profile), context); });
-  for (StringRef profile : {"protocol", "participant", "exec"})
+  for (StringRef profile : {"protocol", "exec"})
     cases.run("Kernel selection policy in " + profile, [&] {
       accepts(
           profileUnit(profile,

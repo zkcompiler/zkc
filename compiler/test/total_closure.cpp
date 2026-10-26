@@ -3,6 +3,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
 #include <sstream>
@@ -48,7 +49,9 @@ OwningOpRef<ModuleOp> mathematicalDefinitions(ModuleOp source) {
   OpBuilder builder(source.getContext());
   builder.setInsertionPointToEnd(result.getBody());
   for (auto &op : unit.getBody().front())
-    if (isa<func::FuncOp, data::DomainOp>(op))
+    if (isa<data::DomainOp>(op) ||
+        (isa<func::FuncOp>(op) &&
+         !protocol::isScopedExecutionFunction(cast<func::FuncOp>(op))))
       builder.clone(op);
   return OwningOpRef<ModuleOp>(result);
 }
@@ -297,12 +300,49 @@ int main() {
       auto source = parse(fixture(name), context);
       require(succeeded(verify(*source)), "Protocol fixture refused");
       auto unit = *source->getOps<protocol_ir::ProtocolModuleOp>().begin();
-      require(succeeded(mathematical::verifyTotalClosure(unit)),
-              "Protocol closure refused");
+      SmallVector<Operation *> definitions;
+      SmallVector<func::FuncOp> mathematics, execution;
+      for (Operation &op : unit.getBody().front()) {
+        if (isa<data::DomainOp>(op))
+          definitions.push_back(&op);
+        if (auto function = dyn_cast<func::FuncOp>(op)) {
+          if (protocol::isScopedExecutionFunction(function))
+            execution.push_back(function);
+          else {
+            mathematics.push_back(function);
+            definitions.push_back(&op);
+          }
+        }
+      }
+      require(!mathematics.empty() &&
+                  succeeded(finite::verifyDefinitionClosure(unit, definitions)),
+              "selected mathematical closure refused");
       auto bare = mathematicalDefinitions(*source);
       require(succeeded(verify(*bare)) &&
                   succeeded(mathematical::verifyTotalClosure(*bare)),
               "identical definitions require a Protocol owner");
+      SymbolTableCollection symbols;
+      mathematical::TotalClosure original(unit, symbols),
+          relocated(*bare, symbols);
+      for (auto function : mathematics) {
+        const mathematical::TotalSummary *before, *after;
+        require(succeeded(original.get(function, before)) &&
+                    succeeded(relocated.get(
+                        bare->lookupSymbol<func::FuncOp>(function.getSymName()),
+                        after)) &&
+                    before->results == after->results &&
+                    before->requirements == after->requirements &&
+                    before->expandedOperations == after->expandedOperations &&
+                    before->depth == after->depth &&
+                    before->observesPolynomial == after->observesPolynomial,
+                "relocation changed mathematical dependencies or work");
+      }
+      for (auto function : execution) {
+        mathematical::TotalClosure isolated(unit, symbols);
+        const mathematical::TotalSummary *summary;
+        require(failed(isolated.get(function, summary)) && !summary,
+                "scoped execution acquired a total mathematical summary");
+      }
     });
   cases.run("finite bounds follow actual operands across owners", [&] {
     auto source = parse(fixture("structured-source/indexed-helper"), context);
