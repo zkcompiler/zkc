@@ -11,6 +11,7 @@ import re
 import struct
 from cases import case
 from commands import Commands
+from scoped_sources import invocation, scoped_function
 from tools import compiler, records
 
 fields = {
@@ -35,13 +36,13 @@ def digest(field, matrix):
 
 
 def source(field, parameters):
+    call = invocation('exec.apply', ['!M'], ['i1'],
+                      f'binding=@check,parameters={json.dumps(parameters, ensure_ascii=False)},site="check"')
+    check = scoped_function('Check', ['!M'], ['i1'], call, ['%r'])
     return f'''!M = !algebra.field_matrix<"{field}">
 module {{ "protocol.module"() ({{
  "runtime.binding"() {{sym_name="check",contract="matrix.identity_check",arguments=["{field}"],implementation=""}} : ()->()
- local.func @Check(%m:!M)->i1 attributes {{logical_origin=["Check",[]]}} {{
-   %ok = "algebra.exec.matrix_identity_check"(%m) {{binding=@check,parameters={json.dumps(parameters, ensure_ascii=False)},site="check"}} : (!M)->i1
-   local.return %ok : i1
- }}
+ {check}
  "protocol.func"() ({{^entry(%m:!M):
    %ok = "protocol.local_call"(%m) {{callee=@Check,role="P",site="work"}} : (!M)->i1
    "protocol.return"(%ok) : (i1)->()
@@ -50,12 +51,14 @@ module {{ "protocol.module"() ({{
 
 for field in [*fields, "koala-bear.ext8-binomial3"]:
     expected = digest(field, ["4", "8", [["0", "1", "7"], ["1", "3", "11"]]])
-    logical = commands.verified(source(field, [expected]))
-    physical = commands.verified(logical, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-select-physical")
-    assert expected in commands.source("protocol-export", physical)
-    for bad in [[], [""], ["0" * 63], ["0" * 65], ["A" * 64], ["g" * 64],
-                ["é" * 32], ["0" * 63 + " "], [expected, expected]]:
-        commands.verified(source(field, bad), "interactive-kernel-parameters")
+    with case(f"{field} identity binding survives physical selection"):
+        logical = commands.verified(source(field, [expected]))
+        physical = commands.verified(logical, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-select-physical")
+        assert expected in commands.source("protocol-export", physical)
+    for index, bad in enumerate([[], [""], ["0" * 63], ["0" * 65], ["A" * 64], ["g" * 64],
+                                 ["é" * 32], ["0" * 63 + " "], [expected, expected]]):
+        with case(f"{field} rejects malformed identity parameter {index}"):
+            commands.verified(source(field, bad), "execution-source-closure")
 
 
 def binary(prime, rows, width=32):
