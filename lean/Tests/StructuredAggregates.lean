@@ -46,9 +46,9 @@ private def equals (actual : Except String Json) (expected : Json) : Bool :=
 example {carriers : Carriers} (value : carriers.Value query) :
     fields.pack (fields.unpack value) = value := ProductFields.pack_unpack fields value
 example {carriers : Carriers} (first second : carriers.Value query)
-    (same : Zkc.Construction.Domain.PublicBinding.publicValue query first =
-      Zkc.Construction.Domain.PublicBinding.publicValue query second) : first = second :=
-  Zkc.Construction.Domain.PublicBinding.publicValue_injective query same
+    (same : Zkc.Construction.Domain.Payload.ofValue query first =
+      Zkc.Construction.Domain.Payload.ofValue query second) : first = second :=
+  Zkc.Construction.Domain.Payload.ofValue_injective (ty := query) rfl same
 
 private def run : IO Unit := do
   let failures ← IO.mkRef ([] : List String)

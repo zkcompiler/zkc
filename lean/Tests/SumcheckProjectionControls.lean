@@ -31,7 +31,7 @@ def changeBody (participant : Participant) (index : Nat) (edit : Instruction →
 /-- Accepted by the construction rule and refused by the composed check with
 `code`. -/
 def RefusedByProjection (participant : Participant) (code : String) : Prop :=
-  checkExport original participant = .ok () ∧ checkCompiled imported participant = .error code
+  Uniform.checkExport original participant = .ok () ∧ Uniform.checkCompiled imported participant = .error code
 
 instance (participant : Participant) (code : String) : Decidable (RefusedByProjection participant code) :=
   inferInstanceAs (Decidable (_ ∧ _))
@@ -105,7 +105,7 @@ theorem terminalOperandsSwapped_refused :
 
 /-- Refused by the transcript-construction rule alone with `code`. -/
 def RefusedByConstruction (participant : Participant) (code : String) : Prop :=
-  checkExport original participant = .error code
+  Uniform.checkExport original participant = .error code
 
 instance (participant : Participant) (code : String) : Decidable (RefusedByConstruction participant code) :=
   inferInstanceAs (Decidable (_ = _))
@@ -155,6 +155,6 @@ theorem callOnTranscript_refused :
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/
-theorem actual_accepted : checkCompiled imported actual = .ok () := by decide +kernel
+theorem actual_accepted : Uniform.checkCompiled imported actual = .ok () := by decide +kernel
 
 end Tests.SumcheckProjectionControls
