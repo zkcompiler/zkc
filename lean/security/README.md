@@ -37,7 +37,7 @@ cryptographic assumptions. See [architecture](../docs/architecture.md) and
 [formal support](../docs/support.md).
 
 The actual plain aggregate table consumer is configured by
-[`Examples/TableMembership/Generation.lean`](ZkcSecurity/Examples/TableMembership/Generation.lean).
+[`Generation/TableMembership.lean`](ZkcSecurity/Generation/TableMembership.lean).
 With current core/security dependencies already checked (including
 `Generation.SubjectABI.Command`, `Generation.OriginalEndpoint`,
 `Claims.Completeness`, `Claims.CompiledSoundness`, `Endpoint.DomainSafety` and

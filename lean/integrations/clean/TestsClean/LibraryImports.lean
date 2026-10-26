@@ -12,7 +12,6 @@ import TestsClean.Bits
 import TestsClean.Control
 import TestsClean.KoalaBear
 import TestsClean.Mutations
-import CleanExamples.NativeClients
 import TestsClean.Nested
 import TestsClean.Presentation
 import TestsClean.Refusals

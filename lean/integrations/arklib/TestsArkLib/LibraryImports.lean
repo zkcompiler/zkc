@@ -42,6 +42,10 @@ import ZkcArkLib.Fri.Protocol
 import ZkcArkLib.Fri.Soundness
 import ZkcArkLib.Fri.UniqueDecoding
 import ZkcArkLib.Gkr.Layer
+import ZkcArkLib.Knowledge.FiniteRecovery
+import ZkcArkLib.Knowledge.RegisteredFiniteRecovery
+import ZkcArkLib.Kzg.EvaluationBinding
+import ZkcArkLib.Kzg.OpeningClient
 import ZkcArkLib.Registry
 import ZkcArkLib.Sumcheck.Bridge
 import ZkcArkLib.Sumcheck.Domain
@@ -72,8 +76,11 @@ import TestsArkLib.CommitmentBridge
 import TestsArkLib.Compatibility
 import TestsArkLib.CompiledSumcheckFiatShamir
 import TestsArkLib.Endpoints
+import TestsArkLib.FiniteRecovery
 import TestsArkLib.FriSecurity
+import TestsArkLib.KzgEvaluationBinding
 import TestsArkLib.MultilinearSumcheck
+import TestsArkLib.RegisteredFiniteRecovery
 import TestsArkLib.ReportControls
 import TestsArkLib.SumcheckFiatShamir
 import TestsArkLib.UpstreamImports

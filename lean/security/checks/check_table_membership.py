@@ -88,7 +88,7 @@ def main() -> None:
         record()
 
     compile_module(PREFIX + "Subject")
-    compile_module(PREFIX + "Generation")
+    compile_module("ZkcSecurity.Generation.TableMembership")
     run("generate", ["lean", "--run", "checks/RunTableMembershipABI.lean", str(sources)])
     emitted = [PREFIX + suffix for suffix in ("ABI", "Endpoint")]
     before = {module: (sources / Path(*module.split("."))).with_suffix(".lean").read_bytes()

@@ -9,7 +9,7 @@ public meta import ZkcSecurity.Generation.OriginalEndpoint
 
 /-! Reproducible source-driven ABI entry point. This module imports no solution
 and emits kernel-checked structural proofs through the shared generator. -/
-namespace ZkcSecurity.Examples.TableMembership.Generation
+namespace ZkcSecurity.Generation.TableMembership
 open ZkcSecurity.Generation.SubjectABI
 open ZkcSecurity.Examples.TableMembership.Subject
 set_option maxRecDepth 50000
@@ -50,4 +50,4 @@ def main (arguments : List String) : IO Unit := do
     IO.FS.createDirAll path.parent.get!
     IO.FS.writeFile path source
 
-end ZkcSecurity.Examples.TableMembership.Generation
+end ZkcSecurity.Generation.TableMembership

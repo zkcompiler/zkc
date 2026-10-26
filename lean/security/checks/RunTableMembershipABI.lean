@@ -1,4 +1,4 @@
-import ZkcSecurity.Examples.TableMembership.Generation
+import ZkcSecurity.Generation.TableMembership
 
 def main (arguments : List String) : IO Unit :=
-  ZkcSecurity.Examples.TableMembership.Generation.main arguments
+  ZkcSecurity.Generation.TableMembership.main arguments

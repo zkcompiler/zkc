@@ -16,6 +16,7 @@ import ZkcSecurity.Claims.DomainSubject
 import ZkcSecurity.Claims.Endpoint
 import ZkcSecurity.Claims.EndpointHypotheses
 import ZkcSecurity.Claims.Extractor
+import ZkcSecurity.Claims.FiniteRecovery
 import ZkcSecurity.Claims.HonestModel
 import ZkcSecurity.Claims.Knowledge
 import ZkcSecurity.Claims.Model
@@ -23,6 +24,7 @@ import ZkcSecurity.Claims.PairValidator
 import ZkcSecurity.Claims.Parameters
 import ZkcSecurity.Claims.Premise
 import ZkcSecurity.Claims.PrimitiveDependencies
+import ZkcSecurity.Claims.PrivateCompleteness
 import ZkcSecurity.Claims.ReceiptAdmission
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Soundness
@@ -36,6 +38,7 @@ import ZkcSecurity.Commitment.Cost
 import ZkcSecurity.Commitment.Escape
 import ZkcSecurity.Commitment.Experiment
 import ZkcSecurity.Commitment.Extractable
+import ZkcSecurity.Commitment.FiniteRecovery
 import ZkcSecurity.Commitment.HashedLeaves
 import ZkcSecurity.Commitment.HistoryKeys
 import ZkcSecurity.Commitment.Merkle
@@ -190,6 +193,11 @@ import ZkcSecurity.Examples.Subjects.SchnorrAnd.Contract
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Endpoints
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Evidence
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
+import ZkcSecurity.Examples.TableMembership.ABI
+import ZkcSecurity.Examples.TableMembership.Claims
+import ZkcSecurity.Examples.TableMembership.Endpoint
+import ZkcSecurity.Examples.TableMembership.Method
+import ZkcSecurity.Examples.TableMembership.Subject
 import ZkcSecurity.Families.Schnorr
 import ZkcSecurity.Families.SchnorrVariants
 import ZkcSecurity.Families.Sigma.Algebra
@@ -264,6 +272,8 @@ import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.OriginalClaims
 import ZkcSecurity.FiatShamir.OriginalReadback
 import ZkcSecurity.FiatShamir.OriginalTransport
+import ZkcSecurity.FiatShamir.PrivatePairWP
+import ZkcSecurity.FiatShamir.PrivateReadbackWP
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Roles
@@ -297,6 +307,7 @@ import ZkcSecurity.Generation.SigmaCompleteness
 import ZkcSecurity.Generation.SubjectABI.Command
 import ZkcSecurity.Generation.SubjectABI
 import ZkcSecurity.Generation.SumcheckAccounts
+import ZkcSecurity.Generation.TableMembership
 import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 import ZkcSecurity.Generation.UniformRoot
 import ZkcSecurity.HashChain.Bound
@@ -435,6 +446,7 @@ import TestsSecurity.EmbeddingEqualityControls
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.ExtractionCounterexample
 import TestsSecurity.FiatShamirTyped
+import TestsSecurity.FiniteRecoveryRegistration
 import TestsSecurity.GenerateClaimLibraries
 import TestsSecurity.GenerateCompletenessClaims
 import TestsSecurity.GenerateRootControls
@@ -490,6 +502,7 @@ import TestsSecurity.OriginalSumcheckBinding
 import TestsSecurity.PairConstruction
 import TestsSecurity.ParametricBindings
 import TestsSecurity.ParametricBindingsGeneration
+import TestsSecurity.PrivateProducerWP
 import TestsSecurity.ProofSearchDiagnostics
 import TestsSecurity.ProtocolObligations
 import TestsSecurity.ProviderSimulation
@@ -526,4 +539,5 @@ import TestsSecurity.SumcheckHonestReferences
 import TestsSecurity.SumcheckReference
 import TestsSecurity.SumcheckRootCompleteness
 import TestsSecurity.SumcheckSubjectInputs
+import TestsSecurity.TableMembershipClaims
 import TestsSecurity.WeakestPrecondition
