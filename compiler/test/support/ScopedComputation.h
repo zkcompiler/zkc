@@ -11,6 +11,28 @@
 
 namespace zkc::test::scopedComputation {
 using namespace mlir;
+inline func::FuncOp computation(func::FuncOp helper, StringRef name) {
+  OpBuilder builder(helper);
+  SmallVector<Type> inputs{runtime::ScopeType::get(helper.getContext())};
+  llvm::append_range(inputs, helper.getArgumentTypes());
+  auto outcome =
+      exec::OutcomeType::get(helper.getContext(), helper.getResultTypes());
+  auto caller = func::FuncOp::create(builder, helper.getLoc(), name,
+                                     builder.getFunctionType(inputs, outcome));
+  caller->setAttr("no_inline", builder.getUnitAttr());
+  caller->setAttr("runtime.origin",
+                  builder.getArrayAttr(
+                      {builder.getStringAttr(name), builder.getArrayAttr({})}));
+  builder.setInsertionPointToEnd(caller.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, caller);
+  auto values = control.invoke(
+      "exec.compute", helper.getResultTypes(), caller.getArguments(),
+      {builder.getNamedAttr("callee",
+                            FlatSymbolRefAttr::get(helper.getSymNameAttr())),
+       builder.getNamedAttr("site", builder.getStringAttr(name))});
+  control.returned(values);
+  return caller;
+}
 inline void numericalAddition(ModuleOp module) {
   auto helper =
       SymbolTable(&module.getBody()->front()).lookup<func::FuncOp>("step");
