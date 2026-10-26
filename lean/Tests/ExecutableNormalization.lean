@@ -97,4 +97,18 @@ theorem oversized_loop_refuses (program : Structured.Program) :
       ((.stopped .refused, []), 0) := by
   constructor <;> kernel_rfl
 
+/-- Normalization preserves an unchanged refusal; it is not whole-program
+admission. This malformed schema never reaches a receive effect. -/
+def refusingReceive : Instruction :=
+  ⟨.receive "site" "different-schema" "peer" .boolean, [], [.data .boolean], []⟩
+
+theorem common_refusal_normalizes :
+    (Zkc.Executable.CanonicalNormalization.check [] []
+      [refusingReceive] [] [refusingReceive] []).toOption.isSome = true := by
+  decide +kernel
+
+theorem common_refusal_stops (program : Structured.Program) :
+    (actual program [refusingReceive] [] [] |>.run 0) = ((.stopped .refused, []), 0) := by
+  kernel_rfl
+
 end Tests.ExecutableNormalization
