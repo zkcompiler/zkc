@@ -1,10 +1,12 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Conversion/Storage.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Target/StorageSchedule.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -12,7 +14,6 @@
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include <iterator>
 #include <limits>
 
 using namespace llvm;
@@ -23,6 +24,7 @@ using namespace zkc::target;
 using namespace zkc::test;
 
 namespace {
+namespace sc = scopedComputation;
 void accept(Error error) {
   if (error)
     throw std::runtime_error(toString(std::move(error)));
@@ -62,13 +64,18 @@ template <typename Op> Op first(ModuleOp module) {
 }
 
 Operation *site(ModuleOp module, StringRef name) {
+  auto flow = take(ExecutionPorts::read(module));
+  auto expanded = "lc_" + std::to_string(name.size()) + "_" + name.str();
   Operation *found = nullptr;
-  module.walk([&](Operation *op) {
+  for (auto *op : flow.operations()) {
     auto attr = op->getAttrOfType<StringAttr>("site");
-    if (attr && attr.getValue() == name && !found)
+    if (flow.get(op).step && attr &&
+        (attr.getValue() == name || attr.getValue() == expanded)) {
+      require(!found, "ambiguous semantic site " + name);
       found = op;
-  });
-  require(found != nullptr, "missing site " + name);
+    }
+  }
+  require(found != nullptr, "missing semantic site " + name);
   return found;
 }
 
@@ -79,32 +86,59 @@ OperationIndex indexOf(ModuleOp module, Operation *operation) {
   return found - operations.begin();
 }
 
-// Decode coordinates from an inspection clone, never from source Kernel IR.
-StorageValue coordinate(ModuleOp selected, Value value) {
-  if (auto result = dyn_cast<OpResult>(value))
-    return {StorageValue::OperationResult, indexOf(selected, result.getOwner()),
-            result.getResultNumber()};
-  auto argument = cast<BlockArgument>(value);
-  auto *block = argument.getOwner();
-  auto *owner = block->getParentOp();
-  unsigned blockIndex = 0;
-  for (auto &region : owner->getRegions())
-    for (auto &candidate : region) {
-      if (&candidate == block)
-        return {StorageValue::BlockArgument, indexOf(selected, owner),
-                argument.getArgNumber(), blockIndex};
-      ++blockIndex;
+Value input(ModuleOp module, Operation *op, unsigned index) {
+  return take(ExecutionPorts::read(module)).inputs(op)[index];
+}
+Value output(ModuleOp module, Operation *op, unsigned index = 0) {
+  return take(ExecutionPorts::read(module)).outputs(op)[index];
+}
+Block *body(ModuleOp module, Operation *op) {
+  return take(ExecutionPorts::read(module)).enclosingBody(op);
+}
+Value argument(ModuleOp module, Block *entry, unsigned index) {
+  return take(ExecutionPorts::read(module)).body(entry).arguments[index];
+}
+SmallVector<Block *> regions(ModuleOp module, Operation *op) {
+  return take(ExecutionPorts::read(module)).get(op).bodies;
+}
+Operation *completion(func::FuncOp function) {
+  Operation *found = nullptr;
+  function.walk([&](Operation *op) {
+    if (isa<exec::ReturnOp, exec::CompleteOp>(op)) {
+      require(!found, "multiple successful completions in storage fixture");
+      found = op;
     }
-  throw std::runtime_error("block outside coordinate owner");
+  });
+  require(found != nullptr, "missing successful completion");
+  return found;
+}
+StringRef implementation(exec::ApplyOp op) {
+  return SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+             op, op.getBindingAttr())
+      .getImplementation();
 }
 
+// Decode semantic coordinates from the selected executable. A CFG payload
+// argument belongs to its instruction, not to the continuation block.
+StorageValue coordinate(ModuleOp selected, Value value) {
+  auto flow = take(ExecutionPorts::read(selected));
+  const auto &definition = flow.definition(value);
+  return {definition.argument ? StorageValue::BlockArgument
+                              : StorageValue::OperationResult,
+          indexOf(selected, definition.owner), definition.port,
+          definition.block};
+}
 StoragePoint after(ModuleOp selected, Operation *operation) {
   return {StoragePoint::AfterOperation, indexOf(selected, operation)};
 }
-
 StoragePoint entry(ModuleOp selected, Block *block) {
-  auto argument = coordinate(selected, block->getArgument(0));
-  return {StoragePoint::BlockEntry, argument.operation, argument.block};
+  auto flow = take(ExecutionPorts::read(selected));
+  auto *owner = flow.body(block).owner;
+  const auto &bodies = flow.get(owner).bodies;
+  auto found = llvm::find(bodies, block);
+  require(found != bodies.end(), "missing logical body");
+  return {StoragePoint::BlockEntry, indexOf(selected, owner),
+          unsigned(found - bodies.begin())};
 }
 
 PhysicalPlan propose(ModuleOp module, bool releases = true,
@@ -140,9 +174,9 @@ void refuse(ModuleOp module, const PhysicalPlan &proposal,
           "refused schedule changed input");
 }
 
-SmallVector<plan::ReleaseOp> actualReleases(ModuleOp module) {
-  SmallVector<plan::ReleaseOp> result;
-  module.walk([&](plan::ReleaseOp op) { result.push_back(op); });
+SmallVector<runtime::ReleaseBindingsOp> actualReleases(ModuleOp module) {
+  SmallVector<runtime::ReleaseBindingsOp> result;
+  module.walk([&](runtime::ReleaseBindingsOp op) { result.push_back(op); });
   return result;
 }
 
@@ -171,70 +205,73 @@ OwningOpRef<ModuleOp> materializedCopy(ModuleOp source,
 }
 
 std::string scalarSource() {
-  return mathematicalFixture(R"mlir(
+  return scopedFixture(
+      R"mlir(
 "runtime.binding"() {sym_name="and",contract="bool.and",arguments=[],implementation=""} : ()->()
 )mlir",
-                             "%a:i1,%b:i1,%unused:i1,%other:i1",
-                             "%a,%b,%unused,%other", "i1,i1,i1,i1", "i1",
-                             R"mlir(
-%first = "algebra.exec.bool_and"(%a,%b) {binding=@and,site="first",parameters=[]} : (i1,i1)->i1
-%middle = "algebra.exec.bool_and"(%first,%b) {binding=@and,site="middle",parameters=[]} : (i1,i1)->i1
-%last = "algebra.exec.bool_and"(%b,%b) {binding=@and,site="last",parameters=[]} : (i1,i1)->i1
-local.return %last : i1
-)mlir",
-                             4);
+      "%a:i1,%b:i1,%unused:i1,%other:i1", "%a,%b,%unused,%other", "i1,i1,i1,i1",
+      "i1",
+      scopedApply("and", "first", "%a,%b", "i1,i1", "%first", "i1") +
+          scopedApply("and", "middle", "%first,%b", "i1,i1", "%middle", "i1") +
+          scopedApply("and", "last", "%b,%b", "i1,i1", "%last", "i1") +
+          scopedReturn("%last", "i1"),
+      4);
 }
-
 std::string conversionSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
+)mlir" + scopedFixture(
+             R"mlir(
 "runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )mlir",
-                             "%a:!T,%b:!T,%r:!F", "%a,%b,%r", "!T,!T,!F", "!T",
-                             R"mlir(
-%first = "poly.exec.fold"(%a,%r) {binding=@fold,site="first",parameters=[]} : (!T,!F)->!T
-%second = "poly.exec.fold"(%b,%r) {binding=@fold,site="second",parameters=[]} : (!T,!F)->!T
-local.return %second : !T
-)mlir",
-                             3);
+             "%a:!T,%b:!T,%r:!F", "%a,%b,%r", "!T,!T,!F", "!T",
+             scopedApply("fold", "first", "%a,%r", "!T,!F", "%first", "!T") +
+                 scopedApply("fold", "second", "%b,%r", "!T,!F", "%second",
+                             "!T") +
+                 scopedReturn("%second", "!T"),
+             3);
 }
-
 OwningOpRef<ModuleOp> scalar(MLIRContext &context) {
   return take(executableFixture(scalarSource(), context));
 }
-
-std::string chunkSource(unsigned count = 1025) {
-  std::string body;
+OwningOpRef<ModuleOp> chunkSource(MLIRContext &context, unsigned count = 1025,
+                                  bool simultaneous = false) {
+  auto module =
+      take(executableFixture(scopedFixture("", "%keep:i1", "%keep", "i1", "i1",
+                                           scopedReturn("%keep", "i1"), 1),
+                             context));
+  auto function = first<func::FuncOp>(*module);
+  function.getBody().getBlocks().clear();
+  OpBuilder builder(function);
+  builder.setInsertionPointToEnd(function.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, function);
+  SmallVector<Value> values;
   for (unsigned i = 0; i < count; ++i)
-    body += "%dead" + std::to_string(i) +
-            " = \"local.bool_constant\"() {value=true,site=\"dead" +
-            std::to_string(i) + "\"} : ()->i1\n";
-  body += "local.return %keep : i1\n";
-  return mathematicalFixture("", "%keep:i1", "%keep", "i1", "i1", body, 1);
+    values.push_back(control.invoke(
+        "exec.boolean", builder.getI1Type(), control.scoped({}),
+        {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+         builder.getNamedAttr(
+             "site", builder.getStringAttr("dead" + std::to_string(i)))})[0]);
+  if (simultaneous)
+    control.conditional(
+        values.front(), ValueRange(values).drop_front(), builder.getI1Type(),
+        "discard", [&](unsigned arm) {
+          auto helper = sc::region(
+              builder, function, "discard_arm" + std::to_string(arm),
+              ValueRange(values).drop_front().getTypes(), builder.getI1Type());
+          exec::ScopedExecutionBuilder inner(builder, helper);
+          inner.complete(helper.getArgument(1));
+          return helper;
+        });
+  control.returned(function.getArgument(1));
+  require(succeeded(verify(*module)), "scoped storage fixture refused");
+  return module;
 }
 
-// Exactly 1024 control operands plus its unused result die together.
-// Each branch retains isolated captures; the normal port limit still holds.
-std::string simultaneousDeathsSource() {
-  std::string arguments, operands, types, body;
-  for (unsigned i = 0; i < 1024; ++i) {
-    auto number = std::to_string(i);
-    auto separator = i ? "," : "";
-    if (i)
-      arguments += (i == 1 ? "" : ",") + std::string("%arg") + number + ":i1";
-    operands += separator + std::string("%dead") + number;
-    types += separator + std::string("i1");
-    body += "%dead" + number +
-            " = \"local.bool_constant\"() {value=true,site=\"dead" + number +
-            "\"} : ()->i1\n";
-  }
-  auto branch =
-      "^entry(" + arguments + "):\n\"local.yield\"(%arg1) : (i1)->()\n";
-  body += "%unused = \"local.if\"(" + operands + ") ({" + branch + "},{" +
-          branch + "}) {site=\"discard\"} : (" + types +
-          ")->i1\nlocal.return %keep : i1\n";
-  return mathematicalFixture("", "%keep:i1", "%keep", "i1", "i1", body, 1);
+// Exactly 1024 semantic control inputs plus its unused result die together.
+// Each branch retains isolated captures; the data-port limit still holds.
+OwningOpRef<ModuleOp> simultaneousDeathsSource(MLIRContext &context) {
+  return chunkSource(context, 1024, true);
 }
 
 bool containsRelease(const PhysicalPlan &proposal, StoragePoint point,
@@ -244,8 +281,8 @@ bool containsRelease(const PhysicalPlan &proposal, StoragePoint point,
   });
 }
 
-// Preserve Kernel input so its operation indices differ from selected Local.
-OwningOpRef<ModuleOp> kernelSource(MLIRContext &context) {
+// Preserve mathematical requests so source and selected indices differ.
+OwningOpRef<ModuleOp> computationSource(MLIRContext &context) {
   auto module = parseSourceString<ModuleOp>(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
@@ -257,12 +294,13 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir",
                                             &context);
-  require(bool(module), "Kernel source fixture did not parse");
+  require(bool(module), "computation source fixture did not parse");
   PassManager pipeline(&context);
   pipeline.addPass(createProjectProtocolPass(false));
   pipeline.addPass(createLowerMathPass());
-  require(succeeded(pipeline.run(*module)), "Kernel fixture lowering failed");
-  first<kernel::CallOp>(*module);
+  require(succeeded(pipeline.run(*module)),
+          "computation fixture lowering failed");
+  first<exec::ComputeOp>(*module);
   return module;
 }
 
@@ -311,6 +349,27 @@ int main() {
                         "materialization did not consume checked releases");
               });
 
+  cases.run("storage coordinates exclude scope and own CFG payload results",
+            [&] {
+              auto module = scalar(context);
+              auto proposal = propose(*module, false);
+              auto selected = take(proposal.cloneSelectedSubject(*module));
+              auto *firstOp = site(*selected, "first");
+              auto function = firstOp->getParentOfType<func::FuncOp>();
+              auto dispatch = cast<exec::DispatchOp>(firstOp->getNextNode());
+              auto payload = dispatch.getReturned()->getArgument(0);
+              require(coordinate(*selected, payload) ==
+                              StorageValue{StorageValue::OperationResult,
+                                           indexOf(*selected, firstOp), 0, 0} &&
+                          coordinate(*selected, function.getArgument(3)) ==
+                              StorageValue{StorageValue::BlockArgument,
+                                           indexOf(*selected, function), 2, 0},
+                      "CFG payload or scope shifted a semantic coordinate");
+              require(!take(ExecutionPorts::read(*selected))
+                           .contains(function.getArgument(0)),
+                      "administrative scope became releasable data");
+            });
+
   cases.run("storage option preserves all existing physical choices", [&] {
     auto module = take(executableFixture(conversionSource(), context));
     auto plain =
@@ -321,8 +380,8 @@ int main() {
     require(printed(*plain) == printed(*released),
             "storage option changed ports, sites, bindings or conversions");
     unsigned fixed = 0;
-    plain->walk([&](plan::ApplyOp op) {
-      fixed += op.getImplementation() == "arkworks-msb/poly.fold";
+    plain->walk([&](exec::ApplyOp op) {
+      fixed += implementation(op) == "arkworks-msb/poly.fold";
     });
     require(fixed == 2, "fixed fold implementation was replaced");
   });
@@ -334,8 +393,8 @@ int main() {
           auto proposal = propose(*module, false);
           auto selected = take(proposal.cloneSelectedSubject(*module));
           if (timing != "omitted") {
-            auto value =
-                coordinate(*selected, site(*selected, "first")->getResult(0));
+            auto value = coordinate(
+                *selected, output(*selected, site(*selected, "first")));
             auto point =
                 after(*selected,
                       site(*selected, timing == "early" ? "first" : "last"));
@@ -357,8 +416,8 @@ int main() {
     auto selected = take(proposal.cloneSelectedSubject(*module));
     auto *firstOp = site(*selected, "first");
     proposal.releases.push_back(
-        {entry(*selected, firstOp->getBlock()),
-         {coordinate(*selected, firstOp->getResult(0))}});
+        {entry(*selected, body(*selected, firstOp)),
+         {coordinate(*selected, output(*selected, firstOp))}});
     refuse(*module, proposal, "storage-schedule-coordinate");
   });
 
@@ -371,16 +430,17 @@ int main() {
       auto proposal = propose(*module, false);
       auto selected = take(proposal.cloneSelectedSubject(*module));
       auto *operation = site(*selected, "first");
-      auto *block = operation->getBlock();
-      StorageRelease release{entry(*selected, block),
-                             {coordinate(*selected, block->getArgument(2))}};
+      auto *block = body(*selected, operation);
+      StorageRelease release{
+          entry(*selected, block),
+          {coordinate(*selected, argument(*selected, block, 2))}};
       auto &value = release.values.front();
       constexpr auto hugeOwner = std::numeric_limits<size_t>::max();
       constexpr auto hugeIndex = std::numeric_limits<unsigned>::max();
       if (mutation == "value owner")
         value.operation = hugeOwner;
       else if (mutation == "result") {
-        value = coordinate(*selected, operation->getResult(0));
+        value = coordinate(*selected, output(*selected, operation));
         value.index = hugeIndex;
         release.point = after(*selected, site(*selected, "last"));
       } else if (mutation == "block")
@@ -405,7 +465,7 @@ int main() {
         release.point = after(*selected, operation);
         release.point.index = 1;
       } else if (mutation == "result block") {
-        value = coordinate(*selected, operation->getResult(0));
+        value = coordinate(*selected, output(*selected, operation));
         value.block = 1;
         release.point = after(*selected, site(*selected, "last"));
       } else
@@ -420,8 +480,10 @@ int main() {
       auto proposal = propose(*module, false);
       auto selected = take(proposal.cloneSelectedSubject(*module));
       auto *operation = site(*selected, "first");
-      auto value = coordinate(*selected, operation->getBlock()->getArgument(2));
-      StorageRelease release{entry(*selected, operation->getBlock()), {value}};
+      auto value = coordinate(
+          *selected, argument(*selected, body(*selected, operation), 2));
+      StorageRelease release{entry(*selected, body(*selected, operation)),
+                             {value}};
       proposal.releases.push_back(release);
       if (duplicate == "within chunk")
         proposal.releases.front().values.push_back(value);
@@ -439,21 +501,38 @@ int main() {
           fixtureText("structured-source/loops-and-captures.mlir"), context));
       auto proposal = propose(*module, false);
       auto selected = take(proposal.cloneSelectedSubject(*module));
+      auto flow = take(ExecutionPorts::read(*selected));
       Operation *terminator = nullptr;
-      if (escape == "return")
-        terminator = first<local::ReturnOp>(*selected);
-      else if (escape == "yield")
-        terminator = first<local::LocalYieldOp>(*selected);
-      else if (escape == "condition")
-        terminator = first<local::LocalConditionOp>(*selected);
-      else
-        terminator = first<local::LocalForOp>(*selected);
-      unsigned operand = escape == "capture" ? 2 : 0;
-      Value value = terminator->getOperand(operand);
-      require(isa<BlockArgument>(value),
-              "escape control needs a block argument");
-      proposal.releases.push_back({entry(*selected, terminator->getBlock()),
-                                   {coordinate(*selected, value)}});
+      unsigned operand = 0;
+      for (auto *op : flow.operations()) {
+        const auto *step = flow.get(op).step;
+        if (!step)
+          continue;
+        if (escape == "condition" && isa<exec::RangeOp>(op) &&
+            step->conditional) {
+          for (auto *inner :
+               flow.body(flow.get(op).bodies.front()).instructions)
+            if (isa<exec::CompleteOp>(inner))
+              terminator = inner;
+          break;
+        }
+        bool matches = escape == "return" ? isa<exec::ReturnOp>(op)
+                       : escape == "yield"
+                           ? isa<exec::CompleteOp>(op)
+                           : escape == "capture" && isa<exec::RangeOp>(op);
+        if (matches && !flow.inputs(op).empty() &&
+            flow.definition(flow.inputs(op)[0]).argument && !terminator)
+          terminator = op;
+      }
+      require(terminator != nullptr, "missing escaping control");
+      if (escape == "capture")
+        operand = 2;
+      Value value = flow.inputs(terminator)[operand];
+      require(flow.definition(value).argument,
+              "escape control needs a logical body argument");
+      proposal.releases.push_back(
+          {entry(*selected, flow.enclosingBody(terminator)),
+           {coordinate(*selected, value)}});
       refuse(*module, proposal);
     });
 
@@ -461,10 +540,10 @@ int main() {
     auto module = scalar(context);
     auto proposal = propose(*module, false);
     auto selected = take(proposal.cloneSelectedSubject(*module));
-    auto *block = site(*selected, "first")->getBlock();
+    auto *block = body(*selected, site(*selected, "first"));
     proposal.releases.push_back(
-        {after(*selected, block->getTerminator()),
-         {coordinate(*selected, block->getArgument(2))}});
+        {after(*selected, completion(cast<func::FuncOp>(block->getParentOp()))),
+         {coordinate(*selected, argument(*selected, block, 2))}});
     refuse(*module, proposal, "storage-schedule-coordinate");
   });
 
@@ -474,25 +553,28 @@ int main() {
             fixtureText("structured-source/loops-and-captures.mlir"), context));
         auto proposal = propose(*module);
         auto selected = take(proposal.cloneSelectedSubject(*module));
-        Operation *choose = first<local::LocalIfOp>(*selected);
-        auto &left = choose->getRegion(0).front();
-        auto &right = choose->getRegion(1).front();
+        Operation *choose = first<exec::TestOp>(*selected);
+        auto branches = regions(*selected, choose);
+        auto &left = *branches[0];
+        auto &right = *branches[1];
         require(
-            containsRelease(proposal, entry(*selected, &left),
-                            coordinate(*selected, left.getArgument(0))) &&
-                containsRelease(proposal, entry(*selected, &right),
-                                coordinate(*selected, right.getArgument(1))),
+            containsRelease(
+                proposal, entry(*selected, &left),
+                coordinate(*selected, argument(*selected, &left, 0))) &&
+                containsRelease(
+                    proposal, entry(*selected, &right),
+                    coordinate(*selected, argument(*selected, &right, 1))),
             "unused isolated block arguments lost their own entry releases");
-        selected->walk([&](Operation *op) {
-          if (!isa<local::ReturnOp, local::LocalYieldOp,
-                   local::LocalConditionOp>(op))
-            return;
-          for (Value operand : op->getOperands())
+        auto flow = take(ExecutionPorts::read(*selected));
+        for (auto *op : flow.operations()) {
+          if (!isa<exec::ReturnOp, exec::CompleteOp>(op))
+            continue;
+          for (Value operand : flow.inputs(op))
             for (const auto &release : proposal.releases)
               require(!llvm::is_contained(release.values,
                                           coordinate(*selected, operand)),
-                      "proposal released an escaping terminator operand");
-        });
+                      "proposal released an escaping completion operand");
+        }
         auto output = materializedCopy(*module, check(*module, proposal));
         require(!actualReleases(*output).empty(),
                 "nested materialization lost releases");
@@ -503,9 +585,10 @@ int main() {
         fixtureText("structured-source/loops-and-captures.mlir"), context));
     auto proposal = propose(*module, false);
     auto selected = take(proposal.cloneSelectedSubject(*module));
-    Operation *loop = first<local::LocalForOp>(*selected);
+    Operation *loop = first<exec::RangeOp>(*selected);
     proposal.releases.push_back(
-        {after(*selected, loop), {coordinate(*selected, loop->getOperand(2))}});
+        {after(*selected, loop),
+         {coordinate(*selected, input(*selected, loop, 2))}});
     materializedCopy(*module, check(*module, proposal));
   });
 
@@ -514,11 +597,13 @@ int main() {
         fixtureText("structured-source/loops-and-captures.mlir"), context));
     auto proposal = propose(*module, false);
     auto selected = take(proposal.cloneSelectedSubject(*module));
-    Operation *choose = first<local::LocalIfOp>(*selected);
-    auto &left = choose->getRegion(0).front();
-    auto &right = choose->getRegion(1).front();
-    proposal.releases.push_back({entry(*selected, &right),
-                                 {coordinate(*selected, left.getArgument(0))}});
+    Operation *choose = first<exec::TestOp>(*selected);
+    auto branches = regions(*selected, choose);
+    auto &left = *branches[0];
+    auto &right = *branches[1];
+    proposal.releases.push_back(
+        {entry(*selected, &right),
+         {coordinate(*selected, argument(*selected, &left, 0))}});
     refuse(*module, proposal);
   });
 
@@ -532,7 +617,8 @@ int main() {
       auto selected = take(proposal.cloneSelectedSubject(*module));
       auto *consumer =
           site(*selected, resource == "used affine" ? "consume" : "respond");
-      auto value = consumer->getOperand(resource == "used affine" ? 0 : 2);
+      auto value =
+          input(*selected, consumer, resource == "used affine" ? 0 : 2);
       auto encoded = take(encodeBoundType(value.getType(), false));
       require(affine(encoded.spelling()) && discardable(encoded.spelling()) ==
                                                 (resource == "used affine"),
@@ -547,26 +633,28 @@ int main() {
     });
 
   cases.run(
-      "Kernel release coordinates belong to the selected Local subject", [&] {
-        auto module = kernelSource(context);
+      "computation releases belong to the selected executable subject", [&] {
+        auto module = computationSource(context);
         auto proposal = propose(*module);
         auto selected = take(proposal.cloneSelectedSubject(*module));
-        auto sourceFunction = first<local::FuncOp>(*module);
-        auto selectedFunction = first<local::FuncOp>(*selected);
-        auto original = coordinate(*module, sourceFunction.getArgument(0));
-        auto actual = coordinate(*selected, selectedFunction.getArgument(0));
-        require(
-            original.operation != actual.operation,
-            "Kernel fixture did not distinguish source and selected indices");
+        auto sourceFunction =
+            first<exec::ComputeOp>(*module)->getParentOfType<func::FuncOp>();
+        auto selectedFunction =
+            SymbolTable(&selected->getBody()->front())
+                .lookup<func::FuncOp>(sourceFunction.getSymName());
+        StorageValue original{StorageValue::BlockArgument,
+                              indexOf(*module, sourceFunction), 0, 0};
+        auto actual = coordinate(*selected, selectedFunction.getArgument(1));
+        require(original.operation != actual.operation,
+                "computation fixture did not distinguish source and selected "
+                "indices");
         auto sourceBefore = printed(*module);
         materializedCopy(*module, check(*module, proposal));
         require(printed(*module) == sourceBefore,
-                "Kernel scheduling changed source");
+                "computation scheduling changed source");
         proposal.releases.clear();
         proposal.releases.push_back(
-            {after(*selected,
-                   &*std::prev(selectedFunction.getBody().front().end(), 2)),
-             {original}});
+            {after(*selected, first<exec::ApplyOp>(*selected)), {original}});
         refuse(*module, proposal, "storage-schedule-coordinate");
       });
 
@@ -582,13 +670,13 @@ int main() {
       const auto &conversions = proposal.operations[index].conversions;
       require(conversions.size() == 1 && conversions.front().operand == 0,
               "fixed arkworks-msb fold did not require a table conversion");
-      auto source = coordinate(*selected, consumer->getOperand(0));
+      auto source = coordinate(*selected, input(*selected, consumer, 0));
       StorageValue temporary{StorageValue::ConversionResult, index, 0};
       StoragePoint converted{StoragePoint::AfterConversion, index, 0};
       bool early = lifetime == "source before conversion" ||
                    lifetime == "temporary before consumer";
       auto point = lifetime == "source before conversion"
-                       ? entry(*selected, consumer->getBlock())
+                       ? entry(*selected, body(*selected, consumer))
                    : lifetime == "temporary after consumer"
                        ? after(*selected, consumer)
                        : converted;
@@ -609,8 +697,9 @@ int main() {
         auto *consumer = site(*selected, "first");
         auto index = indexOf(*selected, consumer);
         require(
-            containsRelease(proposal, {StoragePoint::AfterConversion, index, 0},
-                            coordinate(*selected, consumer->getOperand(0))) &&
+            containsRelease(
+                proposal, {StoragePoint::AfterConversion, index, 0},
+                coordinate(*selected, input(*selected, consumer, 0))) &&
                 containsRelease(proposal, after(*selected, consumer),
                                 {StorageValue::ConversionResult, index, 0}),
             "conversion source or temporary retained beyond deterministic last "
@@ -644,16 +733,17 @@ int main() {
   cases.run(
       "equal conversion inputs retain distinct temporary occurrences", [&] {
         auto module = take(executableFixture(
-            replaceText(conversionSource(), "(%b,%r)", "(%a,%r)"), context));
+            replaceText(conversionSource(), "%scope,%b,%r", "%scope,%a,%r"),
+            context));
         auto proposal = propose(*module);
         auto selected = take(proposal.cloneSelectedSubject(*module));
         auto *firstOp = site(*selected, "first");
         auto *secondOp = site(*selected, "second");
         auto firstIndex = indexOf(*selected, firstOp);
         auto secondIndex = indexOf(*selected, secondOp);
-        auto source = coordinate(*selected, firstOp->getOperand(0));
+        auto source = coordinate(*selected, input(*selected, firstOp, 0));
         require(
-            firstOp->getOperand(0) == secondOp->getOperand(0) &&
+            input(*selected, firstOp, 0) == input(*selected, secondOp, 0) &&
                 containsRelease(proposal,
                                 {StoragePoint::AfterConversion, secondIndex, 0},
                                 source) &&
@@ -675,14 +765,14 @@ int main() {
         [&] {
           auto text = R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
+)mlir" + scopedFixture(R"mlir(
 "runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.product_sum"} : ()->()
 )mlir",
-                             "%table:!T", "%table", "!T", "!F", R"mlir(
-%result = "poly.exec.product_sum"(%table,%table) {binding=@product,site="product",parameters=[]} : (!T,!T)->!F
-local.return %result : !F
-)mlir",
-                             1);
+                       "%table:!T", "%table", "!T", "!F",
+                       scopedApply("product", "product", "%table,%table",
+                                   "!T,!T", "%result", "!F") +
+                           scopedReturn("%result", "!F"),
+                       1);
           auto module = take(executableFixture(text, context));
           auto proposal = propose(*module);
           auto selected = take(proposal.cloneSelectedSubject(*module));
@@ -692,7 +782,7 @@ local.return %result : !F
           require(crossings.size() == 2 && crossings[0].operand == 0 &&
                       crossings[1].operand == 1,
                   "equal operands did not retain two ordered conversions");
-          auto source = coordinate(*selected, consumer->getOperand(0));
+          auto source = coordinate(*selected, input(*selected, consumer, 0));
           require(
               containsRelease(proposal,
                               {StoragePoint::AfterConversion, index, 1},
@@ -715,11 +805,10 @@ local.return %result : !F
   cases.run(
       "proposer chunks 1025 simultaneous deaths within normal port limits",
       [&] {
-        auto module =
-            take(executableFixture(simultaneousDeathsSource(), context));
+        auto module = simultaneousDeathsSource(context);
         auto proposal = propose(*module);
         auto selected = take(proposal.cloneSelectedSubject(*module));
-        auto point = after(*selected, first<local::LocalIfOp>(*selected));
+        auto point = after(*selected, first<exec::TestOp>(*selected));
         SmallVector<const StorageRelease *> chunks;
         for (const auto &release : proposal.releases)
           if (release.point == point)
@@ -738,13 +827,13 @@ local.return %result : !F
        {"legal chunks", "oversized chunk", "duplicate across chunks",
         "changed chunk order", "changed operand order"})
     cases.run("1025 delayed values: " + control, [&] {
-      auto module = take(executableFixture(chunkSource(), context));
+      auto module = chunkSource(context);
       auto proposal = propose(*module, false);
       auto selected = take(proposal.cloneSelectedSubject(*module));
       SmallVector<StorageValue> values;
       for (auto [index, operation] :
            enumerate(physicalPlanOperations(*selected)))
-        if (isa<local::BoolConstantOp>(operation))
+        if (isa<exec::BooleanOp>(operation))
           values.push_back({StorageValue::OperationResult, index, 0});
       require(values.size() == 1025, "chunk fixture lost dead definitions");
       auto point = after(*selected, site(*selected, "dead1024"));
@@ -765,25 +854,24 @@ local.return %result : !F
       auto checked = check(*module, proposal);
       auto output = materializedCopy(*module, checked);
       auto releases = actualReleases(*output);
-      require(releases.size() == 2 && releases[0]->getNumOperands() == 1024 &&
-                  releases[1]->getNumOperands() == 1,
+      require(releases.size() == 2 && releases[0].getValues().size() == 1024 &&
+                  releases[1].getValues().size() == 1,
               "materializer merged, split or omitted checked chunks");
+      auto actualFlow = take(ExecutionPorts::read(*output));
       for (unsigned i = 0; i < 1024; ++i)
-        require(releases[0]
-                        ->getOperand(i)
-                        .getDefiningOp()
-                        ->getAttrOfType<StringAttr>("site")
+        require(actualFlow.definition(releases[0].getValues()[i])
+                        .owner->getAttrOfType<StringAttr>("site")
                         .getValue() == "dead" + std::to_string(i),
                 "materializer changed deterministic operand order");
-      require(releases[1]->getOperand(0).getDefiningOp() ==
+      require(actualFlow.definition(releases[1].getValues()[0]).owner ==
                   site(*output, "dead1024"),
               "materializer reversed chunk order");
       if (control == "changed chunk order")
         releases[1]->moveBefore(releases[0]);
       else if (control == "changed operand order") {
-        Value firstValue = releases[0]->getOperand(0);
-        releases[0]->setOperand(0, releases[0]->getOperand(1));
-        releases[0]->setOperand(1, firstValue);
+        Value firstValue = releases[0].getValues()[0];
+        releases[0].getValuesMutable()[0].set(releases[0].getValues()[1]);
+        releases[0].getValuesMutable()[1].set(firstValue);
       } else {
         auto repeated = propose(*module);
         auto again = propose(*module);
@@ -805,24 +893,26 @@ local.return %result : !F
                 auto module = scalar(context);
                 auto proposal = propose(*module, false);
                 auto selected = take(proposal.cloneSelectedSubject(*module));
-                auto *block = site(*selected, "first")->getBlock();
+                auto *block = body(*selected, site(*selected, "first"));
                 proposal.releases.push_back(
                     {entry(*selected, block),
-                     {coordinate(*selected, block->getArgument(2))}});
+                     {coordinate(*selected, argument(*selected, block, 2))}});
                 auto checked = check(*module, proposal);
                 auto output = materializedCopy(*module, checked);
-                auto release = first<plan::ReleaseOp>(*output);
-                auto other = release->getBlock()->getArgument(3);
+                auto release = first<runtime::ReleaseBindingsOp>(*output);
+                auto function = release->getParentOfType<func::FuncOp>();
+                auto other = function.getArgument(4);
                 if (mutation == "missing")
                   release.erase();
                 else if (mutation == "wrong")
-                  release->setOperand(0, other);
+                  release.getValuesMutable()[0].set(other);
                 else if (mutation == "moved")
-                  release->moveAfter(site(*output, "middle"));
+                  release->moveBefore(site(*output, "last"));
                 else {
                   OpBuilder builder(release);
-                  plan::ReleaseOp::create(builder, release.getLoc(),
-                                          ValueRange{other});
+                  runtime::ReleaseBindingsOp::create(builder, release.getLoc(),
+                                                     function.getArgument(0),
+                                                     ValueRange{other});
                 }
                 admitPhysical(*output);
                 reject(verifyPhysicalMaterialization(*module, *output, checked),
@@ -877,7 +967,8 @@ local.return %result : !F
                 auto proposal = propose(*module);
                 auto checked = check(*module, proposal);
                 auto *operation = site(*module, "middle");
-                operation->setOperand(0, operation->getBlock()->getArgument(0));
+                cast<exec::ApplyOp>(operation).getInputsMutable()[0].set(
+                    operation->getParentOfType<func::FuncOp>().getArgument(1));
                 require(succeeded(verify(*module)),
                         "stale fixture must remain admitted");
                 auto before = printed(*module);
@@ -910,8 +1001,8 @@ local.return %result : !F
     accept(materializePhysical(*module, checked));
     admitPhysical(*module);
     unsigned folds = 0;
-    module->walk([&](plan::ApplyOp op) {
-      folds += op.getImplementation() == "arkworks-msb/poly.fold";
+    module->walk([&](exec::ApplyOp op) {
+      folds += implementation(op) == "arkworks-msb/poly.fold";
     });
     require(folds == 2 && !actualReleases(*module).empty(),
             "scheduled publication lost fixed implementations or releases");
@@ -953,7 +1044,7 @@ local.return %result : !F
         auto module = scalar(context);
         auto output =
             materializedCopy(*module, check(*module, propose(*module)));
-        first<plan::ReleaseOp>(*output)->setAttr(
+        first<runtime::ReleaseBindingsOp>(*output)->setAttr(
             "annotation", StringAttr::get(&context, "unknown"));
         auto before = printed(*output);
         require(failed(releaseLocalStorage(*output)),
@@ -961,23 +1052,66 @@ local.return %result : !F
         require(printed(*output) == before, "refused metadata changed source");
       });
 
-  cases.run("standalone comparison identifies operand-work exhaustion", [&] {
-    auto module = take(executableFixture(simultaneousDeathsSource(), context));
+  cases.run("oversized comparison refuses at shared source admission", [&] {
+    auto module = simultaneousDeathsSource(context);
     auto output =
         materializedCopy(*module, check(*module, propose(*module, false)));
-    Operation *control = first<local::LocalIfOp>(*output);
-    OpBuilder builder(control);
-    // Each control respects the port limit; total operand/argument work does
-    // not.
-    for (unsigned i = 0; i < 400; ++i) {
-      auto *extra = builder.clone(*control);
-      extra->setAttr("site",
-                     builder.getStringAttr("extra" + std::to_string(i)));
+    auto positive = copy(*output);
+    require(take(readStorageReleases(*output, *positive)).empty(),
+            "bounded positive standalone comparison refused");
+    auto *original = first<exec::TestOp>(*output).getOperation();
+    auto flow = take(ExecutionPorts::read(*output));
+    auto inputs = llvm::to_vector(flow.inputs(original));
+    auto function = original->getParentOfType<func::FuncOp>();
+    auto end = completion(function);
+    auto *failure =
+        cast<exec::DispatchOp>(original->getNextNode()).getStopped();
+    IRRewriter rewriter(&context);
+    auto *before = end->getBlock();
+    auto *tail = rewriter.splitBlock(before, end->getIterator());
+    OpBuilder builder(&context);
+    builder.setInsertionPointToEnd(before);
+    exec::ScopedExecutionBuilder control(builder, function);
+    // Every occurrence has its own closed regions and respects the 1024-port
+    // bound. The repeated semantic operand/argument work exceeds admission.
+    for (unsigned i = 0; i < 400; ++i)
+      control.conditional(
+          inputs.front(), ValueRange(inputs).drop_front(), inputs[1].getType(),
+          "extra" + std::to_string(i), [&](unsigned arm) {
+            auto helper = sc::region(builder, function,
+                                     "extra" + std::to_string(i) + "_arm" +
+                                         std::to_string(arm),
+                                     ValueRange(inputs).drop_front().getTypes(),
+                                     inputs[1].getType());
+            exec::ScopedExecutionBuilder inner(builder, helper);
+            inner.complete(helper.getArgument(1));
+            return helper;
+          });
+    rewriter.mergeBlocks(tail, builder.getInsertionBlock());
+    SmallVector<Block *> redundantFailures;
+    function.walk([&](exec::FailureOp op) {
+      if (op->getBlock() != failure)
+        redundantFailures.push_back(op->getBlock());
+    });
+    require(redundantFailures.size() == 1,
+            "appended controls did not share their failure continuation");
+    for (auto *block : redundantFailures) {
+      block->replaceAllUsesWith(failure);
+      block->erase();
     }
-    // Test the internal reader cap directly. Public admission has its own
-    // source-size bound and may refuse this large subject before this reader.
+    // The independent reader now requires admitted ExecutionPorts. This exact
+    // former 400-control workload reaches the shared source bound first; it
+    // must not bypass that boundary to exercise a later private work counter.
     auto identical = copy(*output);
-    refuses(readStorageReleases(*output, *identical), "storage-schedule-limit");
+    bool sourceLimit = false;
+    ScopedDiagnosticHandler diagnostic(&context, [&](Diagnostic &message) {
+      for (const auto &refusal : diagnostics::refusals(message))
+        sourceLimit |= refusal.code == "source-limit";
+      return success();
+    });
+    refuses(readStorageReleases(*output, *identical),
+            "binding-execution-profile");
+    require(sourceLimit, "oversized comparison refused before its work bound");
   });
 
   cases.run("standalone and planned conversion lifetimes agree", [&] {
@@ -992,8 +1126,8 @@ local.return %result : !F
   });
 
   cases.run("release instruction admission failure publishes nothing", [&] {
-    auto module = take(executableFixture(chunkSource(8192), context));
-    auto function = first<local::FuncOp>(*module);
+    auto module = chunkSource(context, 8192);
+    auto function = first<func::FuncOp>(*module);
     OpBuilder builder(function);
     for (unsigned i = 0; i < 3; ++i) {
       auto *extra = builder.clone(*function);
