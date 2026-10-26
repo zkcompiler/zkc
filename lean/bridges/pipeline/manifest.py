@@ -125,7 +125,7 @@ class Subject:
 
     def generated(self, key):
         value = self.get("generated", key)
-        return None if value is None else ROOT / value
+        return None if value is None else (ROOT / value).resolve()
 
     def generated_package(self, key):
         """Actual Lake provider, independent of declaration namespaces."""
@@ -195,12 +195,14 @@ def load(path):
     for key, value in subject.table("generated").items():
         require(not Path(value).is_absolute() and ".." not in Path(value).parts,
                 f"{path}: generated.{key} must be a repository path")
+        require(subject.generated(key).is_relative_to(ROOT),
+                f"{path}: generated.{key} must resolve inside the repository")
     for key in ("glue", "data", "participant", "program", "facts", "bodies", "interactive_data",
                 "interactive_bodies", "interactive_views", "artifacts", "claims", "lowering"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
-    paths = list(subject.table("generated").values())
+    paths = [subject.generated(key) for key in subject.table("generated")]
     require(len(paths) == len(set(paths)), f"{path}: generated output paths must be distinct")
     require(not (subject.generated("claims") and subject.profile("executable")) or subject.generated("lowering"),
             f"{path}: executable claims require generated.lowering")

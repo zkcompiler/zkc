@@ -100,3 +100,40 @@ def test_byte_evidence_has_an_explicit_distinct_destination(tmp_path, replacemen
     path.write_text(source)
     with pytest.raises(loader.Refused, match=diagnostic):
         loader.load(path)
+
+
+@pytest.mark.parametrize("spelling", [
+    "lean/ZkcExamples/./Construction/SchnorrProofData.lean",
+    "lean/ZkcExamples//Construction/SchnorrProofData.lean",
+])
+def test_distinct_outputs_compare_destinations_not_spelling(tmp_path, spelling):
+    loader = manifests()
+    subject = loader.load_all(["schnorr"])[0]
+    source = subject.path.read_text().replace(
+        'glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"',
+        f'glue = "{spelling}"')
+    path = tmp_path / "schnorr.toml"
+    path.write_text(source)
+    with pytest.raises(loader.Refused, match="generated output paths must be distinct"):
+        loader.load(path)
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_generated_symlinks_cannot_alias_or_escape(tmp_path, monkeypatch, outside):
+    loader = manifests()
+    root = tmp_path / "repo"
+    directory = root / "lean" / "ZkcExamples"
+    directory.mkdir(parents=True)
+    target = (tmp_path if outside else directory) / "Data.lean"
+    target.write_text("maintained data\n")
+    (directory / "Glue.lean").symlink_to(target)
+    monkeypatch.setattr(loader, "ROOT", root)
+    monkeypatch.setattr(loader, "PACKAGES", {"main": (root / "lean", ("ZkcExamples",))})
+    path = root / "probe.toml"
+    path.write_text('schema = "zkc.subject/0"\nname = "probe"\n[generated]\n'
+                    'data = "lean/ZkcExamples/Data.lean"\n'
+                    'glue = "lean/ZkcExamples/Glue.lean"\n')
+    diagnostic = "must resolve inside" if outside else "generated output paths must be distinct"
+    with pytest.raises(loader.Refused, match=diagnostic):
+        loader.load(path)
+    assert target.read_text() == "maintained data\n"
