@@ -268,3 +268,34 @@ def test_byte_evidence_regeneration_preserves_source_artifacts(driver_module, tm
     assert artifact.read_text() == "fixed artifact and checked source connection\n"
     assert (tmp_path / "Lowering.lean").read_text() == "actual byte-to-Domain transport\n"
     assert set(record["generated"]) == {"Lowering.lean"}
+
+
+@pytest.mark.parametrize("evaluated", ["true", "false"])
+def test_receipt_process_equations_are_attribution_only(driver_module, tmp_path, monkeypatch, evaluated):
+    driver, _ = recording(driver_module, tmp_path)
+    theorem = "Example.receipt"
+    equation = "ZkcExamples.ValidConnection"
+    values = {("receipt", "theorem"): theorem, ("receipt", "chain"): [theorem],
+              ("receipt", "security_module"): "Example"}
+    subject = SimpleNamespace(name="example", table=lambda key: {"theorem": theorem},
+                              get=lambda table, key, default=None: values.get((table, key), default))
+    monkeypatch.setattr(driver_module, "printed_axioms", lambda _: {theorem: []})
+    driver.evaluate = lambda *args, **kwargs: SimpleNamespace(stdout=(
+        "control-equation ZkcExamples.ClassificationControl.compiled evaluated=true compiled=true\n"
+        f"process-equation {theorem} {equation} evaluated={evaluated} compiled=true\n"))
+    report = driver.receipt_axioms([subject])["example"]
+    assert report["compiled_stage_equations"] == [equation]
+    assert report["evaluated_compiled_stage_equations"] == ([equation] if evaluated == "true" else [])
+
+
+def test_receipt_attribution_does_not_relax_axiom_check(driver_module, tmp_path, monkeypatch):
+    from bridges.common.lean_render import CheckFailed
+    driver, _ = recording(driver_module, tmp_path)
+    values = {("receipt", "theorem"): "Example.receipt", ("receipt", "chain"): ["Example.receipt"],
+              ("receipt", "security_module"): "Example"}
+    subject = SimpleNamespace(name="example", table=lambda key: values,
+                              get=lambda table, key, default=None: values.get((table, key), default))
+    driver.evaluate = lambda *args, **kwargs: SimpleNamespace(stdout="")
+    monkeypatch.setattr(driver_module, "printed_axioms", lambda _: {"Example.receipt": ["sorryAx"]})
+    with pytest.raises(CheckFailed, match="axioms:Example.receipt"):
+        driver.receipt_axioms([subject])
