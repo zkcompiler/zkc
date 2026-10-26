@@ -1,5 +1,7 @@
 #include "../lib/Transforms/Kernel/FrontierVerification.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
@@ -136,6 +138,76 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  auto cfgFixture = [&] {
+    auto result =
+        parseSourceString<mlir::ModuleOp>(R"mlir(
+      module {
+        "protocol.module"() ({
+          func.func private @branch(%condition: i1, %x: i64, %y: i64) -> i64 {
+            cf.cond_br %condition, ^left(%x : i64), ^right(%y : i64)
+          ^join(%result: i64):
+            return %result : i64
+          ^left(%a: i64):
+            cf.br ^join(%a : i64)
+          ^right(%b: i64):
+            cf.br ^join(%b : i64)
+          }
+          func.func private @definition_order(%x: i64, %y: i64) -> i64 {
+            cf.br ^definition
+          ^use:
+            return %sum : i64
+          ^definition:
+            %sum = arith.addi %x, %y : i64
+            cf.br ^use
+          }
+        }) {profile = #protocol.profile<exec>} : () -> ()
+      }
+    )mlir",
+                                          ParserConfig(&context, false));
+    require(bool(result), "CFG context fixture did not parse");
+    // This is a structural-checker fixture, not a protocol admission fixture.
+    for (auto function :
+         owner(*result).getBody().front().getOps<func::FuncOp>())
+      require(succeeded(verify(function)), "CFG fixture is not valid SSA");
+    return result;
+  };
+  cases.run("normalization preserves full CFG and non-dominance block order",
+            [&] {
+              auto before = cfgFixture(), after = cfgFixture();
+              uint64_t remaining = 100000;
+              require(succeeded(kernel::verifyKernelNormalizationContext(
+                          *before, *after, {}, remaining)),
+                      "unchanged CFG context rejected");
+            });
+  for (unsigned mutation = 0; mutation != 4; ++mutation)
+    cases.run(
+        "normalization refuses CFG mutation " + std::to_string(mutation), [&] {
+          auto before = cfgFixture(), after = cfgFixture();
+          auto branch =
+              SymbolTable(owner(*after)).lookup<func::FuncOp>("branch");
+          auto condition = cast<cf::CondBranchOp>(branch.front().back());
+          if (mutation == 0)
+            condition->setSuccessor(condition.getFalseDest(), 0);
+          else if (mutation == 1)
+            condition->setOperand(1, branch.getArgument(2));
+          else if (mutation == 2) {
+            auto function = SymbolTable(owner(*after))
+                                .lookup<func::FuncOp>("definition_order");
+            function.back().front().setOperand(0, function.getArgument(1));
+          } else {
+            auto &left = *std::next(branch.begin(), 2);
+            left.back().setOperand(0, branch.getArgument(2));
+          }
+          for (auto function :
+               owner(*after).getBody().front().getOps<func::FuncOp>())
+            require(succeeded(verify(function)),
+                    "CFG mutation must remain valid SSA");
+          uint64_t remaining = 100000;
+          rejects(*after, [&] {
+            return kernel::verifyKernelNormalizationContext(*before, *after, {},
+                                                            remaining);
+          });
+        });
   cases.run("identity frontier", [&] {
     auto before = fixture(context, "frontier-before.mlir");
     auto after = fixture(context, "frontier-before.mlir");

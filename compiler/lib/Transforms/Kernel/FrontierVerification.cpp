@@ -72,8 +72,12 @@ public:
       return refuse(after, "context inspection limit");
     if (before->getName() != after->getName() ||
         before->getNumRegions() != after->getNumRegions() ||
-        before->getNumSuccessors() || after->getNumSuccessors())
+        before->getNumSuccessors() != after->getNumSuccessors())
       return refuse(after, "operation identity or structured control changed");
+    for (auto [source, target] :
+         zip(before->getSuccessors(), after->getSuccessors()))
+      if (values.lookupOrNull(source) != target)
+        return refuse(after, "ordered control successor changed");
     pairs[before] = after;
     NamedAttrList expected(before->getAttrs()), actual(after->getAttrs());
     if (auto replacement = callees.find(before); replacement != callees.end())
@@ -122,6 +126,11 @@ public:
          zip(before->getRegions(), after->getRegions())) {
       if (source.getBlocks().size() != target.getBlocks().size())
         return refuse(after, "region shape changed");
+      // CFG block order need not be dominance order. Establish the complete
+      // positional correspondence before checking any operation, including
+      // successor operands, failure continuations and loop backedges. This
+      // grants no rewrite: every paired definition is checked below.
+      IRMapping inner(values);
       for (auto [a, b] : zip(source, target)) {
         uint64_t cost = 1 + uint64_t(a.getNumArguments()) + b.getNumArguments();
         if (cost > remaining)
@@ -130,9 +139,23 @@ public:
         if (function ? !prefix(a.getArgumentTypes(), b.getArgumentTypes())
                      : a.getArgumentTypes() != b.getArgumentTypes())
           return refuse(after, "block interface changed");
-        IRMapping inner(values);
+        inner.map(&a, &b);
         inner.map(a.getArguments(),
                   b.getArguments().take_front(a.getNumArguments()));
+        auto cursor = b.begin();
+        for (auto &op : a) {
+          if (cursor == b.end() || op.getNumResults() > cursor->getNumResults())
+            return refuse(after, "missing ordered definition");
+          uint64_t cost = 1 + uint64_t(op.getNumResults());
+          if (cost > remaining)
+            return refuse(after, "definition correspondence inspection limit");
+          remaining -= cost;
+          inner.map(op.getResults(),
+                    cursor->getResults().take_front(op.getNumResults()));
+          ++cursor;
+        }
+      }
+      for (auto [a, b] : zip(source, target)) {
         auto cursor = b.begin();
         for (auto &op : a) {
           if (cursor == b.end())
@@ -140,8 +163,6 @@ public:
           auto *candidate = &*cursor++;
           if (failed(operation(&op, candidate, inner, depth + 1)))
             return failure();
-          inner.map(op.getResults(),
-                    candidate->getResults().take_front(op.getNumResults()));
         }
         // Normalization may append only the explicitly checked fresh units,
         // in the protocol module's declaration block.
