@@ -64,7 +64,7 @@ records the selected baseline.
 The [native adapter](../../../compiler/adapters/clean/README.md) uses
 [NativeExport](ZkcClean/NativeExport.lean) to extract inductive table operations
 and one flat component with channels. The audited
-[clients](TestsClean/NativeClients.lean) author a Fibonacci constraint and
+[clients](CleanExamples/NativeClients.lean) author a Fibonacci constraint and
 instantiate upstream FemtoCairo, with explicit public bindings and lookup meanings.
 The small [wrapper](CleanExamples.lean), `lake env lean --run CleanExamples.lean OUTPUT`,
 produces separate static source plans, execution inputs and reference results.

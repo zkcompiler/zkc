@@ -1,4 +1,4 @@
-import TestsClean.NativeClients
+import CleanExamples.NativeClients
 
 /-- Regenerate the optional native-adapter source fixtures. -/
-def main := TestsClean.NativeClients.run
+def main := CleanExamples.NativeClients.run

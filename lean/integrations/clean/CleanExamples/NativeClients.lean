@@ -11,7 +11,7 @@ execution. Fibonacci and the auxiliary-column control are locally authored Clean
 constraints. Lookup interpretations and public bindings are explicit client inputs.
 -/
 
-namespace TestsClean.NativeClients
+namespace CleanExamples.NativeClients
 
 open Lean
 open ZkcClean.NativeExport
@@ -95,7 +95,7 @@ def inputs (publicValues trace witnessTables : Json) : Json :=
   Json.mkObj [("format", "zkc.clean-inputs/0"), ("public", publicValues),
     ("trace", trace), ("witness_tables", witnessTables)]
 
-def noPublic : Json := Json.mkObj [("origin", "TestsClean.NativeClients.noPublic"),
+def noPublic : Json := Json.mkObj [("origin", "CleanExamples.NativeClients.noPublic"),
   ("size", toJson (0 : Nat)), ("bindings", Json.arr #[])]
 
 def write (output : System.FilePath) (name : String) (source inputs : Json)
@@ -136,4 +136,4 @@ def run (args : List String) : IO Unit := do
       (Json.arr #[channel ``BytesChannel (BytesChannel (p := koalaBear)).toRaw]))
     (inputs empty (toJson #[weights, weights.map (- ·)]) (Json.mkObj []))
 
-end TestsClean.NativeClients
+end CleanExamples.NativeClients
