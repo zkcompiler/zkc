@@ -269,6 +269,20 @@ end
 
 instance : DecidableEq Instruction := Instruction.decide
 
+mutual
+/-- The helper calls of instructions, with their declared result sorts, those of
+loop bodies included. -/
+def Instruction.callList : List Instruction → List (String × List ValueSort)
+  | [] => []
+  | instruction :: rest => Instruction.callsOf instruction ++ Instruction.callList rest
+
+def Instruction.callsOf : Instruction → List (String × List ValueSort)
+  | ⟨.call name, _, results, _⟩ => [(name, results)]
+  | ⟨.loop _ _ _, _, _, body⟩ => Instruction.callList body
+  | _ => []
+end
+
+
 /-- The native deployment policy exactly as exported: entry, producer and
 validator roles, acceptance index, suite, replaced services, public inputs,
 ordered query/delivery site pairs, framing and construction selector. -/

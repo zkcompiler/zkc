@@ -322,18 +322,6 @@ def checkAnchor : Nat → Terms → List Nat → Instruction → List Nat → In
       | _, _ => .error (.anchor anchor)
 end
 
-mutual
-/-- The helper calls of instructions, with their declared result sorts, those of
-loop bodies included. -/
-def Instruction.callList : List Instruction → List (String × List ValueSort)
-  | [] => []
-  | instruction :: rest => Instruction.callsOf instruction ++ Instruction.callList rest
-
-def Instruction.callsOf : Instruction → List (String × List ValueSort)
-  | ⟨.call name, _, results, _⟩ => [(name, results)]
-  | ⟨.loop _ _ _, _, _, body⟩ => Instruction.callList body
-  | _ => []
-end
 
 mutual
 /-- The number of instructions, those of loop bodies included. -/
