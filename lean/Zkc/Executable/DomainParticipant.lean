@@ -81,4 +81,23 @@ theorem participant_observation (program : Structured.Program) (context : Contex
   rw [participant_values program context artifact env inputs outputs]
   rfl
 
+/-- The same boundary under the actual scalar handler, preserving the exact
+unread proof and the caller's continuation. No property-specific projection is
+built into this transport law. -/
+theorem runK_participant {m : Type → Type} [Monad m] {A : Type}
+    (program : Structured.Program) (context : Context) (artifact : Participant)
+    (env : Environment F G) (inputs : env.map Domain.Value.sort = artifact.inputs)
+    (outputs : ReturnSchema artifact) (key : Origin → Origin) (initial : History F G)
+    (challenge : History F G → m F) (messages : Proof F G)
+    (next : Environment F G → Proof F G → m (PIR.Outcome A × Proof F G)) :
+    Uniform.DomainAdapter.runK key initial challenge
+        (Domain.participant (Structured.ringModel F G) program context artifact env)
+        messages (fun result => next result.values) =
+      Uniform.DomainAdapter.runK key initial challenge
+        (observation program context artifact.instructions artifact.returned env) messages next := by
+  have law := congrArg (fun process => Uniform.DomainAdapter.runK key initial challenge process messages next)
+    (participant_observation program context artifact env inputs outputs)
+  simpa only [Uniform.DomainAdapter.runK_forgetCheckpoints, Uniform.DomainAdapter.runK_bind,
+    Uniform.DomainAdapter.runK] using law
+
 end Zkc.Executable.DomainVM
