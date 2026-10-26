@@ -284,6 +284,16 @@ run_cmd do
     `Zkc.Construction.spec, `Zkc.Construction.ideal,
     `Zkc.Executable.meteredK, `Zkc.Executable.meteredIterate, `Zkc.Executable.meteredStep,
     `Zkc.Executable.metered, `Zkc.Construction.Uniform.compiled_selected]
+  -- Namespace is not ownership: PIR declarations live in Zkc.Semantics.
+  let project := fun (name : Name) =>
+    match env.getModuleIdxFor? name with
+    | some index =>
+      let owner := env.header.moduleNames[index.toNat]!.toString
+      owner == "Zkc" || owner.startsWith "Zkc." || owner.startsWith "ZkcExamples." ||
+        owner.startsWith "Tests."
+    | none => true -- A found declaration without an imported module is local.
+  unless project ``PIR.Process.bind do
+    throwError "project ownership omitted the Process implementation"
   let mut pending := roots
   let mut seen : Std.HashSet Name := {}
   while !pending.isEmpty do
@@ -294,9 +304,7 @@ run_cmd do
     if forbidden.contains name then throwError "native/Domain proof reaches retired interpreter: {name}"
     let some info := env.checked.get.find? name | throwError "missing dependency: {name}"
     if info.isUnsafe then throwError "native/Domain proof reaches unsafe declaration: {name}"
-    if name.toString.startsWith "Zkc." || name.toString.startsWith "ZkcExamples." ||
-        name.toString.startsWith "Tests." || name.toString.startsWith "_private.Zkc" ||
-        name.toString.startsWith "_private.Tests." then
+    if project name then
       if info.isAxiom then throwError "project proof body unavailable: {name}"
     else continue
     let values := (info.value? true).map Expr.getUsedConstants |>.getD #[]
