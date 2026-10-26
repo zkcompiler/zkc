@@ -1,11 +1,11 @@
-#include "ScopedExecution.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "zkc/Dialect/Data/Variant.h"
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::protocol::detail {
+namespace zkc::exec {
 namespace {
 ArrayAttr strings(Builder &builder, ArrayRef<std::string> values) {
   SmallVector<Attribute> result;
@@ -132,7 +132,10 @@ ScopedExecutionBuilder::conditional(Value condition, ValueRange captures,
                            ValueRange{});
   for (unsigned i = 0; i < 2; ++i) {
     builder.setInsertionPointToEnd(i ? no : yes);
-    auto held = region(outline(body, i), captures, types, "conditional", site,
+    auto helper = outline(body, i);
+    if (!helper)
+      return {};
+    auto held = region(helper, captures, types, "conditional", site,
                        i ? "else" : "then");
     branch(join, accept(held, types));
   }
@@ -158,8 +161,11 @@ ScopedExecutionBuilder::match(Value input, ValueRange captures, TypeRange types,
        arms);
   for (auto [i, alternative] : enumerate(alternatives)) {
     builder.setInsertionPointToEnd(arms[i + 1]);
-    auto held = region(outline(body, i), arms[i + 1]->getArguments(), types,
-                       "match", site, alternative);
+    auto helper = outline(body, i);
+    if (!helper)
+      return {};
+    auto held = region(helper, arms[i + 1]->getArguments(), types, "match",
+                       site, alternative);
     branch(join, accept(held, types));
   }
   builder.setInsertionPointToEnd(join);
@@ -196,6 +202,8 @@ ScopedExecutionBuilder::Values ScopedExecutionBuilder::loop(
   append_range(inputs, peek->getResults());
   append_range(inputs, captures);
   auto helper = outline(body, 0);
+  if (!helper)
+    return {};
   auto yielded =
       cast<exec::OutcomeType>(helper.getResultTypes().front()).getPayload();
   auto held = region(helper, inputs, yielded, "iteration", site, {}, coordinate,
@@ -233,4 +241,4 @@ void ScopedExecutionBuilder::returned(ValueRange values) {
   auto *returned = make("exec.returned", result, values);
   make("func.return", {}, returned->getResults());
 }
-} // namespace zkc::protocol::detail
+} // namespace zkc::exec

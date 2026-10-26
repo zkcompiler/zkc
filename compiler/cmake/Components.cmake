@@ -174,6 +174,7 @@ add_zkc_component(IR
   lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
   lib/Dialect/Exec/IR/Instructions.cpp
+  lib/Dialect/Exec/Builders.cpp
   lib/Dialect/Exec/Execution.cpp
   lib/Dialect/Exec/ExecutionComparison.cpp
   lib/Dialect/Exec/IR/Computation.cpp
@@ -244,7 +245,6 @@ add_zkc_component(IR
 )
 add_zkc_component(Translation
   lib/Translation/ExecutionEmission.cpp
-  lib/Translation/ScopedExecution.cpp
   lib/Translation/Entry.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp
@@ -263,6 +263,8 @@ add_zkc_component(Transforms
   lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/Algorithms.cpp
+  lib/Transforms/ScopedAlgorithms.cpp
+  lib/Transforms/ScopedAlgorithmVerification.cpp
   lib/Transforms/AlgorithmVerification.cpp
   lib/Transforms/Mathematical.cpp
   lib/Transforms/MathematicalTrace.cpp

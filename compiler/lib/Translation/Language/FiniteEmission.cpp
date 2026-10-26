@@ -1,9 +1,9 @@
-#include "../ScopedExecution.h"
 #include "DataPreconditions.h"
 #include "EmissionBudget.h"
 #include "Finite.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Packing.h"
 using namespace llvm;
@@ -29,7 +29,7 @@ class FiniteEmitter {
   std::vector<unsigned> bodyPorts, predicatePorts;
   Values domainOperands, captures, initial;
   bool local;
-  protocol::detail::ScopedExecutionBuilder *scoped;
+  exec::ScopedExecutionBuilder *scoped;
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
       failure = value.takeError();
@@ -329,9 +329,9 @@ class FiniteEmitter {
     }
     return bool(make("data.domain_yield", {}, nodes[shape.result]));
   }
-  std::optional<Values>
-  item(unsigned index, mlir::ValueRange inputs, unsigned &ordinal,
-       protocol::detail::ScopedExecutionBuilder *control) {
+  std::optional<Values> item(unsigned index, mlir::ValueRange inputs,
+                             unsigned &ordinal,
+                             exec::ScopedExecutionBuilder *control) {
     if (!charge(inputs.size() + 1))
       return {};
     const auto &node = finite.domain->nodes[index];
@@ -382,7 +382,7 @@ class FiniteEmitter {
               helper->setAttr("runtime.region", builder.getUnitAttr());
               helper.addEntryBlock();
               builder.setInsertionPointToEnd(&helper.front());
-              protocol::detail::ScopedExecutionBuilder region(builder, helper);
+              exec::ScopedExecutionBuilder region(builder, helper);
               region.complete(helper.getArguments().drop_front());
               return helper;
             });
@@ -443,7 +443,7 @@ class FiniteEmitter {
     for (auto type : actualInputs)
       block.addArgument(type, location);
     builder.setInsertionPointToEnd(&block);
-    std::optional<protocol::detail::ScopedExecutionBuilder> control;
+    std::optional<exec::ScopedExecutionBuilder> control;
     if (scoped)
       control.emplace(builder, mlir::cast<mlir::func::FuncOp>(declaration));
     auto logicalArguments = block.getArguments().drop_front(scoped ? 1 : 0);
@@ -539,7 +539,7 @@ public:
                 mlir::Location location, mlir::Block &definitions,
                 Layouts &layouts, StringRef prefix, StringRef site,
                 EmissionBudget &budget, uint64_t &remaining,
-                protocol::detail::ScopedExecutionBuilder *scoped)
+                exec::ScopedExecutionBuilder *scoped)
       : project(project), finite(finite), resultType(resultType),
         values(values), builder(builder), location(location),
         definitions(definitions), layouts(layouts), prefix(prefix), site(site),
@@ -617,8 +617,7 @@ emitFinite(const ClosedEntry &project, const Body &source,
            ArrayRef<SmallVector<mlir::Value>> values, mlir::OpBuilder &builder,
            mlir::Location location, mlir::Block &definitions, Layouts &layouts,
            StringRef prefix, StringRef site, EmissionBudget &budget,
-           uint64_t &remaining,
-           protocol::detail::ScopedExecutionBuilder *scoped) {
+           uint64_t &remaining, exec::ScopedExecutionBuilder *scoped) {
   if (scoped && source.mode != Body::Mode::Local)
     return error("source.emission",
                  "scoped finite emission requires an ordered body");

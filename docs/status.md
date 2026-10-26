@@ -75,6 +75,13 @@ preparation, physical selection and publication still require migration before
 this becomes a complete default source-to-executable path. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
+Checked scoped helper expansion substitutes actual SSA bodies, preserves
+uncharged helper returns and charged control yields, and normalizes aliased
+immutable capture ports together. Its separate reader checks virtual source
+substitution against the actual candidate and recovers full occurrence paths.
+It is tested as a transformation component; default executable preparation
+still needs to consume this edge before selecting and publishing native work.
+
 Typed `exec.compute` formation resolves actual private source mathematical
 helpers or sibling computation entries, checks logical ports, and borrows the
 active scope with an explicit outcome. Symbol rewriting and malformed-target

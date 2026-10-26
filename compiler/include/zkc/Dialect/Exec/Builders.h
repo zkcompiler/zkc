@@ -1,5 +1,5 @@
-#ifndef ZKC_TRANSLATION_SCOPED_EXECUTION_H
-#define ZKC_TRANSLATION_SCOPED_EXECUTION_H
+#ifndef ZKC_DIALECT_EXEC_BUILDERS_H
+#define ZKC_DIALECT_EXEC_BUILDERS_H
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
@@ -7,12 +7,14 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 
-namespace zkc::protocol::detail {
+namespace zkc::exec {
 // Mechanical construction of the bounded scoped CFG. Callers own source and
 // result-type selection and construct the actual outlined bodies. No native
 // record, source checker, admission cache or physical plan is stored here.
 // Callbacks return a formed scoped function; construction restores this
-// builder's insertion point even if the callback shares the builder.
+// builder's insertion point even if the callback shares the builder. A null
+// callback result aborts that control construction. The caller owns the
+// failure state and discards its partial candidate before publication.
 class ScopedExecutionBuilder {
 public:
   using Values = llvm::SmallVector<mlir::Value>;
@@ -68,5 +70,5 @@ private:
                      llvm::StringRef site, llvm::StringRef selection = {},
                      mlir::Value coordinate = {}, mlir::Block *stop = nullptr);
 };
-} // namespace zkc::protocol::detail
+} // namespace zkc::exec
 #endif

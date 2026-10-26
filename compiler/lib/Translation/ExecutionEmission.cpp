@@ -1,9 +1,9 @@
-#include "ScopedExecution.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/Variant.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -173,7 +173,7 @@ class Writer;
 class BodyWriter {
   Writer &writer;
   OpBuilder builder;
-  detail::ScopedExecutionBuilder execution;
+  exec::ScopedExecutionBuilder execution;
   Environment env;
   Values values(ArrayRef<std::string> names) {
     Values values;

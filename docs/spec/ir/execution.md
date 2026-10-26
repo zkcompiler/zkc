@@ -395,6 +395,38 @@ elimination emits `data-match-formation`. Original admission reports malformed
 IR as `target.admission`. A well-formed graph with altered source association
 fails `source.correspondence`.
 
+## Checked scoped helper substitution
+
+Outlined-region data preconditions use actual function argument positions,
+including the scope port. Capture substitution transports those positions and
+preserves their ordered constraints; the independent checker derives the same
+obligations from its SSA correspondence. Dropping a premise is a changed static
+contract even when the resulting body remains otherwise admissible.
+
+`expandScopedHelpers` admits a complete source closure and constructs a private
+candidate by substituting ordinary `func.call` bodies at their actual operands.
+It retains typed mathematical and finite requests. Ordinary helper returns
+bind values in their callers without introducing a completion tick; outlined
+control bodies retain `exec.complete`. A stopped helper truncates its caller's
+remaining work. If substitution aliases immutable captures, their actual
+capture list and all corresponding closed-region formal positions change
+together. Loop-carried state is not merged with invariant captures.
+
+`verifyScopedHelperExpansionPreserved` independently walks the original under
+virtual substitution while reading the admitted candidate. It checks actual
+operation attributes, ordered operands, result bindings, control bodies,
+stops, yields and root interfaces. Other declarations remain exact. Occurrence
+names use `algorithmSite` on the complete helper invocation path. The checker
+recovers those paths even when a bounded name uses a digest, and publishes
+optional occurrence records only after the whole comparison succeeds.
+
+Construction bounds substituted operation/port work to 100000, definitions to
+4096, nesting to 64 and occurrence encoding to 16 MiB. The separate comparison
+has a 1000000 operation/port allowance. Refusal discards the candidate and
+leaves the original and caller-owned occurrence output unchanged. This edge
+does not select a numerical implementation, add native participant completion,
+or admit an unresolved source helper as a native executable.
+
 ## Formal consumer boundary
 
 A source exporter connects the admitted profile to the independent

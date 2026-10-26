@@ -5,10 +5,12 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Language.h"
@@ -126,6 +128,16 @@ protocol Run roles(P)(n:index@P,go:bool@P)->(r:State@P){
   for _ in 0..n roles(P) max 4 {state=step(state,n,go);}
   return state;
 }
+)"},
+    {"alias captures after ordinary helper substitution", R"(
+fn identity(x:Fr)->Fr{return x;}
+fn work(x:Fr,n:index)->Fr{let y=identity(x);let mut acc=x;for _ in 0..n{acc=acc+x+y;}return acc;}
+protocol Run roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return work(x,n);}
+)"},
+    {"stopping ordinary helper truncates its caller", R"(
+fn fail(x:Fr)->Fr{stop "reject";}
+fn work(x:Fr)->Fr{let y=fail(x);return x+y;}
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
 )"}};
 struct Fixture {
   CheckedProject checked;
@@ -164,6 +176,18 @@ int main() {
   context.loadAllAvailableDialects();
   for (const auto &sample : samples) {
     cases.run(sample.name, [&] { Fixture fixture(context, sample); });
+    cases.run((llvm::Twine("expand ") + sample.name).str(), [&] {
+      Fixture fixture(context, sample);
+      auto expanded = protocol::expandScopedHelpers(*fixture.module);
+      require(bool(expanded), "scoped helper expansion failed");
+      require(succeeded(protocol::verifyScopedHelperExpansionPreserved(
+                  *fixture.module, *expanded)),
+              "scoped helper correspondence failed");
+      expanded->walk([&](func::CallOp call) {
+        require(!call->hasAttr("runtime.site"),
+                "ordinary scoped helper call survived expansion");
+      });
+    });
     cases.run((llvm::Twine("project ") + sample.name).str(), [&] {
       Fixture fixture(context, sample);
       auto candidate = OwningOpRef<ModuleOp>(
@@ -189,6 +213,177 @@ int main() {
     require(succeeded(manager.run(*candidate)), "projection fixture failed");
     return candidate;
   };
+  auto expandedMutation = [&](StringRef name, auto edit, unsigned sample = 0) {
+    cases.run(name, [&] {
+      Fixture fixture(context, samples[sample]);
+      auto candidate = protocol::expandScopedHelpers(*fixture.module);
+      require(bool(candidate), "expansion mutation fixture failed");
+      edit(*candidate);
+      require(succeeded(verify(*candidate)),
+              "expansion mutation must remain admitted");
+      ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+      require(failed(protocol::verifyScopedHelperExpansionPreserved(
+                  *fixture.module, *candidate)),
+              "independent expansion check accepted a changed computation");
+    });
+  };
+  expandedMutation("expanded primitive uses a different operand",
+                   [&](ModuleOp module) {
+                     bool changed = false;
+                     module.walk([&](exec::ApplyOp op) {
+                       if (!changed && op.getInputs().size() == 2) {
+                         op->setOperand(2, op.getInputs().front());
+                         changed = true;
+                       }
+                     });
+                     require(changed, "missing expanded primitive");
+                   });
+  expandedMutation("expanded occurrence loses its invocation path",
+                   [&](ModuleOp module) {
+                     bool changed = false;
+                     module.walk([&](exec::ComputeOp op) {
+                       if (!changed) {
+                         op.setSite("different");
+                         changed = true;
+                       }
+                     });
+                     require(changed, "missing expanded computation");
+                   });
+  expandedMutation("expanded return selects an earlier value",
+                   [&](ModuleOp module) {
+                     bool changed = false;
+                     module.walk([&](exec::ReturnOp op) {
+                       auto function = op->getParentOfType<func::FuncOp>();
+                       if (!changed && function.getNumArguments() == 3 &&
+                           op.getValues().size() == 1) {
+                         op->setOperand(0, function.getArgument(1));
+                         changed = true;
+                       }
+                     });
+                     require(changed, "missing expanded return");
+                   });
+  expandedMutation(
+      "expanded loop yields a stale carried value",
+      [&](ModuleOp module) {
+        bool changed = false;
+        module.walk([&](exec::CompleteOp op) {
+          auto function = op->getParentOfType<func::FuncOp>();
+          if (!changed && function.getNumArguments() >= 3 &&
+              op.getValues().size() == 1 &&
+              function.getArgument(2).getType() ==
+                  op.getValues().front().getType() &&
+              op.getValues().front() != function.getArgument(2)) {
+            op->setOperand(1, function.getArgument(2));
+            changed = true;
+          }
+        });
+        require(changed, "missing expanded loop yield");
+      },
+      2);
+  cases.run("unexpanded calls cannot claim scoped substitution", [&] {
+    Fixture fixture(context, samples[0]);
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(failed(protocol::verifyScopedHelperExpansionPreserved(
+                *fixture.module, *fixture.module)),
+            "ordinary calls survived independent expansion checking");
+  });
+  cases.run("checked occurrence paths retain nested helper provenance", [&] {
+    Fixture fixture(context, samples[0]);
+    std::vector<protocol::AlgorithmOrigin> origins;
+    auto candidate = protocol::expandScopedHelpers(*fixture.module, &origins);
+    require(bool(candidate), "provenance fixture failed");
+    bool nested = false;
+    for (const auto &origin : origins) {
+      require(!origin.function.empty() && !origin.definition.empty() &&
+                  !origin.originalSite.empty(),
+              "incomplete occurrence provenance");
+      nested |= !origin.path.empty();
+      uint64_t bytes = 16 * 1024 * 1024;
+      require(take(protocol::algorithmSite(origin.path, origin.originalSite,
+                                           bytes)) == origin.site,
+              "occurrence path does not identify the actual expanded site");
+    }
+    require(nested, "ordinary helper path was dropped");
+  });
+  cases.run("outlined preconditions follow aliased capture positions", [&] {
+    Fixture fixture(context, {"finite capture premises", R"(
+type Vector<F:Field>=builtin("vector",F);
+fn identity(xs:Vector<Fr>)->Vector<Fr>{return xs;}
+fn work(xs:Vector<Fr>,go:bool)->(Vector<Fr>,Vector<Fr>){
+  let ys=identity(xs);return if go{(xs,ys)}else{(ys,xs)};
+}
+protocol Run roles(P)(xs:Vector<Fr>@P,go:bool@P)->(a:Vector<Fr>@P,b:Vector<Fr>@P){let pair @P=work(xs,go);return (a=pair.0,b=pair.1);}
+)"});
+    unsigned regions = 0;
+    fixture.module->walk([&](func::FuncOp function) {
+      if (!function->hasAttr("runtime.region"))
+        return;
+      require(function.getNumArguments() == 3,
+              "expected two distinct vector captures");
+      function->setAttr("data.preconditions",
+                        ArrayAttr::get(&context, {data::EqualExtentAttr::get(
+                                                     &context, 2, 0, 2, 0)}));
+      ++regions;
+    });
+    require(regions == 2, "missing finite premise regions");
+    auto candidate = protocol::expandScopedHelpers(*fixture.module);
+    require(bool(candidate), "capture premise transport failed");
+    candidate->walk([&](func::FuncOp function) {
+      if (!function->hasAttr("runtime.region"))
+        return;
+      auto conditions =
+          function->getAttrOfType<ArrayAttr>("data.preconditions");
+      require(function.getNumArguments() == 2 && conditions &&
+                  conditions.size() == 1 &&
+                  conditions[0] ==
+                      data::EqualExtentAttr::get(&context, 1, 0, 1, 0),
+              "finite premise did not follow the actual capture argument");
+      function->removeAttr("data.preconditions");
+    });
+    require(succeeded(verify(*candidate)),
+            "premise deletion must remain admitted");
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(failed(protocol::verifyScopedHelperExpansionPreserved(
+                *fixture.module, *candidate)),
+            "expansion checker ignored the outlined static contract");
+  });
+  cases.run("expansion capacity failure preserves the source", [&] {
+    std::string text = "fn f0(x:Fr)->Fr{return x;}\n";
+    for (unsigned i = 1; i <= 17; ++i) {
+      auto prior = "f" + std::to_string(i - 1);
+      text += "fn f" + std::to_string(i) + "(x:Fr)->Fr{let y=" + prior +
+              "(x);return " + prior + "(y);}\n";
+    }
+    text += "protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return f17(x);}";
+    Fixture fixture(context, {"bounded expansion", text.c_str()});
+    auto original = OwningOpRef<ModuleOp>(
+        cast<ModuleOp>(fixture.module->getOperation()->clone()));
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(!protocol::expandScopedHelpers(*fixture.module),
+            "unbounded helper substitution was accepted");
+    require(OperationEquivalence::isEquivalentTo(
+                original->getOperation(), fixture.module->getOperation(),
+                OperationEquivalence::IgnoreLocations),
+            "failed expansion mutated its source");
+  });
+  cases.run("outlined expansion capacity refuses without publication", [&] {
+    std::string text = "fn f0(x:Fr)->Fr{return if true{x}else{x};}\n";
+    for (unsigned i = 1; i <= 12; ++i) {
+      auto prior = "f" + std::to_string(i - 1);
+      text += "fn f" + std::to_string(i) + "(x:Fr)->Fr{let y=" + prior +
+              "(x);return " + prior + "(y);}\n";
+    }
+    text += "protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return f12(x);}";
+    Fixture fixture(context, {"bounded outlined expansion", text.c_str()});
+    std::vector<protocol::AlgorithmOrigin> origins{
+        {"unchanged", {}, {}, {}, {}}};
+    ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+    require(!protocol::expandScopedHelpers(*fixture.module, &origins),
+            "unbounded outlined expansion was accepted");
+    require(origins.size() == 1 && origins.front().function == "unchanged",
+            "failed expansion published partial occurrence paths");
+    take(compareOriginal(fixture.entry, *fixture.module));
+  });
   cases.run("projection refuses a changed scoped helper body", [&] {
     Fixture fixture(context, samples[0]);
     auto candidate = projected(fixture);

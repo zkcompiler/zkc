@@ -3,12 +3,10 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Language/Layout.h"
 #include <set>
-namespace zkc::protocol::detail {
-class ScopedExecutionBuilder;
-}
 namespace zkc::exec {
+class ScopedExecutionBuilder;
 class ControlCursor;
-}
+} // namespace zkc::exec
 namespace zkc::language {
 class EmissionBudget;
 /// Emit the closed source finite operation using private descriptor and ABI
@@ -22,7 +20,7 @@ emitFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
            mlir::OpBuilder &, mlir::Location, mlir::Block &definitions,
            Layouts &, llvm::StringRef prefix, llvm::StringRef site,
            EmissionBudget &, uint64_t &remaining,
-           protocol::detail::ScopedExecutionBuilder *scoped = nullptr);
+           exec::ScopedExecutionBuilder *scoped = nullptr);
 /// Read the supplied descriptor, adapters and occurrence relationally. This
 /// checker never invokes the emitter or constructs an expected MLIR module.
 /// Scoped callers supply an already-entered cursor over formed IR. Comparison

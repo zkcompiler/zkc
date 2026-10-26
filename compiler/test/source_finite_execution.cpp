@@ -1,10 +1,10 @@
 #include "../lib/Translation/Language/EmissionBudget.h"
 #include "../lib/Translation/Language/Finite.h"
-#include "../lib/Translation/ScopedExecution.h"
 #include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
@@ -137,7 +137,7 @@ public:
       offset += width;
     }
     builder.setInsertionPointToEnd(&caller.front());
-    protocol::detail::ScopedExecutionBuilder control(builder, caller);
+    exec::ScopedExecutionBuilder control(builder, caller);
     uint64_t remaining = Limits{}.work;
     auto result =
         take(emitFinite(project, *source, *finite, *resultType, values, builder,
@@ -295,7 +295,7 @@ int main() {
     mathematical.mode = Body::Mode::Math;
     EmissionBudget budget(1000);
     OpBuilder builder(&context, &budget);
-    protocol::detail::ScopedExecutionBuilder control(builder, fixture.caller);
+    exec::ScopedExecutionBuilder control(builder, fixture.caller);
     uint64_t remaining = Limits{}.work;
     refuses(emitFinite(fixture.project, mathematical, *fixture.finite,
                        *fixture.resultType, fixture.values, builder,

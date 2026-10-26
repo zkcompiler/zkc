@@ -1,9 +1,9 @@
 #include "../lib/Translation/Language/EmissionBudget.h"
-#include "../lib/Translation/ScopedExecution.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
 
@@ -102,7 +102,7 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(el
                                    builder.getFunctionType(scope, outcome));
           function.addEntryBlock();
           builder.setInsertionPointToEnd(&function.front());
-          protocol::detail::ScopedExecutionBuilder control(builder, function);
+          exec::ScopedExecutionBuilder control(builder, function);
           auto value = control.invoke(
               "exec.boolean", builder.getI1Type(), control.getScope(),
               {builder.getNamedAttr("site", builder.getStringAttr("literal")),

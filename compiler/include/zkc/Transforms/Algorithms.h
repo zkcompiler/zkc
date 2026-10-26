@@ -10,6 +10,21 @@ namespace zkc::mathematical {
 struct RealizationTrace;
 }
 namespace zkc::protocol {
+struct AlgorithmOrigin;
+/// Expand ordinary scoped helper calls by checked SSA substitution, retaining
+/// typed mathematical/finite requests and explicit scope/outcome control.
+/// Source and candidate are separate owned modules. The independent checker
+/// reads both actual CFGs; no native model or Local IR is produced as a
+/// rewrite. Source returns remain uncharged. This is not native artifact
+/// admission. Optional occurrence paths are recovered by the independent
+/// checker and published only after complete success; a refusal leaves the
+/// output intact.
+mlir::OwningOpRef<mlir::ModuleOp>
+expandScopedHelpers(mlir::ModuleOp source,
+                    std::vector<AlgorithmOrigin> *origins = nullptr);
+mlir::LogicalResult verifyScopedHelperExpansionPreserved(
+    mlir::ModuleOp source, mlir::ModuleOp candidate,
+    std::vector<AlgorithmOrigin> *origins = nullptr);
 namespace detail {
 struct AlgorithmExpansionRecord;
 struct AlgorithmStateAccess;

@@ -1,4 +1,3 @@
-#include "../ScopedExecution.h"
 #include "DataPreconditions.h"
 #include "EmissionBudget.h"
 #include "Finite.h"
@@ -8,6 +7,7 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
@@ -46,7 +46,7 @@ class Emitter {
   Layouts layouts;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   mlir::Block *definitions = nullptr;
-  protocol::detail::ScopedExecutionBuilder *scoped = nullptr;
+  exec::ScopedExecutionBuilder *scoped = nullptr;
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
   std::map<std::pair<std::string, std::vector<bool>>, std::string> maps;
@@ -315,7 +315,7 @@ class Emitter {
       for (auto input : arguments)
         entry.addArgument(input, location);
       builder.setInsertionPointToEnd(&entry);
-      protocol::detail::ScopedExecutionBuilder callback(
+      exec::ScopedExecutionBuilder callback(
           builder, mlir::cast<mlir::func::FuncOp>(body));
       Values actual;
       unsigned item = 1, capture = 1 + items.size() + vectors.size();
@@ -485,7 +485,7 @@ class Emitter {
       if (!helper)
         return {};
       builder.setInsertionPointToEnd(&helper.front());
-      protocol::detail::ScopedExecutionBuilder control(builder, helper);
+      exec::ScopedExecutionBuilder control(builder, helper);
       control.complete(helper.getArguments().drop_front());
     }
     return scoped->match(value, {}, *flat, {layout.alternative}, site,
@@ -496,7 +496,7 @@ class Emitter {
     builder.setInsertionPointToEnd(&block);
     std::vector<Values> values(source.values.size());
     auto *previous = scoped;
-    std::optional<protocol::detail::ScopedExecutionBuilder> control;
+    std::optional<exec::ScopedExecutionBuilder> control;
     if (source.mode == Body::Mode::Local)
       control.emplace(builder,
                       mlir::cast<mlir::func::FuncOp>(block.getParentOp()));
@@ -1015,7 +1015,7 @@ class Emitter {
             if (!arm)
               return false;
             builder.setInsertionPointToEnd(&arm.front());
-            protocol::detail::ScopedExecutionBuilder branch(builder, arm);
+            exec::ScopedExecutionBuilder branch(builder, arm);
             if (i)
               branch.reject("reject", site + "_reject");
             else
