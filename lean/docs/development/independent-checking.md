@@ -1,7 +1,8 @@
 # Independent checking of locked declarations
 
 From the repository root, use `python3 lean/checks/check_independent.py` to
-capture existing compiled declarations or compare two explicit export captures.
+capture existing compiled declarations, compare two explicit export captures,
+or replay a candidate under the current model.
 The default covers all 88 declarations in `checks/claims.lock.json`: main (41),
 security (24), ArkLib (20), and Clean (3). Each package's `comparator.json` must
 match its lock entries exactly and permit only `propext`, `Classical.choice`,
@@ -81,7 +82,52 @@ kernels accept the full main export, but this is not an all-kernel verdict.
 Keep the failed result and diagnose without `--silent` using `leanchecker
 --from-export` or `leanchecker-paranoid --from-export` inside a read-only sandbox.
 Do not alter protocol meanings, skip a checker, or classify the failure as a pass.
-A correction belongs in the upstream replay implementation.
+
+For the pinned upstream repair, prepare the exact sources and run
+[build_replay_tools.py](../../checks/build_replay_tools.py) as described in the
+[replay tool recipe](../../checks/replay_tools/README.md). It builds only the
+affected checker closure into a new local directory, with exact source, patch,
+installed-input, command and binary provenance. No installed tool is changed.
+The explicit option selects a checked local runtime overlay containing the
+three patched readers and the remaining stock tools/libraries:
+
+```sh
+python3 lean/checks/check_independent.py compare \
+  --lake /path/to/stock-lean-4.35.0/bin/lake \
+  --replay-toolset /path/to/replay-tools/manifest.json \
+  --base-manifest /path/to/base-exports/manifest.json \
+  --candidate-manifest /path/to/candidate-exports/manifest.json \
+  --output /path/to/new-patched-comparison
+```
+
+The comparator and axiom policy are unchanged. Lake selects all six checkers
+from the local runtime and retains its read-only, network-isolated sandbox.
+Reports explicitly label patched readers and retain stock runtime identities.
+Keep earlier stock failure reports; a patched verdict does not rewrite them.
+Without `--replay-toolset`, the stock workflow remains selected. Capture rejects
+this option and continues to read existing oleans through the stock exporter.
+
+An intentional model transition may need independent proof replay before its
+separate model review and baseline decision. Run the selected final captures:
+
+```sh
+python3 lean/checks/check_independent.py replay \
+  --lake /path/to/stock-lean-4.35.0/bin/lake \
+  --replay-toolset /path/to/replay-tools/manifest.json \
+  --candidate-manifest /path/to/final-exports/manifest.json \
+  --output /path/to/new-final-replay
+```
+
+This runs `lake check --paranoid --from-export` on each selected package and
+validates exact locked coverage and every comparator configuration first. A
+bounded streaming inventory also requires every locked root to occur in the
+actual export; a manifest's coverage list alone is insufficient. Inventory
+records are limited to 8 MiB, and loaded exports obey `--export-mb` as well.
+The `zkc.independent-replay/0` report establishes only current proof/standard-axiom
+validation. It does not compare models, exempt fingerprints, permit definition
+holes, certify source freshness or accept a baseline. Preserve the fixed-model
+comparison failure and complete the separate transition review. Default replay
+covers all four packages; repeated `--package` selects a narrower verdict.
 
 Comparison checks artifact hashes before and after checking, requires identical
 declaration coverage, and rejects shared manifest/export paths, symlinks, and
@@ -92,6 +138,11 @@ commands. `failure.json` and command logs explain unsuccessful runs. A capture
 alone is not a checking verdict. Preserve trusted baseline artifacts and review
 their provenance; hashes establish file identity, not authenticity or source
 freshness. Do not modify artifacts while checking them.
+Replay also checks artifact identity before and after commands. Patched toolset
+validation rejects symlinks and extra/missing runtime files, snapshots the local
+runtime, and checks hashes and file metadata around every command. Installation
+overrides such as `LEAN_SYSROOT`/`LAKE_OVERRIDE_LEAN`, dynamic-loader overrides,
+and any inherited `LAKE_CHECK_EXPORT` are refused before checking.
 
 The defaults bound each child to 8192 MiB of address space, 1800 seconds,
 8 MiB of combined diagnostic output, and 2048 MiB per export. Configure these
@@ -122,6 +173,10 @@ corrupted proof. They do not build the project:
 ZKC_INDEPENDENT_TOOLCHAIN="$(cd lean && lake env lean --print-prefix)" \
   uv run --no-sync --locked pytest common/tests/harness/test_lean_independent_tools.py
 ```
+
+Set `ZKC_INDEPENDENT_REPLAY_TOOLSET=/path/to/replay-tools/manifest.json` as well
+to exercise the explicit runtime, string literals, corrupt proof/quotient
+records, and sandboxed all-checker selection. Existing stock controls remain.
 
 If a namespace probe fails, the tests explicitly skip the sandbox-dependent
 controls; statement, dependency, and axiom mismatch controls and direct default

@@ -15,6 +15,7 @@ from harness import load
 
 
 PREFIX = os.environ.get("ZKC_INDEPENDENT_TOOLCHAIN")
+REPLAY_TOOLSET = os.environ.get("ZKC_INDEPENDENT_REPLAY_TOOLSET")
 pytestmark = pytest.mark.skipif(not PREFIX, reason="set ZKC_INDEPENDENT_TOOLCHAIN to run real checker controls")
 
 
@@ -34,6 +35,8 @@ def exports(tmp_path_factory):
         "statement": "def statement : Prop := True\ntheorem locked : True ∧ True := ⟨True.intro, True.intro⟩\n",
         "dependency": "def statement : Prop := True ∧ True\ntheorem locked : statement := ⟨True.intro, True.intro⟩\n",
         "axiom": "def statement : Prop := True\naxiom bad : True\ntheorem locked : statement := bad\n",
+        "strings": 'def first : String := "a"\ndef second : String := first ++ "b"\n'
+                   'theorem locked : second = "ab" := rfl\n',
     }
     # Lake 4.35 compares non-target theorem bodies referenced through a
     # definition syntactically, even though their proofs are irrelevant.
@@ -65,6 +68,14 @@ def exports(tmp_path_factory):
                    identifiers.get(row["thm"]["name"]) == "Independent.locked")
     theorem["value"] = theorem["type"]
     (root / "invalid.ndjson").write_text("".join(json.dumps(row) + "\n" for row in rows))
+    # Keep all expression/name references valid and alter only Quot.mk's type.
+    rows = [json.loads(line) for line in (root / "base.ndjson").read_text().splitlines()]
+    quotient = next(row['quot'] for row in rows if 'quot' in row and
+                    identifiers.get(row['quot']['name']) == 'Quot.mk')
+    quotient['type'] = theorem['type']
+    tables = [r for r in rows if not {'def', 'thm', 'opaque', 'axiom', 'quot', 'inductive'} & r.keys()]
+    declarations = [r for r in rows if {'def', 'thm', 'opaque', 'axiom', 'quot', 'inductive'} & r.keys()]
+    (root / "corrupt-quotient.ndjson").write_text(''.join(json.dumps(r) + '\n' for r in tables + declarations))
     config = {"challenge_module": "Control", "solution_module": "Control",
               "theorem_names": group["theorems"], "definition_names": [], "permitted_axioms": audit.AXIOMS}
     audit.write_json(root / "comparator.json", config)
@@ -158,3 +169,56 @@ def test_referenced_helper_proof_change_is_strictly_rejected(exports):
         runner.run(command, root, "helper-proof-compare")
     assert "Const does not match between challenge and target 'Independent.helper'" in (
         root / "helper-proof-compare.log").read_text()
+
+
+@pytest.fixture(scope='module')
+def patched_runtime(exports):
+    if not REPLAY_TOOLSET:
+        pytest.skip('set ZKC_INDEPENDENT_REPLAY_TOOLSET to test the explicit patched runtime')
+    audit, runner, root, stock = exports
+    output = root / 'patched'
+    output.mkdir()
+    prefix, _ = audit.select_replay_toolset(Path(REPLAY_TOOLSET), stock, {}, output, runner)
+    assert runner.run([str(prefix / 'bin/lean'), '--print-prefix'], root, 'overlay-prefix').strip() == str(prefix)
+    return prefix
+
+
+@pytest.mark.parametrize('tool', ['leanchecker', 'leanchecker-paranoid', 'lean4lean'])
+@pytest.mark.parametrize('label', ['strings', 'invalid', 'corrupt-quotient'])
+def test_patched_runtime_direct_controls(exports, patched_runtime, tool, label):
+    audit, runner, root, _ = exports
+    command = [str(patched_runtime / 'bin' / tool), '--import' if tool == 'lean4lean' else '--from-export',
+               str(root / f'{label}.ndjson')]
+    if tool == 'lean4lean' and label == 'invalid':
+        # Its existing error formatter panics before printing the kernel error
+        # when abort-on-panic is enabled. A direct diagnostic permits its raw
+        # printer fallback; production Lake/Runner still require abort-on-panic.
+        command = ['env', '-u', 'LEAN_ABORT_ON_PANIC', *command]
+    name = f'patched-{tool}-{label}'
+    if label == 'strings':
+        runner.run(command, root, name)
+    else:
+        with pytest.raises(audit.CheckError):
+            runner.run(command, root, name)
+        diagnostic = (root / f'{name}.log').read_text()
+        assert any(s in diagnostic for s in ['(kernel)', 'Quotient constant mismatch', 'Quotient post-check rejects'])
+        assert not any(s in diagnostic for s in ['Invalid JSON', 'Expr not found', 'Name not found'])
+
+
+def test_patched_runtime_retains_all_sandboxed_kernels(exports, sandbox_ready, patched_runtime):
+    _, runner, root, _ = exports
+    runner.run([str(patched_runtime / 'bin/lake'), 'check', '--paranoid', '--from-export',
+                str(root / 'strings.ndjson')], root, 'patched-all-kernels')
+    log = (root / 'patched-all-kernels.log').read_text()
+    for name in ['Lean paranoid', 'lean4lean', 'nanoda', 'con-leche', 'con-ron', 'Lean default']:
+        assert f'{name} kernel accepts' in log
+
+
+def test_patched_comparator_keeps_strict_dependency_comparison(exports, patched_runtime):
+    audit, runner, root, _ = exports
+    with pytest.raises(audit.CheckError):
+        runner.run([str(patched_runtime / 'bin/lake'), 'comparator', '--config', str(root / 'comparator.json'),
+                    '--challenge-from-export', str(root / 'helper-base.ndjson'),
+                    '--solution-from-export', str(root / 'helper-proof.ndjson')], root, 'patched-helper-compare')
+    assert "Const does not match between challenge and target 'Independent.helper'" in (
+        root / 'patched-helper-compare.log').read_text()
