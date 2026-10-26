@@ -215,16 +215,15 @@ int main() {
         nested ? "nested total finite comparison retries ordered"
                : "total finite comparison retries ordered",
         [&] {
-          auto text = fixture();
+          auto source = parseSourceString<ModuleOp>(fixture(), &context);
+          require(bool(source), "total source refused");
           if (!nested) {
-            auto pos = text.find("step=@outside");
-            require(pos != std::string::npos, "missing outer step");
-            text.replace(pos, std::string("step=@outside").size(),
-                         "step=@inside");
+            auto helper =
+                SymbolTable(unit(*source)).lookup<func::FuncOp>("total");
+            auto fold = cast<algebra::FiniteFoldOp>(helper.front().front());
+            fold.setStepAttr(FlatSymbolRefAttr::get(&context, "inside"));
           }
-          auto source = parseSourceString<ModuleOp>(text, &context);
-          require(bool(source) && succeeded(verify(*source)),
-                  "total source refused");
+          require(succeeded(verify(*source)), "total source refused");
           auto numerical =
               kernelRecipeSource(unit(*source), "total", "calculation");
           auto original = copy(*source);

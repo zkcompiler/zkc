@@ -740,6 +740,16 @@ class Admission {
         return false;
     return true;
   }
+  bool callbackEdges() {
+    for (const auto &[symbol, definition] : functions)
+      for (const auto &callback : definition.callbacks) {
+        auto found = functions.find(callback);
+        if (found == functions.end() || !found->second.body)
+          return fail("local-realization-callback");
+        edges[symbol].insert(callback);
+      }
+    return true;
+  }
   bool check(const program::LocalDefinitions &m) {
     if (!environment(m.bindings))
       return false;
@@ -748,14 +758,7 @@ class Admission {
     for (const auto &f : m.functions)
       if (!declare(f))
         return false;
-    for (const auto &[symbol, definition] : functions)
-      for (const auto &callback : definition.callbacks) {
-        auto found = functions.find(callback);
-        if (found == functions.end() || !found->second.body)
-          return fail("local-realization-callback");
-        edges[symbol].insert(callback);
-      }
-    return bodies(functions, true) && cycles();
+    return callbackEdges() && bodies(functions, true) && cycles();
   }
   bool check(const program::Participants &m) {
     target = true;
@@ -770,7 +773,8 @@ class Admission {
     for (const auto &p : m.participants)
       if (!declare(p))
         return false;
-    if (!bodies(functions, true) || !bodies(participants, false) || !cycles())
+    if (!callbackEdges() || !bodies(functions, true) ||
+        !bodies(participants, false) || !cycles())
       return false;
     if (m.entries.empty() && (!m.participants.empty() || m.functions.empty()))
       return fail("interactive-entry");

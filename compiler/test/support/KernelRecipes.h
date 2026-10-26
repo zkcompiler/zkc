@@ -36,8 +36,9 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
   return owner;
 }
 
-// Keep the Protocol fixture immutable. A recipe source owns only standard
-// functions and domains, including every original dependency and its premises.
+// Keep the Protocol fixture immutable. An isolated mathematical recipe source
+// owns pure standard functions and domains, including dormant mathematical
+// definitions and their premises. Scoped source callers are separate owners.
 inline mlir::OwningOpRef<mlir::ModuleOp>
 kernelRecipeUnit(mlir::Operation *sourceOwner) {
   mlir::OpBuilder builder(sourceOwner->getContext());
@@ -47,6 +48,9 @@ kernelRecipeUnit(mlir::Operation *sourceOwner) {
   builder.setInsertionPointToEnd(unit->getBody());
   for (auto &definition : sourceOwner->getRegion(0).front()) {
     if (!mlir::isa<mlir::func::FuncOp, data::DomainOp>(definition))
+      continue;
+    if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(definition);
+        function && protocol::isScopedExecutionFunction(function))
       continue;
     auto *copy = builder.clone(definition);
     mlir::SymbolTable::setSymbolVisibility(

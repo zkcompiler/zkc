@@ -187,15 +187,41 @@ int main() {
   });
   for (auto kind : {protocol::LocalRealization::Kind::FiniteFold,
                     protocol::LocalRealization::Kind::FiniteCollect})
-    cases.run(kind == protocol::LocalRealization::Kind::FiniteFold
-                  ? "finite fold realization refuses in logical Exec"
-                  : "finite collect realization refuses in logical Exec",
-              [&] {
-                auto invalid = signature;
-                invalid.kind = kind;
-                refuse(protocol::admit(fixture(), {invalid}),
-                       "local-realization-signature");
-              });
+    cases.run(
+        kind == protocol::LocalRealization::Kind::FiniteFold
+            ? "finite fold realization requires actual callback bodies"
+            : "finite collect realization requires actual callback bodies",
+        [&] {
+          auto finite = signature;
+          finite.kind = kind;
+          refuse(protocol::admit(fixture(), {finite}),
+                 "local-realization-callback");
+          finite.callbacks = {"callback"};
+          refuse(protocol::admit(fixture(), {finite}),
+                 "local-realization-callback");
+          auto model = fixture();
+          program::Function callback;
+          callback.name = "callback";
+          callback.origin = program::LogicalOrigin{"callback", {}};
+          callback.arguments = {{"x", field}};
+          callback.results = {field};
+          callback.body = {{"", program::Return{{"x"}}}};
+          model.functions.push_back(std::move(callback));
+          accept(protocol::admit(model, {finite}));
+          auto cyclic = model;
+          cyclic.functions.back().body = {
+              {"recursive", program::LocalApply{finite.name, {"x"}, {"next"}}},
+              {"", program::Return{{"next"}}}};
+          refuse(protocol::admit(cyclic, {finite}), "interactive-call-cycle");
+          finite.callbacks = {"prover"};
+          refuse(protocol::admit(model, {finite}),
+                 "local-realization-callback");
+          finite.callbacks = {"total"};
+          auto total = signature;
+          total.name = "total";
+          refuse(protocol::admit(model, {finite, total}),
+                 "local-realization-callback");
+        });
   for (const auto &port : {std::string("polynomial:bls12-381.fr"), transcript,
                            std::string("bool@native.bool/0")})
     cases.run("non-total, affine or physical signature refuses: " + port, [&] {
