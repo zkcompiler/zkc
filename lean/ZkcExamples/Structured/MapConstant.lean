@@ -1,7 +1,9 @@
 module
 
 public import ZkcExamples.Structured.MapConstantViews
-public import Zkc.Source.Structured.MapLaws
+public import Zkc.Source.Structured.CollectLaws
+public import Zkc.Source.DeriveRegion
+public import ZkcExamples.Structured.MapObservations
 public import Zkc.Source.Structured.ClosedProjection
 
 @[expose] public section
@@ -9,8 +11,9 @@ public import Zkc.Source.Structured.ClosedProjection
 /-! An input-independent formula still checks every retained row shape and
 requires all owned inputs. Its formula is derived from the exact Math body. -/
 namespace ZkcExamples.Structured.MapConstant
-open Zkc.Source Zkc.Source.Structured MapConstantViews
-set_option smartUnfolding false
+open Zkc.Source Zkc.Source.Structured MapConstantViews MapConstantBodies
+set_option backward.isDefEq.respectTransparency false
+set_option smartUnfolding true
 
 private theorem prepend_one {Value : Ty → Type} {types : List Ty} {type : Ty}
     (env : Environment Value types) (values : Values Value [type]) :
@@ -33,23 +36,78 @@ theorem formula_equation (a b unusedScalar : F) :
     invoke (program.payload.tables F G).closed formulaHelper
       (.cons a (.cons b (.cons unusedScalar .nil))) = .done (.cons (7 : F) .nil) :=
   (program.payload.closed_body_view_as formulaDefinition formula_member formulaHelper formula_signature
-    formulaBody formula_exact (.cons a (.cons b (.cons unusedScalar .nil)))).trans
+    formulaBody formula_shared_raw (.cons a (.cons b (.cons unusedScalar .nil)))).trans
       (formula_body _ _ a b unusedScalar)
 
-/-- Constant results preserve the checked row count, including zero. -/
+theorem realization_equation (a b unusedScalar : F) :
+    invoke (program.payload.tables F G).closed formulaRealizationHelper
+      (.cons a (.cons b (.cons unusedScalar .nil))) = .done (.cons (7 : F) .nil) := by
+  rw [program.payload.closed_body_view_as formulaRealizationDefinition formulaRealization_member
+    formulaRealizationHelper formulaRealization_signature formulaRealizationBody
+    formulaRealization_shared_raw (.cons a (.cons b (.cons unusedScalar .nil)))]
+  have expanded : formulaRealizationBody.denote
+      (Evaluation.meaning (observedSites F G) (program.payload.tables F G).closed)
+      (Values.cons a (.cons b (.cons unusedScalar .nil))).get =
+        (invoke (program.payload.tables F G).closed formulaHelper
+          (.cons a (.cons b (.cons unusedScalar .nil)))).bind fun result =>
+            .done (.cons (result.get .here) .nil) := by derive_process
+  rw [expanded, formula_equation]
+  rfl
+
+theorem callback_equation (x y unusedScalar : F) (a b : List F) :
+    invoke (program.payload.tables F G).closed mapCallbackHelper
+      (.cons x (.cons y (.cons a (.cons b (.cons unusedScalar .nil))))) =
+      .call (.mark "body") fun _ => .done (.cons (7 : F) .nil) := by
+  rw [program.payload.closed_body_view_as mapCallbackDefinition mapCallback_member
+    mapCallbackHelper mapCallback_signature mapCallbackBody mapCallback_shared_raw
+    (.cons x (.cons y (.cons a (.cons b (.cons unusedScalar .nil)))))]
+  have expanded : mapCallbackBody.denote
+      (Evaluation.meaning (observedSites F G) (program.payload.tables F G).closed)
+      (Values.cons x (.cons y (.cons a (.cons b (.cons unusedScalar .nil))))).get =
+      .call (.mark "body") fun _ =>
+        (invoke (program.payload.tables F G).closed formulaRealizationHelper
+          (.cons x (.cons y (.cons unusedScalar .nil)))).bind fun result =>
+            .done (.cons (result.get .here) .nil) := by derive_process
+  rw [expanded, realization_equation]
+  rfl
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+theorem domain_admit (a b : List F) (small : a.length < indexLimit)
+    (sameLength : b.length = a.length) :
+    collectSpec.domain.admit (carriers := uniformCarriers F G) (.cons a (.cons b .nil)) =
+      .returned ((a.zip b).map fun pair => .cons pair.1 (.cons pair.2 .nil)) := by
+  change Finite.continueWith
+    (if a.length < indexLimit then
+      .returned (a.map fun x => (Values.cons x .nil : Values (assignment F G) [.field "bls12-381.fr"]))
+    else .stopped .exhausted) (fun xs =>
+      Finite.continueWith
+        (if b.length < indexLimit then
+          .returned (b.map fun x => (Values.cons x .nil : Values (assignment F G) [.field "bls12-381.fr"]))
+        else .stopped .exhausted) (fun ys =>
+          Finite.continueWith (zipDomainRows (.cons xs (.cons ys .nil)))
+            (fun rows => .returned rows))) = _
+  simp only [small, ↓reduceIte, Finite.continueWith, zipDomainRows,
+    List.map_map, Values.append, List.length_map, sameLength, List.zip_map,
+    Function.comp_def, Prod.map_fst, Prod.map_snd]
+
+/-- Constant results retain one callback observation for each checked row. -/
 theorem map_equation (a b : List F) (unusedScalar : F)
     (small : a.length < indexLimit) (sameLength : b.length = a.length) :
-    Evaluation.denoteMap (program.payload.tables F G).closed mapSpec (inputs a b unusedScalar) =
-      .done (.cons (List.replicate a.length (7 : F)) .nil) := by
-  have equation := Evaluation.denoteMap_twoRows_broadcast (program.payload.tables F G).closed
-    mapSpec.helperName mapSpec.field a b unusedScalar small sameLength (fun _ _ => (7 : F))
-    (fun x y => formula_equation x y unusedScalar)
-  have values : List.zipWith (fun (_ _ : F) => (7 : F)) a b = List.replicate a.length 7 := by
+    Evaluation.denoteCollect (program.payload.tables F G).closed collectSpec (inputs a b unusedScalar) =
+      (MapObservations.rows (List.replicate a.length (7 : F))).bind fun values =>
+        .done (.cons values .nil) := by
+  have equation := Evaluation.denoteCollect_process (program.payload.tables F G).closed
+    collectSpec (.cons a (.cons b .nil)) (.cons unusedScalar .nil) (a.zip b)
+    (fun pair => .cons pair.1 (.cons pair.2 .nil)) (domain_admit a b small sameLength) rfl
+    (fun _ => .call (.mark "body") fun _ => .done (7 : F))
+    (fun pair => callback_equation pair.1 pair.2 unusedScalar a b)
+  have values : (a.zip b).map (fun _ => (7 : F)) = List.replicate a.length 7 := by
     apply List.ext_getElem
-    · simp only [List.length_zipWith, List.length_replicate, sameLength, Nat.min_self]
+    · simp only [List.length_map, List.length_zip, List.length_replicate, sameLength, Nat.min_self]
     · intro index leftBound rightBound
-      simp only [List.getElem_zipWith, List.getElem_replicate]
-  exact equation.trans (congrArg (fun values => PIR.Process.done (Values.cons values Values.nil)) values)
+      simp only [List.getElem_map, List.getElem_replicate]
+  rw [MapObservations.rows_map (a.zip b) (fun _ => (7 : F)), values] at equation
+  exact equation
 
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -62,17 +120,17 @@ set_option smartUnfolding true in
 theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (a b : List F) (unusedScalar : F) :
     mapBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
-      Evaluation.denoteMap table mapSpec (inputs a b unusedScalar) := by
-  simp only [mapBody, inputs, mapSpec, Region.denote, Evaluation.meaning, Evaluation.operation,
+      Evaluation.denoteCollect table collectSpec (inputs a b unusedScalar) := by
+  simp only [mapBody, inputs, collectSpec, Region.denote, Evaluation.meaning, Evaluation.operation,
     Op.results, Operands.eval, Regions.denote, Values.get_cons, prepend_one,
     Environment.push]
   exact singleton_return _
 
 theorem map_invocation (a b : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed mapHelper (inputs a b unusedScalar) =
-      Evaluation.denoteMap (program.payload.tables F G).closed mapSpec (inputs a b unusedScalar) :=
+      Evaluation.denoteCollect (program.payload.tables F G).closed collectSpec (inputs a b unusedScalar) :=
   (program.payload.closed_body_view_as mapDefinition map_member mapHelper map_signature
-    mapBody map_exact (inputs a b unusedScalar)).trans (map_body _ _ a b unusedScalar)
+    mapBody map_shared_raw (inputs a b unusedScalar)).trans (map_body _ _ a b unusedScalar)
 
 set_option smartUnfolding true in
 theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
@@ -101,9 +159,9 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
 theorem wrapper_invocation (a b : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed wrapperHelper (inputs a b unusedScalar) =
       .call (.mark "s0") (fun _ =>
-        Evaluation.denoteMap (program.payload.tables F G).closed mapSpec (inputs a b unusedScalar)) := by
+        Evaluation.denoteCollect (program.payload.tables F G).closed collectSpec (inputs a b unusedScalar)) := by
   refine (program.payload.closed_body_view_as wrapperDefinition wrapper_member wrapperHelper wrapper_signature
-    wrapperBody wrapper_exact (inputs a b unusedScalar)).trans ?_
+    wrapperBody wrapper_shared_raw (inputs a b unusedScalar)).trans ?_
   rw [wrapper_body, map_invocation]
   rfl
 
@@ -138,20 +196,23 @@ theorem observed_expansion (a b : List F) (unusedScalar : F) :
     funext type ref
     exact Values.get_present _ _
   rw [owner_projection.protocol_table_independent _ _ [], env,
-    owner_projection.denote_present _ program.payload.tables_adequate]
+    owner_projection.denote_present (program.payload.tables F G)
+      program.payload.tables_adequate (inputs a b unusedScalar).get]
   set_option smartUnfolding true in
     rw [owner_body]
     simp only [PIR.Process.bind, output_mask, PIR.Process.bind_done, observedSites]
 
 
-/-- The complete retained protocol preserves both reached source marks. -/
+/-- The complete source retains both outer marks and every reached callback mark. -/
 theorem observed_equation (a b : List F) (unusedScalar : F)
     (small : a.length < indexLimit) (sameLength : b.length = a.length) :
     program.observed F G 0 (inputs a b unusedScalar).present =
       .call (.mark "s0") (fun _ => .call (.mark "s0")
-        (fun _ => .done (.cons (some (List.replicate a.length (7 : F))) .nil))) := by
+        (fun _ => (MapObservations.rows (List.replicate a.length (7 : F))).bind
+          fun values => .done (.cons (some values) .nil))) := by
   rw [observed_expansion]
   rw [wrapper_invocation, map_equation a b unusedScalar small sameLength]
+  simp only [PIR.Process.bind, PIR.Process.bind_assoc]
   rfl
 
 /-- Full source result for the owner after erasing internal site observations. -/
@@ -161,15 +222,19 @@ theorem owner_equation (a b : List F) (unusedScalar : F)
       .done (.cons (some (List.replicate a.length (7 : F))) .nil) := by
   unfold Program.participant
   rw [observed_equation a b unusedScalar small sameLength]
-  rfl
+  simp only [PIR.Process.interpret, forgetSites, PIR.Process.bind,
+    PIR.Process.interpret_bind, MapObservations.rows_forget]
 
 
 /-- The exact source preserves the ordered map shape failure after its marks. -/
 theorem owner_shape_failure (a b : List F) (unusedScalar : F) (reason : PIR.Stop)
-    (shape : Evaluation.mapShape [a.length, b.length] = .stopped reason) :
+    (shape : collectSpec.domain.admit (carriers := uniformCarriers F G)
+      (.cons a (.cons b .nil)) = .stopped reason) :
     program.participant F G 0 (inputs a b unusedScalar).present = .halt reason := by
-  have stopped := Evaluation.denoteMap_shape_stops (program.payload.tables F G).closed
-    mapSpec (inputs a b unusedScalar) reason shape
+  have stopped := Evaluation.denoteCollect_admission_stop (program.payload.tables F G).closed
+    collectSpec (.cons a (.cons b .nil)) (.cons unusedScalar .nil) reason shape
+  change Evaluation.denoteCollect (program.payload.tables F G).closed collectSpec
+    (inputs a b unusedScalar) = .halt reason at stopped
   have observed : program.observed F G 0 (inputs a b unusedScalar).present =
       .call (.mark "s0") (fun _ => .call (.mark "s0") (fun _ => .halt reason)) := by
     rw [observed_expansion]

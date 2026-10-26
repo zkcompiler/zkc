@@ -25,7 +25,7 @@ example : MapCombinationViews.program.participant Int Int 0
 -- The formula ignores this row's values, but its shape still precedes execution.
 example : MapCombinationViews.program.participant Int Int 0
     (MapCombination.inputs 2 [] 3 [] [99] 0).present = .halt .refused :=
-  MapCombination.owner_shape_failure _ _ _ _ _ _ _ (by decide +kernel)
+  MapCombination.owner_shape_failure _ _ _ _ _ _ _ rfl
 
 example : MapCombinationViews.program.participant Int Int 0
     (MapCombination.inputs 2 [] 3 [] [] 0).present = .done (.cons (some []) .nil) := by
@@ -55,7 +55,7 @@ example : MapConstantViews.program.participant Int Int 0
 
 example : MapConstantViews.program.participant Int Int 0
     (MapConstant.inputs [] [10] 41).present = .halt .refused :=
-  MapConstant.owner_shape_failure _ _ _ _ (by decide +kernel)
+  MapConstant.owner_shape_failure _ _ _ _ rfl
 
 example : MapConstantViews.program.participant Int Int 0
     (.cons (some []) (.cons (some []) (.cons none .nil))) = .halt .incomplete :=
@@ -64,5 +64,22 @@ example : MapConstantViews.program.participant Int Int 0
 example : MapConstantViews.program.participant Int Int 1
     (.cons none (.cons none (.cons none .nil))) = .done (.cons none .nil) :=
   MapConstant.nonowner_equation
+
+-- Each reached callback is visible before site interpretation.
+example : MapConstantViews.program.observed Int Int 0
+    (MapConstant.inputs [1, 2] [10, 20] 41).present =
+      .call (.mark "s0") (fun _ => .call (.mark "s0") (fun _ =>
+        .call (.mark "body") (fun _ => .call (.mark "body") (fun _ =>
+          .done (.cons (some [7, 7]) .nil))))) := by
+  rw [MapConstant.observed_equation (F := Int) (G := Int) [1, 2] [10, 20] 41
+    (by decide +kernel) rfl]
+  rfl
+
+-- Shape admission finishes before the first callback, including unused rows.
+example : MapCombinationViews.program.observed Int Int 0
+    (MapCombination.inputs 2 [3] 7 [] [17] 23).present =
+      .call (.mark "s0") (fun _ => .call (.mark "s0") (fun _ => .halt .refused)) := by
+  rw [MapCombination.observed_expansion, MapCombination.wrapper_invocation]
+  rfl
 
 end Tests.StructuredMapClients

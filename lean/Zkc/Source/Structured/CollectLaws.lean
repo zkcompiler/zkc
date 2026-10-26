@@ -50,6 +50,39 @@ theorem collectTransition_unfiltered (table : HelperTable carriers.Value interfa
         .done (value.get .here :: collected) := by
   simp only [collectTransition, absent, ↓reduceIte, PIR.Process.bind, Values.get]
 
+set_option backward.isDefEq.respectTransparency false in
+/-- An unfiltered collection is ordered monadic traversal of the exact callback.
+Unlike the pure formula rule, this equation retains arbitrary callback effects
+and stops. Every domain input and capture remains in each callback invocation. -/
+theorem denoteCollect_process {A : Type}
+    (table : HelperTable carriers.Value interface) (spec : CollectSpec)
+    (arguments : Values carriers.Value spec.domain.inputs)
+    (captures : Values carriers.Value spec.captures)
+    (items : List A) (pack : A → Values carriers.Value spec.domain.items)
+    (admitted : spec.domain.admit arguments = .returned (items.map pack))
+    (absent : spec.predicate.isEmpty = true)
+    (callback : A → PIR.Process interface (carriers.Value spec.collection.element))
+    (law : ∀ item,
+      invoke table spec.bodyHelper ((pack item).append (arguments.append captures)) =
+        (callback item).bind fun value => .done (.cons value .nil)) :
+    denoteCollect table spec (arguments.append captures) =
+      (items.mapM callback).bind fun values =>
+        .done (.cons (spec.collection.pack values) .nil) := by
+  rw [denoteCollect_pack]
+  simp only [admitted, Finite.admitThen, Finite.fold_map]
+  have transition (collected : List (carriers.Value spec.collection.element)) (item : A) :
+      collectTransition table spec arguments captures collected (pack item) =
+        (callback item).bind fun value => .done (value :: collected) := by
+    rw [collectTransition_unfiltered _ _ absent, law]
+    simp only [PIR.Process.bind_assoc, PIR.Process.bind]
+    rfl
+  rw [Finite.fold_congr _ _ transition]
+  have ordered := Finite.fold_collect callback items []
+  simp only [List.reverse_nil, List.nil_append] at ordered
+  have packed := congrArg (fun process => process.bind fun values =>
+    PIR.Process.done (Values.cons (spec.collection.pack values) Values.nil)) ordered
+  simpa only [PIR.Process.bind_assoc, PIR.Process.bind] using packed
+
 /-- A scalar formula is justified through the actual callback on each admitted
 item. The packing map retains every tuple component, domain argument and capture;
 this rule supplies no formula classification from native or generated names. -/

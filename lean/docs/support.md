@@ -387,6 +387,16 @@ lemmas. All value equations use the structured interpreter and actual helper tab
 | `MapConstant` | Exactly one constant `7` per row, including zero rows, full shape stops and strict owned presence | Unused row shapes and the unused scalar remain required; the nonowner skips the Local call |
 | `RealizationValues` | Actual vector projection through the retained realization and unchanged Local values wrapper, preceded by table validation in the full source | The projection/realization itself needs no vector-size or index premise; source validation and optional/owned boundaries remain explicit |
 
+The constant and linear-combination clients follow the actual scoped collection,
+its complete callback tuple and the separately admitted scalar realization.
+Their observed equations retain both outer marks and one `body` mark per reached
+row. Participant results erase those marks through the existing interpretation.
+`CollectLaws.denoteCollect_process` relates an unfiltered collection to ordered
+monadic traversal without assuming pure or total callbacks. The combination
+client also proves that a mismatch in the first two rows stops before inspecting
+the later unused row, with no size premise on that later row. These equations
+concern the independent process model; they do not prove native correspondence.
+
 First's shape theorem preserves arbitrary flattened column widths. For one
 column, its result decodes to `Multilinear.fixFirst` on the leading Boolean
 coordinate. For one column, Prefix's result decodes to `fixPrefix` in the supplied point order,
