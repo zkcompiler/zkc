@@ -143,34 +143,6 @@ func.return %done : !exec.outcome<(!F)>
 )",
                    3);
 }
-// Build the actual outlined scope transitions; the physical checker reads
-// these CFGs independently of this mechanical construction helper.
-func::FuncOp regionFunction(OpBuilder &builder, func::FuncOp parent,
-                            StringRef name, TypeRange inputs,
-                            TypeRange outputs) {
-  builder.setInsertionPoint(parent);
-  SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};
-  llvm::append_range(arguments, inputs);
-  auto type = builder.getFunctionType(
-      arguments,
-      exec::OutcomeType::get(builder.getContext(), llvm::to_vector(outputs)));
-  auto region = func::FuncOp::create(builder, parent.getLoc(), name, type);
-  region.setPrivate();
-  region->setAttr("no_inline", builder.getUnitAttr());
-  region->setAttr("runtime.region", builder.getUnitAttr());
-  builder.setInsertionPointToEnd(region.addEntryBlock());
-  return region;
-}
-SmallVector<Value> apply(exec::ScopedExecutionBuilder &control,
-                         OpBuilder &builder, StringRef binding, StringRef site,
-                         ValueRange inputs, TypeRange outputs) {
-  return control.invoke(
-      "exec.apply", outputs, control.scoped(inputs),
-      {builder.getNamedAttr(
-           "binding", FlatSymbolRefAttr::get(builder.getContext(), binding)),
-       builder.getNamedAttr("parameters", builder.getArrayAttr({})),
-       builder.getNamedAttr("site", builder.getStringAttr(site))});
-}
 std::string nestedLayouts(MLIRContext &context) {
   auto text = R"(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
@@ -192,18 +164,18 @@ func.return %done : !exec.outcome<(!T)>
   builder.setInsertionPointToEnd(work.addEntryBlock());
   exec::ScopedExecutionBuilder control(builder, work);
   auto table = work.getArgument(1), scalar = work.getArgument(2);
-  auto outer = apply(control, builder, "fold", "outer", {table, scalar},
-                     {table.getType()});
+  auto outer = scopedComputation::apply(control, builder, "fold", "outer",
+                                        {table, scalar}, {table.getType()});
   auto selected = control.conditional(
       work.getArgument(3), {outer.front(), scalar}, {table.getType()}, "choose",
       [&](unsigned index) {
-        auto region = regionFunction(builder, work, index ? "right" : "left",
-                                     {table.getType(), scalar.getType()},
-                                     {table.getType()});
+        auto region = scopedComputation::region(
+            builder, work, index ? "right" : "left",
+            {table.getType(), scalar.getType()}, {table.getType()});
         exec::ScopedExecutionBuilder nested(builder, region);
-        auto inner =
-            apply(nested, builder, "fold", index ? "other" : "inner",
-                  region.getArguments().drop_front(), {table.getType()});
+        auto inner = scopedComputation::apply(
+            nested, builder, "fold", index ? "other" : "inner",
+            region.getArguments().drop_front(), {table.getType()});
         nested.complete(inner);
         return region;
       });
@@ -229,20 +201,23 @@ std::string nestedContractions(MLIRContext &context, bool group) {
   auto values = control.conditional(
       condition.front(), work.getArguments().drop_front(), output, "branch",
       [&](unsigned index) {
-        auto region =
-            regionFunction(builder, work, index ? "unchosen" : "chosen",
-                           work.getArgumentTypes().drop_front(), output);
+        auto region = scopedComputation::region(
+            builder, work, index ? "unchosen" : "chosen",
+            work.getArgumentTypes().drop_front(), output);
         exec::ScopedExecutionBuilder nested(builder, region);
         if (index) {
           nested.reject("abort", "unused");
         } else {
-          auto mapped = apply(nested, builder, "map", "map",
-                              {region.getArgument(2), region.getArgument(3)},
-                              {region.getArgument(3).getType()});
-          apply(nested, builder, "reduce", "first",
-                {region.getArgument(1), mapped.front()}, output);
-          auto second = apply(nested, builder, "reduce", "second",
-                              {region.getArgument(1), mapped.front()}, output);
+          auto mapped = scopedComputation::apply(
+              nested, builder, "map", "map",
+              {region.getArgument(2), region.getArgument(3)},
+              {region.getArgument(3).getType()});
+          scopedComputation::apply(nested, builder, "reduce", "first",
+                                   {region.getArgument(1), mapped.front()},
+                                   output);
+          auto second = scopedComputation::apply(
+              nested, builder, "reduce", "second",
+              {region.getArgument(1), mapped.front()}, output);
           nested.complete(second);
         }
         return region;

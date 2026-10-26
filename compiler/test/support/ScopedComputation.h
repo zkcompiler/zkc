@@ -11,6 +11,34 @@
 
 namespace zkc::test::scopedComputation {
 using namespace mlir;
+inline func::FuncOp region(OpBuilder &builder, func::FuncOp parent,
+                           StringRef name, TypeRange inputs,
+                           TypeRange outputs) {
+  builder.setInsertionPoint(parent);
+  SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};
+  llvm::append_range(arguments, inputs);
+  auto type = builder.getFunctionType(
+      arguments,
+      exec::OutcomeType::get(builder.getContext(), llvm::to_vector(outputs)));
+  auto helper = func::FuncOp::create(builder, parent.getLoc(), name, type);
+  helper.setPrivate();
+  helper->setAttr("no_inline", builder.getUnitAttr());
+  helper->setAttr("runtime.region", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(helper.addEntryBlock());
+  return helper;
+}
+inline SmallVector<Value> apply(exec::ScopedExecutionBuilder &control,
+                                OpBuilder &builder, StringRef binding,
+                                StringRef site, ValueRange inputs,
+                                TypeRange outputs,
+                                ArrayRef<StringRef> parameters = {}) {
+  return control.invoke(
+      "exec.apply", outputs, control.scoped(inputs),
+      {builder.getNamedAttr(
+           "binding", FlatSymbolRefAttr::get(builder.getContext(), binding)),
+       builder.getNamedAttr("parameters", builder.getStrArrayAttr(parameters)),
+       builder.getNamedAttr("site", builder.getStringAttr(site))});
+}
 inline func::FuncOp computation(func::FuncOp helper, StringRef name) {
   OpBuilder builder(helper);
   SmallVector<Type> inputs{runtime::ScopeType::get(helper.getContext())};

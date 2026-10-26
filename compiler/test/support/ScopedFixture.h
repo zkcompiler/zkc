@@ -15,6 +15,30 @@ inline std::string replaceText(std::string text, llvm::StringRef from,
   }
   return text;
 }
+// One-result (or zero-result) invocation fragment, with an explicit failure
+// continuation in the enclosing fixture. No old IR is parsed or translated.
+inline std::string scopedApply(llvm::StringRef binding, llvm::StringRef site,
+                               llvm::StringRef inputs, llvm::StringRef types,
+                               llvm::StringRef output, llvm::StringRef result,
+                               llvm::StringRef parameters = "[]") {
+  std::string outcome = result.empty()
+                            ? "!exec.outcome<>"
+                            : "!exec.outcome<(" + result.str() + ")>";
+  auto name = site.str();
+  return "%" + name + "_attempt = \"exec.apply\"(%scope" +
+         (inputs.empty() ? "" : "," + inputs.str()) + ") {binding=@" +
+         binding.str() + ",site=\"" + name +
+         "\",parameters=" + parameters.str() + "} : (!runtime.scope" +
+         (types.empty() ? "" : "," + types.str()) + ")->" + outcome +
+         "\n\"exec.dispatch\"(%" + name + "_attempt)[^" + name +
+         ",^failed] : (" + outcome + ")->()\n^" + name + "(" +
+         (result.empty() ? "" : output.str() + ":" + result.str()) + "):\n";
+}
+inline std::string scopedReturn(llvm::StringRef value, llvm::StringRef type) {
+  auto outcome = "!exec.outcome<(" + type.str() + ")>";
+  return "%done = \"exec.returned\"(" + value.str() + ") : (" + type.str() +
+         ")->" + outcome + "\nfunc.return %done : " + outcome + "\n";
+}
 // The caller authors the actual scoped CFG, including its success return.
 // Projection supplies participant metadata through the production pass.
 inline std::string scopedFixture(llvm::StringRef declarations,
