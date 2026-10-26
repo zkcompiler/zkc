@@ -366,6 +366,14 @@ cutover. The native record writer is not an authored-source emitter.
 
 ## Independent admission
 
+Standard Func/CF supplies function and control-flow structure. The enclosing
+profile determines which operations, effects and transformations are admitted.
+A function using a borrowed scope and an outcome is not a total mathematical
+function merely because both use `func.func`. Readers distinguish these profiles
+by checked signatures, bodies and closure, rather than a copied origin marker.
+Dialect-conversion legality alone does not establish this distinction or
+preservation of reached checks, stopping, frame accounting and cleanup.
+
 The exporter retains logical signatures and source block shape under Entry
 attributes. The reader checks that shape against actual function signatures,
 operations, descriptors, symbols, SSA operands, successor arguments and edges.
@@ -386,3 +394,32 @@ Exec payload and descriptor formation emits `execution-formation`; sum
 elimination emits `data-match-formation`. Original admission reports malformed
 IR as `target.admission`. A well-formed graph with altered source association
 fails `source.correspondence`.
+
+## Formal consumer boundary
+
+A source exporter connects the admitted profile to the independent
+[structured source model](../../../lean/docs/spec/structured-source.md).
+Changing the native carrier requires updating that exporter, its independent
+reader and the affected artifact bindings together. Retaining the original
+subject and its checked mapping serves a different purpose from retaining a
+superseded native execution schema. No compatibility reader is needed to keep
+the original subject available for verification.
+
+An association with the formal model identifies actual bodies, closure,
+ordered inputs and source occurrences. A simulation additionally relates live
+states and continuations for the relevant replies. An executable refinement
+specifies returned values in the actual residual state, ordered events and
+stopped observations; output equality alone does not supply those laws.
+Runtime scope ownership is an execution contract, not a certificate of this
+correspondence or a cryptographic assumption.
+
+The formal [weakest-precondition interfaces](../../../lean/docs/spec/weakest-preconditions.md)
+have property-specific meanings. A charged rejection argument may accept a
+stopped path, whereas honest completion requires the concrete execution
+interpretation and a return. Cryptographic query loss and pathwise credit are
+separate from native instruction, storage and invocation allowances. Selecting
+one interpretation or resource bound does not establish the others.
+
+These are consumer obligations. Current native coverage is recorded in
+[status](../../status.md), and maintained formal instances in
+[formal support](../../../lean/docs/support.md).
