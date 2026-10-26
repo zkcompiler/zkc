@@ -186,6 +186,7 @@ import Zkc.Source.Structured.Availability
 import Zkc.Source.Structured.Bindings.Assembly
 import Zkc.Source.Structured.Bindings.Component
 import Zkc.Source.Structured.Bindings.Selection
+import Zkc.Source.Structured.Bindings.Template
 import Zkc.Source.Structured.BodyBindings
 import Zkc.Source.Structured.Catalogue
 import Zkc.Source.Structured.CatalogueJustification

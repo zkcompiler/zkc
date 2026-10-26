@@ -195,6 +195,28 @@ for the responsibility and trust boundaries.
 
 ## Compiled subjects
 
+The nominal template route additionally checks fresh generated installations
+for the exact mixed KoalaBear embedding source and GKR Rounds/caller bodies.
+`Bindings.Template.binding` preserves the full optional ABI, caller context,
+helper table and captured protocol prefix. The mixed generated binding is
+applied to the actual original participant. Its model uses distinct base and
+octic carriers with cardinalities `q` and `q^8`; the existing compiled mixed
+equality endpoint continues to supply its own canonical soundness receipt.
+
+`GkrFiniteCircuit.reference_total` connects the selected `(3,5)` two-layer
+circuit to the four-factor reference at every field point.
+`GkrFiniteGate.binding` closes the entire imported Rounds invocation with an
+executable terminal comparison; the same equation supports honest handler
+execution and degree-two arbitrary-message rejection under the actual
+conditional query law. `GkrFiniteCalls` applies shared list-composition rules,
+with checked 1/2/4-call instances and finite-buffer honest runs. These are
+named gate-component results, with a Lean terminal and composition. They do
+not supply a new compiled GKR pair, canonical GKR receipt, native theorem, or
+the complete multilayer caller's line/input acceptance proof. Fresh generation,
+four dependent-type refusals and composition measurements are reproduced by
+`security/checks/check_parametric_bindings.py` after building
+`TestsSecurity.ParametricBindingsGeneration` and `TestsSecurity.GkrFiniteGate`.
+
 The composed-Sumcheck manifest report is retired. The same source is covered
 by the generated `TwoSums` root, with exact scalar and charged soundness
 requests and a compiled-ideal completeness receipt; see the

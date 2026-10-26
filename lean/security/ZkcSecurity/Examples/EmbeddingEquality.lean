@@ -156,7 +156,8 @@ theorem compiled_verifier_eq {m : Type → Type} [Monad m] [LawfulMonad m]
         Construction.Domain.interface, Construction.Domain.receivedValue, decoded]
     | some u =>
       have payloadEq := Construction.Domain.Payload.ofValue_value decoded
-      simp only [Construction.Domain.Payload.ofValue, Option.some.injEq] at payloadEq
+      simp only [Construction.Domain.Payload.ofValue, Ty.isService,
+        dite_true, Option.some.injEq] at payloadEq
       subst payload
       change (fun (result : PIR.Outcome (Construction.Domain.Result model.toCarriers) × Proof) =>
         (Zkc.Transcript.mapOutcome checked.acceptance result.1, result.2)) <$>
@@ -172,7 +173,7 @@ theorem compiled_verifier_eq {m : Type → Type} [Monad m] [LawfulMonad m]
       have sourceEntry : snapshot.entry = "s7h6578616d706c6517h456d62656464696e67457175616c697479" := rfl
       simp [Construction.Domain.evaluate, Construction.Domain.step,
         Construction.Domain.read, Construction.Domain.sortsMatch,
-        Construction.Domain.Value.sort, Construction.Domain.Payload.ty,
+        Construction.Domain.Value.sort,
         Construction.Domain.templateOrigin, Construction.Domain.atCoordinates,
         Template.origin, Template.qualify, Template.repeats, Template.applicationPrefix,
         qualifyProtocolSite, checked, artifacts, selection,

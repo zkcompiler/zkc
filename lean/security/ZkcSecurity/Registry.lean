@@ -548,6 +548,10 @@ def entries : List Entry := [
     some `ZkcSecurity.Examples.Components.GkrRoundsResidual.Prefix,
     "The state is reached from the fixed caller state by successive factor restrictions \
     under arbitrary received coefficient triples and challenges."⟩,
+  ⟨"wellformed.gkr-finite-call-contexts", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrFiniteCalls.Valid,
+    "Each selected gate call maps its two local roles to distinct participants; \
+    every call retains its own immutable protocol context."⟩,
   ⟨"event.gkr-rounds-false-residual", .event,
     some `ZkcSecurity.Examples.Components.GkrRoundsResidual.NoReturn,
     "The complete returned ABI encodes a state at the fixed residual dimension that \

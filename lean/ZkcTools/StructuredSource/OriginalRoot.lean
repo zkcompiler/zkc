@@ -3,6 +3,7 @@ module
 public import ZkcTools.StructuredSource.Bindings.Generate
 public import ZkcTools.StructuredSource.LibraryAssociation
 public import ZkcTools.StructuredSource.Root
+public import Zkc.Source.Structured.Bindings.Template
 
 @[expose] public section
 
@@ -18,18 +19,22 @@ open ZkcTools.StructuredSource.Presentation
 structure LibraryComponent where
   familyModule : String
   maximum : Nat
+  domain : String
 
 /-- The installed Sumcheck method owns its source template and static ABI.
 The selected field must match the nominal domain of its complete library body.
 Max is read by name and kind, never inferred from a repeat in a candidate. -/
-def sumcheckLibrary : LibraryAssociation.Installed LibraryComponent where
+def sumcheckLibrary (domain : String := "bls12-381.fr")
+    (familyModule : String := "ZkcExamples.Structured.OriginalSumcheckReduce") :
+    LibraryAssociation.Installed LibraryComponent where
   template := ⟨"sumcheck::Reduce", ["F", "Max"]⟩
   instantiate arguments := do
-    let [("F", .field "bls12-381.fr"), ("Max", .natural decimal)] := arguments
+    let [("F", .field selected), ("Max", .natural decimal)] := arguments
       | throw "original-root-library-arguments"
+    unless selected == domain do throw "original-root-library-arguments"
     let some maximum := decimal.toNat? | throw "original-root-library-arguments"
     unless maximum < indexLimit do throw "original-root-library-maximum"
-    return ⟨"ZkcExamples.Structured.OriginalSumcheckReduce", maximum⟩
+    return ⟨familyModule, maximum, selected⟩
 
 structure Output where
   moduleName : String
@@ -238,6 +243,8 @@ def source (program : Program) (output : Output) : Except String String := do
   unless root.roles.length == 2 do throw "original-root-roster"
   let associations ← LibraryAssociation.bottomUp program.snapshot output.libraries (protocols.take rootIndex)
   let [association] := associations | throw "original-root-family-count"
+  unless association.selected.domain == "bls12-381.fr" do
+    throw "original-root-realization-domain"
   let keys := associations.map fun association =>
     CalleeKey.mk association.signature 1 (Bindings.optionalPattern association.signature.inputs) []
   let sig : Signature := ⟨[], false, true, program.payload.definitions.map (·.helper), keys⟩
@@ -363,5 +370,57 @@ def source (program : Program) (output : Output) : Except String String := do
     "  change (realized (G := G) " ++ inputNames ++ ").bind (fun (out : Values (Component (assignment F G)) [.boolean]) => .done (maskValues 1 (List.replicate 1 [1]) out)) = _\n" ++
     "  exact bind_mask_single_role _ 1\n\nend " ++ output.moduleName ++ "\n"
   return text
+
+
+/-- Selection for the same checked source/normal-form boundary at an arbitrary
+nominal model. Mathematical helper results remain indexed checked arguments. -/
+structure TemplateOutput where
+  moduleName : String
+  sourceModule : String
+  programExpression : String
+  definitionIndex : Nat
+  role : Nat
+  signature : Signature
+
+/-- Emit a dependent template, never a name-only certificate. This uses the
+same normalizer as structural root generation and supports mixed carriers.
+The emitted theorem is generic in the actual helper table and immutable
+protocol capture; their laws cannot be replaced by selection strings. -/
+def templateSource (program : Program) (output : TemplateOutput) : Except String String := do
+  let some definition := program.payload.protocols[output.definitionIndex]?
+    | throw "original-root-template-definition"
+  unless output.role < definition.roles.length do throw "original-root-template-role"
+  let form ← (normalize output.signature definition.body output.role definition.roles.length
+    (Bindings.optionalPattern definition.inputs)).mapError (fun reason => "original-root-template-" ++ reason)
+  unless NormalForms.callsMatch form do throw "original-root-template-calls"
+  return "module\n\npublic import " ++ output.sourceModule ++
+    "\npublic import Zkc.Source.Structured.Bindings.Template\n\n@[expose] public section\n" ++
+    "namespace " ++ output.moduleName ++
+    "\nopen Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm Zkc.Source.Structured.Bindings\n" ++
+    "set_option maxRecDepth 50000\nset_option maxHeartbeats 8000000\nnoncomputable section\n" ++
+    "abbrev program : Program := " ++ output.programExpression ++ "\n" ++
+    "abbrev definition : CheckedProtocol := program.payload.protocols.get ⟨" ++
+      toString output.definitionIndex ++ ", by decide +kernel⟩\n" ++
+    "theorem definition_member : definition ∈ program.payload.protocols := List.get_mem _ _\n" ++
+    "def signature : Signature := ⟨" ++ listText (output.signature.laws.map lawText) ++ ", " ++
+      boolText output.signature.strict ++ ", " ++ boolText output.signature.names ++ ", " ++
+      listText (output.signature.kept.map helperText) ++ ", " ++
+      listText (output.signature.callees.map calleeText) ++ "⟩\n" ++
+    "def template : Template definition signature " ++ toString output.role ++ " " ++
+      toString definition.roles.length ++ " where\n  form := " ++ formLiteral form ++
+      "\n  normalized := by kernel_rfl\n  matched := by decide +kernel\n" ++
+    "def helperTables (model : DomainModel) : Tables model :=\n  program.payload.definitions.foldl " ++
+      "(Evaluation.ComponentTablesOn.extend model (.silent _)) ⟨[], []⟩\n" ++
+    "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  " ++
+      "(program.payload.protocols.take " ++ toString output.definitionIndex ++ ").foldl " ++
+      "(extendProtocolTableOn model (.silent _) (participantActionsOn model.toCarriers) (helperTables model)) []\n" ++
+    "theorem capture_exact (model : DomainModel) : capture model =\n  " ++
+      "(program.payload.protocols.take " ++ toString output.definitionIndex ++ ").foldl " ++
+      "(extendProtocolTableOn model (.silent _) (participantActionsOn model.toCarriers) (helperTables model)) [] := rfl\n" ++
+    "theorem source_capture (model : DomainModel) :\n  " ++
+      "invokeProtocol (program.payload.plainProtocolTableOn model) definition.signature =\n    " ++
+      "definition.denoteWithOn model (.silent _) (participantActionsOn model.toCarriers) " ++
+      "(helperTables model) (capture model) .silent := by kernel_rfl\n" ++
+    "end\nend " ++ output.moduleName ++ "\n"
 
 end ZkcTools.StructuredSource.OriginalRoot

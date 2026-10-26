@@ -71,6 +71,9 @@ import ZkcSecurity.Examples.Components.GkrCallerRealization
 import ZkcSecurity.Examples.Components.GkrCallerResidual
 import ZkcSecurity.Examples.Components.GkrCallerSetup
 import ZkcSecurity.Examples.Components.GkrCallerSource
+import ZkcSecurity.Examples.Components.GkrFiniteCalls
+import ZkcSecurity.Examples.Components.GkrFiniteCircuit
+import ZkcSecurity.Examples.Components.GkrFiniteGate
 import ZkcSecurity.Examples.Components.GkrRoundsBinding
 import ZkcSecurity.Examples.Components.GkrRoundsBindingHelpers
 import ZkcSecurity.Examples.Components.GkrRoundsBindingInvocation
@@ -201,6 +204,7 @@ import ZkcSecurity.Families.Sumcheck.Cost
 import ZkcSecurity.Families.Sumcheck.Derivation
 import ZkcSecurity.Families.Sumcheck.FactorOpening.Security
 import ZkcSecurity.Families.Sumcheck.FactorReference
+import ZkcSecurity.Families.Sumcheck.FiniteCalls
 import ZkcSecurity.Families.Sumcheck.Message
 import ZkcSecurity.Families.Sumcheck.Process
 import ZkcSecurity.Families.Sumcheck.Reference
@@ -439,6 +443,7 @@ import TestsSecurity.GenerateSubjects
 import TestsSecurity.GenerateSumcheckCompleteness
 import TestsSecurity.GenerateSumcheckSoundness
 import TestsSecurity.GkrCaller
+import TestsSecurity.GkrFiniteGate
 import TestsSecurity.GkrRoundsRealization
 import TestsSecurity.GkrRoundsReference
 import TestsSecurity.GkrRoundsResidual
@@ -483,6 +488,8 @@ import TestsSecurity.OriginalSecurityRoots
 import TestsSecurity.OriginalSecurityTransport
 import TestsSecurity.OriginalSumcheckBinding
 import TestsSecurity.PairConstruction
+import TestsSecurity.ParametricBindings
+import TestsSecurity.ParametricBindingsGeneration
 import TestsSecurity.ProofSearchDiagnostics
 import TestsSecurity.ProtocolObligations
 import TestsSecurity.ProviderSimulation
