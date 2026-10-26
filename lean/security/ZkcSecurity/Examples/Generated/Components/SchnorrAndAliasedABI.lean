@@ -137,7 +137,7 @@ theorem validator_application_read (input0 : (model.Value (Zkc.Source.Structured
       (validatorArguments input0 input1 input2 input3 witness) := by
   rfl
 
-theorem context_eq : subject.selection.context = ({ toContextIdentity := { entry := "s7h6578616d706c6510h416c6961736564416e64",                          roles := ["role00000000", "role00000001"],                          producer := 0,                          validator := 1 },   profile := Zkc.Construction.Profile.fiatShamir                { service := 7,                  contract := "random.bls12-381.fr/0",                  request := some { method := "draw",                               operands := [],                               sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" },                  suite := "merlin3.bls12-381.fr64be/0",                  draws := [("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")] } }) := rfl
+theorem context_eq : subject.selection.context = (Context.fiatShamir ("s7h6578616d706c6510h416c6961736564416e64") (["role00000000", "role00000001"]) 0 1 7 ("random.bls12-381.fr/0") (some { method := "draw", operands := [], sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" }) ("merlin3.bls12-381.fr64be/0") ([("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")])) := rfl
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 

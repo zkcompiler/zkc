@@ -81,3 +81,27 @@ There are related inputs with both empty queries and a nonempty selected row.
 No empty-schedule premise is used as a soundness proof. Inactive query values remain in the bound input data.
 These are nominal constructed-model theorems, without a selected codec/native
 execution realization or a new baseline acceptance.
+
+`ZkcSecurity.Examples.TableMembership.Subject` fixes that same admitted pair,
+`selected_rows` clause and catalogue-compatible prime field `ZMod 2130706433`.
+The shared `Generation.SubjectABI` emits the full source input tuple, exact
+plain participant frames and a separate semantic initial public history. That
+history binds both query fields, including inactive values; no transcript value
+is appended to either participant frame. Optional inputs, representation bounds
+and any retained input clauses keep the existing honest-input meaning.
+
+`Method.compiled_ideal_complete` proves canonical perfect completeness with an
+actual related admitted input and the actual producer execution.
+`Method.bridge` and `Method.rejects` reuse the same whole-validator equation and
+helper mathematics as completeness. They preserve exhausted inputs and prove
+rejection independently of the empty charge schedule. Soundness quantifies
+every raw typed statement and proof, without an honest-input bound.
+`Method.adaptive_zero` also removes the adversary query-count premise, using
+the existing zero-cost theorem for arbitrary terminating oracle computations.
+`Claims` registers the existing canonical completeness and adaptive soundness
+meanings and closes their required construction/source links at zero error;
+it also supplies an empty charged receipt. The generic random-oracle interface
+remains available to the adversary, while the actual plain validator makes no
+query. These receipts cover the compiled ideal model, without a native runtime
+or byte-codec correspondence claim. The [focused driver](../../security/checks/check_table_membership.py)
+regenerates the ABI and endpoint and checks the receipts and refusal controls.

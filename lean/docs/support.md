@@ -27,6 +27,12 @@ execution for mathematical selected membership under explicit reached length
 bounds; `membership_false_rejected` proves deterministic rejection of false
 mathematical statements under every permitted reply, even outside those bounds.
 Nonvacuity has both empty-query and nonempty selected-row witnesses.
+`ZkcSecurity.Examples.TableMembership.Claims` extends this same actual pair to
+canonical compiled-ideal perfect completeness and adaptive zero-error soundness
+receipts, including the empty charged quantity. The generated nominal ABI keeps
+inactive values in its semantic public binding and appends no transcript to
+plain runtime inputs. Both properties reuse the same whole-validator equation
+and actual helper laws; the soundness game includes every raw typed statement.
 `BatchOpening` separately admits and binds an actual aggregate send/receive
 client, preserves its returned batch and refuses wrong nominal or empty-sequence
 sorts. The [selected byte connection](spec/data-codecs.md) also relates its actual

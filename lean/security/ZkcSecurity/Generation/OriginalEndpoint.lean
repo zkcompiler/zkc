@@ -46,7 +46,10 @@ def soundnessSource (metadata : SubjectABI.Metadata) (validator : Participant)
   unless targets.all metadata.publicPositions.contains do
     throw "original-endpoint-private-target-requires-residual-contract"
   let publics ← SubjectABI.atPositions metadata.types metadata.publicPositions
-  unless validator.inputs == publics.map ValueSort.data ++ [.transcript metadata.suite] do
+  let expected := match metadata.context.profile with
+    | .plain => publics.map ValueSort.data
+    | .fiatShamir _ => publics.map ValueSort.data ++ [.transcript metadata.suite]
+  unless validator.inputs == expected do
     throw "original-endpoint-validator-interface-mismatch"
   let scalar := match output.scalar with
     | none => ""
