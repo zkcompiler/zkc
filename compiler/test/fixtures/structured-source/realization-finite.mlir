@@ -15,7 +15,16 @@ module { "protocol.module"() ({
    %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
    func.return %sum : !F
  }
- local.realize @realized = @sum : (!V)->!F
+ func.func @realized(%scope:!runtime.scope,%a0:!V)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["realized",[]]} {
+   %call = "exec.compute"(%scope,%a0) {callee=@sum,site="kernel"} : (!runtime.scope,!V)->!exec.outcome<(!F)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%r0:!F):
+   %result = "exec.returned"(%r0) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
+ }
  "protocol.func"() ({ "protocol.return"() : ()->() })
  {sym_name="main",origin=["main",[]],function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

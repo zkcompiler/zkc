@@ -113,6 +113,14 @@ against the numerical owner, while generated bindings belong to the executable
 candidate. The independent numerical reader compares the original entry with
 actual output and never invokes the recipe producer.
 
+On the scoped path, a closed recipe fragment has one builtin module containing
+one executable Protocol owner. Neither owner has operands, results or block
+arguments. Its declarations are resolved runtime bindings and scoped standard
+functions, with one root interface and any required outlined control bodies.
+The independent reader checks this entire fragment, including dormant
+declarations and scope/outcome associations, before comparing its actual data
+coordinates and ordered instructions with the mathematical entry.
+
 Structural analysis retains numerical call occurrences independently of their
 selection policy. An enclosing finite optimization must still honor every
 retained call's replacement restrictions. Analysis views borrow immutable source

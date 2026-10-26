@@ -765,6 +765,7 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
 
 LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
   if (!candidate || candidate->getNumRegions() != 1 ||
+      candidate->getNumOperands() || candidate->getNumResults() ||
       !candidate.getBodyRegion().hasOneBlock() ||
       !candidate->getAttrs().empty() ||
       candidate.getBody()->getNumArguments() ||
@@ -775,6 +776,7 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
   if (!owner || !owner.getProfileAttr() ||
       owner.getProfile() != protocol_ir::Profile::Exec ||
+      owner->getNumOperands() || owner->getNumResults() ||
       owner->getAttrs().size() != 1 || owner->getNumRegions() != 1 ||
       !owner.getBody().hasOneBlock() ||
       owner.getBody().front().getNumArguments())

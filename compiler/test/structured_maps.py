@@ -227,15 +227,24 @@ with case('finite-realization-admission-preserves-original-declaration'):
     export(source)
     assert run(source, []) == returned([])
     # The same finite Math remains supported outside a realization closure.
-    source = source.replace(' local.realize @realized = @sum : (!V)->!F\n', '')
+    start = source.index(' func.func @realized(')
+    end = source.index(' "protocol.func"', start)
+    source = source[:start] + source[end:]
+    assert 'exec.compute' not in source
     export(source)
     assert run(source, []) == returned([])
 
 with case('finite-realization-executes-empty-and-ordered-domains'):
     source = (fixtures / 'realization-finite.mlir').read_text()
-    source = source.replace(empty_main.replace('\n{sym_name', '\n {sym_name'), '''local.func @work(%xs:!V)->!F attributes {logical_origin=["finite-sum",[]]} {
-   %result = local.apply @realized(%xs) {site="calculate"} : (!V)->!F
-   local.return %result : !F
+    source = source.replace(empty_main.replace('\n{sym_name', '\n {sym_name'), '''func.func @work(%scope:!runtime.scope,%xs:!V)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["finite-sum",[]]} {
+   %call = "func.call"(%scope,%xs) {callee=@realized,runtime.site="calculate"} : (!runtime.scope,!V)->!exec.outcome<(!F)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
  "protocol.func"() ({
  ^entry(%xs:!V):
@@ -244,19 +253,26 @@ with case('finite-realization-executes-empty-and-ordered-domains'):
  }) {sym_name="main",origin=["main",[]],function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()''')
     # The fixture indents its header; match the same declaration independently
     # of that leading whitespace without changing any body or realization.
-    assert 'local.func @work' in source
+    assert 'func.func @work' in source
     export(source)
-    for rows in [[], [1], [2, 5, 2], [modulus - 1, 2]]:
-        assert run(source, [[str(value) for value in rows]]) == returned([str(sum(rows) % modulus)])
+    for private in [False, True]:
+        candidate = source.replace('func.func @realized(', 'func.func private @realized(') if private else source
+        export(candidate)
+        for rows in [[], [1], [2, 5, 2], [modulus - 1, 2]]:
+            assert run(candidate, [[str(value) for value in rows]]) == returned([str(sum(rows) % modulus)])
 
 with case('dormant-realization-transitive-profile-and-dead-calls'):
     source = (fixtures / 'realization-finite.mlir').read_text()
-    source = source.replace(' local.realize @realized = @sum : (!V)->!F', '''
- func.func private @projection(%xs:!V)->!V {
+    start = source.index(' func.func @realized(')
+    end = source.index(' "protocol.func"', start)
+    wrapper = source[start:end]
+    changed = wrapper.replace('callee=@sum', 'callee=@projection').replace('!F', '!V')
+    assert changed != wrapper and 'callee=@projection' in changed
+    source = source[:start] + ''' func.func private @projection(%xs:!V)->!V {
    %unused = func.call @sum(%xs) : (!V)->!F
    func.return %xs : !V
  }
- local.realize @realized = @projection : (!V)->!V''')
+''' + changed + source[end:]
     commands.verified(source)
     export(source)
     assert run(source, []) == returned([])

@@ -102,6 +102,10 @@ participate in bulk selection with the same shape, failure and work controls.
 The physical transaction keeps the actual prepared and selected modules
 for independent checks of both edges. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
+Numerical transformation controls now exercise scoped recipe fragments, exact
+closures, retained policies, forwarding ports and repeated invocation origins.
+Fragment admission rejects data ports on either outer owner; capture mutations
+remain checked after coherent scope-entry and outlined-call rewiring.
 
 Checked scoped helper expansion substitutes actual SSA bodies, preserves
 uncharged helper returns and charged control yields, and normalizes aliased

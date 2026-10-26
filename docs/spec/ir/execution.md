@@ -375,6 +375,9 @@ no child frame. Every potential helper body, including dormant definitions,
 is checked, and the internal logical admission checks the complete acyclic
 call closure. Standard symbol and function verification alone does not supply
 these execution guarantees.
+Scoped helpers may be public or private; visibility does not turn a borrowed
+scope call into a plain mathematical call. Crossing from scoped execution into
+total mathematics uses `exec.compute` and its distinct data signature.
 
 The same source table may also contain plain mathematical `func.func`
 definitions. A scope, transfer, stop or outcome in a signature, or a Runtime

@@ -444,9 +444,12 @@ class Admission {
         inputs = inputs.drop_front();
         outputs = cast<exec::OutcomeType>(outputs[0]).getPayload();
       } else if (kind(op) == Kind::Call) {
+        // Scoped helper calls retain the ordinary execution interface,
+        // including public roots. Private visibility constrains plain
+        // mathematical calls; scope crossing requires an explicit boundary.
         if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
-            !cast<func::FuncOp>(target).isPrivate() ||
-            (isScoped(*target) && !isScoped(owner)))
+            isScoped(*target) != isScoped(owner) ||
+            (!isScoped(*target) && !cast<func::FuncOp>(target).isPrivate()))
           return error("structured-reference-symbol", "call owner or kind");
       } else if (computation && (isScoped(*target) || !isScoped(owner))) {
         return error("structured-reference-symbol", "computation boundary");
