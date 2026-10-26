@@ -218,9 +218,10 @@ for name, source, code in [
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
     ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
-    ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-symbol'),
+    # Complete source definition admission rejects these before export begins.
+    ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-original'),
     ('used-empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }',
-                                '%r = func.call @""(%flag) : (i1)->i1', '%r'), 'structured-source-symbol'),
+                                '%r = func.call @""(%flag) : (i1)->i1', '%r'), 'structured-source-original'),
     ('depth-limit', 'module {' * 66 + '}' * 66, 'mlir-depth-limit'),
     ('instruction-limit', simple(body='\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4097))), 'structured-source-limit'),
     ('definition-limit', simple('\n'.join(f'func.func private @h{i}(%x:i1) -> i1 {{ return %x : i1 }}' for i in range(128))), 'structured-source-limit'),

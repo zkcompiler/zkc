@@ -18,6 +18,21 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::protocol {
+bool isScopedExecutionFunction(func::FuncOp function) {
+  if (function->hasAttr("runtime.origin") ||
+      function->hasAttr("runtime.region"))
+    return true;
+  auto raw = function->getAttrOfType<TypeAttr>("function_type");
+  auto type = raw ? dyn_cast<FunctionType>(raw.getValue()) : FunctionType();
+  if (!type)
+    return true;
+  auto executionType = [](Type type) {
+    return isa<runtime::ScopeType, runtime::TransferType, exec::OutcomeType,
+               exec::StopType>(type);
+  };
+  return llvm::any_of(type.getInputs(), executionType) ||
+         llvm::any_of(type.getResults(), executionType);
+}
 namespace {
 bool attributes(Operation *op, ArrayRef<StringRef> allowed) {
   return llvm::all_of(op->getAttrs(), [&](NamedAttribute attribute) {
@@ -57,10 +72,14 @@ class BodyReader {
   bool results(ValueRange values, program::Names &names);
   bool invokeRegion(runtime::EnterScopeOp enter, StringRef kind, StringRef site,
                     StringRef selection, program::Body &body,
-                    program::Names &captures, SmallVectorImpl<Value> &values);
-  bool conditional(exec::TestOp test, program::Conditional &record);
-  bool match(exec::MatchOp match, program::Match &record);
-  bool loop(exec::RangeOp range, program::For &record);
+                    program::Names &captures, SmallVectorImpl<Value> &values,
+                    SourceExecutionStep &step);
+  bool conditional(exec::TestOp test, program::Conditional &record,
+                   SourceExecutionStep &step);
+  bool match(exec::MatchOp match, program::Match &record,
+             SourceExecutionStep &step);
+  bool loop(exec::RangeOp range, program::For &record,
+            SourceExecutionStep &step);
 
 public:
   BodyReader(Reader &reader, func::FuncOp function, bool regionBody)
@@ -73,7 +92,9 @@ class Reader {
   unsigned remaining = 1000000, next = 0;
   llvm::DenseSet<Operation *> active, visited;
   std::string problem;
-  SmallVector<LocalRealization> mathematicalSignatures;
+  std::vector<LocalRealization> mathematicalSignatures;
+  std::map<std::string, Operation *> computationOrigins;
+  std::map<std::string, std::vector<SourceExecutionStep>> sourceBodies;
   llvm::DenseMap<Operation *, std::string> mathematicalNames;
   unsigned nextMathematics = 0;
 
@@ -83,6 +104,19 @@ public:
       : module(module), physical(physical), source(source),
         mathematicalCalls(mathematicalCalls) {}
   bool isSource() const { return source; }
+  std::vector<LocalRealization> takeComputations() {
+    return std::move(mathematicalSignatures);
+  }
+  std::map<std::string, Operation *> takeComputationOrigins() {
+    return std::move(computationOrigins);
+  }
+  auto takeBodies() { return std::move(sourceBodies); }
+  void recordBody(func::FuncOp function,
+                  std::vector<SourceExecutionStep> body) {
+    if (mathematicalCalls)
+      sourceBodies.insert_or_assign(function.getSymName().str(),
+                                    std::move(body));
+  }
   bool computation(exec::ComputeOp call, std::string &name) {
     if (!source || !mathematicalCalls ||
         failed(finite::verifyCallPreconditions(call)))
@@ -119,6 +153,7 @@ public:
     }
     name = signature.name;
     mathematicalNames.try_emplace(helper, name);
+    computationOrigins.emplace(name, call.getOperation());
     mathematicalSignatures.push_back(std::move(signature));
     return true;
   }
@@ -165,6 +200,7 @@ public:
             .push_back(std::move(spelling));
       }
     name = signature.name;
+    computationOrigins.emplace(name, op);
     mathematicalSignatures.push_back(std::move(signature));
     return true;
   }
@@ -329,7 +365,8 @@ bool BodyReader::results(ValueRange values, program::Names &names) {
 bool BodyReader::invokeRegion(runtime::EnterScopeOp enter, StringRef kind,
                               StringRef site, StringRef selection,
                               program::Body &body, program::Names &captures,
-                              SmallVectorImpl<Value> &values) {
+                              SmallVectorImpl<Value> &values,
+                              SourceExecutionStep &step) {
   if (!enter || enter.getParent() != scope || enter.getKind() != kind ||
       enter.getSite() != site ||
       enter.getSelection().value_or("") != selection ||
@@ -346,6 +383,8 @@ bool BodyReader::invokeRegion(runtime::EnterScopeOp enter, StringRef kind,
   if (!call || !attributes(call, {"callee"}) || call.getOperands() != inputs ||
       call.getNumResults() != 1 || !reader.region(call, captures, body))
     return reader.fail("region callee or actual captures");
+  step.regions.push_back(cast<func::FuncOp>(
+      SymbolTable::lookupSymbolIn(function->getParentOp(), call.getCallee())));
   auto exit = dyn_cast_or_null<runtime::ExitScopeOp>(take());
   if (!exit || !bare(exit) || exit.getScope() != acquired.front() ||
       exit.getBody() != call.getResult(0))
@@ -360,7 +399,8 @@ bool BodyReader::invokeRegion(runtime::EnterScopeOp enter, StringRef kind,
     return reader.fail("region result must bind into its actual parent");
   return true;
 }
-bool BodyReader::conditional(exec::TestOp test, program::Conditional &record) {
+bool BodyReader::conditional(exec::TestOp test, program::Conditional &record,
+                             SourceExecutionStep &step) {
   if (test.getScope() != scope || !attributes(test, {"site"}))
     return reader.fail("conditional admission scope");
   program::Names condition;
@@ -391,7 +431,8 @@ bool BodyReader::conditional(exec::TestOp test, program::Conditional &record) {
     SmallVector<Value> values;
     program::Names captures;
     if (!invokeRegion(enter, "conditional", test.getSite(), i ? "else" : "then",
-                      i ? record.elseBody : record.thenBody, captures, values))
+                      i ? record.elseBody : record.thenBody, captures, values,
+                      step))
       return false;
     if (!i)
       record.captures = std::move(captures);
@@ -401,9 +442,15 @@ bool BodyReader::conditional(exec::TestOp test, program::Conditional &record) {
       return reader.fail("conditional result join");
     join = branch.getDest();
   }
-  return block(join) && results(current->getArguments(), record.outputs);
+  step.inputs.push_back(test.getCondition());
+  append_range(step.inputs, actualCaptures);
+  if (!block(join) || !results(current->getArguments(), record.outputs))
+    return false;
+  append_range(step.outputs, current->getArguments());
+  return true;
 }
-bool BodyReader::match(exec::MatchOp match, program::Match &record) {
+bool BodyReader::match(exec::MatchOp match, program::Match &record,
+                       SourceExecutionStep &step) {
   program::Names input;
   if (match.getScope() != scope ||
       !attributes(match, {"site", "alternatives"}) || !atEnd() ||
@@ -428,7 +475,7 @@ bool BodyReader::match(exec::MatchOp match, program::Match &record) {
     SmallVector<Value> values;
     if (!enter || enter.getInputs() != armBlock->getArguments() ||
         !invokeRegion(enter, "match", match.getSite(), arm.alternative,
-                      arm.body, arguments, values))
+                      arm.body, arguments, values, step))
       return reader.fail(
           "variant arm must receive exact selected payload and captures");
     auto branch = dyn_cast_or_null<cf::BranchOp>(take());
@@ -440,9 +487,15 @@ bool BodyReader::match(exec::MatchOp match, program::Match &record) {
     for (Value value : armBlock->getArguments())
       environment.erase(value);
   }
-  return block(join) && results(current->getArguments(), record.outputs);
+  step.inputs.push_back(match.getInput());
+  append_range(step.inputs, match.getCaptures());
+  if (!block(join) || !results(current->getArguments(), record.outputs))
+    return false;
+  append_range(step.outputs, current->getArguments());
+  return true;
 }
-bool BodyReader::loop(exec::RangeOp range, program::For &record) {
+bool BodyReader::loop(exec::RangeOp range, program::For &record,
+                      SourceExecutionStep &step) {
   if (range.getScope() != scope || !attributes(range, {"site"}))
     return reader.fail("loop admission scope");
   program::Names bounds;
@@ -546,6 +599,11 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record) {
       call.getOperands() != callInputs || call.getNumResults() != 1 ||
       !reader.region(call, bodyNames, record.body))
     return reader.fail("iteration body must use actual scoped arguments");
+  step.regions.push_back(cast<func::FuncOp>(
+      SymbolTable::lookupSymbolIn(function->getParentOp(), call.getCallee())));
+  step.inputs = {range.getLower(), range.getUpper()};
+  append_range(step.inputs, initial.getInputs());
+  append_range(step.inputs, enter.getInputs().drop_front(prefix.size()));
   auto exit = dyn_cast_or_null<runtime::ExitScopeOp>(take());
   if (!exit || !bare(exit) || exit.getScope() != acquired.front() ||
       exit.getBody() != call.getResult(0))
@@ -561,6 +619,7 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record) {
   Block *increment = nullptr;
   if (auto condition = dyn_cast_or_null<runtime::TakeConditionOp>(next)) {
     record.conditional = true;
+    step.conditional = true;
     if (!bare(condition) || condition.getTransfer() != held.front())
       return reader.fail(
           "conditional loop must inspect its newly returned carry");
@@ -610,9 +669,17 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record) {
   environment.erase(nativeIndex.front());
   for (Value value : peek.getValues())
     environment.erase(value);
+  append_range(step.outputs, values);
   return true;
 }
 bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
+  std::vector<SourceExecutionStep> sourceBody;
+  auto finish = [&]() {
+    if (checked.size() != function.getBody().getBlocks().size())
+      return reader.fail("unchecked CFG blocks");
+    reader.recordBody(function, std::move(sourceBody));
+    return true;
+  };
   outcome = cast<exec::OutcomeType>(function.getFunctionType().getResult(0));
   scope = function.getArgument(0);
   if (!block(&function.front()))
@@ -621,6 +688,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
        zip(function.getArguments().drop_front(), arguments))
     environment[value] = name;
   while (auto *op = take()) {
+    SourceExecutionStep step;
+    step.operation = op;
     if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
       program::Operation record;
       if (apply.getScope() != scope ||
@@ -634,6 +703,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (!dispatch(apply.getOutcome(), values) ||
           !results(values, record.outputs))
         return false;
+      append_range(step.inputs, apply.getInputs());
+      step.outputs = values;
       body.push_back({apply.getSite().str(), std::move(record)});
     } else if (auto compute = dyn_cast<exec::ComputeOp>(op)) {
       program::LocalApply record;
@@ -645,6 +716,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (!dispatch(compute.getOutcome(), values) ||
           !results(values, record.outputs))
         return false;
+      append_range(step.inputs, compute.getInputs());
+      step.outputs = values;
       body.push_back({compute.getSite().str(), std::move(record)});
     } else if (isa<exec::FoldOp, exec::CollectOp>(op)) {
       program::LocalApply record;
@@ -657,6 +730,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (!dispatch(op->getResult(0), values) ||
           !results(values, record.outputs))
         return false;
+      append_range(step.inputs, op->getOperands().drop_front());
+      step.outputs = values;
       body.push_back({site.str(), std::move(record)});
     } else if (auto call = dyn_cast<func::CallOp>(op)) {
       program::LocalApply record;
@@ -671,6 +746,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (!dispatch(call.getResult(0), values) ||
           !results(values, record.outputs))
         return false;
+      append_range(step.inputs, call.getOperands().drop_front());
+      step.outputs = values;
       body.push_back({site.str(), std::move(record)});
     } else if (auto literal = dyn_cast<exec::BooleanOp>(op)) {
       if (literal.getScope() != scope ||
@@ -680,12 +757,13 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       program::Names outputs;
       if (!dispatch(literal.getOutcome(), values) || !results(values, outputs))
         return false;
+      step.outputs = values;
       body.push_back(
           {literal.getSite().str(),
            program::BooleanConstant{outputs.front(), literal.getValue()}});
     } else if (auto test = dyn_cast<exec::TestOp>(op)) {
       program::Conditional record;
-      if (!conditional(test, record))
+      if (!conditional(test, record, step))
         return false;
       body.push_back({test.getSite().str(), std::move(record)});
     } else if (auto construct = dyn_cast<exec::VariantOp>(op)) {
@@ -702,16 +780,18 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (!dispatch(construct.getOutcome(), values) ||
           !results(values, outputs))
         return false;
+      append_range(step.inputs, construct.getPayload());
+      step.outputs = values;
       record.output = outputs.front();
       body.push_back({construct.getSite().str(), std::move(record)});
     } else if (auto selected = dyn_cast<exec::MatchOp>(op)) {
       program::Match record;
-      if (!match(selected, record))
+      if (!match(selected, record, step))
         return false;
       body.push_back({selected.getSite().str(), std::move(record)});
     } else if (auto range = dyn_cast<exec::RangeOp>(op)) {
       program::For record;
-      if (!loop(range, record))
+      if (!loop(range, record, step))
         return false;
       body.push_back({range.getSite().str(), std::move(record)});
     } else if (auto release = dyn_cast<runtime::ReleaseBindingsOp>(op)) {
@@ -719,6 +799,7 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       if (release.getScope() != scope || !bare(release) ||
           !names(release.getValues(), record.values))
         return reader.fail("invalid storage release");
+      append_range(step.inputs, release.getValues());
       body.push_back({"", std::move(record)});
     } else if (auto returnedValue = dyn_cast<exec::ReturnOp>(op)) {
       program::Names values;
@@ -727,8 +808,9 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
           !returned(take(), returnedValue.getOutcome()) || !atEnd())
         return reader.fail("source return must package its exact payload");
       body.push_back({"", program::Return{std::move(values)}});
-      return checked.size() == function.getBody().getBlocks().size() ||
-             reader.fail("unchecked CFG blocks");
+      append_range(step.inputs, returnedValue.getValues());
+      sourceBody.push_back(std::move(step));
+      return finish();
     } else if (auto complete = dyn_cast<exec::CompleteOp>(op)) {
       program::Names values;
       if ((reader.isSource() && !regionBody) || complete.getScope() != scope ||
@@ -739,8 +821,9 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
         body.push_back({"", program::Yield{std::move(values)}});
       else
         body.push_back({"", program::Return{std::move(values)}});
-      return checked.size() == function.getBody().getBlocks().size() ||
-             reader.fail("unchecked CFG blocks");
+      append_range(step.inputs, complete.getValues());
+      sourceBody.push_back(std::move(step));
+      return finish();
     } else if (auto reject = dyn_cast<exec::RejectOp>(op)) {
       auto branch = dyn_cast_or_null<cf::BranchOp>(take());
       if (reject.getScope() != scope ||
@@ -750,11 +833,12 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
         return reader.fail("native rejection must retain its cause");
       body.push_back(
           {reject.getSite().str(), program::Stop{reject.getReason().str()}});
-      return checked.size() == function.getBody().getBlocks().size() ||
-             reader.fail("unchecked CFG blocks");
+      sourceBody.push_back(std::move(step));
+      return finish();
     } else {
       return reader.fail("operation outside the canonical execution profile");
     }
+    sourceBody.push_back(std::move(step));
   }
   return reader.fail("missing native completion");
 }
@@ -783,7 +867,7 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
         continue;
       return error("execution-cfg", "unexpected execution definition");
     }
-    if (source && !detail::isScopedExecutionFunction(function))
+    if (source && !isScopedExecutionFunction(function))
       continue;
     if (function->getAttrOfType<UnitAttr>("runtime.region"))
       continue;
@@ -824,7 +908,7 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
     result.functions.push_back(std::move(record));
   }
   for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
-    if ((!source || detail::isScopedExecutionFunction(function)) &&
+    if ((!source || isScopedExecutionFunction(function)) &&
         !visited.contains(function))
       return error("execution-cfg", "unchecked region definition");
   if (source) {
@@ -864,7 +948,8 @@ readSourceExecutionDefinitions(Operation *symbolTable) {
   return Reader(symbolTable, /*physical=*/false, /*source=*/true)
       .run(/*mixed=*/true);
 }
-Error verifySourceExecutionClosure(Operation *symbolTable) {
+Expected<SourceExecutionClosure>
+readSourceExecutionClosure(Operation *symbolTable) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable, true)))
     return error("execution-source-closure", "invalid source definition scope");
   SmallVector<Operation *> definitions;
@@ -896,11 +981,17 @@ Error verifySourceExecutionClosure(Operation *symbolTable) {
   if (failed(finite::verifyDefinitionClosure(symbolTable, definitions)))
     return error("execution-source-closure",
                  "source data premises do not hold");
-  auto admitted = Reader(symbolTable, /*physical=*/false, /*source=*/true,
-                         /*mathematicalCalls=*/true)
-                      .run(/*mixed=*/true);
+  Reader reader(symbolTable, /*physical=*/false, /*source=*/true,
+                /*mathematicalCalls=*/true);
+  auto admitted = reader.run(/*mixed=*/true);
   if (!admitted)
     return error("execution-source-closure", toString(admitted.takeError()));
-  return Error::success();
+  return SourceExecutionClosure{std::move(*admitted), reader.takeComputations(),
+                                reader.takeComputationOrigins(),
+                                reader.takeBodies()};
+}
+Error verifySourceExecutionClosure(Operation *symbolTable) {
+  auto admitted = readSourceExecutionClosure(symbolTable);
+  return admitted ? Error::success() : admitted.takeError();
 }
 } // namespace zkc::protocol

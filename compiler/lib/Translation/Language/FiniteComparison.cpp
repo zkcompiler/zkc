@@ -540,8 +540,8 @@ class FiniteCheck {
       adapterOutputs = {protocol::decodeBoundType(context, packed->carrier)};
     }
     SmallVector<StringRef> attrs{"sym_name", "sym_visibility", "function_type"};
-    if (local)
-      attrs.push_back("logical_origin");
+    if (local || scoped)
+      attrs.push_back(scoped ? "runtime.origin" : "logical_origin");
     if (!helper.dataPreconditions.empty())
       attrs.push_back("data.preconditions");
     Types actualInputs = inputs, actualOutputs = adapterOutputs;
@@ -556,8 +556,9 @@ class FiniteCheck {
                    actualOutputs, true, attrs, bool(scoped));
     if (!op || !text(*op, "sym_visibility", "private"))
       return fail("finite callback visibility differs");
-    if (local) {
-      auto origin = op->getAttrOfType<mlir::ArrayAttr>("logical_origin");
+    if (local || scoped) {
+      auto origin = op->getAttrOfType<mlir::ArrayAttr>(
+          scoped ? "runtime.origin" : "logical_origin");
       if (!origin || origin.size() != 2 ||
           !mlir::isa<mlir::StringAttr>(origin[0]) ||
           mlir::cast<mlir::StringAttr>(origin[0]).getValue() !=

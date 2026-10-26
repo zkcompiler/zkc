@@ -10,6 +10,8 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -290,14 +292,25 @@ bool boundedSourceWire(const json::Value &source) {
 
 FunctionType signature(Operation &op) {
   auto attr = op.getAttrOfType<TypeAttr>("function_type");
-  return attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
+  auto type = attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType();
+  if (auto function = dyn_cast<func::FuncOp>(op);
+      function && isScopedExecutionFunction(function)) {
+    if (!type || type.getNumInputs() == 0 || type.getNumResults() != 1)
+      return {};
+    auto outcome = dyn_cast<exec::OutcomeType>(type.getResult(0));
+    if (!outcome || !isa<runtime::ScopeType>(type.getInput(0)))
+      return {};
+    return FunctionType::get(op.getContext(), type.getInputs().drop_front(),
+                             outcome.getPayload());
+  }
+  return type;
 }
 
 StringRef kind(Operation &op) {
   if (isa<protocol_ir::MathematicalOp>(op))
     return "protocol";
-  if (isa<func::FuncOp>(op))
-    return "math";
+  if (auto function = dyn_cast<func::FuncOp>(op))
+    return isScopedExecutionFunction(function) ? "local" : "math";
   if (isa<local::FuncOp>(op))
     return "local";
   if (isa<local::FiniteFoldOp>(op))
@@ -330,6 +343,7 @@ class Exporter {
   llvm::DenseMap<Operation *, SmallVector<Operation *>> dependencies;
   unsigned instructions = 0;
   UsedIdentities used;
+  SourceExecutionClosure execution;
 
   Expected<json::Value> sort(Type type) { return encodeSort(type, used); }
   Expected<json::Array> sorts(TypeRange types, bool services = false) {
@@ -351,7 +365,8 @@ class Exporter {
   }
 
   Expected<StringRef> site(Operation &op) {
-    auto attr = op.getAttrOfType<StringAttr>("site");
+    auto attr = op.getAttrOfType<StringAttr>(
+        isa<func::CallOp>(op) ? "runtime.site" : "site");
     if (!attr || attr.getValue().empty() ||
         !sites.insert(attr.getValue()).second)
       return error("structured-source-site");
@@ -388,7 +403,8 @@ class Exporter {
     auto domain = reference(op, "domain", {"domain"});
     if (!domain)
       return domain.takeError();
-    StringRef helperKind = isa<local::FiniteFoldOp>(op) ? "local" : "math";
+    StringRef helperKind =
+        isa<local::FiniteFoldOp, exec::FoldOp>(op) ? "local" : "math";
     auto step = reference(op, "step", {helperKind});
     if (!step)
       return step.takeError();
@@ -396,6 +412,165 @@ class Exporter {
     if (!predicate)
       return predicate.takeError();
     return json::Array{*domain, *step, *predicate};
+  }
+
+  Expected<StringRef> computationName(Operation &op) {
+    for (const auto &[name, origin] : execution.computationOrigins)
+      if (origin == &op ||
+          (isa<exec::ComputeOp>(op) && isa<exec::ComputeOp>(origin) &&
+           op.getAttr("callee") == origin->getAttr("callee")))
+        return StringRef(name);
+    return error("structured-source-reference", "unassociated computation");
+  }
+
+  Expected<json::Value> scopedDescriptor(const SourceExecutionStep &step) {
+    Operation &op = *step.operation;
+    if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
+      auto binding = primitiveBinding(symbols.lookup(apply.getBinding()), used);
+      if (!binding)
+        return binding.takeError();
+      return json::Array{"exec",
+                         boundOperationName(binding->application.contract),
+                         binding->name, names(apply.getParameters())};
+    }
+    if (auto boolean = dyn_cast<exec::BooleanOp>(op))
+      return json::Array{"bool.constant", boolean.getValue()};
+    if (isa<func::CallOp>(op)) {
+      auto target = reference(op, "callee", {"local"});
+      if (!target)
+        return target.takeError();
+      return json::Array{"apply", target->str()};
+    }
+    if (isa<exec::ComputeOp, exec::FoldOp>(op)) {
+      if (isa<exec::ComputeOp>(op)) {
+        auto helper = reference(op, "callee", {"math"});
+        if (!helper)
+          return helper.takeError();
+      } else {
+        auto callbacks = fold(op);
+        if (!callbacks)
+          return callbacks.takeError();
+      }
+      auto target = computationName(op);
+      if (!target)
+        return target.takeError();
+      // This key belongs to the transient view, not the MLIR context. The JSON
+      // result outlives this Exporter and must own its bytes.
+      return json::Array{"apply", target->str()};
+    }
+    if (isa<exec::TestOp>(op))
+      return json::Array{"if"};
+    if (isa<exec::RangeOp>(op))
+      return json::Array{step.conditional ? "for_condition" : "for"};
+    return error("structured-source-operation", op.getName().getStringRef());
+  }
+
+  // The CFG reader checks all scope acquisition, failure propagation, transfer
+  // cleanup and branch edges. Export its checked association using the actual
+  // SSA formals, not Program value names (which may identify aliased captures).
+  Expected<json::Value> scopedBlock(func::FuncOp function, StringRef terminator,
+                                    unsigned forwarded = 0,
+                                    unsigned depth = 0) {
+    if (depth > depthLimit)
+      return error("structured-source-limit");
+    auto found = execution.bodies.find(function.getSymName().str());
+    if (found == execution.bodies.end() || found->second.empty())
+      return error("structured-source-region");
+    auto arguments = function.getArguments().drop_front();
+    if (arguments.size() > signatureLimit || forwarded > arguments.size())
+      return error("structured-source-limit");
+    llvm::DenseMap<Value, unsigned> refs;
+    for (auto [i, argument] : llvm::enumerate(arguments))
+      refs[argument] = i;
+    auto indices = [&](ValueRange values) -> Expected<json::Array> {
+      json::Array result;
+      for (Value value : values) {
+        auto ref = refs.find(value);
+        if (ref == refs.end())
+          return error("structured-source-reference");
+        if (ref->second > instructionLimit)
+          return error("structured-source-limit");
+        result.push_back(ref->second);
+      }
+      return result;
+    };
+    json::Array encoded;
+    for (const SourceExecutionStep &step : found->second) {
+      Operation &op = *step.operation;
+      // Formation has checked the allowed attribute names. Apply the wire's
+      // UTF-8 and size bounds to every actual attribute, including locations
+      // represented by runtime.site and private computation references.
+      SmallVector<StringRef> checkedAttributes;
+      for (NamedAttribute attr : op.getAttrs())
+        checkedAttributes.push_back(attr.getName().getValue());
+      if (auto e = attributes(op, checkedAttributes))
+        return std::move(e);
+      if (isa<exec::ReturnOp, exec::CompleteOp>(op)) {
+        SmallVector<Value> values(step.inputs);
+        // Scoped loops retain invariant captures in their parent. The formal
+        // closed-region signature expresses that same transport explicitly.
+        llvm::append_range(values, arguments.take_back(forwarded));
+        auto result = indices(values);
+        if (!result)
+          return result.takeError();
+        return json::Array{"block", std::move(encoded),
+                           json::Array{terminator, std::move(*result)}};
+      }
+      if (auto stop = dyn_cast<exec::RejectOp>(op)) {
+        auto occurrence = site(op);
+        if (!occurrence)
+          return occurrence.takeError();
+        return json::Array{"block", std::move(encoded),
+                           json::Array{"stop", stop.getReason(), *occurrence}};
+      }
+      if (++instructions > instructionLimit)
+        return error("structured-source-limit");
+      auto args = indices(step.inputs);
+      if (!args)
+        return args.takeError();
+      auto inputs = sorts(ValueRange(step.inputs).getTypes());
+      if (!inputs)
+        return inputs.takeError();
+      auto results = sorts(ValueRange(step.outputs).getTypes());
+      if (!results)
+        return results.takeError();
+      auto desc = scopedDescriptor(step);
+      if (!desc)
+        return desc.takeError();
+      auto occurrence = site(op);
+      if (!occurrence)
+        return occurrence.takeError();
+      json::Array regions;
+      for (auto nested : step.regions) {
+        bool loop = isa<exec::RangeOp>(op);
+        unsigned captures =
+            loop ? step.inputs.size() - 2 - step.outputs.size() : 0;
+        SmallVector<Type> outputs(signature(*nested).getResults());
+        auto captureTypes = nested.getArgumentTypes().take_back(captures);
+        llvm::append_range(outputs, captureTypes);
+        auto in = sorts(nested.getArgumentTypes().drop_front());
+        if (!in)
+          return in.takeError();
+        auto out = sorts(outputs);
+        if (!out)
+          return out.takeError();
+        auto content =
+            scopedBlock(nested, step.conditional ? "condition" : "yield",
+                        captures, depth + 1);
+        if (!content)
+          return content.takeError();
+        regions.push_back(
+            json::Array{std::move(*in), std::move(*out), std::move(*content)});
+      }
+      encoded.push_back(json::Array{std::move(*desc), std::move(*args),
+                                    std::move(*results), std::move(regions),
+                                    *occurrence});
+      for (auto &entry : refs)
+        entry.second += step.outputs.size();
+      for (auto [i, result] : llvm::enumerate(step.outputs))
+        refs[result] = i;
+    }
+    return error("structured-source-region");
   }
 
   Expected<json::Value> descriptor(Operation &op, StringRef owner) {
@@ -1103,20 +1278,75 @@ class Exporter {
       if (auto e = check(root, field))
         return e;
     }
+    for (const auto &[name, origin] : execution.computationOrigins)
+      if (auto call = dyn_cast<exec::ComputeOp>(origin)) {
+        auto *root = symbols.lookup(call.getCallee().getRootReference());
+        if (!root)
+          return error("structured-source-realization",
+                       "sibling helper required");
+        if (auto premises =
+                root->getAttrOfType<ArrayAttr>("data.preconditions");
+            premises && !premises.empty())
+          return error("structured-source-realization", "root preconditions");
+        if (auto e = check(root, {}))
+          return e;
+      }
     return Error::success();
+  }
+
+  Expected<json::Value> computation(StringRef name, Operation &op) {
+    if (++instructions > instructionLimit)
+      return error("structured-source-limit");
+    auto inputs = sorts(op.getOperands().drop_front().getTypes());
+    if (!inputs)
+      return inputs.takeError();
+    auto outputs =
+        sorts(cast<exec::OutcomeType>(op.getResult(0).getType()).getPayload());
+    if (!outputs)
+      return outputs.takeError();
+    definition = op.getParentOfType<func::FuncOp>();
+    if (isa<exec::ComputeOp>(op)) {
+      auto helper = reference(op, "callee", {"math"});
+      if (!helper)
+        return helper.takeError();
+      return json::Array{"realize", name.str(), std::move(*inputs),
+                         std::move(*outputs), *helper};
+    }
+    if (isa<exec::FoldOp>(op)) {
+      auto refs = fold(op);
+      if (!refs)
+        return refs.takeError();
+      return json::Array{"finite",
+                         name.str(),
+                         "private",
+                         std::move(*inputs),
+                         std::move(*outputs),
+                         std::move((*refs)[0]),
+                         std::move((*refs)[1]),
+                         std::move((*refs)[2])};
+    }
+    return error("structured-source-operation", op.getName().getStringRef());
   }
 
   Expected<json::Value> function(Operation &op) {
     if (isa<local::RealizeOp, algebra::MapRealizeOp>(op))
       return preparation(op);
     StringRef owner = kind(op);
+    auto scoped = dyn_cast<func::FuncOp>(op);
+    if (scoped && !isScopedExecutionFunction(scoped))
+      scoped = {};
     SmallVector<StringRef> allowed{"sym_name", "sym_visibility",
                                    "function_type"};
     if (owner == "math")
       allowed.push_back("data.preconditions");
-    else if (owner == "local")
-      allowed.push_back("logical_origin");
-    else if (owner == "protocol")
+    else if (owner == "local") {
+      if (scoped)
+        llvm::append_range(allowed,
+                           ArrayRef<StringRef>{"runtime.origin", "no_inline",
+                                               "data.preconditions"});
+      else
+        allowed.push_back("logical_origin");
+    } else if (owner == "protocol")
       llvm::append_range(allowed, ArrayRef<StringRef>{"roles", "input_roles",
                                                       "output_roles",
                                                       "contracts", "origin"});
@@ -1173,15 +1403,19 @@ class Exporter {
         return error("structured-source-limit");
       for (Attribute attr : attrs) {
         auto bound = dyn_cast<data::IndexBoundAttr>(attr);
-        if (!bound || bound.getAxis() != 0 ||
-            bound.getIndexArg() >= type.getNumInputs() ||
-            bound.getContainerArg() >= type.getNumInputs() ||
-            !type.getInput(bound.getIndexArg()).isUnsignedInteger(64) ||
+        unsigned offset = scoped ? 1 : 0;
+        if (!bound || bound.getAxis() != 0 || bound.getIndexArg() < offset ||
+            bound.getContainerArg() < offset ||
+            bound.getIndexArg() - offset >= type.getNumInputs() ||
+            bound.getContainerArg() - offset >= type.getNumInputs() ||
+            !type.getInput(bound.getIndexArg() - offset)
+                 .isUnsignedInteger(64) ||
             !isa<algebra::FieldVectorType>(
-                type.getInput(bound.getContainerArg())))
+                type.getInput(bound.getContainerArg() - offset)))
           return error("structured-source-precondition");
-        preconditions.push_back(json::Array{"index_bound", bound.getIndexArg(),
-                                            bound.getContainerArg(), 0});
+        preconditions.push_back(
+            json::Array{"index_bound", bound.getIndexArg() - offset,
+                        bound.getContainerArg() - offset, 0});
       }
     }
     json::Array origin;
@@ -1192,7 +1426,8 @@ class Exporter {
       origin = std::move(*value->getAsArray());
     }
     if (owner == "local") {
-      auto attr = op.getAttrOfType<ArrayAttr>("logical_origin");
+      auto attr = op.getAttrOfType<ArrayAttr>(scoped ? "runtime.origin"
+                                                     : "logical_origin");
       if (!attr || attr.size() != 2 || !isa<StringAttr>(attr[0]) ||
           !isa<ArrayAttr>(attr[1]))
         return error("structured-source-origin");
@@ -1208,10 +1443,13 @@ class Exporter {
       origin.push_back(cast<StringAttr>(attr[0]).getValue());
       origin.push_back(std::move(bindings));
     }
-    if (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)) ||
-        op.getRegion(0).front().getArgumentTypes() != type.getInputs())
+    if (!scoped &&
+        (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)) ||
+         op.getRegion(0).front().getArgumentTypes() != type.getInputs()))
       return error("structured-source-region");
-    auto body = block(op.getRegion(0), type.getResults(), owner, "return");
+    auto body =
+        scoped ? scopedBlock(scoped, "return")
+               : block(op.getRegion(0), type.getResults(), owner, "return");
     if (!body)
       return body.takeError();
     return json::Array{"function",
@@ -1331,6 +1569,10 @@ public:
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile"}))
       return std::move(e);
+    auto admitted = readSourceExecutionClosure(unit);
+    if (!admitted)
+      return admitted.takeError();
+    execution = std::move(*admitted);
     json::Array domains, relations, bindings, definitions, contracts;
     llvm::StringSet<> symbolsSeen;
     for (Operation &op : unit.getBody().front()) {
@@ -1389,6 +1631,9 @@ public:
                         names(op.getAttrOfType<ArrayAttr>("arguments")),
                         binding->application.implementation});
       } else {
+        if (auto function = dyn_cast<func::FuncOp>(op);
+            function && function->hasAttr("runtime.region"))
+          continue; // Checked and consumed at each exact closed-region use.
         if (definitions.size() == 128)
           return error("structured-source-limit");
         auto encoded = function(op);
@@ -1406,6 +1651,16 @@ public:
                               : json::Value(json::Array{})});
         }
       }
+    }
+    for (const auto &signature : execution.computations) {
+      const auto &name = signature.name;
+      auto *origin = execution.computationOrigins.at(name);
+      if (definitions.size() == 128 || !symbolsSeen.insert(name).second)
+        return error("structured-source-limit");
+      auto encoded = computation(name, *origin);
+      if (!encoded)
+        return encoded.takeError();
+      definitions.push_back(std::move(*encoded));
     }
     if (auto e = closure())
       return std::move(e);

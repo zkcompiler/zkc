@@ -9,6 +9,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
@@ -524,7 +525,14 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
     return refuse(module, "expected one mathematical symbol-table block");
   SymbolTableCollection tables;
   TotalClosure helpers(module, tables);
-  if (failed(helpers.verify()))
+  // Func owns both plain mathematics and scoped source execution. The source
+  // closure assigns every retained definition to its checking owner and reads
+  // actual scoped bodies, including dormant helpers and outlined regions.
+  if (auto error = protocol::verifySourceExecutionClosure(module))
+    return diagnostics::emit(module.emitOpError(), std::move(error));
+  // The enclosing profile also owns finite references in protocol and Local
+  // declarations, outside the scoped/Math definition component above.
+  if (failed(finite::verifyClosure(module)))
     return failure();
   algebra::MapFormulas maps(tables);
   unsigned programs = 0;
@@ -533,7 +541,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
     if (auto program = dyn_cast<protocol_ir::MathematicalOp>(op)) {
       ++programs;
     } else if (isa<func::FuncOp>(op)) {
-      // TotalClosure checked every retained mathematical definition above.
+      // Complete mathematical/scoped admission was performed above.
     } else if (auto realization = dyn_cast<local::RealizeOp>(op)) {
       for (auto attr : realization->getAttrs())
         if (!is_contained(realization.getAttributeNames(),

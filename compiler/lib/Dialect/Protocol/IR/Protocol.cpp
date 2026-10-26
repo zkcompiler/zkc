@@ -6,9 +6,11 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -159,10 +161,11 @@ LogicalResult zkc::protocol_ir::ProtocolLoopOp::verifyRegions() {
 LogicalResult
 zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto *callee = tables.lookupNearestSymbolFrom(*this, getCalleeAttr());
-  if (!callee || !isa<zkc::local::FuncOp, zkc::poly::RealizeOp>(callee))
+  if (!callee ||
+      !isa<func::FuncOp, zkc::local::FuncOp, zkc::poly::RealizeOp>(callee))
     return diagnostics::emit(
         emitOpError(), "interactive-symbol-kind",
-        "expected a local definition or checked polynomial realization");
+        "expected scoped source execution or a checked local realization");
   if (auto caller =
           (*this)->getParentOfType<zkc::protocol_ir::MathematicalOp>()) {
     llvm::StringSet<> roles;
@@ -173,6 +176,23 @@ zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   } else {
     return diagnostics::emit(emitOpError(), "interactive-local-role",
                              "expected a common protocol owner");
+  }
+  if (isa<func::FuncOp>(callee)) {
+    auto attribute = callee->getAttrOfType<TypeAttr>("function_type");
+    auto type = attribute ? dyn_cast<FunctionType>(attribute.getValue())
+                          : FunctionType();
+    auto outcome = type && type.getNumResults() == 1
+                       ? dyn_cast<exec::OutcomeType>(type.getResult(0))
+                       : exec::OutcomeType();
+    if (!type || !type.getNumInputs() ||
+        !isa<runtime::ScopeType>(type.getInput(0)) || !outcome ||
+        callee->hasAttr("runtime.region") ||
+        getOperandTypes() != TypeRange(type.getInputs().drop_front()) ||
+        getResultTypes() != TypeRange(outcome.getPayload()))
+      return diagnostics::emit(
+          emitOpError(), "interactive-call-type",
+          "scoped calls expose only their logical data ports");
+    return success();
   }
   return callSignature(*this, callee);
 }

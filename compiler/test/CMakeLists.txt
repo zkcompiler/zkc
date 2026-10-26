@@ -54,6 +54,8 @@ mlir_target_link_libraries(zkc-execution_control_cursor-test PRIVATE MLIRParser)
 
 add_zkc_test(source_emission_budget Translation source-emission-budget)
 add_zkc_test(source_finite_execution Translation source-finite-execution)
+add_zkc_test(source_scoped_execution Translation source-scoped-execution)
+mlir_target_link_libraries(zkc-source_scoped_execution-test PRIVATE MLIRParser)
 mlir_target_link_libraries(zkc-source_emission_budget-test PRIVATE MLIRParser)
 
 add_zkc_test(execution_emission Translation execution-emission)

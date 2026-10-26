@@ -365,7 +365,7 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
         continue;
       return false;
     }
-    if (source && !detail::isScopedExecutionFunction(function))
+    if (source && !isScopedExecutionFunction(function))
       continue;
     if (function->getAttrOfType<UnitAttr>("runtime.region"))
       continue;
@@ -407,7 +407,7 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
   if (binding != expected.bindings.size() || root != expected.functions.size())
     return false;
   for (auto function : module->getRegion(0).front().getOps<func::FuncOp>())
-    if ((!source || detail::isScopedExecutionFunction(function)) &&
+    if ((!source || isScopedExecutionFunction(function)) &&
         !visited.contains(function))
       return false;
   return true;

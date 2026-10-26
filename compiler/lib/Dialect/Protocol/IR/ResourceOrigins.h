@@ -3,6 +3,7 @@
 
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Program/ResourceOrigins.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -23,6 +24,11 @@ class ResourceOrigins {
   llvm::DenseSet<mlir::Operation *> active;
   uint64_t remaining;
   unsigned depthLimit;
+  // Scoped helper facts are derived once from the actual admitted closure.
+  // The owned snapshot cannot be invalidated by a later IR mutation; this
+  // object itself is used only while the enclosing IR remains immutable.
+  std::unique_ptr<program::ResourceOriginAnalysis> execution;
+  mlir::Operation *executionOwner = nullptr;
 
   mlir::LogicalResult charge(mlir::Operation *op, uint64_t amount);
   mlir::LogicalResult limit(mlir::Operation *op, llvm::StringRef detail);

@@ -4,6 +4,9 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/ScopeExit.h"
 
 using namespace mlir;
@@ -35,6 +38,49 @@ LogicalResult ResourceOrigins::call(Operation *op, unsigned depth,
   auto name = op->getAttrOfType<FlatSymbolRefAttr>("callee");
   Operation *callee =
       name ? symbols.lookupNearestSymbolFrom(op, name) : nullptr;
+  if (auto function = dyn_cast_or_null<func::FuncOp>(callee)) {
+    // Protocol calls expose logical ports; the scoped function prepends its
+    // borrowed scope and wraps its results in an explicit outcome. The reader
+    // validates the complete actual profile before the native view drops those
+    // administrative ports. A name, origin marker or matching type is not a
+    // resource successor law.
+    if (isa<protocol_ir::ApplyOp>(op) ||
+        function.getNumArguments() != op->getNumOperands() + 1 ||
+        function.getNumResults() != 1 ||
+        !isa<runtime::ScopeType>(function.getArgumentTypes().front()) ||
+        !llvm::equal(function.getArgumentTypes().drop_front(),
+                     op->getOperandTypes()))
+      return malformed(op, "resource origins require a scoped helper");
+    auto outcome =
+        dyn_cast<exec::OutcomeType>(function.getFunctionType().getResult(0));
+    if (!outcome || !llvm::equal(outcome.getPayload(), op->getResultTypes()))
+      return malformed(op, "inconsistent scoped resource-origin signature");
+    if (!execution) {
+      executionOwner = function->getParentOp();
+      auto closure = protocol::readSourceExecutionClosure(executionOwner);
+      if (!closure)
+        return diagnostics::emit(op->emitOpError(), closure.takeError());
+      auto analysis = program::ResourceOriginAnalysis::create(
+          std::move(closure->definitions), std::move(closure->computations),
+          remaining, depthLimit);
+      if (!analysis)
+        return diagnostics::emit(op->emitOpError(), analysis.takeError());
+      execution = std::move(*analysis);
+    }
+    if (executionOwner != function->getParentOp())
+      return malformed(op, "resource-origin query crossed its source closure");
+    auto roots = execution->get(function.getSymName(), depth + 1);
+    if (!roots)
+      return diagnostics::emit(op->emitOpError(), roots.takeError());
+    Summary summary;
+    summary.continues = roots->continues;
+    summary.depth = roots->depth;
+    for (auto [output, input] : roots->roots)
+      summary.roots[output] = input;
+    result =
+        &summaries.insert_or_assign(callee, std::move(summary)).first->second;
+    return success();
+  }
   if (finite::isDeclaration(callee)) {
     if (failed(verifyFinite(callee)))
       return failure();

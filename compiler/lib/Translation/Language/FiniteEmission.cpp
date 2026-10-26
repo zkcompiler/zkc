@@ -430,9 +430,9 @@ class FiniteEmitter {
                                  actualInputs, actualOutputs)))};
     if (scoped)
       attrs.push_back(builder.getNamedAttr("no_inline", builder.getUnitAttr()));
-    if (local)
+    if (local || scoped)
       attrs.push_back(builder.getNamedAttr(
-          "logical_origin",
+          scoped ? "runtime.origin" : "logical_origin",
           builder.getArrayAttr({builder.getStringAttr(prefix + suffix.str()),
                                 builder.getArrayAttr({})})));
     auto *declaration =

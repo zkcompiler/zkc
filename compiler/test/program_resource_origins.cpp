@@ -349,5 +349,35 @@ int main() {
               "mathematical-analysis-limit");
     }
   });
+  cases.run("analysis owns its admitted snapshot", [&] {
+    auto model = fixture();
+    uint64_t work = 100000;
+    auto analysis = take(ResourceOriginAnalysis::create(model, {}, work));
+    model.functions[0].body = {
+        {"fresh", Operation{"create", {}, {}, {"fresh"}}},
+        {"", Return{{"fresh"}}}};
+    expect(take(analysis->get("identity")), {{0, 0}});
+    expect(query(model), {});
+  });
+  cases.run("cached queries consume work and retain caller depth", [&] {
+    auto model = fixture();
+    uint64_t work = 100000;
+    auto analysis = take(ResourceOriginAnalysis::create(model, {}, work, 4));
+    expect(take(analysis->get("identity")), {{0, 0}});
+    uint64_t before = work;
+    expect(take(analysis->get("identity", 4)), {{0, 0}});
+    require(work < before, "cached query consumed no work");
+    refuses(analysis->get("identity", 5), "mathematical-analysis-limit");
+    refuses(analysis->get("identity"), "mathematical-analysis-limit");
+  });
+  cases.run("a populated cache cannot bypass exhausted work", [&] {
+    uint64_t work = 100000;
+    auto analysis = take(ResourceOriginAnalysis::create(fixture(), {}, work));
+    take(analysis->get("identity"));
+    work = 0;
+    refuses(analysis->get("identity"), "mathematical-analysis-limit");
+    work = 100000;
+    refuses(analysis->get("identity"), "mathematical-analysis-limit");
+  });
   return cases.result();
 }

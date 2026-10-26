@@ -1,17 +1,22 @@
 #include "DataPreconditions.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Exec/ControlCursor.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -20,8 +25,10 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
+#include <limits>
 #include <set>
 using namespace llvm;
 namespace zkc::language {
@@ -58,8 +65,10 @@ class Comparator {
   mlir::ModuleOp module;
   const Limits &limits;
   Layouts layouts;
-  std::map<std::string, mlir::Operation *> realizations, maps;
-  std::set<mlir::Operation *> usedRealizations, usedMaps;
+  std::map<std::string, mlir::Operation *> outlined, maps;
+  std::set<mlir::Operation *> usedOutlined, usedMaps;
+  exec::ControlCursor *scoped = nullptr;
+  unsigned accounted = 0;
   std::map<std::string, mlir::Operation *> finiteDefinitions;
   std::set<mlir::Operation *> usedFiniteDefinitions;
   Error failure = Error::success();
@@ -83,7 +92,9 @@ class Comparator {
   }
   bool fail(StringRef message) {
     if (!failure)
-      failure = error("source.correspondence", message);
+      failure = scoped && scoped->exhausted()
+                    ? error("source.limit", "scoped comparison limit exceeded")
+                    : error("source.correspondence", message);
     return false;
   }
   bool contractSelector(mlir::Attribute attr,
@@ -167,6 +178,26 @@ class Comparator {
     remaining -= n;
     return true;
   }
+  unsigned allowance() const {
+    return unsigned(std::min<uint64_t>(
+        std::numeric_limits<unsigned>::max(),
+        std::min(remaining, limits.operations - std::min(report.operations,
+                                                         limits.operations))));
+  }
+  bool account() {
+    unsigned count = scoped->consumed() - accounted;
+    if (report.operations > limits.operations ||
+        count > limits.operations - report.operations) {
+      failure =
+          error("source.limit", "scoped comparison operation limit exceeded");
+      return false;
+    }
+    if (!charge(count))
+      return false;
+    accounted = scoped->consumed();
+    report.operations += count;
+    return true;
+  }
   std::optional<std::string> alternative(const Layout &layout, StringRef name) {
     for (unsigned i = 0; i < layout.alternatives.size(); ++i) {
       if (!charge(layout.alternatives[i].name.size() + 1))
@@ -219,16 +250,21 @@ class Comparator {
   mlir::Operation *next(mlir::Block &block, mlir::Block::iterator &cursor,
                         Span span, StringRef name, mlir::ValueRange operands,
                         unsigned results, unsigned regions = 0) {
-    if (cursor == block.end()) {
+    if (scoped ? scoped->atEnd() : cursor == block.end()) {
       fail("original omitted an operation");
       return nullptr;
     }
-    auto &op = *cursor++;
-    if (++report.operations > limits.operations) {
+    auto *operation = scoped ? scoped->take() : &*cursor++;
+    if (!operation || (scoped && !account())) {
+      fail("scoped operation is unavailable");
+      return nullptr;
+    }
+    auto &op = *operation;
+    if (!scoped && ++report.operations > limits.operations) {
       failure = error("source.limit", "comparison operation limit exceeded");
       return nullptr;
     }
-    if (!charge(1 + operands.size()) || !record(op, span))
+    if (!charge((scoped ? 0 : 1) + operands.size()) || !record(op, span))
       return nullptr;
     if ((!name.empty() && op.getName().getStringRef() != name) ||
         op.getNumResults() != results || op.getNumRegions() != regions ||
@@ -238,24 +274,337 @@ class Comparator {
     }
     return &op;
   }
+  mlir::Operation *invoke(mlir::Block &block, mlir::Block::iterator &cursor,
+                          Span span, StringRef name, mlir::ValueRange inputs,
+                          ArrayRef<LayoutLeaf> outputs, Values &result) {
+    Values arguments{scoped->getScope()};
+    llvm::append_range(arguments, inputs);
+    auto *operation = next(block, cursor, span, name, arguments, 1);
+    auto outcome = operation ? mlir::dyn_cast<exec::OutcomeType>(
+                                   operation->getResult(0).getType())
+                             : exec::OutcomeType();
+    if (!outcome || !types(outcome.getPayload(), outputs) ||
+        !scoped->dispatch(operation->getResult(0), result) || !account()) {
+      fail("scoped outcome or dispatch differs");
+      return nullptr;
+    }
+    return operation;
+  }
+  mlir::func::FuncOp region(mlir::func::CallOp call, Span span) {
+    if (!account())
+      return {};
+    auto found = outlined.find(call.getCallee().str());
+    auto function = found == outlined.end()
+                        ? mlir::func::FuncOp()
+                        : mlir::dyn_cast<mlir::func::FuncOp>(found->second);
+    if (!function || !usedOutlined.insert(function).second ||
+        !attributes(*function, {"sym_name", "sym_visibility", "function_type",
+                                "no_inline", "runtime.region"}) ||
+        !string(*function, "sym_visibility", "private") ||
+        !function->getAttrOfType<mlir::UnitAttr>("no_inline") ||
+        !function->getAttrOfType<mlir::UnitAttr>("runtime.region") ||
+        mlir::TypeRange(function.getArgumentTypes()) !=
+            call.getOperandTypes() ||
+        mlir::TypeRange(function.getResultTypes()) != call.getResultTypes() ||
+        function.empty() || !record(*function, span) || !charge(1)) {
+      fail("outlined control identity or signature differs");
+      return {};
+    }
+    if (++report.operations > limits.operations) {
+      failure = error("source.limit", "outlined definition limit exceeded");
+      return {};
+    }
+    return function;
+  }
+  bool finish(mlir::Block &block, mlir::Block::iterator &cursor, Span span,
+              mlir::ValueRange values, bool charged) {
+    Values arguments;
+    if (charged)
+      arguments.push_back(scoped->getScope());
+    llvm::append_range(arguments, values);
+    auto *result =
+        next(block, cursor, span, charged ? "exec.complete" : "exec.returned",
+             arguments, 1);
+    auto outcome =
+        result
+            ? mlir::dyn_cast<exec::OutcomeType>(result->getResult(0).getType())
+            : exec::OutcomeType();
+    if (!result || !attributes(*result, {}) || !outcome ||
+        mlir::TypeRange(outcome.getPayload()) != values.getTypes())
+      return fail("scoped return packaging differs");
+    auto *ret =
+        next(block, cursor, span, "func.return", result->getResults(), 0);
+    return (ret && attributes(*ret, {}) && scoped->complete()) ||
+           fail("scoped function has extra control or a changed return");
+  }
+  bool stop(Span span, StringRef reason, StringRef site) {
+    auto reject = mlir::dyn_cast_or_null<exec::RejectOp>(scoped->take());
+    auto edge = mlir::dyn_cast_or_null<mlir::cf::BranchOp>(scoped->take());
+    if (!reject || !attributes(*reject, {"site", "reason"}) ||
+        reject.getScope() != scoped->getScope() ||
+        reject.getReason() != reason || reject.getSite() != site || !edge ||
+        !attributes(*edge, {}) ||
+        edge.getDestOperands() != mlir::ValueRange{reject.getStop()} ||
+        !scoped->atEnd() || !scoped->failure(edge.getDest()) ||
+        !scoped->complete() || !account() || !record(*reject, span) ||
+        !record(*edge, span))
+      return fail("scoped rejection or propagation differs");
+    return true;
+  }
+  bool withScoped(mlir::func::FuncOp function,
+                  llvm::function_ref<bool()> check) {
+    auto signature = function.getFunctionType();
+    if (function.empty() || signature.getNumInputs() == 0 ||
+        !mlir::isa<runtime::ScopeType>(signature.getInput(0)) ||
+        signature.getNumResults() != 1 ||
+        !mlir::isa<exec::OutcomeType>(signature.getResult(0)) ||
+        function.front().getArgumentTypes() != signature.getInputs())
+      return fail("scoped function interface differs");
+    unsigned work = allowance();
+    exec::ControlCursor control(function, work);
+    auto *parent = scoped;
+    unsigned parentAccounted = accounted;
+    scoped = &control;
+    accounted = 0;
+    llvm::scope_exit restore([&] {
+      scoped = parent;
+      accounted = parentAccounted;
+    });
+    if (!control.enter(&function.front()) || !check() || !account())
+      return false;
+    return control.complete() ||
+           fail("scoped function has uninspected control");
+  }
+  std::optional<Values> variant(mlir::Block &block,
+                                mlir::Block::iterator &cursor, Span span,
+                                mlir::ValueRange inputs,
+                                const LayoutLeaf &output, StringRef alternative,
+                                StringRef site) {
+    Values result;
+    auto *actual =
+        scoped ? invoke(block, cursor, span, "exec.variant", inputs, {output},
+                        result)
+               : next(block, cursor, span, "local.variant_inject", inputs, 1);
+    if (!actual || !attributes(*actual, {"alternative", "site"}) ||
+        !string(*actual, "alternative", alternative) ||
+        !string(*actual, "site", site) ||
+        (!scoped && !types(actual->getResultTypes(), {output}))) {
+      fail("variant alternative or occurrence differs");
+      return {};
+    }
+    return scoped ? result : Values(actual->getResults());
+  }
+  std::optional<Values> unpack(mlir::Value value, ArrayRef<LayoutLeaf> outputs,
+                               StringRef alternative, Span span,
+                               StringRef site) {
+    Values result;
+    auto check = [&](mlir::func::CallOp call, unsigned) {
+      auto function = region(call, span);
+      if (!function ||
+          !types(function.getArgumentTypes().drop_front(), outputs))
+        return false;
+      return withScoped(function, [&] {
+        auto cursor = function.front().begin();
+        return finish(function.front(), cursor, span,
+                      function.getArguments().drop_front(), true);
+      });
+    };
+    if (!scoped->match(value, {}, {alternative.str()}, site, check, result) ||
+        !account() || !types(mlir::ValueRange(result).getTypes(), outputs)) {
+      fail("sequence payload unpacking or transfer differs");
+      return {};
+    }
+    return result;
+  }
+  std::optional<Values>
+  map(const Declaration &helper, const BulkApplication &source,
+      mlir::ValueRange inputs, ArrayRef<LayoutLeaf> outputs, mlir::Block &block,
+      mlir::Block::iterator &cursor, Span span, StringRef site) {
+    if (!scoped || source.mapped.size() != inputs.size()) {
+      fail("mapped application requires scoped execution and exact ports");
+      return {};
+    }
+    Values vectors, captures;
+    for (auto [input, mapped] : llvm::zip(inputs, source.mapped))
+      (mapped ? vectors : captures).push_back(input);
+    std::string identity =
+        "zkc.source.map:" + std::to_string(helper.symbol.size()) + ":" +
+        helper.symbol + ":";
+    for (bool row : source.mapped)
+      identity += row ? '1' : '0';
+    if (!charge(identity.size()))
+      return {};
+    auto digest = SHA256::hash(arrayRefFromStringRef(identity));
+    std::string name = "zkl_map_" + toHex(ArrayRef<uint8_t>(digest), true);
+    auto domain = maps.find(name + "_domain"),
+         callback = maps.find(name + "_body");
+    auto layout = take(layouts.get(helper.outputs.front().type));
+    if (!layout || vectors.empty() || domain == maps.end() ||
+        callback == maps.end() || (*layout)->leaves.size() != 1 ||
+        !(*layout)->leaves.front().data()) {
+      fail("mapped auxiliary definition or scalar layout differs");
+      return {};
+    }
+    auto bound = take(
+        protocol::parseBoundType(*(*layout)->leaves.front().data(), false));
+    if (!bound)
+      return {};
+    auto scalar = protocol::decodeBoundType(module.getContext(), *bound);
+    if (!scalar) {
+      fail("mapped scalar type is unavailable");
+      return {};
+    }
+    auto *domainOp = domain->second, *callbackOp = callback->second;
+    if (!usedMaps.count(domainOp)) {
+      SmallVector<mlir::Type> items(vectors.size(), scalar);
+      auto domainType = data::DomainType::get(module.getContext(), items);
+      SmallVector<mlir::Type> arguments{
+          runtime::ScopeType::get(module.getContext())};
+      llvm::append_range(arguments, items);
+      llvm::append_range(arguments, mlir::ValueRange(vectors).getTypes());
+      llvm::append_range(arguments, mlir::ValueRange(captures).getTypes());
+      auto outcome = exec::OutcomeType::get(module.getContext(), {scalar});
+      auto definition = [&](mlir::Operation *op, StringRef kind,
+                            mlir::TypeRange inputs, mlir::TypeRange outputs,
+                            ArrayRef<StringRef> attrs, bool single) {
+        auto type = op->getAttrOfType<mlir::TypeAttr>("function_type");
+        auto signature =
+            type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
+                 : mlir::FunctionType();
+        if (!charge(1) || ++report.operations > limits.operations) {
+          if (!failure)
+            failure = error("source.limit", "mapped definition limit exceeded");
+          return false;
+        }
+        return (op->getName().getStringRef() == kind &&
+                attributes(*op, attrs) &&
+                string(*op, "sym_visibility", "private") &&
+                !op->getNumOperands() && !op->getNumResults() &&
+                op->getNumRegions() == 1 && !op->getRegion(0).empty() &&
+                (!single || llvm::hasSingleElement(op->getRegion(0))) &&
+                signature && mlir::TypeRange(signature.getInputs()) == inputs &&
+                mlir::TypeRange(signature.getResults()) == outputs &&
+                op->getRegion(0).front().getArgumentTypes() == inputs &&
+                record(*op, span)) ||
+               fail("mapped definition structure or signature differs");
+      };
+      if (!definition(domainOp, "data.domain",
+                      mlir::ValueRange(vectors).getTypes(), {domainType},
+                      {"sym_name", "sym_visibility", "function_type"}, true) ||
+          !definition(callbackOp, "func.func", arguments, {outcome},
+                      {"sym_name", "sym_visibility", "function_type",
+                       "no_inline", "runtime.origin"},
+                      false))
+        return {};
+      usedMaps.insert(domainOp);
+      usedMaps.insert(callbackOp);
+      {
+        auto *parent = scoped;
+        scoped = nullptr;
+        llvm::scope_exit restore([&] { scoped = parent; });
+        auto &entry = domainOp->getRegion(0).front();
+        auto cursor = entry.begin();
+        Values domains;
+        for (auto input : entry.getArguments()) {
+          auto *elements =
+              next(entry, cursor, span, "data.domain_elements", input, 1);
+          if (!elements || !attributes(*elements, {}) ||
+              elements->getResult(0).getType() !=
+                  data::DomainType::get(module.getContext(), {scalar})) {
+            fail("mapped element domain differs");
+            return {};
+          }
+          domains.push_back(elements->getResult(0));
+        }
+        mlir::Value root = domains.front();
+        if (domains.size() > 1) {
+          auto *zip = next(entry, cursor, span, "data.domain_zip", domains, 1);
+          if (!zip || !attributes(*zip, {}) ||
+              zip->getResult(0).getType() != domainType) {
+            fail("mapped zip domain differs");
+            return {};
+          }
+          root = zip->getResult(0);
+        }
+        auto *yield = next(entry, cursor, span, "data.domain_yield", root, 0);
+        if (!yield || !attributes(*yield, {}) || cursor != entry.end()) {
+          fail("mapped domain returns a different value or has extra work");
+          return {};
+        }
+      }
+      auto origin =
+          callbackOp->getAttrOfType<mlir::ArrayAttr>("runtime.origin");
+      auto label = origin && origin.size() == 2
+                       ? mlir::dyn_cast<mlir::StringAttr>(origin[0])
+                       : mlir::StringAttr();
+      if (!callbackOp->getAttrOfType<mlir::UnitAttr>("no_inline") || !label ||
+          label.getValue() != name + "_body" || !strings(origin[1], {})) {
+        fail("mapped callback origin differs");
+        return {};
+      }
+      auto function = mlir::cast<mlir::func::FuncOp>(callbackOp);
+      if (!withScoped(function, [&] {
+            auto &entry = function.front();
+            auto cursor = entry.begin();
+            Values actual, result;
+            unsigned item = 1, capture = 1 + items.size() + vectors.size();
+            for (bool mapped : source.mapped)
+              actual.push_back(entry.getArgument(mapped ? item++ : capture++));
+            auto *call = invoke(entry, cursor, span, "exec.compute", actual,
+                                (*layout)->leaves, result);
+            auto callee =
+                call ? call->getAttrOfType<mlir::FlatSymbolRefAttr>("callee")
+                     : mlir::FlatSymbolRefAttr();
+            return (call && attributes(*call, {"callee", "site"}) && callee &&
+                    callee.getValue() == helper.symbol &&
+                    string(*call, "site", "body") &&
+                    finish(entry, cursor, span, result, false)) ||
+                   fail("mapped scalar callback differs");
+          }))
+        return {};
+    }
+    Values arguments = vectors, result;
+    llvm::append_range(arguments, captures);
+    auto *actual =
+        invoke(block, cursor, span, "exec.collect", arguments, outputs, result);
+    auto selectedDomain =
+        actual ? actual->getAttrOfType<mlir::FlatSymbolRefAttr>("domain")
+               : mlir::FlatSymbolRefAttr();
+    auto selectedBody =
+        actual ? actual->getAttrOfType<mlir::FlatSymbolRefAttr>("body")
+               : mlir::FlatSymbolRefAttr();
+    if (!actual || !attributes(*actual, {"domain", "body", "site"}) ||
+        !selectedDomain || !selectedBody ||
+        selectedDomain.getValue() != name + "_domain" ||
+        selectedBody.getValue() != name + "_body" ||
+        !string(*actual, "site", site)) {
+      fail("mapped occurrence, domain or callback differs");
+      return {};
+    }
+    return result;
+  }
   std::optional<Values>
   primitive(mlir::Block &block, mlir::Block::iterator &cursor,
             const LocalPrimitive &expected, mlir::ValueRange operands,
             ArrayRef<LayoutLeaf> outputs, Span span, StringRef site) {
     if (!expected.bindingArguments && expected.contract == "bool.constant") {
-      auto *actual = next(block, cursor, span, "local.bool_constant", {}, 1);
+      Values result;
+      auto *actual =
+          scoped
+              ? invoke(block, cursor, span, "exec.boolean", {}, outputs, result)
+              : next(block, cursor, span, "local.bool_constant", {}, 1);
       if (!actual)
         return {};
       auto value = actual->getAttrOfType<mlir::BoolAttr>("value");
       if (!attributes(*actual, {"value", "site"}) || !value ||
           value.getValue() != (expected.parameters.front() == "true") ||
           !string(*actual, "site", site) ||
-          !types(actual->getResultTypes(), outputs)) {
+          (!scoped && !types(actual->getResultTypes(), outputs))) {
         if (!failure)
           fail("local Boolean literal differs");
         return {};
       }
-      return Values(actual->getResults());
+      return scoped ? result : Values(actual->getResults());
     }
     if (!expected.bindingArguments && expected.contract == "bool.equal") {
       auto invoke = [&](StringRef contract, mlir::ValueRange ins,
@@ -279,19 +628,25 @@ class Comparator {
       Values either{both->front(), neither->front()};
       return invoke("bool.or", either, "");
     }
-    auto *actual = next(block, cursor, span, "", operands, outputs.size());
+    Values result;
+    auto *actual =
+        scoped ? invoke(block, cursor, span, "exec.apply", operands, outputs,
+                        result)
+               : next(block, cursor, span, "", operands, outputs.size());
     if (!actual)
       return {};
     if (!attributes(*actual, {"binding", "parameters", "site"}) ||
         !string(*actual, "site", site) ||
         !strings(actual->getAttr("parameters"), expected.parameters) ||
-        !protocol::operationSupportsContract(actual->getName().getStringRef(),
-                                             expected.contract) ||
-        !types(actual->getResultTypes(), outputs)) {
+        (!scoped && !protocol::operationSupportsContract(
+                        actual->getName().getStringRef(), expected.contract)) ||
+        (!scoped && !types(actual->getResultTypes(), outputs))) {
       if (!failure)
         fail("ordered operation contract, parameters or site differ");
       return {};
     }
+    if (!scoped)
+      result = Values(actual->getResults());
     auto ref = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("binding");
     auto found = ref ? bindings.find(ref.getValue().str()) : bindings.end();
     if (found == bindings.end()) {
@@ -311,8 +666,7 @@ class Comparator {
                StringRef(expected.contract).starts_with("curve.") ||
                StringRef(expected.contract).starts_with("resource_unit.")) {
       auto type = take(protocol::encodeBoundType(
-          operands.empty() ? actual->getResult(0).getType()
-                           : operands[0].getType(),
+          operands.empty() ? result.front().getType() : operands[0].getType(),
           false));
       if (!type)
         return {};
@@ -344,10 +698,10 @@ class Comparator {
       }
       return true;
     };
-    if (!agree(actual->getOperandTypes(), selected->inputs) ||
-        !agree(actual->getResultTypes(), selected->outputs))
+    if (!agree(operands.getTypes(), selected->inputs) ||
+        !agree(mlir::ValueRange(result).getTypes(), selected->outputs))
       return {};
-    return Values(actual->getResults());
+    return result;
   }
   bool retire(mlir::Block &block, mlir::Block::iterator &cursor,
               mlir::Value value, Span span, StringRef site) {
@@ -356,11 +710,24 @@ class Comparator {
                           value, {}, span, site));
   }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
-            const mathematical::Availability *availability,
-            bool region = false) {
+            const mathematical::Availability *availability, bool region = false,
+            unsigned forwarded = 0) {
+    auto check = [&] {
+      return contents(decl, source, block, availability, region, forwarded);
+    };
+    if (source.mode == Body::Mode::Local) {
+      auto function = mlir::dyn_cast<mlir::func::FuncOp>(block.getParentOp());
+      return (function && withScoped(function, check)) ||
+             fail("expected scoped source function");
+    }
+    return check();
+  }
+  bool contents(const Declaration &decl, const Body &source, mlir::Block &block,
+                const mathematical::Availability *availability, bool region,
+                unsigned forwarded) {
     auto cursor = block.begin();
     std::vector<Values> values(source.values.size());
-    unsigned argument = 0;
+    unsigned argument = scoped ? 1 : 0;
     auto bind = [&](unsigned i, Values native, bool exact = true) -> bool {
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout ||
@@ -510,15 +877,11 @@ class Comparator {
                 alternative(*resultLayouts.front(), construct->alternative);
             if (!label)
               return false;
-            auto *actual =
-                next(block, cursor, op.span, "local.variant_inject", input, 1);
-            if (!actual)
+            auto injected = variant(block, cursor, op.span, input,
+                                    leaves.back(), *label, site);
+            if (!injected)
               return false;
-            if (!attributes(*actual, {"alternative", "site"}) ||
-                !string(*actual, "alternative", *label) ||
-                !string(*actual, "site", site))
-              return fail("variant alternative differs");
-            result.push_back(actual->getResult(0));
+            result.push_back(injected->front());
           } else
             llvm::append_range(result, input);
         }
@@ -637,17 +1000,13 @@ class Comparator {
             return false;
           if (local->contract == "sequence.append" && packed->product) {
             const auto &fields = values[local->operands[1].index];
-            auto *actual =
-                next(block, cursor, op.span, "local.variant_inject", fields, 1);
-            if (!actual)
+            auto packedValue = variant(block, cursor, op.span, fields,
+                                       packed->carrier.spelling(),
+                                       packed->alternative, site + "_pack");
+            if (!packedValue)
               return false;
-            if (!attributes(*actual, {"alternative", "site"}) ||
-                !string(*actual, "alternative", packed->alternative) ||
-                !string(*actual, "site", site + "_pack") ||
-                !types(actual->getResultTypes(), {packed->carrier.spelling()}))
-              return fail("sequence element packing differs");
             operands = values[local->operands[0].index];
-            operands.push_back(actual->getResult(0));
+            operands.push_back(packedValue->front());
           }
           if (local->contract == "sequence.at")
             outputs = {packed->carrier.spelling()};
@@ -658,120 +1017,77 @@ class Comparator {
           return false;
         result = std::move(*checked);
         if (packed && packed->product && local->contract == "sequence.at") {
-          auto *actual = next(block, cursor, op.span, "local.match", result,
-                              leaves.size(), 1);
-          if (!actual)
+          auto flat = unpack(result.front(), leaves, packed->alternative,
+                             op.span, site + "_unpack");
+          if (!flat)
             return false;
-          if (!attributes(*actual, {"alternatives", "site"}) ||
-              !strings(actual->getAttr("alternatives"),
-                       {packed->alternative}) ||
-              !string(*actual, "site", site + "_unpack") ||
-              !types(actual->getResultTypes(), leaves) ||
-              !llvm::hasSingleElement(actual->getRegion(0)))
-            return fail("sequence element unpacking differs");
-          auto &arm = actual->getRegion(0).front();
-          if (!types(arm.getArgumentTypes(), packed->flat->leaves))
-            return false;
-          auto armCursor = arm.begin();
-          auto *yield = next(arm, armCursor, op.span, "local.yield",
-                             arm.getArguments(), 0);
-          if (!yield || !attributes(*yield, {}) || armCursor != arm.end())
-            return fail("sequence payload result mapping differs");
-          result = Values(actual->getResults());
+          result = std::move(*flat);
         }
       } else if (auto *call = std::get_if<HelperCall>(&op.action)) {
         auto &target = project.declarations()[call->callee.index];
-        bool local = target.kind == Declaration::Kind::Local ||
-                     source.mode == Body::Mode::Local,
-             owned = local && source.mode == Body::Mode::Protocol,
-             realized = source.mode == Body::Mode::Local &&
-                        target.kind == Declaration::Kind::Math;
-        auto *actual = next(block, cursor, op.span,
-                            owned   ? "protocol.local_call"
-                            : local ? "local.apply"
-                                    : "func.call",
-                            flatten(call->operands), leaves.size());
+        bool owned = target.kind == Declaration::Kind::Local &&
+                     source.mode == Body::Mode::Protocol;
+        bool math = target.kind == Declaration::Kind::Math;
+        auto input = flatten(call->operands);
+        auto *actual = scoped
+                           ? invoke(block, cursor, op.span,
+                                    math ? "exec.compute" : "func.call", input,
+                                    leaves, result)
+                           : next(block, cursor, op.span,
+                                  owned ? "protocol.local_call" : "func.call",
+                                  input, leaves.size());
         if (!actual)
           return false;
         auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
-        if (realized) {
-          auto found = callee ? realizations.find(callee.getValue().str())
-                              : realizations.end();
-          if (found == realizations.end())
-            return fail("missing mathematical realization");
-          auto *definition = found->second;
-          auto helper =
-              definition->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-          auto type =
-              definition->getAttrOfType<mlir::TypeAttr>("function_type");
-          auto signature =
-              type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
-                   : mlir::FunctionType();
-          if (!helper || helper.getValue() != target.symbol || !signature ||
-              actual->getOperandTypes() != signature.getInputs() ||
-              actual->getResultTypes() != signature.getResults())
-            return fail("mathematical realization target or signature differs");
-          usedRealizations.insert(definition);
-        }
-        if (!callee || (!realized && callee.getValue() != target.symbol) ||
-            !attributes(
-                *actual,
-                owned
-                    ? std::initializer_list<StringRef>{"callee", "site", "role"}
-                : local ? std::initializer_list<StringRef>{"callee", "site"}
-                        : std::initializer_list<StringRef>{"callee"}) ||
-            (local && !string(*actual, "site", site)) ||
+        SmallVector<StringRef> attrs{"callee"};
+        if (owned)
+          attrs.append({"site", "role"});
+        else if (scoped)
+          attrs.push_back(math ? "site" : "runtime.site");
+        if (!callee || callee.getValue() != target.symbol ||
+            !attributes(*actual, attrs) ||
+            ((owned || scoped) &&
+             !string(*actual, scoped && !math ? "runtime.site" : "site",
+                     site)) ||
             (owned && (!call->owner ||
                        !string(*actual, "role", nativeRoleName(*call->owner)))))
           return fail("call target, mode, owner or site differs");
-        result = Values(actual->getResults());
+        if (!scoped)
+          result = Values(actual->getResults());
       } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
-        if (cursor == block.end())
+        if (scoped ? scoped->atEnd() : cursor == block.end())
           return fail("omitted finite computation");
+        auto *occurrence = scoped ? scoped->peek() : &*cursor;
+        if (scoped && !account())
+          return false;
         auto first = cursor;
         auto compared = take(compareFinite(
             project, source, *finite,
             source.values[op.results.front().index].type, values, block, cursor,
             finiteDefinitions, usedFiniteDefinitions, layouts,
             "finite_" + decl.symbol + "_" + site, site, limits,
-            report.operations, remaining));
+            report.operations, remaining, scoped));
         if (!compared)
           return false;
-        for (auto emitted = first; emitted != cursor; ++emitted)
-          if (!record(*emitted, op.span))
+        if (scoped) {
+          accounted = scoped->consumed();
+          if (!record(*occurrence, op.span))
             return false;
+        } else
+          for (auto emitted = first; emitted != cursor; ++emitted)
+            if (!record(*emitted, op.span))
+              return false;
         result = std::move(*compared);
       } else if (auto *bulk = std::get_if<BulkApplication>(&op.action)) {
         auto &target = project.declarations()[bulk->callee.index];
         if (source.mode != Body::Mode::Local ||
             target.kind != Declaration::Kind::Math)
           return fail("map mode or helper kind differs");
-        auto *actual = next(block, cursor, op.span, "local.apply",
-                            flatten(bulk->operands), leaves.size());
-        if (!actual)
+        auto compared = map(target, *bulk, flatten(bulk->operands), leaves,
+                            block, cursor, op.span, site);
+        if (!compared)
           return false;
-        auto callee = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
-        auto found = callee ? maps.find(callee.getValue().str()) : maps.end();
-        if (found == maps.end())
-          return fail("missing map realization");
-        auto *definition = found->second;
-        auto helper =
-            definition->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-        auto type = definition->getAttrOfType<mlir::TypeAttr>("function_type");
-        auto rowwise =
-            definition->getAttrOfType<mlir::DenseBoolArrayAttr>("rowwise");
-        auto signature =
-            type ? mlir::dyn_cast<mlir::FunctionType>(type.getValue())
-                 : mlir::FunctionType();
-        if (!helper || helper.getValue() != target.symbol || !signature ||
-            !rowwise || !llvm::equal(rowwise.asArrayRef(), bulk->mapped) ||
-            actual->getOperandTypes() != signature.getInputs() ||
-            actual->getResultTypes() != signature.getResults() ||
-            !attributes(*actual, {"callee", "site"}) ||
-            !string(*actual, "site", site))
-          return fail("map helper, rows, signature or site differs");
-        usedMaps.insert(definition);
-        result = Values(actual->getResults());
+        result = std::move(*compared);
       } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
         const auto &port = source.services[query->service.index];
         SmallVector<mlir::Value> operands{services[query->service.index]};
@@ -831,39 +1147,34 @@ class Comparator {
         if (source.mode == Body::Mode::Math ||
             protocol != check->owner.has_value())
           return fail("require owner does not match its body mode");
-        auto *actual = next(
-            block, cursor, op.span, protocol ? "protocol.guard" : "local.if",
-            values[check->condition.index], 0, protocol ? 0 : 2);
-        if (!actual)
-          return false;
         if (protocol) {
-          if (!attributes(*actual, {"owner", "site"}) ||
+          auto *actual = next(block, cursor, op.span, "protocol.guard",
+                              values[check->condition.index], 0);
+          if (!actual || !attributes(*actual, {"owner", "site"}) ||
               !string(*actual, "owner", nativeRoleName(*check->owner)) ||
               !string(*actual, "site", site))
             return fail("require owner or occurrence differs");
         } else {
-          if (!attributes(*actual, {"site"}) || !string(*actual, "site", site))
-            return fail("require occurrence differs");
-          for (unsigned i = 0; i < 2; ++i) {
-            auto &region = actual->getRegion(i);
-            if (!llvm::hasSingleElement(region) ||
-                region.front().getNumArguments() != 0 ||
-                !llvm::hasSingleElement(region.front()))
-              return fail("require branch structure differs");
-            auto &terminator = region.front().front();
-            if (terminator.getNumOperands() || terminator.getNumResults() ||
-                terminator.getNumRegions() ||
-                terminator.getName().getStringRef() !=
-                    (i ? "local.stop" : "local.yield"))
-              return fail("require branch outcome differs");
-            if (i ? (!attributes(terminator, {"site", "reason"}) ||
-                     !string(terminator, "site", site + "_reject") ||
-                     !string(terminator, "reason", "reject"))
-                  : !attributes(terminator, {}))
-              return fail("require rejection reason or occurrence differs");
-            if (!record(terminator, op.span))
-              return false;
-          }
+          Values outputs;
+          auto arm = [&](mlir::func::CallOp call, unsigned index) {
+            auto function = this->region(call, op.span);
+            if (!function || function.getNumArguments() != 1 ||
+                !mlir::cast<exec::OutcomeType>(
+                     function.getResultTypes().front())
+                     .getPayload()
+                     .empty())
+              return fail("require branch signature differs");
+            return withScoped(function, [&] {
+              auto cursor = function.front().begin();
+              return index
+                         ? stop(op.span, "reject", site + "_reject")
+                         : finish(function.front(), cursor, op.span, {}, true);
+            });
+          };
+          if (!scoped->conditional(values[check->condition.index].front(), {},
+                                   site, arm, outputs) ||
+              !outputs.empty() || !account())
+            return fail("require control or outcome differs");
         }
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
@@ -980,27 +1291,35 @@ class Comparator {
             input.erase(input.begin());
           }
         }
-        auto *actual =
-            next(block, cursor, op.span,
-                 match                                      ? "local.match"
-                 : control->kind == LocalControl::Kind::For ? "local.for"
-                                                            : "local.if",
-                 input, leaves.size(), control->regions.size());
-        if (!actual)
-          return false;
-        if (!attributes(
-                *actual,
-                match ? std::initializer_list<StringRef>{"site", "alternatives"}
-                      : std::initializer_list<StringRef>{"site"}) ||
-            !string(*actual, "site", site) ||
-            (match && !strings(actual->getAttr("alternatives"), labels)))
-          return fail("control site or alternative order differs");
-        for (unsigned i = 0; i < control->regions.size(); ++i)
-          if (!llvm::hasSingleElement(actual->getRegion(i)) ||
-              !body(decl, *control->regions[i], actual->getRegion(i).front(),
-                    nullptr, true))
-            return false;
-        result = Values(actual->getResults());
+        bool loop = control->kind == LocalControl::Kind::For;
+        if (loop && input.size() < 2 + leaves.size())
+          return fail("loop state interface is incomplete");
+        unsigned forwarded = loop ? input.size() - 2 - leaves.size() : 0;
+        auto arm = [&](mlir::func::CallOp call, unsigned index) {
+          auto function = this->region(call, op.span);
+          if (!function || index >= control->regions.size() ||
+              !types(mlir::cast<exec::OutcomeType>(
+                         function.getResultTypes().front())
+                         .getPayload(),
+                     leaves))
+            return fail("control region result signature differs");
+          return body(decl, *control->regions[index], function.front(), nullptr,
+                      true, forwarded);
+        };
+        bool agrees =
+            match  ? scoped->match(input.front(),
+                                   mlir::ValueRange(input).drop_front(), labels,
+                                   site, arm, result)
+            : loop ? scoped->loop(
+                         input[0], input[1],
+                         mlir::ValueRange(input).slice(2, leaves.size()),
+                         mlir::ValueRange(input).drop_front(2 + leaves.size()),
+                         false, site, arm, result)
+                   : scoped->conditional(input.front(),
+                                         mlir::ValueRange(input).drop_front(),
+                                         site, arm, result);
+        if (!agrees || !account())
+          return fail("control occurrence, transfer or state differs");
       } else
         return fail("source operation has no comparison rule");
       if (result.size() != leaves.size())
@@ -1025,29 +1344,29 @@ class Comparator {
         offset += count;
       }
     }
-    if (source.stopped) {
-      auto *stop = next(block, cursor, decl.span, "local.stop", {}, 0);
-      if (!stop)
-        return false;
-      if (!attributes(*stop, {"site", "reason"}) ||
-          !string(*stop, "site", "stop" + std::to_string(siteOrdinal++)) ||
-          !string(*stop, "reason", source.stopReason))
-        return fail("stop reason or site differs");
-    } else {
-      auto *ret =
-          next(block, cursor, decl.span,
-               region && source.mode == Body::Mode::Protocol ? "protocol.yield"
-               : region                                      ? "local.yield"
-               : source.mode == Body::Mode::Protocol         ? "protocol.return"
-               : source.mode == Body::Mode::Local            ? "local.return"
-                                                             : "func.return",
-               flatten(source.results), 0);
-      if (!ret)
-        return false;
-      if (!attributes(*ret, {}))
-        return fail("extra return attributes");
+    if (scoped) {
+      if (source.stopped)
+        return stop(decl.span, source.stopReason,
+                    "stop" + std::to_string(siteOrdinal++));
+      auto results = flatten(source.results);
+      if (forwarded > results.size() ||
+          forwarded > block.getNumArguments() - 1 ||
+          mlir::ValueRange(results).take_back(forwarded) !=
+              block.getArguments().take_back(forwarded))
+        return fail("loop invariant forwarding differs");
+      results.resize(results.size() - forwarded);
+      return finish(block, cursor, decl.span, results, region);
     }
-    return cursor == block.end() || fail("extra operations after source body");
+    if (source.stopped)
+      return fail("stopped body requires scoped execution");
+    auto *ret =
+        next(block, cursor, decl.span,
+             region && source.mode == Body::Mode::Protocol ? "protocol.yield"
+             : source.mode == Body::Mode::Protocol         ? "protocol.return"
+                                                           : "func.return",
+             flatten(source.results), 0);
+    return (ret && attributes(*ret, {}) && cursor == block.end()) ||
+           fail("extra return attributes or operations after source body");
   }
 
   bool construction(const Declaration &definition,
@@ -1198,8 +1517,6 @@ public:
     SmallVector<mlir::Operation *> functions;
     std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
-    std::set<std::string> realizedHelpers;
-    std::set<std::pair<std::string, std::vector<bool>>> mappedHelpers;
     for (auto &op : native.getBody().front()) {
       auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
       if (name && name.getValue().starts_with("finite_")) {
@@ -1222,31 +1539,12 @@ public:
                 op, {"sym_name", "contract", "arguments", "implementation"}) ||
             !name || !bindings.emplace(name.getValue().str(), &op).second)
           return error("source.correspondence", "invalid or duplicate binding");
-      } else if (op.getName().getStringRef() == "local.realize") {
-        auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
-        auto helper = op.getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-        if (!name || !helper ||
-            !realizedHelpers.insert(helper.getValue().str()).second ||
-            !attributes(op, {"sym_name", "helper", "function_type"}) ||
-            op.getNumOperands() || op.getNumResults() || op.getNumRegions() ||
-            !realizations.emplace(name.getValue().str(), &op).second)
-          return error("source.correspondence",
-                       "invalid or duplicate realization");
-      } else if (op.getName().getStringRef() == "algebra.map_realize") {
-        auto name = op.getAttrOfType<mlir::StringAttr>("sym_name");
-        auto helper = op.getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-        auto rowwise = op.getAttrOfType<mlir::DenseBoolArrayAttr>("rowwise");
-        if (!name || !helper || !rowwise ||
-            !mappedHelpers
-                 .emplace(helper.getValue().str(),
-                          std::vector<bool>(rowwise.asArrayRef().begin(),
-                                            rowwise.asArrayRef().end()))
-                 .second ||
-            !attributes(op,
-                        {"sym_name", "helper", "function_type", "rowwise"}) ||
-            op.getNumOperands() || op.getNumResults() || op.getNumRegions() ||
-            !maps.emplace(name.getValue().str(), &op).second)
-          return error("source.correspondence", "invalid or duplicate map");
+      } else if (op.hasAttr("runtime.region")) {
+        if (!name || !outlined.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence", "duplicate outlined control");
+      } else if (name && name.getValue().starts_with("zkl_map_")) {
+        if (!maps.emplace(name.getValue().str(), &op).second)
+          return error("source.correspondence", "duplicate mapped adapter");
       } else
         functions.push_back(&op);
     }
@@ -1285,13 +1583,13 @@ public:
       auto &function = *functions[index++];
       bool protocol = decl.kind == Declaration::Kind::Protocol,
            local = decl.kind == Declaration::Kind::Local;
-      if (function.getName().getStringRef() != (protocol ? "protocol.func"
-                                                : local  ? "local.func"
-                                                         : "func.func") ||
+      if (function.getName().getStringRef() !=
+              (protocol ? "protocol.func" : "func.func") ||
           !string(function, "sym_name",
                   decl.relation ? formulaSymbol(decl) : decl.symbol) ||
           function.getNumRegions() != 1 ||
-          !llvm::hasSingleElement(function.getRegion(0)))
+          (local ? function.getRegion(0).empty()
+                 : !llvm::hasSingleElement(function.getRegion(0))))
         return error("source.correspondence",
                      "definition identity or structure differs");
       SmallVector<StringRef> names =
@@ -1304,20 +1602,26 @@ public:
                                                       "origin"}
           : local
               ? std::initializer_list<StringRef>{"sym_name", "function_type",
-                                                 "logical_origin"}
+                                                 "runtime.origin", "no_inline",
+                                                 "sym_visibility"}
               : std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "sym_visibility"};
       auto conditions = take(flattenDataPreconditions(decl, layouts));
       if (!conditions)
         return std::move(failure);
+      if (local)
+        for (auto &condition : *conditions) {
+          ++condition.left;
+          ++condition.right;
+        }
       if (!conditions->empty())
         names.push_back("data.preconditions");
       if (!compareDataPreconditions(function, *conditions))
         return error("source.correspondence",
                      "helper data preconditions differ");
       if (!attributes(function, names) ||
-          (!protocol && !local &&
-           !string(function, "sym_visibility", "private")))
+          (!protocol && !string(function, "sym_visibility", "private")) ||
+          (local && !function.getAttrOfType<mlir::UnitAttr>("no_inline")))
         return error("source.correspondence", "definition attributes differ");
       if (protocol) {
         auto origin = take(encodeProtocolOrigin(project, decl));
@@ -1328,7 +1632,7 @@ public:
           return error("source.correspondence", "protocol origin differs");
       }
       if (local) {
-        auto origin = function.getAttrOfType<mlir::ArrayAttr>("logical_origin");
+        auto origin = function.getAttrOfType<mlir::ArrayAttr>("runtime.origin");
         if (!origin || origin.size() != 2 || !strings(origin[1], {}) ||
             !mlir::isa<mlir::StringAttr>(origin[0]) ||
             mlir::cast<mlir::StringAttr>(origin[0]).getValue() !=
@@ -1341,6 +1645,12 @@ public:
                            : mlir::FunctionType();
       if (!signature)
         return error("source.correspondence", "missing definition signature");
+      if (local && (!signature.getNumInputs() ||
+                    !mlir::isa<runtime::ScopeType>(signature.getInput(0)) ||
+                    signature.getNumResults() != 1 ||
+                    !mlir::isa<exec::OutcomeType>(signature.getResult(0))))
+        return error("source.correspondence",
+                     "scoped definition signature differs");
       for (bool input : {true, false}) {
         std::vector<LayoutLeaf> leaves;
         auto roles = function.getAttrOfType<mlir::ArrayAttr>(
@@ -1359,6 +1669,11 @@ public:
         }
         auto nativeTypes =
             input ? signature.getInputs() : signature.getResults();
+        if (local)
+          nativeTypes =
+              input ? nativeTypes.drop_front()
+                    : mlir::cast<exec::OutcomeType>(signature.getResult(0))
+                          .getPayload();
         auto serviceCount = input ? decl.services.size() : 0;
         if (nativeTypes.size() != leaves.size() + serviceCount)
           return error("source.correspondence",
@@ -1491,7 +1806,7 @@ public:
     if (!relations.empty())
       return error("source.correspondence", "extra relation declaration");
     if (index != functions.size() || usedBindings.size() != bindings.size() ||
-        usedRealizations.size() != realizations.size() ||
+        usedOutlined.size() != outlined.size() ||
         usedMaps.size() != maps.size() ||
         usedFiniteDefinitions.size() != finiteDefinitions.size())
       return error("source.correspondence",

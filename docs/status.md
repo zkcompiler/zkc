@@ -62,9 +62,14 @@ callees, occurrences and ordered operands. Source helper return packaging is
 distinct from charged native completion; outlined control yields retain their
 tick. Plain mathematical functions can share that source table; all are checked
 by the mathematical owner with their actual finite-domain and bound premises.
-Their equations still need separate source correspondence. This covers callable
-inventory and the scoped helper component, not mathematical/finite requests or
-the authored-source emitter migration. See the
+Their equations still need separate source correspondence. Ordinary source
+emission and independent comparison now use this scoped profile. Protocol
+repeat analysis reads exact continuing affine roots from its admitted Program
+view. Structured export preserves actual SSA binding positions and checked
+control, and the independent Lean reader exercises fresh branches, loops,
+stops, mathematical calls and ordered finite callbacks. Participant preparation,
+physical selection and publication still require migration before this becomes
+a complete default source-to-executable path. See the
 [source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
 
 Typed `exec.compute` formation resolves actual private source mathematical

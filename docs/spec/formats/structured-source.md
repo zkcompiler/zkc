@@ -18,6 +18,24 @@ The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
 
+Ordinary source helpers use scoped `func.func`/CF bodies. Before exporting
+their logical `local` meaning, the execution reader checks the complete actual
+closure, scope ownership, outcome dispatch, failure propagation and transfer
+cleanup. The exporter consumes that checked control association and the
+original SSA operands. It does not infer a body from `runtime.origin`, strip
+scope ports from an unchecked function, or rebuild a Local-dialect module.
+Private outlined control bodies become closed formal regions. Distinct formal
+arguments remain distinct even when their caller's actual arguments alias.
+Invariant loop captures retained by the parent scope are explicitly forwarded
+in the formal region's result tuple.
+
+Supported `exec.compute` and ordered `exec.fold` occurrences retain their actual
+mathematical helper or domain/callback references. Their logical signatures
+become private `realize` or `finite` declarations in the export; generated names
+identify these declarations and supply no mathematical evidence. The source
+hash still identifies the original, unexpanded MLIR. This checked export and
+independent Lean admission are not a native execution correspondence theorem.
+
 ## Envelope and types
 
 The current format is an exact tagged array, `zkc.structured-source/0`:
@@ -32,8 +50,10 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
-All ten slots are required, including empty tables. Each declaration category preserves its native encounter
-order. There is no cross-category declaration-order field.
+All ten slots are required, including empty tables. Each declaration category
+preserves its native encounter order. Private computation declarations derived
+from scoped bodies follow the native declarations in reader encounter order.
+There is no cross-category declaration-order field.
 
 | Type | Native interpretation |
 |---|---|

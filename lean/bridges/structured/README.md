@@ -25,6 +25,13 @@ of canonical KoalaBear values; installed execution is checked separately by
 
 ## Reproduce
 
+`scoped.py` exports fresh source-language helpers through the scoped Func/CF
+profile and checks them with the independent Lean reader and evaluator. Its
+bounded cases cover branches, stopped arms, invariant loop captures,
+mathematical requests, ordered finite callbacks and malformed formal binders.
+It checks logical outcomes; it does not claim native execution or resource
+equivalence. `lean-native` includes this suite in its bridge stage.
+
 From the repository root in the pinned development environment:
 
 ```sh
@@ -34,6 +41,8 @@ python3 lean/bridges/structured/check.py \
   --report build/experiments/structured-source/report.json
 python3 lean/bridges/structured/open_protocol.py \
   --report build/experiments/structured-open/report.json
+python3 lean/bridges/structured/scoped.py \
+  --report build/experiments/structured-scoped/report.json
 ```
 
 The suites' retained subjects (each one's Entry, sources and Lean data module)

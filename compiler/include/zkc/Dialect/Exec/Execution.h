@@ -1,11 +1,16 @@
 #ifndef ZKC_DIALECT_EXEC_EXECUTION_H
 #define ZKC_DIALECT_EXEC_EXECUTION_H
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Program/Model.h"
+#include "zkc/Program/Admission.h"
 #include "llvm/Support/Error.h"
+#include <map>
 
 namespace zkc::protocol {
+/// Select the execution checking owner from the signature or execution
+/// markers, including malformed partial signatures. This is not admission.
+bool isScopedExecutionFunction(mlir::func::FuncOp function);
 /// Reconstruct native local definitions from the bounded Func/CF execution
 /// profile. Read actual bodies, scopes, bindings and outcome edges; refuse
 /// unconsumed blocks and unchecked callees. The returned model is independently
@@ -45,6 +50,32 @@ readSourceExecutionDefinitions(mlir::Operation *symbolTable);
 /// This does not establish source correspondence or permit unresolved calls in
 /// an executable artifact.
 llvm::Error verifySourceExecutionClosure(mlir::Operation *symbolTable);
+/// Transient admitted logical view for analyses before realization. Computation
+/// signatures are derived from the actual checked definitions and retain finite
+/// callback edges. They are not executable declarations or mathematical
+/// equations. Consumers must not publish this view as an executable program.
+struct SourceExecutionStep {
+  mlir::Operation *operation = nullptr;
+  llvm::SmallVector<mlir::Value> inputs, outputs;
+  llvm::SmallVector<mlir::func::FuncOp> regions;
+  bool conditional = false;
+};
+struct SourceExecutionClosure {
+  program::LocalDefinitions definitions;
+  std::vector<LocalRealization> computations;
+  /// Actual occurrences from which private computation signatures were read.
+  /// These references borrow the immutable source IR; a changed body or source
+  /// invalidates the view. They supply association, not mathematical evidence.
+  std::map<std::string, mlir::Operation *> computationOrigins;
+  /// Structured association recovered while checking the actual CFG. Values
+  /// are the original SSA values, including distinct closed-region formals
+  /// even when their actual captures alias. Administrative scope/outcome edges
+  /// are consumed by the reader, not silently skipped by downstream clients.
+  /// Like computationOrigins, this view borrows the immutable source IR.
+  std::map<std::string, std::vector<SourceExecutionStep>> bodies;
+};
+llvm::Expected<SourceExecutionClosure>
+readSourceExecutionClosure(mlir::Operation *symbolTable);
 /// Independently compare current actual CFG with admitted native definitions.
 /// Allows SSA renaming; checks all actual bodies and bindings without calling
 /// the reconstruction reader or replaying emission. No source theorem is

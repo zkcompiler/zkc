@@ -5,30 +5,12 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/StringSet.h"
 
 namespace zkc::protocol::detail {
-// Select a checking owner, never grant admission from an annotation. Malformed
-// or partial execution signatures must not escape into the mathematical set.
-inline bool isScopedExecutionFunction(mlir::func::FuncOp function) {
-  using namespace mlir;
-  if (function->hasAttr("runtime.origin") ||
-      function->hasAttr("runtime.region"))
-    return true;
-  auto raw = function->getAttrOfType<TypeAttr>("function_type");
-  auto type = raw ? dyn_cast<FunctionType>(raw.getValue()) : FunctionType();
-  if (!type)
-    return true;
-  auto executionType = [](Type type) {
-    return isa<runtime::ScopeType, runtime::TransferType, exec::OutcomeType,
-               exec::StopType>(type);
-  };
-  return llvm::any_of(type.getInputs(), executionType) ||
-         llvm::any_of(type.getResults(), executionType);
-}
-
 // Formation shared by the two independent body checks. Do not verify the
 // enclosing operation: its region verifier may be the consumer of this API.
 // Every direct Func is owned, including dormant roots and outlined regions.

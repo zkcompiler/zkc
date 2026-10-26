@@ -18,11 +18,13 @@ class Analysis {
   std::set<std::string> active;
   uint64_t &remaining;
   unsigned depthLimit;
-  Error failure = Error::success();
+  std::string refusalCode, refusalDetail;
 
   bool fail(StringRef code, StringRef detail) {
-    if (!failure)
-      failure = error(code, detail);
+    if (refusalCode.empty()) {
+      refusalCode = code.str();
+      refusalDetail = detail.str();
+    }
     return false;
   }
   bool charge(uint64_t amount) {
@@ -247,7 +249,7 @@ public:
   }
   const ResourceOriginSummary *get(const std::string &name,
                                    unsigned level = 1) {
-    if (failure || !depth(level) || !charge(1))
+    if (!refusalCode.empty() || !depth(level) || !charge(1))
       return nullptr;
     if (auto found = summaries.find(name); found != summaries.end()) {
       if (!depth(level, found->second.depth))
@@ -325,12 +327,50 @@ public:
     return &summaries.emplace(name, std::move(summary)).first->second;
   }
   Error takeFailure() {
-    if (failure)
-      return std::move(failure);
+    if (!refusalCode.empty())
+      return error(refusalCode, refusalDetail);
     return error("mathematical-formation", "resource-origin analysis refused");
+  }
+  Expected<ResourceOriginSummary> query(StringRef function, unsigned level) {
+    const auto *result = get(function.str(), level);
+    if (!result || !charge(result->roots.size()))
+      return takeFailure();
+    return *result;
   }
 };
 } // namespace
+
+struct ResourceOriginAnalysis::Impl {
+  LocalDefinitions definitions;
+  std::vector<protocol::LocalRealization> realizations;
+  Analysis analysis;
+  Impl(LocalDefinitions definitions,
+       std::vector<protocol::LocalRealization> realizations,
+       uint64_t &remaining, unsigned depthLimit)
+      : definitions(std::move(definitions)),
+        realizations(std::move(realizations)),
+        analysis(this->definitions, this->realizations, remaining, depthLimit) {
+  }
+};
+ResourceOriginAnalysis::ResourceOriginAnalysis(std::unique_ptr<Impl> impl)
+    : impl(std::move(impl)) {}
+ResourceOriginAnalysis::~ResourceOriginAnalysis() = default;
+Expected<std::unique_ptr<ResourceOriginAnalysis>>
+ResourceOriginAnalysis::create(
+    LocalDefinitions definitions,
+    std::vector<protocol::LocalRealization> realizations, uint64_t &remaining,
+    unsigned depthLimit) {
+  if (auto error =
+          protocol::admitNativeLocalDefinitions(definitions, realizations))
+    return std::move(error);
+  return std::unique_ptr<ResourceOriginAnalysis>(new ResourceOriginAnalysis(
+      std::make_unique<Impl>(std::move(definitions), std::move(realizations),
+                             remaining, depthLimit)));
+}
+Expected<ResourceOriginSummary> ResourceOriginAnalysis::get(StringRef function,
+                                                            unsigned depth) {
+  return impl->analysis.query(function, depth);
+}
 
 Error detail::verifyFiniteResourceOrigins(
     const LocalDefinitions &definitions,
@@ -354,13 +394,11 @@ analyzeResourceOrigins(const LocalDefinitions &definitions,
                        ArrayRef<protocol::LocalRealization> realizations,
                        StringRef function, uint64_t &remaining,
                        unsigned depthLimit) {
-  if (auto error =
-          protocol::admitNativeLocalDefinitions(definitions, realizations))
-    return std::move(error);
-  Analysis analysis(definitions, realizations, remaining, depthLimit);
-  const auto *result = analysis.get(function.str());
-  if (!result)
-    return analysis.takeFailure();
-  return *result;
+  auto analysis = ResourceOriginAnalysis::create(
+      definitions, {realizations.begin(), realizations.end()}, remaining,
+      depthLimit);
+  if (!analysis)
+    return analysis.takeError();
+  return (*analysis)->get(function);
 }
 } // namespace zkc::program
