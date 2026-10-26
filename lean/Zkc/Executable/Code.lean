@@ -181,4 +181,20 @@ calls charges, its return included. -/
 def Lowered.total? (lowered : Lowered) : Option Nat := (Code.static lowered.code).map (· + 1)
 
 
+/-- What code without loops charges: the instructions its items charge, a helper
+call its call and at most `bound` for its body; `none` for code with a loop or a
+helper without a bound. -/
+def Code.charges (bound : String → Option Nat) : List Code → Option Nat
+  | [] => some 0
+  | .charge count :: rest => (Code.charges bound rest).map (count + ·)
+  | .step _ charged :: rest => (Code.charges bound rest).map (charged + ·)
+  | .helper instruction :: rest =>
+      match instruction.operation with
+      | .call name =>
+          match bound name, Code.charges bound rest with
+          | some most, some others => some (1 + most + others)
+          | _, _ => none
+      | _ => none
+  | .loop .. :: _ => none
+
 end Zkc.Executable

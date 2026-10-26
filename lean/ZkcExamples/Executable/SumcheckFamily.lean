@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Executable.Loops
 public import ZkcExamples.Executable.SumcheckShape
 public import ZkcExamples.Structured.PrimitiveRows
 public import Zkc.Executable.NormalizationSoundness
