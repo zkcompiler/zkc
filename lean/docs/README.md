@@ -88,3 +88,5 @@ that all native behavior already has a Lean model.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.
+
+- [Nominal data and execution boundaries](spec/nominal-data.md)
