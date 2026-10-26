@@ -31,7 +31,7 @@ theorem lossless (field : String) :
         have recovered : received (G := G) field origin (.message origin (.field field (0 : F))) = some 0 := by
           simp [received_message, Domain.Payload.value]
         have recognized := congrArg Option.isSome ((decoded (.field field 0)).symm.trans recovered)
-        simp only [Option.isSome_map, Domain.Payload.value_isSome, Domain.Payload.ty,
+        simp only [Option.isSome_map, Domain.Payload.value_isSome,
           Option.isSome_some] at recognized
         exact (of_decide_eq_true recognized).symm
       subst ty

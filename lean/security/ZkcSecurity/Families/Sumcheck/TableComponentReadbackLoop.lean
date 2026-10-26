@@ -110,8 +110,8 @@ theorem loop_readback (plan : Plan) (program : Structured.Program)
     rw [nextEntries]
     exact leftRead
   · exact rightRead
-  · simp [Domain.sortsMatch, producerCarried, Domain.Value.sort, Domain.Payload.ty]
-  · simp [Domain.sortsMatch, validatorCarried, Domain.Value.sort, Domain.Payload.ty]
+  · simp [Domain.sortsMatch, producerCarried, Domain.Value.sort]
+  · simp [Domain.sortsMatch, validatorCarried, Domain.Value.sort]
   · exact ⟨next, sameOriginal, by simpa using Nat.le_trans (Nat.le_succ rest.length) remainingBound,
       nextHonest, rfl, rfl⟩
 

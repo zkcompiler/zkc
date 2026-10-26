@@ -100,7 +100,7 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     queryOrigin, templateOrigin, Template.origin, Template.qualify, Template.repeats,
     Template.applicationPrefix, atCoordinates, Context.query, Context.role, Origin.query,
     Structured.qualifyProtocolSite, context, query, decimal, decimalDigit, Domain.read,
-    Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, Domain.Payload.ty, drawRequest, Request.draw,
+    Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, drawRequest, Request.draw,
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
     Domain.Payload.value, bind, pure,

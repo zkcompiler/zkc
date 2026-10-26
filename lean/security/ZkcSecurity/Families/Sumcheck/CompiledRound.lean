@@ -177,7 +177,7 @@ theorem reading
       (block plan program context field captured.length (input field context.suite captured index point claim history))
       (presented field context.suite captured index point claim history
         lowOrigin highOrigin queryOrigin deliveryOrigin request) := by
-  simp only [block, presented, Domain.View.sequence, Domain.View.receive, Domain.dataType,
+  simp only [block, presented, Domain.View.sequence, Domain.View.receive, Domain.dataType, Ty.isService, Bool.not_false,
     true_and, ite_true, PIR.Process.bind]
   apply ReadingTo.checkpoint
   apply ReadingTo.receive (I := TableComponent.Nominal.signature F field) (.field field)
@@ -187,10 +187,10 @@ theorem reading
   intro payload low decoded
   have same := Domain.Payload.ofValue_value decoded
   have payload_eq : payload = .field field low := by
-    simpa only [Domain.Payload.ofValue, Option.some.injEq] using same.symm
+    simpa [Domain.Payload.ofValue, Ty.isService] using same.symm
   subst payload
-  simp [PIR.Process.bind, Domain.Value.encode, Domain.Payload.ofValue, Domain.View.append, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, input, List.append_assoc, Domain.View.indicesEmpty, Domain.View.indicesAppend,
+  simp [PIR.Process.bind, Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, Domain.View.append, Domain.sortsMatch,
+    Domain.Value.sort, input, List.append_assoc, Domain.View.indicesEmpty, Domain.View.indicesAppend,
     Domain.View.observe, lowFound, lowMessage]
   repeat' first | apply ReadingTo.checkpoint | apply ReadingTo.observe
   apply ReadingTo.receive (I := TableComponent.Nominal.signature F field) (.field field)
@@ -200,17 +200,17 @@ theorem reading
   intro payload high decoded
   have same := Domain.Payload.ofValue_value decoded
   have payload_eq : payload = .field field high := by
-    simpa only [Domain.Payload.ofValue, Option.some.injEq] using same.symm
+    simpa [Domain.Payload.ofValue, Ty.isService] using same.symm
   subst payload
   simp [PIR.Process.bind, Domain.View.append, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, List.append_assoc, Domain.View.calculation, Domain.read, Domain.View.guard,
+    Domain.Value.sort, List.append_assoc, Domain.View.calculation, Domain.read, Domain.View.guard,
     Domain.Calculations.fieldAdd (F := F) (G := G),
     Domain.Calculations.fieldEqual (F := F) (G := G), highFound, highMessage]
   repeat' first | apply ReadingTo.checkpoint | apply ReadingTo.observe
   by_cases boundary : claim = low + high
   · simp [boundary, PIR.Process.bind, Domain.View.challenge, queryFound, request,
       Domain.View.helper, append, Domain.read, Domain.View.append, Domain.sortsMatch,
-      Domain.Value.sort, Domain.Payload.ty, List.append_assoc, deliveryFound, deliveryMessage,
+      Domain.Value.sort, List.append_assoc, deliveryFound, deliveryMessage,
       Domain.Calculations.fieldConstant (F := F) (G := G),
       Domain.Calculations.fieldSubtract (F := F) (G := G),
       Domain.Calculations.fieldMultiply (F := F) (G := G),
@@ -244,26 +244,26 @@ theorem coherent
     CoherentTo Post history
       (block plan program context field captured.length
         (input field context.suite captured index point claim history)) := by
-  simp only [block, Domain.View.sequence, Domain.View.receive, Domain.dataType,
+  simp only [block, Domain.View.sequence, Domain.View.receive, Domain.dataType, Ty.isService, Bool.not_false,
     true_and, ite_true, PIR.Process.bind]
   apply CoherentTo.checkpoint
   apply CoherentTo.receive
   intro low
-  simp [PIR.Process.bind, Domain.Value.encode, Domain.Payload.ofValue, Domain.View.append, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, input, List.append_assoc, Domain.View.indicesEmpty, Domain.View.indicesAppend,
+  simp [PIR.Process.bind, Domain.Value.encode, Domain.Payload.ofValue, Ty.isService, Domain.View.append, Domain.sortsMatch,
+    Domain.Value.sort, input, List.append_assoc, Domain.View.indicesEmpty, Domain.View.indicesAppend,
     Domain.View.observe, lowFound, lowMessage]
   repeat' first | apply CoherentTo.checkpoint | apply CoherentTo.observe
   apply CoherentTo.receive
   intro high
   simp [PIR.Process.bind, Domain.View.append, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, List.append_assoc, Domain.View.calculation, Domain.read, Domain.View.guard,
+    Domain.Value.sort, List.append_assoc, Domain.View.calculation, Domain.read, Domain.View.guard,
     Domain.Calculations.fieldAdd (F := F) (G := G),
     Domain.Calculations.fieldEqual (F := F) (G := G), highFound, highMessage]
   repeat' first | apply CoherentTo.checkpoint | apply CoherentTo.observe
   by_cases boundary : claim = low + high
   · simp [boundary, PIR.Process.bind, Domain.View.challenge, queryFound, request,
       Domain.View.helper, append, Domain.read, Domain.View.append, Domain.sortsMatch,
-      Domain.Value.sort, Domain.Payload.ty, List.append_assoc, deliveryFound, deliveryMessage,
+      Domain.Value.sort, List.append_assoc, deliveryFound, deliveryMessage,
       Domain.Calculations.fieldConstant (F := F) (G := G),
       Domain.Calculations.fieldSubtract (F := F) (G := G),
       Domain.Calculations.fieldMultiply (F := F) (G := G),

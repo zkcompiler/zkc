@@ -86,13 +86,12 @@ def validatorSubject (subject : Subject model original imported selected)
 The application remains arbitrary; equality with completeness uses originalExport. -/
 theorem validatorCodec_eq (subject : Subject model original imported selected)
     (application : String) (statement : Values model.toCarriers.Value subject.selection.publics) :
-    (FiatShamir.DomainReduction.policyCodec subject.validatorArtifacts.publics
-      subject.validatorArtifacts.participant.policy.publicInputs
-      (FiatShamir.DomainReduction.policyArity subject.validatorCompiled) application).encode statement =
+    (FiatShamir.DomainReduction.policyCodec subject.validatorCompiled application).encode statement =
       Domain.PublicBinding.history application selected.policy.publicInputs statement
-        subject.publicBindingArity := by
-  simp only [FiatShamir.DomainReduction.policyCodec_encode, validatorArtifacts,
-    AuthoredPair.admitted_validator_policy subject.admitted]
+        subject.publicBindingArity subject.publicBindingData := by
+  change Domain.PublicBinding.history application selected.artifacts.validator.policy.publicInputs
+    statement _ _ = _
+  simp only [AuthoredPair.admitted_validator_policy subject.admitted]
 
 /-- Source/public alignment is inherited from the retained admitted Entry.
 Absent private inputs keep their coordinates; missing public inputs refuse. -/
@@ -131,13 +130,9 @@ theorem runtimeInputs_binding (subject : Subject model original imported selecte
       project (encodeInputs inputs) selected.policy.publicInputs = some validator ∧
       Domain.encodeValues statement = some validator ∧
       actualProducer = producer ++ [.transcript selected.policy.suite
-        ((FiatShamir.DomainReduction.policyCodec subject.validatorArtifacts.publics
-          subject.validatorArtifacts.participant.policy.publicInputs
-          (FiatShamir.DomainReduction.policyArity subject.validatorCompiled) subject.originalExport).encode statement)] ∧
+        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement)] ∧
       actualValidator = validator ++ [.transcript selected.policy.suite
-        ((FiatShamir.DomainReduction.policyCodec subject.validatorArtifacts.publics
-          subject.validatorArtifacts.participant.policy.publicInputs
-          (FiatShamir.DomainReduction.policyArity subject.validatorCompiled) subject.originalExport).encode statement)] := by
+        ((FiatShamir.DomainReduction.policyCodec subject.validatorCompiled subject.originalExport).encode statement)] := by
   simp only [validatorCodec_eq]
   cases interfaceFound : entryInterface original with
   | none => simp [runtimeInputs, interfaceFound] at prepared
@@ -152,7 +147,7 @@ theorem runtimeInputs_binding (subject : Subject model original imported selecte
           | some validator =>
               obtain ⟨statement, encoding⟩ := subject.publicProjection inputs validator validatorFound
               have binding := Domain.PublicBinding.fromEnvironment_encodeValues statement
-                subject.originalExport selected.policy.publicInputs subject.publicBindingArity encoding
+                subject.originalExport selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData encoding
               simp [runtimeInputs, interfaceFound, producerFound, validatorFound, binding] at prepared
               exact ⟨statement, producer, validator, rfl, encoding,
                 prepared.1.symm, prepared.2.symm⟩

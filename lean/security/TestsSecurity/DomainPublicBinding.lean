@@ -19,12 +19,12 @@ open ZkcSecurity.Claims ZkcSecurity.FiatShamir
 /-- The common initializer law is generic in all nominal carriers and raw values. -/
 theorem common_encoding {carriers : Carriers} {types : List Ty}
     (values : Values carriers.Value types) (positions : List Nat)
-    (arity : positions.length = types.length) (application : String)
+    (arity : positions.length = types.length) (data : Domain.PublicBinding.DataSchema types) (application : String)
     (environment : Domain.Environment carriers)
     (encoded : Domain.encodeValues values = some environment) :
-    Domain.PublicBinding.fromEnvironment application positions arity environment =
-      some ((DomainReduction.policyCodec types positions arity application).encode values) :=
-  Domain.PublicBinding.fromEnvironment_encodeValues values application positions arity encoded
+    Domain.PublicBinding.fromEnvironment application positions arity data environment =
+      some ((DomainReduction.publicCodec types positions arity data application).encode values) :=
+  Domain.PublicBinding.fromEnvironment_encodeValues values application positions arity data encoded
 
 abbrev carriers := uniformCarriers Bool Unit
 abbrev types : List Ty := [.vector "scalar", .index]
@@ -60,48 +60,48 @@ theorem missing_count_refused (raw : List Bool) (service : Option Nat) :
       [1, 3] = none := rfl
 
 theorem source_coordinates (raw : List Bool) (count : Nat) (application : String) :
-    (DomainReduction.policyCodec (carriers := carriers) types [1, 3] rfl application).encode
+    (DomainReduction.publicCodec (carriers := carriers) types [1, 3] rfl rfl application).encode
       (statement raw count) =
       [.publicBinding ⟨application,
-        [(toString (1 : Nat), .vector (raw.map (.field "scalar"))), (toString (3 : Nat), .count count)]⟩] := rfl
+        [(1, .vector "scalar" raw), (3, .index count)]⟩] := rfl
 
 /-- Every raw typed statement is determined, including wrong lengths and counts. -/
 theorem raw_all_determined (application : String) :
-    Typed.Determined (DomainReduction.policyCodec (carriers := carriers) types [1, 3] rfl application).encode :=
-  DomainReduction.policyCodec_determined types [1, 3] rfl application
+    Typed.Determined (DomainReduction.publicCodec (carriers := carriers) types [1, 3] rfl rfl application).encode :=
+  (DomainReduction.publicCodec types [1, 3] rfl rfl application).determined
 
 theorem malformed_not_erased (application : String) :
-    (DomainReduction.policyCodec (carriers := carriers) types [1, 3] rfl application).encode (statement [] 99) ≠
-    (DomainReduction.policyCodec (carriers := carriers) types [1, 3] rfl application).encode (statement [false] 0) := by
+    (DomainReduction.publicCodec (carriers := carriers) types [1, 3] rfl rfl application).encode (statement [] 99) ≠
+    (DomainReduction.publicCodec (carriers := carriers) types [1, 3] rfl rfl application).encode (statement [false] 0) := by
   intro same
-  have equal := (DomainReduction.policyCodec (carriers := carriers) types [1, 3] rfl application).injective same
+  have equal := (DomainReduction.publicCodec (carriers := carriers) types [1, 3] rfl rfl application).injective same
   cases equal
 
 theorem missing_abi_refused :
     Domain.PublicBinding.fromEnvironment (carriers := carriers) (tys := types)
-      "application" [1, 3] rfl [] = none := rfl
+      "application" [1, 3] rfl rfl [] = none := rfl
 
 theorem excess_abi_refused (raw : List Bool) (count : Nat) :
     Domain.PublicBinding.fromEnvironment (carriers := carriers) (tys := types)
-      "application" [1, 3] rfl [.data (.vector "scalar" raw), .data (.index count), .data (.index 0)] = none := rfl
+      "application" [1, 3] rfl rfl [.data (.vector "scalar" raw), .data (.index count), .data (.index 0)] = none := rfl
 
 theorem wrong_nominal_domain_refused (raw : List Bool) (count : Nat) :
     Domain.PublicBinding.fromEnvironment (carriers := carriers) (tys := types)
-      "application" [1, 3] rfl [.data (.vector "other" raw), .data (.index count)] = none := rfl
+      "application" [1, 3] rfl rfl [.data (.vector "other" raw), .data (.index count)] = none := rfl
 
 /-- Application identity remains a request choice, not a theorem equating games. -/
 theorem wrong_application_refused (application other : String) (different : application ≠ other)
     (values : Statement) :
-    (DomainReduction.policyCodec types [1, 3] rfl application).encode values ≠
-    (DomainReduction.policyCodec types [1, 3] rfl other).encode values := by
+    (DomainReduction.publicCodec types [1, 3] rfl rfl application).encode values ≠
+    (DomainReduction.publicCodec types [1, 3] rfl rfl other).encode values := by
   intro same
-  exact different ((Domain.PublicBinding.history_eq_iff application other [1, 3] rfl values values).mp same).1
+  exact different ((Domain.PublicBinding.history_eq_iff (tys := types) application other [1, 3] rfl rfl values values).mp same).1
 
 /-- Renumbering sparse source coordinates changes the actual first query key. -/
 theorem wrong_coordinates_key_refused (application : String) (values : Statement)
     (before after : Domain.History carriers) :
-    (DomainReduction.policyCodec types [1, 3] rfl application).encode values ++ before ≠
-    (DomainReduction.policyCodec types [0, 1] rfl application).encode values ++ after := by
+    (DomainReduction.publicCodec types [1, 3] rfl rfl application).encode values ++ before ≠
+    (DomainReduction.publicCodec types [0, 1] rfl rfl application).encode values ++ after := by
   cases values with | cons raw rest => ?_
   cases rest with | cons count rest => ?_
   cases rest
@@ -110,32 +110,40 @@ theorem wrong_coordinates_key_refused (application : String) (values : Statement
     match history with
     | .publicBinding binding :: _ => binding.row.head?.map Prod.fst
     | _ => none) same
-  change some (toString (1 : Nat)) = some (toString (0 : Nat)) at different
-  have refused : (1 : Nat) = 0 := Domain.PublicBinding.coordinate_injective (Option.some.inj different)
-  cases refused
+  change some (1 : Nat) = some (0 : Nat) at different
+  cases different
 
-/-- Large source positions do not alias the old bounded service-port formatter. -/
-theorem large_coordinate_not_truncated : toString (10001 : Nat) ≠ toString (1 : Nat) := by
-  intro same
-  have impossible := Domain.PublicBinding.coordinate_injective same
-  omega
+/-- Coordinates are natural numbers, without a bounded or decimal formatter. -/
+theorem large_coordinate_not_truncated : (10001 : Nat) ≠ 1 := by decide
 
-/-- Historical scalar(vector/index) encoding cannot supply the repaired key. -/
-theorem wrong_scalar_codec_key_refused (application : String) (raw : List Bool) (count : Nat)
+/-- A sequence and a vector keep distinct nominal tags even at the same host type. -/
+theorem wrong_container_key_refused (application : String) (raw : List Bool) (count : Nat)
     (before after : Domain.History carriers) :
-    (DomainReduction.policyCodec types [1, 3] rfl application).encode (statement raw count) ++ before ≠
+    (DomainReduction.publicCodec types [1, 3] rfl rfl application).encode (statement raw count) ++ before ≠
       [Domain.Event.publicBinding ⟨application,
-        [("1", .scalar (.vector "scalar" raw)), ("3", .scalar (.index count))]⟩] ++ after := by
+        [(1, ⟨.sequence (.field "scalar"), rfl, raw⟩), (3, .index count)]⟩] ++ after := by
   intro same
   have different := congrArg (fun history : Domain.History carriers =>
     match history with
-    | .publicBinding binding :: _ =>
-      match binding.row with
-      | (_, .vector _) :: _ => true
-      | _ => false
-    | _ => false) same
-  change true = false at different
+    | .publicBinding binding :: _ => binding.row.head?.map (fun (entry : Nat × Domain.Payload carriers) => entry.2.ty)
+    | _ => none) same
+  change some (Ty.vector "scalar") = some (.sequence (.field "scalar")) at different
   cases different
+
+/-- Inactive data is not erased by the binding, even if a relation ignores it. -/
+theorem inactive_field_bound (application : String) (first second : Bool) (different : first ≠ second) :
+    (DomainReduction.publicCodec (carriers := carriers)
+      [.product "query" "Query" (.cons .boolean (.cons (.field "scalar") .nil))]
+      [0] rfl rfl application).encode (.cons (false, first, ()) .nil) ≠
+    (DomainReduction.publicCodec (carriers := carriers)
+      [.product "query" "Query" (.cons .boolean (.cons (.field "scalar") .nil))]
+      [0] rfl rfl application).encode (.cons (false, second, ()) .nil) := by
+  intro same
+  have values := (DomainReduction.publicCodec (carriers := carriers)
+    [.product "query" "Query" (.cons .boolean (.cons (.field "scalar") .nil))]
+    [0] rfl rfl application).injective same
+  cases values
+  exact different rfl
 
 noncomputable section
 open ZkcSecurity.Examples ZkcSecurity.Domains.PrimeField
@@ -144,17 +152,14 @@ abbrev Scalar := ZMod blsModulus
 /-- Actual small-root initializer, universally over raw tables and counts. -/
 theorem small_initial_history (raw : List Scalar) (claim : Scalar) (count : Nat) :
     Generated.Components.SmallSumcheckABI.initialHistory raw claim count =
-      (DomainReduction.policyCodec Generated.SmallSumcheck.validatorArtifacts.publics
-        Generated.SmallSumcheck.selected.policy.publicInputs
-        Generated.SmallSumcheck.subject.publicBindingArity
+      (DomainReduction.policyCodec Generated.SmallSumcheck.validatorCompiled
         Generated.SmallSumcheck.subject.originalExport).encode
           (.cons raw (.cons claim (.cons count .nil))) := rfl
 
 /-- Actual composed-root initializer, including both statements and count. -/
 theorem two_initial_history (left right : List Scalar) (lc rc : Scalar) (count : Nat) :
     Generated.Components.TwoSumsABI.initialHistory left right lc rc count =
-      (DomainReduction.policyCodec Generated.TwoSums.validatorArtifacts.publics
-        Generated.TwoSums.selected.policy.publicInputs Generated.TwoSums.subject.publicBindingArity
+      (DomainReduction.policyCodec Generated.TwoSums.validatorCompiled
         Generated.TwoSums.subject.originalExport).encode
           (.cons left (.cons right (.cons lc (.cons rc (.cons count .nil))))) := rfl
 
@@ -183,15 +188,11 @@ theorem small_projected_binding (raw : List Scalar) (claim : Scalar) (count : Na
       Domain.encodeValues values = some validator ∧
       Generated.Components.SmallSumcheckABI.producerInputs raw claim count = producer ++
         [.transcript Generated.SmallSumcheck.selected.policy.suite
-          ((DomainReduction.policyCodec Generated.SmallSumcheck.validatorArtifacts.publics
-            Generated.SmallSumcheck.validatorArtifacts.participant.policy.publicInputs
-            (DomainReduction.policyArity Generated.SmallSumcheck.validatorCompiled)
+          ((DomainReduction.policyCodec Generated.SmallSumcheck.validatorCompiled
             Generated.SmallSumcheck.subject.originalExport).encode values)] ∧
       Generated.Components.SmallSumcheckABI.validatorInputs raw claim count = validator ++
         [.transcript Generated.SmallSumcheck.selected.policy.suite
-          ((DomainReduction.policyCodec Generated.SmallSumcheck.validatorArtifacts.publics
-            Generated.SmallSumcheck.validatorArtifacts.participant.policy.publicInputs
-            (DomainReduction.policyArity Generated.SmallSumcheck.validatorCompiled)
+          ((DomainReduction.policyCodec Generated.SmallSumcheck.validatorCompiled
             Generated.SmallSumcheck.subject.originalExport).encode values)] :=
   Generated.SmallSumcheck.subject.runtimeInputs_binding
     (Generated.Components.SmallSumcheckABI.inputs raw claim count service) _ _
@@ -206,15 +207,11 @@ theorem two_projected_binding (left right : List Scalar) (lc rc : Scalar) (count
       Domain.encodeValues values = some validator ∧
       Generated.Components.TwoSumsABI.producerInputs left right lc rc count = producer ++
         [.transcript Generated.TwoSums.selected.policy.suite
-          ((DomainReduction.policyCodec Generated.TwoSums.validatorArtifacts.publics
-            Generated.TwoSums.validatorArtifacts.participant.policy.publicInputs
-            (DomainReduction.policyArity Generated.TwoSums.validatorCompiled)
+          ((DomainReduction.policyCodec Generated.TwoSums.validatorCompiled
             Generated.TwoSums.subject.originalExport).encode values)] ∧
       Generated.Components.TwoSumsABI.validatorInputs left right lc rc count = validator ++
         [.transcript Generated.TwoSums.selected.policy.suite
-          ((DomainReduction.policyCodec Generated.TwoSums.validatorArtifacts.publics
-            Generated.TwoSums.validatorArtifacts.participant.policy.publicInputs
-            (DomainReduction.policyArity Generated.TwoSums.validatorCompiled)
+          ((DomainReduction.policyCodec Generated.TwoSums.validatorCompiled
             Generated.TwoSums.subject.originalExport).encode values)] :=
   Generated.TwoSums.subject.runtimeInputs_binding
     (Generated.Components.TwoSumsABI.inputs left right lc rc count service) _ _

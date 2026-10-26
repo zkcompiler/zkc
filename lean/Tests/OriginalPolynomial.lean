@@ -81,7 +81,7 @@ private def certificate (value claim : F) (history : Domain.History (model (F :=
   dsimp only [artifact]
   derive_artifact_binding
     normalizing (try simp [inputs, Domain.evaluate, Domain.read,
-      Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, PIR.Process.bind,
+      Domain.sortsMatch, Domain.Value.sort, PIR.Process.bind,
       ])
     solving (simp [returns, Zkc.Construction.ArtifactBinding.Captures, inputs])
 

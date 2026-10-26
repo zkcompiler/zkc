@@ -62,6 +62,12 @@ theorem publicBindingArity (subject : Subject model original imported selected) 
   exact Domain.PublicBinding.selectionArity imported selected.artifacts.validator
     subject.selection subject.selectionChecked
 
+/-- Capabilities are excluded by the checked public schema, before values arrive. -/
+theorem publicBindingData (subject : Subject model original imported selected) :
+    Domain.PublicBinding.DataSchema subject.selection.publics :=
+  Domain.PublicBinding.selectionData imported selected.artifacts.validator
+    subject.selection subject.selectionChecked
+
 abbrev Inputs (subject : Subject model original imported selected) :=
   Values (Component model.Value) subject.target.owner.protocol.inputs
 
@@ -111,7 +117,7 @@ def runtimeInputs (subject : Subject model original imported selected) (inputs :
   let producer ← project encoded (dataInputs types interface.inputScopes selected.policy.producer)
   let validator ← project encoded selected.policy.publicInputs
   let history ← Domain.PublicBinding.fromEnvironment subject.originalExport
-    selected.policy.publicInputs subject.publicBindingArity validator
+    selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData validator
   return (producer ++ [.transcript selected.policy.suite history],
     validator ++ [.transcript selected.policy.suite history])
 

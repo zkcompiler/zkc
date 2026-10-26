@@ -111,8 +111,7 @@ noncomputable def AdaptiveSoundness (capabilities : Capabilities model art.origi
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.compiled.verifier model
         (Typed.ask (R := Typed.ByLast Zkc.Construction.Domain.Raw)) claimed.1
-        ((DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-          (DomainReduction.policyArity subject.compiled) selected.application).encode claimed.1)
+        ((DomainReduction.policyCodec subject.compiled selected.application).encode claimed.1)
         claimed.2)).run' ∅}[
       subject.FalseStatement result.1 ∧ ZkcSecurity.Endpoint.Domain.CompleteAccepted result.2] ≤ error queries
 
@@ -148,8 +147,7 @@ noncomputable def WeightedAdaptiveSoundness (capabilities : Capabilities model a
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.compiled.verifier model
         (Typed.ask (R := Typed.ByLast Zkc.Construction.Domain.Raw)) claimed.1
-        ((DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-          (DomainReduction.policyArity subject.compiled) selected.application).encode claimed.1)
+        ((DomainReduction.policyCodec subject.compiled selected.application).encode claimed.1)
         claimed.2)).run' ∅}[
       subject.FalseStatement result.1 ∧ ZkcSecurity.Endpoint.Domain.CompleteAccepted result.2] ≤
         cost + selected.validatorCost.value queries

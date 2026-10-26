@@ -43,18 +43,14 @@ def existentialBinders (declarations : String) : String :=
 def existential (types : List Ty) (optional : Ty → Bool) : String :=
   existentialBinders (binders types optional)
 def names (types : List Ty) : List String := (List.range types.length).map inputName
-def isService (ty : Ty) : Bool := !Domain.dataType ty
+def isService (ty : Ty) : Bool := ty.isService
 
-def encoded (ty : Ty) (name : String) : Except String String := do
-  let payload ← match ty with
-    | .boolean => pure (".boolean " ++ name)
-    | .index => pure (".index " ++ name)
-    | .field domain => pure (".field " ++ literal domain ++ " " ++ name)
-    | .vector domain => pure (".vector " ++ literal domain ++ " " ++ name)
-    | .group domain => pure (".group " ++ literal domain ++ " " ++ name)
-    | .service _ => throw "subject-abi-service-projection"
-    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
-  pure (".data (" ++ payload ++ ")")
+/-- Emit the existing nominal data constructor; no second carrier enumeration
+or recursive data encoding is owned by the generator. The kernel checks the
+closed capability-exclusion proof in the generated module. -/
+def encoded (ty : Ty) (name : String) : Except String String :=
+  if ty.isService then .error "subject-abi-service-projection"
+  else .ok (".data ⟨" ++ literal ty ++ ", by decide, " ++ name ++ "⟩")
 
 def atPositions (types : List Ty) (positions : List Nat) : Except String (List Ty) :=
   positions.mapM fun position => match types[position]? with
@@ -80,6 +76,8 @@ def representationProposition (types : List Ty) : String :=
   let bounds := types.zipIdx.filterMap fun (ty, index) => match ty with
     | .index => some (inputName index ++ " < indexLimit")
     | .vector _ => some (inputName index ++ ".length < indexLimit")
+    | .sequence _ | .product .. => some ("inputRepresentable (carriers := model.toCarriers) " ++
+        literal ty ++ " (some " ++ inputName index ++ ")")
     | _ => none
   if bounds.isEmpty then "True" else " ∧ ".intercalate bounds
 
@@ -120,10 +118,6 @@ def metadata {model : DomainModel} {original : Snapshot} {imported : Imported or
 
 def source (metadata : Metadata) (output : Output) : Except String String := do
   let types := metadata.types
-  for type in types do
-    match type with
-    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
-    | _ => pure ()
   let some producerPositions := metadata.producerPositions | throw "subject-abi-source-interface"
   let publicPositions := metadata.publicPositions
   -- This presentation stores every data coordinate as present. Refuse profiles
@@ -237,7 +231,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "    statementData (statementOfData fields) = fields := TypedABI.unpack_pack fields\n\n" ++
     "def initialHistory" ++ publicBinders ++ " : Domain.History model.toCarriers :=\n" ++
     "  Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs\n" ++
-    "    " ++ call "statement" publicNames ++ " subject.publicBindingArity\n\n" ++
+    "    " ++ call "statement" publicNames ++ " subject.publicBindingArity subject.publicBindingData\n\n" ++
     "def producerInputs" ++ producerBinders ++ " : Domain.Environment model.toCarriers :=\n  " ++ producer ++ "\n\n" ++
     "def validatorInputs" ++ publicBinders ++ " : Domain.Environment model.toCarriers :=\n  " ++ validator ++ "\n\n" ++
     "theorem producer_sorts" ++ producerBinders ++ " :\n" ++

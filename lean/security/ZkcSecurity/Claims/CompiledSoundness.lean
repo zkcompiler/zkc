@@ -138,8 +138,7 @@ noncomputable def assembled (value cost : ENNReal)
 
 noncomputable abbrev binding (subject : Claims.Domain.Subject model art) (application : String) :
     BindingCodec (art.Statement model) (Domain.Event model.toCarriers) :=
-  DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-    (DomainReduction.policyArity subject.compiled) application
+  DomainReduction.policyCodec subject.compiled application
 
 /-- Full acceptance includes the absence of unread proof values. -/
 noncomputable def probability (subject : Claims.Domain.Subject model art) (application : String)
@@ -166,7 +165,7 @@ theorem adaptive_charged {schedule : Claims.Domain.ChargeSchedule subject} {quer
     (binding subject application).encode exported.inputs
     (fun statement => exported.presented statement ((binding subject application).encode statement))
     exported.encoded (fun statement => exported.bridge statement _)
-    (DomainReduction.policyCodec_determined _ _ (DomainReduction.policyArity subject.compiled) _)
+    (DomainReduction.policyCodec_determined subject.compiled _)
     subject.FalseStatement (exported.certificate.toReduction exported.absorb)
     (fun _ _ post => post) (fun statement falseStatement => exported.doomed statement falseStatement _)
     cost (fun statement => exported.costBound statement _) prover proverCost bounded

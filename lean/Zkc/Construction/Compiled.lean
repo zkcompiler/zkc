@@ -290,11 +290,12 @@ selected position. -/
 def Selection.check {original : Structured.Snapshot} (imported : Structured.Imported original)
     (selection : Selection imported.program.payload.entry.outputs) (participant : Participant) : Bool :=
   let entry := imported.program.payload.entry
-  decide (selection.position + 1 < participant.returned.length) &&
+  selection.publics.all (fun ty => !ty.isService) &&
+    (decide (selection.position + 1 < participant.returned.length) &&
     slotsTyped selection.publics selection.slots entry.inputs &&
     selection.publics.length == participant.policy.publicInputs.length &&
     inScope selection.context.validator entry.outputScopes selection.output &&
-    scopePosition selection.context.validator entry.outputScopes selection.output == selection.position
+    scopePosition selection.context.validator entry.outputScopes selection.output == selection.position)
 
 /-- The selection check of an export. -/
 def checkSelection {original : Structured.Snapshot} (imported : Structured.Imported original)
@@ -343,7 +344,7 @@ theorem selection_sound {original : Structured.Snapshot} (imported : Structured.
         outputs.get selection.output) := by
   obtain ⟨-, -, slots⟩ := select_sound imported participant selected
   simp only [Selection.check, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at checked
-  obtain ⟨⟨⟨⟨inside, typed⟩, published⟩, scoped'⟩, placed⟩ := checked
+  obtain ⟨_, ⟨⟨⟨⟨inside, typed⟩, published⟩, scoped'⟩, placed⟩⟩ := checked
   refine ⟨fun values length => acceptanceAt_decisionAt (by omega), fun handle held extra => ?_,
     fun held => by rw [encodeValues_length]; exact published, fun outputs => ?_⟩
   · rw [← slots]

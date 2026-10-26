@@ -63,13 +63,13 @@ theorem statementData_statementOfData (fields : StatementData) :
 
 def initialHistory (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.index))) : Domain.History model.toCarriers :=
   Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs
-    (statement input0 input1 input2) subject.publicBindingArity
+    (statement input0 input1 input2) subject.publicBindingArity subject.publicBindingData
 
 def producerInputs (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.index))) : Domain.Environment model.toCarriers :=
-  [.data (.vector ("bls12-381.fr") input0), .data (.index input2), .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1 input2)]
+  [.data ⟨(Zkc.Source.Structured.Ty.vector "bls12-381.fr"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.index), by decide, input2⟩, .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1 input2)]
 
 def validatorInputs (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.index))) : Domain.Environment model.toCarriers :=
-  [.data (.vector ("bls12-381.fr") input0), .data (.field ("bls12-381.fr") input1), .data (.index input2), .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1 input2)]
+  [.data ⟨(Zkc.Source.Structured.Ty.vector "bls12-381.fr"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.field "bls12-381.fr"), by decide, input1⟩, .data ⟨(Zkc.Source.Structured.Ty.index), by decide, input2⟩, .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1 input2)]
 
 theorem producer_sorts (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.index))) :
     Domain.sortsMatch selected.artifacts.producer.inputs (producerInputs input0 input1 input2) = true := rfl
@@ -80,7 +80,7 @@ theorem validator_sorts (input0 : (model.Value (Zkc.Source.Structured.Ty.vector 
 theorem runtimeInputs_eq (input0 : (model.Value (Zkc.Source.Structured.Ty.vector "bls12-381.fr"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.index))) (input3 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.runtimeInputs (inputs input0 input1 input2 input3) = some ((producerInputs input0 input1 input2), (validatorInputs input0 input1 input2)) := by
   exact Subject.runtime_of_projections subject (inputs input0 input1 input2 input3) (by rfl)
-    [.data (.vector ("bls12-381.fr") input0), .data (.index input2)] [.data (.vector ("bls12-381.fr") input0), .data (.field ("bls12-381.fr") input1), .data (.index input2)] (statement input0 input1 input2)
+    [.data ⟨(Zkc.Source.Structured.Ty.vector "bls12-381.fr"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.index), by decide, input2⟩] [.data ⟨(Zkc.Source.Structured.Ty.vector "bls12-381.fr"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.field "bls12-381.fr"), by decide, input1⟩, .data ⟨(Zkc.Source.Structured.Ty.index), by decide, input2⟩] (statement input0 input1 input2)
     (by rfl) (by rfl) (by rfl)
 
 theorem preparation (values : subject.Inputs) :

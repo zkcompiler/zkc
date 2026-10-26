@@ -26,7 +26,7 @@ theorem runtime_layout (subject : Subject model original imported selected)
       let producer ← project (encodeInputs inputs) producerPositions
       let validator ← project (encodeInputs inputs) selected.policy.publicInputs
       let history ← Domain.PublicBinding.fromEnvironment subject.originalExport
-        selected.policy.publicInputs subject.publicBindingArity validator
+        selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData validator
       pure (producer ++ [.transcript selected.policy.suite history],
         validator ++ [.transcript selected.policy.suite history])) := by
   cases entry : entryInterface original with
@@ -51,12 +51,12 @@ theorem runtime_of_projections (subject : Subject model original imported select
     (encoding : Domain.encodeValues statement = some validator) :
     subject.runtimeInputs inputs = some
       (producer ++ [.transcript selected.policy.suite (Domain.PublicBinding.history
-        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity)],
+        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData)],
        validator ++ [.transcript selected.policy.suite (Domain.PublicBinding.history
-        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity)]) := by
+        subject.originalExport selected.policy.publicInputs statement subject.publicBindingArity subject.publicBindingData)]) := by
   simp [runtimeInputs, entry, producerProjection, publicProjection,
     Domain.PublicBinding.fromEnvironment_encodeValues statement subject.originalExport
-      selected.policy.publicInputs subject.publicBindingArity encoding]
+      selected.policy.publicInputs subject.publicBindingArity subject.publicBindingData encoding]
 
 theorem no_input_clauses (subject : Subject model original imported selected)
     (empty : ∀ clause ∈ subject.target.owner.contract.clauses, clause.kind ≠ .input)

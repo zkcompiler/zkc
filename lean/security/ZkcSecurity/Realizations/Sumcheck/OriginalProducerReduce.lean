@@ -138,7 +138,7 @@ def ProducerCallback.reduce (program : Structured.Program)
     simp []
   simp only [active, ↓reduceIte, SumcheckProverLaws.mask_embedP _ _ rfl maximum]
   simp only [Domain.View.loop, countRead, initialRead, carried, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, List.map_cons, List.map_nil,
+    Domain.Value.sort, List.map_cons, List.map_nil,
     beq_self_eq_true, and_true]
   by_cases admitted : count ≤ maximum
   · simp only [admitted, ↓reduceIte]
@@ -153,7 +153,7 @@ def ProducerCallback.reduce (program : Structured.Program)
     obtain ⟨nextRaw, width, point, reached, rfl, rfl, nextShape, nextBound⟩ := returned
     refine ⟨?_⟩
     simp only [Original.fold, PIR.Process.interpretState, Domain.View.append, carried,
-      Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.map_cons, List.map_nil,
+      Domain.sortsMatch, Domain.Value.sort, List.map_cons, List.map_nil,
       beq_self_eq_true, ↓reduceIte]
     exact .done ⟨nextRaw, width, point, reached, rfl, rfl, nextShape, nextBound⟩
   · simp only [admitted, ↓reduceIte, PIR.Process.bind]

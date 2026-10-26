@@ -108,11 +108,17 @@ theorem ofValue_injective {ty : Structured.Ty} (admissible : ty.isService = fals
 
 end Payload
 
+/-- One public row uses the same nominal data as proof messages. Coordinates
+are original source positions; the request fixes their order and the schema. -/
+structure PublicBinding (carriers : Structured.Carriers) where
+  application : String
+  row : List (Nat × Payload carriers)
+
 /-- The history retains actual typed data and the full request occurrence. -/
 inductive Event (carriers : Structured.Carriers) where
   | message (origin : Origin) (value : Payload carriers)
   | challenge (origin : Origin)
-  | publicBinding (binding : PublicBinding (Payload carriers))
+  | publicBinding (binding : PublicBinding carriers)
 
 abbrev History (carriers : Structured.Carriers) := List (Event carriers)
 abbrev Proof (carriers : Structured.Carriers) := List (Payload carriers)

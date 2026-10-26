@@ -98,7 +98,7 @@ def terminal (program : Structured.Program)
       simp only [Domain.View.helper, read]
       rw [nominal]
       simp only [computed, PIR.Process.interpret, PIR.Process.bind, Values.present,
-        Original.fold, PIR.Process.interpretState, Domain.View.append, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty,
+        Original.fold, PIR.Process.interpretState, Domain.View.append, Domain.sortsMatch, Domain.Value.sort,
         List.map_cons, List.map_nil, beq_self_eq_true, ↓reduceIte]
       exact .done ⟨value, rfl, rfl⟩
   | halt reason =>

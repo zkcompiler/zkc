@@ -95,7 +95,7 @@ def VerifierCallback.step (program : Structured.Program)
       List.dropLast_singleton, PIR.Process.bind, SumcheckVerifierLaws.mask_embedV _ _ rfl maximum]
     simp only [VerifierOutputs.references, Domain.read, List.mapM_cons, List.mapM_nil, pointRead, scalarRead, historyRead,
       Bind.bind, Pure.pure, Option.bind]
-    simp only [Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.map_cons,
+    simp only [Domain.sortsMatch, Domain.Value.sort, List.map_cons,
       List.map_nil, beq_self_eq_true, ↓reduceIte]
     exact .done ⟨nextPoint, nextScalar, state.history, rfl, rfl⟩
 
@@ -176,7 +176,7 @@ def VerifierCallback.reduce (program : Structured.Program)
     simp []
   simp only [active, ↓reduceIte, SumcheckVerifierLaws.mask_embedV _ _ rfl maximum]
   simp only [Domain.View.loop, countRead, initialRead, carried, Domain.sortsMatch,
-    Domain.Value.sort, Domain.Payload.ty, List.map_cons, List.map_nil,
+    Domain.Value.sort, List.map_cons, List.map_nil,
     beq_self_eq_true, and_true]
   by_cases admitted : count ≤ maximum
   · simp only [admitted, ↓reduceIte]
@@ -190,7 +190,7 @@ def VerifierCallback.reduce (program : Structured.Program)
     obtain ⟨point, scalar, history, rfl, rfl⟩ := returned
     refine ⟨?_⟩
     simp only [Original.fold, PIR.Process.interpretState, Domain.View.append, carried,
-      Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.map_cons, List.map_nil,
+      Domain.sortsMatch, Domain.Value.sort, List.map_cons, List.map_nil,
       beq_self_eq_true, ↓reduceIte]
     exact .done ⟨point, scalar, history, rfl, rfl⟩
   · simp only [admitted, ↓reduceIte, PIR.Process.bind]

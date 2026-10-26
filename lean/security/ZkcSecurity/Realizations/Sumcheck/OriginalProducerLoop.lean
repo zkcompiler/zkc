@@ -131,7 +131,7 @@ def ProducerCallback.step (program : Structured.Program)
       SumcheckProverLaws.mask_embedP _ _ rfl maximum]
     simp only [Outputs.references, Domain.read, List.mapM_cons, List.mapM_nil, rawRead, dimensionRead,
       widthRead, pointRead, historyRead, Bind.bind, Pure.pure, Option.bind]
-    simp only [Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, List.map_cons,
+    simp only [Domain.sortsMatch, Domain.Value.sort, List.map_cons,
       List.map_nil, beq_self_eq_true, ↓reduceIte]
     exact .done ⟨_, _, _, _, rfl, rfl,
       MapFirstLaws.restrict_shape raw dimension width challenge shape positive,

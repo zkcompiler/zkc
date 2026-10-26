@@ -541,6 +541,18 @@ A binding codec establishes statement determination only; that the native
 transcript absorbs the encoded rows, in order, belongs to the encoding and
 transcript-state [obligation](#obligations).
 
+For the nominal-domain construction model, `Domain.PublicBinding` uses an ordered
+list of `(Nat × Domain.Payload carriers)` directly. Each coordinate is its
+original source input position, and each payload carries its exact nominal type
+and existing `Carriers.Value` interpretation. `Selection.check` establishes that
+public types contain no service capability, including recursively nested ones.
+`DomainReduction.policyCodec` derives both arity and data eligibility from that
+checked selection. It binds every raw value, including inactive fields and
+values outside the relation's admitted bounds. `history_eq_iff` proves
+application identity and fixed-schema injectivity; it does not claim equality
+of different schemas or native transcript bytes. The generic `PublicValue`
+representation above remains for clients with their own proved binding adapter.
+
 The host binds the policy's statements, its public inputs in policy order,
 while a library's theorem is about the model's statements. A **statement
 binding** `StatementBinding Policy Model E` pairs a binding codec of policy

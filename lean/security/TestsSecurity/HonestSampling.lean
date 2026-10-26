@@ -143,7 +143,7 @@ theorem public_pair_shares_cache (program : Structured.Program) :
     Domain.queryOrigin, Domain.templateOrigin, Template.origin, Template.repeats,
     Template.qualify, Template.applicationPrefix, context, publicTemplate,
     Domain.atCoordinates, Domain.sortsMatch, Domain.Value.sort, Domain.read,
-    Context.query, Context.role, Origin.query, Domain.Payload.ty, Domain.drawRequest, Request.draw,
+    Context.query, Context.role, Origin.query, Domain.drawRequest, Request.draw,
     PIR.Process.bind, PIR.Process.runM, PIR.Execution.followM, Domain.handler,
     SampledCompiled.tableOracle, HonestCompiled.tableOracle, PairRepliesAgree]
 

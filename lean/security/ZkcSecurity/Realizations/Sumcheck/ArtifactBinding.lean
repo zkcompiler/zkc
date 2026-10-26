@@ -198,7 +198,7 @@ theorem original_round (payload : UnitPayload)
     rfl separate index (some handle) (some point) (some scalar), Zkc.Construction.Original.fold_bind, Zkc.Construction.Original.fold_actions]
   simp only [SumcheckVerifierLaws.roundPlain, PIR.Process.interpretState,
     Zkc.Construction.Original.operations, Zkc.Construction.Original.receive, Zkc.Construction.Original.send, Zkc.Construction.Original.query, routes.mode, routes.low, routes.high,
-    Zkc.Construction.Original.record, Domain.Payload.ofValue,
+    Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self, dite_true,
     PIR.Process.bind, verifier, List.append_assoc]
   congr 1
   funext low
@@ -213,6 +213,7 @@ theorem original_round (payload : UnitPayload)
     simp only [passed, ite_true, ite_false, PIR.Process.interpretState,
       routes.draw, routes.delivery,
       Zkc.Construction.Original.queryField, request, PIR.Process.bind, Zkc.Construction.Original.fold,
-      ↓reduceDIte, List.cons_append, List.nil_append]
+      ↓reduceDIte, Ty.isService, eq_self,
+      List.cons_append, List.nil_append]
 
 end ZkcSecurity.Realizations.Sumcheck.ArtifactBinding

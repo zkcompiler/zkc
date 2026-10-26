@@ -104,6 +104,15 @@ theorem BindingCodec.determined (codec : BindingCodec Stmt E) : Typed.Determined
     subst empty
     exact codec.injective (by simpa using longer)
 
+/-- Any injective event embedding is a prefix-free singleton history. The
+argument need not use a particular recursive public-value representation. -/
+def BindingCodec.singleton (event : Stmt → E) (injective : Function.Injective event) :
+    BindingCodec Stmt E where
+  encode statement := [event statement]
+  injective _ _ same := injective (List.cons.inj same).1
+  prefixFree _ _ rest same := by
+    simpa using congrArg List.length same
+
 /-- The codec that binds a statement as one typed public-value binding event of
 the application context and the statement's canonical row. -/
 def BindingCodec.single (bind : PublicBinding Scalar → E) (bindInjective : Function.Injective bind)
