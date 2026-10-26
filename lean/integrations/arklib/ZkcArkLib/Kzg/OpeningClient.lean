@@ -90,7 +90,7 @@ theorem message_run (srs : Vector G₁ (n + 1) × Vector G₂ 2)
       pure (some ((fun ⟨0, _⟩ => proof, true, ()),
         KZG.verifyOpening (g₁ := g₁) (g₂ := g₂) pairing srs.2 commitment proof point value)) := by
   simp [Reduction.run, Prover.run, Prover.runToRound, Prover.processRound,
-    messageProver, kzg, Verifier.run, Fin.induction, Fin.induction.go, Transcript.concat]
+    messageProver, kzg, Verifier.run, Transcript.concat]
   funext index
   fin_cases index
   rfl
@@ -109,8 +109,7 @@ theorem experiment_openingAdversary
       (kzg (n := n) (g₁ := g₁) (g₂ := g₂) pairing)).run = _
   unfold bindingGameExt openingExperiment
   dsimp only [openingAdversary, kzg]
-  simp [Reduction.run, Prover.run, Prover.runToRound, Fin.induction,
-    Fin.induction.go, Prover.processRound, messageProver, Verifier.run,
+  simp [Reduction.run, Prover.run, Prover.runToRound, Prover.processRound, messageProver, Verifier.run,
     liftComp_eq_liftM, QueryImpl.addLift_def,
     QueryImpl.simulateQ_add_liftM_left, StateT.run'_eq, Observation.ofUpstream]
 
