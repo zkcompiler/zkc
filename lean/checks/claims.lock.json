@@ -571,23 +571,23 @@
       "structural": "60416965fb460bda",
       "explicit": "30c53a4b39587424"
     },
-    "ZkcSecurity.Examples.TableMembership.Completeness.completeReceipt": {
+    "ZkcSecurity.Examples.TableMembership.Endpoint.scalar_meaning": {
       "package": "security",
-      "module": "ZkcSecurity.Examples.TableMembership.Claims",
-      "structural": "69fc4fcad11b32db",
-      "explicit": "517f760b79ccc6e5"
+      "module": "ZkcSecurity.Examples.TableMembership.Endpoint",
+      "structural": "904ed1fa81789f7f",
+      "explicit": "704142aa50c299c8"
     },
-    "ZkcSecurity.Examples.TableMembership.Soundness.chargedReceipt": {
+    "ZkcSecurity.Examples.TableMembership.Method.compiled_ideal_complete": {
       "package": "security",
-      "module": "ZkcSecurity.Examples.TableMembership.Claims",
-      "structural": "c50b1a031bc323ac",
-      "explicit": "5dd8f516914e5be5"
+      "module": "ZkcSecurity.Examples.TableMembership.Method",
+      "structural": "81f540c3b5de1940",
+      "explicit": "a9b9494d3fc9b670"
     },
-    "ZkcSecurity.Examples.TableMembership.Soundness.soundReceipt": {
+    "ZkcSecurity.Examples.TableMembership.Soundness.charged_meaning": {
       "package": "security",
       "module": "ZkcSecurity.Examples.TableMembership.Claims",
-      "structural": "3fbba3c5d23ca328",
-      "explicit": "a757e16ebd879f9b"
+      "structural": "bdce92cc678b484b",
+      "explicit": "85f0a58bd9fedfc7"
     },
     "ZkcSecurity.FiatShamir.Obligations.not_determines": {
       "package": "security",

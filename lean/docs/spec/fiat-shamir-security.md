@@ -936,23 +936,23 @@ acceptance of the image implies acceptance of the transform's outcome.
 the transcript-construction and
 [participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)
 rules. Its subject is the compiled verifier itself: `compiledVerifier challenge
-raw claim count initial proof` is the ideal interpretation
-(`Zkc.Construction.ideal`) of the exported validator `SumcheckProof.participant`,
-under the occurrence context the check derives and with helper calls read by the
-original's checked helpers, on the table values, the claim, the round count and
-the initial transcript, read through the acceptance output the policy selects.
+raw claim count initial proof` runs `ScalarVerifier.verify` on the exported
+validator `SumcheckProof.participant`. This executes the actual checked Domain
+operations with the selected scalar ABI, occurrence context, helper meanings
+and acceptance output. The table values, claim, round count, initial transcript
+and typed proof remain inputs to that execution.
 
 - `construction` is the vertical link: for every challenge function the
-  compiled verifier is the transform of `importedValidator`. It instantiates
-  `SumcheckProof.compiled_transform`, which follows from the composed check
-  `checkCompiled` on the admitted Sumcheck source with no equation specific to
-  the Entry, and
-  `verifier_imported`, the definitional equality of the Proof Entry's original
-  validator with the imported `example::Interactive` verifier. The construction
-  bridge pins the bytes: the Proof Entry's fresh original export must render to
-  `SumcheckSourceData`, the admitted source both readings use (the check
+  compiled verifier is the transform of `importedValidator`.
+  `SumcheckProof.compiled_transform` follows from the all-reply Domain-to-source
+  connection, including terminal outcomes and the unread typed proof suffix.
+  `verifier_imported` identifies the original validator with the imported
+  `example::Interactive` verifier. The construction bridge pins the source:
+  the Proof Entry's fresh original export must render to `SumcheckSourceData`,
+  the admitted source both readings use (the check
   `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean` of its
-  `sumcheck` subject).
+  `sumcheck` subject). This scalar observation connection does not assert that
+  the historical and current nominal random-oracle games are identical.
 - `soundness`: for a fixed well-formed statement (the raw values decode to a
   table at the count) and initial transcript, the compiled verifier accepts a
   false claim on the raw table values with probability at most

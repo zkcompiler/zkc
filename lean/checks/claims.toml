@@ -301,9 +301,9 @@ result = '''
 The actual admitted CheckMembership pair, its nominal aggregate ABI and retained bounded-execution target have canonical compiled-ideal perfect-completeness, adaptive zero-error soundness and empty-charge receipts. Both properties use the same whole-validator connection; overbound raw inputs remain in the adversary interface, and the empty schedule still requires independent rejection evidence'''
 owners = [["Formal support", "docs/support.md"], ["Security package", "security/README.md"]]
 theorems = [
-  "ZkcSecurity.Examples.TableMembership.Completeness.completeReceipt",
-  "ZkcSecurity.Examples.TableMembership.Soundness.soundReceipt",
-  "ZkcSecurity.Examples.TableMembership.Soundness.chargedReceipt",
+  "ZkcSecurity.Examples.TableMembership.Method.compiled_ideal_complete",
+  "ZkcSecurity.Examples.TableMembership.Endpoint.scalar_meaning",
+  "ZkcSecurity.Examples.TableMembership.Soundness.charged_meaning",
 ]
 
 [[proved]]
