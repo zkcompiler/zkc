@@ -1,6 +1,6 @@
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.NormalForm.Soundness
-import Zkc.Construction.Semantics
+import Zkc.Construction.Scalar
 import Mathlib.Algebra.Ring.Prod
 
 /-! Nominal embedding admission and operational interpretation controls.

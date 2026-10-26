@@ -9,8 +9,8 @@ public import Zkc.Source.Structured.OutputSelection
 /-! Admission of exact constructed participants in either explicit profile.
 The structural rule and projection check retain the original subject. Generic
 semantic evidence uses full nominal Process equations (`Domain.Correspondence`).
-The retained scalar interpreted-byte claims
-continue to use `Uniform.checkCompiled` and its own scoped theorem. -/
+Scalar consumers reuse this admission and require their own actual Domain
+connection; admission alone supplies no execution correspondence. -/
 set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source

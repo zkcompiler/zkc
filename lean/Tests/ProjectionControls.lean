@@ -4,7 +4,7 @@ import ZkcExamples.Construction.SchnorrProof
 check on the actual compiled Schnorr validator. The transcript-construction rule
 alone checks transcript wiring, not the validator's mathematics: each
 mathematical mutation below keeps that wiring and is accepted by
-`Uniform.checkExport`, while the composed check refuses it because the mutated
+`checkExport`, while the composed check refuses it because the mutated
 instruction implements no operation of the original validator. The last group
 shows why the composed check takes an admitted original rather than a snapshot
 and a program separately: an altered program with a matching candidate passes
@@ -25,7 +25,7 @@ def modify (participant : Participant) (index : Nat) (change : Instruction → I
   { participant with instructions := participant.instructions.mapIdx fun position instruction =>
       if position = index then change instruction else instruction }
 
-theorem compiled_accepted : Uniform.checkCompiled imported actual = .ok () := by decide +kernel
+theorem compiled_accepted : checkCompiled imported actual = .ok () := by decide +kernel
 
 /-! The verifier's arithmetic. Exported positions: inputs `0` base, `1`
 statement; `3` commitment, `7` challenge, `11` response; `14` is `response •
@@ -36,11 +36,11 @@ the decision `14 = 16`. -/
 def baseEqualsBase : Participant :=
   modify actual 13 fun instruction => { instruction with operands := [0, 0] }
 
-theorem baseEqualsBase_construction_accepted : Uniform.checkExport original baseEqualsBase = .ok () := by
+theorem baseEqualsBase_construction_accepted : checkExport original baseEqualsBase = .ok () := by
   decide +kernel
 
 theorem baseEqualsBase_refused :
-    Uniform.checkCompiled imported baseEqualsBase = .error "projection-unexplained" := by
+    checkCompiled imported baseEqualsBase = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The response scales the statement instead of the base. -/
@@ -48,11 +48,11 @@ def responseScalesStatement : Participant :=
   modify actual 10 fun instruction => { instruction with operands := [1, 11] }
 
 theorem responseScalesStatement_construction_accepted :
-    Uniform.checkExport original responseScalesStatement = .ok () := by
+    checkExport original responseScalesStatement = .ok () := by
   decide +kernel
 
 theorem responseScalesStatement_refused :
-    Uniform.checkCompiled imported responseScalesStatement = .error "projection-unexplained" := by
+    checkCompiled imported responseScalesStatement = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The challenge, not the response, scales the base. -/
@@ -60,21 +60,21 @@ def challengeScalesBase : Participant :=
   modify actual 10 fun instruction => { instruction with operands := [0, 7] }
 
 theorem challengeScalesBase_construction_accepted :
-    Uniform.checkExport original challengeScalesBase = .ok () := by
+    checkExport original challengeScalesBase = .ok () := by
   decide +kernel
 
 theorem challengeScalesBase_refused :
-    Uniform.checkCompiled imported challengeScalesBase = .error "projection-unexplained" := by
+    checkCompiled imported challengeScalesBase = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The sum adds the scaled base, not the commitment, to the scaled statement. -/
 def wrongSum : Participant :=
   modify actual 12 fun instruction => { instruction with operands := [14, 15] }
 
-theorem wrongSum_construction_accepted : Uniform.checkExport original wrongSum = .ok () := by
+theorem wrongSum_construction_accepted : checkExport original wrongSum = .ok () := by
   decide +kernel
 
-theorem wrongSum_refused : Uniform.checkCompiled imported wrongSum = .error "projection-unexplained" := by
+theorem wrongSum_refused : checkCompiled imported wrongSum = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The decision compares the operands in the other order; equality is
@@ -83,7 +83,7 @@ def swappedComparison : Participant :=
   modify actual 13 fun instruction => { instruction with operands := [16, 14] }
 
 theorem swappedComparison_refused :
-    Uniform.checkCompiled imported swappedComparison = .error "projection-unexplained" := by
+    checkCompiled imported swappedComparison = .error "projection-unexplained" := by
   decide +kernel
 
 /-! The result selector. -/
@@ -96,22 +96,22 @@ def acceptAlways : Participant :=
     instructions := actual.instructions ++ [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩]
     returned := [18, 13] }
 
-theorem acceptAlways_construction_accepted : Uniform.checkExport original acceptAlways = .ok () := by
+theorem acceptAlways_construction_accepted : checkExport original acceptAlways = .ok () := by
   decide +kernel
 
 theorem acceptAlways_refused :
-    Uniform.checkCompiled imported acceptAlways = .error "projection-unexplained" := by
+    checkCompiled imported acceptAlways = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The export returns the sum instead of the decision. -/
 theorem wrongResult_refused :
-    Uniform.checkCompiled imported { actual with returned := [16, 13] } =
+    checkCompiled imported { actual with returned := [16, 13] } =
       .error "construction-final" := by
   decide +kernel
 
 /-- The policy selects an output the validator does not have. -/
 theorem wrongAcceptance_refused :
-    Uniform.checkCompiled imported { actual with policy := { actual.policy with acceptance := 1 } } =
+    checkCompiled imported { actual with policy := { actual.policy with acceptance := 1 } } =
       .error "construction-acceptance" := by
   decide +kernel
 
@@ -120,7 +120,7 @@ theorem wrongAcceptance_refused :
 /-- The validator's data inputs are the base and the statement; the witness is
 the producer's. -/
 theorem validator_data_inputs :
-    (Uniform.entryInterface original).map (fun (inputs, interface) =>
+    (entryInterface original).map (fun (inputs, interface) =>
       dataInputs inputs interface.inputScopes actual.policy.validator) = some [0, 1] := by
   decide +kernel
 
@@ -132,7 +132,7 @@ def witnessPublished : Participant :=
       .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"] }
 
 theorem witnessPublished_refused :
-    Uniform.checkCompiled imported witnessPublished = .error "construction-context" := by
+    checkCompiled imported witnessPublished = .error "construction-context" := by
   decide +kernel
 
 /-! Actions, checked by the projection rule alone. -/
@@ -146,7 +146,7 @@ def deliveryFromProducer : Participant :=
         "label_64656c6976657279_0", "role00000000", "role00000001"]⟩ }
 
 theorem deliveryFromProducer_projection_refused :
-    Uniform.project program SchnorrProof.context deliveryFromProducer = .error "projection-delivery" := by
+    project program SchnorrProof.context deliveryFromProducer = .error "projection-delivery" := by
   decide +kernel
 
 /-- The challenge is drawn at the delivery's site. -/
@@ -157,7 +157,7 @@ def challengeAtDelivery : Participant :=
         "random.bls12-381.fr/0", "draw", "role00000001"]⟩ }
 
 theorem challengeAtDelivery_projection_refused :
-    Uniform.project program SchnorrProof.context challengeAtDelivery = .error "projection-challenge" := by
+    project program SchnorrProof.context challengeAtDelivery = .error "projection-challenge" := by
   decide +kernel
 
 /-- The response is received at the commitment's site. -/
@@ -167,7 +167,7 @@ def responseAtCommitment : Participant :=
       "role00000000" (.field "bls12-381.fr") }
 
 theorem responseAtCommitment_projection_refused :
-    Uniform.project program SchnorrProof.context responseAtCommitment = .error "projection-receive" := by
+    project program SchnorrProof.context responseAtCommitment = .error "projection-receive" := by
   decide +kernel
 
 /-- An extra calculation that no original operation accounts for. -/
@@ -176,7 +176,7 @@ def extraCalculation : Participant :=
       [⟨.calculate (.groupAdd "bls12-381.g1"), [0, 1], [.data (.group "bls12-381.g1")], []⟩] }
 
 theorem extraCalculation_projection_refused :
-    Uniform.project program SchnorrProof.context extraCalculation = .error "projection-unexplained" := by
+    project program SchnorrProof.context extraCalculation = .error "projection-unexplained" := by
   decide +kernel
 
 /-- The validator's work is dropped: the export ends after the response. -/
@@ -184,7 +184,7 @@ def truncated : Participant :=
   { actual with instructions := actual.instructions.take 10, returned := [11, 13] }
 
 theorem truncated_projection_refused :
-    Uniform.project program SchnorrProof.context truncated = .error "projection-outputs" := by
+    project program SchnorrProof.context truncated = .error "projection-outputs" := by
   decide +kernel
 
 /-! Source admission. -/
@@ -193,8 +193,8 @@ theorem truncated_projection_refused :
 one snapshot and the projection rule against any program. -/
 def unlinkedCheck (snapshot : Zkc.Source.Structured.Snapshot) (program : Zkc.Source.Structured.Program)
     (participant : Participant) : Except String Unit :=
-  match Uniform.checkExport snapshot participant, Uniform.exportContext snapshot participant with
-  | .ok (), some context => Uniform.project program context participant
+  match checkExport snapshot participant, exportContext snapshot participant with
+  | .ok (), some context => project program context participant
   | .error error, _ => .error error
   | .ok (), none => .error "construction-context"
 
@@ -267,7 +267,7 @@ theorem unlinked_accepts_mixed : unlinkedCheck original alteredProgram alteredCa
   decide +kernel
 
 /-- Against its own snapshot, the altered pair passes the composed check. -/
-theorem altered_accepted : Uniform.checkCompiled alteredImported alteredCandidate = .ok () := by
+theorem altered_accepted : checkCompiled alteredImported alteredCandidate = .ok () := by
   decide +kernel
 
 /-- The admission premise cannot be met: the unchanged snapshot does not admit
@@ -287,7 +287,7 @@ theorem subject_unique (subject : Zkc.Source.Structured.Imported original) : sub
 /-- So every admitted subject of the unchanged snapshot refuses the altered
 candidate. -/
 theorem mixed_refused (subject : Zkc.Source.Structured.Imported original) :
-    Uniform.checkCompiled subject alteredCandidate = .error "projection-unexplained" := by
+    checkCompiled subject alteredCandidate = .error "projection-unexplained" := by
   rw [subject_unique subject]
   decide +kernel
 
