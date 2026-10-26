@@ -70,9 +70,7 @@ def succeeds {carriers : Structured.Carriers} {S : Type} (position : Nat)
   | .returned _, some checked =>
       match checked.outcome with
       | .returned result =>
-          (match result.values[position]? with
-          | some (.data (.boolean true)) => true
-          | _ => false) && checked.state.proof.isEmpty
+          (acceptanceAt position result.values == some true) && checked.state.proof.isEmpty
       | .stopped _ => false
   | _, _ => false
 
@@ -89,15 +87,9 @@ theorem succeeds_iff {carriers : Structured.Carriers} {S : Type} (position : Nat
       cases hc : checked.outcome with
       | stopped reason => simp [succeeds, Success, hp, hv, hc]
       | returned result =>
-        cases hvalue : result.values[position]? with
-        | none => simp [succeeds, Success, acceptanceAt, hp, hv, hc, hvalue]
-        | some value =>
-          cases value with
-          | transcript | indices => simp [succeeds, Success, acceptanceAt, hp, hv, hc, hvalue]
-          | data payload =>
-            cases payload <;> simp [succeeds, Success, acceptanceAt, hp, hv, hc, hvalue]
-            rename_i decision
-            cases decision <;> simp [and_comm]
+        cases hvalue : acceptanceAt position result.values with
+        | none => simp [succeeds, Success, hp, hv, hc, hvalue]
+        | some decision => cases decision <;> simp [succeeds, Success, hp, hv, hc, hvalue, and_comm]
 
 end PairExecution
 

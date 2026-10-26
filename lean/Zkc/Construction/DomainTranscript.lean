@@ -17,62 +17,94 @@ set_option autoImplicit false
 namespace Zkc.Construction.Domain
 open Zkc.Source
 
-/-- Data transported in a proof or absorbed into a transcript. -/
-inductive Payload (carriers : Structured.Carriers) where
-  | boolean (value : Bool)
-  | index (value : Nat)
-  | field (domain : String) (value : carriers.Field domain)
-  | vector (domain : String) (value : List (carriers.Field domain))
-  | group (domain : String) (value : carriers.Group domain)
+/-- Data transported in a proof or bound in a public statement. The nominal
+sort determines the existing recursive value interpretation. Eligibility excludes
+capabilities recursively; it does not assume relation validity or finite size. -/
+structure Payload (carriers : Structured.Carriers) where
+  ty : Structured.Ty
+  admissible : ty.isService = false
+  contents : carriers.Value ty
 
 namespace Payload
 variable {carriers : Structured.Carriers}
 
-def ty : Payload carriers → Structured.Ty
-  | .boolean _ => .boolean
-  | .index _ => .index
-  | .field domain _ => .field domain
-  | .vector domain _ => .vector domain
-  | .group domain _ => .group domain
+/-- Smart constructors retain concise scalar patterns without a second data
+universe. General products and sequences use the same dependent constructor. -/
+@[match_pattern] abbrev boolean (value : Bool) : Payload carriers := ⟨.boolean, rfl, value⟩
+@[match_pattern] abbrev index (value : Nat) : Payload carriers := ⟨.index, rfl, value⟩
+@[match_pattern] abbrev field (domain : String) (value : carriers.Field domain) : Payload carriers :=
+  ⟨.field domain, rfl, value⟩
+@[match_pattern] abbrev vector (domain : String) (value : List (carriers.Field domain)) : Payload carriers :=
+  ⟨.vector domain, rfl, value⟩
+@[match_pattern] abbrev group (domain : String) (value : carriers.Group domain) : Payload carriers :=
+  ⟨.group domain, rfl, value⟩
 
-def ofValue : (ty : Structured.Ty) → carriers.Value ty → Option (Payload carriers)
-  | .boolean, value => some (.boolean value)
-  | .index, value => some (.index value)
-  | .field domain, value => some (.field domain value)
-  | .vector domain, value => some (.vector domain value)
-  | .group domain, value => some (.group domain value)
-  | .service _, _ | .sequence _, _ | .product .., _ => none
+def ofValue (ty : Structured.Ty) (contents : carriers.Value ty) : Option (Payload carriers) :=
+  if admissible : ty.isService = false then some ⟨ty, admissible, contents⟩ else none
 
-/-- Decode only at the exact nominal sort. The equality transports the value's
-type; an equality of host carrier types alone cannot authorize decoding. -/
-def value : (ty : Structured.Ty) → Payload carriers → Option (carriers.Value ty)
-  | .boolean, .boolean value => some value
-  | .index, .index value => some value
-  | .field domain, .field other value =>
-      if h : other = domain then some (h ▸ value) else none
-  | .vector domain, .vector other value =>
-      if h : other = domain then some (h ▸ value) else none
-  | .group domain, .group other value =>
-      if h : other = domain then some (h ▸ value) else none
-  | _, _ => none
+/-- Only exact nominal equality authorizes transport. Equal host carrier types
+cannot identify different fields, products, constructors or ordered fields. -/
+def value (ty : Structured.Ty) (payload : Payload carriers) : Option (carriers.Value ty) :=
+  if same : payload.ty = ty then some (same ▸ payload.contents) else none
 
 theorem value_ofValue {ty : Structured.Ty} {input : carriers.Value ty}
     {payload : Payload carriers} (encoded : ofValue ty input = some payload) :
     payload.value ty = some input := by
-  cases ty <;> simp only [ofValue] at encoded <;> cases encoded <;> simp [value]
+  unfold ofValue at encoded
+  split at encoded
+  · cases Option.some.inj encoded
+    simp [value]
+  · cases encoded
 
 theorem ofValue_value {ty : Structured.Ty} {payload : Payload carriers}
     {output : carriers.Value ty} (decoded : payload.value ty = some output) :
     ofValue ty output = some payload := by
-  cases ty <;> cases payload <;> simp_all [value, ofValue]
-  all_goals
-    rcases decoded with ⟨rfl, rfl⟩
-    exact ⟨rfl, HEq.rfl⟩
+  rcases payload with ⟨actual, admissible, contents⟩
+  unfold value at decoded
+  simp only at decoded
+  split at decoded
+  · rename_i same
+    subst actual
+    simp only [Option.some.injEq] at decoded
+    subst output
+    simp [ofValue, admissible]
+  · cases decoded
 
 theorem value_isSome {ty : Structured.Ty} {payload : Payload carriers} :
     (payload.value ty).isSome = decide (payload.ty = ty) := by
-  cases ty <;> cases payload <;> simp [value, Payload.ty]
-  all_goals split <;> simp_all
+  unfold value
+  split <;> simp_all
+
+theorem value_wrong_type {ty : Structured.Ty} {payload : Payload carriers}
+    (different : payload.ty ≠ ty) : payload.value ty = none := by
+  simp [value, different]
+
+/-- A capability cannot occur even inside an otherwise ordinary aggregate. -/
+theorem value_service_refused {ty : Structured.Ty} (service : ty.isService = true)
+    (payload : Payload carriers) : payload.value ty = none := by
+  apply value_wrong_type
+  intro same
+  have admissible := payload.admissible
+  rw [same, service] at admissible
+  cases admissible
+
+/-- Fixed-sort packaging is injective; eligibility proof witnesses carry no identity. -/
+@[simp] theorem mk_inj {ty : Structured.Ty} {firstProof secondProof : ty.isService = false}
+    {first second : carriers.Value ty} :
+    (Payload.mk ty firstProof first : Payload carriers) = ⟨ty, secondProof, second⟩ ↔
+      first = second := by
+  constructor
+  · intro same
+    have decoded := congrArg (value ty) same
+    simpa [value] using decoded
+  · rintro rfl
+    rfl
+
+theorem ofValue_injective {ty : Structured.Ty} (admissible : ty.isService = false) :
+    Function.Injective (ofValue (carriers := carriers) ty) := by
+  intro first second same
+  have decoded := congrArg (fun encoded => encoded >>= value ty) same
+  simpa [ofValue, admissible, value] using decoded
 
 end Payload
 

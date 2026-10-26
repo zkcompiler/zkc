@@ -35,13 +35,16 @@ end
 mutual
   theorem publicValue_injective : ∀ ty : Ty,
       Function.Injective (publicValue (carriers := carriers) ty)
-    | .boolean, _, _, same => by simpa [publicValue] using same
+    | .boolean, _, _, same => by
+        exact Payload.mk_inj.mp (PublicValue.scalar.inj same)
     | .index, _, _, same => by simpa [publicValue] using same
-    | .field _, _, _, same => by simpa [publicValue] using same
+    | .field _, _, _, same => by
+        exact Payload.mk_inj.mp (PublicValue.scalar.inj same)
     | .vector _, _, _, same => by
         simp only [publicValue, PublicValue.vector.injEq] at same
         exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
-    | .group _, _, _, same => by simpa [publicValue] using same
+    | .group _, _, _, same => by
+        exact Payload.mk_inj.mp (PublicValue.scalar.inj same)
     | .service _, _, _, same => by simpa [publicValue] using same
 
     | .sequence element, _, _, same => by

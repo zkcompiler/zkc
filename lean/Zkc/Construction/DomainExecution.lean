@@ -167,9 +167,8 @@ def localCoordinates (env : Environment carriers) (references : List Nat) : Opti
     | some (.data (.index value)) => some value
     | _ => none
 
-def dataType : Structured.Ty → Bool
-  | .service _ | .sequence _ | .product .. => false
-  | _ => true
+/-- One structural capability check, shared with source admission. -/
+def dataType (ty : Structured.Ty) : Bool := !ty.isService
 
 def sortsMatch (declared : List ValueSort) (values : Environment carriers) : Bool :=
   values.map Value.sort == declared
