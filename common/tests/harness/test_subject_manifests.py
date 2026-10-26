@@ -137,3 +137,22 @@ def test_generated_symlinks_cannot_alias_or_escape(tmp_path, monkeypatch, outsid
     with pytest.raises(loader.Refused, match=diagnostic):
         loader.load(path)
     assert target.read_text() == "maintained data\n"
+
+
+
+def test_generated_symlink_cannot_replace_maintained_connection(tmp_path, monkeypatch):
+    loader = manifests()
+    directory = tmp_path / "lean" / "ZkcExamples"
+    directory.mkdir(parents=True)
+    proof = directory / "Proof.lean"
+    proof.write_text("maintained connection\n")
+    (directory / "Generated.lean").symlink_to(proof)
+    monkeypatch.setattr(loader, "ROOT", tmp_path)
+    monkeypatch.setattr(loader, "PACKAGES", {"main": (tmp_path / "lean", ("ZkcExamples",))})
+    path = tmp_path / "probe.toml"
+    path.write_text('schema = "zkc.subject/0"\nname = "probe"\n[generated]\n'
+                    'glue = "lean/ZkcExamples/Generated.lean"\n[construction]\n'
+                    'connection = "ZkcExamples.Proof"\n')
+    with pytest.raises(loader.Refused, match="construction.connection must differ"):
+        loader.load(path)
+    assert proof.read_text() == "maintained connection\n"
