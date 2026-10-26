@@ -475,6 +475,7 @@ target_compile_definitions(zkc-total_verification_capacity-test PRIVATE
 mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRParser)
 
 add_zkc_test(program_logical_realizations Program program-logical-realizations)
+add_zkc_test(program_resource_origins Program program-resource-origins)
 
 add_zkc_test(kernel_transforms Transforms kernel-transforms)
 target_compile_definitions(zkc-kernel_transforms-test PRIVATE

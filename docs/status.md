@@ -93,9 +93,12 @@ CFGs with bounded work. These controls isolate adapter correspondence; the
 enclosing source checker owns ordinary helper bodies and complete inventory.
 This is a pre-selection component: default source emission and
 realization still require migration before the Local finite route is replaced.
-The scoped source-closure API currently refuses affine fold state: affine reuse
-checks do not establish the required preservation of each exact resource root.
-The existing Local finite route retains its separate root analysis.
+The scoped source-closure API admits affine fold state only after the shared
+Program analysis checks exact state-root preservation over actual callbacks.
+Controls distinguish fresh replacements, exchanged slots, stopped paths, primitive
+successors and cached analysis limits. The existing Local finite route still
+uses its earlier root analysis; migrating Protocol repeat consumers and deleting
+that replaced path remain part of the execution cutover.
 Unresolved requests are refused by
 executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
 

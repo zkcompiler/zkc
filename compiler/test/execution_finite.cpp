@@ -165,7 +165,7 @@ int main() {
     module->getBody()->push_back(extra);
     refuseAdmission(*module, "execution-cfg");
   });
-  cases.run("affine finite state needs scoped root preservation", [&] {
+  auto affineFold = [&] {
     auto text = changed(
         collect, "!O = !exec.outcome<(!V)>",
         "!T = !runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">\n"
@@ -185,8 +185,89 @@ int main() {
     text = changed(text, "^done(%value:!V)", "^done(%value:!T)");
     text = changed(text, "\"exec.returned\"(%value) : (!V)->!O",
                    "\"exec.returned\"(%value) : (!T)->!O");
+    return text;
+  };
+  cases.run("affine finite state preserves its callback root", [&] {
+    auto module = accept(affineFold());
+    admit(*module);
+    zkc::test::refuses(protocol::readSourceExecutionDefinitions(*module),
+                       "execution-cfg");
+  });
+  cases.run("scoped finite callback cannot replace an affine root", [&] {
+    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
+                        "resource_unit:Guard");
+    text = changed(text, "module {", R"mlir(module {
+ "runtime.binding"() {sym_name="create",contract="resource_unit.create",arguments=["Guard"],implementation=""} : ()->()
+)mlir");
+    text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
+   return %ok : !O)mlir",
+                   R"mlir(
+   %call = "exec.apply"(%scope) {binding=@create,parameters=[],site="fresh"} : (!S)->!O
+   "exec.dispatch"(%call)[^done,^failed] : (!O)->()
+ ^done(%fresh:!T):
+   %ok = "exec.returned"(%fresh) : (!T)->!O
+   return %ok : !O
+ ^failed(%cause:!exec.stop):
+   %failed = "exec.failed"(%cause) : (!exec.stop)->!O
+   return %failed : !O)mlir");
     auto module = accept(text);
-    refuseAdmission(*module, "execution-cfg");
+    refuseAdmission(*module, "mathematical-formation");
+  });
+  cases.run("scoped finite callback retains a sampling successor root", [&] {
+    auto text = changed(affineFold(), "transcript:merlin3.bls12-381.fr64be/0",
+                        "rng:bls12-381.fr");
+    text = changed(text, "!algebra.field<\"koala-bear\">",
+                   "!algebra.field<\"bls12-381.fr\">");
+    text = changed(text, "!algebra.field_vector<\"koala-bear\">",
+                   "!algebra.field_vector<\"bls12-381.fr\">");
+    text = changed(text, "module {", R"mlir(module {
+ "runtime.binding"() {sym_name="draw",contract="random.draw",arguments=["bls12-381.fr"],implementation=""} : ()->()
+)mlir");
+    text = changed(text, R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
+   return %ok : !O)mlir",
+                   R"mlir(
+   %call = "exec.apply"(%scope,%state) {binding=@draw,parameters=[],site="sample"} : (!S,!T)->!exec.outcome<(!F,!T)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F,!T)>)->()
+ ^done(%sample:!F,%next:!T):
+   %ok = "exec.returned"(%next) : (!T)->!O
+   return %ok : !O
+ ^failed(%cause:!exec.stop):
+   %failed = "exec.failed"(%cause) : (!exec.stop)->!O
+   return %failed : !O)mlir");
+    auto module = accept(text);
+    admit(*module);
+  });
+  cases.run("scoped finite stopping callback keeps the zero-item return", [&] {
+    auto text = changed(affineFold(),
+                        R"mlir(   %ok = "exec.returned"(%state) : (!T)->!O
+   return %ok : !O)mlir",
+                        R"mlir(
+   %stop = "exec.reject"(%scope) {site="stop",reason="reject"} : (!S)->!exec.stop
+   cf.br ^failed(%stop : !exec.stop)
+ ^failed(%cause:!exec.stop):
+   %failed = "exec.failed"(%cause) : (!exec.stop)->!O
+   return %failed : !O)mlir");
+    auto module = accept(text);
+    admit(*module);
+  });
+  cases.run("equal-typed scoped finite state slots cannot be exchanged", [&] {
+    auto text =
+        changed(affineFold(), "!exec.outcome<(!T)>", "!exec.outcome<(!T,!T)>");
+    text = changed(text, "%state:!T,%item:!F", "%state:!T,%other:!T,%item:!F");
+    text =
+        changed(text, "(%state) : (!T)->!O", "(%state,%other) : (!T,!T)->!O");
+    text = changed(text, "%seed:!T)", "%seed:!T,%other:!T)");
+    text = changed(text, "(%scope,%domain,%seed)",
+                   "(%scope,%domain,%seed,%other)");
+    text = changed(text, "(!S,!V,!T)->!O", "(!S,!V,!T,!T)->!O");
+    text = changed(text, "^done(%value:!T)", "^done(%value:!T,%otherValue:!T)");
+    text = changed(text, "(%value) : (!T)->!O",
+                   "(%value,%otherValue) : (!T,!T)->!O");
+    auto positive = accept(text);
+    admit(*positive);
+    auto negative = accept(changed(text, "(%state,%other) : (!T,!T)",
+                                   "(%other,%state) : (!T,!T)"));
+    refuseAdmission(*negative, "mathematical-formation");
   });
   cases.run("actual scoped fold ABI and exact positional aliases", [&] {
     auto module = accept(fold);

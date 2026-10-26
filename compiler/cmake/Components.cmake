@@ -165,6 +165,7 @@ add_zkc_component(Program
   lib/Program/Encode.cpp
   lib/Program/Structure.cpp
   lib/Program/Admission.cpp
+  lib/Program/ResourceOrigins.cpp
 )
 add_zkc_component(IR
   lib/Dialect/Collection.cpp

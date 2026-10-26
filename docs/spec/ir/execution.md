@@ -213,6 +213,24 @@ an ordered signature cannot conceal a history transition inside a match.
 Every referenced callback must have an admitted body, including callbacks of
 empty or dormant requests. These derived views are internal admission data;
 they are neither source declarations nor executable implementations.
+
+Affine fold state requires more than absence of duplicate uses. Program admission
+analyzes the actual admitted callback control view and requires each continuing
+result to retain the root of its corresponding formal state argument. Ordinary
+calls substitute actual arguments. History, sampling and observation contracts
+can preserve roots across primitive successors; matching result types alone
+cannot. Branches join all continuing paths, while stopped paths have no returned
+root. A fresh resource, unknown origin or exchanged state slot cannot satisfy
+the invariant. Match payloads have unknown roots; explicit captures retain their
+own origins. Loops require each continuing backedge to preserve its own state
+slot. Zero iterations and empty domains retain the initial state even when every
+reached callback stops.
+
+Root analysis bounds cumulative work and nesting, including the full height of
+cached callees. Missing facts and exhausted analysis never authorize preservation.
+These facts constrain admitted transitions; they do not discharge executable
+realization or source correspondence.
+
 Unrealized finite requests are excluded from executable extraction. Source
 emission, selected realization and their independent comparisons must be
 connected before this component replaces the default finite compilation path;

@@ -4,7 +4,6 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
-#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
@@ -138,18 +137,11 @@ public:
     if (!source || !mathematicalCalls ||
         failed(finite::describe(op, computation)) || !computation.scoped)
       return fail("unresolved finite invocation outside source admission");
-    // Affine reuse admission alone does not establish that each iteration
-    // returns the same resource root. The scoped origin analysis must own that
-    // additional invariant before affine finite state can enter this profile.
-    mathematical::NativeTypePolicies policies(op);
-    for (Type result : computation.signature.getResults()) {
-      auto policy = policies.get(result);
-      if (!policy || policy->affine)
-        return fail("finite state requires scoped resource-root admission");
-    }
     // The enclosing owner has checked the domain, callback ABI, premises and
     // closure. Retain callback edges in this transient admission view: a
     // finite signature alone would hide ordered effects from control checks.
+    // Complete Program admission also checks the actual callback's affine
+    // state roots before accepting this source closure.
     LocalRealization signature;
     do {
       if (!charge())

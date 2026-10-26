@@ -39,8 +39,9 @@ readSourceExecutionDefinitions(mlir::Operation *symbolTable);
 /// finite callback edges; no model or source declaration is returned.
 /// Checks every immediate scoped/math definition and selected computation unit,
 /// including dormant ones. Other declarations belong to the enclosing profile.
-/// Ordered affine fold state is refused until scoped resource-root admission
-/// establishes the additional invariant beyond affine reuse checking.
+/// Ordered affine fold state additionally requires preservation of each exact
+/// state root on every continuing callback path, using the admitted control
+/// view and operation successor contracts.
 /// This does not establish source correspondence or permit unresolved calls in
 /// an executable artifact.
 llvm::Error verifySourceExecutionClosure(mlir::Operation *symbolTable);

@@ -1,5 +1,6 @@
 #include "zkc/Program/Admission.h"
 #include "EncodingLimits.h"
+#include "ResourceOrigins.h"
 #include "Structure.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/NativePolicy.h"
@@ -874,7 +875,9 @@ public:
       return error("interactive-definition-limit");
     if (auto e = seedRealizations(realizations))
       return e;
-    return run(module);
+    if (auto e = run(module))
+      return e;
+    return program::detail::verifyFiniteResourceOrigins(module, realizations);
   }
   Error logicalParticipants(const program::Participants &module,
                             ArrayRef<LocalRealization> realizations) {
