@@ -1674,6 +1674,7 @@ json::Value attributeValue(Attribute value) {
 // original source remain calls.
 class ParticipantExporter {
   SymbolTable symbols, sourceSymbols;
+  const protocol::SourceExecutionClosure &execution;
   const StringMap<Origin> &sourceOrigins;
   llvm::DenseMap<Value, unsigned> references;
   SmallVector<unsigned> coordinates;
@@ -1686,9 +1687,9 @@ class ParticipantExporter {
       return error("constructed-participant-reference");
     return found->second;
   }
-  Expected<json::Array> operands(Operation &op) {
+  Expected<json::Array> operands(ValueRange inputs) {
     json::Array result;
-    for (Value operand : op.getOperands()) {
+    for (Value operand : inputs) {
       auto index = reference(operand);
       if (!index)
         return index.takeError();
@@ -1727,9 +1728,9 @@ class ParticipantExporter {
                                    attributeValue(attribute.getValue())});
     return result;
   }
-  Expected<SmallVector<unsigned>> terminal(Operation &op) {
+  Expected<SmallVector<unsigned>> terminal(ValueRange values) {
     SmallVector<unsigned> returned;
-    for (Value value : op.getOperands()) {
+    for (Value value : values) {
       auto index = reference(value);
       if (!index)
         return index.takeError();
@@ -1737,19 +1738,22 @@ class ParticipantExporter {
     }
     return returned;
   }
-  Error emit(Operation &op, json::Array &out, json::Array regions) {
+  Error emit(Operation &op, ValueRange inputs, TypeRange outputs,
+             json::Array &out, json::Array regions) {
     if (++exported > 2048)
       return error("constructed-participant-limit");
     auto declaration = binding(op);
     if (!declaration)
       return declaration.takeError();
-    auto arguments = operands(op);
+    auto arguments = operands(inputs);
     if (!arguments)
       return arguments.takeError();
-    json::Array instruction{
-        op.getName().getStringRef().str(), attributes(op),
-        std::move(*declaration),           std::move(*arguments),
-        printedTypes(op.getResultTypes()), std::move(regions)};
+    json::Array instruction{op.getName().getStringRef().str(),
+                            attributes(op),
+                            std::move(*declaration),
+                            std::move(*arguments),
+                            printedTypes(outputs),
+                            std::move(regions)};
     if (op.getName().getStringRef() == "protocol.service_query") {
       auto site = op.getAttrOfType<StringAttr>("site");
       auto found =
@@ -1770,11 +1774,73 @@ class ParticipantExporter {
     return Error::success();
   }
 
+  Expected<SmallVector<unsigned>> helper(FlatSymbolRefAttr callee,
+                                         ValueRange inputs, unsigned depth,
+                                         json::Array &out,
+                                         Operation *invocation) {
+    if (depth > 64)
+      return error("constructed-participant-limit");
+    auto function = symbols.lookup<func::FuncOp>(callee.getValue());
+    auto signature = protocol::scopedDataSignature(function);
+    if (!signature || signature.getNumInputs() != inputs.size())
+      return error("constructed-participant-helper");
+    if (sourceSymbols.lookup(callee.getValue())) {
+      if (auto e = emit(*invocation, inputs, signature.getResults(), out, {}))
+        return std::move(e);
+      SmallVector<unsigned> values;
+      for (unsigned i = 0; i < signature.getNumResults(); ++i)
+        values.push_back(next++);
+      return values;
+    }
+    auto found = execution.bodies.find(callee.getValue().str());
+    if (found == execution.bodies.end())
+      return error("constructed-participant-helper");
+    for (auto [formal, actual] :
+         zip(function.getArguments().drop_front(), inputs)) {
+      auto index = reference(actual);
+      if (!index)
+        return index.takeError();
+      references[formal] = *index;
+    }
+    for (const auto &step : found->second) {
+      if (++work > 4096)
+        return error("constructed-participant-limit");
+      auto &op = *step.operation;
+      if (isa<exec::ReturnOp>(op))
+        return terminal(step.inputs);
+      if (!step.regions.empty())
+        return error("constructed-participant-control",
+                     op.getName().getStringRef());
+      if (auto call = dyn_cast<func::CallOp>(op)) {
+        auto values =
+            helper(call.getCalleeAttr(), step.inputs, depth + 1, out, &op);
+        if (!values)
+          return values.takeError();
+        if (values->size() != step.outputs.size())
+          return error("constructed-participant-helper");
+        for (auto [result, index] : zip(step.outputs, *values))
+          references[result] = index;
+        continue;
+      }
+      if (!isa<exec::ApplyOp, exec::BooleanOp>(op))
+        return error("constructed-participant-operation",
+                     op.getName().getStringRef());
+      if (auto e = emit(op, step.inputs, ValueRange(step.outputs).getTypes(),
+                        out, {}))
+        return std::move(e);
+      for (auto result : step.outputs)
+        references[result] = next++;
+    }
+    return error("constructed-participant-return");
+  }
+
 public:
   ParticipantExporter(pir::ProtocolModuleOp module,
                       pir::ProtocolModuleOp source,
-                      const StringMap<Origin> &sourceOrigins)
-      : symbols(module), sourceSymbols(source), sourceOrigins(sourceOrigins) {}
+                      const StringMap<Origin> &sourceOrigins,
+                      const protocol::SourceExecutionClosure &execution)
+      : symbols(module), sourceSymbols(source), execution(execution),
+        sourceOrigins(sourceOrigins) {}
 
   // Exports one block into `out`. `terminator` names the operation that must
   // end it; its operand references are returned.
@@ -1789,35 +1855,11 @@ public:
       if (name == terminator) {
         if (&op != &block.back())
           return error("constructed-participant-return");
-        return terminal(op);
+        return terminal(op.getOperands());
       }
-      if (name == "local.call") {
-        auto callee = op.getAttrOfType<FlatSymbolRefAttr>("callee");
-        Operation *helper =
-            callee ? symbols.lookup(callee.getValue()) : nullptr;
-        if (!helper || helper->getName().getStringRef() != "local.func")
-          return error("constructed-participant-helper");
-        if (sourceSymbols.lookup(callee.getValue())) {
-          if (auto e = emit(op, out, json::Array{}))
-            return std::move(e);
-          for (Value result : op.getResults())
-            references[result] = next++;
-          continue;
-        }
-        if (helper->getNumRegions() != 1 ||
-            !hasSingleElement(helper->getRegion(0)))
-          return error("constructed-participant-helper");
-        Block &nested = helper->getRegion(0).front();
-        if (nested.getNumArguments() != op.getNumOperands())
-          return error("constructed-participant-helper");
-        for (auto [formal, actual] :
-             zip(nested.getArguments(), op.getOperands())) {
-          auto index = reference(actual);
-          if (!index)
-            return index.takeError();
-          references[formal] = *index;
-        }
-        auto returned = body(nested, "local.return", depth + 1, out);
+      if (auto call = dyn_cast<pir::LocalCallOp>(op)) {
+        auto returned =
+            helper(call.getCalleeAttr(), call.getInputs(), depth + 1, out, &op);
         if (!returned)
           return returned.takeError();
         if (returned->size() != op.getNumResults())
@@ -1846,7 +1888,8 @@ public:
           yieldedList.push_back(index);
         json::Array region{printedTypes(loop.getArgumentTypes()),
                            std::move(nested), std::move(yieldedList)};
-        if (auto e = emit(op, out, json::Array{std::move(region)}))
+        if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
+                          json::Array{std::move(region)}))
           return std::move(e);
         for (Value result : op.getResults())
           references[result] = next++;
@@ -1860,7 +1903,8 @@ public:
             name == "protocol.service_query" || name == "local.bool_constant" ||
             name == "local.guard"))
         return error("constructed-participant-operation", name);
-      if (auto e = emit(op, out, json::Array{}))
+      if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
+                        json::Array{}))
         return std::move(e);
       for (Value result : op.getResults())
         references[result] = next++;
@@ -1952,7 +1996,10 @@ exportCheckedParticipant(ModuleOp source, ModuleOp candidate,
     }
   if (!selected)
     return error(refusal);
-  return ParticipantExporter(module, original, sourceOrigins)
+  auto execution = protocol::readSourceExecutionClosure(module);
+  if (!execution)
+    return execution.takeError();
+  return ParticipantExporter(module, original, sourceOrigins, *execution)
       .run(selected, sourceBytes, printedText(candidate.getOperation()),
            policy);
 }

@@ -128,37 +128,51 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
     if name == "protocol.send" and set(attrs) == {"peer", "schema", "site"} and binding == []:
         return (f".send {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
                 f"{text(string_attribute(attrs, 'peer'))}")
-    if name == "algebra.exec.indices_empty" and binding == ["indices.empty", [], ""] \
-            and binding_attributes(attrs) and attrs["parameters"] == ("strings", []):
-        return ".indicesEmpty"
-    if name == "algebra.exec.indices_append" and binding == ["indices.append", [], ""] \
-            and binding_attributes(attrs) and attrs["parameters"] == ("strings", []):
-        require(len(operand_kinds) == 2 and operand_kinds[0][0] == "indices" and operand_kinds[1][0] == "index"
-                and len(result_kinds) == 1 and result_kinds[0][0] == "indices", "indices append shape")
-        return ".indicesAppend"
-    # The kernel site is a diagnostic frame name; it never enters transcript identity.
-    if name == "crypto.exec.indexed_transcript_observe_data" and binding_attributes(attrs) \
-            and isinstance(binding, list) and len(binding) == 3 \
-            and binding[0] == "transcript.native.indexed.observe.data" and binding[2] == "":
-        suite, leaf = record(binding[1], 2)
-        require(len(operand_kinds) == 3 and operand_kinds[1][0] in ("field", "group")
-                and leaf == f"{operand_kinds[1][0]}:{operand_kinds[1][1]}", "observed leaf type")
-        return f".observe {text(suite)} {origin(one_parameter(attrs))}"
-    if name == "crypto.exec.indexed_transcript_challenge" and binding_attributes(attrs) \
-            and isinstance(binding, list) and len(binding) == 3 \
-            and binding[0] == "transcript.native.indexed.challenge" and binding[2] == "":
-        (suite,) = record(binding[1], 1)
-        require(len(result_kinds) == 2 and result_kinds[0][0] == "field", "challenge results")
-        return f".challenge {text(suite)} {text(result_kinds[0][1])} {origin(one_parameter(attrs))}"
-    if name == "algebra.exec.field_embed":
-        require(binding_attributes(attrs)
-                and attrs["parameters"] == ("strings", []), "field embedding attributes")
-        require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
-                and len(result_kinds) == 1 and result_kinds[0][0] == "field", "field embedding ports")
-        extension, base = result_kinds[0][1], operand_kinds[0][1]
-        require(isinstance(binding, list) and len(binding) == 3 and binding[0] == "field.embed"
-                and binding[1] == [extension] and binding[2] == "", "field embedding binding")
-        return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
+    if name == "exec.apply":
+        require(binding_attributes(attrs), "execution binding attributes")
+        contract, arguments, implementation = record(binding, 3)
+        require(isinstance(contract, str) and isinstance(arguments, list)
+                and all(isinstance(value, str) for value in arguments)
+                and implementation == "", "execution binding")
+        parameters = attrs["parameters"][1]
+        if contract == "indices.empty":
+            require(not arguments and not parameters and not operand_kinds
+                    and result_kinds == [("indices", None)], "indices empty shape")
+            return ".indicesEmpty"
+        if contract == "indices.append":
+            require(not arguments and not parameters
+                    and operand_kinds == [("indices", None), index]
+                    and result_kinds == [("indices", None)], "indices append shape")
+            return ".indicesAppend"
+        # The execution site is a diagnostic frame name, separate from transcript identity.
+        if contract == "transcript.native.indexed.observe.data":
+            suite, leaf = record(arguments, 2)
+            require(len(operand_kinds) == 3 and operand_kinds[0] == ("transcript", suite)
+                    and operand_kinds[1][0] in ("field", "group")
+                    and operand_kinds[2] == ("indices", None)
+                    and result_kinds == [("transcript", suite)]
+                    and leaf == f"{operand_kinds[1][0]}:{operand_kinds[1][1]}", "observed leaf type")
+            return f".observe {text(suite)} {origin(one_parameter(attrs))}"
+        if contract == "transcript.native.indexed.challenge":
+            (suite,) = record(arguments, 1)
+            require(operand_kinds == [("transcript", suite), ("indices", None)]
+                    and len(result_kinds) == 2 and result_kinds[0][0] == "field"
+                    and result_kinds[1] == ("transcript", suite), "challenge results")
+            return f".challenge {text(suite)} {text(result_kinds[0][1])} {origin(one_parameter(attrs))}"
+        if contract == "field.embed":
+            require(not parameters, "field embedding attributes")
+            require(len(operand_kinds) == 1 and operand_kinds[0][0] == "field"
+                    and len(result_kinds) == 1 and result_kinds[0][0] == "field", "field embedding ports")
+            extension, base = result_kinds[0][1], operand_kinds[0][1]
+            require(arguments == [extension], "field embedding binding")
+            return f".calculate (.fieldEmbed {text(extension)} {text(base)})"
+        return f".unsupported {text(name + ':' + contract)}"
+    if name == "exec.boolean":
+        require(set(attrs) == {"value", "site"} and binding == [] and not operand_kinds
+                and result_kinds == [boolean] and attrs["value"][0] == "bool",
+                "Boolean execution shape")
+        string_attribute(attrs, "site")
+        return f".calculate (.booleanConstant {str(attrs['value'][1]).lower()})"
     if name == "algebra.group_scale" and not attrs and binding == []:
         require(len(operand_kinds) == 2 and operand_kinds[0][0] == "group" and operand_kinds[1][0] == "field",
                 "group scale operands")
@@ -178,7 +192,12 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
                 "field constant shape")
         return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
                 f"{decimal(string_attribute(attrs, 'value'), FIELD_MODULUS)})")
-    if name == "local.call" and set(attrs) == {"callee", "site"} and binding == []:
+    if name in ("protocol.local_call", "func.call"):
+        expected = {"callee", "site", "role"} if name == "protocol.local_call" else {"callee", "runtime.site"}
+        require(set(attrs) == expected and binding == [], "call attributes")
+        string_attribute(attrs, "site" if name == "protocol.local_call" else "runtime.site")
+        if name == "protocol.local_call":
+            require(bool(string_attribute(attrs, "role")), "call role")
         kind, callee = attrs["callee"]
         require(kind == "symbol" and isinstance(callee, str), "call callee")
         return f".call {text(callee)}"

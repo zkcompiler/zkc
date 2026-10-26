@@ -250,7 +250,7 @@ class Driver(Runner):
 
         def templates(instructions):
             for item in mutations.nested(instructions):
-                if item[0] in (mutations.OBSERVE, mutations.CHALLENGE):
+                if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
                     yield list(bytes.fromhex(dict(item[1])["parameters"][1][0]))
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding", "set_option maxRecDepth 20000",

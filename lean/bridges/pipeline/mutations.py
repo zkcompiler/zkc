@@ -37,8 +37,8 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common.lean_render import decode_tree, encode_tree  # noqa: E402
 
-OBSERVE = "crypto.exec.indexed_transcript_observe_data"
-CHALLENGE = "crypto.exec.indexed_transcript_challenge"
+OBSERVE = "transcript.native.indexed.observe.data"
+CHALLENGE = "transcript.native.indexed.challenge"
 TRANSCRIPT_CONTRACTS = ("transcript.native.indexed.observe.data", "transcript.native.indexed.challenge")
 
 
@@ -72,6 +72,10 @@ def kind(name, stage, property_, expected, construction_accepts=False):
 
 # ---------------------------------------------------------------------------
 # The constructed participant export
+
+def bound(item, contract):
+    return item[0] == "exec.apply" and len(item[2]) == 3 and item[2][0] == contract
+
 
 def nested(instructions):
     for item in instructions:
@@ -146,7 +150,7 @@ def first_only(edit):
       "construction-observe")
 def observe_reads_input(exported):
     def edit(value):
-        found = next((item for item in nested(value[7]) if item[0] == OBSERVE), None)
+        found = next((item for item in nested(value[7]) if bound(item, OBSERVE)), None)
         if found is None:
             return False
         scope = environments(value)[id(found)]
@@ -164,7 +168,7 @@ def observe_reads_input(exported):
 def observe_repeats_value(exported):
     def edit(value):
         scopes = environments(value)
-        found = [item for item in nested(value[7]) if item[0] == OBSERVE]
+        found = [item for item in nested(value[7]) if bound(item, OBSERVE)]
         for index, later in enumerate(found):
             for earlier in found[:index]:
                 if earlier[3][1] != later[3][1] and earlier[3][1] < len(scopes[id(later)]) \
@@ -181,7 +185,7 @@ def challenge_reads_host(exported):
     host = len(exported[5]) - 1
 
     def edit(value):
-        found = next((item for item in nested(value[7]) if item[0] == CHALLENGE), None)
+        found = next((item for item in nested(value[7]) if bound(item, CHALLENGE)), None)
         if found is None or found[3][0] == host:
             return False
         found[3][0] = host
@@ -195,9 +199,9 @@ def challenge_names_delivery(exported):
     validator = exported[3][3]
 
     def edit(value):
-        deliveries = [item for item in nested(value[7]) if item[0] == OBSERVE
+        deliveries = [item for item in nested(value[7]) if bound(item, OBSERVE)
                       and template_tree(item)[4][4] == validator]
-        challenge = next((item for item in nested(value[7]) if item[0] == CHALLENGE), None)
+        challenge = next((item for item in nested(value[7]) if bound(item, CHALLENGE)), None)
         if not deliveries or challenge is None:
             return False
         tree = template_tree(challenge)
@@ -286,7 +290,7 @@ def stale_yield(exported):
       construction_accepts=True)
 def call_reads_sibling(exported):
     def edit(value):
-        calls = [item for item in value[7] if item[0] == "local.call" and len(item[3]) >= 2]
+        calls = [item for item in value[7] if item[0] in ("protocol.local_call", "func.call") and len(item[3]) >= 2]
         for first, second in zip(calls, calls[1:]):
             if len(first[3]) == len(second[3]) and first[3][1:] != second[3][1:]:
                 second[3][1:] = first[3][1:]
@@ -301,7 +305,7 @@ def call_reads_sibling(exported):
 def native_domain_separator(candidate, exported):
     """The challenge template names the delivery site instead of the selected
     query site."""
-    challenge = next((item for item in nested(exported[7]) if item[0] == CHALLENGE), None)
+    challenge = next((item for item in nested(exported[7]) if bound(item, CHALLENGE)), None)
     if challenge is None or not exported[3][8]:
         return []
     hex_text = dict(challenge[1])["parameters"][1][0]
@@ -313,8 +317,9 @@ def native_domain_separator(candidate, exported):
 
 
 def function_block(lines, name):
-    """The line range of the local function `name` in a candidate."""
-    first = next((index for index, line in enumerate(lines) if f"local.func @{name}(" in line), None)
+    """The line range of an actual Func definition in a printed candidate."""
+    pattern = re.compile(r"func\.func(?: private| public)? @" + re.escape(name) + r"\(")
+    first = next((index for index, line in enumerate(lines) if pattern.search(line)), None)
     if first is None:
         return None
     indentation = lines[first][:len(lines[first]) - len(lines[first].lstrip())]
@@ -324,7 +329,7 @@ def function_block(lines, name):
 
 def native_helper_constant(candidate, exported):
     """A constant in the body of the last helper the validator calls changes."""
-    calls = [item for item in exported[7] if item[0] == "local.call"]
+    calls = [item for item in exported[7] if item[0] in ("protocol.local_call", "func.call")]
     if not calls:
         return []
     callee = dict(calls[-1][1])["callee"][1]
@@ -345,12 +350,21 @@ def native_challenge_reads_host(candidate, exported):
     """The validator's first challenge call reads the validator's initial
     transcript, which an earlier call already consumed."""
     lines = candidate.splitlines()
+    challenge_bindings = []
+    for line in lines:
+        if '"runtime.binding"' in line and f'contract = "{CHALLENGE}"' in line:
+            match = re.search(r'sym_name = "([\w.$-]+)"', line)
+            if match:
+                challenge_bindings.append(match[1])
     challenge_helpers = []
-    for index, line in enumerate(lines):
-        match = re.search(r"local\.func @([\w.$-]+)\(", line)
+    for line in lines:
+        match = re.search(r"func\.func(?: private| public)? @([\w.$-]+)\(", line)
         if match:
-            block = function_block([text + "\n" for text in lines], match[1])
-            if block and any(CHALLENGE in text for text in lines[block[0]:block[1] + 1]):
+            block = function_block(lines, match[1])
+            if block and any('"exec.apply"' in text and
+                             any(re.search(r"binding = @" + re.escape(binding) + r"[, }]", text)
+                                 for binding in challenge_bindings)
+                             for text in lines[block[0]:block[1] + 1]):
                 challenge_helpers.append(match[1])
     validator = exported[3][3]
     start = next((index for index, line in enumerate(lines)
@@ -363,14 +377,14 @@ def native_challenge_reads_host(candidate, exported):
     for index in range(start + 1, len(lines)):
         if '"protocol.participant"()' in lines[index]:
             break
-        match = re.search(r"local\.call @(" + "|".join(map(re.escape, challenge_helpers)) + r")\(([^)]*)\)",
-                          lines[index])
+        match = re.search(r'"protocol.local_call"\(([^)]*)\).*callee = @('
+                          + "|".join(map(re.escape, challenge_helpers)) + r')[, }]', lines[index])
         if match:
-            operands = [operand.strip() for operand in match[2].split(",")]
+            operands = [operand.strip() for operand in match[1].split(",")]
             if operands[0] == f"%arg{transcript}":
                 return []
             operands[0] = f"%arg{transcript}"
-            lines[index] = lines[index][:match.start(2)] + ", ".join(operands) + lines[index][match.end(2):]
+            lines[index] = lines[index][:match.start(1)] + ", ".join(operands) + lines[index][match.end(1):]
             return ["\n".join(lines) + "\n"]
     return []
 
@@ -430,7 +444,7 @@ def helper_names(exported):
     """The helpers the constructed validator calls: their program functions are
     read by the lowering rule only for their sorts and freedom from transcript
     operations, and prepared separately."""
-    return {dict(item[1])["callee"][1] for item in nested(exported[7]) if item[0] == "local.call"}
+    return {dict(item[1])["callee"][1] for item in nested(exported[7]) if item[0] in ("protocol.local_call", "func.call")}
 
 
 def calculations(program, participant, exported):

@@ -124,7 +124,8 @@ class Entry:
         require(contract[0] == "service", "the replaced input is not a service")
         self.contract = contract[1]
         fields = sorted({instruction_field(item) for item in walk(exported[7])
-                         if item[0] == "crypto.exec.indexed_transcript_challenge"})
+                         if item[0] == "exec.apply" and len(item[2]) == 3
+                         and item[2][0] == "transcript.native.indexed.challenge"})
         self.request = f"some (.draw {text(fields[0])})" if len(fields) == 1 else "none"
         self.draws = [(pair[0], pair[1]) for pair in policy[8]]
 
