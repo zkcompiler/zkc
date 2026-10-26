@@ -46,7 +46,11 @@ theorem wrong_producer_slot (context : Zkc.Construction.Context) :
     simpa only [SumcheckProverLaws.embedP, SumcheckRoundNormalForms.proverState,
       Values.cons.injEq, Option.some.injEq, and_true, Prod.mk.injEq] using output
   cases values
-  simp at rawRead
+  simp only [List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.some.injEq, Domain.Value.data.injEq] at rawRead
+  have same := (Domain.Payload.mk_inj (carriers := uniformCarriers F G)
+    (ty := .vector "bls12-381.fr")).mp rawRead
+  cases same
 
 /-- Structural simulation cannot turn that wrong slot into a certified return. -/
 theorem wrong_slot_simulation (context : Zkc.Construction.Context) :
