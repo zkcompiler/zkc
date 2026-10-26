@@ -74,3 +74,4 @@ end PIR
 -- Their proofs remain kernel checked and retain a single stored provider.
 run_cmd Lean.Elab.Command.liftTermElabM do
   discard <| Lean.Meta.getUnfoldEqnFor? ``PIR.Yields
+  discard <| Lean.Meta.getEqnsFor? ``PIR.Yields
