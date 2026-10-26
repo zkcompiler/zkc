@@ -55,6 +55,10 @@ pointwise expressions, vector operations and ordered execution share this bounde
 selection process. Explicit implementation choices remain fixed; an unrelated
 malformed operation or correspondence mismatch remains a refusal. Attempts share
 compile-time allowances, including discarded candidate construction.
+Numerical preparation transfers its private candidate into recipe emission;
+it does not take another whole-context snapshot merely to change ownership.
+Correspondence still reads the unchanged original subject. Failed attempts
+discard the private candidate and retain their charged work.
 
 Physical lowering separates three steps:
 

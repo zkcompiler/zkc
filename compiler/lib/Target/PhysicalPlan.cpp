@@ -1779,65 +1779,57 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (refusal)
       constructionCapacity = speculative;
     if (!refusal && hasNumerical) {
-      if (!kernel::chargeCopy(*prepared, selection.numerical.remainingCopy)) {
-        if (!speculative)
-          return error("kernel-lowering", "numerical candidate copy capacity");
-        constructionCapacity = true;
+      // Preparation already owns a private checked candidate. Discovery stores
+      // owned formula bodies and transient occurrence associations; neither the
+      // caller's source nor an independent reader borrows this proposal. Move
+      // it into materialization without a second whole-context snapshot. The
+      // original numericalSource remains the correspondence authority.
+      candidate = std::move(prepared);
+      selected = *candidate;
+      if (hasKernels &&
+          failed(kernel::materializeKernelCalls(
+              selected, options.numericalPolicy, nullptr, selection.numerical,
+              &numericalOutcome, speculative))) {
+        if (numericalOutcome.outcome ==
+            mathematical::VerificationObservation::OptionalCapacity) {
+          capacitySubject = numericalOutcome.subject;
+          constructionCapacity = speculative && numericalOutcome.capacity &&
+                                 (numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmExpansion ||
+                                  numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmOriginBytes);
+        } else
+          return error("kernel-lowering", numericalOutcome.detail);
         refusal = error("finite-analysis-limit");
-      } else {
-        IRMapping mapping;
-        candidate = cast<ModuleOp>(prepared->getOperation()->clone(mapping));
-        prepared->walk([&](Operation *op) {
-          for (auto id : selection.numerical.owners(op))
-            selection.numerical.record(mapping.lookup(op), id);
-        });
-        selected = *candidate;
-        if (hasKernels &&
-            failed(kernel::materializeKernelCalls(
-                selected, options.numericalPolicy, nullptr, selection.numerical,
-                &numericalOutcome, speculative))) {
-          if (numericalOutcome.outcome ==
-              mathematical::VerificationObservation::OptionalCapacity) {
-            capacitySubject = numericalOutcome.subject;
-            constructionCapacity = speculative && numericalOutcome.capacity &&
-                                   (numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmExpansion ||
-                                    numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmOriginBytes);
-          } else
-            return error("kernel-lowering", numericalOutcome.detail);
-          refusal = error("finite-analysis-limit");
-        }
-        if (!refusal && hasMaps &&
-            failed(mathematical::materializeRetainedMaps(
-                selected, maps, selection.numerical, options.numericalPolicy,
-                numericalOutcome, speculative))) {
-          if (numericalOutcome.outcome ==
-              mathematical::VerificationObservation::OptionalCapacity) {
-            capacitySubject = numericalOutcome.subject;
-            constructionCapacity = speculative && numericalOutcome.capacity &&
-                                   (numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmExpansion ||
-                                    numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmOriginBytes);
-          } else
-            return error("algebra-map-lowering", numericalOutcome.detail);
-          refusal = error("mathematical-analysis-limit");
-        }
-        auto candidateRoot = cast<zkc::protocol_ir::ProtocolModuleOp>(
-            selected.getBody()->front());
-        // Replacement saw fixed requests. Retained declarations keep their
-        // original attributes; physical choices carry the requested pins.
-        for (auto declaration : candidateRoot.getBody()
-                                    .front()
-                                    .getOps<zkc::runtime::BindingOp>()) {
-          auto original = originalPins.find(declaration.getSymName().str());
-          if (original != originalPins.end())
-            declaration.setImplementation(original->second);
-        }
-        if (!refusal && failed(verify(selected)))
-          return error("binding-operation");
       }
+      if (!refusal && hasMaps &&
+          failed(mathematical::materializeRetainedMaps(
+              selected, maps, selection.numerical, options.numericalPolicy,
+              numericalOutcome, speculative))) {
+        if (numericalOutcome.outcome ==
+            mathematical::VerificationObservation::OptionalCapacity) {
+          capacitySubject = numericalOutcome.subject;
+          constructionCapacity = speculative && numericalOutcome.capacity &&
+                                 (numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmExpansion ||
+                                  numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmOriginBytes);
+        } else
+          return error("algebra-map-lowering", numericalOutcome.detail);
+        refusal = error("mathematical-analysis-limit");
+      }
+      auto candidateRoot =
+          cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());
+      // Replacement saw fixed requests. Retained declarations keep their
+      // original attributes; physical choices carry the requested pins.
+      for (auto declaration :
+           candidateRoot.getBody().front().getOps<zkc::runtime::BindingOp>()) {
+        auto original = originalPins.find(declaration.getSymName().str());
+        if (original != originalPins.end())
+          declaration.setImplementation(original->second);
+      }
+      if (!refusal && failed(verify(selected)))
+        return error("binding-operation");
     }
     if (auto e = input->check(module))
       return e;
