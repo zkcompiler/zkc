@@ -656,14 +656,21 @@ or preparation; unsupported dormant native declarations still refuse.
 
 ## Map and realization execution
 
-The independent reference invokes the exact retained Math helper through its
-existing SSA evaluator. It does not dispatch a production kernel, extract a
-polynomial for another evaluator, or assign meaning by helper name. Realization
-passes every argument and returns every result in order. Owned Local calls are
-strict even for an unused projection input or a zero-result invocation.
-Native missing-input controls observe strictness at `protocol.local_call`, before
-entering its Local body. They do not separately exercise a direct optional
-derived map operation or the inner preparation invocation presence check.
+The independent reference executes actual Func/CF bodies, including block
+arguments, backedges, outcome dispatch, scoped calls and transfers. `exec.compute`
+invokes the exact Math helper through that same independent SSA evaluator. It
+passes every data argument and returns every result in order. It uses neither
+the structured exporter nor production preparation or runtime kernels.
+`protocol.local_call` sequences owned inputs before entering the scoped helper,
+including unused projection inputs and zero-result invocations. Nonowners skip
+the owned call.
+
+Finite requests execute every stored domain constructor in order, including
+unused results, before any callback. Strict zip concatenates complete tuples;
+Cartesian product varies the last factor fastest. Each fold or collection
+invokes its actual predicate before its body, preserving the first stop and
+the original argument positions. Domain admission failure uses the finite
+invocation site. A stop inside a callback retains that callback's site.
 
 Map first measures the first row length, stopping `exhausted` if it is not below
 2^64. It then visits each remaining row input in argument order, measures and
@@ -675,31 +682,38 @@ argument order, selecting each row element or scalar broadcast. Equal empty rows
 return the empty vector without invoking the helper. Admission has nevertheless
 already checked the entire unit and every helper body.
 
-The derived operation has no authored internal site; shape refusal uses the
-invoking `local.apply` site. Discarding its result cannot discard that stop or
-allow a subsequent interaction. Nonowners skip owned Local work. Native map
-preparation instead inserts `control.require` guards with generated sites and
-backend failure `rejected:require`. Relating that failure to source `refused`
-requires an explicit observation/site mapping; the raw codes and generated
-sites are not equated here.
+Frontend maps use `exec.collect` with ordered domain admission and a scoped
+callback. Shape refusal uses that collection's invocation site. Discarding its
+result cannot discard the stop or permit a subsequent interaction. The callback
+passes the complete ordered tuple and broadcasts to its actual computation.
+The independent observer checks the source outcome; relating selected native
+failure codes, generated sites and resource effects requires a separate bridge.
 
 Ordinary wrappers capture unchanged `multilinear::fix_first` and `fix_prefix`,
 including their table constructor and values/variables/width projections.
-`fix_prefix` uses existing Local finite folds. An independently authored Fr linear
+`fix_prefix` uses scoped finite folds. An independently authored Fr linear
 combination covers ordered broadcasts and unused scalar/row arguments. The native
 library's KoalaBear Ext8 Combination remains outside this Fr-only profile.
 
 Structured admission checks retained SSA, without production formula expansion.
-Native language emission additionally checks expanded Ring eligibility; native
-preparation can reject a handwritten map for Ring depth even after ordinary
-formation succeeds. Structured admission alone does not claim that eligibility.
+Collections admit actual effectful callbacks; a specialized scalar-ring
+optimization must separately establish eligibility of the selected computation.
+Neither a generated name nor collection admission establishes that eligibility.
 
 ## Limits and evidence
 
 The independent native SSA test executable retains its closed invocation:
 `zkc-structured_reference-test FILE SYMBOL INPUTS_JSON`. Its single-role scalar
-and finite inputs and outputs are unchanged. Open executions use a distinct
-command and exact request:
+and finite inputs and outputs are unchanged.
+
+Its scope and transfer identities check the observer's logical control and
+custody, including one-time transfer consumption. They do not model backend
+allocation, frame admission, cleanup failures or the native resource ledger.
+Observer work, tuple-storage and vector bounds produce diagnostics, never
+fabricated source stops. Native and formal agreement is bounded evidence, not
+a theorem of CFG lowering or resource correspondence.
+
+Open executions use a distinct command and exact request:
 
 ```text
 zkc-structured_reference-test open FILE SYMBOL REQUEST_JSON

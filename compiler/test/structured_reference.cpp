@@ -4,11 +4,13 @@
 // this executable supplies finite evidence, not a shipped semantic interpreter.
 #include "../lib/Support/Input.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
@@ -104,21 +106,42 @@ enum class Kind {
   Select,
   At,
   Call,
-  Apply,
   ProtocolApply,
   ProtocolRepeat,
   LocalCall,
   Fold,
-  If,
-  For,
   Guard,
   Return,
   Yield,
-  Condition,
   Stop,
   Elements,
   Indices,
-  DomainYield
+  DomainYield,
+  DomainRange,
+  Zip,
+  Product,
+  Compute,
+  ScopedFold,
+  Collect,
+  Complete,
+  Test,
+  Range,
+  Returned,
+  Failed,
+  Dispatch,
+  Branch,
+  CondBranch,
+  EnterScope,
+  ExitScope,
+  AcceptTransfer,
+  BorrowTransfer,
+  TransferValues,
+  ReleaseTransfer,
+  TakeCondition,
+  Iteration,
+  ReleaseBindings,
+  IntegerConstant,
+  IntegerAdd
 };
 
 // Independent of the exporter and native operation catalogue. Resolve every
@@ -142,49 +165,32 @@ enum class Primitive {
   FieldEqual
 };
 struct PrimitiveSpec {
-  StringLiteral operation, contract, inputs, outputs;
+  StringLiteral contract, inputs, outputs;
   Primitive primitive;
   bool field;
 };
 constexpr PrimitiveSpec primitiveSpecs[] = {
-    {"algebra.exec.index_constant", "index.constant", "", "i",
-     Primitive::Constant, false},
-    {"algebra.exec.index_add", "index.add", "ii", "i", Primitive::Add, false},
-    {"algebra.exec.index_sub", "index.sub", "ii", "i", Primitive::Sub, false},
-    {"algebra.exec.index_mul", "index.mul", "ii", "i", Primitive::Mul, false},
-    {"algebra.exec.index_div", "index.div", "ii", "i", Primitive::Div, false},
-    {"algebra.exec.index_mod", "index.mod", "ii", "i", Primitive::Mod, false},
-    {"algebra.exec.index_equal", "index.equal", "ii", "b", Primitive::Equal,
-     false},
-    {"algebra.exec.index_less", "index.less", "ii", "b", Primitive::Less,
-     false},
-    {"algebra.exec.vector_empty", "vector.empty", "", "v", Primitive::Empty,
-     true},
-    {"algebra.exec.vector_length", "vector.length", "v", "i", Primitive::Length,
-     true},
-    {"algebra.exec.vector_sum", "vector.sum", "v", "f", Primitive::Sum, true},
-    {"algebra.exec.vector_split", "vector.split", "v", "vv", Primitive::Split,
-     true},
-    {"algebra.exec.vector_append", "vector.append", "vf", "v",
-     Primitive::Append, true},
-    {"algebra.exec.vector_equal", "vector.equal", "vv", "b",
-     Primitive::VectorEqual, true},
-    {"algebra.exec.field_equal", "field.equal", "ff", "b",
-     Primitive::FieldEqual, true},
+    {"index.constant", "", "i", Primitive::Constant, false},
+    {"index.add", "ii", "i", Primitive::Add, false},
+    {"index.sub", "ii", "i", Primitive::Sub, false},
+    {"index.mul", "ii", "i", Primitive::Mul, false},
+    {"index.div", "ii", "i", Primitive::Div, false},
+    {"index.mod", "ii", "i", Primitive::Mod, false},
+    {"index.equal", "ii", "b", Primitive::Equal, false},
+    {"index.less", "ii", "b", Primitive::Less, false},
+    {"vector.empty", "", "v", Primitive::Empty, true},
+    {"vector.length", "v", "i", Primitive::Length, true},
+    {"vector.sum", "v", "f", Primitive::Sum, true},
+    {"vector.split", "v", "vv", Primitive::Split, true},
+    {"vector.append", "vf", "v", Primitive::Append, true},
+    {"vector.equal", "vv", "b", Primitive::VectorEqual, true},
+    {"field.equal", "ff", "b", Primitive::FieldEqual, true},
 };
 struct CheckedPrimitive {
   Primitive primitive;
   uint64_t literal = 0;
 };
 using PrimitiveMap = llvm::DenseMap<Operation *, CheckedPrimitive>;
-
-enum class PreparationKind { Realize, Map };
-struct CheckedPreparation {
-  PreparationKind kind;
-  func::FuncOp helper;
-  SmallVector<bool> rowwise;
-};
-using PreparationMap = llvm::DenseMap<Operation *, CheckedPreparation>;
 
 bool primitivePorts(TypeRange types, StringRef ports) {
   if (types.size() != ports.size())
@@ -201,9 +207,10 @@ bool primitivePorts(TypeRange types, StringRef ports) {
 }
 
 Kind kind(Operation &op) {
-  for (const auto &spec : primitiveSpecs)
-    if (op.getName().getStringRef() == spec.operation)
-      return Kind::Exec;
+  if (isa<arith::ConstantOp>(op))
+    return op.getResult(0).getType().isSignlessInteger(1)
+               ? Kind::BoolConstant
+               : Kind::IntegerConstant;
   return llvm::StringSwitch<Kind>(op.getName().getStringRef())
       .Case("data.index", Kind::IndexConstant)
       .Case("data.index_equal", Kind::IndexEqual)
@@ -223,7 +230,7 @@ Kind kind(Operation &op) {
       .Case("protocol.exchange", Kind::Exchange)
       .Case("protocol.query", Kind::Draw)
       .Case("protocol.statement", Kind::Statement)
-      .Cases({"arith.constant", "local.bool_constant"}, Kind::BoolConstant)
+      .Case("exec.boolean", Kind::BoolConstant)
       .Case("arith.andi", Kind::And)
       .Case("arith.ori", Kind::Or)
       .Case("arith.xori", Kind::Xor)
@@ -231,21 +238,42 @@ Kind kind(Operation &op) {
       .Case("arith.select", Kind::Select)
       .Case("data.bounded_at", Kind::At)
       .Case("func.call", Kind::Call)
-      .Case("local.apply", Kind::Apply)
       .Case("protocol.apply", Kind::ProtocolApply)
       .Case("protocol.repeat", Kind::ProtocolRepeat)
       .Case("protocol.local_call", Kind::LocalCall)
       .Case("algebra.finite_fold", Kind::Fold)
-      .Case("local.if", Kind::If)
-      .Case("local.for", Kind::For)
       .Case("protocol.guard", Kind::Guard)
-      .Cases({"func.return", "local.return", "protocol.return"}, Kind::Return)
-      .Cases({"local.yield", "protocol.yield"}, Kind::Yield)
-      .Case("local.condition", Kind::Condition)
-      .Case("local.stop", Kind::Stop)
+      .Cases({"func.return", "protocol.return"}, Kind::Return)
+      .Case("protocol.yield", Kind::Yield)
+      .Case("exec.reject", Kind::Stop)
+      .Case("exec.apply", Kind::Exec)
+      .Case("exec.compute", Kind::Compute)
+      .Case("exec.fold", Kind::ScopedFold)
+      .Case("exec.collect", Kind::Collect)
+      .Case("exec.complete", Kind::Complete)
+      .Case("exec.test", Kind::Test)
+      .Case("exec.range", Kind::Range)
+      .Case("exec.returned", Kind::Returned)
+      .Case("exec.failed", Kind::Failed)
+      .Case("exec.dispatch", Kind::Dispatch)
+      .Case("cf.br", Kind::Branch)
+      .Case("cf.cond_br", Kind::CondBranch)
+      .Case("runtime.enter_scope", Kind::EnterScope)
+      .Case("runtime.exit_scope", Kind::ExitScope)
+      .Case("runtime.accept_transfer", Kind::AcceptTransfer)
+      .Case("runtime.borrow_transfer", Kind::BorrowTransfer)
+      .Case("runtime.transfer_values", Kind::TransferValues)
+      .Case("runtime.release_transfer", Kind::ReleaseTransfer)
+      .Case("runtime.take_condition", Kind::TakeCondition)
+      .Case("runtime.iteration", Kind::Iteration)
+      .Case("runtime.release_bindings", Kind::ReleaseBindings)
+      .Case("arith.addi", Kind::IntegerAdd)
       .Case("data.domain_elements", Kind::Elements)
       .Case("data.domain_indices", Kind::Indices)
       .Case("data.domain_yield", Kind::DomainYield)
+      .Case("data.domain_range", Kind::DomainRange)
+      .Case("data.domain_zip", Kind::Zip)
+      .Case("data.domain_product", Kind::Product)
       .Default(Kind::Unsupported);
 }
 
@@ -283,6 +311,31 @@ FunctionType signature(Operation &op) {
   return attr ? dyn_cast<FunctionType>(attr.getValue()) : FunctionType{};
 }
 
+bool isScoped(Operation &op) {
+  auto type = signature(op);
+  return type && type.getNumInputs() &&
+         isa<runtime::ScopeType>(type.getInput(0)) &&
+         type.getNumResults() == 1 && isa<exec::OutcomeType>(type.getResult(0));
+}
+
+bool referenceType(Type type, bool scoped) {
+  if (valueType(type))
+    return true;
+  if (!scoped)
+    return false;
+  if (type.isSignlessInteger(64) ||
+      isa<runtime::ScopeType, exec::StopType>(type))
+    return true;
+  if (auto outcome = dyn_cast<exec::OutcomeType>(type))
+    return outcome.getPayload().size() <= maxSignature &&
+           llvm::all_of(outcome.getPayload(),
+                        [](Type t) { return referenceType(t, true); });
+  if (auto transfer = dyn_cast<runtime::TransferType>(type))
+    return transfer.getPayload().size() <= maxSignature &&
+           llvm::all_of(transfer.getPayload(), valueType);
+  return false;
+}
+
 // The profile check visits every definition and every region independently of
 // evaluation. Unsupported operations in dormant branches and unused helpers
 // therefore cannot acquire meaning just because one request avoids them.
@@ -295,8 +348,6 @@ class Admission {
   llvm::DenseMap<Operation *, unsigned> heights;
   llvm::DenseMap<Operation *, const PrimitiveSpec *> bindings;
   PrimitiveMap primitives;
-  PreparationMap preparations;
-  llvm::StringSet<> sites;
 
   Error binding(Operation &op) {
     if (auto failure = attributes(
@@ -343,13 +394,15 @@ class Admission {
     auto site = op.getAttrOfType<StringAttr>("site");
     auto found =
         bindings.find(name ? symbols.lookup(name.getValue()) : nullptr);
-    if (!isa<local::FuncOp>(owner) || !site || site.getValue().empty() ||
+    if (!isScoped(owner) || !site || site.getValue().empty() ||
         found == bindings.end() || !parameters)
       return error("structured-reference-binding", "owner, reference or site");
     const auto &spec = *found->second;
-    if (op.getName().getStringRef() != spec.operation ||
-        !primitivePorts(op.getOperandTypes(), spec.inputs) ||
-        !primitivePorts(op.getResultTypes(), spec.outputs))
+    if (!primitivePorts(op.getOperands().drop_front().getTypes(),
+                        spec.inputs) ||
+        !primitivePorts(
+            cast<exec::OutcomeType>(op.getResult(0).getType()).getPayload(),
+            spec.outputs))
       return error("structured-reference-binding", "operation or ports");
     CheckedPrimitive checked{spec.primitive};
     bool constant = spec.primitive == Primitive::Constant;
@@ -376,153 +429,49 @@ class Admission {
       return optional ? Error::success()
                       : error("structured-reference-symbol", attribute);
     Operation *target = symbols.lookup(name.getValue());
-    if (!target ||
-        (target->getName().getStringRef() != expected &&
-         !(expected == "local.func" && attribute == "callee" &&
-           kind(op) == Kind::Apply &&
-           isa<local::FiniteFoldOp, local::RealizeOp, algebra::MapRealizeOp>(
-               target))))
+    if (!target || target->getName().getStringRef() != expected)
       return error("structured-reference-symbol", name.getValue());
     dependencies[&owner].push_back(target);
     if (attribute == "callee") {
-      if ((kind(op) == Kind::Apply && !isa<local::FuncOp>(owner)) ||
-          (kind(op) == Kind::LocalCall &&
-           !isa<protocol_ir::MathematicalOp>(owner)) ||
-          (kind(op) == Kind::Call &&
-           (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
-            !cast<func::FuncOp>(target).isPrivate())))
-        return error("structured-reference-symbol", "call owner or kind");
       auto type = signature(*target);
-      if (!type || op.getOperandTypes() != type.getInputs() ||
-          op.getResultTypes() != type.getResults())
+      bool bridge = kind(op) == Kind::LocalCall;
+      bool computation = kind(op) == Kind::Compute;
+      auto inputs = type.getInputs();
+      auto outputs = type.getResults();
+      if (bridge) {
+        if (!isa<protocol_ir::MathematicalOp>(owner) || !isScoped(*target))
+          return error("structured-reference-symbol", "local call scope");
+        inputs = inputs.drop_front();
+        outputs = cast<exec::OutcomeType>(outputs[0]).getPayload();
+      } else if (kind(op) == Kind::Call) {
+        if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
+            !cast<func::FuncOp>(target).isPrivate() ||
+            (isScoped(*target) && !isScoped(owner)))
+          return error("structured-reference-symbol", "call owner or kind");
+      } else if (computation && (isScoped(*target) || !isScoped(owner))) {
+        return error("structured-reference-symbol", "computation boundary");
+      }
+      TypeRange actualInputs = op.getOperandTypes();
+      if (computation)
+        actualInputs = actualInputs.drop_front();
+      if (actualInputs != inputs ||
+          (computation
+               ? TypeRange(cast<exec::OutcomeType>(op.getResult(0).getType())
+                               .getPayload())
+               : TypeRange(op.getResultTypes())) != outputs)
         return error("structured-reference-signature", name.getValue());
     }
     return Error::success();
   }
 
-  Error foldReferences(Operation &op, Operation &owner, bool local) {
+  Error foldReferences(Operation &op, Operation &owner) {
     if (auto failure = reference(op, owner, "domain", "data.domain"))
       return failure;
     if (auto failure =
-            reference(op, owner, "step", local ? "local.func" : "func.func"))
+            reference(op, owner, kind(op) == Kind::Collect ? "body" : "step",
+                      "func.func"))
       return failure;
-    return reference(op, owner, "predicate", local ? "local.func" : "func.func",
-                     true);
-  }
-
-  Error preparation(Operation &op) {
-    bool mapped = isa<algebra::MapRealizeOp>(op);
-    StringRef code = mapped ? "structured-reference-map"
-                            : "structured-reference-realization";
-    SmallVector<StringRef> allowed{"sym_name", "function_type", "helper"};
-    if (mapped)
-      allowed.push_back("rowwise");
-    if (auto failure = attributes(op, allowed))
-      return failure;
-    if (op.getNumOperands() || op.getNumResults() || op.getNumRegions())
-      return error(code, "declaration shape");
-    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("helper");
-    auto helper =
-        ref ? dyn_cast_or_null<func::FuncOp>(symbols.lookup(ref.getValue()))
-            : func::FuncOp{};
-    if (!helper || !helper.isPrivate() || helper.isExternal() ||
-        helper->getParentOp() != op.getParentOp())
-      return error(code, "private sibling Math helper");
-    CheckedPreparation checked{
-        mapped ? PreparationKind::Map : PreparationKind::Realize, helper, {}};
-    auto type = signature(op), scalar = helper.getFunctionType();
-    if (mapped) {
-      auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
-      if (!mask || mask.size() != type.getNumInputs() ||
-          !llvm::is_contained(mask.asArrayRef(), true) ||
-          type.getNumResults() != 1 ||
-          !primitivePorts(type.getResults(), "v") ||
-          scalar.getNumInputs() != type.getNumInputs() ||
-          !primitivePorts(scalar.getResults(), "f"))
-        return error(code, "root ABI or row mask");
-      for (unsigned i = 0; i < type.getNumInputs(); ++i) {
-        bool row = mask[i];
-        if (!primitivePorts(TypeRange{type.getInput(i)}, row ? "v" : "f") ||
-            !primitivePorts(TypeRange{scalar.getInput(i)}, "f"))
-          return error(code, "lifted input ABI");
-        checked.rowwise.push_back(row);
-      }
-    } else if (type != scalar) {
-      return error(code, "full realization ABI");
-    }
-    dependencies[&op].push_back(helper);
-    preparations.try_emplace(&op, std::move(checked));
-    return Error::success();
-  }
-
-  Error preparationClosures() {
-    // Computation and scalar-map profiles have separate caches. Ordinary
-    // formation has already checked bounds and graph cycles/depth.
-    llvm::DenseSet<Operation *> computation, ring;
-    for (Operation &declaration : unit.getBody().front()) {
-      auto found = preparations.find(&declaration);
-      if (found == preparations.end())
-        continue;
-      bool mapped = found->second.kind == PreparationKind::Map;
-      auto &visited = mapped ? ring : computation;
-      StringRef code = mapped ? "structured-reference-map"
-                              : "structured-reference-realization";
-      auto rootPremises =
-          found->second.helper->getAttrOfType<ArrayAttr>("data.preconditions");
-      if (rootPremises && !rootPremises.empty())
-        return error(code, "nonempty root preconditions");
-      SmallVector<Operation *> pending{found->second.helper};
-      while (!pending.empty()) {
-        auto *current = pending.pop_back_val();
-        if (!visited.insert(current).second)
-          continue;
-        auto helper = dyn_cast<func::FuncOp>(current);
-        if (!helper || !helper.isPrivate() || helper.isExternal() ||
-            helper->getParentOp() != unit.getOperation())
-          return error(code, "private Math closure");
-        auto premises = helper->getAttrOfType<ArrayAttr>("data.preconditions");
-        if (mapped && premises && !premises.empty())
-          return error(code, "nonempty helper preconditions");
-        if (mapped) {
-          auto type = helper.getFunctionType();
-          for (Type port :
-               llvm::concat<const Type>(type.getInputs(), type.getResults()))
-            if (!primitivePorts(TypeRange{port}, "f"))
-              return error(code, "non-scalar closure port");
-        }
-        for (Operation &op : helper.getBody().front()) {
-          Kind operation = kind(op);
-          if (operation == Kind::Call) {
-            pending.push_back(
-                symbols.lookup(cast<func::CallOp>(op).getCallee()));
-            continue;
-          }
-          if (!mapped && operation == Kind::Fold) {
-            for (StringRef attribute : {"step", "predicate"})
-              if (auto callback =
-                      op.getAttrOfType<FlatSymbolRefAttr>(attribute))
-                pending.push_back(symbols.lookup(callback.getValue()));
-            continue;
-          }
-          bool allowed =
-              operation == Kind::FieldConstant || operation == Kind::Add ||
-              operation == Kind::Subtract || operation == Kind::Multiply ||
-              operation == Kind::Return;
-          if (!mapped)
-            allowed |= llvm::is_contained(
-                ArrayRef<Kind>{
-                    Kind::Equal, Kind::GroupIdentity, Kind::GroupAdd,
-                    Kind::GroupScale, Kind::GroupEqual, Kind::IndexConstant,
-                    Kind::IndexEqual, Kind::IndexLess, Kind::IndexPowerOfTwo,
-                    Kind::VectorLength, Kind::BoolConstant, Kind::And, Kind::Or,
-                    Kind::Xor, Kind::Compare, Kind::Select, Kind::At},
-                operation);
-          if (!allowed || op.getNumRegions())
-            return error(code, op.getName().getStringRef());
-        }
-      }
-    }
-    return Error::success();
+    return reference(op, owner, "predicate", "func.func", true);
   }
 
   Error instruction(Operation &op, Operation &owner) {
@@ -531,18 +480,16 @@ class Admission {
         code == Kind::Indices || code == Kind::DomainYield)
       return error("structured-reference-unsupported",
                    op.getName().getStringRef());
-    if (op.getNumRegions() !=
-        (code == Kind::If                                    ? 2u
-         : code == Kind::For || code == Kind::ProtocolRepeat ? 1u
-                                                             : 0u))
+    if (op.getNumRegions() != (code == Kind::ProtocolRepeat ? 1u : 0u))
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
-      if (!valueType(type) ||
+      if (!referenceType(type, isScoped(owner)) ||
           (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw &&
            code != Kind::ProtocolApply && code != Kind::ProtocolRepeat))
         return error("structured-reference-unsupported", "operand type");
     for (Type type : op.getResultTypes())
-      if (!valueType(type) || isa<protocol_ir::ServiceReferenceType>(type))
+      if (!referenceType(type, isScoped(owner)) ||
+          isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
     case Kind::ProtocolRepeat: {
@@ -609,51 +556,72 @@ class Admission {
       break;
     }
     case Kind::BoolConstant:
-      if (auto failure =
-              attributes(op, isa<local::BoolConstantOp>(op)
-                                 ? ArrayRef<StringRef>{"value", "site"}
-                                 : ArrayRef<StringRef>{"value"}))
-        return failure;
-      if (op.getNumResults() != 1 ||
-          !op.getResult(0).getType().isSignlessInteger(1))
-        return error("structured-reference-unsupported",
-                     "non-boolean constant");
-      break;
+      return attributes(op, isa<exec::BooleanOp>(op)
+                                ? ArrayRef<StringRef>{"value", "site"}
+                                : ArrayRef<StringRef>{"value"});
+    case Kind::IntegerConstant:
+      if (!isScoped(owner) || !op.getResult(0).getType().isSignlessInteger(64))
+        return error("structured-reference-unsupported", "integer constant");
+      return attributes(op, {"value"});
+    case Kind::IntegerAdd:
+      if (!isScoped(owner) ||
+          !op.getResult(0).getType().isSignlessInteger(64) ||
+          cast<arith::AddIOp>(op).getOverflowFlags() !=
+              arith::IntegerOverflowFlags::none)
+        return error("structured-reference-unsupported", "integer addition");
+      return attributes(op, {"overflowFlags"});
     case Kind::And:
     case Kind::Or:
     case Kind::Xor:
-    case Kind::Compare:
       if (!llvm::all_of(op.getOperandTypes(),
                         [](Type t) { return t.isSignlessInteger(1); }))
         return error("structured-reference-unsupported",
                      "non-boolean arithmetic");
-      if (code == Kind::Compare) {
-        auto predicate = cast<arith::CmpIOp>(op).getPredicate();
-        if (predicate != arith::CmpIPredicate::eq &&
-            predicate != arith::CmpIPredicate::ne)
-          return error("structured-reference-unsupported",
-                       "comparison predicate");
-        return attributes(op, {"predicate"});
-      }
       return attributes(op, {});
+    case Kind::Compare: {
+      auto type = op.getOperand(0).getType();
+      auto predicate = cast<arith::CmpIOp>(op).getPredicate();
+      if (!(type.isSignlessInteger(1) &&
+            (predicate == arith::CmpIPredicate::eq ||
+             predicate == arith::CmpIPredicate::ne)) &&
+          !(isScoped(owner) && type.isSignlessInteger(64) &&
+            predicate == arith::CmpIPredicate::ult))
+        return error("structured-reference-unsupported",
+                     "comparison predicate");
+      return attributes(op, {"predicate"});
+    }
     case Kind::Call:
-    case Kind::Apply:
     case Kind::LocalCall:
+    case Kind::Compute:
       if (auto failure = attributes(
-              op, code == Kind::Call ? ArrayRef<StringRef>{"callee"}
-                  : code == Kind::Apply
+              op, code == Kind::Call
+                      ? ArrayRef<StringRef>{"callee", "runtime.site"}
+                  : code == Kind::Compute
                       ? ArrayRef<StringRef>{"callee", "site"}
                       : ArrayRef<StringRef>{"callee", "site", "role"}))
         return failure;
-      return reference(op, owner, "callee",
-                       code == Kind::Call ? "func.func" : "local.func");
+      return reference(op, owner, "callee", "func.func");
     case Kind::Fold:
-      if (auto failure = attributes(op, {"domain", "step", "predicate"}))
+    case Kind::ScopedFold:
+    case Kind::Collect:
+      if (auto failure = attributes(
+              op,
+              code == Kind::Collect
+                  ? ArrayRef<StringRef>{"domain", "body", "predicate", "site"}
+              : code == Kind::ScopedFold
+                  ? ArrayRef<StringRef>{"domain", "step", "predicate", "site"}
+                  : ArrayRef<StringRef>{"domain", "step", "predicate"}))
         return failure;
-      return foldReferences(op, owner, false);
-    case Kind::If:
-    case Kind::For:
+      return foldReferences(op, owner);
+    case Kind::Test:
+    case Kind::Range:
+    case Kind::Iteration:
       return attributes(op, {"site"});
+    case Kind::EnterScope:
+      return attributes(
+          op, {"kind", "site", "selection", "callee", "operandSegmentSizes"});
+    case Kind::CondBranch:
+      return attributes(op, {"operandSegmentSizes"});
     case Kind::Guard:
       return attributes(op, {"site", "owner"});
     case Kind::Restrict:
@@ -678,7 +646,7 @@ class Admission {
       if (!llvm::is_contained(ArrayRef<StringRef>{"reject", "abort",
                                                   "exhausted", "incomplete",
                                                   "refused"},
-                              cast<local::StopOp>(op).getReason()))
+                              cast<exec::RejectOp>(op).getReason()))
         return error("structured-reference-unsupported", "stop reason");
       break;
     default:
@@ -824,58 +792,36 @@ class Admission {
   Error block(Block &body, Operation &owner, unsigned depth) {
     if (depth > maxDepth || body.getNumArguments() > maxSignature)
       return error("structured-reference-capacity", "block depth or arguments");
-    llvm::DenseSet<Value> defined;
-    for (Value argument : body.getArguments()) {
-      if (!valueType(argument.getType()))
+    for (Value argument : body.getArguments())
+      if (!referenceType(argument.getType(), isScoped(owner)))
         return error("structured-reference-unsupported", "block argument type");
-      defined.insert(argument);
-    }
+    // Native verification checked dominance; independently reject cross-region
+    // captures. CFG values may dominate several blocks in this one function.
     for (Operation &op : body) {
-      // Structural instructions exclude terminators. Interpreter work has a
-      // separate budget and still charges every executed native operation.
       if ((!op.hasTrait<OpTrait::IsTerminator>() &&
            ++operations > maxOperations) ||
           op.getNumOperands() > maxSignature ||
           op.getNumResults() > maxSignature)
         return error("structured-reference-capacity",
                      "operations or signature");
-      for (Value operand : op.getOperands())
-        if (!defined.contains(operand))
+      for (Value operand : op.getOperands()) {
+        auto *region = operand.getParentRegion();
+        if (region != body.getParent())
           return error("structured-reference-ssa",
-                       "operand outside closed block");
+                       "operand outside closed region");
+      }
       for (auto attr : op.getAttrs())
         if (auto failure = attributeBounds(attr.getValue()))
           return failure;
-      if (auto site = op.getAttrOfType<StringAttr>("site"))
-        if (site.getValue().empty() || !sites.insert(site.getValue()).second)
-          return error("structured-reference-unsupported", "execution site");
       if (auto failure = instruction(op, owner))
         return failure;
       for (Region &region : op.getRegions()) {
         if (!llvm::hasSingleElement(region) || region.front().empty())
-          return error("structured-reference-unsupported", "non-single block");
+          return error("structured-reference-unsupported",
+                       "nested block count");
         if (auto failure = block(region.front(), owner, depth + 1))
           return failure;
       }
-      // Preserve the complete native yield ABI, including invariant identity.
-      if (kind(op) == Kind::For) {
-        Block &inner = op.getRegion(0).front();
-        Operation &end = inner.back();
-        if (kind(end) != Kind::Stop) {
-          unsigned offset = kind(end) == Kind::Condition ? 1 : 0;
-          unsigned count = op.getNumResults();
-          unsigned captures = op.getNumOperands() - 2 - count;
-          if (end.getNumOperands() != offset + count + captures)
-            return error("structured-reference-signature", "loop yield");
-          for (unsigned i = 0; i < captures; ++i)
-            if (end.getOperand(offset + count + i) !=
-                inner.getArgument(1 + count + i))
-              return error("structured-reference-ssa",
-                           "loop capture forwarding");
-        }
-      }
-      for (Value result : op.getResults())
-        defined.insert(result);
     }
     return Error::success();
   }
@@ -886,32 +832,37 @@ class Admission {
       return failure;
     if (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)))
       return error("structured-reference-unsupported", "domain body");
-    Block &body = op.getRegion(0).front();
-    if (std::distance(body.begin(), body.end()) != 2)
-      return error("structured-reference-unsupported",
-                   "domain must have exactly one constructor and yield");
-    Operation &constructor = body.front(), &end = body.back();
-    Kind code = kind(constructor);
-    if ((code != Kind::Elements && code != Kind::Indices) ||
-        kind(end) != Kind::DomainYield || constructor.getNumOperands() != 1 ||
-        constructor.getNumResults() != 1 || end.getNumOperands() != 1 ||
-        end.getOperand(0) != constructor.getResult(0))
-      return error("structured-reference-unsupported",
-                   "domain constructor or yield");
-    auto container = dyn_cast<BlockArgument>(constructor.getOperand(0));
-    if (!container || container.getOwner() != &body ||
-        !isa<algebra::FieldVectorType>(container.getType()) ||
-        !valueType(container.getType()))
-      return error("structured-reference-unsupported", "domain container");
-    if (auto failure = attributes(constructor, code == Kind::Indices
-                                                   ? ArrayRef<StringRef>{"axis"}
-                                                   : ArrayRef<StringRef>{}))
-      return failure;
-    if (auto failure = attributes(end, {}))
-      return failure;
-    if (code == Kind::Indices &&
-        cast<IntegerAttr>(constructor.getAttr("axis")).getInt() != 0)
-      return error("structured-reference-unsupported", "domain axis");
+    auto &body = op.getRegion(0).front();
+    llvm::DenseSet<Value> defined(body.getArguments().begin(),
+                                  body.getArguments().end());
+    for (Operation &item : body) {
+      if (++operations > maxOperations)
+        return error("structured-reference-capacity", "domain instructions");
+      auto code = kind(item);
+      if (!llvm::is_contained(ArrayRef<Kind>{Kind::Elements, Kind::Indices,
+                                             Kind::DomainRange, Kind::Zip,
+                                             Kind::Product, Kind::DomainYield},
+                              code))
+        return error("structured-reference-unsupported", "domain constructor");
+      for (Value operand : item.getOperands())
+        if (!defined.contains(operand))
+          return error("structured-reference-ssa", "domain operand");
+      if (auto failure = attributes(item, code == Kind::Indices
+                                              ? ArrayRef<StringRef>{"axis"}
+                                              : ArrayRef<StringRef>{}))
+        return failure;
+      if (code == Kind::Indices &&
+          cast<data::DomainIndicesOp>(item).getAxis() != 0)
+        return error("structured-reference-unsupported", "domain axis");
+      for (Type type : item.getResultTypes()) {
+        auto domain = dyn_cast<data::DomainType>(type);
+        if (!domain || !llvm::all_of(domain.getItemTypes(), valueType))
+          return error("structured-reference-unsupported",
+                       "domain element type");
+      }
+      for (Value value : item.getResults())
+        defined.insert(value);
+    }
     return Error::success();
   }
 
@@ -946,7 +897,6 @@ public:
   explicit Admission(protocol_ir::ProtocolModuleOp unit)
       : unit(unit), symbols(unit) {}
   const PrimitiveMap &checkedPrimitives() const { return primitives; }
-  const PreparationMap &checkedPreparations() const { return preparations; }
 
   Error check() {
     unsigned domains = 0, definitions = 0, relations = 0;
@@ -1008,10 +958,7 @@ public:
         continue;
       }
       bool isDomain = isa<data::DomainOp>(op);
-      bool finite = isa<local::FiniteFoldOp>(op);
-      bool prepared = isa<local::RealizeOp, algebra::MapRealizeOp>(op);
-      if (!isDomain && !finite && !prepared &&
-          !isa<func::FuncOp, local::FuncOp, protocol_ir::MathematicalOp>(op))
+      if (!isDomain && !isa<func::FuncOp, protocol_ir::MathematicalOp>(op))
         return error("structured-reference-unsupported",
                      op.getName().getStringRef());
       if (++(isDomain ? domains : definitions) > 128)
@@ -1021,36 +968,17 @@ public:
           type.getNumResults() > maxSignature)
         return error("structured-reference-capacity", "function signature");
       for (Type input : type.getInputs())
-        if (!valueType(input) ||
+        if (!referenceType(input, isScoped(op)) ||
             (isa<protocol_ir::ServiceReferenceType>(input) &&
              !isa<protocol_ir::MathematicalOp>(op)))
           return error("structured-reference-unsupported", "input type");
       if (!isDomain)
         for (Type output : type.getResults())
-          if (!valueType(output) ||
+          if (!referenceType(output, isScoped(op)) ||
               isa<protocol_ir::ServiceReferenceType>(output))
             return error("structured-reference-unsupported", "output type");
       if (isDomain) {
         if (auto failure = domain(op))
-          return failure;
-        continue;
-      }
-      if (prepared) {
-        if (++operations > maxOperations)
-          return error("structured-reference-capacity",
-                       "preparation instructions");
-        if (auto failure = preparation(op))
-          return failure;
-        continue;
-      }
-      if (finite) {
-        if (++operations > maxOperations)
-          return error("structured-reference-capacity", "finite instructions");
-        if (auto failure =
-                attributes(op, {"sym_name", "sym_visibility", "function_type",
-                                "domain", "step", "predicate"}))
-          return failure;
-        if (auto failure = foldReferences(op, op, true))
           return failure;
         continue;
       }
@@ -1067,7 +995,8 @@ public:
       } else if (isa<func::FuncOp>(op)) {
         if (auto failure =
                 attributes(op, {"sym_name", "sym_visibility", "function_type",
-                                "data.preconditions"}))
+                                "data.preconditions", "runtime.origin",
+                                "runtime.region", "no_inline"}))
           return failure;
         if (auto conditions =
                 op.getAttrOfType<ArrayAttr>("data.preconditions")) {
@@ -1084,25 +1013,22 @@ public:
               return error("structured-reference-unsupported", "precondition");
           }
         }
-      } else if (auto failure =
-                     attributes(op, {"sym_name", "sym_visibility",
-                                     "function_type", "logical_origin"})) {
-        return failure;
       }
-      if (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)) ||
-          op.getRegion(0).front().empty())
+      if (op.getNumRegions() != 1 || op.getRegion(0).empty() ||
+          (!isScoped(op) && !llvm::hasSingleElement(op.getRegion(0))))
         return error("structured-reference-unsupported", "function body");
-      sites.clear();
-      if (auto failure = block(op.getRegion(0).front(), op, 1))
-        return failure;
+      for (Block &body : op.getRegion(0)) {
+        if (body.empty())
+          return error("structured-reference-unsupported", "empty block");
+        if (auto failure = block(body, op, 1))
+          return failure;
+      }
     }
     for (Operation &op : unit.getBody().front()) {
       auto checked = height(&op, 0);
       if (!checked)
         return checked.takeError();
     }
-    if (auto failure = preparationClosures())
-      return failure;
     if (auto failure = effectiveSites())
       return failure;
     llvm::DenseSet<Operation *> checked;
@@ -1136,14 +1062,35 @@ public:
 };
 
 using Vector = std::shared_ptr<const std::vector<APInt>>;
-struct Domain {
-  Vector container;
-  bool indices;
+struct DomainRows;
+struct Outcome;
+struct ScopeState;
+struct HeldValues;
+using Domain = std::shared_ptr<const DomainRows>;
+using Result = std::shared_ptr<const Outcome>;
+using Scope = std::shared_ptr<ScopeState>;
+using Transfer = std::shared_ptr<HeldValues>;
+struct Stop {
+  std::string reason, site;
 };
 // monostate is an absent participant component, never a missing SSA binding.
-using Datum =
-    std::variant<std::monostate, bool, uint64_t, APInt, Vector, Domain>;
+using Datum = std::variant<std::monostate, bool, uint64_t, APInt, Vector,
+                           Domain, Result, Scope, Transfer, Stop>;
 using Values = std::vector<Datum>;
+struct DomainRows {
+  std::vector<Values> rows;
+};
+// These are the observer's control/custody identities, not backend resources,
+// frame limits, allocation budgets or a second native resource ledger.
+struct ScopeState {
+  Scope parent;
+  bool active = true;
+};
+struct HeldValues {
+  Scope parent;
+  Values values;
+  bool live = true;
+};
 bool present(const Datum &value) {
   return !std::holds_alternative<std::monostate>(value);
 }
@@ -1152,6 +1099,7 @@ struct Outcome {
   Values values;
   std::string reason;
   std::string site = {};
+  Block *destination = nullptr;
   bool stopped() const { return terminator == Kind::Stop; }
 };
 
@@ -1226,9 +1174,34 @@ bool matches(Type type, const Datum &value) {
     return true;
   if (type.isSignlessInteger(1))
     return std::holds_alternative<bool>(value);
-  if (type.isUnsignedInteger(64) ||
+  if (type.isUnsignedInteger(64) || type.isSignlessInteger(64) ||
       isa<protocol_ir::ServiceReferenceType>(type))
     return std::holds_alternative<uint64_t>(value);
+  if (isa<runtime::ScopeType>(type))
+    return std::holds_alternative<Scope>(value);
+  if (isa<exec::StopType>(type))
+    return std::holds_alternative<Stop>(value);
+  if (auto outcome = dyn_cast<exec::OutcomeType>(type)) {
+    auto result = std::get_if<Result>(&value);
+    if (!result)
+      return false;
+    if ((*result)->stopped())
+      return true;
+    auto payload = outcome.getPayload();
+    return payload.size() == (*result)->values.size() &&
+           llvm::all_of(llvm::zip(payload, (*result)->values), [](auto entry) {
+             return matches(std::get<0>(entry), std::get<1>(entry));
+           });
+  }
+  if (auto transfer = dyn_cast<runtime::TransferType>(type)) {
+    auto held = std::get_if<Transfer>(&value);
+    if (!held || transfer.getPayload().size() != (*held)->values.size())
+      return false;
+    return llvm::all_of(
+        llvm::zip(transfer.getPayload(), (*held)->values), [](auto entry) {
+          return matches(std::get<0>(entry), std::get<1>(entry));
+        });
+  }
   if (isa<algebra::FieldType, algebra::GroupType>(type))
     return std::holds_alternative<APInt>(value);
   if (isa<algebra::FieldVectorType>(type))
@@ -1262,7 +1235,6 @@ struct ProtocolContext {
 class Reference {
   SymbolTable symbols;
   const PrimitiveMap &primitives;
-  const PreparationMap &preparations;
   uint64_t steps = 0;
   uint64_t capacity = maxSteps;
   bool open = false;
@@ -1444,7 +1416,7 @@ class Reference {
   }
 
   Expected<Outcome> invoke(Operation *callee, ArrayRef<Datum> args,
-                           unsigned depth, StringRef invocationSite = {}) {
+                           unsigned depth) {
     if (auto failure = tick(depth))
       return failure;
     if (!callee)
@@ -1471,19 +1443,7 @@ class Reference {
             std::get<Vector>(args[bound.getContainerArg()])->size())
           return error("structured-reference-bounds", "helper precondition");
       }
-    auto result = [&]() -> Expected<Outcome> {
-      if (auto found = preparations.find(callee); found != preparations.end()) {
-        const auto &checked = found->second;
-        if (!llvm::all_of(args, present))
-          return Outcome{Kind::Stop, {}, "incomplete", invocationSite.str()};
-        if (checked.kind == PreparationKind::Realize)
-          return invoke(checked.helper, args, depth + 1);
-        return map(checked, args, depth, invocationSite);
-      }
-      if (isa<local::FiniteFoldOp>(callee))
-        return fold(*callee, args, type.getNumResults(), depth);
-      return block(callee->getRegion(0).front(), args, depth);
-    }();
+    auto result = block(callee->getRegion(0).front(), args, depth);
     if (!result || result->stopped())
       return result;
     if (result->values.size() != type.getNumResults())
@@ -1494,74 +1454,67 @@ class Reference {
     return result;
   }
 
-  Expected<Outcome> map(const CheckedPreparation &checked, ArrayRef<Datum> args,
-                        unsigned depth, StringRef site) {
-    std::optional<size_t> count;
-    for (auto [argument, row] : llvm::zip(args, checked.rowwise)) {
-      if (auto failure = tick(depth))
-        return failure;
-      if (!row)
-        continue;
-      size_t length = std::get<Vector>(argument)->size();
-      // Every stored vector is <=4096: logical length >=2^64 is exhausted,
-      // but cannot be represented by this bounded observer. Compare rows in
-      // source order, including unused rows and the zero-length case.
-      if (count && length != *count)
-        return Outcome{Kind::Stop, {}, "refused", site.str()};
-      count = length;
-    }
-    if (!count)
-      return error("structured-reference-map", "unchecked row mask");
-    if (auto failure = vectorWork(*count))
-      return failure;
-    auto output = std::make_shared<std::vector<APInt>>();
-    output->reserve(*count);
-    for (size_t i = 0; i < *count; ++i) {
-      if (auto failure = argumentWork(args.size()))
-        return failure;
-      Values scalar;
-      scalar.reserve(args.size());
-      for (auto [argument, row] : llvm::zip(args, checked.rowwise))
-        scalar.push_back(row ? Datum((*std::get<Vector>(argument))[i])
-                             : argument);
-      auto value = invoke(checked.helper, scalar, depth + 1);
-      if (!value || value->stopped())
-        return value;
-      output->push_back(std::get<APInt>(value->values[0]));
-    }
-    return Outcome{Kind::Return, {Vector(std::move(output))}, {}};
+  Expected<Outcome> packed(Expected<Outcome> result) {
+    if (!result)
+      return result.takeError();
+    return Outcome{Kind::Return,
+                   {Result(std::make_shared<Outcome>(std::move(*result)))},
+                   {}};
   }
 
-  Expected<Outcome> fold(Operation &op, ArrayRef<Datum> args, unsigned count,
-                         unsigned depth) {
+  Expected<Outcome> invokeScoped(Operation *callee, Scope scope,
+                                 ArrayRef<Datum> args, unsigned depth) {
+    if (!scope->active)
+      return error("structured-reference-custody", "inactive invocation scope");
+    Values inputs{scope};
+    llvm::append_range(inputs, args);
+    auto result = invoke(callee, inputs, depth);
+    if (!result)
+      return result.takeError();
+    if (result->stopped() || result->values.size() != 1 ||
+        !std::holds_alternative<Result>(result->values[0]))
+      return error("structured-reference-signature", "scoped call result");
+    return *std::get<Result>(result->values[0]);
+  }
+
+  Expected<Outcome> finite(Operation &op, ArrayRef<Datum> args, unsigned count,
+                           unsigned depth, Scope scope = {}) {
     Operation *domain = target(op, "domain");
     if (!domain)
       return error("structured-reference-symbol", "domain");
     unsigned arity = signature(*domain).getNumInputs();
     if (args.size() < arity + count)
-      return error("structured-reference-signature", "fold inputs");
+      return error("structured-reference-signature", "finite inputs");
     auto enumerated = invoke(domain, args.take_front(arity), depth + 1);
     if (!enumerated)
       return enumerated.takeError();
+    if (enumerated->stopped())
+      return stopped(op, enumerated->reason);
     if (enumerated->values.size() != 1 ||
         !std::holds_alternative<Domain>(enumerated->values[0]))
       return error("structured-reference-signature", "domain result");
     Domain items = std::get<Domain>(enumerated->values[0]);
-    // Initial seeds are read once. Every subsequent step uses the actual
-    // preceding results, including same-typed positions and aliases.
+    bool collect = kind(op) == Kind::Collect;
     auto initial = args.slice(arity, count);
     Outcome state{Kind::Return, Values(initial.begin(), initial.end()), {}};
-    for (size_t i = 0; i < items.container->size(); ++i) {
+    auto output = std::make_shared<std::vector<APInt>>();
+    auto callback = [&](Operation *callee, ArrayRef<Datum> inputs) {
+      return scope ? invokeScoped(callee, scope, inputs, depth + 1)
+                   : invoke(callee, inputs, depth + 1);
+    };
+    for (const auto &row : items->rows) {
       if (auto failure = tick(depth))
         return failure;
-      Values callback{items.indices ? Datum(uint64_t(i))
-                                    : Datum((*items.container)[i])};
-      llvm::append_range(callback, args.take_front(arity));
-      llvm::append_range(callback, args.drop_front(arity + count));
-      // Predicate ABI: I,A,C. Step ABI: S,I,A,C. The state is not a predicate
-      // input.
+      if (auto failure = argumentWork(row.size() + args.size()))
+        return failure;
+      Values inputs(row.begin(), row.end());
+      llvm::append_range(inputs, args.take_front(arity));
+      llvm::append_range(inputs, args.drop_front(arity + count));
+      // All domain constructors have completed before the first callback.
+      // Predicate receives I,A,C; fold step receives S,I,A,C; collect receives
+      // I,A,C.
       if (Operation *predicate = target(op, "predicate")) {
-        auto admitted = invoke(predicate, callback, depth + 1);
+        auto admitted = callback(predicate, inputs);
         if (!admitted || admitted->stopped())
           return admitted;
         if (admitted->values.size() != 1 ||
@@ -1570,16 +1523,89 @@ class Reference {
         if (!std::get<bool>(admitted->values[0]))
           continue;
       }
-      callback.insert(callback.begin(), state.values.begin(),
-                      state.values.end());
-      auto next = invoke(target(op, "step"), callback, depth + 1);
+      if (!collect)
+        inputs.insert(inputs.begin(), state.values.begin(), state.values.end());
+      auto next = callback(target(op, collect ? "body" : "step"), inputs);
       if (!next || next->stopped())
         return next;
-      if (next->values.size() != count)
-        return error("structured-reference-signature", "fold state");
-      state = std::move(*next);
+      if (collect) {
+        if (next->values.size() != 1 ||
+            !std::holds_alternative<APInt>(next->values[0]))
+          return error("structured-reference-signature", "collection item");
+        if (output->size() == maxVector)
+          return error("structured-reference-capacity", "collection length");
+        output->push_back(std::get<APInt>(next->values[0]));
+      } else {
+        if (next->values.size() != count)
+          return error("structured-reference-signature", "fold state");
+        state = std::move(*next);
+      }
     }
+    if (collect)
+      return Outcome{Kind::Return, {Vector(std::move(output))}, {}};
     return state;
+  }
+
+  Expected<Outcome> domainInstruction(Operation &op, ArrayRef<Datum> args) {
+    if (!llvm::all_of(args, present))
+      return stopped(op, "incomplete");
+    auto rows = std::make_shared<DomainRows>();
+    auto code = kind(op);
+    if (code == Kind::Elements || code == Kind::Indices) {
+      auto vector = std::get<Vector>(args[0]);
+      if (auto failure = vectorWork(vector->size()))
+        return failure;
+      for (size_t i = 0; i < vector->size(); ++i)
+        rows->rows.push_back(
+            {code == Kind::Indices ? Datum(uint64_t(i)) : Datum((*vector)[i])});
+    } else if (code == Kind::DomainRange) {
+      uint64_t lower = std::get<uint64_t>(args[0]),
+               upper = std::get<uint64_t>(args[1]);
+      uint64_t count = upper > lower ? upper - lower : 0;
+      if (auto failure = vectorWork(count))
+        return failure;
+      for (uint64_t i = 0; i < count; ++i)
+        rows->rows.push_back({lower + i});
+    } else {
+      if (args.empty())
+        return error("structured-reference-signature",
+                     "empty domain combination");
+      size_t count =
+          code == Kind::Zip ? std::get<Domain>(args[0])->rows.size() : 1;
+      size_t width = 0;
+      for (const auto &arg : args) {
+        const auto &part = std::get<Domain>(arg)->rows;
+        if (code == Kind::Zip && part.size() != count)
+          return stopped(op, "refused");
+        if (code == Kind::Product) {
+          if (part.size() && count > maxVector / part.size())
+            return error("structured-reference-capacity", "domain product");
+          count *= part.size();
+        }
+        if (!part.empty())
+          width += part.front().size();
+      }
+      if (auto failure = vectorWork(count))
+        return failure;
+      if (width && count > (capacity - steps) / width)
+        return error("structured-reference-capacity", "domain tuple work");
+      if (auto failure = argumentWork(count * width))
+        return failure;
+      for (size_t i = 0; i < count; ++i) {
+        Values row;
+        size_t stride = count;
+        for (const auto &arg : args) {
+          const auto &part = std::get<Domain>(arg)->rows;
+          if (code == Kind::Product)
+            stride /= part.size();
+          const auto &item =
+              part[code == Kind::Zip ? i : (i / stride) % part.size()];
+          llvm::append_range(row, item);
+        }
+        rows->rows.push_back(std::move(row));
+      }
+    }
+    return Outcome{Kind::Return, {Domain(std::move(rows))}, {}};
   }
 
   bool inScope(ArrayAttr scope,
@@ -1716,18 +1742,154 @@ class Reference {
     Kind code = kind(op);
     switch (code) {
     case Kind::Exec:
-      // Local execution sequences every operand even when all results are
-      // discarded. It cannot use the pure absent-component propagation below.
       if (!llvm::all_of(args, present))
-        return stopped(op, "incomplete", context);
-      return execute(op, args);
+        return packed(stopped(op, "incomplete", context));
+      if (!std::get<Scope>(args[0])->active)
+        return error("structured-reference-custody",
+                     "inactive primitive scope");
+      return packed(execute(op, args.drop_front()));
     case Kind::Return:
     case Kind::Yield:
-    case Kind::Condition:
     case Kind::DomainYield:
       return Outcome{code, Values(args.begin(), args.end()), {}};
-    case Kind::Stop:
-      return stopped(op, cast<local::StopOp>(op).getReason(), context);
+    case Kind::Stop: {
+      auto stop = stopped(op, cast<exec::RejectOp>(op).getReason(), context);
+      return Outcome{Kind::Return, {Stop{stop.reason, stop.site}}, {}};
+    }
+    case Kind::Failed: {
+      const auto &stop = std::get<Stop>(args[0]);
+      return packed(Outcome{Kind::Stop, {}, stop.reason, stop.site});
+    }
+    case Kind::Returned:
+      return packed(
+          Outcome{Kind::Return, Values(args.begin(), args.end()), {}});
+    case Kind::Compute:
+    case Kind::ScopedFold:
+    case Kind::Collect:
+    case Kind::Complete:
+    case Kind::Test:
+    case Kind::Range:
+    case Kind::Iteration: {
+      if (!llvm::all_of(args, present))
+        return packed(stopped(op, "incomplete", context));
+      auto scope = std::get<Scope>(args[0]);
+      if (!scope->active)
+        return error("structured-reference-custody", "inactive scope");
+      auto data = args.drop_front();
+      if (code == Kind::Compute)
+        return packed(invoke(target(op, "callee"), data, depth + 1));
+      if (code == Kind::ScopedFold || code == Kind::Collect) {
+        unsigned count =
+            code == Kind::Collect
+                ? 0
+                : cast<exec::OutcomeType>(op.getResult(0).getType())
+                      .getPayload()
+                      .size();
+        return packed(finite(op, data, count, depth, scope));
+      }
+      return packed(
+          Outcome{Kind::Return, Values(data.begin(), data.end()), {}});
+    }
+    case Kind::EnterScope: {
+      if (!llvm::all_of(args, present))
+        return packed(stopped(op, "incomplete", context));
+      auto parent = std::get<Scope>(args[0]);
+      if (!parent->active)
+        return error("structured-reference-custody", "inactive parent");
+      return packed(
+          Outcome{Kind::Return,
+                  {Scope(std::make_shared<ScopeState>(ScopeState{parent}))},
+                  {}});
+    }
+    case Kind::ExitScope: {
+      auto scope = std::get<Scope>(args[0]);
+      auto result = std::get<Result>(args[1]);
+      if (!scope->active || !scope->parent)
+        return error("structured-reference-custody", "scope exit");
+      scope->active = false;
+      if (result->stopped())
+        return packed(*result);
+      return packed(Outcome{Kind::Return,
+                            {Transfer(std::make_shared<HeldValues>(
+                                HeldValues{scope->parent, result->values}))},
+                            {}});
+    }
+    case Kind::BorrowTransfer: {
+      auto parent = std::get<Scope>(args[0]);
+      if (!parent->active)
+        return error("structured-reference-custody", "borrow parent");
+      return Outcome{Kind::Return,
+                     {Transfer(std::make_shared<HeldValues>(HeldValues{
+                         parent, Values(args.begin() + 1, args.end())}))},
+                     {}};
+    }
+    case Kind::AcceptTransfer:
+    case Kind::TransferValues:
+    case Kind::ReleaseTransfer:
+    case Kind::TakeCondition: {
+      auto transfer =
+          std::get<Transfer>(args[code == Kind::AcceptTransfer ? 1 : 0]);
+      if (!transfer->live || !transfer->parent->active)
+        return error("structured-reference-custody", "expired transfer");
+      if (code == Kind::AcceptTransfer) {
+        if (std::get<Scope>(args[0]) != transfer->parent)
+          return error("structured-reference-custody", "transfer parent");
+        transfer->live = false;
+        return packed(Outcome{Kind::Return, transfer->values, {}});
+      }
+      if (code == Kind::ReleaseTransfer) {
+        transfer->live = false;
+        return Outcome{};
+      }
+      if (code == Kind::TakeCondition) {
+        if (transfer->values.empty() ||
+            !std::holds_alternative<bool>(transfer->values[0]))
+          return error("structured-reference-signature", "condition transfer");
+        auto rest = std::make_shared<HeldValues>(
+            HeldValues{transfer->parent, Values(transfer->values.begin() + 1,
+                                                transfer->values.end())});
+        transfer->live = false;
+        return packed(Outcome{Kind::Return,
+                              {transfer->values[0], Transfer(std::move(rest))},
+                              {}});
+      }
+      return Outcome{Kind::Return, transfer->values, {}};
+    }
+    case Kind::ReleaseBindings:
+      if (!std::get<Scope>(args[0])->active)
+        return error("structured-reference-custody", "release scope");
+      return Outcome{};
+    case Kind::Dispatch: {
+      auto result = std::get<Result>(args[0]);
+      return Outcome{Kind::Return,
+                     result->stopped()
+                         ? Values{Stop{result->reason, result->site}}
+                         : result->values,
+                     {},
+                     {},
+                     op.getSuccessor(result->stopped() ? 1 : 0)};
+    }
+    case Kind::Branch:
+      return Outcome{Kind::Return,
+                     Values(args.begin(), args.end()),
+                     {},
+                     {},
+                     op.getSuccessor(0)};
+    case Kind::CondBranch: {
+      if (!present(args[0]))
+        return stopped(op, "incomplete", context);
+      auto branch = cast<cf::CondBranchOp>(op);
+      bool condition = std::get<bool>(args[0]);
+      unsigned count = condition ? branch.getTrueDestOperands().size()
+                                 : branch.getFalseDestOperands().size();
+      unsigned offset = condition ? 1 : 1 + branch.getTrueDestOperands().size();
+      auto forwarded = args.slice(offset, count);
+      return Outcome{Kind::Return,
+                     Values(forwarded.begin(), forwarded.end()),
+                     {},
+                     {},
+                     op.getSuccessor(condition ? 0 : 1)};
+    }
     case Kind::Guard:
       if (role(op.getAttrOfType<StringAttr>("owner").getValue(), context) !=
           self)
@@ -1739,19 +1901,23 @@ class Reference {
     case Kind::Call:
       // Do not sequence Math arguments: an ignored absent input is legal.
       return invoke(target(op, "callee"), args, depth + 1);
-    case Kind::LocalCall:
+    case Kind::LocalCall: {
       if (role(op.getAttrOfType<StringAttr>("role").getValue(), context) !=
           self)
         return absent(op);
-      [[fallthrough]];
-    case Kind::Apply:
       if (!llvm::all_of(args, present))
         return stopped(op, "incomplete", context);
-      return invoke(
-          target(op, "callee"), args, depth + 1,
-          context
-              ? context->site(op.getAttrOfType<StringAttr>("site").getValue())
-              : op.getAttrOfType<StringAttr>("site").getValue().str());
+      auto scope = std::make_shared<ScopeState>();
+      auto result = invokeScoped(target(op, "callee"), scope, args, depth + 1);
+      scope->active = false;
+      return result;
+    }
+    case Kind::Elements:
+    case Kind::Indices:
+    case Kind::DomainRange:
+    case Kind::Zip:
+    case Kind::Product:
+      return domainInstruction(op, args);
     case Kind::ProtocolApply: {
       auto call = cast<protocol_ir::ApplyOp>(op);
       auto callee = cast<protocol_ir::MathematicalOp>(target(op, "callee"));
@@ -1815,38 +1981,7 @@ class Reference {
       return absent(op);
     switch (code) {
     case Kind::Fold:
-      return fold(op, args, op.getNumResults(), depth);
-    case Kind::If:
-      return block(op.getRegion(std::get<bool>(args[0]) ? 0 : 1).front(),
-                   args.drop_front(), depth + 1);
-    case Kind::For: {
-      uint64_t lower = std::get<uint64_t>(args[0]),
-               upper = std::get<uint64_t>(args[1]);
-      if (lower > maxLoopBound || upper > maxLoopBound)
-        return error("structured-reference-capacity", "loop bounds");
-      size_t count = op.getNumResults();
-      auto initial = args.slice(2, count),
-           captures = args.drop_front(2 + count);
-      Outcome state{Kind::Return, Values(initial.begin(), initial.end()), {}};
-      for (uint64_t i = lower; i < upper; ++i) {
-        if (auto failure = tick(depth))
-          return failure;
-        Values inputs{Datum(i)};
-        llvm::append_range(inputs, state.values);
-        llvm::append_range(inputs, captures);
-        auto next = block(op.getRegion(0).front(), inputs, depth + 1);
-        if (!next || next->stopped())
-          return next;
-        size_t offset = next->terminator == Kind::Condition ? 1 : 0;
-        if (next->values.size() != offset + count + captures.size())
-          return error("structured-reference-signature", "loop yield");
-        state.values.assign(next->values.begin() + offset,
-                            next->values.begin() + offset + count);
-        if (offset && !std::get<bool>(next->values[0]))
-          break;
-      }
-      return state;
-    }
+      return finite(op, args, op.getNumResults(), depth);
     default:
       break;
     }
@@ -1892,6 +2027,19 @@ class Reference {
     case Kind::BoolConstant:
       result.values.emplace_back(
           !cast<IntegerAttr>(op.getAttr("value")).getValue().isZero());
+      if (isa<exec::BooleanOp>(op)) {
+        if (!std::get<Scope>(args[0])->active)
+          return error("structured-reference-custody", "boolean scope");
+        return packed(std::move(result));
+      }
+      break;
+    case Kind::IntegerConstant:
+      result.values.emplace_back(
+          cast<IntegerAttr>(op.getAttr("value")).getValue().getZExtValue());
+      break;
+    case Kind::IntegerAdd:
+      result.values.emplace_back(std::get<uint64_t>(args[0]) +
+                                 std::get<uint64_t>(args[1]));
       break;
     case Kind::Add:
     case Kind::Subtract:
@@ -1917,6 +2065,12 @@ class Reference {
     case Kind::Or:
     case Kind::Xor:
     case Kind::Compare: {
+      if (code == Kind::Compare &&
+          op.getOperand(0).getType().isSignlessInteger(64)) {
+        result.values.emplace_back(std::get<uint64_t>(args[0]) <
+                                   std::get<uint64_t>(args[1]));
+        break;
+      }
       bool a = std::get<bool>(args[0]), b = std::get<bool>(args[1]);
       bool output = code == Kind::And  ? a && b
                     : code == Kind::Or ? a || b
@@ -1940,11 +2094,6 @@ class Reference {
       result.values.emplace_back((*container)[index]);
       break;
     }
-    case Kind::Elements:
-    case Kind::Indices:
-      result.values.emplace_back(
-          Domain{std::get<Vector>(args[0]), code == Kind::Indices});
-      break;
     default:
       return error("structured-reference-unsupported",
                    op.getName().getStringRef());
@@ -1961,41 +2110,60 @@ class Reference {
     // Each invocation owns a fresh map. Missing SSA values are errors, never
     // default-constructed field zeros or remnants from another helper call.
     llvm::DenseMap<Value, Datum> values;
-    for (auto [argument, input] : llvm::zip(body.getArguments(), inputs)) {
-      if (!matches(argument.getType(), input))
-        return error("structured-reference-signature", "block input type");
-      values.try_emplace(argument, input);
-    }
-    for (Operation &op : body) {
+    Block *current = &body;
+    Values incoming(inputs.begin(), inputs.end());
+    while (true) {
       if (auto failure = tick(depth))
         return failure;
-      Values args;
-      for (Value operand : op.getOperands()) {
-        auto found = values.find(operand);
-        if (found == values.end())
-          return error("structured-reference-ssa", "missing operand");
-        args.push_back(found->second);
+      if (current->getNumArguments() != incoming.size())
+        return error("structured-reference-signature", "successor inputs");
+      for (auto [argument, input] :
+           llvm::zip(current->getArguments(), incoming)) {
+        if (!matches(argument.getType(), input))
+          return error("structured-reference-signature", "block input type");
+        values[argument] = input;
       }
-      auto result = evaluate(op, args, depth, context);
-      if (!result || result->stopped() || op.hasTrait<OpTrait::IsTerminator>())
-        return result;
-      if (op.getNumResults() != result->values.size())
-        return error("structured-reference-signature", "operation results");
-      for (auto [output, value] : llvm::zip(op.getResults(), result->values)) {
-        if (!matches(output.getType(), value))
-          return error("structured-reference-signature",
-                       "operation result type");
-        if (!values.try_emplace(output, std::move(value)).second)
-          return error("structured-reference-ssa", "duplicate result");
+      Block *destination = nullptr;
+      for (Operation &op : *current) {
+        if (auto failure = tick(depth))
+          return failure;
+        Values args;
+        for (Value operand : op.getOperands()) {
+          auto found = values.find(operand);
+          if (found == values.end())
+            return error("structured-reference-ssa", "missing operand");
+          args.push_back(found->second);
+        }
+        auto result = evaluate(op, args, depth, context);
+        if (!result || result->stopped())
+          return result;
+        if (result->destination) {
+          destination = result->destination;
+          incoming = std::move(result->values);
+          break;
+        }
+        if (op.hasTrait<OpTrait::IsTerminator>())
+          return result;
+        if (op.getNumResults() != result->values.size())
+          return error("structured-reference-signature", "operation results");
+        for (auto [output, value] :
+             llvm::zip(op.getResults(), result->values)) {
+          if (!matches(output.getType(), value))
+            return error("structured-reference-signature",
+                         "operation result type");
+          values[output] = std::move(value);
+        }
       }
+      if (!destination || destination->getParent() != body.getParent())
+        return error("structured-reference-ssa",
+                     "missing or foreign successor");
+      current = destination;
     }
-    return error("structured-reference-ssa", "missing terminator");
   }
 
 public:
-  Reference(Operation *unit, const PrimitiveMap &primitives,
-            const PreparationMap &preparations)
-      : symbols(unit), primitives(primitives), preparations(preparations) {}
+  Reference(Operation *unit, const PrimitiveMap &primitives)
+      : symbols(unit), primitives(primitives) {}
   Expected<json::Value> run(protocol_ir::MathematicalOp source,
                             const json::Array &request, bool openRequest) {
     open = openRequest;
@@ -2153,8 +2321,7 @@ int main(int argc, char **argv) {
   auto selected = symbols.lookup<protocol_ir::MathematicalOp>(argv[2 + offset]);
   if (!selected)
     return fail(error("structured-reference-symbol", argv[2 + offset]));
-  auto result = Reference(unit, admission.checkedPrimitives(),
-                          admission.checkedPreparations())
+  auto result = Reference(unit, admission.checkedPrimitives())
                     .run(selected, *array, open);
   if (!result)
     return fail(result.takeError());

@@ -114,6 +114,7 @@ def lean_native(args):
                  "--report", output / "structured-aggregates/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/scoped.py",
                  "--compiler", compiler / "zkc-compile",
+                 "--reference", compiler / "test/zkc-structured_reference-test",
                  "--lean", ROOT / "lean/.lake/build/bin/structured-source",
                  "--report", output / "structured-scoped/report.json"], env=store)
             run([sys.executable, ROOT / "lean/bridges/structured/tables.py",
