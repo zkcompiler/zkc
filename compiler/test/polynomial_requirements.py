@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from cases import case, counted
@@ -282,7 +283,10 @@ with case("independent reduction checker rejects mismatched preparation choices"
 
 with case("finite policy matches independent reconstruction with and without simplify"):
     finite = (fixtures.parent / 'finite/sum.mlir').read_text()
-    declarations = finite.split('module { "protocol.module"() ({', 1)[1].split(' "protocol.func"', 1)[0]
+    declarations = finite[finite.index('    "runtime.binding"'):finite.rindex('  }) : () -> ()')]
+    declarations, entries = re.subn(
+        r'(?ms)^    "protocol.func"\(\).*?^    \}\) : \(\) -> \(\)\n', '', declarations)
+    assert entries == 1
     declarations = declarations.replace('!V', vector).replace('!F', field)
     mixed = source.replace('module { "protocol.module"() ({',
                            'module { "protocol.module"() ({' + declarations, 1)
@@ -292,7 +296,10 @@ with case("finite policy matches independent reconstruction with and without sim
         choice = 'true' if bulk else 'false'
         candidate = commands.verified(
             mixed, None, f'--zkc-project-protocol=simplify=false optimize-finite={choice}')
-        assert ('algebra.exec.vector_sum' in candidate) == bulk
+        # Preparation retains the request; physical selection owns the loop
+        # versus bulk decision. Identical prepared IR can satisfy either choice.
+        assert '"exec.fold"' in candidate
+        assert 'contract = "vector.sum"' not in candidate
         candidate_path.write_text(candidate)
         flags = [] if bulk else ['--no-finite-bulk']
         report = json.loads(commands.run([
@@ -301,9 +308,22 @@ with case("finite policy matches independent reconstruction with and without sim
         assert report['finite_bulk'] is bulk
         assert report['fuse_collect_fold'] is False
         opposite = ['--no-finite-bulk'] if bulk else []
+        alternate = json.loads(commands.run([
+            compiler, 'protocol-check-reductions', source_path,
+            requirement_path, candidate_path, *opposite]))
+        assert alternate['finite_bulk'] is not bulk
+        # A retained callback still freezes its actual equation, even when
+        # either policy can produce the same preparation stage.
+        changed, count = re.subn(
+            r'("exec\.apply"\(%arg0, %arg1, )%arg2(\) <\{binding = @add)',
+            r'\1%arg1\2', candidate, count=1)
+        assert count == 1
+        commands.verified(changed)
+        candidate_path.write_text(changed)
         commands.run([compiler, 'protocol-check-reductions', source_path,
-                      requirement_path, candidate_path, *opposite],
+                      requirement_path, candidate_path, *flags],
                      refuses='polynomial-correspondence-declaration')
+        candidate_path.write_text(candidate)
         for simplify in (False, True):
             compiled = json.loads(commands.source(
                 'protocol-checked-bundle', mixed, '--entry=reduction',

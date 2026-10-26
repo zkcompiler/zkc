@@ -22,7 +22,7 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
   auto *context = module.getContext();
   std::string helper;
   runtime::BindingOp binding;
-  module.walk([&](local::FuncOp fn) {
+  module.walk([&](func::FuncOp fn) {
     fn.walk([&](Operation *op) {
       auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
       if (parameters && parameters.size() == 1 &&
@@ -34,8 +34,8 @@ unsigned removeAbsorption(ModuleOp module, StringRef origin) {
     });
   });
   require(!helper.empty() && bool(binding), "absorption helper missing");
-  SmallVector<local::CallOp> calls;
-  module.walk([&](local::CallOp call) {
+  SmallVector<pir::LocalCallOp> calls;
+  module.walk([&](pir::LocalCallOp call) {
     if (call.getCallee() == helper)
       calls.push_back(call);
   });
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
                if (participant.getRole() != policy.producer)
                  return;
                auto &block = participant.getBody().front();
-               for (auto call : block.getOps<local::CallOp>())
+               for (auto call : block.getOps<pir::LocalCallOp>())
                  if (!changed && call.getNumOperands() == 2 &&
                      call.getInputs()[1].getType() ==
                          block.getArgument(0).getType()) {
@@ -282,8 +282,9 @@ int main(int argc, char **argv) {
     after->walk([&](pir::ParticipantOp participant) {
       if (participant.getRole() != policy.validator)
         return;
-      for (auto call : participant.getBody().front().getOps<local::CallOp>()) {
-        auto fn = SymbolTable::lookupNearestSymbolFrom<local::FuncOp>(
+      for (auto call :
+           participant.getBody().front().getOps<pir::LocalCallOp>()) {
+        auto fn = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
             call, call.getCalleeAttr());
         bool delivery = false;
         fn.walk([&](Operation *op) {

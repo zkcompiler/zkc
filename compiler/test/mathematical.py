@@ -223,7 +223,7 @@ with case("projection exposes sender component equality before lowering"):
     candidate, _ = project(alias)
     assert execute(candidate, 'P', [3])[:2] == ('returned', (6, 6))
     assert execute(candidate, 'V', [], [11])[:2] == ('returned', (22,))
-    commands.source('protocol-export', projected, refuses='interactive-module')
+    commands.source('protocol-export', projected, refuses='native-physical-required')
     commands.verified(alias, 'mathematical-lowering-profile', '--zkc-lower-math')
     commands.verified(projected, 'mathematical-module', '--zkc-project-protocol')
 

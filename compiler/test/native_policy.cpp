@@ -6,8 +6,10 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/StringSet.h"
@@ -297,8 +299,9 @@ int main() {
     require(bool(source), "mixed fixture refused");
     run(*source, protocol::createPrepareProtocolPass());
     bool residual = false;
-    source->walk([&](local::ApplyOp) { residual = true; });
-    require(!residual, "preparation left local.apply");
+    source->walk(
+        [&](func::CallOp call) { residual |= call->hasAttr("runtime.site"); });
+    require(residual, "preparation must retain actual scoped helper calls");
     OwningOpRef<ModuleOp> prepared(cast<ModuleOp>(source->clone()));
     {
       OwningOpRef<ModuleOp> changed(cast<ModuleOp>(source->clone()));
@@ -322,15 +325,19 @@ int main() {
     OwningOpRef<ModuleOp> projected(cast<ModuleOp>(source->clone()));
     for (bool extraDefinition : {false, true}) {
       OwningOpRef<ModuleOp> changed(cast<ModuleOp>(projected->clone()));
-      auto work = cast<local::FuncOp>(
+      auto work = cast<func::FuncOp>(
           SymbolTable::lookupSymbolIn(unit(*changed), "work"));
       if (extraDefinition) {
         auto *extra = work->clone();
         extra->setAttr("sym_name", StringAttr::get(&context, "extra_work"));
         unit(*changed)->getRegion(0).front().push_back(extra);
       } else {
-        auto result = cast<local::ReturnOp>(work.getBody().front().back());
-        result->setOperand(0, work.getArgument(0));
+        bool changedReturn = false;
+        work.walk([&](exec::ReturnOp result) {
+          result->setOperand(0, work.getArgument(1));
+          changedReturn = true;
+        });
+        require(changedReturn, "missing actual source completion");
       }
       require(succeeded(verify(*changed)),
               "local mutation must retain formation");
@@ -340,10 +347,15 @@ int main() {
                   unit(*projected), unit(*changed))),
               "local freeze accepted new work or rewired return");
     }
+    auto expanded = protocol::expandScopedHelpers(*source);
+    require(bool(expanded) &&
+                succeeded(protocol::verifyScopedHelperExpansionPreserved(
+                    *source, *expanded)),
+            "actual scoped helper expansion changed source meaning");
     run(*source, protocol::createLowerMathPass());
     require(succeeded(mathematical::verifyAuthoredLocalsPreserved(
-                unit(*prepared), unit(*source))),
-            "lowering changed authored locals");
+                unit(*expanded), unit(*source))),
+            "lowering changed expanded authored functions");
     for (bool retainAction : {true, false}) {
       OwningOpRef<ModuleOp> changed(cast<ModuleOp>(source->clone()));
       auto record = *unit(*changed)
@@ -385,17 +397,27 @@ int main() {
       require(failed(verify(*changed)) && correct,
               "authored resource call was relabeled as generated total math");
     }
+    require(
+        succeeded(mathematical::verifyProjectionPreserved(*expanded, *source)),
+        "valid expanded source correspondence refused");
     auto work =
-        cast<local::FuncOp>(SymbolTable::lookupSymbolIn(unit(*source), "work"));
-    auto branch = *work.getBody().front().getOps<local::LocalIfOp>().begin();
-    branch.setSite("changed_but_valid_site");
+        cast<func::FuncOp>(SymbolTable::lookupSymbolIn(unit(*source), "work"));
+    exec::TestOp branch;
+    work.walk([&](exec::TestOp op) { branch = op; });
+    require(bool(branch), "missing authored conditional admission");
+    auto site = branch.getSite().str();
+    work.walk([&](Operation *op) {
+      auto occurrence = op->getAttrOfType<StringAttr>("site");
+      if (occurrence && occurrence.getValue() == site)
+        op->setAttr("site",
+                    StringAttr::get(&context, "changed_but_valid_site"));
+    });
     require(succeeded(verify(*source)),
             "body mutation should be structurally valid");
     ScopedDiagnosticHandler expected(&context,
                                      [](Diagnostic &) { return success(); });
-    require(
-        failed(mathematical::verifyProjectionPreserved(*projected, *source)),
-        "frozen postcondition accepted a changed local body");
+    require(failed(mathematical::verifyProjectionPreserved(*expanded, *source)),
+            "frozen postcondition accepted a changed local body");
   });
   cases.run("statement preservation refuses computed candidate operands", [&] {
     auto source = parseSourceString<ModuleOp>(R"mlir(module {
