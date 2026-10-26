@@ -130,6 +130,64 @@ int main() {
               "scope borrowing refused");
     return module;
   };
+  auto admit = [&](ModuleOp module) {
+    if (auto error = protocol::verifySourceExecutionClosure(module))
+      throw std::runtime_error(llvm::toString(std::move(error)));
+  };
+  auto refuseAdmission = [&](ModuleOp module, StringRef code) {
+    auto error = protocol::verifySourceExecutionClosure(module);
+    require(bool(error), "invalid source closure admitted");
+    auto diagnostic = llvm::toString(std::move(error));
+    require(namesIdentifier(diagnostic, code),
+            "unexpected admission refusal: " + diagnostic);
+  };
+  cases.run(
+      "source admission checks the complete ordered collection closure", [&] {
+        auto module = accept(collect);
+        admit(*module);
+        zkc::test::refuses(protocol::readSourceExecutionDefinitions(*module),
+                           "execution-cfg");
+        module->lookupSymbol<func::FuncOp>("body")->removeAttr(
+            "runtime.origin");
+        refuseAdmission(*module, "execution-cfg");
+      });
+  cases.run("finite formation alone does not admit an arbitrary callback CFG",
+            [&] {
+              auto module = accept(fold);
+              refuseAdmission(*module, "execution-cfg");
+            });
+  cases.run("source admission checks unused finite callback bodies", [&] {
+    auto module = accept(collect);
+    auto extra =
+        cast<func::FuncOp>(module->lookupSymbol<func::FuncOp>("body")->clone());
+    extra.setSymName("unused");
+    extra->removeAttr("no_inline");
+    module->getBody()->push_back(extra);
+    refuseAdmission(*module, "execution-cfg");
+  });
+  cases.run("affine finite state needs scoped root preservation", [&] {
+    auto text = changed(
+        collect, "!O = !exec.outcome<(!V)>",
+        "!T = !runtime.capability<\"transcript:merlin3.bls12-381.fr64be/0\">\n"
+        "!O = !exec.outcome<(!T)>");
+    text = changed(text,
+                   "@body(%scope:!S,%item:!F,%domain:!V)->!exec.outcome<(!F)>",
+                   "@body(%scope:!S,%state:!T,%item:!F,%domain:!V)->!O");
+    text = changed(text, "\"exec.returned\"(%item) : (!F)->!exec.outcome<(!F)>",
+                   "\"exec.returned\"(%state) : (!T)->!O");
+    text = changed(text, "return %ok : !exec.outcome<(!F)>", "return %ok : !O");
+    text = changed(text, "@caller(%scope:!S,%domain:!V)",
+                   "@caller(%scope:!S,%domain:!V,%seed:!T)");
+    text = changed(text, "\"exec.collect\"(%scope,%domain)",
+                   "\"exec.fold\"(%scope,%domain,%seed)");
+    text = changed(text, "body=@body", "step=@body");
+    text = changed(text, "(!S,!V)->!O", "(!S,!V,!T)->!O");
+    text = changed(text, "^done(%value:!V)", "^done(%value:!T)");
+    text = changed(text, "\"exec.returned\"(%value) : (!V)->!O",
+                   "\"exec.returned\"(%value) : (!T)->!O");
+    auto module = accept(text);
+    refuseAdmission(*module, "execution-cfg");
+  });
   cases.run("actual scoped fold ABI and exact positional aliases", [&] {
     auto module = accept(fold);
     auto *op = occurrence(*module);
@@ -286,6 +344,7 @@ int main() {
     text = changed(text, "\"exec.returned\"(%value) : (!V)->!O",
                    "\"exec.returned\"() : ()->!O");
     auto module = accept(text);
+    admit(*module);
     finite::Computation c;
     require(succeeded(finite::describe(occurrence(*module), c)) && !c.collect &&
                 c.states == 0 && c.signature.getNumResults() == 0,

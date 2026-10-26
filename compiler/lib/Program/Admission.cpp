@@ -23,6 +23,7 @@ struct Definition {
   std::vector<Port> inputs, outputs;
   const program::Body *body = nullptr;
   bool realization = false;
+  program::Names callbacks;
   program::Names arguments;
   std::string instance, role;
   std::map<std::string, std::string> services;
@@ -230,9 +231,13 @@ class Admission {
     if (!seen.insert(callee).second)
       return false;
     auto found = functions.find(callee);
-    if (found == functions.end() || !found->second.body)
+    if (found == functions.end())
       return false;
     bool result = false;
+    for (const auto &callback : found->second.callbacks)
+      result |= callsMatchUnsafe(callback, seen);
+    if (!found->second.body)
+      return result;
     program::walk(*found->second.body, [&](const program::Instruction &i) {
       if (const auto *op = i.get<program::Operation>()) {
         auto binding = bindings.find(op->callee);
@@ -742,6 +747,13 @@ class Admission {
     for (const auto &f : m.functions)
       if (!declare(f))
         return false;
+    for (const auto &[symbol, definition] : functions)
+      for (const auto &callback : definition.callbacks) {
+        auto found = functions.find(callback);
+        if (found == functions.end() || !found->second.body)
+          return fail("local-realization-callback");
+        edges[symbol].insert(callback);
+      }
     return bodies(functions, true) && cycles();
   }
   bool check(const program::Participants &m) {
@@ -790,6 +802,14 @@ class Admission {
     for (const auto &realization : realizations) {
       if (totalOnly && realization.kind != LocalRealization::Kind::Total)
         return error("local-realization-signature");
+      if (realization.kind == LocalRealization::Kind::Total
+              ? !realization.callbacks.empty()
+              : (realization.callbacks.empty() ||
+                 realization.callbacks.size() > 2))
+        return error("local-realization-callback");
+      for (const auto &callback : realization.callbacks)
+        if (!name(callback))
+          return error("local-realization-callback");
       if (!name(realization.name) || !symbols.insert(realization.name).second)
         return error("local-realization-symbol");
       if (realization.domainArguments > realization.inputs.size())
@@ -808,6 +828,7 @@ class Admission {
       }
       Definition d;
       d.realization = true;
+      d.callbacks = realization.callbacks;
       for (bool input : {true, false}) {
         const auto &ports = input ? realization.inputs : realization.outputs;
         if (ports.size() > 1024)

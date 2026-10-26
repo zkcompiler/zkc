@@ -159,8 +159,9 @@ their discharge at each actual call, then checks logical affine ownership with
 private signatures derived from the admitted mathematical bodies. These
 temporary signatures are not returned as executable declarations or accepted
 from metadata. This admission permits mathematical calls with supported native
-logical ports; formal polynomial/quotient invocation ports and ordered finite
-requests still require their own realization. Source-equation correspondence,
+logical ports; formal polynomial/quotient invocation ports still require their
+own realization. Ordered finite requests use the additional callback closure
+checks below. Source-equation correspondence,
 candidate comparison and executable extraction remain separate checks.
 
 ## Ordered finite requests
@@ -206,6 +207,12 @@ Formation checks symbols, port partitions, logical type policies and callback
 premises. Whole-source admission additionally checks every potential body,
 reference cycles, actual outcome dispatch and affine state behavior. The
 mathematical result-dependency summary does not describe a scoped outcome.
+The transient logical admission view retains actual step/body and predicate
+definition edges. Its cycle and control-effect checks follow those edges:
+an ordered signature cannot conceal a history transition inside a match.
+Every referenced callback must have an admitted body, including callbacks of
+empty or dormant requests. These derived views are internal admission data;
+they are neither source declarations nor executable implementations.
 Unrealized finite requests are excluded from executable extraction. Source
 emission, selected realization and their independent comparisons must be
 connected before this component replaces the default finite compilation path;

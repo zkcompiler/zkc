@@ -83,13 +83,19 @@ the default `kernel.call` path. See
 
 Retained `exec.fold` and `exec.collect` have checked scoped callback ABIs,
 actual domain/capture premise discharge, zero-state outcomes, and scoped
-ownership formation. Multi-block callbacks remain distinct from single-block
+ownership formation. Source-closure admission checks every actual callback and
+retains callback dependencies for cycle and control-effect checks, including
+history transitions hidden behind finite requests in matches. Multi-block
+callbacks remain distinct from single-block
 expression views. Internal source adapters construct and independently compare
 scoped occurrences, array materialization, product/Unit packing and callback
 CFGs with bounded work. These controls isolate adapter correspondence; the
 enclosing source checker owns ordinary helper bodies and complete inventory.
-This is a pre-selection component: default source emission/admission and
+This is a pre-selection component: default source emission and
 realization still require migration before the Local finite route is replaced.
+The scoped source-closure API currently refuses affine fold state: affine reuse
+checks do not establish the required preservation of each exact resource root.
+The existing Local finite route retains its separate root analysis.
 Unresolved requests are refused by
 executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
 

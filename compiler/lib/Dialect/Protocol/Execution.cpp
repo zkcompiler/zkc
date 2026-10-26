@@ -715,6 +715,11 @@ public:
                            ? LocalRealization::Kind::FiniteCollect
                            : LocalRealization::Kind::FiniteFold;
           value.domainArguments = computation.arguments;
+          value.callbacks.push_back(
+              SymbolTable::getSymbolName(computation.helper).str());
+          if (computation.predicate)
+            value.callbacks.push_back(
+                SymbolTable::getSymbolName(computation.predicate).str());
         }
         for (bool input : {true, false})
           for (auto type :

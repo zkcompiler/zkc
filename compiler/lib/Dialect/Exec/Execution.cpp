@@ -4,6 +4,7 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
@@ -131,6 +132,49 @@ public:
             call.getNumResults() == 1 &&
             isa<exec::OutcomeType>(call.getResult(0).getType())) ||
            fail("source call must select an actual ordinary scoped helper");
+  }
+  bool finiteInvocation(Operation *op, std::string &name) {
+    finite::Computation computation;
+    if (!source || !mathematicalCalls ||
+        failed(finite::describe(op, computation)) || !computation.scoped)
+      return fail("unresolved finite invocation outside source admission");
+    // Affine reuse admission alone does not establish that each iteration
+    // returns the same resource root. The scoped origin analysis must own that
+    // additional invariant before affine finite state can enter this profile.
+    mathematical::NativeTypePolicies policies(op);
+    for (Type result : computation.signature.getResults()) {
+      auto policy = policies.get(result);
+      if (!policy || policy->affine)
+        return fail("finite state requires scoped resource-root admission");
+    }
+    // The enclosing owner has checked the domain, callback ABI, premises and
+    // closure. Retain callback edges in this transient admission view: a
+    // finite signature alone would hide ordered effects from control checks.
+    LocalRealization signature;
+    do {
+      if (!charge())
+        return false;
+      signature.name = "_finite_admission_" + std::to_string(nextMathematics++);
+    } while (SymbolTable::lookupSymbolIn(module, signature.name));
+    signature.kind = computation.collect ? LocalRealization::Kind::FiniteCollect
+                                         : LocalRealization::Kind::FiniteFold;
+    signature.domainArguments = computation.arguments;
+    for (Operation *callback : {computation.helper, computation.predicate})
+      if (callback)
+        signature.callbacks.push_back(
+            SymbolTable::getSymbolName(callback).str());
+    for (bool input : {true, false})
+      for (Type port : input ? computation.signature.getInputs()
+                             : computation.signature.getResults()) {
+        std::string spelling;
+        if (!type(port, spelling))
+          return false;
+        (input ? signature.inputs : signature.outputs)
+            .push_back(std::move(spelling));
+      }
+    name = signature.name;
+    mathematicalSignatures.push_back(std::move(signature));
+    return true;
   }
   bool fail(StringRef reason) {
     if (problem.empty())
@@ -610,6 +654,18 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
           !results(values, record.outputs))
         return false;
       body.push_back({compute.getSite().str(), std::move(record)});
+    } else if (isa<exec::FoldOp, exec::CollectOp>(op)) {
+      program::LocalApply record;
+      auto site = op->getAttrOfType<StringAttr>("site");
+      if (!site || op->getOperand(0) != scope ||
+          !reader.finiteInvocation(op, record.callee) ||
+          !names(op->getOperands().drop_front(), record.inputs))
+        return reader.fail("invalid source finite invocation");
+      SmallVector<Value> values;
+      if (!dispatch(op->getResult(0), values) ||
+          !results(values, record.outputs))
+        return false;
+      body.push_back({site.str(), std::move(record)});
     } else if (auto call = dyn_cast<func::CallOp>(op)) {
       program::LocalApply record;
       auto site = call->getAttrOfType<StringAttr>("runtime.site");
