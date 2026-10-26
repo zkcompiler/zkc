@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Executable.SchnorrProofProgramData
 public import ZkcExamples.Construction.SchnorrArtifact
-public import Zkc.Executable.NormalizationSoundness
+public import Zkc.Executable.Reading
 public import Zkc.Executable.Installed
 
 @[expose] public section

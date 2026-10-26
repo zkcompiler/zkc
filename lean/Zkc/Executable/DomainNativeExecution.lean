@@ -16,21 +16,9 @@ interpretation of the lowering check. -/
 theorem checkLowering_read (vocabulary : Vocabulary) (participant : Participant)
     (validator : Validator) (lowered : Lowered)
     (accepted : checkLowering vocabulary participant validator = .ok lowered) :
-    validator.read vocabulary (Instruction.helperList participant.instructions) = .ok lowered := by
-  unfold checkLowering at accepted
-  cases reading : validator.read vocabulary (Instruction.helperList participant.instructions) with
-  | error refusal => simp [reading, bind, Except.bind] at accepted
-  | ok candidate =>
-    simp only [reading, bind, Except.bind] at accepted
-    by_cases symbol : validator.symbol = participant.symbol <;>
-    by_cases entry : validator.entry = participant.policy.entry <;>
-    by_cases role : validator.role = participant.policy.validator <;>
-    by_cases inputs : validator.inputs.map (·.2.sort) = participant.inputs <;>
-    by_cases outputs : validator.results.map (·.sort) = participant.outputs <;>
-    by_cases exact : Code.instructionList candidate.code = participant.instructions ∧ candidate.returned = participant.returned <;>
-    cases normalized : checkNormalized participant.inputs participant.instructions participant.returned
-      (Code.instructionList candidate.code) candidate.returned <;>
-    simp_all [pure, Except.pure]
+    validator.read vocabulary (Instruction.helperList participant.instructions) = .ok lowered :=
+  (checkLowering_checks accepted).1
+
 
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]

@@ -2,7 +2,7 @@ module
 
 public import Zkc.Executable.Execution
 public import Zkc.Executable.Code
-public import Zkc.Executable.Normalization
+public import Zkc.Executable.DomainNormalizationCheck
 
 @[expose] public section
 
@@ -487,8 +487,8 @@ theorem ok_of_isSome {ε α : Type} :
   | .ok _, _ => rfl
   | .error _, present => by simp [Except.toOption] at present
 
-/-- The per-compile lowering rule: the executable validator reads back as
-exactly the constructed validator. -/
+/-- Admit the exact native identity, input/output ABI and canonical normalization
+of its reading. Even an identical schedule passes the result-schema check. -/
 def checkLowering (vocabulary : Vocabulary) (participant : Participant) (validator : Validator) :
     Except Refusal Lowered := do
   let lowered ← validator.read vocabulary (Instruction.helperList participant.instructions)
@@ -497,14 +497,37 @@ def checkLowering (vocabulary : Vocabulary) (participant : Participant) (validat
   unless validator.role = participant.policy.validator do throw (Refusal.different "role")
   unless validator.inputs.map (·.2.sort) = participant.inputs do throw (Refusal.different "inputs")
   unless validator.results.map (·.sort) = participant.outputs do throw (Refusal.different "outputs")
-  -- The reading is the constructed validator itself, or they have the same
-  -- normal form (`Zkc.Executable.Normalization`).
-  unless Code.instructionList lowered.code = participant.instructions ∧ lowered.returned = participant.returned do
-    match checkNormalized participant.inputs participant.instructions participant.returned
-        (Code.instructionList lowered.code) lowered.returned with
-    | .ok _ => pure ()
-    | .error refusal => throw refusal
+  let _ ← CanonicalNormalization.check participant.inputs participant.outputs
+    participant.instructions participant.returned (Code.instructionList lowered.code) lowered.returned
   pure lowered
+
+
+/-- Successful admission exposes finite reader, identity, ABI and normalization
+facts. It assumes no execution equality or protocol-validity proposition. -/
+theorem checkLowering_checks {vocabulary : Vocabulary} {participant : Participant}
+    {validator : Validator} {lowered : Lowered}
+    (accepted : checkLowering vocabulary participant validator = .ok lowered) :
+    validator.read vocabulary (Instruction.helperList participant.instructions) = .ok lowered ∧
+      validator.symbol = participant.symbol ∧ validator.entry = participant.policy.entry ∧
+      validator.role = participant.policy.validator ∧
+      validator.inputs.map (·.2.sort) = participant.inputs ∧
+      validator.results.map (·.sort) = participant.outputs ∧
+      (CanonicalNormalization.check participant.inputs participant.outputs
+        participant.instructions participant.returned
+        (Code.instructionList lowered.code) lowered.returned).toOption.isSome = true := by
+  unfold checkLowering at accepted
+  cases reading : validator.read vocabulary (Instruction.helperList participant.instructions) with
+  | error refusal => simp [reading, bind, Except.bind] at accepted
+  | ok candidate =>
+    simp only [reading, bind, Except.bind] at accepted
+    by_cases symbol : validator.symbol = participant.symbol <;>
+    by_cases entry : validator.entry = participant.policy.entry <;>
+    by_cases role : validator.role = participant.policy.validator <;>
+    by_cases inputs : validator.inputs.map (·.2.sort) = participant.inputs <;>
+    by_cases outputs : validator.results.map (·.sort) = participant.outputs <;>
+    cases normalized : CanonicalNormalization.check participant.inputs participant.outputs
+      participant.instructions participant.returned (Code.instructionList candidate.code) candidate.returned <;>
+    simp_all [pure, Except.pure, Except.toOption]
 
 
 end Zkc.Executable

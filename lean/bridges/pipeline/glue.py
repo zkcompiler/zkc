@@ -523,7 +523,7 @@ def facts_module(namespace, construction, program_module, facts, form):
     glue = construction["glue"]
     data = f"({glue}.inputs (F := F) (G := G) {args}).map .data" if form == "payloads" else \
         f"{glue}.inputs (F := F) (G := G) {args}"
-    out = [HEADER.format(imports=imports([program_module, construction["module"], "Zkc.Executable.NormalizationSoundness",
+    out = [HEADER.format(imports=imports([program_module, construction["module"], "Zkc.Executable.Reading",
                                           "Zkc.Executable.Installed"]),
                          doc=f"Generated facts of the executable validator `{program_module.rsplit('.', 1)[-1]}`.\n"
                              "Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering\n"

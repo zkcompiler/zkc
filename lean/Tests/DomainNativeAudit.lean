@@ -77,7 +77,7 @@ import all Zkc.Executable.HelperSoundness
 import all Zkc.Executable.Helpers
 import all Zkc.Executable.Installed
 import all Zkc.Executable.NativeLaws
-import all Zkc.Executable.Normalization
+import all Zkc.Executable.DomainNormalizationCheck
 import all Zkc.Executable.Numerical
 import all Zkc.Executable.Observations
 import all Zkc.Executable.Program

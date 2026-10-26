@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Executable.DomainNormalizationCheck
+public import Zkc.Executable.DomainSchema
 
 @[expose] public section
 

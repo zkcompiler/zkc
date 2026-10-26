@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Executable.Refusal
-public import Zkc.Executable.DomainSchema
+public import Zkc.Source.Structured.Admission
 
 @[expose] public section
 
@@ -143,7 +143,7 @@ def Terms.term (terms : Terms) (ids : List Nat) (anchor : Nat) :
         match operandIds ids operands, calculation.op.results with
         | some operands', [result] =>
             if operands'.map terms.sort? = calculation.op.arguments.map (some ∘ .data) ∧
-                calculation.op.arguments.all Domain.dataType then
+                calculation.op.arguments.all (fun ty => !ty.isService) then
               .ok (terms.intern (.calculate calculation operands', .data result))
             else .error (.sort anchor)
         | _, _ => .error (.sort anchor)
