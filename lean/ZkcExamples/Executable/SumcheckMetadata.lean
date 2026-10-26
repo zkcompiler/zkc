@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Executable.SumcheckProofFacts
 public import ZkcExamples.Executable.SumcheckShape
+public import ZkcExamples.Executable.SumcheckMessages
 
 @[expose] public section
 
@@ -26,6 +27,15 @@ theorem maximum_eq : maximum = 2 := by decide +kernel
 
 /-- The names of this Entry's sites, templates and helpers. -/
 def names : SumcheckShape.Names := SumcheckShape.Names.of SumcheckProof.participant.instructions
+
+/-- The honest producer uses precisely the four actual occurrence templates,
+in the verifier's message, message, draw, delivery order. -/
+def transcript : SumcheckMessages.Transcript :=
+  ⟨names.scalar,
+    (names.firstMessage.origin SumcheckProof.context).getD ⟨"", [], none⟩,
+    (names.secondMessage.origin SumcheckProof.context).getD ⟨"", [], none⟩,
+    (names.draw.origin SumcheckProof.context).getD ⟨"", [], none⟩,
+    (names.delivery.origin SumcheckProof.context).getD ⟨"", [], none⟩⟩
 
 set_option maxRecDepth 20000 in
 /-- The receive plan: a loop over the round count, at most `maximum` rounds,

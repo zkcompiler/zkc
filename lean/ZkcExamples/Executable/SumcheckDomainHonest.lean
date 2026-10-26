@@ -23,9 +23,7 @@ open SumcheckMessages (lowSum highSum)
 variable {F G : Type} [Field F] [DecidableEq F]
 
 /-- Occurrences are read from the admitted Entry's transcript templates. -/
-def transcript : SumcheckMessages.Transcript :=
-  ⟨"bls12-381.fr", staticOrigin lowTemplate, staticOrigin highTemplate,
-    staticOrigin drawTemplate, staticOrigin deliveryTemplate⟩
+abbrev transcript : SumcheckMessages.Transcript := SumcheckProof.transcript
 
 abbrev messages (oracle : History F G → F) := SumcheckMessages.honestRounds transcript oracle
 

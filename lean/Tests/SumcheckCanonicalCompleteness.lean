@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Executable.SumcheckDomainCompleteness
+public import ZkcExamples.Executable.SumcheckCompleteness
 
 @[expose] public section
 
@@ -23,35 +23,35 @@ abbrev run (oracle : History F G → F) (budget : Nat) (values : List F) (claim 
     (rounds : Nat) (proof : Proof F G) :=
   DomainVM.metered (m := Id) ZkcExamples.Construction.SumcheckProof.program
     ZkcExamples.Construction.SumcheckProof.context Origin.withoutCoordinates [] oracle
-    SumcheckDomainCharges.cost budget SumcheckProof.lowered (frame values claim rounds []) proof
+    SumcheckCharges.cost budget SumcheckProof.lowered (frame values claim rounds []) proof
 
 /-- The consumer keeps the round count symbolic and uses the actual Entry. -/
 theorem variable_honest (oracle : History F G → F) (values : List F) (rounds : Nat)
     (admitted : rounds ≤ SumcheckProof.maximum) (shaped : values.length = 2 ^ rounds) :
     ∃ history suffix, run oracle (68 + 59 * rounds) values values.sum rounds
-      ((SumcheckDomainCompleteness.honestRounds oracle [] values rounds).map (.field "bls12-381.fr")) =
+      ((SumcheckCompleteness.honestRounds oracle [] values rounds).map (.field "bls12-381.fr")) =
       (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], []) ∧
       readbackHistory Origin.withoutCoordinates history = some suffix :=
-  SumcheckDomainCompleteness.honest_metered oracle _ values rounds admitted shaped []
-    (by rw [SumcheckDomainCharges.charge_eq])
+  SumcheckCompleteness.honest_metered oracle _ values rounds admitted shaped []
+    (by rw [SumcheckCharges.charge_eq])
 
 theorem zero_honest (oracle : History F G → F) (value : F) :
     ∃ history suffix, run oracle 68 [value] value 0 [] =
       (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], []) ∧
       readbackHistory Origin.withoutCoordinates history = some suffix := by
-  simpa [SumcheckDomainCompleteness.honestRounds, SumcheckDomainHonest.messages, SumcheckMessages.honestRounds] using
+  simpa [SumcheckCompleteness.honestRounds, SumcheckDomainHonest.messages, SumcheckMessages.honestRounds] using
     variable_honest oracle [value] 0 (by decide +kernel) (by simp)
 
 theorem one_honest (oracle : History F G → F) (low high : F) :
     ∃ history suffix, run oracle 127 [low, high] (low + high) 1
-      ((SumcheckDomainCompleteness.honestRounds oracle [] [low, high] 1).map (.field "bls12-381.fr")) =
+      ((SumcheckCompleteness.honestRounds oracle [] [low, high] 1).map (.field "bls12-381.fr")) =
       (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], []) ∧
       readbackHistory Origin.withoutCoordinates history = some suffix := by
   simpa using variable_honest oracle [low, high] 1 (by decide +kernel) (by simp)
 
 theorem two_honest (oracle : History F G → F) (a b c d : F) :
     ∃ history suffix, run oracle 186 [a,b,c,d] (a + (b + (c + d))) 2
-      ((SumcheckDomainCompleteness.honestRounds oracle [] [a,b,c,d] 2).map (.field "bls12-381.fr")) =
+      ((SumcheckCompleteness.honestRounds oracle [] [a,b,c,d] 2).map (.field "bls12-381.fr")) =
       (.returned [.data (.boolean true), .transcript ZkcExamples.Construction.SumcheckProof.context.suite history], []) ∧
       readbackHistory Origin.withoutCoordinates history = some suffix := by
   simpa using variable_honest oracle [a,b,c,d] 2 (by decide +kernel) (by simp)
@@ -62,18 +62,18 @@ theorem variable_budget (maximum rounds : Nat) (small : maximum < 64)
     (values : List F) (claim : F) (history : Domain.History (Structured.uniformCarriers F G))
     (proof : Proof F G) (shaped : values.length = 2 ^ rounds) :
     DomainVM.Sufficient ZkcExamples.Construction.SumcheckProof.program
-      ZkcExamples.Construction.SumcheckProof.context SumcheckDomainCharges.cost (68 + 59 * rounds)
-      (SumcheckDomainFamily.lowered maximum) (frame values claim rounds history) proof :=
-  SumcheckDomainFamily.sufficient_family maximum small _ values claim rounds history proof shaped
-    (by rw [SumcheckDomainFamily.charge_eq])
+      ZkcExamples.Construction.SumcheckProof.context SumcheckCharges.cost (68 + 59 * rounds)
+      (SumcheckFamily.lowered maximum) (frame values claim rounds history) proof :=
+  SumcheckFamily.sufficient_family maximum small _ values claim rounds history proof shaped
+    (by rw [SumcheckFamily.charge_eq])
 
 /-- Insufficient budget stops before even the empty-point helper. -/
 theorem zero_budget (oracle : History F G → F) (values : List F) (claim : F)
     (rounds : Nat) (proof : Proof F G) :
     run oracle 0 values claim rounds proof = (.stopped .exhausted, proof) := by
   unfold run
-  rw [SumcheckDomainFamily.lowered_eq]
-  simp [SumcheckDomainFamily.lowered, SumcheckShape.code, DomainVM.metered,
+  rw [SumcheckFamily.lowered_eq]
+  simp [SumcheckFamily.lowered, SumcheckShape.code, DomainVM.metered,
     DomainVM.meteredK, DomainVM.meteredStep]
   rfl
 
@@ -98,10 +98,10 @@ theorem false_claim (oracle : History F G → F) (value claim : F) (wrong : valu
     simp [rootProcess, reduce, PIR.Process.bind, terminal, Structured.indexLimit, DomainVM.Passes, point, checked]
   obtain ⟨returned, unread, good, executed⟩ := DomainVM.metered_success (F := F) (G := G)
     ZkcExamples.Construction.SumcheckProof.program ZkcExamples.Construction.SumcheckProof.context
-    Origin.withoutCoordinates [] oracle SumcheckDomainCharges.cost 68 SumcheckProof.lowered
+    Origin.withoutCoordinates [] oracle SumcheckCharges.cost 68 SumcheckProof.lowered
     (frame [value] claim 0 []) proof _
-    (SumcheckDomainCharges.sufficient (F := F) (G := G) 68 [value] claim 0 [] proof (by simp)
-      (by rw [SumcheckDomainFamily.charge_eq]))
+    (SumcheckCharges.sufficient (F := F) (G := G) 68 [value] claim 0 [] proof (by simp)
+      (by rw [SumcheckFamily.charge_eq]))
     (SumcheckDomainHonest.of_root_passes (F := F) (G := G) oracle [] [value] claim 0 [] proof _ passes)
   rcases good with ⟨rfl, rfl⟩
   exact executed

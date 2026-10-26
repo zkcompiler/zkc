@@ -12,8 +12,7 @@ run_cmd ZkcTools.DeclarationAudit.check [
    `ZkcExamples.Construction.SumcheckDomainLoop, `ZkcExamples.Construction.SumcheckDomainRoot,
    `ZkcExamples.Construction.SumcheckScalarProtocol, `ZkcExamples.Construction.SumcheckScalarRound,
    `ZkcExamples.Construction.SumcheckDomainVerifier, `ZkcExamples.Construction.SumcheckSourceConnection,
-   `ZkcExamples.Construction.SumcheckLegacyRound, `ZkcExamples.Construction.SumcheckLegacyLoop,
-   `ZkcExamples.Construction.SumcheckLegacyRoot, `ZkcExamples.Construction.SumcheckProof,
+   `ZkcExamples.Construction.SumcheckProof,
    `ZkcExamples.Construction.SumcheckProofRounds, `ZkcExamples.Executable.SumcheckProof] "SUMCHECK-DOMAIN-AUDIT-PASS" true
 
 open Lean Elab Command in
@@ -21,8 +20,8 @@ run_cmd do
   let env ← getEnv
   let roots := [``ZkcExamples.Construction.SumcheckProof.compiled_transform,
     ``ZkcExamples.Construction.SumcheckProof.compiled_transform_rounds]
-  let forbidden := [``Zkc.Construction.specK, ``Zkc.Construction.specStep,
-    ``Zkc.Construction.idealK, ``Zkc.Construction.idealStep]
+  let forbidden := [`Zkc.Construction.specK, `Zkc.Construction.specStep,
+    `Zkc.Construction.idealK, `Zkc.Construction.idealStep]
   let mut pending := roots
   let mut seen : Std.HashSet Name := {}
   while !pending.isEmpty do
@@ -37,7 +36,6 @@ run_cmd do
   logInfo m!"SUMCHECK-DIRECT-SOURCE-PASS roots={roots.length} dependencies={seen.size}"
 
 #print axioms Zkc.Construction.Uniform.DomainAdapter.validate_actual
-#print axioms ZkcExamples.Construction.SumcheckDomainConnection.retained_legacy
 #print axioms ZkcExamples.Construction.SumcheckProof.compiled_transform
-#print axioms ZkcExamples.Executable.SumcheckProof.metered_domain_prunes
+#print axioms ZkcExamples.Executable.SumcheckProof.domain_prunes
 #print axioms ZkcExamples.Executable.SumcheckProof.executable_transform_prunes

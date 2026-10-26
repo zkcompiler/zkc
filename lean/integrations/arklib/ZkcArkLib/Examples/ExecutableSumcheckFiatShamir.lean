@@ -88,11 +88,9 @@ theorem verifyBytes_prunes {m : Type → Type} [Monad m] [LawfulMonad m] (challe
       (verifyBytes challenge decode budget binding raw claim count initial bytes)
       (ZkcExamples.Executable.SumcheckProof.accepting <$>
         compiledVerifier challenge raw claim count initial (decodedProof decode count bytes)) := by
-  unfold verifyBytes compiledVerifier
-  rw [Functor.map_map]
-  simp only [← ZkcExamples.Executable.SumcheckProof.accepts_eq]
-  exact ZkcExamples.Executable.SumcheckProof.executable_prunes challenge decode budget binding raw claim count
-    initial bytes
+  simpa only [verifyBytes, compiledVerifier, SumcheckProof.compiledVerifier,
+    decodedProof, ZkcExamples.Executable.SumcheckProof.plan_types] using
+    ZkcExamples.Executable.SumcheckProof.domain_prunes challenge decode budget binding raw claim count initial bytes
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- An accepted result returned the decision true. -/
