@@ -1,6 +1,6 @@
 import Zkc.Executable.DomainCompleteness
 import Zkc.Executable.DomainNormalization
-import Zkc.Executable.Normalization
+import Zkc.Executable.DomainNormalizationCheck
 
 /-! Budget/failure-order controls for canonical Code, including a checked
 counterexample to unscoped raw normalization. -/
@@ -48,10 +48,10 @@ example : meteredStep program context key initial challenge (fun _ _ => 0) 1
     Uniform.DomainAdapter.runK, Value.decode]
 
 -- Raw metadata is semantically relevant to Domain, even for an unused pure
--- result. The old normalizer accepts this pair; canonical outcomes differ.
+-- result. Canonical admission refuses this pair because its outcomes differ.
 private def malformed : Instruction := ⟨.indicesEmpty, [], [], []⟩
 
-example : (checkNormalized [] [malformed] [] [] []).toOption.isSome = true := by decide +kernel
+example : (CanonicalNormalization.check [] [] [malformed] [] [] []).toOption.isSome = false := by decide +kernel
 
 example : DomainVM.observation (F := F) (G := G) program context [malformed] [] [] = .halt .refused := by
   simp [DomainVM.observation, outcome, malformed, Domain.evaluate, Domain.step,
