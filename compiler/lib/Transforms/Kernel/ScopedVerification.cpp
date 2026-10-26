@@ -1,5 +1,4 @@
 #include "../RealizationSubject.h"
-#include "../RealizationTrace.h"
 #include "../ScopedCandidate.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"

@@ -1,9 +1,13 @@
 #ifndef ZKC_TRANSFORMS_FINITEVERIFICATION_H
 #define ZKC_TRANSFORMS_FINITEVERIFICATION_H
 
-#include "ScopedFinite.h"
+#include "ScopedCallback.h"
 #include "zkc/Transforms/Finite.h"
+#include "llvm/ADT/DenseSet.h"
 
+namespace zkc::protocol {
+struct SourceExecutionClosure;
+}
 namespace zkc::mathematical {
 class ScopedCandidate;
 }
@@ -63,4 +67,38 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>> verifyExpression(
     VerificationResult &outcome, MathematicalSelectionPolicy policy = {});
 
 } // namespace zkc::finite
+
+namespace zkc::mathematical {
+inline VerificationDecision
+verificationDecision(const finite::VerificationResult &result) {
+  VerificationObservation outcome;
+  switch (result.status) {
+  case finite::VerificationStatus::Verified:
+    outcome = VerificationObservation::Verified;
+    break;
+  case finite::VerificationStatus::Mismatch:
+    outcome = VerificationObservation::Mismatch;
+    break;
+  case finite::VerificationStatus::OptionalCapacity:
+    outcome = VerificationObservation::OptionalCapacity;
+    break;
+  case finite::VerificationStatus::RequiredCapacity:
+    outcome = VerificationObservation::RequiredCapacity;
+    break;
+  }
+  return {outcome, result.detail.str(), result.capacity, result.subject};
+}
+
+} // namespace zkc::mathematical
+
+namespace zkc::protocol {
+// The independent reader receives actual immutable source/candidate IR, policy
+// and work bounds. Producer recipe inventories are outside this interface.
+mlir::LogicalResult verifyScopedFinitePreparation(
+    mlir::ModuleOp source, mlir::ModuleOp candidate,
+    mathematical::RealizationWork &work,
+    MathematicalSelectionPolicy policy = {},
+    mathematical::VerificationDecision *outcome = nullptr,
+    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr);
+} // namespace zkc::protocol
 #endif

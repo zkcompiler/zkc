@@ -188,8 +188,11 @@ def main():
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/ScopedCandidate.h",
+        ROOT / "lib/Transforms/ScopedCallback.h",
         ROOT / "lib/Transforms/ScopedSubstitution.h",
         ROOT / "lib/Transforms/ScopedFinite.h",
+        ROOT / "lib/Transforms/ScopedCollectionSum.h",
+        ROOT / "lib/Transforms/ScopedNestedContraction.h",
         ROOT / "lib/Transforms/ScopedPreparation.h",
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
@@ -238,7 +241,10 @@ def main():
             assert path.is_file(), f"nonexistent header: {path}"
             assert path not in header_owners, f"multiple owners: {path}"
             header_owners[path] = name
-    assert set(header_owners) == {p for p in (ROOT / "include/zkc").rglob("*") if p.suffix in (".h", ".def")} | set((ROOT / "lib").rglob("*.h")), "unowned headers"
+    actual_headers = {p for p in (ROOT / "include/zkc").rglob("*") if p.suffix in (".h", ".def")} | set((ROOT / "lib").rglob("*.h"))
+    assert set(header_owners) == actual_headers, (
+        f"unowned headers: {sorted(str(p.relative_to(ROOT)) for p in actual_headers - set(header_owners))}; "
+        f"absent headers: {sorted(str(p.relative_to(ROOT)) for p in set(header_owners) - actual_headers)}")
     for path, owner in extra_headers.items():
         header_owners[path] = owner
         if path.suffix != ".td":
@@ -392,12 +398,14 @@ def main():
         ROOT / "include/zkc/Analysis/Computation.h",
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
-            "CollectionRealization", "RealizationEmission", "RecipeRealizations")),
+            "CollectionRealization", "RealizationEmission", "RecipeRealizations",
+            "ScopedFinite", "ScopedPreparation")),
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison", "NestedContractionVerification",
                    "HelperNormalizationVerification", "AlgorithmVerification",
-                   "Kernel/RecipeVerification"):
+                   "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
+                   "Kernel/RecipeVerification", "Kernel/ScopedVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

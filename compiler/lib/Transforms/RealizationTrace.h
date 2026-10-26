@@ -45,26 +45,6 @@ realizationSubject(const finite::ComputationDiagnostic &diagnostic) {
   return key;
 }
 
-inline VerificationDecision
-verificationDecision(const finite::VerificationResult &result) {
-  VerificationObservation outcome;
-  switch (result.status) {
-  case finite::VerificationStatus::Verified:
-    outcome = VerificationObservation::Verified;
-    break;
-  case finite::VerificationStatus::Mismatch:
-    outcome = VerificationObservation::Mismatch;
-    break;
-  case finite::VerificationStatus::OptionalCapacity:
-    outcome = VerificationObservation::OptionalCapacity;
-    break;
-  case finite::VerificationStatus::RequiredCapacity:
-    outcome = VerificationObservation::RequiredCapacity;
-    break;
-  }
-  return {outcome, result.detail.str(), result.capacity, result.subject};
-}
-
 /// A journal scope observes existing transaction boundaries. It neither owns
 /// candidates nor controls acceptance, retries, counters, or occurrence state.
 class RealizationScope {

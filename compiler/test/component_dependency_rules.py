@@ -348,14 +348,22 @@ rejects("prepared protocol bridge grants no other private transform header",
         "private component dependency")
 
 for source in ("FiniteVerification", "MathLoweringVerification",
-               "MathematicalComparison", "NestedContractionVerification"):
+               "MathematicalComparison", "NestedContractionVerification",
+               "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
+               "Kernel/ScopedVerification"):
     for header in ("ComputationEquations.h", "ComputationSelection.h",
-                   "RealizationEmission.h", "zkc/Analysis/Computation.h"):
+                   "RealizationEmission.h", "zkc/Analysis/Computation.h",
+                   "ScopedFinite.h", "ScopedPreparation.h"):
+        include = "../" + header if "/" in source and not header.startswith("zkc/") else header
         rejects(f"independent reader excludes producer machinery: {source} -> {header}",
                 root / f"lib/Transforms/{source}.cpp",
-                lambda text, header=header: f'#include "{header}"\n' + text,
+                lambda text, include=include: f'#include "{include}"\n' + text,
                 "independent reader imports producer machinery")
 rejects("independent reader boundary is transitive",
         root / "lib/Transforms/MathematicalComparison.h",
         lambda text: '#include "ComputationSelection.h"\n' + text,
+        "independent reader imports producer machinery")
+rejects("shared callback signatures cannot import producer recipes",
+        root / "lib/Transforms/ScopedCallback.h",
+        lambda text: '#include "MathematicalRecipes.h"\n' + text,
         "independent reader imports producer machinery")

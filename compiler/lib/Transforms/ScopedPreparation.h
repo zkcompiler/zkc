@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_SCOPEDPREPARATION_H
 #define ZKC_TRANSFORMS_SCOPEDPREPARATION_H
 
+#include "FiniteVerification.h"
 #include "MathematicalRecipes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -29,11 +30,5 @@ mlir::OwningOpRef<mlir::ModuleOp> prepareScopedFinite(
     mathematical::VerificationDecision *outcome = nullptr,
     const mathematical::MathematicalRecipes &recipes =
         mathematical::mathematicalRecipes());
-mlir::LogicalResult verifyScopedFinitePreparation(
-    mlir::ModuleOp source, mlir::ModuleOp candidate,
-    mathematical::RealizationWork &work,
-    MathematicalSelectionPolicy policy = {},
-    mathematical::VerificationDecision *outcome = nullptr,
-    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr);
 } // namespace zkc::protocol
 #endif

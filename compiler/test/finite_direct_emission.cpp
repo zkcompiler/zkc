@@ -1,5 +1,6 @@
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/FiniteVerification.h"
+#include "../lib/Transforms/ScopedFinite.h"
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/ScopedCandidate.h"

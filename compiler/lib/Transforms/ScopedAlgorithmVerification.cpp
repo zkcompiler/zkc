@@ -2,7 +2,6 @@
 #include "Kernel/Support.h"
 #include "ScopedCandidate.h"
 #include "ScopedCollectionSum.h"
-#include "ScopedPreparation.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"

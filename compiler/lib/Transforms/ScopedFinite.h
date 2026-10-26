@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_SCOPEDFINITE_H
 
 #include "MathematicalRecipes.h"
+#include "ScopedCallback.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Transforms/Finite.h"
@@ -11,21 +12,6 @@ namespace zkc::protocol {
 struct SourceExecutionClosure;
 }
 namespace zkc::finite {
-// A reached callback can stop without producing its result. This is separate
-// from construction failure and from a successful callback with no outputs.
-struct ScopedCallbackResult {
-  llvm::SmallVector<mlir::Value> values;
-  bool stopped = false;
-};
-using ScopedCallbackEmitter =
-    llvm::function_ref<mlir::FailureOr<ScopedCallbackResult>(
-        mlir::func::FuncOp, mlir::ValueRange, llvm::StringRef,
-        exec::ScopedExecutionBuilder &)>;
-using ScopedCallbackReader =
-    llvm::function_ref<mlir::FailureOr<ScopedCallbackResult>(
-        mlir::func::FuncOp, mlir::ValueRange, llvm::StringRef,
-        mlir::Operation *&)>;
-
 // Required construction accounts shared with callback substitution. Debits
 // bound each generated instruction and its CFG plumbing before allocation.
 struct ScopedEmissionBudget {
