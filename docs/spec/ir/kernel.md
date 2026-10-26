@@ -138,6 +138,18 @@ ordered, including unused work in its normalized input. Independent readers
 check normalization, actual port wiring, original
 return coordinates and unchanged surrounding guards and effects.
 
+On the default scoped path, these cuts are actual `protocol.local_call`
+actions into generated `func.func` definitions containing `exec.compute`.
+Original data arguments and return payloads remain exact prefixes. A new
+coefficient result extends the computation's outcome and its unique dispatch
+success block, then the wrapper's returned payload and participant call. A
+new input extends the consumer's data arguments after its borrowed scope.
+Root failure packaging keeps the same stop value and adopts the wrapper's
+extended outcome type. Guard bodies, scope transfers, control successors and
+all other block interfaces stay unchanged. The independent frontier reader
+checks these distinctions; an outcome result is never treated as a numerical
+data result, and the scope is never an exported coefficient.
+
 Expansion adds no Local frame,
 entry/return charge or destruction point. Installed implementation restrictions,
 native failure behavior and the [canonical Local accounting](functions.md)

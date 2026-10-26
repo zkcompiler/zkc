@@ -80,3 +80,31 @@ protocol Run roles(P)(xs:vec::Vector<F>@P,ys:vec::Vector<F>@P)->(value:F@P){
         for optimized in (counters[0], counters[2]):
             assert optimized['logical_bytes'] < counters[1]['logical_bytes']
             assert optimized['total_value_bytes'] < counters[1]['total_value_bytes']
+
+
+@pytest.mark.parametrize('flags', [(), ('--no-simplify',),
+                                  ('--no-calculation-batching',), ('--release-storage',)])
+def test_polynomial_coefficients_across_guard(toolchain, journal, directory, flags):
+    source = PRELUDE + """
+math fn square_at(a:F,b:F,x:F)->F{
+  let linear=symbolic::from_coefficients(symbolic::pack([a,b]));
+  return symbolic::evaluate(symbolic::multiply(linear,linear),[x]);
+}
+protocol Run roles(P)(a:F@P,b:F@P,x:F@P,y:F@P,claimed:F@P)->(first:F@P,second:F@P){
+  let first=square_at(a,b,x);
+  require first == claimed;
+  return(first=first,second=square_at(a,b,y));
+}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+"""
+    entry = Entry(toolchain, journal, directory, source, (*MODULES, *flags))
+    modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    for number, (a, b, x, y) in enumerate([(2, 3, 4, 7), (0, 0, 1, 2),
+                                          (modulus-1, 5, 9, 3), (7, 2, 0, 0)]):
+        first, second = ((a+b*z)**2 % modulus for z in (x, y))
+        inputs = dict(zip(('a', 'b', 'x', 'y', 'claimed'), map(str, (a, b, x, y, first))))
+        assert entry.run(f'accepted-{number}', inputs) == {
+            'first': str(first), 'second': str(second)}
+        report = entry.run(f'refused-{number}', inputs | {'claimed': str((first+1) % modulus)},
+                           refuses='entry-host-run-failed')
+        after = joint_execution(report)['roles'][0]['after']
+        assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'

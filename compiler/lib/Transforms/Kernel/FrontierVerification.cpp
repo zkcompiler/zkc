@@ -2,6 +2,8 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/Hashing.h"
@@ -28,42 +30,39 @@ bool prefix(TypeRange before, TypeRange after) {
          llvm::equal(before, after.take_front(before.size()));
 }
 
+bool outcomePrefix(TypeRange before, TypeRange after) {
+  if (before.size() != 1 || after.size() != 1)
+    return false;
+  auto a = dyn_cast<exec::OutcomeType>(before.front());
+  auto b = dyn_cast<exec::OutcomeType>(after.front());
+  return a && b && prefix(a.getPayload(), b.getPayload());
+}
+Block *payloadBlock(exec::ComputeOp call) {
+  if (!call || !call.getOutcome().hasOneUse())
+    return nullptr;
+  auto dispatch =
+      dyn_cast<exec::DispatchOp>(*call.getOutcome().getUsers().begin());
+  if (!dispatch || dispatch->getPrevNode() != call.getOperation() ||
+      dispatch.getReturned() == dispatch.getStopped() ||
+      dispatch.getReturned()->getParent() != call->getParentRegion() ||
+      dispatch.getReturned()->getSinglePredecessor() != call->getBlock() ||
+      dispatch.getReturned()->getArgumentTypes() !=
+          call.getOutcome().getType().getPayload())
+    return nullptr;
+  return dispatch.getReturned();
+}
+
 // The same ordered structural pattern as AlgorithmVerification::unchanged,
 // with narrow, explicitly enumerated exceptions. Locations are not semantic.
 class ContextReader {
   uint64_t &remaining;
 
-  bool portAttributes(Operation *before, Operation *after,
-                      NamedAttrList &expected, NamedAttrList &actual) {
-    for (auto name : {"arg_attrs", "res_attrs"}) {
-      auto a = expected.get(name), b = actual.get(name);
-      if (bool(a) != bool(b))
-        return false;
-      if (!a)
-        continue;
-      for (auto [op, raw] : {std::pair{before, a}, std::pair{after, b}}) {
-        auto attributes = dyn_cast<ArrayAttr>(raw);
-        auto count = StringRef(name) == "arg_attrs" ? op->getNumOperands()
-                                                    : op->getNumResults();
-        if (!attributes || attributes.size() != count || count > remaining)
-          return false;
-        remaining -= count;
-        if (!llvm::all_of(attributes, [](Attribute value) {
-              auto dictionary = dyn_cast<DictionaryAttr>(value);
-              return dictionary && dictionary.empty();
-            }))
-          return false;
-      }
-      expected.erase(name);
-      actual.erase(name);
-    }
-    return true;
-  }
-
 public:
   llvm::DenseMap<Operation *, Operation *> pairs;
   llvm::DenseSet<Operation *> flexibleFunctions, flexibleCalls, flexibleReturns;
-  llvm::DenseSet<Operation *> skipBodies, appendedDeclarations;
+  llvm::DenseSet<Operation *> skipBodies, appendedDeclarations,
+      flexibleOutcomes;
+  llvm::DenseSet<Block *> flexibleBlocks;
   llvm::DenseMap<Operation *, Attribute> callees;
 
   explicit ContextReader(uint64_t &remaining) : remaining(remaining) {}
@@ -97,15 +96,13 @@ public:
         return refuse(after, "function interface inspection limit");
       remaining -= cost;
       if (!prefix(x.getInputs(), y.getInputs()) ||
-          !prefix(x.getResults(), y.getResults()))
+          !(prefix(x.getResults(), y.getResults()) ||
+            outcomePrefix(x.getResults(), y.getResults())))
         return refuse(after, "original function interface changed");
       expected.erase("function_type");
       actual.erase("function_type");
     }
     bool call = flexibleCalls.contains(before);
-    if (call && isa<CallOp>(before) &&
-        !portAttributes(before, after, expected, actual))
-      return refuse(after, "numerical call port attributes changed");
     if (expected.getDictionary(before->getContext()) !=
         actual.getDictionary(after->getContext()))
       return refuse(after, "attributes, guard, declaration or site changed");
@@ -118,9 +115,18 @@ public:
          zip(before->getOperands(), after->getOperands()))
       if (values.lookupOrNull(operand) != candidate)
         return refuse(after, "ordered operand or original return changed");
-    if (call ? !prefix(before->getResultTypes(), after->getResultTypes())
-             : before->getResultTypes() != after->getResultTypes())
+    if (flexibleOutcomes.contains(before)
+            ? !outcomePrefix(before->getResultTypes(), after->getResultTypes())
+            : (call ? !prefix(before->getResultTypes(), after->getResultTypes())
+                    : before->getResultTypes() != after->getResultTypes()))
       return refuse(after, "original result interface changed");
+    if (flexibleOutcomes.contains(before) &&
+        isa<exec::ReturnOp, exec::FailureOp>(after)) {
+      auto parent = after->getParentOfType<func::FuncOp>();
+      if (!parent || after->getResultTypes() != parent.getResultTypes())
+        return refuse(after,
+                      "scoped completion type differs from its function");
+    }
     if (skipBodies.contains(before))
       return success();
     for (auto [source, target] :
@@ -137,8 +143,9 @@ public:
         if (cost > remaining)
           return refuse(after, "block interface inspection limit");
         remaining -= cost;
-        if (function ? !prefix(a.getArgumentTypes(), b.getArgumentTypes())
-                     : a.getArgumentTypes() != b.getArgumentTypes())
+        bool extensible = flexibleBlocks.contains(&a);
+        if (extensible ? !prefix(a.getArgumentTypes(), b.getArgumentTypes())
+                       : a.getArgumentTypes() != b.getArgumentTypes())
           return refuse(after, "block interface changed");
         inner.map(&a, &b);
         inner.map(a.getArguments(),
@@ -178,9 +185,10 @@ public:
 };
 
 struct Step {
-  local::FuncOp wrapper;
-  local::CallOp invocation;
-  CallOp call;
+  func::FuncOp wrapper;
+  protocol_ir::LocalCallOp invocation;
+  exec::ComputeOp call;
+  exec::ReturnOp returned;
   func::FuncOp entry;
   llvm::DenseSet<Operation *> generated;
 };
@@ -242,9 +250,9 @@ class FrontierReader {
   // signatures. Greedily consuming the concrete occurrence as generated work
   // would reject a valid deletion. Explore only that local ambiguity, charging
   // copied state and every attempted instruction; never replay an IR producer.
-  bool body(Step &source, local::CallOp invocation, Block::iterator position,
-            Block::iterator cursor, func::ReturnOp sourceReturn,
-            func::ReturnOp actualReturn,
+  bool body(Step &source, protocol_ir::LocalCallOp invocation,
+            Block::iterator position, Block::iterator cursor,
+            func::ReturnOp sourceReturn, func::ReturnOp actualReturn,
             llvm::DenseMap<Value, uint64_t> &original,
             llvm::DenseMap<Value, uint64_t> &actual, BlockFrontier &frontier,
             unsigned depth = 0) {
@@ -360,27 +368,28 @@ class FrontierReader {
   }
   LogicalResult step(Step source) {
     auto wrapper =
-        dyn_cast_or_null<local::FuncOp>(context.pairs.lookup(source.wrapper));
-    auto invocation = dyn_cast_or_null<local::CallOp>(
+        dyn_cast_or_null<func::FuncOp>(context.pairs.lookup(source.wrapper));
+    auto invocation = dyn_cast_or_null<protocol_ir::LocalCallOp>(
         context.pairs.lookup(source.invocation));
-    auto call = dyn_cast_or_null<CallOp>(context.pairs.lookup(source.call));
+    auto call =
+        dyn_cast_or_null<exec::ComputeOp>(context.pairs.lookup(source.call));
     auto entry =
         dyn_cast_or_null<func::FuncOp>(context.pairs.lookup(source.entry));
-    if (!wrapper || !invocation || !call || !entry ||
-        !wrapper.getBody().hasOneBlock() || !entry.getBody().hasOneBlock() ||
-        entry.front().empty() ||
-        !llvm::equal(wrapper.getArgumentTypes(),
-                     invocation.getOperandTypes()) ||
-        !llvm::equal(wrapper.getResultTypes(), invocation.getResultTypes()) ||
-        wrapper.getBody().front().getArgumentTypes() !=
-            wrapper.getArgumentTypes() ||
-        !llvm::equal(entry.getArgumentTypes(), call.getOperandTypes()) ||
-        !llvm::equal(entry.getResultTypes(), call.getResultTypes()) ||
+    auto signature =
+        wrapper ? protocol::scopedDataSignature(wrapper) : FunctionType();
+    auto *payload = payloadBlock(call);
+    if (!signature || !invocation || !entry || !payload ||
+        !entry.getBody().hasOneBlock() || entry.front().empty() ||
+        !llvm::equal(signature.getInputs(), invocation.getOperandTypes()) ||
+        !llvm::equal(signature.getResults(), invocation.getResultTypes()) ||
+        wrapper.front().getArgumentTypes() != wrapper.getArgumentTypes() ||
+        !llvm::equal(entry.getArgumentTypes(), call.getInputs().getTypes()) ||
+        !llvm::equal(entry.getResultTypes(), payload->getArgumentTypes()) ||
         entry.front().getArgumentTypes() != entry.getArgumentTypes())
       return refuse(after,
                     "actual wrapper or entry interface differs from call");
     SymbolTableCollection symbols;
-    if (resolve(call, symbols) != entry)
+    if (call.resolveCallee(symbols) != entry)
       return refuse(call, "actual numerical callee changed");
     auto &frontier = frontiers[source.invocation->getBlock()];
     llvm::DenseMap<Value, uint64_t> original, actual;
@@ -389,9 +398,11 @@ class FrontierReader {
     auto input = [&](Value value) -> uint64_t {
       auto argument = dyn_cast<BlockArgument>(value);
       if (!argument || argument.getOwner() != &wrapper.getBody().front() ||
-          argument.getArgNumber() >= invocation.getNumOperands())
+          !argument.getArgNumber() ||
+          argument.getArgNumber() > invocation.getNumOperands())
         return 0;
-      return anchor(invocation.getOperand(argument.getArgNumber()), frontier);
+      return anchor(invocation.getOperand(argument.getArgNumber() - 1),
+                    frontier);
     };
     for (auto [argument, value] : zip(entry.getArguments(), call.getInputs())) {
       auto id = input(value);
@@ -406,10 +417,11 @@ class FrontierReader {
          zip(source.entry.getArguments(), source.call.getInputs())) {
       auto mapped = dyn_cast<BlockArgument>(value);
       if (!mapped || mapped.getOwner() != &source.wrapper.getBody().front() ||
-          mapped.getArgNumber() >= source.invocation.getNumOperands())
+          !mapped.getArgNumber() ||
+          mapped.getArgNumber() > source.invocation.getNumOperands())
         return refuse(source.call, "source inner input is not a wrapper port");
       original[argument] =
-          anchor(invocation.getOperand(mapped.getArgNumber()), frontier);
+          anchor(invocation.getOperand(mapped.getArgNumber() - 1), frontier);
     }
     for (unsigned i = source.invocation.getNumOperands();
          i < invocation.getNumOperands(); ++i) {
@@ -420,7 +432,7 @@ class FrontierReader {
         return refuse(invocation,
                       "appended import is not an exact earlier output");
       extraValues.insert(frontier.outer.lookup(result));
-      if (wrapper.getArgument(i).use_empty())
+      if (wrapper.getArgument(i + 1).use_empty())
         return refuse(invocation, "unused appended import");
     }
     auto sourceReturn = dyn_cast<func::ReturnOp>(source.entry.front().back());
@@ -446,20 +458,20 @@ class FrontierReader {
     for (auto id : ArrayRef<uint64_t>(*returned).drop_front(expected->size()))
       extraValues.insert(id);
     auto wrapperReturn =
-        dyn_cast<local::ReturnOp>(wrapper.getBody().front().back());
+        dyn_cast_or_null<exec::ReturnOp>(context.pairs.lookup(source.returned));
     if (!wrapperReturn ||
-        wrapperReturn.getOperandTypes() != wrapper.getResultTypes())
+        wrapperReturn.getOperandTypes() != signature.getResults())
       return refuse(wrapper, "actual wrapper return interface changed");
     for (auto [value, result] :
-         zip(wrapperReturn.getInputs(), invocation.getResults())) {
+         zip(wrapperReturn.getValues(), invocation.getResults())) {
       // Preserve the distinction between a wrapper input and a numerical
       // result coordinate. ContextReader already fixes every original return
       // operand, including duplicate aliases and the order of mixed returns.
       uint64_t id = input(value);
-      if (auto coordinate = dyn_cast<OpResult>(value);
-          coordinate && coordinate.getOwner() == call.getOperation() &&
-          coordinate.getResultNumber() < returned->size())
-        id = (*returned)[coordinate.getResultNumber()];
+      if (auto coordinate = dyn_cast<BlockArgument>(value);
+          coordinate && coordinate.getOwner() == payload &&
+          coordinate.getArgNumber() < returned->size())
+        id = (*returned)[coordinate.getArgNumber()];
       if (!id)
         return refuse(wrapper,
                       "actual wrapper return is not a wrapper input or "
@@ -531,19 +543,19 @@ public:
       }
     llvm::DenseMap<Attribute, unsigned> uses;
     llvm::DenseMap<Operation *, unsigned> entryUses, wrapperCalls;
-    SmallVector<local::CallOp> invocations;
+    SmallVector<protocol_ir::LocalCallOp> invocations;
     SymbolTableCollection symbols;
     auto walk = owner.walk([&](Operation *op) {
       if (!charge(op, remaining))
         return WalkResult::interrupt();
-      if (auto invocation = dyn_cast<local::CallOp>(op)) {
+      if (auto invocation = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         ++uses[invocation.getCalleeAttr()];
         invocations.push_back(invocation);
       }
-      if (auto call = dyn_cast<CallOp>(op)) {
-        if (auto function = call->getParentOfType<local::FuncOp>())
+      if (auto call = dyn_cast<exec::ComputeOp>(op)) {
+        if (auto function = call->getParentOfType<func::FuncOp>())
           ++wrapperCalls[function];
-        if (auto entry = resolve(call, symbols))
+        if (auto entry = call.resolveCallee(symbols))
           ++entryUses[entry];
       }
       return WalkResult::advance();
@@ -555,11 +567,11 @@ public:
     for (auto invocation : invocations) {
       if (!wrappers.contains(invocation.getCalleeAttr()))
         continue;
-      auto wrapper = declarations.lookup<local::FuncOp>(invocation.getCallee());
+      auto wrapper = declarations.lookup<func::FuncOp>(invocation.getCallee());
       auto participant =
           invocation->getParentOfType<protocol_ir::ParticipantOp>();
       auto recorded = wrapperOrigins.lookup(invocation.getCalleeAttr());
-      if (!wrapper || !wrapper.getBody().hasOneBlock() ||
+      if (!wrapper || wrapper.empty() ||
           uses.lookup(invocation.getCalleeAttr()) != 1 || !participant ||
           recorded.first !=
               FlatSymbolRefAttr::get(participant.getSymNameAttr()) ||
@@ -568,30 +580,47 @@ public:
             after, "calculation wrapper is not uniquely participant-invoked");
       if (wrapper.getBody().front().empty())
         return refuse(after, "empty calculation wrapper");
-      auto call = dyn_cast<CallOp>(wrapper.getBody().front().front());
+      auto call = dyn_cast<exec::ComputeOp>(wrapper.front().front());
       if (!call)
         continue; // Guard-only wrappers remain exactly unchanged.
-      auto entry = resolve(call, symbols);
-      if (!entry || !generated.count(entry) || entryUses.lookup(entry) != 1 ||
-          wrapperCalls.lookup(wrapper) != 1 || entry.front().empty() ||
-          !llvm::equal(wrapper.getArgumentTypes(),
-                       invocation.getOperandTypes()) ||
-          !llvm::equal(wrapper.getResultTypes(), invocation.getResultTypes()) ||
-          !llvm::equal(entry.getArgumentTypes(), call.getOperandTypes()) ||
-          !llvm::equal(entry.getResultTypes(), call.getResultTypes()) ||
+      auto entry = call.resolveCallee(symbols);
+      auto signature = protocol::scopedDataSignature(wrapper);
+      auto *payload = payloadBlock(call);
+      if (!signature || !payload || !entry || !generated.count(entry) ||
+          entryUses.lookup(entry) != 1 || wrapperCalls.lookup(wrapper) != 1 ||
+          entry.front().empty() ||
+          !llvm::equal(signature.getInputs(), invocation.getOperandTypes()) ||
+          !llvm::equal(signature.getResults(), invocation.getResultTypes()) ||
+          !llvm::equal(entry.getArgumentTypes(), call.getInputs().getTypes()) ||
+          !llvm::equal(entry.getResultTypes(), payload->getArgumentTypes()) ||
           !selectedEntries.insert(entry).second)
         return refuse(after,
                       "missing checked origin or nonunique numerical entry");
-      auto returned =
-          dyn_cast<local::ReturnOp>(wrapper.getBody().front().back());
+      exec::ReturnOp returned;
+      for (auto &block : wrapper.getBody())
+        for (auto &op : block) {
+          if (!charge(&op, remaining))
+            return refuse(after, "wrapper packaging inspection limit");
+          if (auto result = dyn_cast<exec::ReturnOp>(op)) {
+            if (returned)
+              return refuse(after, "calculation wrapper has multiple returns");
+            returned = result;
+          }
+          if (isa<exec::ReturnOp, exec::FailureOp>(op))
+            context.flexibleOutcomes.insert(&op);
+        }
       if (!returned)
         return refuse(after, "calculation wrapper has no return");
-      steps.push_back(
-          {wrapper, invocation, call, entry, generated.lookup(entry)});
+      steps.push_back({wrapper, invocation, call, returned, entry,
+                       generated.lookup(entry)});
       context.flexibleFunctions.insert(wrapper);
       context.flexibleFunctions.insert(entry);
+      context.flexibleBlocks.insert(&wrapper.front());
+      context.flexibleBlocks.insert(&entry.front());
+      context.flexibleBlocks.insert(payload);
       context.flexibleCalls.insert(invocation);
       context.flexibleCalls.insert(call);
+      context.flexibleOutcomes.insert(call);
       context.flexibleReturns.insert(returned);
       context.skipBodies.insert(entry);
     }

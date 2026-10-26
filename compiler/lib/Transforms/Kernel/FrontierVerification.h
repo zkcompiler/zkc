@@ -16,11 +16,13 @@ struct FrontierNormalizationOrigin {
   llvm::SmallVector<mlir::Operation *> polynomialGenerated;
 };
 
-// Read the actual proposal, preserving the entire ordered module context and
-// original port prefixes. Only checked generated operations may reuse actual
-// earlier generated producers in the same participant block. Generated
-// projections may forward exact retained pack coordinates through actual ports.
-// Concrete producers remain fixed. Does not emit IR.
+// Read the actual scoped proposal, preserving the entire ordered module
+// context and original data-port prefixes. Scope and outcome coordinates stay
+// separate: only selected compute success blocks and root return/failure
+// packaging may grow their logical payload. Only checked generated operations
+// may reuse actual earlier generated producers in the same participant block.
+// Generated projections may forward exact retained pack coordinates through
+// actual ports. Concrete producers remain fixed. Does not emit IR.
 mlir::LogicalResult
 verifyKernelFrontier(mlir::ModuleOp normalizedBefore,
                      mlir::ModuleOp actualAfter,

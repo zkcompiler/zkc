@@ -76,6 +76,10 @@ domain closure, with actual-body preservation checks. Projected local calls
 remain Protocol actions and must match their participant's role. Participant
 mathematical preparation now expands scoped helpers and creates scoped
 calculations with typed mathematical requests and explicit guard outcomes.
+The normalization frontier now shares polynomial-generated coefficients across
+those scoped calculation cuts through actual participant ports. Its independent
+reader checks original data prefixes, exact imports, outcome packaging and
+unchanged guard/failure control, while preserving concrete numerical occurrences.
 Fully resolved scoped bodies now feed physical port selection, actual-use
 conversions, diagonal contraction checks, storage release scheduling, native
 publication and independent artifact comparison. The planner indexes semantic
