@@ -31,7 +31,7 @@ abbrev RootReturns := ValidatorReturns (F := F) (G := G)
 def inputs (input0 : List F) (input1 : F) (input2 : Nat) (history : Domain.History (uniformCarriers F G)) : Domain.Environment (uniformCarriers F G) :=
   [.data (.vector "bls12-381.fr" input0), .data (.field "bls12-381.fr" input1), .data (.index input2), .transcript context.suite history]
 
-theorem sourceHelper27_identity : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper27.helper = ({ name := "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc",   kind := Zkc.Source.Structured.HelperKind.local,   inputs := [Zkc.Source.Structured.Ty.vector "bls12-381.fr",              Zkc.Source.Structured.Ty.vector "bls12-381.fr",              Zkc.Source.Structured.Ty.field "bls12-381.fr"],   outputs := [Zkc.Source.Structured.Ty.boolean] }) := by kernel_rfl
+theorem sourceHelper29_identity : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper29.helper = ({ name := "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc",   kind := Zkc.Source.Structured.HelperKind.local,   inputs := [Zkc.Source.Structured.Ty.vector "bls12-381.fr",              Zkc.Source.Structured.Ty.vector "bls12-381.fr",              Zkc.Source.Structured.Ty.field "bls12-381.fr"],   outputs := [Zkc.Source.Structured.Ty.boolean] }) := by kernel_rfl
 
 theorem mask_outputs (site : String) (point : List F) (scalar : F) :
     (show Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs from

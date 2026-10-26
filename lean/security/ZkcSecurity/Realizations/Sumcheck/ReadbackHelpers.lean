@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
+public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 
@@ -26,8 +26,7 @@ theorem terminal (program : Structured.Program) (bodies : ZkcExamples.Structured
       [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" state.point),
         .data (.field "bls12-381.fr" state.scalar)] = .returned [.data (.boolean true)] := by
   have truth := DomainHelpers.terminal_condition raw state original bounded honest
-  have law := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check (G := G) program bodies.prefixBodies bodies.sumcheck.first
-    bodies.check bodies.checkTable raw state.point state.scalar bounded
+  have law := DomainHelpers.check (G := G) program bodies.terminal raw state.point state.scalar bounded
     (truth.1.2.1.trans (by decide +kernel))
   simpa only [truth, and_self, decide_true] using law
 

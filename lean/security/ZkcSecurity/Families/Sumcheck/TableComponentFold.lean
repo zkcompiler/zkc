@@ -14,7 +14,8 @@ namespace ZkcSecurity.Families.Sumcheck.TableComponent
 open Zkc.Source Zkc.Source.Structured
 
 def sumFold (field domain step : String) : FoldSpec :=
-  ⟨⟨domain, [.vector field], (.vector field), .here, false⟩, [.field field], [], step, "", .math⟩
+  ⟨DomainSpec.elements domain [.vector field] (.vector field) .here,
+    [.field field], [], step, "", .math⟩
 
 variable {F G : Type} [CommRing F]
 
@@ -37,12 +38,13 @@ theorem sumFold_equation (table : Meanings F G)
     Evaluation.denoteFold table (sumFold field domain step)
       ((Values.cons raw .nil).append ((Values.cons initial .nil).append .nil)) =
       .done (.cons (initial + raw.sum) .nil) := by
-  have admitted : ((sumFold field domain step).domain.denote (Values.cons raw
-      (Values.nil : Values (assignment F G) []))).admit = .returned raw := by
-    change (Finite.Domain.check (raw.length < indexLimit) .exhausted (.elements raw)).admit = _
-    simp [Finite.Domain.admit, bounded]
-  have folded := Evaluation.denoteFold_reference table (sumFold field domain step)
-    (.cons raw .nil) (.cons initial .nil) .nil raw admitted
+  have admitted : (sumFold field domain step).domain.admit
+      (Values.cons raw (Values.nil : Values (assignment F G) [])) =
+        .returned (raw.map fun value => .cons value .nil) := by
+    simp only [sumFold, DomainSpec.admit_elements, Collection.values, Values.get,
+      bounded, ↓reduceIte]
+  have folded := Evaluation.denoteFold_reference_map table (sumFold field domain step)
+    (.cons raw .nil) (.cons initial .nil) .nil raw (fun value => .cons value .nil) admitted
     (fun (state : Values (assignment F G) [.field field]) (value : F) =>
       Values.cons (state.get .here + value) .nil) (fun _ => True) trivial (by
       intro state value _ _
