@@ -79,6 +79,8 @@ binding arguments and result types describe domains and representations, not
 runtime values or dynamic shapes. Selection remarks are analysis observations:
 a proposal's success alone does not establish publication. The detailed journal
 retains proposals, checks, discarded candidates, retry policy and publication.
+When a checking cause identifies a numerical invocation, it records the actual
+source subject (declaration, site and occurrence path), not a traversal ordinal.
 SDK observations retain the actual compiler executable hash and capabilities;
 the executable identity is checked again after compilation.
 Counters and dumps identify truncation; no sidecar authorizes execution.

@@ -5,6 +5,9 @@
 #include "zkc/Transforms/MathematicalTrace.h"
 #include "llvm/ADT/DenseSet.h"
 
+namespace zkc::mathematical {
+class NumericalSelection;
+}
 namespace zkc::protocol {
 // Finite preparation preserves ordered admission and callback effects. An
 // optional mathematical proposal is compared against actual source callbacks;
@@ -12,11 +15,15 @@ namespace zkc::protocol {
 // execution. The physical transaction retains the actual prepared candidate.
 // Shared matching/checking work is never replenished on retry. fixedBindings
 // borrows original binding declarations fixed by validated physical requests.
+// With a selection context, emit one attempt and report its checking outcome;
+// the enclosing physical transaction owns retry and discard accounting.
 mlir::OwningOpRef<mlir::ModuleOp> prepareScopedFinite(
     mlir::ModuleOp, mathematical::RealizationWork &, uint64_t &copy,
     uint64_t &siteBytes, std::optional<CapacityCause> &capacity,
     MathematicalSelectionPolicy policy = {},
-    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr);
+    const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr,
+    mathematical::NumericalSelection *selection = nullptr,
+    mathematical::VerificationDecision *outcome = nullptr);
 mlir::LogicalResult verifyScopedFinitePreparation(
     mlir::ModuleOp source, mlir::ModuleOp candidate,
     mathematical::RealizationWork &work,

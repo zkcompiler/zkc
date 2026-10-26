@@ -5,7 +5,6 @@
 #include "RealizationSubject.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Transforms/Algorithms.h"
-#include <limits>
 
 using namespace mlir;
 using namespace llvm;
@@ -40,7 +39,7 @@ LogicalResult prepareRetainedMaps(ModuleOp source, PreparedMaps &prepared,
                               PreparedMaps::Formula{std::move(*formula), dot});
   }
   SymbolTable symbols(root);
-  selection.enterInvocation(std::numeric_limits<size_t>::max());
+  selection.enterInvocation({});
   auto discovered = root.walk([&](local::ApplyOp call) {
     auto map = symbols.lookup<algebra::MapRealizeOp>(call.getCallee());
     auto found = prepared.formulas.find(call.getCallee().str());
@@ -73,9 +72,10 @@ LogicalResult materializeRetainedMaps(ModuleOp candidate,
   RealizationEmitter emitter(root, "_map_binding_");
   SmallVector<local::ApplyOp> calls;
   root.walk([&](local::ApplyOp call) { calls.push_back(call); });
-  // Kernel invocation numbers occupy [0, calls). Retained calls have complete
-  // Local coordinates and a separate fixed qualification in this same session.
-  selection.enterInvocation(std::numeric_limits<size_t>::max());
+  // Numerical calls use their actual invocation identity. Retained maps have
+  // complete Local coordinates and a separate fixed qualification in this same
+  // session.
+  selection.enterInvocation({});
   for (auto call : calls) {
     unsigned depth = 0;
     for (auto *parent = call->getParentOp();
@@ -162,7 +162,7 @@ LogicalResult materializeRetainedMaps(ModuleOp candidate,
                      ? VerificationObservation::OptionalCapacity
                      : VerificationObservation::RequiredCapacity,
                  "map construction capacity", capacityCause, subject,
-                 std::numeric_limits<size_t>::max()};
+                 RealizationSubject{}};
       if (!result)
         consumeError(result.takeError());
       return failure();

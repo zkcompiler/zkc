@@ -46,6 +46,12 @@ bool RecipeConstructionWork::discard(RealizationWork &work) const {
   return true;
 }
 
+void NumericalSelection::beginAttempt() {
+  origins.clear();
+  for (auto &occurrence : occurrences)
+    occurrence.active = false;
+}
+
 RealizationSubject
 NumericalSelection::childSubject(const RealizationSubject &parent,
                                  StringRef operation, unsigned child) {
@@ -63,9 +69,10 @@ NumericalSelection::discover(const RealizationSubject &subject,
   auto found = coordinates.find({invocation, subject});
   if (found != coordinates.end()) {
     auto &occurrence = occurrences[found->second];
+    occurrence.active = true;
     // Replacement permission can only become more restrictive.
     occurrence.replaceable &= replaceable;
-    if (!canSpeculate())
+    if (!occurrence.replaceable || !canSpeculate())
       occurrence.alternative = NumericalAlternative::Ordered;
     return found->second;
   }
@@ -168,7 +175,8 @@ NumericalSelection::advance(ArrayRef<NumericalOccurrence> implicated) {
     auto next = static_cast<unsigned>(occurrence.alternative) + 1;
     while (next < occurrence.legal.size() && !occurrence.legal[next])
       ++next;
-    if (!occurrence.replaceable || next == occurrence.legal.size())
+    if (!occurrence.active || !occurrence.replaceable ||
+        next == occurrence.legal.size())
       continue;
     if (!chargeCatalog())
       return error("finite-analysis-limit");
@@ -177,9 +185,9 @@ NumericalSelection::advance(ArrayRef<NumericalOccurrence> implicated) {
   }
   return false;
 }
-Expected<bool>
-NumericalSelection::advanceSubject(const RealizationSubject &subject,
-                                   std::optional<size_t> invocation) {
+Expected<bool> NumericalSelection::advanceSubject(
+    const RealizationSubject &subject,
+    std::optional<RealizationSubject> invocation) {
   SmallVector<NumericalOccurrence> owners;
   for (auto [id, occurrence] : enumerate(occurrences))
     if (occurrence.subject == subject &&
@@ -201,10 +209,10 @@ Expected<bool> NumericalSelection::advanceInvocation() {
   return advance(owners);
 }
 bool NumericalSelection::hasAlternatives(
-    std::optional<size_t> coordinate) const {
+    std::optional<RealizationSubject> coordinate) const {
   return any_of(occurrences, [&](const auto &occurrence) {
-    if (!occurrence.replaceable ||
-        (coordinate && occurrence.invocation != *coordinate))
+    if (!occurrence.active || !occurrence.replaceable ||
+        (coordinate && !(occurrence.invocation == *coordinate)))
       return false;
     auto first = static_cast<unsigned>(occurrence.alternative);
     return any_of(ArrayRef<bool>(occurrence.legal).drop_front(first + 1),

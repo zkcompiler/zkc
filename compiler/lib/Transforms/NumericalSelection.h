@@ -34,33 +34,30 @@ enum class NumericalAlternative {
 };
 
 /// Private, synchronous selection state. Identities are owned coordinates in
-/// the once-prepared source, qualified by the actual invocation. No operation
+/// the immutable source, qualified by the actual invocation. No operation
 /// or computation view from a discarded candidate is retained here.
 class NumericalSelection {
   struct Coordinate {
-    size_t invocation;
+    RealizationSubject invocation;
     RealizationSubject subject;
     bool operator<(const Coordinate &other) const {
-      auto key = [](const Coordinate &value) {
-        const auto &s = value.subject;
-        return std::tie(value.invocation, s.declaration, s.site, s.operation,
-                        s.position, s.definition, s.originalSite, s.occurrence);
-      };
-      return key(*this) < key(other);
+      return std::tie(invocation, subject) <
+             std::tie(other.invocation, other.subject);
     }
   };
   struct Occurrence {
-    size_t invocation;
+    RealizationSubject invocation;
     RealizationSubject subject;
     NumericalAlternative alternative = NumericalAlternative::Specialized;
     bool replaceable = true;
     NumericalExpressionMode expressionMode =
         NumericalExpressionMode::PreferNative;
     std::array<bool, 5> legal = {true, true, false, true, true};
+    bool active = true;
   };
   std::vector<Occurrence> occurrences;
   std::map<Coordinate, NumericalOccurrence> coordinates;
-  size_t invocation = 0;
+  RealizationSubject invocation;
   bool optionalConstructionAllowed = true;
   RealizationWork *sharedWork = nullptr;
   RealizationWork &account() { return sharedWork ? *sharedWork : work; }
@@ -80,7 +77,12 @@ public:
   /// physical failure reports copy only occurrence ids and integer indices.
   llvm::DenseMap<mlir::Operation *, llvm::SmallVector<NumericalOccurrence>>
       origins;
-  void enterInvocation(size_t coordinate) { invocation = coordinate; }
+  /// A new complete attempt rediscovers its current occurrences. Choices
+  /// remain monotone, but disappeared occurrences cannot drive another retry.
+  void beginAttempt();
+  void enterInvocation(const RealizationSubject &coordinate) {
+    invocation = coordinate;
+  }
   /// A child coordinate counts finite occurrences in exact ordered callback
   /// substitution, independently of the number of emitted instructions. Both
   /// producer and reader reconstruct this path from the immutable closure.
@@ -101,11 +103,12 @@ public:
   void select(NumericalOccurrence, ComputationSelection &,
               const MathematicalRecipes &);
   llvm::Expected<bool> advance(llvm::ArrayRef<NumericalOccurrence> implicated);
-  llvm::Expected<bool> advanceSubject(const RealizationSubject &,
-                                      std::optional<size_t> invocation = {});
+  llvm::Expected<bool>
+  advanceSubject(const RealizationSubject &,
+                 std::optional<RealizationSubject> invocation = {});
   llvm::Expected<bool> advanceAll();
   llvm::Expected<bool> advanceInvocation();
-  bool hasAlternatives(std::optional<size_t> invocation = {}) const;
+  bool hasAlternatives(std::optional<RealizationSubject> invocation = {}) const;
   bool hasInvocationAlternatives() const { return hasAlternatives(invocation); }
   llvm::Expected<bool> order(const RealizationSubject &subject);
   bool canSpeculate() const;

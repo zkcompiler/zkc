@@ -492,10 +492,32 @@ requests use the same construction and occurrence-byte accounts. Each emitted
 instruction reserves a conservative allowance for its CFG plumbing before
 allocation; domain visits and callback copies also debit shared work. Refusal
 discards the private candidate without modifying the source. Optional
-construction is capped by the separate discard reserve. An optional comparison-capacity refusal may discard
-the proposal and retry the ordered route with independent checking; only
+construction is capped by the separate discard reserve. An optional comparison
+capacity refusal may discard the proposal and retry the ordered route with independent checking; only
 performed construction transfers to that reserve. Matching and checking remain
 cumulative. Required admission exhaustion and semantic mismatches refuse.
+
+Physical selection considers finite recipes, mathematical implementations,
+providers and conversions in one bounded search. A failed provider or conversion
+is attributed to actual emitted uses and their source occurrences; only those
+eligible occurrences advance to another recipe or ordered execution. Explicit
+requests and authored pins remain fixed. Independent available occurrences keep
+their choices. Required correspondence failures remain terminal.
+
+Selection coordinates use actual declarations and sites, qualified by their
+source invocation, rather than traversal ordinals. Finite control outlines use
+stable private names derived from their containing function and control site,
+so changing an unrelated recipe does not renumber a numerical call. These
+names and transient origin maps only guide search; the independent reader checks
+actual source and candidate bodies without treating them as evidence.
+
+Each physical attempt owns its complete construction/discard envelope, including
+finite preparation and mathematical normalization. Nested preparation does not
+retry or charge the same discarded construction again. If optional construction
+stops before any occurrence can be discovered, at most one required endpoint
+attempt disables optional recipes and uses the preserved ordinary reserve.
+Matching, checking and catalog work remain cumulative. Standalone finite
+preparation owns its own retry envelope.
 
 The physical transaction retains the actual finite-prepared module alongside
 the selected numerical module. Its independent validation checks both edges:

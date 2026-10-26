@@ -30,7 +30,8 @@ mlir::func::FuncOp resolveInvocation(mlir::Operation *call,
 // port rewrites. Every performed copy and context check shares the given bound.
 mlir::OwningOpRef<mlir::ModuleOp>
 prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared = nullptr,
-                      std::optional<CapacityCause> *capacity = nullptr);
+                      std::optional<CapacityCause> *capacity = nullptr,
+                      mathematical::NumericalSelection *selection = nullptr);
 // Materialize only Kernel occurrences in an already private candidate. The
 // containing numerical transaction owns cloning, map consumption and readback.
 // An outcome sink delegates retry to that transaction. optionalConstruction

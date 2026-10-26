@@ -5,6 +5,7 @@
 #include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
 #include "ExecutionPorts.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Implementations.h"
@@ -64,7 +65,7 @@ struct InputSnapshot {
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
   // Accessible only inside Target; callers can obtain independent clones.
-  // Actual ordered finite preparation, retained for independent composition.
+  // Actual selected finite preparation, retained for independent composition.
   // Source/candidate mutation cannot turn a producer cache into evidence.
   OwningOpRef<ModuleOp> finite;
   OwningOpRef<ModuleOp> numerical;
@@ -1649,59 +1650,18 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       options.numericalWork->numericalOccurrence.reset();
     }
   });
-  OwningOpRef<ModuleOp> prepared;
-  mathematical::PreparedMaps maps;
-  ModuleOp numericalSource = module;
-  if (hasFinite) {
-    std::optional<CapacityCause> capacity;
-    input->finite = protocol::prepareScopedFinite(
-        module, selection.numerical.work, selection.numerical.remainingCopy,
-        selection.numerical.remainingSiteBytes, capacity,
-        options.numericalPolicy, &fixedFiniteBindings);
-    if (!input->finite)
-      return error("kernel-lowering", "finite preparation refused");
-    numericalSource = *input->finite;
-  }
-  if (hasNumerical) {
-    if (hasKernels)
-      prepared = kernel::prepareKernelLowering(
-          numericalSource, &selection.numerical.remainingCopy);
-    else {
-      if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
-        return error("kernel-lowering", "numerical source copy capacity");
-      prepared = cast<ModuleOp>(module->clone());
-    }
-    if (!prepared)
-      return error("kernel-lowering", "numerical source preparation");
-    // Checked mathematical normalization does not consult executable binding
-    // choices. Apply requests to its owned result before any replacement
-    // discovery, rather than cloning the complete source just to pin it.
-    auto preparedRoot =
-        cast<zkc::protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
-    for (auto declaration :
-         preparedRoot.getBody().front().getOps<zkc::runtime::BindingOp>())
-      for (const auto &[name, implementation] : selections)
-        if (declaration.getSymName() == name)
-          declaration.setImplementation(implementation);
-    // Preparation and source discovery run once. All candidate attempts clone
-    // this immutable closure; no view into a failed clone becomes source IR.
-    if (hasKernels &&
-        failed(kernel::discoverKernelCalls(*prepared, options.numericalPolicy,
-                                           selection.numerical)))
-      return error("kernel-lowering", "numerical occurrence discovery");
-    if (hasMaps &&
-        failed(mathematical::prepareRetainedMaps(
-            *prepared, maps, selection.numerical, options.numericalPolicy)))
-      return error("algebra-map-formula");
-  }
+  bool firstAttempt = true, requiredEndpoint = false;
   for (;;) {
     auto incomingCopy = selection.numerical.remainingCopy;
     auto incomingBytes = selection.numerical.remainingSiteBytes;
     selection.numerical.allowSpeculation(true);
     mathematical::RecipeConstructionWork construction(selection.numerical.work);
-    bool speculative = hasNumerical && selection.numerical.canSpeculate() &&
-                       selection.numerical.hasAlternatives() &&
-                       construction.canDiscard(selection.numerical.work);
+    bool speculative =
+        hasNumerical && !requiredEndpoint &&
+        selection.numerical.canSpeculate() &&
+        (selection.numerical.hasAlternatives() || firstAttempt) &&
+        construction.canDiscard(selection.numerical.work);
+    firstAttempt = false;
     selection.numerical.allowSpeculation(speculative);
     auto copyCeiling =
         speculative ? std::min(incomingCopy,
@@ -1720,7 +1680,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       selection.numerical.remainingCopy += incomingCopy - copyCeiling;
       selection.numerical.remainingSiteBytes += incomingBytes - byteCeiling;
     });
-    selection.numerical.origins.clear();
+    selection.numerical.beginAttempt();
     OwningOpRef<ModuleOp> candidate;
     auto clearOrigins =
         llvm::scope_exit([&] { selection.numerical.origins.clear(); });
@@ -1729,14 +1689,86 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     std::optional<mathematical::RealizationSubject> capacitySubject;
     mathematical::VerificationDecision numericalOutcome;
     bool constructionCapacity = false;
-    if (hasNumerical) {
+    OwningOpRef<ModuleOp> prepared;
+    mathematical::PreparedMaps maps;
+    ModuleOp numericalSource = module;
+    OwningOpRef<ModuleOp> finite;
+    std::optional<CapacityCause> preparationCapacity;
+    mathematical::VerificationDecision preparationOutcome;
+    auto prepare = [&]() -> Error {
+      if (hasFinite) {
+        finite = protocol::prepareScopedFinite(
+            module, selection.numerical.work, selection.numerical.remainingCopy,
+            selection.numerical.remainingSiteBytes, preparationCapacity,
+            options.numericalPolicy, &fixedFiniteBindings, &selection.numerical,
+            &preparationOutcome);
+        if (!finite)
+          return error("kernel-lowering", "finite preparation refused");
+        numericalSource = *finite;
+      }
+      if (hasNumerical) {
+        if (hasKernels)
+          prepared = kernel::prepareKernelLowering(
+              numericalSource, &selection.numerical.remainingCopy,
+              &preparationCapacity, &selection.numerical);
+        else {
+          if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
+            return error("kernel-lowering", "numerical source copy capacity");
+          prepared = cast<ModuleOp>(module->clone());
+        }
+        if (!prepared)
+          return error("kernel-lowering", "numerical source preparation");
+        // Checked mathematical normalization does not consult executable
+        // binding choices. Apply requests to its owned result before any
+        // replacement discovery, rather than cloning the complete source just
+        // to pin it.
+        auto preparedRoot = cast<zkc::protocol_ir::ProtocolModuleOp>(
+            prepared->getBody()->front());
+        for (auto declaration :
+             preparedRoot.getBody().front().getOps<zkc::runtime::BindingOp>())
+          for (const auto &[name, implementation] : selections)
+            if (declaration.getSymName() == name)
+              declaration.setImplementation(implementation);
+        // Discover the current immutable prepared closure. Invocation
+        // identities remain stable when another finite recipe changes the call
+        // count.
+        if (hasKernels &&
+            failed(kernel::discoverKernelCalls(
+                *prepared, options.numericalPolicy, selection.numerical)))
+          return error("kernel-lowering", "numerical occurrence discovery");
+        if (hasMaps &&
+            failed(mathematical::prepareRetainedMaps(
+                *prepared, maps, selection.numerical, options.numericalPolicy)))
+          return error("algebra-map-formula");
+      }
+      return Error::success();
+    };
+    if (speculative) {
+      ScopedDiagnosticHandler quiet(module.getContext(),
+                                    [](Diagnostic &) { return success(); });
+      refusal = prepare();
+    } else
+      refusal = prepare();
+    bool preparationCheckingCapacity =
+        preparationOutcome.outcome ==
+        mathematical::VerificationObservation::OptionalCapacity;
+    if (refusal && !preparationCapacity && !preparationCheckingCapacity)
+      return refusal;
+    if (refusal)
+      constructionCapacity = speculative;
+    if (!refusal && hasNumerical) {
       if (!kernel::chargeCopy(*prepared, selection.numerical.remainingCopy)) {
         if (!speculative)
           return error("kernel-lowering", "numerical candidate copy capacity");
         constructionCapacity = true;
         refusal = error("finite-analysis-limit");
       } else {
-        candidate = cast<ModuleOp>(prepared->getOperation()->clone());
+        IRMapping mapping;
+        candidate = cast<ModuleOp>(prepared->getOperation()->clone(mapping));
+        prepared->walk([&](Operation *op) {
+          for (auto id : selection.numerical.owners(op))
+            selection.numerical.record(mapping.lookup(op), id);
+        });
         selected = *candidate;
         if (hasKernels &&
             failed(kernel::materializeKernelCalls(
@@ -1850,6 +1882,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       if (auto e = input->check(module))
         return e;
       selection.numerical.origins.clear();
+      input->finite = std::move(finite);
       input->numerical = std::move(candidate);
       plan.input = input;
       return plan;
@@ -1883,6 +1916,13 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!advanced) {
       consumeError(std::move(refusal));
       return advanced.takeError();
+    }
+    if (!*advanced && constructionCapacity && speculative) {
+      // Construction can stop before discovery reaches any occurrence. The
+      // single required endpoint disables optional recipes and consumes the
+      // preserved ordinary reserve; it is not an unbounded repeated attempt.
+      requiredEndpoint = true;
+      *advanced = true;
     }
     if (!*advanced)
       return refusal;

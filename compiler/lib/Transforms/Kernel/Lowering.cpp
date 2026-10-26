@@ -49,7 +49,8 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
                   detail.str(), CapacityCause{WorkOwner::AlgorithmExpansion}};
     return failure();
   };
-  for (auto [invocation, call] : enumerate(calls)) {
+  for (auto call : calls) {
+    auto invocation = mathematical::realizationSubject(call);
     selection.enterInvocation(invocation);
     SymbolTableCollection symbols;
     auto entry = call.resolveCallee(symbols);
@@ -124,6 +125,8 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
       auto old = SymbolTable::getSymbolName(&definition);
       if (omitted.contains(&definition)) {
         auto *binding = outer.lookup(renamed.lookup(old.getValue()));
+        for (auto occurrence : selection.owners(call))
+          selection.record(binding, occurrence);
         for (auto occurrence : selection.owners(&definition))
           selection.record(binding, occurrence);
         continue;
@@ -135,6 +138,10 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
       SymbolTable::setSymbolName(copy, renamed.lookup(old.getValue()));
       outer.insert(copy);
       definition.walk([&](Operation *nested) {
+        for (auto occurrence : selection.owners(call))
+          selection.record(nested == &definition ? copy
+                                                 : mapping.lookup(nested),
+                           occurrence);
         for (auto occurrence : selection.owners(nested))
           selection.record(nested == &definition ? copy
                                                  : mapping.lookup(nested),
@@ -184,7 +191,8 @@ LogicalResult discoverKernelCalls(mlir::ModuleOp module,
   SmallVector<exec::ComputeOp> calls;
   module.walk([&](exec::ComputeOp call) { calls.push_back(call); });
   SymbolTableCollection symbols;
-  for (auto [invocation, call] : enumerate(calls)) {
+  for (auto call : calls) {
+    auto invocation = mathematical::realizationSubject(call);
     selection.enterInvocation(invocation);
     auto entry = call.resolveCallee(symbols);
     auto policy = effectiveSelectionPolicy(call, fallback);

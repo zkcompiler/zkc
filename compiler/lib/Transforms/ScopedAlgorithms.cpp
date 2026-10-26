@@ -1,5 +1,6 @@
 #include "Kernel/Support.h"
 #include "NumericalSelection.h"
+#include "RealizationSubject.h"
 #include "ScopedFinite.h"
 #include "ScopedPreparation.h"
 #include "ScopedSubstitution.h"
@@ -32,7 +33,7 @@ struct Result {
 // Source admission consumes the actual CFG and associates each ordered step
 // with its logical SSA ports and closed bodies. Reconstruct only that checked
 // control profile. No Local IR or native-program body is used for production.
-class ScopedExpander {
+class ScopedExpander : private OpBuilder::Listener {
   const SourceExecutionClosure &source;
   SymbolTable symbols;
   protocol_ir::ProtocolModuleOp target;
@@ -49,6 +50,12 @@ class ScopedExpander {
   MathematicalSelectionPolicy finitePolicy;
   const llvm::DenseSet<Operation *> *fixedBindings;
   llvm::DenseSet<Operation *> replacedDefinitions;
+  SmallVector<mathematical::NumericalOccurrence> finiteOwners;
+  void notifyOperationInserted(Operation *op, OpBuilder::InsertPoint) override {
+    if (selection)
+      for (auto owner : finiteOwners)
+        selection->record(op, owner);
+  }
 
   void record(Operation *before, Operation *after) {
     if (selection)
@@ -301,8 +308,39 @@ class ScopedExpander {
         std::optional<CapacityCause> cause;
         finite::ScopedEmissionBudget budget{remaining, remainingBytes, cause};
 
+        auto effective = finitePolicy;
+        auto previousSelection = finiteWork->numericalSelection;
+        auto previousOccurrence = finiteWork->numericalOccurrence;
+        auto previousOwners = finiteOwners.size();
+        auto restoreSelection = llvm::scope_exit([&] {
+          finiteWork->numericalSelection = previousSelection;
+          finiteWork->numericalOccurrence = previousOccurrence;
+          finiteOwners.resize(previousOwners);
+        });
+        if (selection) {
+          // Root plus qualified site identifies this actual substitution, even
+          // when a different recipe changes the number of numerical calls.
+          auto subject = mathematical::realizationSubject(op);
+          subject.definition = subject.declaration;
+          subject.originalSite = subject.site;
+          subject.declaration = root;
+          subject.site = occurrence;
+          subject.occurrence = path;
+          selection->enterInvocation({});
+          auto id = selection->discover(subject, finitePolicy.finiteBulk,
+                                        finitePolicy.numericalExpressions);
+          if (!id) {
+            diagnostics::emit(op->emitOpError(), id.takeError());
+            valid = false;
+            return {};
+          }
+          finiteOwners.push_back(*id);
+          finiteWork->numericalSelection = selection;
+          finiteWork->numericalOccurrence = *id;
+          effective = selection->policy(*id, finitePolicy);
+        }
         auto result = finite::realizeScopedExpression(
-            op, inputs, builder, control, callback, *finiteWork, finitePolicy,
+            op, inputs, builder, control, callback, *finiteWork, effective,
             nullptr, occurrence, &budget, &source, fixedBindings);
         if (failed(result) || result->size() != step.outputs.size()) {
           if (capacity && cause)
@@ -432,7 +470,7 @@ public:
       MathematicalSelectionPolicy finitePolicy = {},
       const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
       : source(source), symbols(original), target(target),
-        builder(target.getContext()),
+        builder(target.getContext(), this),
         remaining(selection ? selection->remainingCopy : defaultRemaining),
         remainingBytes(selection ? selection->remainingSiteBytes
                                  : defaultBytes),
@@ -572,7 +610,9 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                     uint64_t &copy, uint64_t &siteBytes,
                     std::optional<CapacityCause> &capacity,
                     MathematicalSelectionPolicy policy,
-                    const llvm::DenseSet<Operation *> *fixedBindings) {
+                    const llvm::DenseSet<Operation *> *fixedBindings,
+                    mathematical::NumericalSelection *selection,
+                    mathematical::VerificationDecision *reported) {
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
   auto owner =
@@ -584,9 +624,12 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     diagnostics::emit(owner.emitOpError(), closure.takeError());
     return {};
   }
+  mathematical::NumericalSelection standalone(&work);
+  auto &choices = selection ? *selection : standalone;
   for (;;) {
     mathematical::RecipeConstructionWork construction(work);
-    bool speculative = policy.finiteBulk && work.discardedRecipeCopy &&
+    bool speculative = policy.finiteBulk && choices.canSpeculate() &&
+                       work.discardedRecipeCopy &&
                        work.discardedRecipeSiteBytes &&
                        construction.canDiscard(work);
     if (!speculative)
@@ -615,18 +658,19 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
           builder, owner.getLoc(), owner.getProfileAttr());
       target->setAttrs(owner->getAttrs());
       target.getBody().push_back(new Block);
-      mathematical::NumericalSelection budgets;
-      budgets.remainingCopy = copy;
-      budgets.remainingSiteBytes = siteBytes;
-      auto result = ScopedExpander(*closure, owner, target, nullptr, &budgets,
+      choices.remainingCopy = copy;
+      choices.remainingSiteBytes = siteBytes;
+      auto result = ScopedExpander(*closure, owner, target, nullptr, &choices,
                                    &capacity, &work, policy, fixedBindings)
                         .run(owner);
-      copy = budgets.remainingCopy;
-      siteBytes = budgets.remainingSiteBytes;
+      copy = choices.remainingCopy;
+      siteBytes = choices.remainingSiteBytes;
       if (failed(result) || failed(verify(*candidate)) ||
           failed(verifyScopedFinitePreparation(source, *candidate, work, policy,
-                                               &outcome, fixedBindings)))
+                                               &outcome, fixedBindings))) {
+        choices.origins.clear();
         return {};
+      }
       return candidate;
     };
     OwningOpRef<ModuleOp> candidate;
@@ -636,8 +680,14 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
       candidate = propose();
     } else
       candidate = propose();
+    if (reported)
+      *reported = outcome;
     if (candidate)
       return candidate;
+    // A containing physical attempt owns its complete discard envelope. Do
+    // not retry or transfer the same construction to a second reserve here.
+    if (selection)
+      return {};
     bool optionalCapacity =
         outcome.outcome ==
         mathematical::VerificationObservation::OptionalCapacity;

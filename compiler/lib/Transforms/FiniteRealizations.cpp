@@ -25,6 +25,8 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <algorithm>
 #include <limits>
 using namespace mlir;
@@ -173,7 +175,6 @@ class Realizer {
   ScopedEmissionBudget *budget;
   StringRef scopedOccurrence;
   bool stoppedCallback = false;
-  unsigned nextRegion = 0;
   struct Control {
     Operation *operation = nullptr;
     SmallVector<Value> outputs;
@@ -299,7 +300,17 @@ class Realizer {
       bool loop = name == "local.for";
       unsigned prefix = loop ? 2 + outputs.size() : 1;
       auto captures = inputs.drop_front(prefix);
-      auto outline = [&](unsigned) {
+      auto parent = function().getSymName();
+      if (!reserve(parent.size() + occurrence.size()))
+        return {};
+      // Names identify actual control occurrences, not allocation order. A
+      // different finite recipe must not renumber unrelated numerical calls.
+      // This bounded private spelling has no semantic or proof authority.
+      auto coordinate =
+          (Twine(parent.size()) + ":" + parent + occurrence).str();
+      auto stem = "_finite_region_" +
+                  toHex(SHA256::hash(arrayRefFromStringRef(coordinate)), true);
+      auto outline = [&](unsigned arm) {
         OpBuilder::InsertionGuard restore(builder);
         builder.setInsertionPointToEnd(&unit->getRegion(0).front());
         SmallVector<Type> arguments{
@@ -309,11 +320,12 @@ class Realizer {
           append_range(arguments, outputs);
         }
         append_range(arguments, captures.getTypes());
-        std::string name;
-        do {
-          name = "_finite_region_" + std::to_string(nextRegion++);
-        } while (SymbolTable::lookupSymbolIn(unit, name) ||
-                 SymbolTable::lookupSymbolIn(sourceRoot, name));
+        auto base = stem + "_" + std::to_string(arm);
+        std::string name = base;
+        unsigned collision = 0;
+        while (SymbolTable::lookupSymbolIn(unit, name) ||
+               SymbolTable::lookupSymbolIn(sourceRoot, name))
+          name = base + "_" + std::to_string(collision++);
         auto body = func::FuncOp::create(
             builder, loc, name,
             builder.getFunctionType(

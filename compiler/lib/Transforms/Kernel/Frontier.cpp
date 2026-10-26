@@ -418,7 +418,8 @@ public:
 // recipe is selected. Public verification reads actual candidate instructions.
 OwningOpRef<mlir::ModuleOp>
 prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
-                      std::optional<CapacityCause> *capacity) {
+                      std::optional<CapacityCause> *capacity,
+                      mathematical::NumericalSelection *selection) {
   uint64_t standalone = 1000000;
   auto &remaining = shared ? *shared : standalone;
   if (!chargeCopy(source, remaining, capacity))
@@ -426,6 +427,13 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   IRMapping sourceMapping;
   OwningOpRef<mlir::ModuleOp> proposal(
       cast<mlir::ModuleOp>(source->clone(sourceMapping)));
+  auto inherit = [&] {
+    if (selection)
+      source.walk([&](Operation *op) {
+        for (auto id : selection->owners(op))
+          selection->record(sourceMapping.lookup(op), id);
+      });
+  };
   auto owner =
       cast<protocol_ir::ProtocolModuleOp>(proposal->getBody()->front());
   llvm::DenseSet<Operation *> shareable;
@@ -474,8 +482,10 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   // Only checked polynomial-generated operations can change a frontier. With
   // none, the checked normalized subject is already final: there is no port
   // rewrite to propose or independently compare, and no snapshot to copy.
-  if (shareable.empty())
+  if (shareable.empty()) {
+    inherit();
     return proposal;
+  }
   // Preserve the actual normalized subject and checked origins before any
   // port rewrite. The independent reader consumes this immutable snapshot.
   if (!chargeCopy(proposal->getOperation(), remaining, capacity))
@@ -545,6 +555,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   if (failed(verifyKernelFrontier(*normalizedBefore, *proposal, origins,
                                   remaining)))
     return {};
+  inherit();
   return proposal;
 }
 } // namespace zkc::kernel

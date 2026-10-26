@@ -1,3 +1,4 @@
+#include "../RealizationSubject.h"
 #include "../RealizationTrace.h"
 #include "../ScopedCandidate.h"
 #include "Support.h"
@@ -26,7 +27,6 @@ class ScopedReader {
   mathematical::RealizationWork &work;
   mathematical::VerificationDecision &outcome;
   llvm::DenseSet<Operation *> usedBindings, visitedFunctions;
-  llvm::DenseMap<Operation *, size_t> invocations;
   uint64_t &remaining, &bytes;
 
   LogicalResult refuse(StringRef reason) {
@@ -155,7 +155,7 @@ class ScopedReader {
                                            *policy, limits, result);
         if (failed(outputs)) {
           outcome = mathematical::verificationDecision(result);
-          outcome.invocation = invocations.lookup(compute);
+          outcome.invocation = mathematical::realizationSubject(compute);
           return refuse("actual scoped numerical recipe differs");
         }
         if (outputs->size() != step.outputs.size())
@@ -237,11 +237,7 @@ public:
         actual(actual), ports(&actual), targetSymbols(candidate),
         originalDeclarations(declarations), fallback(fallback), work(work),
         outcome(outcome), remaining(work.numericalContextChecking),
-        bytes(work.numericalCheckSiteBytes) {
-    size_t ordinal = 0;
-    original.walk(
-        [&](exec::ComputeOp compute) { invocations[compute] = ordinal++; });
-  }
+        bytes(work.numericalCheckSiteBytes) {}
   LogicalResult run() {
     auto next = candidate.getBody().front().begin();
     SymbolTable sourceSymbols(original);

@@ -11,7 +11,6 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
-#include <limits>
 
 using namespace mlir;
 using namespace llvm;
@@ -27,7 +26,6 @@ class Checker {
   bool maps;
   SymbolTableCollection symbols;
   llvm::DenseSet<Operation *> generatedBindings, consumedHelpers;
-  llvm::DenseMap<Operation *, size_t> invocations;
   uint64_t &remaining, &remainingBytes;
 
   LogicalResult refuse(Operation *op, StringRef reason) {
@@ -116,7 +114,7 @@ class Checker {
                        generatedBindings, work.requiredMapChecking,
                        work.optionalMapChecking, outcome);
     outcome.subject = realizationSubject(call);
-    outcome.invocation = std::numeric_limits<size_t>::max();
+    outcome.invocation = RealizationSubject{};
     if (failed(result)) {
       if (outcome.outcome == VerificationObservation::OptionalCapacity ||
           outcome.outcome == VerificationObservation::RequiredCapacity)
@@ -194,7 +192,7 @@ class Checker {
             remainingBytes, *policy, limits, result);
         if (failed(outputs)) {
           outcome = mathematical::verificationDecision(result);
-          outcome.invocation = invocations.lookup(call);
+          outcome.invocation = mathematical::realizationSubject(call);
           if (outcome.outcome ==
                   mathematical::VerificationObservation::OptionalCapacity ||
               outcome.outcome ==
@@ -291,10 +289,7 @@ public:
         targetSymbols(candidate), originalDeclarations(unprepared),
         fallback(fallback), selections(selections), work(work),
         outcome(outcome), maps(maps), remaining(work.numericalContextChecking),
-        remainingBytes(work.numericalCheckSiteBytes) {
-    size_t invocation = 0;
-    original.walk([&](CallOp call) { invocations[call] = invocation++; });
-  }
+        remainingBytes(work.numericalCheckSiteBytes) {}
   LogicalResult run() {
     if (original->getAttrDictionary() != candidate->getAttrDictionary() ||
         original.getProfile() != protocol_ir::Profile::Exec)

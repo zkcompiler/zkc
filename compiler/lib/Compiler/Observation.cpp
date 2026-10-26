@@ -93,7 +93,7 @@ json::Value cause(const mathematical::DecisionCause &cause) {
           result["detail"] = c.detail;
           result["subject"] = subject(c.subject);
           if (c.invocation)
-            result["invocation"] = *c.invocation;
+            result["invocation"] = subject(*c.invocation);
         } else
           result["required_failure"] = c.detail;
         result["capacity"] = capacity(c.capacity);

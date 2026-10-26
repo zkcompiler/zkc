@@ -6,6 +6,7 @@
 #include "zkc/Transforms/MathematicalWork.h"
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -22,6 +23,13 @@ struct RealizationSubject {
   std::vector<unsigned> position;
   std::string definition, originalSite;
   std::vector<std::pair<std::string, std::string>> occurrence;
+  bool operator<(const RealizationSubject &other) const {
+    auto key = [](const RealizationSubject &s) {
+      return std::tie(s.declaration, s.site, s.operation, s.position,
+                      s.definition, s.originalSite, s.occurrence);
+    };
+    return key(*this) < key(other);
+  }
   bool operator==(const RealizationSubject &other) const {
     return declaration == other.declaration && site == other.site &&
            operation == other.operation && position == other.position &&
@@ -75,9 +83,9 @@ struct VerificationDecision {
   std::string detail;
   std::optional<CapacityCause> capacity = {};
   RealizationSubject subject = {};
-  /// Original static Kernel invocation, when a containing reader exposes it.
-  /// This coordinate is independently reconstructed, never producer evidence.
-  std::optional<size_t> invocation = {};
+  /// Actual static invocation identity, independently reconstructed by the
+  /// reader. Unlike a traversal ordinal it survives unrelated recipe changes.
+  std::optional<RealizationSubject> invocation = {};
 };
 struct RequiredFailure {
   std::string detail;
