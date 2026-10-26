@@ -3,6 +3,9 @@
 
 #include "zkc/Transforms/Finite.h"
 
+namespace zkc::mathematical {
+class ScopedCandidate;
+}
 namespace zkc::finite {
 // Private allowances for the actual independent reader. Changing them never
 // replaces the reader or grants admission. Each declaration starts a scope.
@@ -16,6 +19,8 @@ struct VerificationLimits {
   uint64_t *sharedComparison = nullptr;
   uint64_t *sharedContext = nullptr;
   uint64_t *sharedSiteBytes = nullptr;
+  // Borrowed actual scoped candidate; mutation invalidates the whole view.
+  const mathematical::ScopedCandidate *candidate = nullptr;
 };
 enum class VerificationStatus {
   Verified,

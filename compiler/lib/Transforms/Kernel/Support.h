@@ -35,6 +35,7 @@ materializeKernelCalls(mlir::ModuleOp candidate, MathematicalSelectionPolicy,
                        mathematical::NumericalSelection &,
                        mathematical::VerificationDecision *outcome = nullptr,
                        bool optionalConstruction = false);
+
 mlir::LogicalResult discoverKernelCalls(mlir::ModuleOp,
                                         MathematicalSelectionPolicy,
                                         mathematical::NumericalSelection &);
@@ -68,7 +69,9 @@ effectiveSelectionPolicy(CallOp call, MathematicalSelectionPolicy fallback) {
 }
 
 // Convert one immutable normalized Kernel entry into an owned executable
-// candidate through a checked standard numerical schedule. Local is output.
+// candidate through a checked standard numerical schedule. The output uses
+// scoped Func/CF and Exec. selectedSchedule optionally receives the actual
+// independently checked selected schedule, without replay or another copy.
 // Callers share copy/site and realization budgets across the entire module.
 // Copy/site quotas charge the selected attempt (or a terminal failure).
 // Speculative construction is capped by the cumulative discard reserve before
@@ -83,11 +86,12 @@ realizeEntry(mlir::ModuleOp source, llvm::StringRef callSite,
              mathematical::RealizationTrace *trace = nullptr,
              mathematical::NumericalSelection *selection = nullptr,
              mathematical::VerificationDecision *outcome = nullptr,
-             bool optionalConstruction = false);
+             bool optionalConstruction = false,
+             mlir::OwningOpRef<mlir::ModuleOp> *selectedSchedule = nullptr);
 
-// Admit a closed Local fragment in the existing executable owner. It has no
-// participant Entry, so whole-program admission applies after insertion into
-// its caller; reuse the existing local-definition grammar and resource checks.
+// Admit a closed scoped numerical fragment in the executable owner. It has no
+// participant Entry; whole-program admission applies after insertion. Read the
+// actual CFG, outlined bodies, resource origins and resolved binding closure.
 mlir::LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate);
 
 // Independent complete-candidate reader, including executable admission,

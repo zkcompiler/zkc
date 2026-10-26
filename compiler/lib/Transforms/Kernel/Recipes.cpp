@@ -820,7 +820,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
              uint64_t &remaining, uint64_t &remainingBytes,
              finite::VerificationLimits limits, RealizationTrace *trace,
              NumericalSelection *selection, VerificationDecision *reported,
-             bool optionalConstruction) {
+             bool optionalConstruction,
+             OwningOpRef<mlir::ModuleOp> *selectedSchedule) {
   if (reported)
     *reported = {VerificationObservation::Mismatch,
                  "Kernel construction differs"};
@@ -982,6 +983,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
     if (succeeded(checked)) {
       attempt.publish();
       scope.publish();
+      if (selectedSchedule)
+        *selectedSchedule = std::move(schedule);
       return candidate;
     }
     candidate->walk([&](Operation *op) { selection->origins.erase(op); });

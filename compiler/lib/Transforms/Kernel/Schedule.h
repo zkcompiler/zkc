@@ -26,12 +26,13 @@ readScheduledLoop(mlir::Operation *&cursor);
 mlir::FailureOr<std::optional<ScheduledLoop>>
 readScheduledLoop(mlir::Operation *&cursor, uint64_t &remaining);
 llvm::SmallVector<mlir::Value> traversalArguments(mlir::Block *);
+mlir::func::FuncOp readScheduledFunction(mlir::ModuleOp);
 // Producer consumes an admitted Local recipe fragment, returning standard
 // func.func plus scheduled control. Required copying is charged before work.
 mlir::OwningOpRef<mlir::ModuleOp>
 scheduleEntry(mlir::ModuleOp local, uint64_t &remaining,
               std::optional<CapacityCause> *capacity = nullptr);
-// Real executable consumer: publishes a fresh Local fragment from the actual
+// Real executable consumer: publishes scoped Func/CF execution from the actual
 // schedule. It does not retain or regenerate the earlier recipe fragment.
 mlir::OwningOpRef<mlir::ModuleOp>
 consumeSchedule(mlir::ModuleOp schedule, uint64_t &remaining,

@@ -59,14 +59,18 @@ void scheduleMismatch(mlir::ModuleOp source, mlir::ModuleOp schedule,
               outcome.status == finite::VerificationStatus::Mismatch,
           "schedule difference was accepted or classified as capacity");
 }
-OwningOpRef<mlir::ModuleOp> schedule(mlir::ModuleOp local) {
-  uint64_t work = 1000000;
-  auto result = kernel::scheduleEntry(local, work);
-  require(bool(result) && work < 1000000,
-          "actual schedule producer failed or did not debit work");
-  require(succeeded(mlir::verify(*result)),
-          "produced schedule is not valid ordinary MLIR");
-  return result;
+OwningOpRef<mlir::ModuleOp>
+schedule(mlir::ModuleOp source, MathematicalSelectionPolicy policy = fused) {
+  mathematical::RealizationWork work;
+  uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
+  OwningOpRef<mlir::ModuleOp> selected;
+  auto actual = kernel::realizeEntry(source, "collect_fold", policy, work,
+                                     remaining, bytes, {}, nullptr, nullptr,
+                                     nullptr, false, &selected);
+  require(bool(actual) && bool(selected), "selected schedule was not retained");
+  require(succeeded(mlir::verify(*selected)),
+          "selected schedule is not valid ordinary MLIR");
+  return selected;
 }
 OwningOpRef<mlir::ModuleOp> controls(MLIRContext &context) {
   auto result = parseSourceString<mlir::ModuleOp>(R"mlir(
@@ -107,7 +111,7 @@ int main() {
     auto original = controls(context);
     auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
     auto local = realize(unit);
-    auto scheduled = schedule(*local);
+    auto scheduled = schedule(unit);
     require(operations(*scheduled, "local.variant_inject").size() == 1 &&
                 operations(*scheduled, "local.match").size() == 1 &&
                 operations(*scheduled, "local.if").size() == 1,
@@ -128,7 +132,7 @@ int main() {
       auto original = controls(context);
       auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
       auto local = realize(unit);
-      auto scheduled = schedule(*local);
+      auto scheduled = schedule(unit);
       auto changed = clone(*scheduled);
       OpBuilder builder(&context);
       Operation *malformed = nullptr;
@@ -212,7 +216,7 @@ int main() {
     require(succeeded(mlir::verify(*unit)),
             "conditional callback is malformed");
     auto local = realize(*unit);
-    auto scheduled = schedule(*local);
+    auto scheduled = schedule(*unit);
     for (StringRef name : {"local.if", "local.match", "local.variant_inject"}) {
       auto nested = operations(*scheduled, name);
       require(llvm::any_of(nested,
@@ -235,7 +239,7 @@ int main() {
       auto original = controls(context);
       auto unit = cast<mlir::ModuleOp>(original->getBody()->front());
       auto local = realize(unit);
-      auto scheduled = schedule(*local);
+      auto scheduled = schedule(unit);
       auto changed = clone(*scheduled);
       OpBuilder builder(&context);
       if (mutation == "module region" || mutation == "module result") {
@@ -347,28 +351,6 @@ module { "protocol.module"() ({
     });
 
   cases.run(
-      "independently authored SCF is consumed into independently authored "
-      "Local",
-      [&] {
-        auto scheduled = authored(context, "authored-schedule");
-        require(succeeded(mlir::verify(*scheduled)),
-                "independently authored schedule failed normal verification");
-        auto expected = authored(context, "authored-schedule-local");
-        auto before = clone(*scheduled);
-        auto expectedBefore = clone(*expected);
-        auto actual = consume(*scheduled);
-        require(succeeded(kernel::verifyRecipeOutput(*expected)) &&
-                    succeeded(kernel::verifyScheduleLowering(*scheduled,
-                                                             *expected)) &&
-                    succeeded(
-                        kernel::verifyScheduleLowering(*scheduled, *actual)) &&
-                    same(*actual, *expected),
-                "independent schedule/Local controls disagree");
-        require(same(*scheduled, *before) && same(*expected, *expectedBefore),
-                "consumer or reader changed independently authored input");
-      });
-
-  cases.run(
       "schedule schema inspection has an exact shared work boundary", [&] {
         auto scheduled = authored(context, "authored-schedule");
         auto before = clone(*scheduled);
@@ -408,7 +390,7 @@ module { "protocol.module"() ({
         "lexical capture", "nominal state type", "missing admission"})
     cases.run("schedule schema independently refuses " + mutation, [&] {
       auto scheduled = authored(context, "authored-schedule");
-      auto expected = authored(context, "authored-schedule-local");
+      auto expected = consume(*scheduled);
       auto candidate = clone(*scheduled);
       auto traversal = loop(*candidate);
       auto *start = packetStart(traversal);
@@ -472,56 +454,14 @@ module { "protocol.module"() ({
               "independent positive control was damaged");
     });
 
-  for (StringRef mutation : {"bound", "seed order", "state order", "capture",
-                             "missing body", "extra body", "nominal domain"})
-    cases.run("actual SCF to Local reader rejects " + mutation, [&] {
-      auto scheduled = authored(context, "authored-schedule");
-      auto expected = authored(context, "authored-schedule-local");
-      auto candidate = clone(*expected);
-      auto target = stateLoops(*candidate).front();
-      auto &body = target.getBody().front();
-      auto *add = &body.front();
-      OpBuilder builder(&context);
-      if (mutation == "bound")
-        target->setOperand(1, target->getOperand(0));
-      else if (mutation == "seed order") {
-        auto first = target->getOperand(2);
-        target->setOperand(2, target->getOperand(3));
-        target->setOperand(3, first);
-      } else if (mutation == "state order")
-        body.back().setOperand(0, body.getArgument(1));
-      else if (mutation == "capture") {
-        auto first = target->getOperand(4);
-        target->setOperand(4, target->getOperand(5));
-        target->setOperand(5, first);
-      } else if (mutation == "missing body") {
-        add->getResult(0).replaceAllUsesWith(body.getArgument(1));
-        add->erase();
-      } else if (mutation == "extra body") {
-        builder.setInsertionPoint(add);
-        builder.clone(*add)->setAttr("site", builder.getStringAttr("extra"));
-      } else {
-        auto binding = SymbolTable(kernelRecipeOutput(*candidate))
-                           .lookup<runtime::BindingOp>("add");
-        binding->setAttr("arguments", builder.getStrArrayAttr({"bn254.fr"}));
-      }
-      if (mutation != "nominal domain")
-        require(succeeded(kernel::verifyRecipeOutput(*candidate)),
-                "Local semantic mutation must remain an admitted fragment");
-      require(failed(kernel::verifyScheduleLowering(*scheduled, *candidate)),
-              "schedule/Local mismatch was accepted");
-      require(succeeded(kernel::verifyScheduleLowering(*scheduled, *expected)),
-              "unmodified Local control failed");
-    });
-
   for (StringRef name : {"elements", "indices"}) {
-    cases.run(name + " original source to actual SCF to actual Local", [&] {
+    cases.run(name + " original source to actual SCF to scoped execution", [&] {
       auto unit = source(context, name);
       OwningOpRef<mlir::ModuleOp> sourceBefore(
           cast<mlir::ModuleOp>((*unit)->clone()));
       auto local = realize(*unit);
       auto localBefore = clone(*local);
-      auto scheduled = schedule(*local);
+      auto scheduled = schedule(*unit);
       auto scheduleBefore = clone(*scheduled);
       require(operations(*scheduled, "scf.for").size() == 1,
               "producer did not expose an actual SCF traversal");
@@ -535,7 +475,7 @@ module { "protocol.module"() ({
               "scheduled preservation mutated an input");
       scheduleMismatch(*unit, *scheduled, ordered);
       auto orderedLocal = realize(*unit, ordered);
-      auto orderedSchedule = schedule(*orderedLocal);
+      auto orderedSchedule = schedule(*unit, ordered);
       scheduleAccepts(*unit, *orderedSchedule, ordered);
     });
 
@@ -547,7 +487,7 @@ module { "protocol.module"() ({
           [&] {
             auto unit = source(context, name);
             auto local = realize(*unit);
-            auto scheduled = schedule(*local);
+            auto scheduled = schedule(*unit);
             auto changed = clone(*scheduled);
             auto traversal = loop(*changed);
             auto &body = *traversal.getBody();
@@ -622,7 +562,7 @@ module { "protocol.module"() ({
         [&] {
           auto unit = source(context, "elements");
           auto local = realize(*unit, policy);
-          auto scheduled = schedule(*local);
+          auto scheduled = schedule(*unit, policy);
           finite::VerificationResult outcome{
               finite::VerificationStatus::Verified, {}};
           require(failed(kernel::verifyEntrySchedule(*unit, *scheduled,

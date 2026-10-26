@@ -539,3 +539,8 @@ mlir_target_link_libraries(zkc-native_preferences-test PRIVATE MLIRParser MLIRPa
 
 add_zkc_test(aggregate_layouts Transforms aggregate-layouts)
 mlir_target_link_libraries(zkc-aggregate_layouts-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(scoped_schedule Transforms scoped-schedule)
+target_compile_definitions(zkc-scoped_schedule-test PRIVATE
+  ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-scoped_schedule-test PRIVATE MLIRParser MLIRSCFDialect)

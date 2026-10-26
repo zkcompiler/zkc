@@ -187,6 +187,7 @@ def main():
         ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/ExecutionPorts.h",
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/ScopedCandidate.h",
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
         ROOT / "lib/Transforms/HelperNormalization.h",

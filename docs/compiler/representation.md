@@ -40,6 +40,14 @@ One physical plan retains the original subject, including retained maps and
 Numerical transforms propose a complete scoped execution candidate without changing that
 subject. The candidate records the actual numerical choices, including ordered
 fallbacks; compile-time permission flags alone do not determine those choices.
+Numerical recipe selection retains an actual standard SCF schedule. Its consumer
+constructs scoped Func/CF and Exec, and an independent reader compares the actual
+bounds, state, captures, primitive occurrences and completion behavior. The
+mathematical reader separately checks that scoped payload against the original
+mathematics; neither check obtains equations from the emitter. Root return
+packaging remains uncharged, while an entered control body's completion remains
+charged. Scope and Outcome plumbing are excluded from logical data coordinates.
+
 Selection checks complete physical feasibility before retaining a candidate.
 An unavailable implementation or direct conversion can advance the implicated
 numerical occurrence to another admitted realization. Specialized contractions,
@@ -61,7 +69,7 @@ Physical lowering separates three steps:
    the actual physical output and publish once. Materialization performs no
    numerical selection or catalog search.
 
-Physical operation indices refer to the selected Local candidate. They are not
+Physical operation indices refer to the selected scoped candidate. They are not
 indices into the original mathematical subject. The checked object privately retains
 that candidate and owns the physical choices. Inspection returns a separate clone.
 Module identity and complete source content guard validation and publication;

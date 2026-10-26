@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
@@ -80,7 +81,7 @@ bool closed(Block &block, uint64_t &remaining, unsigned depth = 0,
   }
   return true;
 }
-func::FuncOp scheduledFunction(mlir::ModuleOp module) {
+func::FuncOp inspectScheduledFunction(mlir::ModuleOp module) {
   // Inspect generic shape and attributes (including builtin properties) before
   // using generated region or function-type accessors on untrusted packets.
   if (!module || module->getNumRegions() != 1 || module->getNumOperands() ||
@@ -214,92 +215,10 @@ void scheduleLoop(local::LocalForOp old) {
   old->replaceAllUsesWith(loop.getResults().take_front(old.getNumResults()));
   old.erase();
 }
-FailureOr<SmallVector<Value>> mapped(ValueRange operands, IRMapping &values) {
-  SmallVector<Value> result;
-  for (Value operand : operands) {
-    auto value = values.lookupOrNull(operand);
-    if (!value)
-      return failure();
-    result.push_back(value);
-  }
-  return result;
-}
-// Executable conversion consumes the actual SCF packet. Domain reasoning and
-// source callbacks are deliberately absent from this consumer.
-LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
-                         uint64_t &remaining, bool scheduledBody = false,
-                         std::optional<CapacityCause> *capacity = nullptr) {
-  OpBuilder builder(target.getParentOp()->getContext());
-  auto *cursor = source.empty() ? nullptr : &source.front();
-  if (scheduledBody)
-    cursor = cursor->getNextNode();
-  while (cursor) {
-    builder.setInsertionPointToEnd(&target);
-    auto *after = cursor;
-    auto parsed = readScheduledLoop(after, remaining);
-    if (failed(parsed)) {
-      if (capacity)
-        *capacity = CapacityCause{WorkOwner::AlgorithmExpansion};
-      return failure();
-    }
-    auto &packet = *parsed;
-    if (packet) {
-      auto inputs = mapped(packet->inputs, values);
-      if (failed(inputs))
-        return failure();
-      auto loop = local::LocalForOp::create(
-          builder, packet->loop.getLoc(),
-          packet->loop.getResults().take_front(packet->states).getTypes(),
-          *inputs, packet->loop->getAttrOfType<StringAttr>("site").getValue());
-      SmallVector<Type> types;
-      for (Value value : packet->arguments)
-        types.push_back(value.getType());
-      auto *body = builder.createBlock(
-          &loop.getBody(), loop.getBody().end(), types,
-          SmallVector<Location>(types.size(), loop.getLoc()));
-      auto nested = values;
-      nested.map(packet->arguments, body->getArguments());
-      if (failed(lowerBlock(*packet->loop.getBody(), *body, nested, remaining,
-                            true, capacity)))
-        return failure();
-      values.map(packet->loop.getResults().take_front(packet->states),
-                 loop.getResults());
-      cursor = after;
-      continue;
-    }
-    auto *op = cursor;
-    cursor = op->getNextNode();
-    if (isa<scf::ForOp, UnrealizedConversionCastOp, arith::ConstantOp>(op))
-      return failure(); // No partial packets or free representation bridges.
-    auto inputs = mapped(op->getOperands(), values);
-    if (failed(inputs))
-      return failure();
-    if (isa<func::ReturnOp, scf::YieldOp>(op)) {
-      if (op->getNumResults() || op->getNumRegions() || !op->getAttrs().empty())
-        return failure();
-      if (isa<func::ReturnOp>(op))
-        local::ReturnOp::create(builder, op->getLoc(), *inputs);
-      else
-        local::LocalYieldOp::create(builder, op->getLoc(), *inputs);
-      continue;
-    }
-    auto *copy = builder.cloneWithoutRegions(*op, values);
-    for (auto [a, b] : zip(op->getRegions(), copy->getRegions())) {
-      if (!a.hasOneBlock())
-        return failure();
-      auto &block = a.front();
-      auto *out = builder.createBlock(
-          &b, b.end(), block.getArgumentTypes(),
-          SmallVector<Location>(block.getNumArguments(), op->getLoc()));
-      auto nested = values;
-      nested.map(block.getArguments(), out->getArguments());
-      if (failed(lowerBlock(block, *out, nested, remaining, false, capacity)))
-        return failure();
-    }
-  }
-  return success();
-}
 } // namespace
+func::FuncOp readScheduledFunction(mlir::ModuleOp module) {
+  return inspectScheduledFunction(module);
+}
 FailureOr<std::optional<ScheduledLoop>> readScheduledLoop(Operation *&cursor) {
   uint64_t remaining = 1000000;
   return readScheduledLoop(cursor, remaining);
@@ -410,7 +329,8 @@ scheduleEntry(mlir::ModuleOp source, uint64_t &remaining,
     return {};
   source.getContext()->getOrLoadDialect<scf::SCFDialect>();
   source.getContext()->getOrLoadDialect<arith::ArithDialect>();
-  if (failed(verifyRecipeOutput(source)) ||
+  if (!hasSingleElement(*source.getBody()) ||
+      failed(mathematical::verifyLocalFragment(&source.getBody()->front())) ||
       !chargeCopy(source, remaining, capacity))
     return {};
   auto walk = source.walk([&](local::LocalForOp loop) {
@@ -451,170 +371,9 @@ scheduleEntry(mlir::ModuleOp source, uint64_t &remaining,
     } else
       builder.clone(op);
   }
-  if (!scheduledFunction(*result))
+  if (!readScheduledFunction(*result))
     return {};
   return result;
-}
-OwningOpRef<mlir::ModuleOp>
-consumeSchedule(mlir::ModuleOp source, uint64_t &remaining,
-                std::optional<CapacityCause> *capacity) {
-  auto function = scheduledFunction(source);
-  if (!function || !chargeCopy(source, remaining, capacity))
-    return {};
-  OwningOpRef<mlir::ModuleOp> result(mlir::ModuleOp::create(source.getLoc()));
-  OpBuilder builder(result->getBody(), result->getBody()->end());
-  auto owner = protocol_ir::ProtocolModuleOp::create(
-      builder, source.getLoc(), protocol_ir::Profile::Exec);
-  owner.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&owner.getBody().front());
-  for (auto binding : source.getBody()->getOps<runtime::BindingOp>())
-    builder.clone(*binding.getOperation());
-  auto output =
-      local::FuncOp::create(builder, function.getLoc(), function.getSymName(),
-                            function.getFunctionType());
-  output->setAttr("logical_origin", function->getAttr("logical_origin"));
-  auto *body = builder.createBlock(
-      &output.getBody(), output.getBody().end(), function.getArgumentTypes(),
-      SmallVector<Location>(function.getNumArguments(), function.getLoc()));
-  IRMapping values;
-  values.map(function.getArguments(), body->getArguments());
-  if (failed(lowerBlock(function.front(), *body, values, remaining, false,
-                        capacity)) ||
-      failed(verifyRecipeOutput(*result)))
-    return {};
-  return result;
-}
-// Independent structural reader: never invokes lowerBlock or scheduleLoop.
-namespace {
-class ScheduleReader {
-  uint64_t &remaining;
-  bool capacity = false;
-
-public:
-  explicit ScheduleReader(uint64_t &remaining) : remaining(remaining) {}
-  bool exhausted() const { return capacity; }
-  bool block(Block &source, Block &target, IRMapping values,
-             bool body = false) {
-    auto *at = source.empty() ? nullptr : &source.front();
-    auto *actual = target.empty() ? nullptr : &target.front();
-    if (body)
-      at = at->getNextNode();
-    while (at) {
-      if (!remaining) {
-        capacity = true;
-        return false;
-      }
-      if (!actual)
-        return false;
-      --remaining;
-      auto *next = at;
-      auto parsed = readScheduledLoop(next, remaining);
-      if (failed(parsed)) {
-        capacity = true;
-        return false;
-      }
-      auto &packet = *parsed;
-      if (packet) {
-        auto loop = dyn_cast<local::LocalForOp>(actual);
-        auto inputs = mapped(packet->inputs, values);
-        if (!loop || failed(inputs) ||
-            loop.getOperands() != ValueRange(*inputs) ||
-            loop.getNumResults() != packet->states ||
-            loop.getSiteAttr() != packet->loop->getAttr("site") ||
-            loop.getResultTypes() != packet->loop.getResults()
-                                         .take_front(packet->states)
-                                         .getTypes() ||
-            !loop.getBody().hasOneBlock())
-          return false;
-        auto &out = loop.getBody().front();
-        if (ValueRange(packet->arguments).getTypes() != out.getArgumentTypes())
-          return false;
-        auto nested = values;
-        nested.map(packet->arguments, out.getArguments());
-        if (!block(*packet->loop.getBody(), out, nested, true))
-          return false;
-        values.map(packet->loop.getResults().take_front(packet->states),
-                   loop.getResults());
-        at = next;
-        actual = actual->getNextNode();
-        continue;
-      }
-      auto name = at->getName().getStringRef();
-      if (isa<func::ReturnOp>(at))
-        name = "local.return";
-      else if (isa<scf::YieldOp>(at))
-        name = "local.yield";
-      if (isa<scf::ForOp, UnrealizedConversionCastOp, arith::ConstantOp>(at))
-        return false;
-      auto inputs = mapped(at->getOperands(), values);
-      if (failed(inputs) || actual->getName().getStringRef() != name ||
-          actual->getAttrDictionary() != at->getAttrDictionary() ||
-          actual->getOperands() != ValueRange(*inputs) ||
-          actual->getResultTypes() != at->getResultTypes() ||
-          actual->getNumRegions() != at->getNumRegions())
-        return false;
-      for (auto [a, b] : zip(at->getRegions(), actual->getRegions())) {
-        if (!a.hasOneBlock() || !b.hasOneBlock() ||
-            a.front().getArgumentTypes() != b.front().getArgumentTypes())
-          return false;
-        auto nested = values;
-        nested.map(a.front().getArguments(), b.front().getArguments());
-        if (!block(a.front(), b.front(), nested))
-          return false;
-      }
-      values.map(at->getResults(), actual->getResults());
-      at = at->getNextNode();
-      actual = actual->getNextNode();
-    }
-    return !actual;
-  }
-};
-} // namespace
-LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
-                                     mlir::ModuleOp candidate, uint64_t *shared,
-                                     finite::VerificationResult *reported) {
-  if (reported)
-    *reported = {finite::VerificationStatus::Mismatch,
-                 "schedule lowering differs"};
-  auto function = scheduledFunction(schedule);
-  if (!function || failed(verifyRecipeOutput(candidate)))
-    return failure();
-  auto owner =
-      cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  auto target = SymbolTable(owner).lookup<local::FuncOp>(function.getSymName());
-  if (!target || target->getAttrDictionary() != function->getAttrDictionary() ||
-      !target.getBody().hasOneBlock())
-    return failure();
-  auto before = schedule.getBody()->getOps<runtime::BindingOp>();
-  auto after = owner.getBody().front().getOps<runtime::BindingOp>();
-  if (std::distance(before.begin(), before.end()) !=
-      std::distance(after.begin(), after.end()))
-    return failure();
-  for (auto [a, b] : zip(before, after))
-    if (!OperationEquivalence::isEquivalentTo(
-            a, b, OperationEquivalence::IgnoreLocations))
-      return failure();
-  unsigned functions = 0;
-  for (auto &op : owner.getBody().front())
-    if (isa<local::FuncOp>(op))
-      ++functions;
-    else if (!isa<runtime::BindingOp>(op))
-      return failure();
-  IRMapping values;
-  values.map(function.getArguments(), target.getArguments());
-  uint64_t standalone = 1000000;
-  ScheduleReader reader(shared ? *shared : standalone);
-  bool valid = functions == 1 &&
-               reader.block(function.front(), target.getBody().front(), values);
-  if (reported) {
-    if (valid)
-      *reported = {finite::VerificationStatus::Verified, {}};
-    else if (reader.exhausted())
-      *reported = {finite::VerificationStatus::RequiredCapacity,
-                   "schedule checking capacity",
-                   CapacityCause{WorkOwner::AlgorithmChecking}};
-  }
-  return success(valid);
 }
 LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
                                   mlir::ModuleOp schedule, StringRef callSite,
@@ -623,7 +382,7 @@ LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
                                   finite::VerificationResult *reported) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                      "numerical schedule differs"};
-  auto function = scheduledFunction(schedule);
+  auto function = readScheduledFunction(schedule);
   auto entry = mathematical::getComputationEntry(source);
   auto finish = [&](bool valid) {
     if (valid)

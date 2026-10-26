@@ -4,6 +4,7 @@
 #include "Kernel/Schedule.h"
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
+#include "ScopedCandidate.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
@@ -12,6 +13,7 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -27,6 +29,8 @@ namespace {
 class Reader {
   Computation c;
   SymbolTable &symbols;
+  mathematical::CandidatePorts ports;
+  llvm::DenseMap<Operation *, unsigned> regionReturns;
   llvm::DenseSet<Operation *> &bindings;
   Operation *cursor = nullptr;
   Type index, boolean;
@@ -64,21 +68,38 @@ class Reader {
       *limits.sharedReader -= amount;
     return true;
   }
+  SmallVector<Value> arguments(Block *block) {
+    return ports.isScoped() ? SmallVector<Value>(ports.arguments(block))
+                            : zkc::kernel::traversalArguments(block);
+  }
   Operation *consume(StringRef name) {
-    if (!valid || !cursor || cursor->getName().getStringRef() != name) {
+    if (ports.isScoped()) {
+      if (name == "local.for")
+        name = "exec.range";
+      else if (name == "local.if")
+        name = "exec.test";
+      else if (name == "local.yield" || name == "local.condition")
+        name = "exec.complete";
+      else if (name == "local.return")
+        name = "exec.returned";
+    }
+    if (!valid || !ports.contains(cursor) ||
+        cursor->getName().getStringRef() != name) {
       fail();
       return nullptr;
     }
     if (!charge())
       return nullptr;
     auto *op = cursor;
-    cursor = cursor->getNextNode();
+    cursor = ports.next(cursor);
     return op;
   }
   Value kernel(StringRef contract, ValueRange operands, Type result,
                ArrayRef<std::string> arguments = {},
                ArrayRef<std::string> parameters = {}) {
-    auto *op = consume(protocol::boundOperationName(contract));
+    auto *op =
+        consume(ports.isScoped() ? exec::ApplyOp::getOperationName()
+                                 : protocol::boundOperationName(contract));
     if (!op)
       return {};
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
@@ -87,9 +108,9 @@ class Reader {
     auto params = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!binding || !params || !site || op->getAttrs().size() != 3 ||
-        op->getNumRegions() || op->getOperands() != operands ||
-        op->getNumResults() != unsigned(bool(result)) ||
-        (result && op->getResult(0).getType() != result) ||
+        ports.bodies(op) || ports.inputs(op) != operands ||
+        ports.outputs(op).size() != unsigned(bool(result)) ||
+        (result && ports.outputs(op)[0].getType() != result) ||
         binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size() ||
@@ -104,7 +125,7 @@ class Reader {
       if (a != StringAttr::get(op->getContext(), b))
         fail();
     bindings.insert(binding);
-    return result ? op->getResult(0) : Value();
+    return result ? ports.outputs(op)[0] : Value();
   }
   Value natural(uint64_t n) {
     return kernel("index.constant", {}, index, {}, {std::to_string(n)});
@@ -131,7 +152,7 @@ class Reader {
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {
-    if (name == "local.for") {
+    if (name == "local.for" && !ports.isScoped()) {
       auto *at = cursor;
       auto available = availableWork();
       auto scheduleWork = available;
@@ -168,39 +189,52 @@ class Reader {
     auto *op = consume(name);
     if (!op)
       return nullptr;
-    if (op->getOperands() != operands || op->getResultTypes() != results ||
-        op->getNumRegions() != regions ||
-        !op->getAttrOfType<StringAttr>("site") || op->getAttrs().size() != 1) {
+    if (ports.inputs(op) != operands ||
+        ports.outputs(op).getTypes() != results ||
+        ports.bodies(op) != regions || !op->getAttrOfType<StringAttr>("site") ||
+        op->getAttrs().size() != 1) {
       fail();
       return nullptr;
     }
     return op;
   }
   Block *enter(Operation *op, unsigned region, TypeRange types) {
-    if (!op || !op->getRegion(region).hasOneBlock()) {
+    auto *block = ports.body(op, region);
+    if (!block) {
       fail();
       return nullptr;
     }
-    auto &block = op->getRegion(region).front();
-    auto arguments = zkc::kernel::traversalArguments(&block);
-    if (!llvm::equal(ValueRange(arguments).getTypes(), types) ||
-        block.empty()) {
+    auto values = arguments(block);
+    if (!llvm::equal(ValueRange(values).getTypes(), types) ||
+        !ports.first(block)) {
       fail();
       return nullptr;
     }
-    cursor = &block.front();
+    if (ports.isScoped())
+      regionReturns[block->getParentOp()] = ports.outputs(op).size();
+    cursor = ports.first(block);
     if (isa<scf::ForOp>(op))
       cursor =
           cursor->getNextNode(); // Exact induction bridge checked by schema.
-    return &block;
+    return block;
   }
   void end(StringRef name, ValueRange inputs) {
     if (cursor && isa<scf::ForOp>(cursor->getParentOp()) &&
         name == "local.yield")
       name = "scf.yield";
     auto *op = consume(name);
-    if (!op || op->getOperands() != inputs || op->getNumResults() ||
-        op->getNumRegions() || !op->getAttrs().empty() || cursor)
+    if (!op)
+      return;
+    if (ports.isScoped() && isa<exec::CompleteOp>(op)) {
+      auto found = regionReturns.find(op->getParentOp());
+      if (found == regionReturns.end() || inputs.size() < found->second) {
+        fail();
+        return;
+      }
+      inputs = inputs.take_front(found->second);
+    }
+    if (ports.inputs(op) != inputs || !ports.outputs(op).empty() ||
+        ports.bodies(op) || !op->getAttrs().empty() || cursor)
       fail();
   }
   void bound(Value value) {
@@ -221,8 +255,7 @@ class Reader {
     if (auto *yes = enter(branch, 0, types)) {
       Value size = kernel(
           "index.sub",
-          {yes->getArgument(upper == lower ? 0 : 1), yes->getArgument(0)},
-          index);
+          {arguments(yes)[upper == lower ? 0 : 1], arguments(yes)[0]}, index);
       end("local.yield", size ? ValueRange{size} : ValueRange{});
     }
     if (enter(branch, 1, types)) {
@@ -230,7 +263,7 @@ class Reader {
       end("local.yield", zero ? ValueRange{zero} : ValueRange{});
     }
     cursor = after;
-    return branch ? branch->getResult(0) : Value();
+    return branch ? ports.outputs(branch)[0] : Value();
   }
   Value product(Value left, Value right) {
     bound(left);
@@ -442,9 +475,9 @@ public:
   Reader(Computation computation, SymbolTable &symbols,
          llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {},
          bool allowBulk = true)
-      : c(computation), symbols(symbols), bindings(bindings),
-        index(IntegerType::get(c.operation->getContext(), 64,
-                               IntegerType::Unsigned)),
+      : c(computation), symbols(symbols), ports(limits.candidate),
+        bindings(bindings), index(IntegerType::get(c.operation->getContext(),
+                                                   64, IntegerType::Unsigned)),
         boolean(IntegerType::get(c.operation->getContext(), 1)),
         allowBulk(allowBulk), remaining(limits.reader), limits(limits) {}
   void compose(const CollectFold &pair, ValueRange inputs,
@@ -494,14 +527,19 @@ public:
     if (!valid)
       return false;
     Value rootDomain = c.domain.getBody().front().back().getOperand(0);
+    auto binding = cursor ? cursor->getAttrOfType<FlatSymbolRefAttr>("binding")
+                          : FlatSymbolRefAttr();
+    auto declaration =
+        binding ? symbols.lookup<runtime::BindingOp>(binding.getValue())
+                : runtime::BindingOp();
+    bool startsEmpty =
+        declaration && declaration.getContract() == "vector.empty";
     if (allowBulk &&
         (mathematical::hasFinitePayloadContract(cursor, symbols) ||
-         // An identity collect can return an existing vector without emitting
-         // payload. Its ordered alternative starts with an empty container.
+         // An identity collect may return an existing vector without payload.
          (c.collect && cursor &&
           isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
-          cursor->getName().getStringRef() !=
-              protocol::boundOperationName("vector.empty")))) {
+          !startsEmpty))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
       uint64_t comparisonWork =
@@ -517,7 +555,7 @@ public:
               c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
               bindings, comparisonWork,
               inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
-              &debit);
+              &debit, limits.candidate);
           succeeded(compared)) {
         finish(ValueRange{*compared});
         return valid;
@@ -586,7 +624,7 @@ public:
     auto *body = enter(loop, 0, bt);
     if (!body)
       return false;
-    auto bodyArguments = zkc::kernel::traversalArguments(body);
+    auto bodyArguments = arguments(body);
     auto current = ValueRange(bodyArguments).slice(1, state.size()),
          captured = ValueRange(bodyArguments).drop_front(1 + state.size());
     llvm::DenseMap<Value, Value> mapping;
@@ -625,7 +663,7 @@ public:
         for (Value value : operands) {
           auto position =
               llvm::find(capturedValues, value) - capturedValues.begin();
-          result.push_back(block->getArgument(position));
+          result.push_back(arguments(block)[position]);
         }
         return result;
       };
@@ -639,7 +677,7 @@ public:
       cursor = following;
       if (!valid)
         return false;
-      append_range(next, branch->getResults());
+      append_range(next, ports.outputs(branch));
     } else
       next = transition(current, item, environment, bodyArguments[0]);
     append_range(next, captured);
@@ -647,7 +685,7 @@ public:
     cursor = after;
     if (!valid)
       return false;
-    SmallVector<Value> results(loop->getResults().take_front(state.size()));
+    SmallVector<Value> results(ports.outputs(loop).take_front(state.size()));
     if (!composition && c.collect &&
         results[0].getType() != c.signature.getResult(0)) {
       auto col = mathematical::interpretCollection(c.signature.getResult(0));
