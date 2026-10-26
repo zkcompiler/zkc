@@ -81,6 +81,10 @@ conversions, diagonal contraction checks, storage release scheduling, native
 publication and independent artifact comparison. The planner indexes semantic
 payload definitions and uses across administrative CFG blocks. Captures retain
 their producer layout; body-only conversions execute in their reached body.
+Resident field/group controls exercise explicit entry and return ABIs, outlined
+branch and loop ports, helper expansion, and variant payloads on this path.
+Native execution checks retain zero-trip behavior, reached conversion failures,
+and the original resource allowances.
 Mathematical and retained finite requests are realized through this same scoped
 path. The physical transaction keeps the actual prepared and selected modules
 for independent checks of both edges. See the
@@ -90,6 +94,9 @@ Checked scoped helper expansion substitutes actual SSA bodies, preserves
 uncharged helper returns and charged control yields, and normalizes aliased
 immutable capture ports together. Its separate reader checks virtual source
 substitution against the actual candidate and recovers full occurrence paths.
+Transitive dependency checks keep the scoped substitution, finite, polynomial
+recipe and numerical readback consumers separate from producer recognition and
+recipe interfaces. Shared callback signatures carry no selected recipe.
 Default participant preparation consumes this checked edge before outlining
 mathematical demands. Logical participant admission also checks retained finite
 callback edges and affine state roots; unresolved requests cannot be published.

@@ -1,8 +1,11 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
@@ -24,83 +27,243 @@ void accept(Error e) {
   if (e)
     throw std::runtime_error(toString(std::move(e)));
 }
-std::string chain(bool residentInitial = true, bool executionControls = false) {
-  auto source =
+namespace sc = scopedComputation;
+namespace sf = scopedFinite;
+std::string printed(ModuleOp module) {
+  std::string result;
+  raw_string_ostream stream(result);
+  module.print(stream);
+  return result;
+}
+std::string encodedSite(StringRef name) {
+  return "lc_" + std::to_string(name.size()) + "_" + name.str();
+}
+std::string chain(MLIRContext &context, bool residentInitial = true,
+                  StringRef mode = {}, bool helperInArm = false,
+                  bool conditional = false, bool stoppedArm = false) {
+  const bool execution = !mode.empty();
+  auto text =
       R"(!F = !algebra.field<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
-)" + mathematicalFixture(
+)" + scopedFixture(
           R"(
 "runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
 "runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
 )",
-          executionControls
-              ? "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64,%allowed:i1,%t:!F"
-              : "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64",
-          executionControls ? "%g,%s,%c,%lo,%hi,%allowed,%t"
-                            : "%g,%s,%c,%lo,%hi",
-          executionControls ? "!G,!F,i1,ui64,ui64,i1,!F" : "!G,!F,i1,ui64,ui64",
-          "!G", R"(
-"local.exec.require"(%c) {binding=@guard,site="first_guard",parameters=[]} : (i1)->()
-%initial = "algebra.exec.group_scale"(%g,%s) {binding=@scale,site="initial",parameters=[]} : (!G,!F)->!G
-%joined = "local.if"(%c,%initial,%s,%c) ({^left(%p:!G,%r:!F,%ok:i1):
-  "local.exec.require"(%ok) {binding=@guard,site="left_guard",parameters=[]} : (i1)->()
-  %next = "algebra.exec.group_scale"(%p,%r) {binding=@scale,site="left_scale",parameters=[]} : (!G,!F)->!G
-  "local.yield"(%next) : (!G)->()
-}, {^right(%p:!G,%r:!F,%ok:i1):
-  %next = "algebra.exec.group_scale"(%p,%r) {binding=@scale,site="right_scale",parameters=[]} : (!G,!F)->!G
-  "local.yield"(%next) : (!G)->()
-}) {site="branch"} : (i1,!G,!F,i1)->!G
-%result = "local.for"(%lo,%hi,%joined,%s,%c) ({^body(%i:ui64,%state:!G,%r:!F,%ok:i1):
-  "local.exec.require"(%ok) {binding=@guard,site="loop_guard",parameters=[]} : (i1)->()
-  %next = "algebra.exec.group_scale"(%state,%r) {binding=@scale,site="body_scale",parameters=[]} : (!G,!F)->!G
-  "local.yield"(%next,%r,%ok) : (!G,!F,i1)->()
-}) {site="loop"} : (ui64,ui64,!G,!F,i1)->!G
-local.return %result : !G
-)",
-          executionControls ? 7 : 5);
-  if (executionControls) {
-    source = replaceText(source, "require\"(%c)", "require\"(%allowed)");
-    source =
-        replaceText(source, "%c,%initial,%s,%c", "%c,%initial,%s,%allowed");
-    source = replaceText(source, "%lo,%hi,%joined,%s,%c",
-                         "%lo,%hi,%joined,%s,%allowed");
+          execution ? "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64,%allowed:i1,%t:!F"
+                    : "%g:!G,%s:!F,%c:i1,%lo:ui64,%hi:ui64",
+          execution ? "%g,%s,%c,%lo,%hi,%allowed,%t" : "%g,%s,%c,%lo,%hi",
+          execution ? "!G,!F,i1,ui64,ui64,i1,!F" : "!G,!F,i1,ui64,ui64", "!G",
+          scopedReturn("%g", "!G"), execution ? 7 : 5);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "resident chain fixture parse");
+  auto work = sf::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  auto group = work.getArgument(1).getType();
+  auto field = work.getArgument(2).getType();
+  auto boolean = builder.getI1Type();
+  auto index = work.getArgument(4).getType();
+  if (execution || helperInArm) {
+    auto helper = sc::region(builder, work, "helper", {group, field}, {group});
+    helper->removeAttr("runtime.region");
+    helper->setAttr("runtime.origin",
+                    builder.getArrayAttr({builder.getStringAttr("helper"),
+                                          builder.getArrayAttr({})}));
+    exec::ScopedExecutionBuilder control(builder, helper);
+    control.returned(sc::apply(control, builder, "scale", "helper_scale",
+                               helper.getArguments().drop_front(), {group}));
   }
-  if (!residentInitial) {
-    source = replaceText(
-        source,
-        "%initial = \"algebra.exec.group_scale\"(%g,%s) "
-        "{binding=@scale,site=\"initial\",parameters=[]} : (!G,!F)->!G",
-        "");
-    source = replaceText(source, "%c,%initial,%s,%c", "%c,%g,%s,%c");
-    source = replaceText(source, "%lo,%hi,%joined,%s,%c", "%lo,%hi,%g,%s,%c");
+  builder.setInsertionPointToEnd(&work.front());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto allowed = work.getArgument(execution ? 6 : 3);
+  sc::apply(control, builder, "guard", "first_guard", {allowed}, {});
+  Value initial = work.getArgument(1);
+  if (residentInitial)
+    initial = sc::apply(control, builder, "scale", "initial",
+                        {initial, work.getArgument(2)}, {group})[0];
+  auto invokeHelper = [&](exec::ScopedExecutionBuilder &nested, Value point,
+                          Value scalar) {
+    return nested.invoke(
+        "func.call", {group}, nested.scoped({point, scalar}),
+        {builder.getNamedAttr("callee",
+                              FlatSymbolRefAttr::get(&context, "helper")),
+         builder.getNamedAttr("runtime.site",
+                              builder.getStringAttr("expanded"))})[0];
+  };
+  if (execution) {
+    initial = sc::apply(control, builder, "scale", "adjacent",
+                        {initial, work.getArgument(2)}, {group})[0];
+    initial = invokeHelper(control, initial, work.getArgument(2));
   }
-  return source;
-}
-std::string withScaleHelper(std::string source) {
-  return replaceText(source, "local.func @Work", R"(
-local.func private @helper(%p:!G,%r:!F)->!G attributes {logical_origin=["helper",[]]} {
-  %next = "algebra.exec.group_scale"(%p,%r) {binding=@scale,site="helper_scale",parameters=[]} : (!G,!F)->!G
-  local.return %next : !G
-}
-local.func @Work)");
+  auto joined = control.conditional(
+      work.getArgument(3),
+      {initial, work.getArgument(mode == "branch" ? 7 : 2), allowed}, {group},
+      "branch", [&](unsigned arm) {
+        auto region = sc::region(builder, work, arm ? "right" : "left",
+                                 {group, field, boolean}, {group});
+        exec::ScopedExecutionBuilder nested(builder, region);
+        if (arm && stoppedArm) {
+          nested.reject("reject", "stopped");
+          return region;
+        }
+        if (!arm)
+          sc::apply(nested, builder, "guard", "left_guard",
+                    {region.getArgument(3)}, {});
+        Value next = region.getArgument(1);
+        if (!arm && helperInArm)
+          next = invokeHelper(nested, next, region.getArgument(2));
+        else if (!arm || !execution)
+          next = sc::apply(nested, builder, "scale",
+                           arm ? "right_scale" : "left_scale",
+                           {next, region.getArgument(2)}, {group})[0];
+        nested.complete({next});
+        return region;
+      });
+  auto result = control.loop(
+      work.getArgument(4), work.getArgument(5),
+      {residentInitial ? joined.front() : work.getArgument(1)},
+      {work.getArgument(mode == "loop" ? 7 : 2),
+       mode == "loop" ? work.getArgument(3) : allowed},
+      {group}, conditional, "loop", [&](unsigned) {
+        SmallVector<Type> results;
+        if (conditional)
+          results.push_back(boolean);
+        results.push_back(group);
+        auto region = sc::region(builder, work, "iteration",
+                                 {index, group, field, boolean}, results);
+        exec::ScopedExecutionBuilder nested(builder, region);
+        sc::apply(nested, builder, "guard", "loop_guard",
+                  {region.getArgument(4)}, {});
+        auto next =
+            sc::apply(nested, builder, "scale", "body_scale",
+                      {region.getArgument(2), region.getArgument(3)}, {group});
+        if (conditional)
+          next.insert(next.begin(), region.getArgument(4));
+        nested.complete(next);
+        return region;
+      });
+  control.returned(result);
+  require(succeeded(verify(*module)), "resident chain fixture formation");
+  return printed(*module);
 }
 OperationDecision &at(PhysicalPlan &plan, ModuleOp module, StringRef name) {
   auto operations = physicalPlanOperations(module);
   for (auto &d : plan.operations) {
     auto site = operations[d.operation]->getAttrOfType<StringAttr>("site");
-    if (site && site.getValue() == name)
+    if (site && site.getValue() ==
+                    (operations[d.operation]->getParentOfType<func::FuncOp>()
+                         ? encodedSite(name)
+                         : name.str()))
       return d;
   }
   throw std::runtime_error("missing site " + name.str());
 }
+Operation *semanticOperation(ModuleOp module, StringRef name) {
+  auto flow = take(ExecutionPorts::read(module));
+  for (auto *op : flow.operations())
+    if (flow.get(op).step)
+      if (auto site = op->getAttrOfType<StringAttr>("site"))
+        if (site.getValue() == encodedSite(name))
+          return op;
+  throw std::runtime_error("missing semantic site " + name.str());
+}
+OperationDecision &bodyDecision(PhysicalPlan &plan, ModuleOp module,
+                                StringRef name, unsigned index = 0) {
+  auto flow = take(ExecutionPorts::read(module));
+  auto *operation = semanticOperation(module, name);
+  const auto &bodies = flow.get(operation).bodies;
+  require(index < bodies.size(), "missing scoped control body");
+  auto *owner = flow.body(bodies[index]).owner;
+  auto operations = physicalPlanOperations(module);
+  for (auto &decision : plan.operations)
+    if (operations[decision.operation] == owner) {
+      require(decision.blockArguments.size() == 1,
+              "missing outlined data argument ports");
+      return decision;
+    }
+  throw std::runtime_error("missing outlined body decision");
+}
+StringRef implementation(exec::ApplyOp op) {
+  return SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+             op, op.getBindingAttr())
+      .getImplementation();
+}
+// Move the complete checked invocation, including its success/failure edges.
+// The mutant remains well-formed while changing the first observable failure.
+void moveInvocationBefore(exec::ApplyOp moved, exec::ApplyOp before) {
+  IRRewriter rewriter(moved.getContext());
+  auto *prefix = before->getBlock();
+  auto *tail = rewriter.splitBlock(prefix, before->getIterator());
+  auto stop = cast<exec::DispatchOp>(before->getNextNode()).getStopped();
+  OpBuilder builder(moved.getContext());
+  builder.setInsertionPointToEnd(prefix);
+  exec::ScopedExecutionBuilder control(builder,
+                                       before->getParentOfType<func::FuncOp>());
+  control.setLocation(moved.getLoc());
+  auto values =
+      control.invoke("exec.apply", moved.getOutcome().getType().getPayload(),
+                     moved->getOperands(), moved->getAttrs(), stop);
+  rewriter.mergeBlocks(tail, builder.getInsertionBlock());
+  sc::omit(moved, values);
+}
+std::string variantSource(MLIRContext &context, StringRef descriptor) {
+  auto text = "!Tag = !data.variant<\"" + descriptor.str() + "\">\n" +
+              R"(!F = !algebra.field<"bls12-381.fr">
+!G = !algebra.group<"bls12-381.g1">
+)" +
+              scopedFixture(R"(
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
+)",
+                            "%g:!G,%s:!F", "%g,%s", "!G,!F", "!G",
+                            scopedReturn("%g", "!G"), 2);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "variant source parse");
+  auto work = sf::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  auto group = work.getArgument(1).getType();
+  auto field = work.getArgument(2).getType();
+  auto variant = data::VariantType::get(&context, descriptor);
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto point = sc::apply(control, builder, "scale", "initial",
+                         work.getArguments().drop_front(), {group})[0];
+  auto tag = control.invoke(
+      "exec.variant", {variant}, control.scoped({work.getArgument(2)}),
+      {builder.getNamedAttr("alternative", builder.getStringAttr("some")),
+       builder.getNamedAttr("site", builder.getStringAttr("pack"))})[0];
+  auto result = control.match(
+      tag, {point}, {group}, {"none", "some"}, "match", [&](unsigned arm) {
+        SmallVector<Type> arguments;
+        if (arm)
+          arguments.push_back(field);
+        arguments.push_back(group);
+        auto region = sc::region(builder, work, arm ? "some" : "none",
+                                 arguments, {group});
+        exec::ScopedExecutionBuilder nested(builder, region);
+        Value next = region.getArgument(arm ? 2 : 1);
+        if (arm)
+          next = sc::apply(nested, builder, "scale", "matched_scale",
+                           {next, region.getArgument(1)}, {group})[0];
+        nested.complete({next});
+        return region;
+      });
+  control.returned(result);
+  require(succeeded(verify(*module)), "variant source formation");
+  return printed(*module);
+}
 PhysicalPlanOptions residentABI(ModuleOp module) {
   PhysicalPlanOptions options;
-  for (auto *op : physicalPlanOperations(module)) {
-    if (!isa<local::FuncOp, protocol_ir::ParticipantOp>(op))
+  auto flow = take(ExecutionPorts::read(module));
+  for (auto *op : flow.operations()) {
+    auto type = flow.get(op).callable;
+    if (!type || op->hasAttr("runtime.region"))
       continue;
-    auto name = op->getAttrOfType<StringAttr>("sym_name").getValue().str();
-    auto type = cast<FunctionType>(
-        op->getAttrOfType<TypeAttr>("function_type").getValue());
+    auto name = SymbolTable::getSymbolName(op).getValue().str();
     for (bool output : {false, true}) {
       auto ports = output ? type.getResults() : type.getInputs();
       for (auto [i, port] : enumerate(ports)) {
@@ -143,11 +306,10 @@ program::Participants publish(ModuleOp module,
   accept(materializePhysical(module, checked));
   require(succeeded(verify(module)), "physical module admission");
   module.walk([&](Operation *op) {
-    require(!isa<UnrealizedConversionCastOp, local::ApplyOp>(op),
-            "unresolved cast or helper call escaped");
-    if (isa<local::CallOp>(op))
-      require(!op->getParentOfType<local::FuncOp>(),
-              "runtime helper call escaped");
+    require(!isa<UnrealizedConversionCastOp>(op), "unresolved cast escaped");
+    require(op->getName().getDialectNamespace() != "local" &&
+                op->getName().getDialectNamespace() != "plan",
+            "replaced execution owner escaped");
   });
   return take(readExecutionModel(module));
 }
@@ -155,27 +317,7 @@ void emitExecutionFixture(MLIRContext &context, StringRef mode) {
   require(mode == "resident" || mode == "ports" || mode == "branch" ||
               mode == "loop",
           "unknown execution fixture");
-  auto source = withScaleHelper(chain(true, true));
-  source = replaceText(source, "%joined =", R"(
-%adjacent = "algebra.exec.group_scale"(%initial,%s) {binding=@scale,site="adjacent",parameters=[]} : (!G,!F)->!G
-%expanded = local.apply @helper(%adjacent,%s) {site="expanded"} : (!G,!F)->!G
-%joined =)");
-  source = replaceText(source, "%c,%initial,%s,%allowed",
-                       "%c,%expanded,%s,%allowed");
-  // The arms have different mathematical results, making the selected branch
-  // observable even when every input and output stays resident.
-  source = replaceText(
-      source,
-      "%next = \"algebra.exec.group_scale\"(%p,%r) "
-      "{binding=@scale,site=\"right_scale\",parameters=[]} : (!G,!F)->!G\n  "
-      "\"local.yield\"(%next)",
-      "\"local.yield\"(%p)");
-  if (mode == "branch")
-    source = replaceText(source, "%c,%expanded,%s,%allowed",
-                         "%c,%expanded,%t,%allowed");
-  if (mode == "loop")
-    source = replaceText(source, "%lo,%hi,%joined,%s,%allowed",
-                         "%lo,%hi,%joined,%t,%c");
+  auto source = chain(context, true, mode);
   auto module = take(executableFixture(source, context));
   auto options = residentABI(*module);
   llvm::erase_if(options.functionPorts, [&](const auto &port) {
@@ -272,7 +414,7 @@ int main(int argc, char **argv) {
   for (auto domain : {"bls12-381.g1", "bls12-381.g2"}) {
     cases.run(Twine("resident branch and loop ports: ") + domain, [&] {
       auto module = take(executableFixture(
-          replaceText(chain(), "bls12-381.g1", domain), context));
+          replaceText(chain(context), "bls12-381.g1", domain), context));
       auto plan = take(proposePhysical(*module));
       require(crossings(plan) == 6, "unexpected resident conversion count");
       require(at(plan, *module, "initial").conversions.size() == 2,
@@ -286,9 +428,10 @@ int main(int argc, char **argv) {
       require(at(plan, *module, "body_scale").conversions.size() == 1,
               "body scalar conversion missing");
       auto changed = plan;
-      at(changed, *module, "loop").blockArguments[0][1] = decodeBoundType(
-          &context, take(defaultRepresentation(take(parseBoundType(
-                        std::string("group:") + domain, false)))));
+      bodyDecision(changed, *module, "loop").blockArguments[0][1] =
+          decodeBoundType(&context,
+                          take(defaultRepresentation(take(parseBoundType(
+                              std::string("group:") + domain, false)))));
       refuses(validatePhysical(*module, changed),
               "binding-operation-signature");
       changed = plan;
@@ -303,21 +446,21 @@ int main(int argc, char **argv) {
       auto checked = take(validatePhysical(*module, plan));
       publish(*module, checked);
     });
-    cases.run(Twine("explicit entry and return ABI stays resident: ") + domain,
-              [&] {
-                auto module = take(executableFixture(
-                    replaceText(chain(), "bls12-381.g1", domain), context));
-                auto options = residentABI(*module);
-                auto plan = take(proposePhysical(*module, installedCandidates(),
-                                                 {}, options));
-                require(crossings(plan) == 0,
-                        "resident ABI reconstructed Ark values");
-                publish(*module, take(validatePhysical(*module, plan)));
-              });
+    cases.run(
+        Twine("explicit entry and return ABI stays resident: ") + domain, [&] {
+          auto module = take(executableFixture(
+              replaceText(chain(context), "bls12-381.g1", domain), context));
+          auto options = residentABI(*module);
+          auto plan = take(
+              proposePhysical(*module, installedCandidates(), {}, options));
+          require(crossings(plan) == 0,
+                  "resident ABI reconstructed Ark values");
+          publish(*module, take(validatePhysical(*module, plan)));
+        });
   }
   cases.run(
       "untaken branch and zero-trip loop retain reached conversions", [&] {
-        auto module = take(executableFixture(chain(false), context));
+        auto module = take(executableFixture(chain(context, false), context));
         auto plan = take(proposePhysical(*module));
         require(at(plan, *module, "branch").conversions.empty() &&
                     at(plan, *module, "loop").conversions.empty(),
@@ -327,28 +470,30 @@ int main(int argc, char **argv) {
                 "reached conversions missing");
         auto checked = take(validatePhysical(*module, plan));
         publish(*module, checked);
-        module->walk([&](local::LocalForOp loop) {
-          auto &block = loop.getBody().front();
-          require(
-              isa<plan::ApplyOp>(block.front()) &&
-                  block.front().getAttrOfType<StringAttr>("site").getValue() ==
-                      "loop_guard",
-              "conversion crossed earlier failure");
-          auto *yield = block.getTerminator();
-          require(yield->getPrevNode()
-                          ->getAttrOfType<StringAttr>("implementation")
-                          .getValue() == "native/representation.convert",
-                  "backedge conversion left body");
-        });
+        auto flow = take(ExecutionPorts::read(*module));
+        auto *range = semanticOperation(*module, "loop");
+        const auto &body = flow.body(flow.get(range).bodies.front());
+        require(isa<exec::ApplyOp>(body.instructions.front()) &&
+                    cast<exec::ApplyOp>(body.instructions.front()).getSite() ==
+                        encodedSite("loop_guard"),
+                "conversion crossed earlier failure");
+        require(body.instructions.size() >= 2 &&
+                    isa<exec::CompleteOp>(body.instructions.back()) &&
+                    implementation(cast<exec::ApplyOp>(
+                        body.instructions[body.instructions.size() - 2])) ==
+                        "native/representation.convert",
+                "backedge conversion left body");
       });
   cases.run("entry selections are exact and independently checked", [&] {
-    auto module = take(executableFixture(chain(), context));
+    auto module = take(executableFixture(chain(context), context));
     auto options = residentABI(*module);
     auto plan =
         take(proposePhysical(*module, installedCandidates(), {}, options));
     auto changed = plan;
+    auto operations = physicalPlanOperations(*module);
     for (auto &d : changed.operations) {
-      if (!d.functionType || d.blockArguments.empty())
+      if (!d.functionType || d.blockArguments.empty() ||
+          operations[d.operation]->hasAttr("runtime.region"))
         continue;
       auto inputs = SmallVector<Type>(d.functionType.getInputs());
       inputs[0] = decodeBoundType(
@@ -374,7 +519,7 @@ int main(int argc, char **argv) {
             "binding-representation");
     PhysicalPlanOptions incompatible;
     for (auto *op : physicalPlanOperations(*module))
-      if (isa<local::FuncOp>(op)) {
+      if (isa<func::FuncOp>(op) && !op->hasAttr("runtime.region")) {
         incompatible.functionPorts.push_back(
             {op->getAttrOfType<StringAttr>("sym_name").getValue().str(), false,
              0, "group:bls12-381.g1@blst/g1"});
@@ -394,7 +539,7 @@ int main(int argc, char **argv) {
         usePass ? "public physical pass retains explicit entry choices"
                 : "public physical lowering accepts explicit entry ABI",
         [&] {
-          auto module = take(executableFixture(chain(), context));
+          auto module = take(executableFixture(chain(context), context));
           auto options = residentABI(*module);
           if (usePass) {
             PassManager pipeline(&context);
@@ -409,38 +554,40 @@ int main(int argc, char **argv) {
                     "selected public physical lowering refused");
           require(succeeded(verify(*module)), "selected physical admission");
           take(readExecutionModel(*module));
-          module->walk([&](plan::ApplyOp op) {
-            require(op.getImplementation() != "native/representation.convert",
+          module->walk([&](exec::ApplyOp op) {
+            require(implementation(op) != "native/representation.convert",
                     "public entry ABI silently reverted to Ark");
           });
         });
   cases.run("partial conversion occurrence cannot be hoisted or shared", [&] {
-    auto module = take(executableFixture(chain(false), context));
+    auto module = take(executableFixture(chain(context, false), context));
     auto plan = take(proposePhysical(*module));
     auto checked = take(validatePhysical(*module, plan));
     auto candidate = OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
     auto own = take(proposePhysical(*candidate));
     publish(*candidate, take(validatePhysical(*candidate, own)));
     accept(verifyPhysicalMaterialization(*module, *candidate, checked));
-    plan::ApplyOp conversion, guard;
-    candidate->walk([&](local::LocalForOp loop) {
-      for (auto op : loop.getBody().front().getOps<plan::ApplyOp>()) {
-        if (op.getImplementation() == "native/representation.convert" &&
+    auto flow = take(ExecutionPorts::read(*candidate));
+    auto *range = semanticOperation(*candidate, "loop");
+    exec::ApplyOp conversion, guard;
+    for (auto *operation :
+         flow.body(flow.get(range).bodies.front()).instructions)
+      if (auto op = dyn_cast<exec::ApplyOp>(operation)) {
+        if (implementation(op) == "native/representation.convert" &&
             !conversion)
           conversion = op;
-        if (op.getSite() == "loop_guard")
+        if (op.getSite() == encodedSite("loop_guard"))
           guard = op;
       }
-    });
     require(conversion && guard, "missing reached body operations");
-    conversion->moveBefore(guard);
+    moveInvocationBefore(conversion, guard);
     require(succeeded(verify(*candidate)),
             "failure-order mutation must retain type formation");
     auto error = verifyPhysicalMaterialization(*module, *candidate, checked);
     require(bool(error), "moved partial failure escaped checker");
     consumeError(std::move(error));
   });
-  cases.run("unsupported protocol region residency independently refuses", [&] {
+  cases.run("protocol repetition checks carried representation edges", [&] {
     auto module = take(executableFixture(R"(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
@@ -456,32 +603,25 @@ module { "protocol.module"() ({
     auto changed = plan;
     at(changed, *module, "rounds").blockArguments[0][1] = decodeBoundType(
         &context, take(parseBoundType("field:bls12-381.fr@blst/fr", true)));
+    // The returning body reads the changed port before the enclosing loop's
+    // final signature check. Its undeclared conversion is the first refusal.
+    refuses(validatePhysical(*module, changed), "binding-no-conversion");
+    changed = plan;
+    at(changed, *module, "rounds").blockArguments[0][1] = decodeBoundType(
+        &context, take(parseBoundType("group:bls12-381.g1@blst/g1", true)));
     refuses(validatePhysical(*module, changed), "binding-operation-signature");
     publish(*module, take(validatePhysical(*module, plan)));
   });
   cases.run("conditional loop and terminal branch retain resident ports", [&] {
-    auto source = replaceText(
-        chain(), "\"local.yield\"(%next,%r,%ok) : (!G,!F,i1)->()",
-        "\"local.condition\"(%ok,%next,%r,%ok) : (i1,!G,!F,i1)->()");
-    source = replaceText(
-        source,
-        "%next = \"algebra.exec.group_scale\"(%p,%r) "
-        "{binding=@scale,site=\"right_scale\",parameters=[]} : (!G,!F)->!G\n  "
-        "\"local.yield\"(%next) : (!G)->()",
-        "\"local.stop\"() {reason=\"reject\",site=\"stopped\"} : ()->()");
+    auto source = chain(context, true, {}, false, true, true);
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module));
     require(at(plan, *module, "loop").conversions.empty(),
             "conditional loop speculated conversions");
     publish(*module, take(validatePhysical(*module, plan)));
   });
-  cases.run("expanded local helper preserves resident ABI", [&] {
-    auto source = withScaleHelper(chain());
-    source = replaceText(
-        source,
-        "%next = \"algebra.exec.group_scale\"(%p,%r) "
-        "{binding=@scale,site=\"left_scale\",parameters=[]} : (!G,!F)->!G",
-        "%next = local.apply @helper(%p,%r) {site=\"expanded\"} : (!G,!F)->!G");
+  cases.run("expanded scoped helper preserves resident ABI", [&] {
+    auto source = chain(context, true, {}, true);
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                      residentABI(*module)));
@@ -493,14 +633,17 @@ module { "protocol.module"() ({
 !V = !algebra.field_vector<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
-)" + mathematicalFixture(R"(
+)" + scopedFixture(R"(
 "runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )",
-                         "%s:!V,%g:!GS", "%s,%g", "!V,!GS", "!G", R"(
-%out = "algebra.exec.group_msm"(%s,%g) {binding=@msm,site="msm",parameters=[]} : (!V,!GS)->!G
-local.return %out : !G
+                   "%s:!V,%g:!GS", "%s,%g", "!V,!GS", "!G", R"(
+%msm_attempt = "exec.apply"(%scope,%s,%g) {binding=@msm,site="msm",parameters=[]} : (!runtime.scope,!V,!GS)->!exec.outcome<(!G)>
+"exec.dispatch"(%msm_attempt)[^msm,^failed] : (!exec.outcome<(!G)>)->()
+^msm(%out:!G):
+%done = "exec.returned"(%out) : (!G)->!exec.outcome<(!G)>
+func.return %done : !exec.outcome<(!G)>
 )",
-                         2);
+                   2);
     auto module = take(executableFixture(source, context));
     MSMCandidates catalog;
     refuses(proposePhysical(*module, catalog), "binding-implementation");
@@ -514,18 +657,25 @@ local.return %out : !G
   cases.run("default sequence layout packs converted resident leaves", [&] {
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture(R"(
+)" + scopedFixture(R"(
 "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
 "runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
 "runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation=""} : ()->()
 )",
-                         "%a:!F,%b:!F", "%a,%b", "!F,!F", "!S", R"(
-%x = "algebra.exec.field_add"(%a,%b) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-%empty = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%packed = "data.exec.sequence_append"(%empty,%x) {binding=@append,site="packed",parameters=[]} : (!S,!F)->!S
-local.return %packed : !S
+                   "%a:!F,%b:!F", "%a,%b", "!F,!F", "!S", R"(
+%add_attempt = "exec.apply"(%scope,%a,%b) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%add_attempt)[^add,^failed] : (!exec.outcome<(!F)>)->()
+^add(%x:!F):
+%empty_attempt = "exec.apply"(%scope) {binding=@empty,site="empty",parameters=[]} : (!runtime.scope)->!exec.outcome<(!S)>
+"exec.dispatch"(%empty_attempt)[^empty,^failed] : (!exec.outcome<(!S)>)->()
+^empty(%empty:!S):
+%packed_attempt = "exec.apply"(%scope,%empty,%x) {binding=@append,site="packed",parameters=[]} : (!runtime.scope,!S,!F)->!exec.outcome<(!S)>
+"exec.dispatch"(%packed_attempt)[^packed,^failed] : (!exec.outcome<(!S)>)->()
+^packed(%packed:!S):
+%done = "exec.returned"(%packed) : (!S)->!exec.outcome<(!S)>
+func.return %done : !exec.outcome<(!S)>
 )",
-                         2);
+                   2);
     auto module = take(executableFixture(source, context));
     auto options = residentABI(*module);
     auto plan =
@@ -538,7 +688,7 @@ local.return %packed : !S
         *cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front())
              .getBody()
              .front()
-             .getOps<local::FuncOp>()
+             .getOps<func::FuncOp>()
              .begin();
     invalid.functionPorts.push_back(
         {function.getSymName().str(), true, 0, "blst/fr"});
@@ -549,18 +699,25 @@ local.return %packed : !S
   cases.run("non-curve field and vector chain remains resident", [&] {
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-)" + mathematicalFixture(R"(
+)" + scopedFixture(R"(
 "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation="blst/resident/vector.mul"} : ()->()
 "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation="blst/resident/vector.sum"} : ()->()
 "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
 )",
-                         "%a:!V,%b:!V,%x:!F", "%a,%b,%x", "!V,!V,!F", "!F", R"(
-%product = "algebra.exec.vector_mul"(%a,%b) {binding=@mul,site="mul",parameters=[]} : (!V,!V)->!V
-%sum = "algebra.exec.vector_sum"(%product) {binding=@sum,site="sum",parameters=[]} : (!V)->!F
-%out = "algebra.exec.field_add"(%sum,%x) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-local.return %out : !F
+                   "%a:!V,%b:!V,%x:!F", "%a,%b,%x", "!V,!V,!F", "!F", R"(
+%mul_attempt = "exec.apply"(%scope,%a,%b) {binding=@mul,site="mul",parameters=[]} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>
+"exec.dispatch"(%mul_attempt)[^mul,^failed] : (!exec.outcome<(!V)>)->()
+^mul(%product:!V):
+%sum_attempt = "exec.apply"(%scope,%product) {binding=@sum,site="sum",parameters=[]} : (!runtime.scope,!V)->!exec.outcome<(!F)>
+"exec.dispatch"(%sum_attempt)[^sum,^failed] : (!exec.outcome<(!F)>)->()
+^sum(%sum:!F):
+%add_attempt = "exec.apply"(%scope,%sum,%x) {binding=@add,site="add",parameters=[]} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%add_attempt)[^add,^failed] : (!exec.outcome<(!F)>)->()
+^add(%out:!F):
+%done = "exec.returned"(%out) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
 )",
-                         3);
+                   3);
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates(), {},
                                      residentABI(*module)));
@@ -573,26 +730,7 @@ local.return %out : !F
             encodeVariant({"ResidentChoice",
                            {{"none", {}}, {"some", {"field:bls12-381.fr"}}}});
         require(bool(variant), "variant fixture");
-        auto source =
-            "!Tag = !data.variant<\"" + *variant + "\">\n" +
-            R"(!F = !algebra.field<"bls12-381.fr">
-!G = !algebra.group<"bls12-381.g1">
-)" +
-            mathematicalFixture(R"(
-"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation="blst/resident/curve.scale"} : ()->()
-)",
-                                "%g:!G,%s:!F", "%g,%s", "!G,!F", "!G", R"(
-%x = "algebra.exec.group_scale"(%g,%s) {binding=@scale,site="initial",parameters=[]} : (!G,!F)->!G
-%tag = "local.variant_inject"(%s) {alternative="some",site="pack"} : (!F)->!Tag
-%out = "local.match"(%tag,%x) ({ ^none(%p:!G):
- "local.yield"(%p) : (!G)->()
-}, { ^some(%r:!F,%p:!G):
- %next = "algebra.exec.group_scale"(%p,%r) {binding=@scale,site="matched_scale",parameters=[]} : (!G,!F)->!G
- "local.yield"(%next) : (!G)->()
-}) {alternatives=["none","some"],site="match"} : (!Tag,!G)->!G
-local.return %out : !G
-)",
-                                2);
+        auto source = variantSource(context, *variant);
         auto module = take(executableFixture(source, context));
         auto options = residentABI(*module);
         auto plan =
@@ -603,7 +741,8 @@ local.return %out : !G
                     at(plan, *module, "matched_scale").conversions.empty(),
                 "selected variant payload inserted a conversion");
         auto changed = plan;
-        auto &args = at(changed, *module, "match").blockArguments[1];
+        auto &args =
+            bodyDecision(changed, *module, "match", 1).blockArguments[0];
         args[0] = decodeBoundType(
             &context,
             take(parseBoundType("field:bls12-381.fr@arkworks.fr/0", true)));
