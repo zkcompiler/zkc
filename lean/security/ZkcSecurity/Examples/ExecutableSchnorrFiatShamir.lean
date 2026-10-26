@@ -27,12 +27,10 @@ ideal verification of the decoded pair or rejects on every path
 acceptance of the decoded prover (`acceptance_le`), and the extraction bound of
 `CompiledSchnorrFiatShamir.knowledge_soundness` transfers for every decoder,
 budget and expected binding (`knowledge_soundness`). No property of the decoder
-is needed for this bound. The chain runs through general rules: the lowering
-rule (`checkLowering`, `validate_ideal`, `validate_rejects`) and the composed
-transcript-construction and participant projection rules
-(`Zkc.Construction.compiled_transform` applied to the admitted original,
-through `ZkcExamples.Construction.SchnorrProof.compiled_transform`); no equation
-about the compiled program's meaning specific to this Entry is assumed. On the
+is needed for this bound. The chain uses the checked native-to-Domain
+correspondence, its finite normalization and the actual all-reply source
+connection (`ZkcExamples.Construction.SchnorrProof.compiled_transform`).
+No whole-execution equation is assumed as input to those checks. On the
 original side, the kernel checks by evaluation that the admitted original's
 validator is the common Schnorr experiment the VCVio consumer uses
 (`SchnorrProof.process_equation`) and gives the process of the DLog formula the
@@ -64,33 +62,6 @@ def decodePair (decode : PhysicalType → List UInt8 → Option (Payload F G)) (
   match decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40) with
   | [.group _ commitment, .field _ response] => (commitment, response)
   | _ => (0, 0)
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The ideal acceptance of the compiled verifier is the host acceptance of
-its observation. -/
-theorem accepted_eq (result : PIR.Outcome (List (Value F G)) × Proof F G) :
-    accepted (mapOutcome SchnorrProof.acceptance result.1, result.2) =
-      Accepts SchnorrProof.acceptancePosition (idealObservation result) := by
-  rcases result with ⟨outcome, unread⟩
-  cases outcome with
-  | stopped stop => simp [accepted, mapOutcome, Accepts, idealObservation, observation, Decision]
-  | returned values =>
-      simp only [mapOutcome, idealObservation, observation, Accepts, Decision, SchnorrProof.acceptance,
-        selectedTrue]
-      cases selected : values[SchnorrProof.acceptancePosition]? with
-      | none => cases unread <;> simp [accepted]
-      | some value =>
-          cases value with
-          | data payload =>
-              cases payload with
-              | boolean decision => cases unread <;> cases decision <;> simp [accepted]
-              | field => cases unread <;> simp [accepted]
-              | group => cases unread <;> simp [accepted]
-          | index => cases unread <;> simp [accepted]
-          | vector => cases unread <;> simp [accepted]
-          | transcript => cases unread <;> simp [accepted]
-          | indices => cases unread <;> simp [accepted]
-          | unsupported => cases unread <;> simp [accepted]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem value_group {payload : Payload F G} {domain : String} {value : G}
@@ -170,8 +141,7 @@ theorem verifyBytes_eq_verify (decode : PhysicalType → List UInt8 → Option (
       verify application base key (commitment, response) := by
   rw [verifyBytes, ZkcExamples.Executable.SchnorrProof.executable_validate historyChallenge decode
     sufficient binding base key (initial application base key) bytes header, decoded]
-  unfold verify
-  simp only [accepted_eq]
+  rfl
 
 /-- Host validation of proof bytes is the ideal verification of the pair they
 decode to, or it rejects on every path: when the budget is below 25, the
@@ -210,22 +180,12 @@ theorem validate_cases (decode : PhysicalType → List UInt8 → Option (Payload
         (initial application base key) (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))
       rw [SchnorrProof.verifier_correspondence] at compiled
       rw [verifyBytes, exec]
-      calc (fun result => Accepts SchnorrProof.acceptancePosition (idealObservation result)) <$>
-            ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
-              SchnorrProof.participant.instructions
-              ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-              (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))
-          = accepted <$> ((fun result => (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
-              ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
-                SchnorrProof.participant.instructions
-                ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-                (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))) := by
-            rw [Functor.map_map]
-            simp only [accepted_eq]
-        _ = _ := by
-            rw [compiled]
-            exact transform_rejects historyChallenge _ base key 0 _ fun commitment response same =>
-              good ⟨commitment, response, same⟩
+      change accepted <$> SchnorrProof.compiledVerifier historyChallenge base key
+        (initial application base key)
+        (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40)) = _
+      rw [compiled]
+      exact transform_rejects historyChallenge _ base key 0 _ fun commitment response same =>
+        good ⟨commitment, response, same⟩
 
 end Bytes
 
