@@ -2,28 +2,30 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
-#include "zkc/Transforms/Mathematical.h"
-#include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
 #include <sstream>
 
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
+namespace sf = zkc::test::scopedFinite;
 namespace {
 std::string fixture(bool mathematics = true) {
   std::ifstream stream(ZKC_NESTED_SOURCE);
@@ -48,25 +50,16 @@ std::string replace(std::string text, StringRef from, StringRef to) {
   }
   return text;
 }
-struct Prepared {
-  OwningOpRef<ModuleOp> module;
-  protocol::AlgorithmExpansionState expansion;
-};
-Prepared prepare(MLIRContext &context) {
+OwningOpRef<ModuleOp> prepareSource(MLIRContext &context) {
   auto captured = take(
       language::capture({{"sample", fixture(), "nested-read-through.zkc"}}));
   auto checked = take(language::analyze(captured).checkedProject());
   auto entry = take(closeProtocolDeployment(checked, "sample::Demo"));
   auto original = take(language::prepareOriginal(entry));
-  Prepared result;
-  result.module = parseSourceString<ModuleOp>(original.bytes(), &context);
-  require(bool(result.module), "source read-through fixture refused");
-  require(succeeded(mathematical::expandMathRealizations(*result.module)),
-          "Kernel formation failed");
-  require(succeeded(protocol::expandAlgorithms(
-              *result.module, protocol::AlgorithmExpansionPhase::RetainMaps,
-              result.expansion)),
-          "source helper expansion failed");
+  auto source = parseSourceString<ModuleOp>(original.bytes(), &context);
+  require(bool(source), "source read-through fixture refused");
+  auto result = protocol::expandScopedHelpers(*source);
+  require(bool(result), "source helper expansion failed");
   return result;
 }
 Operation *product(ModuleOp module) {
@@ -80,30 +73,36 @@ Operation *product(ModuleOp module) {
   require(result, "missing retained raw multiplication");
   return result;
 }
-finite::Computation outerCollection(ModuleOp module) {
-  Operation *result = nullptr;
-  module.walk([&](local::FiniteCollectOp op) { result = op; });
-  require(result, "missing source collection");
-  finite::Computation computation;
-  require(succeeded(finite::describe(result, computation)),
-          "source collection description failed");
-  return computation;
+sf::AdmittedComputation outerCollection(ModuleOp module) {
+  return sf::computation(module);
 }
 unsigned matvecs(ModuleOp module) {
+  protocol_ir::LocalCallOp root;
+  module.walk([&](protocol_ir::LocalCallOp call) { root = call; });
+  require(bool(root), "missing protocol-root invocation");
+  auto closure =
+      take(protocol::readSourceExecutionClosure(&module.getBody()->front()));
   unsigned count = 0;
-  module.walk([&](Operation *op) {
-    auto name = op->getName().getStringRef();
-    count += name == "algebra.exec.matrix_mul_vector" ||
-             name == "algebra.exec.matrix_transpose_mul_vector";
-  });
+  std::function<void(StringRef, unsigned)> visit = [&](StringRef name,
+                                                       unsigned depth) {
+    require(depth < 64, "excessive test region depth");
+    for (const auto &step : closure.bodies.at(name.str())) {
+      if (auto operation = dyn_cast<exec::ApplyOp>(step.operation))
+        count += sf::contract(operation) == "matrix.mul_vector" ||
+                 sf::contract(operation) == "matrix.transpose_mul_vector";
+      for (auto region : step.regions)
+        visit(region.getSymName(), depth + 1);
+    }
+  };
+  visit(root.getCallee(), 0);
   return count;
 }
 // Return a scalar through a nonzero result coordinate and retain another exact
 // coordinate. No numerical normalization or additional scalar work is involved.
 func::CallOp outlineProduct(Operation *operation) {
-  auto unit = operation->getParentOfType<mlir::ModuleOp>();
-  OpBuilder builder(unit.getContext());
-  builder.setInsertionPointToEnd(unit.getBody());
+  auto *unit = operation->getParentOfType<func::FuncOp>()->getParentOp();
+  OpBuilder builder(unit->getContext());
+  builder.setInsertionPointToEnd(&unit->getRegion(0).front());
   Type field = operation->getResult(0).getType();
   auto helper = func::FuncOp::create(
       builder, operation->getLoc(), "coordinate_helper",
@@ -124,19 +123,17 @@ func::CallOp outlineProduct(Operation *operation) {
   operation->erase();
   return call;
 }
-void inlineEntries(ModuleOp module) {
+void inlineMathHelpers(ModuleOp module) {
   unsigned remaining = 10000;
-  module.walk([&](mlir::ModuleOp unit) {
-    if (!mathematical::isComputationUnit(unit))
+  module.walk([&](func::FuncOp function) {
+    if (protocol::isScopedExecutionFunction(function))
       return;
-    auto entry = mathematical::getComputationEntry(unit);
-    require(bool(entry), "missing raw Kernel entry");
-    for (auto iterator = entry.front().begin();
-         iterator != entry.front().end();) {
+    for (auto iterator = function.front().begin();
+         iterator != function.front().end();) {
       auto call = dyn_cast<func::CallOp>(&*iterator++);
       if (!call)
         continue;
-      require(remaining--, "test entry substitution exceeded its bound");
+      require(remaining--, "test helper substitution exceeded its bound");
       auto helper = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
           call, call.getCalleeAttr());
       require(helper && helper.getBody().hasOneBlock(), "missing raw helper");
@@ -158,109 +155,80 @@ void inlineEntries(ModuleOp module) {
     }
   });
 }
-void pinCallbackResult(ModuleOp module) {
-  auto outer = outerCollection(module);
-  auto view = finite::analyzeComputation(outer);
-  require(view && view->nested.size() == 1, "missing nested callback");
-  auto helper = cast<local::FuncOp>(view->nested.front().computation.helper);
-  auto &end = helper.getBody().front().back();
-  Type field = end.getOperand(0).getType();
-  auto domain = cast<algebra::FieldType>(field).getDomain();
-  protocol::BindingApplication application{"field.add", {domain.str()}, ""};
-  auto implementation = protocol::defaultImplementation(application);
-  require(bool(implementation), "missing pinned field implementation");
-  OpBuilder builder(helper);
-  auto binding = runtime::BindingOp::create(
-      builder, helper.getLoc(), "pinned_sum", "field.add",
-      builder.getArrayAttr({builder.getStringAttr(domain)}), *implementation,
-      mlir::ArrayAttr{});
-  builder.setInsertionPoint(&end);
-  // Pin an exact existing scalar operation without introducing raw math into
-  // Local.
-  auto zero = end.getOperand(0);
-  OperationState state(helper.getLoc(),
-                       protocol::boundOperationName("field.add"));
-  state.addOperands({end.getOperand(0), zero});
-  state.addTypes(field);
-  state.addAttribute("binding",
-                     FlatSymbolRefAttr::get(binding.getSymNameAttr()));
-  state.addAttribute("parameters", builder.getArrayAttr({}));
-  state.addAttribute("site", builder.getStringAttr("pinned_sum"));
-  end.setOperand(0, builder.create(state)->getResult(0));
-}
 void routeOuterInputs(ModuleOp module) {
   auto computation = outerCollection(module);
-  auto helper = cast<local::FuncOp>(computation.helper);
-  local::ApplyOp inner;
-  helper.walk([&](local::ApplyOp call) { inner = call; });
+  auto helper = cast<func::FuncOp>(computation.helper);
+  exec::FoldOp inner;
+  helper.walk([&](exec::FoldOp call) { inner = call; });
   require(bool(inner), "missing nested call for input routing");
   OpBuilder builder(helper);
-  auto unit = mlir::ModuleOp::create(builder, helper.getLoc(), "routing");
-  unit->setAttr("exec.computation", builder.getUnitAttr());
-  builder.setInsertionPointToEnd(unit.getBody());
-  SmallVector<Type> types(inner->getOperandTypes());
-  auto entry = func::FuncOp::create(builder, helper.getLoc(), "entry",
+  SmallVector<Type> types(inner.getInputs().getTypes());
+  auto entry = func::FuncOp::create(builder, helper.getLoc(), "routing",
                                     builder.getFunctionType(types, types));
+  entry.setPrivate();
   builder.setInsertionPointToEnd(entry.addEntryBlock());
   func::ReturnOp::create(builder, helper.getLoc(), entry.getArguments());
-  builder.setInsertionPoint(inner);
-  OperationState callState(helper.getLoc(), kernel::CallOp::getOperationName());
-  callState.addOperands(inner->getOperands());
-  callState.addTypes(types);
-  callState.addAttribute(
-      "callee", SymbolRefAttr::get(
-                    module.getContext(), "routing",
-                    {FlatSymbolRefAttr::get(module.getContext(), "entry")}));
-  callState.addAttribute("site", builder.getStringAttr("routing"));
-  auto *routing = builder.create(callState);
-  inner->setOperands(routing->getResults());
+  auto stop = cast<exec::DispatchOp>(inner->getNextNode()).getStopped();
+  IRRewriter rewriter(module.getContext());
+  auto *before = inner->getBlock();
+  auto *tail = rewriter.splitBlock(before, inner->getIterator());
+  builder.setInsertionPointToEnd(before);
+  exec::ScopedExecutionBuilder control(builder, helper);
+  auto outputs = control.invoke(
+      "exec.compute", types, control.scoped(inner.getInputs()),
+      {builder.getNamedAttr("callee",
+                            FlatSymbolRefAttr::get(entry.getSymNameAttr())),
+       builder.getNamedAttr("site", builder.getStringAttr("routing"))},
+      stop);
+  inner.getInputsMutable().assign(outputs);
+  rewriter.mergeBlocks(tail, builder.getInsertionBlock());
 }
-void refusesSource(ModuleOp source, ModuleOp candidate,
-                   const protocol::AlgorithmExpansionState &before,
-                   const protocol::AlgorithmExpansionState &after) {
-  // Give the stale numerical candidate the identical mutated helper context.
-  // Refusal must come from rereading the actual source collection, rather than
-  // merely noticing a different surrounding helper or Kernel declaration.
-  auto *sourceUnit = &source.getBody()->front();
-  auto *candidateUnit = &candidate.getBody()->front();
-  for (auto &operation : sourceUnit->getRegion(0).front()) {
-    if (isa<local::FiniteCollectOp>(operation))
+void pinCallbackResult(ModuleOp module) {
+  auto computation = outerCollection(module);
+  auto view = finite::analyzeComputation(computation);
+  require(view && view->nested.size() == 1, "missing nested callback");
+  auto helper = cast<func::FuncOp>(view->nested.front().computation.helper);
+  auto add = sf::application(helper, "field.add");
+  auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      add, add.getBindingAttr());
+  auto original = take(protocol::readBinding(binding));
+  auto selected = protocol::defaultImplementation(original.application);
+  require(bool(selected), "missing pinned field implementation");
+  binding.setImplementation(*selected);
+}
+void refusesSource(ModuleOp source, ModuleOp candidate) {
+  // Synchronize the actual plain helper definitions so dependency inequality
+  // cannot alone reject a stale strategy. The checker still has to reread
+  // the changed callback operands, scalar work and returned coordinates.
+  auto stale = sf::clone(candidate);
+  auto *owner = &stale->getBody()->front();
+  for (auto &operation : source.getBody()->front().getRegion(0).front()) {
+    auto helper = dyn_cast<func::FuncOp>(operation);
+    if (!helper || protocol::isScopedExecutionFunction(helper))
       continue;
-    auto *replacement = SymbolTable::lookupSymbolIn(
-        candidateUnit, SymbolTable::getSymbolName(&operation));
-    OpBuilder builder(candidate.getContext());
-    if (replacement)
-      builder.setInsertionPoint(replacement);
-    else {
-      Operation *next = operation.getNextNode();
-      Operation *anchor = nullptr;
-      for (; next && !anchor; next = next->getNextNode())
-        anchor = SymbolTable::lookupSymbolIn(candidateUnit,
-                                             SymbolTable::getSymbolName(next));
-      if (anchor)
-        builder.setInsertionPoint(anchor);
-      else
-        builder.setInsertionPointToEnd(&candidateUnit->getRegion(0).front());
-    }
+    auto *previous = SymbolTable::lookupSymbolIn(owner, helper.getSymName());
+    OpBuilder builder(source.getContext());
+    if (previous)
+      builder.setInsertionPoint(previous);
+    else
+      builder.setInsertionPointToEnd(&owner->getRegion(0).front());
     builder.clone(operation);
-    if (replacement)
-      replacement->erase();
+    if (previous)
+      previous->erase();
   }
+  require(succeeded(verify(source)), "source mutation was not admitted");
+  require(succeeded(verify(*stale)), "stale candidate was not admitted");
   bool named = false;
   ScopedDiagnosticHandler quiet(
       source.getContext(), [&](Diagnostic &diagnostic) {
         for (const auto &refusal : diagnostics::refusals(diagnostic))
-          named |= refusal.code == "nested-contraction-correspondence";
+          named |= refusal.code == "algorithm-correspondence";
         return success();
       });
-  require(succeeded(verify(source)), "source mutation was not admitted");
-  require(succeeded(verify(candidate)),
-          "stale numerical candidate was not admitted");
-  require(
-      failed(nested::verifyFiniteCollections(source, candidate, before, after)),
-      "independent reader accepted changed actual source");
-  require(named, "missing nested source correspondence diagnostic");
+  require(failed(sf::compare(source, *stale)) && named,
+          "independent reader accepted changed actual source");
 }
+
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -275,8 +243,8 @@ int main() {
             llvm::Twine(mathematics ? "retained " : "direct ") +
                 (columns ? "columns " : "rows ") + seed,
             [&] {
-              std::string text = replace(fixture(mathematics), ",seed,fn",
-                                         ("," + seed + ",fn").str());
+              auto text = replace(fixture(mathematics), ",seed,fn",
+                                  ("," + seed + ",fn").str());
               if (columns)
                 text = replace(replace(text, "indices.rows", "indices.columns"),
                                "matrix.row", "matrix.column");
@@ -286,76 +254,53 @@ int main() {
               auto entry =
                   take(closeProtocolDeployment(checked, "sample::Demo"));
               auto original = take(language::prepareOriginal(entry));
-              auto prepared =
+              auto source =
                   parseSourceString<ModuleOp>(original.bytes(), &context);
-              require(bool(prepared), "original source IR refused");
-              require(
-                  succeeded(mathematical::expandMathRealizations(*prepared)),
-                  "math helper realization failed");
+              require(bool(source), "original source IR refused");
+              auto expanded = protocol::expandScopedHelpers(*source);
+              require(bool(expanded), "scoped helper expansion failed");
               unsigned retained = 0, rawCalls = 0;
-              prepared->walk([&](kernel::CallOp) { ++retained; });
-              prepared->walk([&](func::CallOp op) {
-                rawCalls += bool(op->getParentOfType<mlir::ModuleOp>());
+              expanded->walk([&](exec::ComputeOp) { ++retained; });
+              expanded->walk([&](func::CallOp call) {
+                rawCalls += !protocol::isScopedExecutionFunction(
+                    call->getParentOfType<func::FuncOp>());
               });
               require(!mathematics || (retained && rawCalls),
-                      "source test no longer exercises retained helper "
-                      "mathematics");
-              protocol::AlgorithmExpansionState expansion;
-              require(
-                  succeeded(protocol::expandAlgorithms(
-                      *prepared, protocol::AlgorithmExpansionPhase::RetainMaps,
-                      expansion)),
-                  "transparent helper expansion failed");
-              OwningOpRef<ModuleOp> before(
-                  cast<ModuleOp>((*prepared)->clone()));
-              auto beforeExpansion = expansion;
-              require(succeeded(nested::rewriteFiniteCollections(*prepared,
-                                                                 expansion)),
-                      "nested source rewrite failed");
-              require(succeeded(nested::verifyFiniteCollections(
-                          *before, *prepared, beforeExpansion, expansion)),
-                      "nested source comparison failed");
-              unsigned matvecs = 0, loops = 0;
-              prepared->walk([&](Operation *op) {
-                auto name = op->getName().getStringRef();
-                matvecs += name == "algebra.exec.matrix_mul_vector" ||
-                           name == "algebra.exec.matrix_transpose_mul_vector";
-                loops += isa<local::LocalForOp>(op);
-              });
-              require(matvecs == 1 && !loops,
-                      "source spelling missed whole collection strategy");
-              // Exercise the parent preparation slot and the compiler's
-              // independent composed correspondence, including the retained
-              // original closure.
+                      "test no longer exercises retained helper mathematics");
+              auto candidate = sf::prepare(*expanded);
+
+              require(succeeded(sf::compare(*expanded, *candidate)),
+                      "nested source correspondence failed");
+              // Other independently admitted callback declarations can contain
+              // ordered loops; the root collection must choose the bulk
+              // strategy.
+              require(matvecs(*candidate) == 1,
+                      "source spelling missed whole collection strategy: " +
+                          Twine(matvecs(*candidate)));
               take(language::compileEntry(original));
               take(language::compileEntry(original, {false, false}));
             });
   for (bool routing : {false, true})
     cases.run(
-        routing ? "Kernel result input routing"
-                : "direct Kernel entry mathematics",
+        routing ? "pure helper result input routing"
+                : "direct mathematical helper body",
         [&] {
-          auto input = prepare(context);
+          auto source = prepareSource(context);
           if (routing)
-            routeOuterInputs(*input.module);
+            routeOuterInputs(*source);
           else
-            inlineEntries(*input.module);
-          require(succeeded(verify(*input.module)), "direct raw entry refused");
-          OwningOpRef<ModuleOp> source(cast<ModuleOp>(input.module->clone()));
-          auto before = input.expansion;
-          require(succeeded(nested::rewriteFiniteCollections(
-                      *input.module, input.expansion)) &&
-                      matvecs(*input.module) == 1,
-                  "direct raw entry missed source matrix strategy");
-          require(succeeded(nested::verifyFiniteCollections(
-                      *source, *input.module, before, input.expansion)),
-                  "independent direct-entry reading failed");
+            inlineMathHelpers(*source);
+          require(succeeded(verify(*source)), "changed helper source refused");
+          auto candidate = sf::prepare(*source);
+          require(matvecs(*candidate) == 1 &&
+                      succeeded(sf::compare(*source, *candidate)),
+                  "exact helper substitution missed checked matrix strategy");
         });
   cases.run("exact helper substitution and source return coordinates", [&] {
-    auto input = prepare(context);
-    auto call = outlineProduct(product(*input.module));
-    require(succeeded(verify(*input.module)), "outlined raw source refused");
-    auto computation = outerCollection(*input.module);
+    auto source = prepareSource(context);
+    auto call = outlineProduct(product(*source));
+    require(succeeded(verify(*source)), "outlined raw source refused");
+    auto computation = outerCollection(*source);
     auto view = finite::analyzeComputation(computation);
     require(view && view->nested.size() == 1 &&
                 view->nested.front().numericalBody,
@@ -375,86 +320,68 @@ int main() {
     auto &inner = view->nested.front();
     for (const auto &output : inner.resultMappings)
       require(output.yielded == inner.callbackValue(output.sourceYielded),
-              "callback return coordinate lost its exact SSA substitution");
-    require(view->sourceOperation(inner.occurrence) != inner.occurrence ||
-                !view->numericalBody,
+              "callback return coordinate lost exact SSA substitution");
+    require(view->sourceOperation(inner.occurrence) != inner.occurrence,
             "temporary nested call has no original source instruction");
+    auto candidate = sf::prepare(*source);
+    require(matvecs(*candidate) == 1 &&
+                succeeded(sf::compare(*source, *candidate)),
+            "independent reader lost exact result coordinate");
     auto helper = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
         call, call.getCalleeAttr());
-    require(bool(helper), "outlined helper lookup failed");
-    OwningOpRef<ModuleOp> source(cast<ModuleOp>(input.module->clone()));
-    auto before = input.expansion;
-    require(succeeded(nested::rewriteFiniteCollections(*input.module,
-                                                       input.expansion)),
-            "outlined numerical closure rewrite failed");
-    require(matvecs(*input.module) == 1,
-            "exact multi-result helper missed source matrix strategy");
-    require(succeeded(nested::verifyFiniteCollections(*source, *input.module,
-                                                      before, input.expansion)),
-            "independent reader lost exact result coordinate");
-    auto *rawProduct = product(*source);
-    auto rawHelper = rawProduct->getParentOfType<func::FuncOp>();
-    auto &returned = rawHelper.front().back();
+    auto &returned = helper.front().back();
     require(returned.getNumOperands() == 2, "missing multi-result return");
     Value first = returned.getOperand(0);
     returned.setOperand(0, returned.getOperand(1));
     returned.setOperand(1, first);
-    refusesSource(*source, *input.module, before, input.expansion);
+    refusesSource(*source, *candidate);
   });
   for (StringRef change :
        {"dead arithmetic", "dead helper invocation", "actual operand",
-        "Kernel operand", "policy", "implementation pin"})
+        "compute operand", "policy", "implementation pin"})
     cases.run("retained source refusal: " + change, [&] {
-      auto input = prepare(context);
-      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(input.module->clone()));
-      auto accepted = input.expansion;
-      require(
-          succeeded(nested::rewriteFiniteCollections(*candidate, accepted)) &&
-              matvecs(*candidate) == 1,
-          "missing positive candidate for independent refusal");
+      auto source = prepareSource(context);
+      auto candidate = sf::prepare(*source);
+      require(matvecs(*candidate) == 1, "missing positive bulk candidate");
       if (change == "dead arithmetic") {
-        auto *operation = product(*input.module);
-        OpBuilder builder(operation);
-        builder.clone(*operation);
+        OpBuilder builder(product(*source));
+        builder.clone(*product(*source));
       } else if (change == "dead helper invocation") {
-        auto call = outlineProduct(product(*input.module));
+        auto call = outlineProduct(product(*source));
         OpBuilder builder(call);
         builder.clone(*call);
       } else if (change == "actual operand") {
-        auto *operation = product(*input.module);
+        auto *operation = product(*source);
         operation->setOperand(1, operation->getOperand(0));
-      } else if (change == "Kernel operand") {
-        auto view = finite::analyzeComputation(outerCollection(*input.module));
-        require(view && view->nested.size() == 1, "missing nested source step");
+      } else if (change == "compute operand") {
+        auto computation = outerCollection(*source);
+        auto view = finite::analyzeComputation(computation);
+        require(view && view->nested.size() == 1, "missing source step");
         auto helper =
-            cast<local::FuncOp>(view->nested.front().computation.helper);
+            cast<func::FuncOp>(view->nested.front().computation.helper);
         bool changed = false;
-        helper.walk([&](kernel::CallOp call) {
-          for (auto [index, operand] : llvm::enumerate(call.getOperands()))
-            if (!changed && operand == helper.getArgument(1)) {
-              call->setOperand(index, helper.getArgument(0));
+        helper.walk([&](exec::ComputeOp call) {
+          for (auto &operand : call->getOpOperands())
+            if (!changed && operand.get() == helper.getArgument(2)) {
+              operand.set(helper.getArgument(1));
               changed = true;
             }
         });
-        require(changed, "missing actual item at Kernel call boundary");
+        require(changed, "missing item at mathematical invocation boundary");
       } else if (change == "implementation pin") {
-        pinCallbackResult(*input.module);
+        pinCallbackResult(*source);
       } else {
-        input.module->walk([&](kernel::CallOp call) {
+        source->walk([&](exec::ComputeOp call) {
           Builder builder(&context);
           call->setAttr("policy",
                         builder.getBoolArrayAttr({false, true, false}));
         });
       }
-      refusesSource(*input.module, *candidate, input.expansion, accepted);
-      OwningOpRef<ModuleOp> unchanged(cast<ModuleOp>(input.module->clone()));
-      require(succeeded(nested::rewriteFiniteCollections(*input.module,
-                                                         input.expansion)),
-              "retained unsupported payload did not keep fallback");
-      require(OperationEquivalence::isEquivalentTo(
-                  unchanged->getOperation(), input.module->getOperation(),
-                  OperationEquivalence::IgnoreLocations),
-              "unsupported retained payload was replaced");
+      refusesSource(*source, *candidate);
+      auto fallback = sf::prepare(*source);
+      require(matvecs(*fallback) == 0 && sf::hasLoop(*fallback) &&
+                  succeeded(sf::compare(*source, *fallback)),
+              "unsupported retained payload lost checked ordered fallback");
     });
   cases.run("effectful callback keeps ordered fallback", [&] {
     auto text = replace(fixture(), "=>s+multiply(a,b)",
@@ -464,22 +391,14 @@ int main() {
     auto checked = take(language::analyze(captured).checkedProject());
     auto entry = take(closeProtocolDeployment(checked, "sample::Demo"));
     auto original = take(language::prepareOriginal(entry));
-    auto prepared = parseSourceString<ModuleOp>(original.bytes(), &context);
-    require(bool(prepared), "effectful source refused");
-    require(succeeded(mathematical::expandMathRealizations(*prepared)),
-            "math realization failed");
-    protocol::AlgorithmExpansionState expansion;
-    require(succeeded(protocol::expandAlgorithms(
-                *prepared, protocol::AlgorithmExpansionPhase::RetainMaps,
-                expansion)),
-            "helper expansion failed");
-    OwningOpRef<ModuleOp> before(cast<ModuleOp>((*prepared)->clone()));
-    require(succeeded(nested::rewriteFiniteCollections(*prepared, expansion)),
-            "effectful fallback failed");
-    require(OperationEquivalence::isEquivalentTo(
-                before->getOperation(), prepared->getOperation(),
-                OperationEquivalence::IgnoreLocations),
-            "effectful source was replaced");
+    auto source = parseSourceString<ModuleOp>(original.bytes(), &context);
+    require(bool(source), "effectful source refused");
+    auto expanded = protocol::expandScopedHelpers(*source);
+    require(bool(expanded), "effectful helper expansion failed");
+    auto candidate = sf::prepare(*expanded);
+    require(matvecs(*candidate) == 0 && sf::hasLoop(*candidate) &&
+                succeeded(sf::compare(*expanded, *candidate)),
+            "effectful source was replaced by bulk work");
     take(language::compileEntry(original));
   });
   return cases.result();

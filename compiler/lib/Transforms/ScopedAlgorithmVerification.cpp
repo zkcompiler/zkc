@@ -194,7 +194,8 @@ class ScopedCorrespondence {
       expected.set("site", StringAttr::get(actual->getContext(), *encoded));
       origins.push_back({root, *encoded, definition.str(), site.str(), path});
     }
-    return original->getName() == actual->getName() &&
+    return original->getLoc() == actual->getLoc() &&
+           original->getName() == actual->getName() &&
            expected.getDictionary(actual->getContext()) ==
                actual->getAttrDictionary();
   }

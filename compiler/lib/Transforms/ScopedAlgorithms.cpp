@@ -254,6 +254,10 @@ class ScopedExpander : private OpBuilder::Listener {
     const auto &steps = source.bodies.at(function.getSymName().str());
     for (const auto &step : steps) {
       auto *op = step.operation;
+      auto previousLocation = control.getLocation();
+      control.setLocation(op->getLoc());
+      auto restoreLocation =
+          llvm::scope_exit([&] { control.setLocation(previousLocation); });
       if (!charge(op, 1 + step.inputs.size() + step.outputs.size()))
         return {};
       auto inputs = values(step.inputs, env);

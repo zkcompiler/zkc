@@ -450,8 +450,10 @@ together. Loop-carried state is not merged with invariant captures.
 
 `verifyScopedHelperExpansionPreserved` independently walks the original under
 virtual substitution while reading the admitted candidate. It checks actual
-operation attributes, ordered operands, result bindings, control bodies,
-stops, yields and root interfaces. Other declarations remain exact. Occurrence
+operation attributes and diagnostic locations, ordered operands, result
+bindings, control bodies, stops, yields and root interfaces. Substitution
+retains each reached source operation's location, including a nested admission
+guard, instead of assigning the enclosing helper's location. Other declarations remain exact. Occurrence
 names use `algorithmSite` on the complete helper invocation path. The checker
 recovers those paths even when a bounded name uses a digest, and publishes
 optional occurrence records only after the whole comparison succeeds.

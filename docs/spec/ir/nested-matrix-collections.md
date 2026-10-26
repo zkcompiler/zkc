@@ -27,10 +27,12 @@ independent of the outer index. The returned step denotes the admitted field mul
 either commutative operand order is allowed. Bounded neutral additions of zero
 and multiplications by one may surround its result, factors or state, or the
 outer returned inner result. The source reader reconstructs these identities
-independently. Every instruction, including unused work, must still belong to
-the admitted total scalar fragment; neutral result syntax cannot hide an effect
-or remove an implementation constraint.
-Additional ignored vector lanes and nested strict zips retain their admission.
+independently. Every scalar instruction must be total and contribute to that
+returned dataflow, including through a retained mathematical helper. An unused
+scalar calculation or helper invocation retains the ordered implementation.
+The reader still inspects every instruction: neutral result syntax cannot hide
+an effect or remove an implementation constraint. Additional ignored vector
+lanes and unused domain constructors retain their admission checks.
 
 If the outer extent is zero, the result is an empty vector. No inner domain
 constructor or shape check is evaluated. Otherwise, constructors are admitted in

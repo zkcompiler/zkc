@@ -297,6 +297,7 @@ template <class Build> void replaceScopedPayload(ModuleOp module, Build build) {
     SmallVector<Value> inputs;
     for (auto value : step->inputs)
       inputs.push_back(mapping.lookup(value));
+    control.setLocation(cursor->getLoc());
     auto outputs =
         control.invoke("exec.apply", ValueRange(step->outputs).getTypes(),
                        control.scoped(inputs), cursor->getAttrs());
@@ -325,6 +326,7 @@ template <class Build> void replaceScopedPayload(ModuleOp module, Build build) {
   };
   auto result =
       build(emit, ValueRange(replacement.getArguments()).drop_front());
+  control.setLocation(returned(old)->getLoc());
   control.returned(result);
   auto name = old.getSymName().str();
   old.erase();

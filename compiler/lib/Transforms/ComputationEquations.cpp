@@ -788,6 +788,9 @@ matchNestedContraction(const ComputationView &structure,
   // Reuse the inner reduction equation through the actual environment. Extra
   // scalar instructions may establish neutral identities; they must all be
   // live and total. Indexed accesses are outside this nested reader's slice.
+  PayloadAnalysis innerPayload(child.payload, child.results, true, work);
+  if (!innerPayload.supported)
+    return std::nullopt;
   for (Operation *op : child.payload) {
     if (!work.take())
       return std::nullopt;
