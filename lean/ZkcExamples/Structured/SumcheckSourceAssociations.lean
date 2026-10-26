@@ -20,19 +20,21 @@ structured_associations SumcheckSourceViews
     table := MapFirstBodies.table, width := MapFirstBodies.width,
     «variables» := MapFirstBodies.variables, empty := SumcheckHelperBodies.empty,
     halves := MapFirstBodies.halves, sums := SumcheckHelperBodies.sums,
-    interpolate := MapFirstBodies.interpolate, map := MapFirstBodies.map,
-    first := MapFirstBodies.first, append := SumcheckHelperBodies.append,
+    interpolate := MapFirstBodies.interpolate, interpolateRealization := SumcheckSourceBodies.interpolateRealization,
+    mapCallback := SumcheckSourceBodies.mapCallback, map := SumcheckSourceBodies.map,
+    first := SumcheckSourceBodies.first, append := SumcheckHelperBodies.append,
     step := MapPrefixBodies.step, foldStep := MapPrefixBodies.foldStep,
-    fold := MapPrefixBodies.fold, foldWrapper := MapPrefixBodies.foldWrapper,
+    fold := SumcheckSourceBodies.fold, foldWrapper := SumcheckSourceBodies.foldWrapper,
     «prefix» := MapPrefixBodies.prefix, values := MapFirstBodies.values,
-    valuesRealization := MapFirstBodies.valuesRealization,
-    checkTable := SumcheckHelperBodies.checkTable, check := SumcheckHelperBodies.check]
+    valuesRealization := SumcheckSourceBodies.valuesRealization,
+    checkTable := SumcheckSourceBodies.checkTable, check := SumcheckHelperBodies.check]
 
-theorem first_bodies : MapFirstContracts.Bodies unit.definitions :=
+theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckSourceBodies.collectBindings :=
   ⟨less_association, rows_association, shape_association, table_association,
-    halves_association, interpolate_association, map_association, first_association⟩
+    halves_association, interpolate_association, interpolateRealization_association,
+    mapCallback_association, map_association, first_association⟩
 
-theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions :=
+theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions SumcheckSourceBodies.prefixBindings :=
   ⟨step_association, foldStep_association, fold_association, foldWrapper_association,
     prefix_association, values_association, valuesRealization_association⟩
 
@@ -46,7 +48,7 @@ theorem protocols_exact :
       reduceDefinition.raw = SumcheckSourceBodies.reduceBody.erase) :=
   ⟨⟨run_member, run_signature, run_raw⟩, ⟨reduce_member, reduce_signature, reduce_raw⟩⟩
 
-theorem helper_inventory_length : unit.definitions.length = 28 := rfl
+theorem helper_inventory_length : unit.definitions.length = 30 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :

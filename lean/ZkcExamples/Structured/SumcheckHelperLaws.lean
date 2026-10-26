@@ -9,6 +9,7 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapPrefixBodies MapFirstL
 open SumcheckHelperBodies MapPrefixLaws
 open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 
+variable {bindings : MultilinearPrefixBodies.Bindings}
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
@@ -43,10 +44,10 @@ theorem sums_shaped (table : Meanings F G) (halves : HalvesLaw table)
     (Nat.lt_trans shape.2.1 (by decide +kernel)), ite_eq_left positive, ite_eq_left (shape.split_valid positive)]
 
 /-- Complete constructor → finite prefix → realization → sum → equality equation. -/
-theorem checkTable_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
+theorem checkTable_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table bindings)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
-    checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get =
+    (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get =
       if HasShape xs point.length 1 then
         .done (boolResult (decide ((restrictPrefixValues xs point).sum = claim)))
       else .halt .reject := by
@@ -75,10 +76,10 @@ theorem check_malformed_generic_body (table : Meanings F G)
   simp only [boolResult, PIR.Process.bind, Values.get, decide_eq_false malformed, Bool.false_eq_true, ite_false]
 
 /-- The only callback premise is an exact body equation; no intended result is assumed. -/
-theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
+theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table bindings)
     (callback : ∀ (xs point : List F) (claim : F),
       invoke table checkTableHelper (checkInputs xs point claim) =
-        checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get)
+        (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
     checkBody.denote (meaning F G table) (checkInputs xs point claim).get =
@@ -97,7 +98,7 @@ theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Law
 theorem check_point_exhausted (table : Meanings F G) (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
     checkBody.denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted ∧
-    checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted := by
+    (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get = .halt .exhausted := by
   simp only [check_expansion, checkTable_expansion, ite_eq_right overflow, and_self]
 
 /-- Exact source body association, not an assumption of a helper's intended result. -/
@@ -150,7 +151,7 @@ theorem check_vector_exhausted_generic_body (table : Meanings F G) (less : LessL
 theorem checkTable_constructor_stopped (table : Meanings F G) (xs point : List F)
     (claim : F) (pointBound : point.length < indexLimit) (reason : PIR.Stop)
     (stopped : invoke table tableHelper (inputs xs point.length 1) = .halt reason) :
-    checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get = .halt reason := by
+    (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get = .halt reason := by
   rw [checkTable_expansion, ite_eq_left pointBound, stopped]
   rfl
 

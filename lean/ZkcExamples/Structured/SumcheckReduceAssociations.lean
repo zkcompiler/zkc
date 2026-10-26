@@ -20,13 +20,15 @@ structured_associations SumcheckReduceViews
     table := MapFirstBodies.table, width := MapFirstBodies.width,
     «variables» := MapFirstBodies.variables, empty := SumcheckHelperBodies.empty,
     halves := MapFirstBodies.halves, sums := SumcheckHelperBodies.sums,
-    interpolate := MapFirstBodies.interpolate, map := MapFirstBodies.map,
-    first := MapFirstBodies.first, append := SumcheckHelperBodies.append,
+    interpolate := MapFirstBodies.interpolate, interpolateRealization := SumcheckReduceBodies.interpolateRealization,
+    mapCallback := SumcheckReduceBodies.mapCallback, map := SumcheckReduceBodies.map,
+    first := SumcheckReduceBodies.first, append := SumcheckHelperBodies.append,
     values := MapFirstBodies.values]
 
-theorem first_bodies : MapFirstContracts.Bodies unit.definitions :=
+theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckReduceBodies.collectBindings :=
   ⟨less_association, rows_association, shape_association, table_association,
-    halves_association, interpolate_association, map_association, first_association⟩
+    halves_association, interpolate_association, interpolateRealization_association,
+    mapCallback_association, map_association, first_association⟩
 
 /-- Both actual protocol trees retain their own complete signatures and membership. -/
 theorem protocols_exact :
@@ -38,7 +40,7 @@ theorem protocols_exact :
       reduceDefinition.raw = SumcheckReduceBodies.reduceBody.erase) :=
   ⟨⟨run_member, run_signature, run_raw⟩, ⟨reduce_member, reduce_signature, reduce_raw⟩⟩
 
-theorem helper_inventory_length : unit.definitions.length = 18 := rfl
+theorem helper_inventory_length : unit.definitions.length = 20 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :

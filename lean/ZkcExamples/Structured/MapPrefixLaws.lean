@@ -59,9 +59,9 @@ theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Na
   rw [MapSourceExpansions.prefix_prefix]
   simp only [triple_eta, PIR.Process.bind_done]
 
-theorem foldWrapper_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
-    foldWrapperBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
-      invoke table foldHelper (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
+theorem foldWrapper_body (table : Meanings F G) {computation : String} (xs : List F) (dimension columns : Nat) (point : List F) :
+    (MultilinearPrefixBodies.foldWrapperBody computation).denote (meaning F G table) (prefixInputs xs dimension columns point).get =
+      invoke table (MultilinearPrefixBodies.foldHelper computation) (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
   dsimp only [prefixInputs, vector]
   rw [MapSourceExpansions.prefix_foldWrapper]
   simp only [triple_eta, PIR.Process.bind_done]
@@ -71,7 +71,7 @@ theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
       (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
       Evaluation.denoteFold table foldSpec
         (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
-  simp only [foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
+  simp only [foldBody, MultilinearPrefixBodies.foldBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Regions.denote, Values.get_cons, Environment.push, Environment.push]
   trans (Evaluation.denoteFold table foldSpec
     (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).bind .done

@@ -18,11 +18,12 @@ open Zkc.Source Zkc.Source.Structured SumcheckReduceBodies
 set_option smartUnfolding false
 
 structured_views SumcheckRepackedData.snapshot
-  helpers [sumAdd := (SumcheckRelationContract.addHelper, SumcheckRelationContract.addBody),
+  helpers [less, rows, shape, table, values,
+    sumAdd := (SumcheckRelationContract.addHelper, SumcheckRelationContract.addBody),
     sumStep := (SumcheckRelationContract.foldSpec.stepHelper, SumcheckRelationContract.stepBody),
     sumTotal := SumcheckRelationContract.total, tableSumFormula := SumcheckRelationContract.tableSum,
-    less, rows, shape, table, values, width, «variables», empty, halves, sums, interpolate, map, first,
-    append]
+    width, «variables», empty, halves, sums, interpolate, append,
+    interpolateRealization, mapCallback, map, first]
   protocols [reduce, run := SumcheckRepackedBodies.run]
 
 /-- The two exports differ in source digest, so they are distinct subjects

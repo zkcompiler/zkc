@@ -128,10 +128,10 @@ theorem prefix_step (table : Meanings F G) (input0 : List F) (input1 : Nat) (inp
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) := by
   derive_process
 
-theorem prefix_foldWrapper (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) (input3 : List F) :
-    MapPrefixBodies.foldWrapperBody.denote (meaning F G table)
+theorem prefix_foldWrapper (table : Meanings F G) (computation : String) (input0 : List F) (input1 : Nat) (input2 : Nat) (input3 : List F) :
+    (MultilinearPrefixBodies.foldWrapperBody computation).denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 (.cons input3 .nil)))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"]).get =
-    (invoke table ⟨"_finite_admission_5", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input3 (.cons input0 (.cons input1 (.cons input2 .nil)))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
+    (invoke table ⟨computation, .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input3 (.cons input0 (.cons input1 (.cons input2 .nil)))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) := by
   derive_process
 

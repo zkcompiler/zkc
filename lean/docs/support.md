@@ -430,7 +430,11 @@ rows and the broadcast argument in their ABI. Prefix additionally retains the fu
 finite callback ABI, including the captured point, arbitrary column widths,
 ordered restriction, initial point-length admission and reached zero-dimension
 rejection. `MapContractInstances` instantiates these constructors independently
-for the complete First and Prefix sources.
+for the complete First and Prefix sources. The reduction and terminal
+Sumcheck sources independently instantiate their own collection and computation
+bindings. Terminal contracts package the prefix fold and values projection with
+the exact checker body that invokes them; exported private names do not become
+parameters of the protocol-level mathematical statement.
 
 `SumcheckHelperLaws` gives exact body equations for ordered half sums, checkTable
 and public check. Sums checks dimension representation and positive/even splitting;

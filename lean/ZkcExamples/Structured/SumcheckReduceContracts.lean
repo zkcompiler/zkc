@@ -19,7 +19,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 abbrev helperMeanings : Meanings F G := closedMeanings unit.definitions
 
 theorem bodies : SumcheckUnitContracts.Bodies unit.definitions :=
-  ⟨first_bodies, sums_association, empty_association, append_association, values_association,
+  ⟨⟨_, first_bodies⟩, sums_association, empty_association, append_association, values_association,
     width_association, variables_association⟩
 
 theorem first_laws : MapFirstContracts.Laws (helperMeanings (F := F) (G := G)) :=

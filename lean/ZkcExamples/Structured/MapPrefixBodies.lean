@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.MapFirstBodies
+public import ZkcExamples.Structured.MultilinearPrefixBodies
 
 @[expose] public section
 
@@ -8,6 +8,9 @@ public import ZkcExamples.Structured.MapFirstBodies
 Actual-source equality and admission are proved in the corresponding Views module. -/
 namespace ZkcExamples.Structured.MapPrefixBodies
 open Zkc.Source Zkc.Source.Structured
+
+abbrev bindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_5", "_mathematical_admission_0"⟩
 
 abbrev mapHelper := MapFirstBodies.mapHelper
 abbrev mapBody := MapFirstBodies.mapBody
@@ -23,7 +26,7 @@ abbrev widthRealizationBody := MapFirstBodies.widthRealizationBody
 abbrev variablesRealizationHelper := MapFirstBodies.variablesRealizationHelper
 abbrev variablesRealizationBody := MapFirstBodies.variablesRealizationBody
 
-abbrev valuesRealizationHelper := MapFirstBodies.valuesRealizationHelper
+abbrev valuesRealizationHelper := MultilinearPrefixBodies.valuesRealizationHelper bindings.values
 abbrev valuesRealizationBody := MapFirstBodies.valuesRealizationBody
 
 
@@ -87,12 +90,9 @@ abbrev halvesBody := MapFirstBodies.halvesBody
 abbrev interpolateHelper := MapFirstBodies.interpolateHelper
 abbrev interpolateBody := MapFirstBodies.interpolateBody
 
-abbrev foldWrapperHelper : Helper := ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
+abbrev foldWrapperHelper := MultilinearPrefixBodies.foldWrapperHelper
 
-def foldWrapperBody : Region dialect [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke ⟨"_finite_admission_5", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩) (.cons (.there (.there (.there .here))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+abbrev foldWrapperBody := MultilinearPrefixBodies.foldWrapperBody bindings.fold
 
 abbrev foldStepHelper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
@@ -101,15 +101,11 @@ def foldStepBody : Region dialect [.vector "bls12-381.fr", .index, .index, .fiel
   .letOp (.invoke ⟨"zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
-abbrev foldHelper : Helper := ⟨"_finite_admission_5", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩
+abbrev foldHelper := MultilinearPrefixBodies.foldHelper bindings.fold
 
-abbrev foldSpec : FoldSpec :=
-  ⟨DomainSpec.elements "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain" [.vector "bls12-381.fr"] (.vector "bls12-381.fr") .here,
-    [.vector "bls12-381.fr", .index, .index], [], "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", "", .local⟩
+abbrev foldSpec := MultilinearPrefixBodies.foldSpec
 
-def foldBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.fold foldSpec) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+abbrev foldBody := MultilinearPrefixBodies.foldBody
 
 abbrev valuesHelper := MapFirstBodies.valuesHelper
 abbrev valuesBody := MapFirstBodies.valuesBody
