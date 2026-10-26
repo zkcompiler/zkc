@@ -4,11 +4,14 @@
 #include "../lib/Transforms/MathematicalComparison.h"
 #include "../lib/Transforms/NumericalSelection.h"
 #include "../lib/Transforms/RecipeRealizations.h"
+#include "../lib/Transforms/ScopedCandidate.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
@@ -20,6 +23,9 @@ using namespace zkc;
 using namespace zkc::test;
 
 namespace {
+namespace sf = scopedFinite;
+namespace sc = scopedComputation;
+using Observation = mathematical::VerificationObservation;
 constexpr MathematicalSelectionPolicy vectorPolicy{
     true, false, false, true, NumericalExpressionMode::VectorOnly};
 OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name) {
@@ -30,6 +36,38 @@ OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name) {
   text << input.rdbuf();
   auto module = parseSourceString<ModuleOp>(text.str(), &context);
   require(bool(module) && succeeded(verify(*module)), "fixture refused");
+  // Exercise the finite expression itself as a scoped entry. The complete
+  // protocol fixtures also test their surrounding arithmetic elsewhere; this
+  // fixture exposes every finite input (including the MSM seed) as a port.
+  Operation *original = nullptr;
+  module->walk([&](Operation *op) {
+    if (finite::isComputation(op))
+      original = op;
+  });
+  finite::Computation computation;
+  require(original && succeeded(finite::describe(original, computation)),
+          "fixture has no finite expression");
+  auto operationName = original->getName().getStringRef();
+  auto attributes = original->getAttrDictionary();
+  auto outcome = original->getResult(0).getType();
+  auto target = sf::function(*module, "work");
+  SmallVector<Type> arguments{runtime::ScopeType::get(&context)};
+  llvm::append_range(arguments, computation.signature.getInputs());
+  target.getBody().dropAllReferences();
+  target.getBody().getBlocks().clear();
+  target.setType(FunctionType::get(&context, arguments, outcome));
+  auto *entry = target.addEntryBlock();
+  OpBuilder builder(entry, entry->end());
+  exec::ScopedExecutionBuilder control(builder, target);
+  auto values =
+      control.invoke(operationName, computation.signature.getResults(),
+                     target.getArguments(), attributes.getValue());
+  control.returned(values);
+  auto owner = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+  for (auto function : llvm::make_early_inc_range(
+           owner.getBody().front().getOps<protocol_ir::MathematicalOp>()))
+    function.erase();
+  require(succeeded(verify(*module)), "isolated finite source refused");
   return module;
 }
 OwningOpRef<ModuleOp> clone(ModuleOp source) {
@@ -39,19 +77,54 @@ bool same(ModuleOp left, ModuleOp right) {
   return OperationEquivalence::isEquivalentTo(
       left, right, OperationEquivalence::IgnoreLocations);
 }
-local::FuncOp function(ModuleOp module, StringRef name) {
-  return SymbolTable(&module.getBody()->front()).lookup<local::FuncOp>(name);
+// Count execution occurrences through outlined bodies, rather than lexical
+// nesting of functions. The same called body contributes once per invocation.
+std::pair<unsigned, unsigned> loopCounts(ModuleOp module, StringRef root) {
+  auto closure =
+      take(protocol::readSourceExecutionClosure(&module.getBody()->front()));
+  unsigned loops = 0, nested = 0;
+  std::function<void(StringRef, unsigned, unsigned)> visit =
+      [&](StringRef name, unsigned depth, unsigned rangeDepth) {
+        require(depth < 64, "test callback depth exceeded");
+        for (const auto &step : closure.bodies.at(name.str())) {
+          bool range = isa<exec::RangeOp>(step.operation);
+          if (range) {
+            ++loops;
+            nested += rangeDepth != 0;
+          }
+          for (auto region : step.regions)
+            visit(region.getSymName(), depth + 1, rangeDepth + range);
+          if (auto call = dyn_cast<func::CallOp>(step.operation))
+            if (closure.bodies.count(call.getCallee().str()))
+              visit(call.getCallee(), depth + 1, rangeDepth);
+        }
+      };
+  visit(root, 0, 0);
+  return {loops, nested};
 }
-Operation *payload(local::FuncOp target, SymbolTable &symbols) {
-  for (auto &op : target.getBody().front())
-    if (mathematical::hasFinitePayloadContract(&op, symbols))
-      return &op;
-  return nullptr;
+OwningOpRef<ModuleOp>
+prepare(ModuleOp source, mathematical::RealizationWork &work,
+        MathematicalSelectionPolicy policy = vectorPolicy,
+        mathematical::VerificationDecision *outcome = nullptr) {
+  uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+  std::optional<CapacityCause> capacity;
+  return protocol::prepareScopedFinite(source, work, copy, bytes, capacity,
+                                       policy, nullptr, nullptr, outcome);
 }
-bool hasLoop(ModuleOp module, StringRef name) {
-  bool result = false;
-  function(module, name).walk([&](local::LocalForOp) { result = true; });
-  return result;
+mathematical::VerificationDecision check(ModuleOp source, ModuleOp candidate,
+                                         uint64_t reader = 1000000,
+                                         uint64_t comparison = 1000000) {
+  mathematical::RealizationWork work;
+  work.requiredFiniteChecking = reader;
+  work.optionalFiniteChecking = comparison;
+  mathematical::VerificationDecision outcome;
+  ScopedDiagnosticHandler quiet(source.getContext(),
+                                [](Diagnostic &) { return success(); });
+  auto checked = protocol::verifyScopedFinitePreparation(source, candidate,
+                                                         work, {}, &outcome);
+  require(succeeded(checked) == (outcome.outcome == Observation::Verified),
+          "scoped comparison lost its typed outcome");
+  return outcome;
 }
 OwningOpRef<ModuleOp> kernelReductions(MLIRContext &context) {
   auto result = parseSourceString<ModuleOp>(R"mlir(
@@ -121,46 +194,49 @@ void requiredReaderCapacity(const finite::VerificationResult &outcome) {
 }
 // Extend the ordinary square into x^(multiplications + 1). Both scalar and
 // vector operations stay well formed, and the two actual formulas agree.
-void extendProduct(local::FuncOp target, unsigned multiplications) {
-  auto &block = target.getBody().front();
-  auto *prototype = block.back().getOperand(0).getDefiningOp();
-  require(prototype && prototype->getNumOperands() == 2,
+void extendProduct(func::FuncOp target, unsigned multiplications,
+                   StringRef contract) {
+  auto prototype = sf::application(target, contract);
+  require(prototype.getInputs().size() == 2,
           "missing multiplication prototype");
-  OpBuilder builder(&block.back());
-  Value result = prototype->getResult(0);
+  Value result = sc::payload(prototype).front();
+  auto item = target.getArgument(1);
   for (unsigned i = 1; i < multiplications; ++i) {
-    auto *next = builder.clone(*prototype);
-    next->setOperands({result, target.getArgument(0)});
-    next->setAttr("site",
-                  builder.getStringAttr("product_" + std::to_string(i)));
-    result = next->getResult(0);
+    auto *next = sc::appendApply(
+        target, prototype.getBinding(), ValueRange{result, item},
+        TypeRange{result.getType()}, "product_" + std::to_string(i));
+    result = sc::payload(next).front();
   }
-  block.back().setOperand(0, result);
+  sc::returned(target).setOperand(0, result);
 }
 // Probe the actual comparator independently of the producer's operation order.
-FailureOr<Value> compare(ModuleOp source, ModuleOp candidate, StringRef name,
-                         uint64_t &work,
+// The caller below separately checks the complete admission and context.
+FailureOr<Value> compare(ModuleOp source, ModuleOp candidate, uint64_t &work,
                          mathematical::ComparisonCapacity &capacity) {
-  SymbolTable before(&source.getBody()->front());
-  finite::Computation computation;
-  require(succeeded(finite::describe(before.lookup(name), computation)),
-          "finite description failed");
+  auto computation = readComputation(source);
+  auto view =
+      take(mathematical::ScopedCandidate::read(&candidate.getBody()->front()));
+  mathematical::CandidatePorts ports(view.get());
   SymbolTable symbols(&candidate.getBody()->front());
-  auto target = function(candidate, name);
-  Operation *cursor = payload(target, symbols);
-  require(cursor, "candidate has no bulk payload");
+  auto target = sf::function(candidate, "work");
+  auto *first = view->first(&target.front());
+  Operation *cursor = first;
+  while (cursor && !mathematical::hasFinitePayloadContract(cursor, symbols))
+    cursor = view->next(cursor);
+  require(cursor && ports.outputs(first).size() == 1,
+          "candidate has no admitted cardinality or bulk payload");
   auto *saved = cursor;
+  auto returned = sc::returned(target);
   llvm::DenseSet<Operation *> bindings;
   auto result = mathematical::compareFinitePayload(
-      computation, target.getArguments(),
-      target.getBody().front().front().getResult(0), cursor, symbols, bindings,
-      work, &target.getBody().front().back(), &capacity);
+      computation, target.getArguments().drop_front(),
+      ports.outputs(first).front(), cursor, symbols, bindings, work, returned,
+      &capacity, nullptr, view.get());
   if (failed(result))
     require(cursor == saved && bindings.empty(),
             "failed comparison published cursor or bindings");
   else
-    require(cursor == &target.getBody().front().back() &&
-                *result == cursor->getOperand(0),
+    require(cursor == returned && *result == returned.getValues().front(),
             "comparison did not verify the actual returned value");
   return result;
 }
@@ -175,7 +251,7 @@ int main() {
   for (bool scheduled : {false, true})
     cases.run(
         scheduled ? "nested scheduled readers share actual work"
-                  : "nested Local readers share actual work",
+                  : "nested scoped readers share actual work",
         [&] {
           auto source = nestedKernelReductions(context);
           auto original = clone(*source);
@@ -184,18 +260,15 @@ int main() {
           work.requiredFiniteChecking = 1000;
           work.optionalFiniteChecking = 0;
           uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
-          auto ordered = kernel::realizeEntry(unit, "nested", {false, false},
-                                              work, copies, bytes);
+          OwningOpRef<ModuleOp> schedule;
+          auto ordered = kernel::realizeEntry(
+              unit, "nested", {false, false}, work, copies, bytes, {}, nullptr,
+              nullptr, nullptr, false, &schedule);
           require(bool(ordered), "outer reader starved its nested callbacks");
-          unsigned loops = 0, nestedLoops = 0;
-          ordered->walk([&](local::LocalForOp loop) {
-            ++loops;
-            nestedLoops += bool(loop->getParentOfType<local::LocalForOp>());
-          });
+          auto [loops, nestedLoops] = loopCounts(*ordered, "evaluate");
           require(loops == 3 && nestedLoops == 2,
                   "fixture lost its outer fold or sibling nested folds");
-          auto candidate = scheduled ? kernel::scheduleEntry(*ordered, copies)
-                                     : clone(*ordered);
+          auto candidate = scheduled ? std::move(schedule) : clone(*ordered);
           require(bool(candidate), "nested schedule construction refused");
           auto before = clone(*candidate);
           finite::VerificationResult outcome{
@@ -316,10 +389,9 @@ int main() {
         session.remainingSiteBytes, {100000, 1}, nullptr, &session);
     require(bool(candidate),
             "attributable optional retries refused ordered source");
-    unsigned loops = 0;
-    candidate->walk([&](local::LocalForOp) { ++loops; });
+    auto [loops, nestedLoops] = loopCounts(*candidate, "evaluate");
     require(
-        loops == 2 && same(*source, *before) &&
+        loops == 2 && nestedLoops == 0 && same(*source, *before) &&
             succeeded(
                 kernel::verifyEntryRecipes(unit, *candidate, "reductions")),
         "targeted retries changed source or lost independent correspondence");
@@ -383,91 +455,87 @@ int main() {
             });
   for (StringRef name : {"collect", "dot", "matrix-row", "matrix-column",
                          "bilinear", "msm-direct"}) {
-    StringRef declaration = name == "collect" ? "collect" : "fold";
     cases.run(name + " precise independent comparison boundary", [&] {
       auto source = fixture(context, name);
-      auto candidate = clone(*source);
-      require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
-              "bulk realization failed");
-      auto target = function(*candidate, declaration);
-      auto *result =
-          target.getBody().front().back().getOperand(0).getDefiningOp();
-      require(result && result->getNumOperands() == 2,
+      auto candidate = sf::prepare(*source, vectorPolicy);
+      auto target = sf::function(*candidate, "work");
+      auto view = take(
+          mathematical::ScopedCandidate::read(&candidate->getBody()->front()));
+      auto result = dyn_cast_or_null<exec::ApplyOp>(
+          view->producer(sc::returned(target).getValues().front()));
+      require(result && result.getInputs().size() == 2,
               "fixture no longer returns a binary bulk result");
-      Value left = result->getOperand(0), right = result->getOperand(1);
-      result->setOperands({right, left});
+      Value left = result.getInputs()[0], right = result.getInputs()[1];
+      view.reset();
+      result.getInputsMutable().assign(ValueRange{right, left});
       require(succeeded(verify(*candidate)) &&
-                  succeeded(finite::verifyRealizations(*source, *candidate)),
+                  succeeded(sf::compare(*source, *candidate)),
               "commuted valid candidate was refused");
       uint64_t work = 100000;
       mathematical::ComparisonCapacity capacity;
-      require(succeeded(
-                  compare(*source, *candidate, declaration, work, capacity)) &&
+      require(succeeded(compare(*source, *candidate, work, capacity)) &&
                   capacity == mathematical::ComparisonCapacity::None,
               "ample comparison refused");
       uint64_t cost = 100000 - work;
       require(cost > 1, "missing comparator charges");
       work = cost;
-      require(succeeded(
-                  compare(*source, *candidate, declaration, work, capacity)) &&
+      require(succeeded(compare(*source, *candidate, work, capacity)) &&
                   work == 0 &&
                   capacity == mathematical::ComparisonCapacity::None,
               "successful exact allowance was classified as capacity");
       work = cost - 1;
-      require(
-          failed(compare(*source, *candidate, declaration, work, capacity)) &&
-              capacity == mathematical::ComparisonCapacity::Work && work == 0,
-          "failed final charge did not report work capacity");
-      auto checked =
-          finite::checkRealizations(*source, *candidate, {100000, 1});
-      require(checked.status == finite::VerificationStatus::OptionalCapacity &&
+      require(failed(compare(*source, *candidate, work, capacity)) &&
+                  capacity == mathematical::ComparisonCapacity::Work &&
+                  work == 0,
+              "failed final charge did not report work capacity");
+      auto checked = check(*source, *candidate, 100000, 1);
+      require(checked.outcome == Observation::OptionalCapacity &&
                   checked.detail == "finite comparison work",
               "optional capacity was reported as semantic mismatch");
       llvm::outs() << name << " comparison work: " << cost << '\n';
     });
     cases.run(name + " changed result remains a hard refusal", [&] {
       auto source = fixture(context, name);
-      auto candidate = clone(*source);
-      require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
-              "bulk realization failed");
-      auto target = function(*candidate, declaration);
-      target.getBody().front().back().setOperand(
-          0, name == "collect" ? target.getArgument(0)
-                               : target.getArguments().back());
+      auto candidate = sf::prepare(*source, vectorPolicy);
+      auto target = sf::function(*candidate, "work");
+      sc::returned(target).setOperand(0, name == "collect"
+                                             ? target.getArgument(1)
+                                             : target.getArguments().back());
       require(succeeded(verify(*candidate)),
               "changed result was not an ordinary well-formed candidate");
-      auto checked = finite::checkRealizations(*source, *candidate);
-      require(checked.status == finite::VerificationStatus::Mismatch,
+      auto checked = check(*source, *candidate);
+      require(checked.outcome == Observation::Mismatch,
               "changed result was downgraded to capacity");
       std::string diagnostic;
       ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
         diagnostic += d.str();
         return success();
       });
-      require(failed(checked.diagnose(*candidate)) &&
-                  namesIdentifier(diagnostic, "finite-correspondence"),
+      require(failed(sf::compare(*source, *candidate)) &&
+                  namesIdentifier(diagnostic, "algorithm-correspondence"),
               "mismatch lost its refusal identifier");
     });
     cases.run(name + " optional capacity retries checked ordered source", [&] {
       auto source = fixture(context, name);
-      auto fallback = clone(*source), ordered = clone(*source);
       mathematical::RealizationWork work;
+      work.optionalFiniteChecking = 1;
       const auto initial = work;
       std::string diagnostic;
       ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
         diagnostic += d.str();
         return success();
       });
-      require(succeeded(finite::realizeLocalsWithLimits(
-                  *fallback, vectorPolicy, &work,
-                  mathematical::mathematicalRecipes(), {100000, 1})) &&
-                  diagnostic.empty(),
+      auto fallback = prepare(*source, work);
+      require(bool(fallback) && diagnostic.empty(),
               "transient capacity did not retry silently");
+      auto ordered = sf::prepare(*source, {false, false});
       require(
-          succeeded(finite::realizeLocals(*ordered, {false, false})) &&
-              hasLoop(*fallback, declaration) && same(*fallback, *ordered) &&
-              succeeded(finite::verifyRealizations(*source, *fallback)),
+          sf::hasLoop(*fallback) && same(*fallback, *ordered) &&
+              succeeded(sf::compare(*source, *fallback)),
           "fallback differs from independently checked ordered realization");
+      require(work.optionalFiniteChecking == 0 &&
+                  work.discardedRecipeCopy < initial.discardedRecipeCopy,
+              "optional retry replenished comparison or discarded copy work");
       if (name == "collect")
         require(work.lanes < initial.lanes,
                 "discarded candidate replenished optional lane work");
@@ -476,58 +544,69 @@ int main() {
     });
     cases.run(name + " required reader boundary and atomic refusal", [&] {
       auto source = fixture(context, name);
-      auto original = clone(*source), ordered = clone(*source);
-      require(succeeded(finite::realizeLocals(*ordered, {false, false})),
-              "ordered realization failed");
+      auto original = clone(*source);
+      auto ordered = sf::prepare(*source, {false, false});
       uint64_t cost = 0;
       for (; cost < 1000; ++cost) {
-        auto checked = finite::checkRealizations(*source, *ordered, {cost, 0});
-        if (checked.status == finite::VerificationStatus::Verified)
+        auto checked = check(*source, *ordered, cost, 0);
+        if (checked.outcome == Observation::Verified)
           break;
-        require(checked.status ==
-                        finite::VerificationStatus::RequiredCapacity &&
-                    checked.detail == "finite reader work",
+        require(checked.outcome == Observation::RequiredCapacity &&
+                    checked.detail == "finite reader work" &&
+                    checked.capacity &&
+                    checked.capacity->owner == WorkOwner::RequiredFiniteReader,
                 "required reader exhaustion became a mismatch");
       }
       require(cost > 1 && cost < 1000, "missing ordered reader boundary");
+      mathematical::RealizationWork work;
+      work.requiredFiniteChecking = cost;
+      work.optionalFiniteChecking = 0;
+      auto exact = prepare(*source, work, {false, false});
+      require(bool(exact) && work.requiredFiniteChecking == 0 &&
+                  same(*exact, *ordered),
+              "exact required allowance changed or refused output");
+      work = {};
+      work.requiredFiniteChecking = cost - 1;
+      work.optionalFiniteChecking = 1;
+      mathematical::VerificationDecision outcome;
       std::string diagnostic;
       ScopedDiagnosticHandler capture(&context, [&](Diagnostic &d) {
         diagnostic += d.str();
         return success();
       });
-      require(failed(finite::realizeLocalsWithLimits(
-                  *source, vectorPolicy, nullptr,
-                  mathematical::mathematicalRecipes(), {cost - 1, 1})) &&
-                  same(*source, *original) &&
-                  namesIdentifier(diagnostic, "finite-verification-capacity") &&
-                  diagnostic.find("finite reader work") != std::string::npos,
+      auto refused = prepare(*source, work, vectorPolicy, &outcome);
+      require(!refused && same(*source, *original) &&
+                  outcome.outcome == Observation::RequiredCapacity &&
+                  outcome.detail == "finite reader work" && outcome.capacity &&
+                  outcome.capacity->owner == WorkOwner::RequiredFiniteReader &&
+                  namesIdentifier(diagnostic, "algorithm-correspondence"),
               "required refusal published a partial source or lost its budget");
       llvm::outs() << name << " ordered reader work: " << cost << '\n';
     });
   }
   cases.run("ordinary valid formula reaches independent term depth limit", [&] {
     auto source = fixture(context, "collect");
-    auto candidate = clone(*source);
-    require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
-            "initial collect realization failed");
-    extendProduct(function(*source, "square"), ring::Limits::depth);
-    extendProduct(function(*candidate, "square"), ring::Limits::depth);
-    extendProduct(function(*candidate, "collect"), ring::Limits::depth);
+    auto candidate = sf::prepare(*source, vectorPolicy);
+    extendProduct(sf::function(*source, "square"), ring::Limits::depth,
+                  "field.mul");
+    extendProduct(sf::function(*candidate, "square"), ring::Limits::depth,
+                  "field.mul");
+    extendProduct(sf::function(*candidate, "work"), ring::Limits::depth,
+                  "vector.mul");
     require(succeeded(verify(*source)) && succeeded(verify(*candidate)),
             "deep equivalent formulas were not admitted");
     uint64_t work = 100000;
     mathematical::ComparisonCapacity capacity;
-    require(failed(compare(*source, *candidate, "collect", work, capacity)) &&
-                work > 0 && capacity == mathematical::ComparisonCapacity::Depth,
+    require(failed(compare(*source, *candidate, work, capacity)) && work > 0 &&
+                capacity == mathematical::ComparisonCapacity::Depth,
             "term depth failure was conflated with work or mismatch");
-    auto checked = finite::checkRealizations(*source, *candidate);
-    require(checked.status == finite::VerificationStatus::OptionalCapacity &&
+    auto checked = check(*source, *candidate);
+    require(checked.outcome == Observation::OptionalCapacity &&
                 checked.detail == "finite comparison term depth",
             "depth exhaustion did not reach the transaction boundary");
-    auto ordered = clone(*source);
+    auto ordered = sf::prepare(*source, {false, false});
     require(
-        succeeded(finite::realizeLocals(*ordered, {false, false})) &&
-            succeeded(finite::verifyRealizations(*source, *ordered)),
+        succeeded(sf::compare(*source, *ordered)),
         "admitted deep formula lost its independently checked ordered path");
   });
   return cases.result();

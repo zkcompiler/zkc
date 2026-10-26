@@ -4,6 +4,8 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -12,7 +14,7 @@
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -20,6 +22,8 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+namespace sf = scopedFinite;
+namespace sc = scopedComputation;
 void run(ModuleOp module, std::unique_ptr<Pass> pass) {
   PassManager manager(module.getContext());
   manager.addPass(std::move(pass));
@@ -52,8 +56,9 @@ module { "protocol.module"() ({
  "runtime.binding"() {sym_name="numerical",contract="numerical.sum",arguments=["bls12-381.fr","0"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="msb",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
  "runtime.binding"() {sym_name="dense",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks/poly.fold"} : ()->()
- local.func @work(%table:!T,%rows:ui64,%a:!F)->!T attributes {logical_origin=["work",[]]} {
-   local.return %table : !T
+ func.func @work(%scope:!runtime.scope,%table:!T,%rows:ui64,%a:!F)->!exec.outcome<(!T)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %result = "exec.returned"(%table) : (!T)->!exec.outcome<(!T)>
+   func.return %result : !exec.outcome<(!T)>
  }
  "protocol.func"() ({ ^entry(%table:!T,%rows:ui64,%a:!F):
    %r = "protocol.local_call"(%table,%rows,%a) {callee=@work,role="P",site="work"} : (!T,ui64,!F)->!T
@@ -67,38 +72,37 @@ OwningOpRef<ModuleOp> capacitySource(MLIRContext &context, StringRef body) {
   require(bool(module), "capacity fixture parse refused");
   run(*module, protocol::createProjectProtocolPass(false));
   run(*module, protocol::createLowerMathPass());
-  auto root = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
-  auto function = SymbolTable(root).lookup<local::FuncOp>("work");
-  require(bool(function), "capacity fixture lost its local function");
-  auto &block = function.getBody().front();
+  auto function = sf::function(*module, "work");
+  function.getBody().dropAllReferences();
+  function.getBody().getBlocks().clear();
   OpBuilder builder(&context);
-  builder.setInsertionPoint(block.getTerminator());
+  builder.setInsertionPointToEnd(function.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, function);
   auto empty = builder.getArrayAttr({});
   auto parameters = builder.getStrArrayAttr({body});
-  auto emit = [&](StringRef contract, StringRef binding, ValueRange inputs,
-                  Type result, StringRef site, ArrayAttr attributes) {
-    OperationState state(function.getLoc(),
-                         protocol::boundOperationName(contract));
-    state.addOperands(inputs);
-    state.addTypes({result});
-    state.addAttribute("binding", FlatSymbolRefAttr::get(&context, binding));
-    state.addAttribute("site", builder.getStringAttr(site));
-    state.addAttribute("parameters", attributes);
-    return builder.create(state)->getResult(0);
+  auto emit = [&](StringRef binding, ValueRange inputs, Type result,
+                  StringRef site, ArrayAttr attributes) {
+    return control
+        .invoke("exec.apply", TypeRange{result}, control.scoped(inputs),
+                {builder.getNamedAttr(
+                     "binding", FlatSymbolRefAttr::get(&context, binding)),
+                 builder.getNamedAttr("site", builder.getStringAttr(site)),
+                 builder.getNamedAttr("parameters", attributes)})
+        .front();
   };
-  Value table = block.getArgument(0);
+  Value table = function.getArgument(1);
   for (unsigned i = 0; i != capacityCalls; ++i) {
     auto suffix = std::to_string(i);
     auto value =
-        emit("numerical.sum", "numerical",
-             ValueRange{block.getArgument(1), block.getArgument(2)},
-             block.getArgument(2).getType(), "sum" + suffix, parameters);
-    table = emit("poly.fold", "msb", ValueRange{table, value}, table.getType(),
+        emit("numerical",
+             ValueRange{function.getArgument(2), function.getArgument(3)},
+             function.getArgument(3).getType(), "sum" + suffix, parameters);
+    table = emit("msb", ValueRange{table, value}, table.getType(),
                  "msb" + suffix, empty);
-    table = emit("poly.fold", "dense", ValueRange{table, value},
-                 table.getType(), "dense" + suffix, empty);
+    table = emit("dense", ValueRange{table, value}, table.getType(),
+                 "dense" + suffix, empty);
   }
-  block.getTerminator()->setOperand(0, table);
+  control.returned(table);
   require(succeeded(verify(*module)), "capacity source is not well formed");
   return module;
 }
@@ -106,9 +110,9 @@ OwningOpRef<ModuleOp> capacitySource(MLIRContext &context, StringRef body) {
 void replaceSourceBodies(ModuleOp module, StringRef body, size_t count) {
   size_t seen = 0;
   auto parameters = OpBuilder(module.getContext()).getStrArrayAttr({body});
-  module.walk([&](algebra::NumericalSumOp op) {
-    if (seen++ < count)
-      op->setAttr("parameters", parameters);
+  module.walk([&](exec::ApplyOp op) {
+    if (sf::contract(op) == "numerical.sum" && seen++ < count)
+      op.setParametersAttr(parameters);
   });
   require(seen == capacityCalls && count <= seen,
           "capacity source lost numerical calls");
@@ -153,28 +157,22 @@ int main() {
   require(bool(module), "fixture parse refused");
   run(*module, protocol::createProjectProtocolPass(false));
   run(*module, protocol::createLowerMathPass());
-  cases.run("public readers refuse unresolved Kernel code", [&] {
-    unsigned units = 0, calls = 0;
-    module->walk([&](mlir::ModuleOp unit) {
-      units += mathematical::isComputationUnit(unit);
-    });
-    module->walk([&](kernel::CallOp) { ++calls; });
-    require(units && calls, "logical fixture lost numerical units");
+  cases.run("public readers refuse unresolved mathematical requests", [&] {
+    unsigned calls = 0;
+    module->walk([&](exec::ComputeOp) { ++calls; });
+    require(calls, "logical fixture lost its mathematical request");
     auto structural = protocol::readExecutionModel(module->getOperation());
-    require(!structural, "public reader published logical Kernel signatures");
-    require(llvm::toString(structural.takeError()) == "kernel-profile",
-            "unresolved Kernel reader lost its diagnostic");
+    require(!structural, "public reader published unresolved computations");
+    require(namesIdentifier(llvm::toString(structural.takeError()),
+                            "execution-cfg"),
+            "unresolved computation reader lost its diagnostic");
     auto exported = protocol::exportProgram(module->getOperation());
-    require(!exported, "program export published unresolved Kernel code");
+    require(!exported, "program export published unresolved computations");
     llvm::consumeError(exported.takeError());
     auto carrier = protocol::exportModule(module->getOperation());
-    require(!carrier, "module export published unresolved Kernel code");
+    require(!carrier, "module export published unresolved computations");
     llvm::consumeError(carrier.takeError());
   });
-  auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
-  run(*module, kernel::createLowerKernelsPass());
-  require(succeeded(kernel::verifyKernelLowering(*logical, *module)),
-          "actual Kernel recipes did not correspond");
   require(succeeded(protocol::lowerPhysical(*module)),
           "physical lowering refused");
   auto original = readProgram(*module);
@@ -219,7 +217,7 @@ int main() {
     root.pop_back();
     refuses(program::decode(artifact), "interactive-shape");
   });
-  cases.run("unexpanded local.apply is internal to mathematical locals", [&] {
+  cases.run("unexpanded algorithm calls cannot enter the program carrier", [&] {
     auto candidate = original;
     auto &function = calculation(candidate);
     function.body.front().value = program::LocalApply{"callee", {}, {}};
@@ -301,17 +299,28 @@ int main() {
                 succeeded(verify(*compact)),
             "compact production control refused");
     unsigned numerical = 0, msb = 0, dense = 0, conversions = 0;
-    compact->walk([&](plan::ApplyOp op) {
-      auto implementation = op.getImplementation();
-      numerical += implementation == "arkworks/numerical.sum";
-      conversions += implementation == "arkworks/table.relayout";
-      msb += implementation == "arkworks-msb/poly.fold";
-      dense += implementation == "arkworks/poly.fold";
-      if (implementation == "arkworks-msb/poly.fold" ||
-          implementation == "arkworks/poly.fold") {
-        auto crossing = op.getOperand(0).getDefiningOp<plan::ApplyOp>();
+    llvm::DenseMap<Value, exec::ApplyOp> producers;
+    compact->walk([&](exec::ApplyOp op) {
+      for (auto value : sc::payload(op))
+        producers[value] = op;
+    });
+    auto implementation = [](exec::ApplyOp op) {
+      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+          op, op.getBindingAttr());
+      require(bool(binding), "physical invocation lost its binding");
+      return binding.getImplementation();
+    };
+    compact->walk([&](exec::ApplyOp op) {
+      auto selected = implementation(op);
+      numerical += selected == "arkworks/numerical.sum";
+      conversions += selected == "arkworks/table.relayout";
+      msb += selected == "arkworks-msb/poly.fold";
+      dense += selected == "arkworks/poly.fold";
+      if (selected == "arkworks-msb/poly.fold" ||
+          selected == "arkworks/poly.fold") {
+        auto crossing = producers.lookup(op.getInputs().front());
         require(crossing &&
-                    crossing.getImplementation() == "arkworks/table.relayout",
+                    implementation(crossing) == "arkworks/table.relayout",
                 "pinned fold did not consume an inserted layout conversion");
       }
     });
@@ -416,7 +425,7 @@ int main() {
     require(program::encode(decoded) == json, "logical arguments were lost");
   });
   auto negative =
-      [&](StringRef name,
+      [&](StringRef name, StringRef code,
           llvm::function_ref<void(program::Participants &)> mutate) {
         cases.run(name, [&] {
           auto candidate = original;
@@ -424,40 +433,45 @@ int main() {
           auto bytes = encoded(candidate); // Every mutant remains executable.
           auto result = protocol::verifyProgramArtifact(*module, bytes);
           require(!result, "wrong artifact passed correspondence");
-          require(namesIdentifier(llvm::toString(result.takeError()),
-                                  "artifact-correspondence"),
-                  "wrong refusal code");
+          auto diagnostic = llvm::toString(result.takeError());
+          require(namesIdentifier(diagnostic, code),
+                  "wrong refusal code: " + diagnostic);
         });
       };
-  negative("serialized primitive uses wrong operand", [&](auto &p) {
-    for (auto &instruction : calculation(p).body)
-      if (auto *operation = instruction.template get<program::Operation>()) {
-        operation->inputs[1] = operation->inputs[0];
-        return;
-      }
-    throw std::runtime_error("missing primitive");
-  });
-  negative("serialized local argument order changed", [&](auto &p) {
-    auto &function = calculation(p);
-    std::swap(function.arguments[0], function.arguments[1]);
-  });
-  negative("serialized local return changed", [&](auto &p) {
-    auto &function = calculation(p);
-    function.body.back().template get<program::Return>()->values[0] =
-        function.arguments[0].name;
-  });
-  negative("serialized send uses local input", [&](auto &p) {
-    for (auto &participant : p.participants)
-      for (auto &instruction : participant.body)
-        if (auto *send = instruction.template get<program::Send>()) {
-          send->input = participant.arguments.front().name;
-          return;
-        }
-    throw std::runtime_error("missing send");
-  });
-  negative("serialized entry renamed",
+  negative("serialized primitive uses wrong operand",
+           "execution-correspondence", [&](auto &p) {
+             for (auto &instruction : calculation(p).body)
+               if (auto *operation =
+                       instruction.template get<program::Operation>()) {
+                 operation->inputs[1] = operation->inputs[0];
+                 return;
+               }
+             throw std::runtime_error("missing primitive");
+           });
+  negative("serialized local argument order changed",
+           "execution-correspondence", [&](auto &p) {
+             auto &function = calculation(p);
+             std::swap(function.arguments[0], function.arguments[1]);
+           });
+  negative("serialized local return changed", "execution-correspondence",
+           [&](auto &p) {
+             auto &function = calculation(p);
+             function.body.back().template get<program::Return>()->values[0] =
+                 function.arguments[0].name;
+           });
+  negative("serialized send uses local input", "artifact-correspondence",
+           [&](auto &p) {
+             for (auto &participant : p.participants)
+               for (auto &instruction : participant.body)
+                 if (auto *send = instruction.template get<program::Send>()) {
+                   send->input = participant.arguments.front().name;
+                   return;
+                 }
+             throw std::runtime_error("missing send");
+           });
+  negative("serialized entry renamed", "artifact-correspondence",
            [&](auto &p) { p.entries.front().name = "other"; });
-  negative("serialized retained origin changed",
+  negative("serialized retained origin changed", "execution-correspondence",
            [&](auto &p) { calculation(p).origin->definition = "other"; });
   cases.run("consistent SSA renaming is permitted", [&] {
     auto renamed = original;
@@ -488,7 +502,7 @@ int main() {
     require(removed, "missing released value");
     auto error = protocol::verifyProgramArtifact(*released, encoded(candidate));
     require(!error && namesIdentifier(llvm::toString(error.takeError()),
-                                      "artifact-correspondence"),
+                                      "execution-correspondence"),
             "removed release escaped");
   });
   cases.run("hostile storage releases fail Program admission", [&] {
