@@ -15,25 +15,27 @@ open Lean Zkc.Source Zkc.Source.Structured
 abbrev OpenValue := assignment Scalar Scalar
 abbrev OptionalValues := Values (Component OpenValue)
 
-def wireType : Ty → Json
-  | .boolean => .arr #[.str "bool"]
-  | .index => .arr #[.str "index"]
-  | .field domain => .arr #[.str "field", .str domain]
-  | .vector domain => .arr #[.str "vector", .str domain]
-  | .group domain => .arr #[.str "group", .str domain]
-  | .service contract => .arr #[.str "service", .str contract]
-
 def wireNatural (json : Json) : Except String Nat := do
   let value ← Format.decimal (← Format.string json)
   if value ≥ indexLimit then throw "structured-input-natural-range"
   return value
 
-def wireInput : (type : Ty) → Json → Except String (OpenValue type)
-  | .boolean, .bool value => .ok value
-  | .boolean, _ => .error "structured-input-type"
-  | .index, json | .service _, json => wireNatural json
-  | .field _, json | .group _, json => scalar json
-  | .vector _, json => do (← Format.array json 4096).mapM scalar
+mutual
+  def wireInput : (type : Ty) → Json → Except String (OpenValue type)
+    | .boolean, .bool value => .ok value
+    | .boolean, _ => .error "structured-input-type"
+    | .index, json | .service _, json => wireNatural json
+    | .field _, json | .group _, json => scalar json
+    | .vector _, json => do (← Format.array json 4096).mapM scalar
+    | .sequence element, json => do (← Format.array json 4096).mapM (wireInput element)
+    | .product _ _ fields, json => do wireProductInput fields (← Format.array json)
+
+  def wireProductInput : (fields : ProductFields) → List Json →
+      Except String ((uniformCarriers Scalar Scalar).ProductValue fields)
+    | .nil, [] => return ()
+    | .cons type rest, value :: values => return (← wireInput type value, ← wireProductInput rest values)
+    | _, _ => throw "structured-input-count"
+end
 
 def optionalInputs : (types : List Ty) → List Json → Except String (OptionalValues types)
   | [], [] => .ok .nil
@@ -42,11 +44,20 @@ def optionalInputs : (types : List Ty) → List Json → Except String (Optional
     return .cons (some (← wireInput type value)) (← optionalInputs types values)
   | _, _ => .error "structured-input-count"
 
-def wireOutput : (type : Ty) → OpenValue type → Json
-  | .boolean, value => .bool value
-  | .index, value | .service _, value => .str (toString value)
-  | .field _, value | .group _, value => .str (toString value.val)
-  | .vector _, values => .arr (values.map (fun value => .str (toString value.val))).toArray
+mutual
+  def wireOutput : (type : Ty) → OpenValue type → Json
+    | .boolean, value => .bool value
+    | .index, value | .service _, value => .str (toString value)
+    | .field _, value | .group _, value => scalarJson value
+    | .vector _, values => .arr ((show List Scalar from values).map scalarJson).toArray
+    | .sequence element, values => .arr (values.map (wireOutput element)).toArray
+    | .product _ _ fields, value => .arr (wireProductOutput fields value).toArray
+
+  def wireProductOutput : (fields : ProductFields) →
+      (uniformCarriers Scalar Scalar).ProductValue fields → List Json
+    | .nil, () => []
+    | .cons type rest, (value, values) => wireOutput type value :: wireProductOutput rest values
+end
 
 def optionalOutputs {types : List Ty} : OptionalValues types → List Json
   | .nil => []

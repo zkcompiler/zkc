@@ -455,17 +455,21 @@ class Admission {
   }
 
   Error preparationClosures() {
-    // Separate total and ring caches: passing the former cannot authorize the
-    // latter. Graph cycles/depth and all ordinary bodies were checked first.
-    llvm::DenseSet<Operation *> total, ring;
+    // Computation and scalar-map profiles have separate caches. Ordinary
+    // formation has already checked bounds and graph cycles/depth.
+    llvm::DenseSet<Operation *> computation, ring;
     for (Operation &declaration : unit.getBody().front()) {
       auto found = preparations.find(&declaration);
       if (found == preparations.end())
         continue;
       bool mapped = found->second.kind == PreparationKind::Map;
-      auto &visited = mapped ? ring : total;
+      auto &visited = mapped ? ring : computation;
       StringRef code = mapped ? "structured-reference-map"
                               : "structured-reference-realization";
+      auto rootPremises =
+          found->second.helper->getAttrOfType<ArrayAttr>("data.preconditions");
+      if (rootPremises && !rootPremises.empty())
+        return error(code, "nonempty root preconditions");
       SmallVector<Operation *> pending{found->second.helper};
       while (!pending.empty()) {
         auto *current = pending.pop_back_val();
@@ -476,7 +480,7 @@ class Admission {
             helper->getParentOp() != unit.getOperation())
           return error(code, "private Math closure");
         auto premises = helper->getAttrOfType<ArrayAttr>("data.preconditions");
-        if (premises && !premises.empty())
+        if (mapped && premises && !premises.empty())
           return error(code, "nonempty helper preconditions");
         if (mapped) {
           auto type = helper.getFunctionType();
@@ -492,6 +496,13 @@ class Admission {
                 symbols.lookup(cast<func::CallOp>(op).getCallee()));
             continue;
           }
+          if (!mapped && operation == Kind::Fold) {
+            for (StringRef attribute : {"step", "predicate"})
+              if (auto callback =
+                      op.getAttrOfType<FlatSymbolRefAttr>(attribute))
+                pending.push_back(symbols.lookup(callback.getValue()));
+            continue;
+          }
           bool allowed =
               operation == Kind::FieldConstant || operation == Kind::Add ||
               operation == Kind::Subtract || operation == Kind::Multiply ||
@@ -503,7 +514,7 @@ class Admission {
                     Kind::GroupScale, Kind::GroupEqual, Kind::IndexConstant,
                     Kind::IndexEqual, Kind::IndexLess, Kind::IndexPowerOfTwo,
                     Kind::VectorLength, Kind::BoolConstant, Kind::And, Kind::Or,
-                    Kind::Xor, Kind::Compare, Kind::Select},
+                    Kind::Xor, Kind::Compare, Kind::Select, Kind::At},
                 operation);
           if (!allowed || op.getNumRegions())
             return error(code, op.getName().getStringRef());

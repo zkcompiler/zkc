@@ -22,10 +22,33 @@ def scalarModulus : Nat :=
   52435875175126190479447740508185965837690552500527637822603658699938581184513
 def indexLimit : Nat := 2 ^ 64
 
-inductive Ty where
-  | boolean | index | field (domain : String) | vector (domain : String)
-  | group (domain : String) | service (contract : String)
-  deriving DecidableEq, Repr, Inhabited
+/- The identity of a represented product is its complete nominal encoding,
+not a digest. Its constructor and flattened component order remain explicit. -/
+mutual
+  inductive Ty where
+    | boolean | index | field (domain : String) | vector (domain : String)
+    | group (domain : String) | service (contract : String)
+    | sequence (element : Ty)
+    | product (identity constructor : String) (fields : ProductFields)
+    deriving DecidableEq, Repr, Inhabited
+  inductive ProductFields where
+    | nil | cons (type : Ty) (rest : ProductFields)
+    deriving DecidableEq, Repr, Inhabited
+end
+
+def ProductFields.toList : ProductFields → List Ty
+  | .nil => []
+  | .cons type rest => type :: rest.toList
+
+def ProductFields.ofList : List Ty → ProductFields
+  | [] => .nil
+  | type :: rest => .cons type (ofList rest)
+
+@[simp] theorem ProductFields.toList_ofList (types : List Ty) :
+    (ProductFields.ofList types).toList = types := by
+  induction types with
+  | nil => rfl
+  | cons type rest ih => simp [ofList, toList, ih]
 
 inductive Kind where
   | protocol | math | local
@@ -81,6 +104,8 @@ inductive Descriptor where
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Ty)
   | boundedAt (domain : String)
+  | makeProduct (constructor : String)
+  | getProduct (index : Nat)
   | call (name : String)
   | apply (name : String)
   | protocolApply (name : String) (roles : List String)

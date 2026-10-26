@@ -239,6 +239,26 @@ pub fn check(
     row[1][1][0] = json!(path.with_extension("missing").to_str().unwrap());
     refuse(deployment, &key, None, "artifact-io");
     let ranges = frames(proof);
+    if !authored {
+        // Both terminal openings use the same setup and point, but different
+        // commitments. Swapping values preserves the product terminal formula;
+        // swapping proofs preserves both claimed values. Both must reach and
+        // fail an opening check, not merely framing or setup admission.
+        for tag in [1, 7] {
+            let messages: Vec<_> = ranges
+                .iter()
+                .filter(|r| proof[r.start + 5] == tag)
+                .collect();
+            assert_eq!(messages.len(), 2);
+            let (first, second) = (messages[0], messages[1]);
+            assert_eq!(first.len(), second.len());
+            assert_ne!(proof[first.clone()], proof[second.clone()]);
+            let mut swapped = proof.to_vec();
+            swapped[first.clone()].copy_from_slice(&proof[second.clone()]);
+            swapped[second.clone()].copy_from_slice(&proof[first.clone()]);
+            refuse(deployment, v, Some(&swapped), "Explicit(\"reject\")");
+        }
+    }
     let opening = ranges.iter().find(|r| proof[r.start + 5] == 7).unwrap();
     for (relative, expected) in [
         (0, "header"),

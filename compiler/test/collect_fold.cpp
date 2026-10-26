@@ -9,9 +9,8 @@ using namespace zkc::test;
 using namespace zkc::test::loops;
 
 namespace {
-FailureOr<finite::CollectFold> pair(kernel::ModuleOp unit,
-                                    uint64_t &remaining) {
-  auto &body = kernel::getEntry(unit).front();
+FailureOr<finite::CollectFold> pair(mlir::ModuleOp unit, uint64_t &remaining) {
+  auto &body = mathematical::getComputationEntry(unit).front();
   return finite::readCollectFold(&body.front(), body.front().getNextNode(),
                                  remaining);
 }
@@ -148,8 +147,8 @@ int main() {
         name + " composition preserves source, states, seeds and captures",
         [&] {
           auto unit = source(context, name);
-          OwningOpRef<kernel::ModuleOp> saved(
-              cast<kernel::ModuleOp>((*unit)->clone()));
+          OwningOpRef<mlir::ModuleOp> saved(
+              cast<mlir::ModuleOp>((*unit)->clone()));
           uint64_t remaining = 100000;
           auto description = pair(*unit, remaining);
           require(succeeded(description) && remaining < 100000 &&
@@ -278,7 +277,7 @@ int main() {
     cases.run("unsupported composition declines: " + reason, [&] {
       auto unit =
           source(context, reason == "captured alias" ? "indices" : "elements");
-      auto entrySource = kernel::getEntry(*unit);
+      auto entrySource = mathematical::getComputationEntry(*unit);
       auto *producer = &entrySource.front().front();
       auto *consumer = producer->getNextNode();
       auto body = helper(*unit, "body");
@@ -311,7 +310,7 @@ int main() {
         builder.create(state);
       } else {
         auto prototype = reason == "predicate" ? body : step;
-        builder.setInsertionPointToEnd(&unit->getBody().front());
+        builder.setInsertionPointToEnd(unit->getBody());
         auto predicate = func::FuncOp::create(
             builder, prototype.getLoc(), "select",
             builder.getFunctionType(

@@ -58,6 +58,43 @@ def test_rewritten_module_invalidates_builds(driver_module, tmp_path, monkeypatc
     assert module.read_text() == "changed\n"
 
 
+@pytest.mark.parametrize("write", [False, True])
+def test_normal_forms_require_a_fresh_module_build(driver_module, tmp_path, monkeypatch, write):
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    monkeypatch.setattr(driver_module, "LEAN", tmp_path / "lean")
+    output = tmp_path / "lean/Example/NormalForms.lean"
+    output.parent.mkdir(parents=True)
+    output.write_text("module\n")
+    request = tmp_path / "request.toml"
+    request.write_text('output = "lean/Example/NormalForms.lean"\n')
+    subject = SimpleNamespace(name="example", get=lambda *_: "request.toml")
+    driver, calls = recording(driver_module, tmp_path, write=write)
+    driver.built.add((str(driver_module.LEAN), "Example.NormalForms"))
+    record = {"generated": {}, "checks": []}
+    driver.normal_forms(subject, record)
+    assert calls[0][0][-1] == (str(request) if write else "--check")
+    assert calls[-1][0] == ["lake", "build", "Example.NormalForms"]
+    assert record["generated"]["lean/Example/NormalForms.lean"]["sha256"] == driver_module.file_digest(output)
+    assert record["checks"][0]["outcome"] == "accepted"
+
+
+def test_normal_forms_build_failure_cannot_record_acceptance(driver_module, tmp_path, monkeypatch):
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    monkeypatch.setattr(driver_module, "LEAN", tmp_path / "lean")
+    (tmp_path / "request.toml").write_text('output = "lean/Example/NormalForms.lean"\n')
+    subject = SimpleNamespace(name="example", get=lambda *_: "request.toml")
+    driver, _ = recording(driver_module, tmp_path)
+
+    def fail(*_args, **_kwargs):
+        raise driver_module.Refused("generated theorem did not elaborate")
+
+    monkeypatch.setattr(driver, "build", fail)
+    record = {"generated": {}, "checks": []}
+    with pytest.raises(driver_module.Refused, match="did not elaborate"):
+        driver.normal_forms(subject, record)
+    assert record == {"generated": {}, "checks": []}
+
+
 def test_threshold_is_evaluated_after_the_generated_facts(driver_module, tmp_path, monkeypatch):
     monkeypatch.setattr(driver_module, "ROOT", tmp_path)
     public = tmp_path / "public.json"

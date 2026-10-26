@@ -185,7 +185,7 @@ statistics. `verifyProgramArtifact` returns the admitted program after comparing
 it with physical SSA, so consumers can reuse the checked records.
 
 `registerDialects` installs the native dialect set and contributions. The
-protocol, local, data, crypto, algebra, polynomial, oracle, PCS, relation and Plan
+protocol, local, data, crypto, algebra, polynomial, commitment, relation and Plan
 dialects are registered. Plan describes native selected representations and
 kernels. Registration does not grant profile admission or transformation correctness.
 

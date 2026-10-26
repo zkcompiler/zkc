@@ -476,6 +476,7 @@ theorem operationOn_total (model : DomainModel) {I : PIR.Signature} (observation
     (args : Values model.Value op.arguments) (bodies : Values (RegionFunction model.Value I) op.regions) :
     Evaluation.operationOn model observations table op args bodies = .done (op.evalTotal model total args) := by
   cases op <;> simp [Op.total] at total
+  case makeProduct => cases bodies; rfl
   all_goals
     (rcases bodies with _ | _); (rcases args with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | _⟩⟩⟩); rfl
 
@@ -552,6 +553,7 @@ theorem literalTerm_eval (results : LawResults model laws) {Δ : Scope} (binders
   | .vector _, _ => rfl
   | .group _, _ => rfl
   | .service _, _ => rfl
+  | .sequence _, _ | .product .., _ => rfl
 
 theorem lawComps_eval (results : LawResults model laws) {Δ : Scope} (binders : Binders model Δ)
     (entry : Fin laws.length) (args : Terms laws Δ laws[entry].helper.inputs) :

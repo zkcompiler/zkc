@@ -77,13 +77,13 @@ void run(mlir::ModuleOp module, std::unique_ptr<Pass> pass) {
   manager.addPass(std::move(pass));
   require(succeeded(manager.run(module)), "compiler pass refused");
 }
-kernel::ModuleOp numericalUnit(mlir::ModuleOp module) {
-  auto units = owner(module).getBody().front().getOps<kernel::ModuleOp>();
+mlir::ModuleOp numericalUnit(mlir::ModuleOp module) {
+  auto units = owner(module).getBody().front().getOps<mlir::ModuleOp>();
   require(!units.empty(), "missing logical numerical unit");
   return *units.begin();
 }
 func::FuncOp numericalEntry(mlir::ModuleOp module) {
-  return kernel::getEntry(numericalUnit(module));
+  return mathematical::getComputationEntry(numericalUnit(module));
 }
 local::FuncOp localFunction(mlir::ModuleOp module, StringRef name) {
   auto result = SymbolTable(owner(module)).lookup<local::FuncOp>(name);
@@ -145,7 +145,7 @@ int main() {
     auto original = parse(demanded, context);
     auto logical = exec(*original);
     auto unit = numericalUnit(*logical);
-    auto entry = kernel::getEntry(unit);
+    auto entry = mathematical::getComputationEntry(unit);
     OpBuilder builder(&context);
     entry->setAttr("sym_visibility", builder.getStringAttr("public"));
     entry->setAttr("data.preconditions", builder.getArrayAttr({}));
@@ -253,7 +253,7 @@ int main() {
     auto source = parse(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module {
- kernel.module @numerical {
+ module @numerical attributes {exec.computation} {
    func.func @square(%x:!F)->!F {
      %r = algebra.field_multiply %x,%x : (!F,!F)->!F
      func.return %r : !F
@@ -267,7 +267,7 @@ module {
 )mlir",
                         context);
     require(succeeded(verify(*source)), "unused caller source refused");
-    auto unit = cast<kernel::ModuleOp>(source->getBody()->front());
+    auto unit = cast<mlir::ModuleOp>(source->getBody()->front());
     auto before = copy(*source);
     mathematical::RealizationWork work;
     auto output = realizeKernelEntry(unit, "square", {}, work);
@@ -286,7 +286,7 @@ module {
     auto source = parse(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module {
- kernel.module @numerical {
+ module @numerical attributes {exec.computation} {
    func.func @identity(%x:!F)->!F {
      func.return %x : !F
    }
@@ -294,7 +294,7 @@ module {
 }
 )mlir",
                         context);
-    auto unit = cast<kernel::ModuleOp>(source->getBody()->front());
+    auto unit = cast<mlir::ModuleOp>(source->getBody()->front());
     auto before = copy(*source);
     mathematical::RealizationWork work;
     auto output = realizeKernelEntry(unit, "identity", {}, work);
@@ -327,8 +327,7 @@ module {
     });
     require(bool(observation), "missing variant observation fixture");
     auto numerical = kernelRecipeUnit(owner(*source));
-    OpBuilder builder(&numerical->getBody().front(),
-                      numerical->getBody().front().end());
+    OpBuilder builder(numerical->getBody(), numerical->getBody()->end());
     auto entry = func::FuncOp::create(
         builder, observation.getLoc(), "present",
         builder.getFunctionType(observation->getOperandTypes(),
@@ -340,8 +339,8 @@ module {
     auto *result = builder.clone(*observation.getOperation(), values);
     func::ReturnOp::create(builder, entry.getLoc(), result->getResults());
     require(succeeded(verify(*numerical)), "variant recipe source refused");
-    OwningOpRef<kernel::ModuleOp> before(
-        cast<kernel::ModuleOp>(numerical->clone()));
+    OwningOpRef<mlir::ModuleOp> before(
+        cast<mlir::ModuleOp>(numerical->clone()));
     mathematical::RealizationWork work;
     auto output = realizeKernelEntry(*numerical, "presence", {}, work);
     require(output && succeeded(kernel::verifyRecipeOutput(*output)) &&
@@ -401,7 +400,8 @@ module {
                 "checked edge failed");
         bool residual = false;
         lowered->walk([&](Operation *op) {
-          residual |= isa<kernel::ModuleOp, kernel::CallOp>(op);
+          residual |=
+              (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
         });
         require(!residual, "unresolved numerical code survived");
         auto result = localFunction(*lowered, "realized");
@@ -630,7 +630,7 @@ module {
             fixture(context, "structured-source/realization-finite.mlir");
         auto logical = exec(*source, {false, false});
         OpBuilder builder(numericalUnit(*logical));
-        auto second = cast<kernel::ModuleOp>(
+        auto second = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
         SymbolTable::setSymbolName(second, "second_numerical");
         auto wrapper = localFunction(*logical, "realized");
@@ -680,7 +680,7 @@ module {
         require(succeeded(mathematical::expandMathRealizations(*candidate)),
                 "formation failed");
         auto unit = numericalUnit(*candidate);
-        auto domain = *unit.getBody().front().getOps<data::DomainOp>().begin();
+        auto domain = *unit.getBody()->getOps<data::DomainOp>().begin();
         auto oldName = SymbolTable::getSymbolName(domain);
         SymbolTable::setSymbolName(domain, "other_items");
         unit.walk([&](Operation *op) {
@@ -725,7 +725,7 @@ module {
         auto source = parse(realization, context);
         auto logical = exec(*source);
         OpBuilder builder(numericalUnit(*logical));
-        auto dormant = cast<kernel::ModuleOp>(
+        auto dormant = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
         SymbolTable::setSymbolName(dormant, "dormant");
         require(succeeded(verify(*logical)), "dormant closure malformed");
@@ -734,9 +734,9 @@ module {
                 "dormant unit prevented lowering");
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "dormant edge failed");
-        dormant->setAttr("unsupported", builder.getUnitAttr());
+        dormant->setAttr("test.unsupported", builder.getUnitAttr());
         auto frozen = copy(*logical);
-        expectRefusal(*logical, "kernel-formation",
+        expectRefusal(*logical, "computation-formation",
                       [&] { return kernel::lowerKernels(*logical); });
         require(OperationEquivalence::isEquivalentTo(
                     logical->getOperation(), frozen->getOperation(),
@@ -1242,7 +1242,9 @@ module {
         require(succeeded(mathematical::expandMathRealizations(*prepared)),
                 "source realization formation failed");
         bool polynomial = false;
-        prepared->walk([&](kernel::ModuleOp unit) {
+        prepared->walk([&](mlir::ModuleOp unit) {
+          if (!mathematical::isComputationUnit(unit))
+            return;
           unit.walk([&](Operation *op) {
             polynomial |= op->getName().getDialectNamespace() == "poly";
           });
@@ -1368,7 +1370,7 @@ module {
         auto source = parse(realization, context);
         auto logical = exec(*source);
         OpBuilder builder(numericalUnit(*logical));
-        auto secondUnit = cast<kernel::ModuleOp>(
+        auto secondUnit = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
         SymbolTable::setSymbolName(secondUnit, "second_unit");
         auto wrapper = localFunction(*logical, "realized");

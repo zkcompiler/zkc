@@ -40,7 +40,7 @@ pub relation IndexedRead<F: Field>(parameter table: Vector<F>, statement positio
 }
 
 // Ordered invocation boundary for protocol consumers. Mathematical evaluation
-// is total; installing and running its finite computation can stop.
+// predicates are total; admitting and running their finite computations can stop.
 pub fn check_membership<F: Field>(table: Vector<F>, queries: Sequence<Query<F>>) -> bool effects(stop) where () {
   return membership(table, queries);
 }

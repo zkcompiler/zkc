@@ -18,7 +18,7 @@ abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"items", [vector], "bls12-381.fr", .here, true⟩,
+  ⟨⟨"items", [vector], (.vector "bls12-381.fr"), .here, true⟩,
     [scalar, scalar], [], "step", "", .math⟩
 
 def stepReturn : Region dialect
@@ -51,7 +51,7 @@ def protocolSignature : ProtocolSignature where
 set_option smartUnfolding true in
 def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
   .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.fold {domain := {name := "items", inputs := [.vector "bls12-381.fr"], field := "bls12-381.fr", container := .here, indices := true}, state := [.field "bls12-381.fr", .field "bls12-381.fr"], captures := [], step := "step", predicate := "", kind := .math}) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.calculate (.fold {domain := {name := "items", inputs := [.vector "bls12-381.fr"], collection := .vector "bls12-381.fr", container := .here, indices := true}, state := [.field "bls12-381.fr", .field "bls12-381.fr"], captures := [], step := "step", predicate := "", kind := .math}) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here (.cons (.there .here) .nil))
 
 -- The program is the literal checked unit admitted from the exact exported
@@ -157,7 +157,10 @@ theorem process_eq_reference (xs : List F) (a b : F)
   have domainAdmitted :
       (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
         .returned (List.range xs.length) := by
-    simp [foldSpec, DomainSpec.denote, Finite.Domain.admit, Values.get, lengthValid]
+    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
+      (.elements (List.range xs.length))).admit = _
+    simp [Finite.Domain.admit, lengthValid]
+    rfl
   have folded := Evaluation.denoteFold_reference (table F G) foldSpec (.cons xs .nil) (outputs a b) .nil
     (List.range xs.length) domainAdmitted
     (fun state (i : Nat) => outputs (G := G) (state.get (.there .here)) (xs[i]?.getD 0))
@@ -195,8 +198,13 @@ theorem process_exhausted (xs : List F) (a b : F)
   change Evaluation.denoteFold (table F G) foldSpec
     ((Values.cons xs Values.nil).append ((outputs a b).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack]
-  simp [Finite.execute, DomainSpec.denote, foldSpec, Values.get, Finite.Domain.admit,
-    lengthInvalid, Finite.admitThen]
+  have refused : (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
+      .stopped .exhausted := by
+    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
+      (.elements (List.range xs.length))).admit = _
+    simp [Finite.Domain.admit, lengthInvalid]
+    rfl
+  simp [Finite.execute, refused, Finite.admitThen]
 
 /-- The complete equation includes domain admission on every input. -/
 theorem process_eq_checked_reference (xs : List F) (a b : F) :

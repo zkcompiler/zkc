@@ -174,6 +174,8 @@ private def run : IO Unit := do
   let .ok generated := sourceAliasSource "Tests.GeneratedOriginAliases" "Tests.StructuredOriginFixture" snapshot ["helper"]
     | throw (IO.userError "alias source refused")
   test "generated aliases retain the namespace" (generated.contains "Tests.GeneratedOriginAliases")
+  IO.FS.createDirAll ".lake/structured-origin"
+  IO.FS.writeFile ".lake/structured-origin/GeneratedOriginAliases.lean" generated
   let errors ← failures.get
   unless errors.isEmpty do throw (IO.userError s!"origin failures: {errors.reverse}")
   IO.println s!"structured-origin: {← count.get} controls passed"

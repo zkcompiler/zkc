@@ -54,7 +54,7 @@ def chargeReplay (work : Nat) : Analysis Unit := do
   set { budget with replay := budget.replay - work }
 
 def noServices (types : List Ty) : Analysis Unit := do
-  if types.any (fun ty => match ty with | .service _ => true | _ => false) then
+  if types.any Ty.isService then
     throw "structured-availability-service"
 
 /-- Charge each membership search and copied prefix before constructing a union.

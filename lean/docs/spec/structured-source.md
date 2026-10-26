@@ -274,6 +274,13 @@ kernel evaluates (`blsModulus_prime`).
 `assignment F G` maps Boolean/index/field/vector/group/service sorts to
 `Bool`, `Nat`, `F`, `List F`, `G`, and `Nat`. Admission resolves the nominal
 identities of these sorts against the [domain catalogue](#domain-catalogue).
+Sequences interpret as ordered lists of their element interpretation. Nominal
+products interpret as heterogeneous products of their ordered component types.
+`ProductFields.pack` and `unpack` are inverse; construction and projection are
+total and use that same representation in the uniform and per-domain models.
+`Collection` selects a field vector or sequence for a finite domain. Elements
+and indices preserve exact container identity, order and the u64 length check.
+Only field-vector bounded reads are currently admitted.
 The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
 `Module F G` and decidable equality laws. Group scaling is scalar action with
 group operand first in the source. No arbitrary group is silently equated to
@@ -300,7 +307,11 @@ conditional completion. The logical semantics has no depth fuel. Finite theorem
 families use the same explicit `F,G` assignment and evaluator.
 `SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
 There is no separate scalar arithmetic or unsupported-sort fallback.
-Selection is interpreted for every admitted type, including vectors and indices.
+Selection is interpreted for every admitted type, including products and sequences.
+The Common scalar effect adapter refuses aggregate messages. Construction
+transcript payload profiles also refuse aggregates until a separate encoding
+rule admits them. The logical public-value binding representation retains
+products and sequences injectively; this establishes no canonical byte encoding.
 
 ### Domain carriers and models
 
@@ -488,27 +499,33 @@ protocol functions.
 
 Realization requires the declaration's complete input and output ABIs to match
 those of its helper, including vector projections and zero or multiple results.
-Its transitive Math fragment is
-region-free: admitted Fr arithmetic/equality, G1 operations/equality, pure index
-constant/equality, Boolean operations, supported selection, Math calls and
-positional returns. No finite operation, bounded read, exec, Local control or
-helper precondition is admitted in that closure. Totality is a separate semantic
-theorem about the actual checked closure; neither this operation list nor a
-native effect annotation proves it.
+Its general Math computation fragment admits field/group operations, pure
+index and Boolean operations, selection, product construction/projection,
+Math calls, finite folds, checked reads and positional returns. Local control,
+exec and services remain excluded. The root has no external premise; ordinary
+formation discharges bounds on internal calls and finite callbacks. Both the
+step and predicate remain in the selected closure, even when never reached.
 
-Formation validates the shared typed operations. The checked raw preparation
-profile and selected helper closure are the single operation/type authority;
-ordinary declaration ordering and protocol availability enforce cycles and depth.
-Declaration ordering precedes preparation-profile selection, so an ordering-depth
-failure takes precedence when a unit also has a preparation-profile violation.
-A separate traversal of retained Math declarations checks only that the entire
-closure has no preconditions, since those original premises are not stored in
-`CheckedDefinition`. It supplies no competing operation profile or depth rule.
-Successful whole-unit admission entails `PreparationRootsSelected`; the
-`Imported` inversion lemmas recover the exact selected root signature of every
-retained realization/map. Totality consumers can use that evidence together
-with actual checked-definition membership and its exact raw derivation, without
-supplying a semantic callee-totality assumption or recomputing root membership.
+Formation validates the shared typed operations. One `selectMathHelpers`
+procedure selects closures using explicit type/body predicates over the actual
+checked dependency table. `computationHelpers` is the general realization
+admission set. `preparationHelpers` retains the narrower region-free fragment
+used by immediate-return proofs and the scalar-map fragment. `mapHelpers`
+additionally binds every selected helper port and intermediate result to the
+declaration's exact field, including discarded values and dead calls; its
+subset theorem supplies the generic immediate-return certificate. Finite folds and
+checked reads are excluded from immediate-return evidence.
+
+Ordinary declaration ordering and protocol availability enforce cycles and
+depth before profile selection. A separate retained-declaration traversal checks
+empty preconditions throughout scalar-map closures; realization checks only its
+root's premises. `PreparationRootsSelected` and its `Imported` inversion lemmas
+identify the exact admitted Math roots. General realization admission cannot
+supply an unconditional return law: reached finite domains can exhaust.
+`imported_immediate_realization_returns` instead requires explicit membership
+of the exact root in the narrower checked closure, alongside retained declaration,
+checked-body membership and raw derivation. It does not assume semantic callee
+totality. Finite formula laws use their own explicit input-domain premises.
 
 Map's root helper has only Fr scalar inputs and exactly one Fr scalar output.
 An input becomes an Fr vector exactly when its mask entry is true, and the map
@@ -805,7 +822,7 @@ one through generic operation, Region and table-fold interpretation laws.
 
 `CommonAdapter` embeds the Common effect fragment and proves that
 projection after embedding preserves the entire process. Projection of extra
-index/vector messages refuses explicitly. Concrete contract use must establish
+index/vector/product/sequence messages refuses explicitly. Concrete contract use must establish
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
 

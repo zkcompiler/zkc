@@ -464,9 +464,10 @@ public:
       return refuse(after, "expected one protocol owner");
     llvm::DenseMap<Operation *, llvm::DenseSet<Operation *>> generated;
     for (auto origin : origins) {
-      auto unit = origin.entry
-                      ? dyn_cast_or_null<ModuleOp>(origin.entry->getParentOp())
-                      : ModuleOp();
+      auto unit =
+          origin.entry
+              ? dyn_cast_or_null<mlir::ModuleOp>(origin.entry->getParentOp())
+              : mlir::ModuleOp();
       if (!unit || unit->getParentOp() != owner.getOperation() ||
           !origin.entry.getBody().hasOneBlock() ||
           !charge(origin.entry, remaining) ||
@@ -618,7 +619,8 @@ LogicalResult verifyKernelNormalizationContext(
         a->getParentOfType<mlir::ModuleOp>() != source ||
         b->getParentOfType<mlir::ModuleOp>() != normalized ||
         unit->getParentOp() != proposal.getOperation() ||
-        declarations.lookup(unit.getSymName()) || !targets.insert(b).second ||
+        declarations.lookup(SymbolTable::getSymbolName(unit)) ||
+        !targets.insert(b).second ||
         !context.appendedDeclarations.insert(unit).second ||
         !context.callees.try_emplace(a, b.getCalleeAttr()).second)
       return refuse(normalized, "invalid or duplicate checked callee rewrite");

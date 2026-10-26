@@ -32,6 +32,12 @@ endfunction()
 add_zkc_test(kernel_ir IR kernel-ir)
 mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
 
+add_zkc_test(structured_computation Transforms structured-computation)
+mlir_target_link_libraries(zkc-structured_computation-test PRIVATE MLIRParser)
+
+add_zkc_test(quotient_calculations Compiler quotient-calculations)
+mlir_target_link_libraries(zkc-quotient_calculations-test PRIVATE MLIRParser)
+
 add_zkc_test(total_closure IR total-closure)
 target_compile_definitions(zkc-total_closure-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

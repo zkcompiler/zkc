@@ -513,7 +513,7 @@ def boundary_cases(suite, unit_text):
 ''' + helpers + '''
 "protocol.func"() ({ ^entry(%flag:i1):
 ''' + body + '\n"protocol.return"(' + result + ''') : (i1)->()
-}) {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {sym_name="main",origin=["main",[]],function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }'''
 
     def instruction_boundary():
@@ -586,15 +586,18 @@ def boundary_cases(suite, unit_text):
 
 
 def installed_rows_cases(suite):
-    """Every installed field, group and random service exports native rows that
-    Lean decodes and finds consistent. Lean then refuses them only because its
-    environment does not list them, or does not admit the sort instance."""
+    """Native rows must match Lean's selected catalogue and sort admission.
+
+    Koala Bear rows are admitted; other installed rows are refused when the
+    formal environment omits the identity or its particular sort instance.
+    Reader admission alone does not establish a field realization theorem.
+    """
     def unit(declarations="", inputs=""):
         return ('''module { "protocol.module"() ({
 ''' + declarations + '''
 "protocol.func"() ({ ^entry(%flag:i1''' + (",%service:" + inputs if inputs else "") + '''):
 "protocol.return"(%flag) : (i1)->()
-}) {sym_name="main",function_type=(i1''' + ("," + inputs if inputs else "") + ''')->i1,roles=["P"],input_roles=[["P"]'''
+}) {sym_name="main",origin=["main",[]],function_type=(i1''' + ("," + inputs if inputs else "") + ''')->i1,roles=["P"],input_roles=[["P"]'''
                 + (',["P"]' if inputs else "") + '''],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }''')
 
@@ -604,19 +607,23 @@ def installed_rows_cases(suite):
 
     unknown = "structured-catalogue-unknown"
     subjects = [(identity, dead("field", identity), unknown) for identity in [
-        "ristretto255.scalar", "bn254.fr", "koala-bear", "koala-bear.ext8-binomial3",
+        "ristretto255.scalar", "bn254.fr",
         "koala-bear.ext4-binomial3", "gf2-64.pentanomial-4-3-1",
         "gf2-64.pentanomial-4-3-1.ext3-trinomial1"]]
+    subjects += [(identity, dead("field", identity), None)
+                 for identity in ["koala-bear", "koala-bear.ext8-binomial3"]]
     subjects += [(identity, dead("group", identity), unknown) for identity in [
         "bn254.g1", "bn254.g2", "bn254.gt", "ristretto255.group", "edwards25519.prime"]]
     # Rows the environment lists, at sort instances it does not admit.
     subjects += [(identity, dead("group", identity), "structured-type-unadmitted")
                  for identity in ["bls12-381.g2", "bls12-381.gt"]]
     subjects += [(contract, unit(inputs=f'!protocol.service_ref<"{contract}">'), unknown) for contract in [
-        "random.bn254.fr/0", "random.ristretto255.scalar/0", "random.koala-bear.ext8-binomial3/0"]]
+        "random.bn254.fr/0", "random.ristretto255.scalar/0"]]
+    subjects.append(("random.koala-bear.ext8-binomial3/0",
+                     unit(inputs='!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'), None))
     for name, source, code in subjects:
         label = "installed-rows-" + name.replace("/", "-")
-        def refused(label=label, source=source, code=code):
+        def check_row(label=label, source=source, code=code):
             folder = suite.directory / label
             folder.mkdir(exist_ok=True)
             original = folder / "source.mlir"
@@ -625,8 +632,15 @@ def installed_rows_cases(suite):
                 suite.tools["compiler"], "protocol-structured", original, "--symbol=main"]))
             if not (snapshot[9][0] or snapshot[9][1]):
                 raise AssertionError(snapshot[9])
-            suite.refuse_snapshot(label, snapshot, code)
-        suite.case(label, refused)
+            if code is None:
+                path = folder / "source.json"
+                write_json(path, snapshot)
+                result = json.loads(suite.command(label, [suite.tools["lean"], "check", path]))
+                if result != ["checked", snapshot[2], snapshot[3]]:
+                    raise AssertionError(result)
+            else:
+                suite.refuse_snapshot(label, snapshot, code)
+        suite.case(label, check_row)
 
 
 def run_cases(suite):

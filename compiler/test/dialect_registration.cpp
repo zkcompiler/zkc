@@ -49,8 +49,9 @@ int main() {
   check<zkc::algebra::AlgebraDialect>(context, "algebra");
   check<zkc::poly::PolynomialDialect>(context, "poly");
   check<zkc::plan::PlanDialect>(context, "plan");
-  check<zkc::pcs::PCSDialect>(context, "pcs");
-  check<zkc::oracle::OracleDialect>(context, "oracle");
+  check<zkc::commitment::CommitmentDialect>(context, "commitment");
+  require(!registry.getDialectAllocator("pcs"));
+  require(!registry.getDialectAllocator("oracle"));
   check<zkc::relation::RelationDialect>(context, "relation");
   require(!registry.getDialectAllocator("claim"));
   check<mlir::func::FuncDialect>(context, "func");

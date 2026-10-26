@@ -112,6 +112,7 @@ end Two
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.sourceInputs_surjective
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.representable_iff
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.honestInput_iff
+#print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.source_clauses
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.runtimeInputs_eq
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.preparation
 #print axioms ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI.honestInput_exists
@@ -122,6 +123,7 @@ end Two
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.sourceInputs_surjective
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.representable_iff
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.honestInput_iff
+#print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.source_clauses
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.runtimeInputs_eq
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.preparation
 #print axioms ZkcSecurity.Examples.Generated.Components.TwoSumsABI.honestInput_exists

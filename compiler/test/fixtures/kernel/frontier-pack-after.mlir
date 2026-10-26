@@ -1,7 +1,7 @@
 !F = !algebra.field<"bls12-381.fr">
 !A = !algebra.field_array<"bls12-381.fr", 2>
 module { "protocol.module"() ({
-  kernel.module @first_unit {
+  module @first_unit attributes {exec.computation} {
     func.func @evaluate(%a: !F, %b: !F) -> (!A, !F) {
       %x = algebra.field_subtract %a, %b : (!F, !F) -> !F
       %y = algebra.field_subtract %a, %b : (!F, !F) -> !F
@@ -9,7 +9,7 @@ module { "protocol.module"() ({
       func.return %p, %y : !A, !F
     }
   }
-  kernel.module @second_unit {
+  module @second_unit attributes {exec.computation} {
     func.func @evaluate(%a: !A, %element: !F) -> !F {
       func.return %element : !F
     }

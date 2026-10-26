@@ -39,6 +39,10 @@ class RecipeReader {
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            "numerical recipes differ"};
+  static bool representation(Type source, Type actual) {
+    return isa<poly::QuotientType>(source) ? isa<algebra::IndicesType>(actual)
+                                           : source == actual;
+  }
   bool charge(uint64_t amount = 1) {
     if (amount > remaining)
       return false;
@@ -149,7 +153,7 @@ class RecipeReader {
       } else {
         auto value = recipe(&op, at, operands);
         if (!value || op.getNumResults() != 1 ||
-            value.getType() != op.getResult(0).getType())
+            !representation(op.getResult(0).getType(), value.getType()))
           return failure();
         values[op.getResult(0)] = value;
       }
@@ -229,6 +233,31 @@ class RecipeReader {
       cursor = cursor->getNextNode();
       return value;
     };
+    if (isa<poly::ObserveQuotientOp>(source))
+      return inputs[0];
+    if (isa<poly::ProjectQuotientOp, poly::AddQuotientOp,
+            poly::SubtractQuotientOp, poly::MultiplyQuotientOp>(source)) {
+      auto ring = cast<poly::QuotientType>(source->getResult(0).getType());
+      const auto modulus = std::to_string(ring.getModulus());
+      auto q = take("index.constant", {}, {}, {modulus});
+      if (!q)
+        return {};
+      SmallVector<Value> args(inputs);
+      args.push_back(q);
+      if (isa<poly::ProjectQuotientOp>(source)) {
+        const auto degree = std::to_string(ring.getDegree());
+        auto n = take("index.constant", {}, {}, {degree});
+        if (!n)
+          return {};
+        args.push_back(n);
+        return take("quotient.project", args);
+      }
+      if (isa<poly::AddQuotientOp>(source))
+        return take("quotient.add", args);
+      if (isa<poly::SubtractQuotientOp>(source))
+        return take("quotient.subtract", args);
+      return take("quotient.multiply", args);
+    }
     if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(source)) {
       auto col = interpretCollection(inputs[0].getType());
       SmallVector<StringRef> args;
@@ -651,14 +680,15 @@ public:
         return finish(false);
       // Primitive roots keep the original occurrence, while a finite recipe
       // has its documented traversal suffixes. No label establishes meaning.
-      if (!finite && !results.empty()) {
+      if (!finite && !results.empty() &&
+          !isa<poly::ObserveQuotientOp>(resultSource)) {
         auto rootSite =
             results.back().getDefiningOp()->getAttrOfType<StringAttr>("site");
         if (!rootSite || rootSite.getValue() != *site)
           return finish(false);
       }
       for (auto [source, actual] : zip(resultSource->getResults(), results)) {
-        if (source.getType() != actual.getType())
+        if (!representation(source.getType(), actual.getType()))
           return finish(false);
         values[source] = actual;
       }
@@ -674,10 +704,11 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
     finite::VerificationLimits limits, finite::VerificationResult &outcome,
     NumericalSelection *selection) {
   outcome = {finite::VerificationStatus::Mismatch, "numerical recipes differ"};
-  auto unit =
-      source ? dyn_cast_or_null<ModuleOp>(source->getParentOp()) : ModuleOp();
-  if (!unit || source != getEntry(unit) || !source.getBody().hasOneBlock() ||
-      source.front().empty() || callSite.empty())
+  auto unit = source ? dyn_cast_or_null<mlir::ModuleOp>(source->getParentOp())
+                     : mlir::ModuleOp();
+  if (!unit || source != mathematical::getComputationEntry(unit) ||
+      !source.getBody().hasOneBlock() || source.front().empty() ||
+      callSite.empty())
     return failure();
   CheckedHelperNormalizations helpers(unit);
   if (failed(helpers.readback(&remaining)))
@@ -703,8 +734,8 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
   return verifyLocalFragment(owner);
 }
 
-LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
-                                 StringRef callSite,
+LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
+                                 mlir::ModuleOp candidate, StringRef callSite,
                                  MathematicalSelectionPolicy policy,
                                  finite::VerificationLimits limits,
                                  finite::VerificationResult *reported,
@@ -732,7 +763,7 @@ LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
   };
   if (failed(verifyRecipeOutput(candidate)))
     return finish(false);
-  auto entry = getEntry(source);
+  auto entry = mathematical::getComputationEntry(source);
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
   if (!entry || !candidate->getAttrs().empty() || !owner ||

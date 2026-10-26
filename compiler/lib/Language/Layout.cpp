@@ -342,14 +342,24 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     auto formed = formalType(type.domain, type.arguments);
     if (!formed)
       return formed.takeError();
-    auto field = builtinLayout(type.arguments[0]);
-    if (!field)
-      return field.takeError();
-    const auto &arity = type.arguments[1].dimension;
-    if (!arity.isClosed())
-      return error("source.generic", "formal layout requires a closed arity");
-    result->formal = true;
-    result->leaves = {PolynomialLayout{field->identity, arity.closedValue()}};
+    if (type.domain == "quotient") {
+      const auto &q = type.arguments[0].dimension;
+      const auto &n = type.arguments[1].dimension;
+      if (!q.isClosed() || !n.isClosed())
+        return error("source.generic",
+                     "quotient layout requires closed parameters");
+      result->formal = true;
+      result->leaves = {QuotientLayout{q.closedValue(), n.closedValue()}};
+    } else {
+      auto field = builtinLayout(type.arguments[0]);
+      if (!field)
+        return field.takeError();
+      const auto &arity = type.arguments[1].dimension;
+      if (!arity.isClosed())
+        return error("source.generic", "formal layout requires a closed arity");
+      result->formal = true;
+      result->leaves = {PolynomialLayout{field->identity, arity.closedValue()}};
+    }
   } else if (type.kind == K::Builtin) {
     auto native = builtinLayout(
         type, [&](const Type &element) -> Expected<protocol::BoundType> {

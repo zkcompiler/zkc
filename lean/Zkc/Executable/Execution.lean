@@ -82,8 +82,8 @@ inductive Kernel where
   | numerical (reduction : Numerical.Reduction) (domain : String) (characteristic : Nat)
   deriving DecidableEq, Repr
 
-/-- One installed operation: a binding's contract, static arguments and
-implementation, and the meaning assumed for it. -/
+/-- One installed operation: a binding's contract, logical arguments,
+implementation, exact physical specialization and the meaning assumed for it. -/
 structure Installed where
   contract : String
   arguments : List String

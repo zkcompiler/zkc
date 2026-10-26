@@ -173,7 +173,7 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
       profile == protocol_ir::Profile::Participant) {
     for (auto &op : after->getRegion(0).front())
       if ((targetHelpers.contains(&op) ||
-           isa<algebra::MapRealizeOp, kernel::ModuleOp, local::FuncOp,
+           isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
                local::OperationBindingOp>(op)) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
@@ -181,7 +181,7 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   }
   for (auto &op : before->getRegion(0).front()) {
     if (!sourceHelpers.contains(&op) &&
-        !isa<algebra::MapRealizeOp, kernel::ModuleOp, local::FuncOp,
+        !isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
              local::OperationBindingOp>(op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);

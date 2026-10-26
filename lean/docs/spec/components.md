@@ -348,7 +348,10 @@ The common ABI separates distinct source-coordinate parameters from ordered
 relation-selector payloads. Payload order and repeated selectors are preserved;
 empty public rows use their unique packed value without an empty existential.
 Retained input clauses stay in `honestInput_iff` together with source-sort ABI
-representability. An optional clause presentation must prove equivalence to the exact
+representability. These premises check u64 indices and collection lengths,
+including every member of nested products and sequences. They do not grant
+native ABI support: the current uniform ABI generator still explicitly refuses
+aggregate input types. An optional clause presentation must prove equivalence to the exact
 retained clauses for every source input. Without it, the generated condition is
 the actual clause conjunction.
 

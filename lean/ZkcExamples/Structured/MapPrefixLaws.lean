@@ -24,7 +24,9 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 theorem domain_admit (point : List F) :
     (foldSpec.domain.denote (.cons point (.nil : Values (assignment F G) []))).admit =
       if point.length < indexLimit then .returned point else .stopped .exhausted := by
-  simp only [foldSpec, DomainSpec.denote, Values.get, Finite.Domain.admit, decide_eq_true_eq]
+  change (Finite.Domain.check (point.length < indexLimit) .exhausted (.elements point)).admit = _
+  simp only [Finite.Domain.admit, decide_eq_true_eq]
+  rfl
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem triple_eta {Value : Ty → Type} {a b c : Ty} (value : Values Value [a,b,c]) :

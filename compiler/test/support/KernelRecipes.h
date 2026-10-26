@@ -34,13 +34,13 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
 
 // Keep the Protocol fixture immutable. A recipe source owns only standard
 // functions and domains, including every original dependency and its premises.
-inline mlir::OwningOpRef<kernel::ModuleOp>
+inline mlir::OwningOpRef<mlir::ModuleOp>
 kernelRecipeUnit(mlir::Operation *sourceOwner) {
   mlir::OpBuilder builder(sourceOwner->getContext());
-  mlir::OwningOpRef<kernel::ModuleOp> unit(
-      kernel::ModuleOp::create(builder, sourceOwner->getLoc(), "numerical"));
-  unit->getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&unit->getBody().front());
+  mlir::OwningOpRef<mlir::ModuleOp> unit(
+      mlir::ModuleOp::create(builder, sourceOwner->getLoc(), "numerical"));
+  unit->getOperation()->setAttr("exec.computation", builder.getUnitAttr());
+  builder.setInsertionPointToEnd(unit->getBody());
   for (auto &definition : sourceOwner->getRegion(0).front()) {
     if (!mlir::isa<mlir::func::FuncOp, data::DomainOp>(definition))
       continue;
@@ -51,7 +51,7 @@ kernelRecipeUnit(mlir::Operation *sourceOwner) {
   return unit;
 }
 
-inline mlir::OwningOpRef<kernel::ModuleOp>
+inline mlir::OwningOpRef<mlir::ModuleOp>
 kernelRecipeSource(mlir::Operation *sourceOwner, llvm::StringRef helper,
                    llvm::StringRef entryName) {
   auto unit = kernelRecipeUnit(sourceOwner);
@@ -59,8 +59,7 @@ kernelRecipeSource(mlir::Operation *sourceOwner, llvm::StringRef helper,
   require(bool(prototype), "missing Kernel recipe helper");
   require(!mlir::SymbolTable(*unit).lookup(entryName),
           "Kernel recipe entry name collides with a dependency");
-  mlir::OpBuilder builder(&unit->getBody().front(),
-                          unit->getBody().front().end());
+  mlir::OpBuilder builder(unit->getBody(), unit->getBody()->end());
   auto entry = mlir::cast<mlir::func::FuncOp>(builder.clone(*prototype));
   entry.setSymName(entryName);
   entry.setPublic();
@@ -72,7 +71,7 @@ kernelRecipeSource(mlir::Operation *sourceOwner, llvm::StringRef helper,
 // Exercise recipe production directly, without normalizing away mutation
 // targets or debiting the optional callback work during test setup.
 inline mlir::OwningOpRef<mlir::ModuleOp>
-realizeKernelEntry(kernel::ModuleOp source, llvm::StringRef callSite,
+realizeKernelEntry(mlir::ModuleOp source, llvm::StringRef callSite,
                    MathematicalSelectionPolicy policy,
                    mathematical::RealizationWork &work,
                    finite::VerificationLimits limits = {},

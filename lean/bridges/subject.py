@@ -12,7 +12,8 @@ pipeline, with no step specific to a subject:
    renderer library, printed Bodies and generated Views included, and require
    the committed modules to equal them (`--write` rewrites them first);
 3. regenerate the per-Entry glue and executable facts, which the kernel checks
-   when built, and check the normal-form request with `normal_forms.py`;
+   when built; check and build the requested normal-form module before deriving
+   dependent construction, executable or claim receipts;
 4. run the kernel checks on the fresh exports: the composed construction and
    projection check (or the construction rule alone), the occurrence-template
    encoding and the lowering rule;
@@ -44,6 +45,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 LEAN = ROOT / "lean"
@@ -881,8 +883,16 @@ class Driver(Runner):
             return
         self.run([sys.executable, NORMAL_FORMS, ROOT / request, *([] if self.args.write else ["--check"])],
                  name=f"{subject.name}:normal-forms")
-        record["normal_forms"] = dict(request=request)
-        record_accepted(record, "normal-forms", request=request)
+        output = (ROOT / tomllib.loads((ROOT / request).read_text())["output"]).resolve()
+        module = ".".join(output.relative_to(LEAN).with_suffix("").parts)
+        # The generator can rewrite a module already imported earlier in this
+        # run. Build it before recording success, even if its text matches.
+        self.built.clear()
+        self.build(module)
+        record["generated"][str(output.relative_to(ROOT))] = dict(
+            sha256=file_digest(output), role="normal-forms")
+        record["normal_forms"] = dict(request=request, module=module)
+        record_accepted(record, "normal-forms", request=request, module=module)
 
     def subject(self, subject):
         record = dict(format="zkc.subject-evidence/0", subject=subject.name,
@@ -907,6 +917,7 @@ class Driver(Runner):
         if subject.profile("structured"):
             interactive = self.interactive(subject, record)
             self.claim_inventory(record, [interactive])
+        self.normal_forms(subject, record)
         run = None
         if subject.profile("construction"):
             artifacts, entry = self.proof(subject, record)
@@ -918,7 +929,6 @@ class Driver(Runner):
         if subject.profile("scalar"):
             record["scalar"] = dict(contract=subject.get("scalar", "contract"),
                                     properties=sorted(subject.get("scalar", "properties", {})))
-        self.normal_forms(subject, record)
         self.write_evidence(subject.name)
         return run
 

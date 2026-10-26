@@ -52,6 +52,13 @@ unsigned count(ModuleOp module, StringRef name) {
   return result;
 }
 
+unsigned computationCount(ModuleOp module) {
+  unsigned result = 0;
+  module.walk(
+      [&](Operation *op) { result += mathematical::isComputationUnit(op); });
+  return result;
+}
+
 template <typename... InputDialects> std::string project(StringRef source) {
   std::string result;
   withSource<InputDialects...>(source, [&](ModuleOp module, MLIRContext &) {
@@ -206,8 +213,8 @@ int main() {
                   !context.getLoadedDialect<algebra::AlgebraDialect>(),
               "participant fixture unexpectedly loaded execution dialects");
       runChecked(module, protocol::createLowerMathPass(),
-                 {"local", "kernel", "func"});
-      require(count(module, "kernel.module") && count(module, "kernel.call") &&
+                 {"local", "exec", "kernel", "func"});
+      require(computationCount(module) && count(module, "kernel.call") &&
                   count(module, "arith.andi") &&
                   !count(module, "algebra.exec.bool_and"),
               "logical formation executed Boolean recipes early");
@@ -221,7 +228,7 @@ int main() {
             runChecked(candidate, kernel::createLowerKernelsPass(),
                        {"algebra"});
             require(count(candidate, "algebra.exec.bool_and") &&
-                        !count(candidate, "kernel.module") &&
+                        !computationCount(candidate) &&
                         !count(candidate, "kernel.call") &&
                         !count(candidate, "arith.andi"),
                     "standalone Kernel pass did not execute Boolean recipes");
@@ -236,7 +243,7 @@ int main() {
                        {"algebra", "plan"});
             require(count(candidate, "plan.apply") == 1 &&
                         !count(candidate, "algebra.exec.bool_and") &&
-                        !count(candidate, "kernel.module") &&
+                        !computationCount(candidate) &&
                         !count(candidate, "kernel.call"),
                     "physical pass did not realize its logical Kernel input");
           });
@@ -253,7 +260,7 @@ int main() {
                       !context.getLoadedDialect<local::LocalDialect>(),
                   "sequence fixture does not isolate data from local");
           runChecked(module, protocol::createLowerMathPass(),
-                     {"local", "kernel", "func", "data"});
+                     {"local", "exec", "kernel", "func", "data"});
           require(count(module, "kernel.call") &&
                       count(module, "data.sequence_append") &&
                       !count(module, "data.exec.sequence_append"),
@@ -289,7 +296,7 @@ int main() {
                       count(module, "func.func"),
                   "finite fixture lost its source helper or loaded local");
           runChecked(module, protocol::createLowerMathPass(),
-                     {"local", "kernel", "data", "func"});
+                     {"local", "exec", "kernel", "data", "func"});
           require(count(module, "kernel.call") &&
                       count(module, "algebra.finite_collect") &&
                       count(module, "data.domain") &&

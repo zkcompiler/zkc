@@ -14,24 +14,54 @@ namespace Zkc.Construction.Domain.PublicBinding
 open Zkc.Source Zkc.Source.Structured
 variable {carriers : Carriers}
 
-def publicValue : (ty : Ty) → carriers.Value ty → PublicValue (Payload carriers)
-  | .boolean, value => .scalar (.boolean value)
-  | .index, value => .count value
-  | .field domain, value => .scalar (.field domain value)
-  | .vector domain, values => .vector (values.map (.field domain))
-  | .group domain, value => .scalar (.group domain value)
-  | .service _, handle => .count handle
+mutual
+  def publicValue : (ty : Ty) → carriers.Value ty → PublicValue (Payload carriers)
+    | .boolean, value => .scalar (.boolean value)
+    | .index, value => .count value
+    | .field domain, value => .scalar (.field domain value)
+    | .vector domain, values => .vector (values.map (.field domain))
+    | .group domain, value => .scalar (.group domain value)
+    | .service _, handle => .count handle
 
-theorem publicValue_injective : ∀ ty : Ty,
-    Function.Injective (publicValue (carriers := carriers) ty)
-  | .boolean, _, _, same => by simpa [publicValue] using same
-  | .index, _, _, same => by simpa [publicValue] using same
-  | .field _, _, _, same => by simpa [publicValue] using same
-  | .vector _, _, _, same => by
-      simp only [publicValue, PublicValue.vector.injEq] at same
-      exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
-  | .group _, _, _, same => by simpa [publicValue] using same
-  | .service _, _, _, same => by simpa [publicValue] using same
+    | .sequence element, values => .sequence (PublicValues.ofList (values.map (publicValue element)))
+    | .product identity constructor fields, value =>
+      .product identity constructor (publicFields fields value)
+
+  def publicFields : (fields : ProductFields) → carriers.ProductValue fields → PublicValues (Payload carriers)
+    | .nil, () => .nil
+    | .cons type rest, (value, values) => .cons (publicValue type value) (publicFields rest values)
+end
+
+mutual
+  theorem publicValue_injective : ∀ ty : Ty,
+      Function.Injective (publicValue (carriers := carriers) ty)
+    | .boolean, _, _, same => by simpa [publicValue] using same
+    | .index, _, _, same => by simpa [publicValue] using same
+    | .field _, _, _, same => by simpa [publicValue] using same
+    | .vector _, _, _, same => by
+        simp only [publicValue, PublicValue.vector.injEq] at same
+        exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
+    | .group _, _, _, same => by simpa [publicValue] using same
+    | .service _, _, _, same => by simpa [publicValue] using same
+
+    | .sequence element, _, _, same => by
+        simp only [publicValue, PublicValue.sequence.injEq] at same
+        exact (List.map_inj_right (fun _ _ equal => publicValue_injective element equal)).mp (PublicValues.ofList_injective same)
+    | .product _ _ fields, _, _, same => by
+        simp only [publicValue, PublicValue.product.injEq, true_and] at same
+        exact publicFields_injective fields same
+
+  theorem publicFields_injective : ∀ fields : ProductFields,
+      Function.Injective (publicFields (carriers := carriers) fields)
+    | .nil, (), (), _ => rfl
+    | .cons type rest, (value, values), (other, others), same => by
+        have components := PublicValues.cons.inj same
+        have head := publicValue_injective type components.1
+        have tail := publicFields_injective rest components.2
+        cases head
+        cases tail
+        rfl
+end
 
 /-- Decimal source coordinates cover every Nat, without bounded-port truncation. -/
 theorem coordinate_injective : Function.Injective (toString : Nat → String) := by

@@ -9,6 +9,8 @@ class Operation;
 }
 namespace zkc::mathematical {
 using NativeTypePolicy = protocol::NativeTypePolicy;
+/// Mathematical descriptors cannot cross executable ports or messages.
+bool isFormalType(mlir::Type type);
 // Closed native-local/0 vocabulary. Nominal formation is checked before any
 // use permission is returned; containers recursively check their leaves.
 std::optional<NativeTypePolicy> nativeTypePolicy(mlir::Type type);

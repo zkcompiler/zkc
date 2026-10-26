@@ -55,6 +55,18 @@ def Occurrence.draw (occurrence : Occurrence) : Template :=
     ["query", occurrence.library, encodedLabel "challenge", "input_5",
       "random.bls12-381.fr/0", "draw", "role00000001"]⟩
 
+/-- Checked encodings of the labels used by this installed Sumcheck schema.
+Generated routing proofs use these equations explicitly; the generic source
+label encoder acquires no protocol-specific simplification rules. -/
+theorem Occurrence.round_label : encodedLabel "round" = "label_726f756e64" := by
+  decide +kernel
+
+theorem Occurrence.challenge_label : encodedLabel "challenge" = "label_6368616c6c656e6765" := by
+  decide +kernel
+
+theorem Occurrence.delivery_label : encodedLabel "delivery" = "label_64656c6976657279" := by
+  decide +kernel
+
 def Occurrence.messages (occurrence : Occurrence) : List Template :=
   [occurrence.low, occurrence.high, occurrence.delivery]
 

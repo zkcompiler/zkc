@@ -1,6 +1,7 @@
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Component
 import Zkc.Source.Structured.MapLaws
+import ZkcTools.StructuredSource.WireTypes
 import Mathlib.Data.ZMod.Basic
 
 /-! Independent retained-declaration controls. Authored constructor subjects
@@ -40,13 +41,7 @@ private def mapDeclaration : MapDeclaration :=
 private def realization : RealizationDeclaration :=
   ⟨"realized", [scalar, scalar], [scalar], "scalar"⟩
 private def arr (values : List Json) : Json := .arr values.toArray
-private def typeWire : Ty → Json
-  | .boolean => arr [.str "bool"]
-  | .index => arr [.str "index"]
-  | .field domain => arr [.str "field", .str domain]
-  | .vector domain => arr [.str "vector", .str domain]
-  | .group domain => arr [.str "group", .str domain]
-  | .service contract => arr [.str "service", .str contract]
+private abbrev typeWire := ZkcTools.StructuredSource.wireType
 private def mapWire (mask : List Json) : Json := arr [
   .str "map", .str "mapped", arr (mapDeclaration.inputs.map typeWire),
   arr (mapDeclaration.outputs.map typeWire), .str "scalar", arr mask]
@@ -152,6 +147,31 @@ private def run : IO Unit := do
   let deadCall := math "scalar" [scalar, scalar] [scalar] [invokeInstruction "dead" [] []] [0]
   test "map-dead-transitive-zero-call" (!admits [badLeaf, deadCall, .map mapDeclaration])
   test "realize-transitive-zero-call" (admits [badLeaf, deadCall, .realization realization])
+  -- Both fields are independently admitted. Refusal must come from the map's
+  -- exact field closure, not from unknown catalogue rows or invalid formation.
+  let otherField : Ty := .field "koala-bear"
+  let otherConstant := .instruction (.fieldConstant "koala-bear" "1") [] [otherField] [] ""
+  let mixed (definitions : List Definition) : Snapshot := {snapshot definitions with
+    catalogue := {blsRows with nominals := blsRows.nominals ++ koalaBearCatalogue.nominals}}
+  let otherLeaf := math "dead" [] [] [otherConstant]
+  test "ordinary-other-admitted-field" ((check (mixed [otherLeaf, deadCall])).isOk)
+  test "map-dead-other-admitted-field"
+    (!(check (mixed [otherLeaf, deadCall, .map mapDeclaration])).isOk)
+  test "realize-other-admitted-field"
+    ((check (mixed [otherLeaf, deadCall, .realization realization])).isOk)
+  let otherResult := math "dead" [] [otherField] [otherConstant] [0]
+  let discardOther := math "scalar" [scalar, scalar] [scalar]
+    [invokeInstruction "dead" [] [otherField]] [1]
+  test "map-discarded-other-field-result"
+    (!(check (mixed [otherResult, discardOther, .map mapDeclaration])).isOk)
+  test "map-unreachable-other-field-helper"
+    ((check (mixed [otherLeaf, identity, .map mapDeclaration])).isOk)
+  let unusedOtherPort := math "dead" [otherField] []
+  let otherPortCall := math "scalar" [scalar, scalar] [scalar]
+    [otherConstant, invokeInstruction "dead" [0] []] [1]
+  test "ordinary-unused-other-field-port" ((check (mixed [unusedOtherPort, otherPortCall])).isOk)
+  test "map-unused-other-field-port"
+    (!(check (mixed [unusedOtherPort, otherPortCall, .map mapDeclaration])).isOk)
   let zeroLeaf := math "zero" [scalar] []
   let tupleLeaf := math "tuple" [scalar, scalar] [scalar, scalar] [] [1, 0]
   let nested := math "scalar" [scalar, scalar] [scalar]
@@ -189,7 +209,7 @@ private def run : IO Unit := do
     [.instruction (.fold "elements" "step" "") [0, 1] [scalar] [] ""] [0]
   let finiteUnit := {snapshot [step, finiteRoot] with domains := [domain]}
   test "ordinary-finite-math-retained" ((check finiteUnit).isOk)
-  test "realization-finite-forbidden" (!(check {finiteUnit with definitions :=
+  test "realization-finite-admitted" ((check {finiteUnit with definitions :=
     finiteUnit.definitions ++ [.realization ⟨"finiteR", [vector, scalar], [scalar], "finiteRoot"⟩]}).isOk)
   let bounded : Definition := .function ⟨"bounded", .math, .privateDef,
     [vector, .index], [scalar], none, [⟨1, 0, 0⟩], none,
@@ -231,9 +251,9 @@ private def run : IO Unit := do
     .realization nestedRealization])
   test "nested-unused-precondition" (!admits [premiseLeaf, nestedRoot,
     .realization nestedRealization])
-  -- Isolate the source premise walk from the ordinary call-premise checker.
-  test "nested-precondition-walk" (!(checkPreparationClosure
-    (snapshot [premiseLeaf, nestedRoot]) .realization nestedRealization.helperSpec).isOk)
+  -- The scalar map profile still rejects transitive source premises.
+  test "map-source-precondition-walk" (!(checkPreparationClosure
+    (snapshot [premiseLeaf, nestedRoot]) .map nestedRealization.helperSpec).isOk)
   test "map-derived-budget" (!(snapshot [identity, .map mapDeclaration]).instructionsWithin 0 &&
     (snapshot [identity, .map mapDeclaration]).instructionsWithin 1)
   test "realization-derived-budget" (!(snapshot [identity, .realization realization]).instructionsWithin 0 &&

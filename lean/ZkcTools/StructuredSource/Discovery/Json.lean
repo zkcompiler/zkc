@@ -1,16 +1,12 @@
 module
 
 public import ZkcTools.StructuredSource.Discovery.Search
+public import ZkcTools.StructuredSource.WireTypes
 
 @[expose] public section
 
 namespace ZkcTools.StructuredSource.Discovery
 open Lean Zkc.Source Zkc.Source.Structured
-
-def wireType : Ty → Json
-  | .boolean => toJson ["bool"] | .index => toJson ["index"]
-  | .field domain => toJson ["field", domain] | .vector domain => toJson ["vector", domain]
-  | .group domain => toJson ["group", domain] | .service domain => toJson ["service", domain]
 
 def strings (items : List String) : Json := toJson items
 
@@ -55,6 +51,7 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .booleanConstant _ => "booleanConstant" | .booleanAnd => "booleanAnd"
     | .booleanOr => "booleanOr" | .booleanXor => "booleanXor"
     | .booleanEqual => "booleanEqual" | .booleanNotEqual => "booleanNotEqual"
+    | .makeProduct .. => "makeProduct" | .getProduct .. => "getProduct"
     | .select _ => "select" | .boundedAt _ => "boundedAt" | .invoke _ => "invoke"
     | .fold _ => "fold" | .map _ => "map" | .branch .. => "branch"
     | .loop .. => "loop" | .loopCondition .. => "loopCondition"
@@ -70,7 +67,7 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .fold spec => Json.mkObj [("domain", toJson spec.domain.name),
         ("step", toJson spec.step), ("predicate", toJson spec.predicate),
         ("domain_inputs", toJson (spec.domain.inputs.map wireType)),
-        ("domain_field", toJson spec.domain.field),
+        ("domain_collection", wireType spec.domain.collection.type),
         ("container", toJson spec.domain.container.index), ("indices", toJson spec.domain.indices),
         ("state", toJson (spec.state.map wireType)), ("captures", toJson (spec.captures.map wireType)),
         ("kind", toJson (if spec.kind == .math then "math" else "local"))]

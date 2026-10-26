@@ -38,8 +38,8 @@ def occurrenceName (index : Nat) : String := "occurrence" ++ toString index
 
 def occurrenceNames (layout : Layout) : List String := (List.range layout.calls.length).map occurrenceName
 
-/-- Symbolic routing normalization. Generated proofs finish closed UTF-8 label
-computations with `kernel_rfl`, without a native evaluator or global simp rules. -/
+/-- Symbolic routing normalization. Explicit checked label equations close UTF-8
+computations without a native evaluator or protocol-specific global simp rules. -/
 def nominalSimp (layout : Layout) : String :=
   ", ".intercalate ((occurrenceNames layout).map (· ++ "_decimal") ++ ["Occurrence.low", "Occurrence.high", "Occurrence.draw",
     "Occurrence.delivery", "Occurrence.message", "Occurrence.steps", "Occurrence.protocol",
@@ -48,7 +48,8 @@ def nominalSimp (layout : Layout) : String :=
     "ProtocolContext.enter", "qualifyProtocolSite", "roleSubstitution",
     "SumcheckVerifierLaws.lowSite", "SumcheckVerifierLaws.highSite", "SumcheckVerifierLaws.challengeSite",
     "SumcheckVerifierLaws.deliverySite", "Context.message", "Context.query", "Context.role",
-    "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw"])
+    "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw",
+    "Occurrence.round_label", "Occurrence.challenge_label", "Occurrence.delivery_label"])
 
 def routes (layout : Layout) (index : Nat) : String := Id.run do
   let occurrence := occurrenceName index
@@ -67,7 +68,7 @@ def routes (layout : Layout) (index : Nat) : String := Id.run do
     "      Occurrence.origins, OccurrenceResolution.resolve, " ++ messageAppendRules ++
     "List.filter_cons, List.filter_nil]\n" ++
     "    simp only [OccurrenceResolution.matchesOccurrence, " ++ ", ".intercalate valid ++ "]\n" ++
-    "    simp [" ++ nominalSimp layout ++ "]\n    kernel_rfl\n\n"
+    "    simp [" ++ nominalSimp layout ++ "]\n\n"
 
 /-- Applicability only: compare exact syntax with the installed layout before
 attempting View conversion. This uses the existing structural Instruction equality;

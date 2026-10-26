@@ -12,7 +12,7 @@ libraries/
   protocols/
     sigma/{schnorr,compositions}/
     polynomial/{sumcheck,gkr,fri}/
-  relations/{air,table}/
+  relations/{air,table,lattice}/
   commitments/kzg/
   arguments/
     stark/{configurations,sampling,single_table,whole_bundle}/
@@ -34,7 +34,7 @@ are separate choices. For example, `zkc::vector` is the convenient facade, while
 |---|---|
 | [Core](core/README.md) | Native ports, traversal, checked mathematical views and local convenience operations |
 | Protocols | [Schnorr](protocols/sigma/schnorr/README.md), [Sigma compositions](protocols/sigma/compositions/README.md), [Sumcheck](protocols/polynomial/sumcheck/README.md), [GKR](protocols/polynomial/gkr/README.md), [FRI](protocols/polynomial/fri/README.md) |
-| Relations and commitments | [AIR interpretation](relations/air/README.md), [exact tables](relations/table/README.md), [generic KZG algebra](commitments/kzg/README.md) |
+| Relations and commitments | [AIR interpretation](relations/air/README.md), [exact tables](relations/table/README.md), [lattice arithmetic](relations/lattice/README.md), [generic KZG algebra](commitments/kzg/README.md) |
 | Arguments | [STARK profiles](arguments/stark/README.md), [weighted inner products](arguments/bulletproofs/README.md) |
 | Concrete constructions | [Spongefish](constructions/spongefish/README.md), [Monero Bulletproofs+](constructions/monero/bulletproofs_plus/README.md), [Ethereum EIP-4844](constructions/ethereum/eip4844/README.md) |
 

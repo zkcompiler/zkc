@@ -58,7 +58,7 @@ std::string mappedSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 )mlir" + mathematicalFixture(R"mlir(
-kernel.module @mapped {
+module @mapped attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>)->()
@@ -86,7 +86,7 @@ local.return %result : !F
 
 std::string mixedMapSource() {
   auto text = mappedSource();
-  auto at = text.find("kernel.module @mapped");
+  auto at = text.find("module @mapped");
   text.insert(at, R"mlir(
 func.func private @late_formula(%x:!F,%a:!F,%b:!F)->!F {
   %m = algebra.field_multiply %x,%a : (!F,!F)->!F
@@ -113,7 +113,7 @@ std::string fixedPeerSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
 )mlir" + mathematicalFixture(R"mlir(
-kernel.module @difference {
+module @difference attributes {exec.computation} {
  func.func @evaluate(%a:!F,%b:!F)->!F {
    %r = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %r : !F
@@ -135,7 +135,7 @@ local.return %product : !F
 std::string nestedSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 )mlir" + mathematicalFixture(R"mlir(
-kernel.module @difference {
+module @difference attributes {exec.computation} {
   func.func @evaluate(%a:!F,%b:!F)->!F {
     %v = algebra.field_subtract %a,%b : (!F,!F)->!F
     func.return %v : !F
@@ -203,7 +203,7 @@ OwningOpRef<ModuleOp> executable(StringRef text, MLIRContext &context,
   require(owner(*module).getProfile() == protocol_ir::Profile::Exec &&
               succeeded(verify(*module)),
           "fixture is not admitted Exec IR");
-  first<kernel::ModuleOp>(*module);
+  first<mlir::ModuleOp>(*module);
   first<kernel::CallOp>(*module);
   return module;
 }
@@ -291,10 +291,9 @@ void admitPhysical(ModuleOp module) {
           "materialized output did not admit the Physical profile");
   bool residual = false;
   module.walk([&](Operation *op) {
-    residual |=
-        isa<kernel::ModuleOp, kernel::CallOp, func::FuncOp, data::DomainOp>(
-            op) ||
-        mathematical::isTotal(op);
+    residual |= mathematical::isComputationUnit(op) ||
+                isa<kernel::CallOp, func::FuncOp, data::DomainOp>(op) ||
+                mathematical::isTotal(op);
   });
   require(!residual, "physical output retained Kernel or source mathematics");
 }
@@ -392,18 +391,19 @@ public:
 void mutateSource(ModuleOp module, StringRef mutation) {
   auto call = first<kernel::CallOp>(module);
   if (mutation == "body") {
-    auto entry = kernel::getEntry(first<kernel::ModuleOp>(module));
+    auto entry =
+        mathematical::getComputationEntry(first<mlir::ModuleOp>(module));
     entry.front().back().setOperand(0, entry.getArgument(0));
   } else if (mutation == "private-helper") {
-    auto unit = first<kernel::ModuleOp>(module);
+    auto unit = first<mlir::ModuleOp>(module);
     auto helper = SymbolTable(unit).lookup<func::FuncOp>("unused_helper");
     require(bool(helper), "missing private source helper");
     helper.front().back().setOperand(0, helper.getArgument(0));
   } else if (mutation == "dormant") {
     auto unit =
-        SymbolTable(owner(module)).lookup<kernel::ModuleOp>("alternative");
+        SymbolTable(owner(module)).lookup<mlir::ModuleOp>("alternative");
     require(bool(unit), "missing dormant source unit");
-    auto entry = kernel::getEntry(unit);
+    auto entry = mathematical::getComputationEntry(unit);
     entry.front().back().setOperand(0, entry.getArgument(0));
   } else if (mutation == "callee") {
     call->setAttr("callee", SymbolRefAttr::get(
@@ -467,7 +467,7 @@ int main() {
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
 )mlir") + mathematicalFixture(R"mlir(
-kernel.module @difference {
+module @difference attributes {exec.computation} {
  func.func @evaluate(%a:!F,%b:!F)->!F {
    %r = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %r : !F
@@ -615,16 +615,17 @@ local.return %scaled : !G
           [&] {
             auto module = executable(scalarSource, context);
             if (mutation == "callee" || mutation == "dormant") {
-              auto unit = first<kernel::ModuleOp>(*module);
+              auto unit = first<mlir::ModuleOp>(*module);
               OpBuilder builder(unit);
               auto alternative =
-                  cast<kernel::ModuleOp>(builder.clone(*unit.getOperation()));
+                  cast<mlir::ModuleOp>(builder.clone(*unit.getOperation()));
               SymbolTable::setSymbolName(alternative, "alternative");
               require(succeeded(verify(*module)),
                       "alternate Kernel fixture did not admit");
             }
             if (mutation == "private-helper") {
-              auto entry = kernel::getEntry(first<kernel::ModuleOp>(*module));
+              auto entry = mathematical::getComputationEntry(
+                  first<mlir::ModuleOp>(*module));
               OpBuilder builder(entry);
               auto helper = cast<func::FuncOp>(builder.clone(*entry));
               SymbolTable::setSymbolName(helper, "unused_helper");
@@ -828,7 +829,8 @@ local.return %scaled : !G
 )");
         auto module = executable(text, context);
         unsigned computations = 0;
-        auto entry = kernel::getEntry(first<kernel::ModuleOp>(*module));
+        auto entry =
+            mathematical::getComputationEntry(first<mlir::ModuleOp>(*module));
         entry.walk([&](Operation *op) {
           computations += op->getName().getStringRef() == "algebra.finite_fold";
         });
@@ -1267,7 +1269,8 @@ local.return %scaled : !G
     auto module = take(executableFixture(pinnedSource(), context));
     bool hasKernel = false;
     module->walk([&](Operation *op) {
-      hasKernel |= isa<kernel::ModuleOp, kernel::CallOp>(op);
+      hasKernel |=
+          (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
     });
     require(!hasKernel, "control fixture still contains Kernel operations");
     auto checked = checkedPlan(*module);
@@ -1307,40 +1310,41 @@ local.return %scaled : !G
           frozen.check(*module);
         });
   }
-  cases.run(
-      "one final Local subject composes structured maps and Kernel calls", [&] {
-        auto module = executable(mixedMapSource(), context);
-        FrozenInput frozen(*module);
-        CountingCatalog catalog;
-        auto plan = take(proposePhysical(*module, catalog));
-        auto selected = take(plan.cloneSelectedSubject(*module));
-        bool map = false, sum = false;
-        selected->walk([&](Operation *op) {
-          require(!isa<kernel::CallOp, kernel::ModuleOp, algebra::MapRealizeOp,
-                       local::ApplyOp, func::FuncOp>(op),
-                  "mixed final subject retained source work");
-          auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-          auto binding =
-              ref ? SymbolTable(owner(*selected))
-                        .lookup<local::OperationBindingOp>(ref.getValue())
-                  : local::OperationBindingOp();
-          if (binding) {
-            map |= binding.getContract() == "numerical.map";
-            sum |= binding.getContract() == "numerical.sum";
-          }
-        });
-        require(map && sum &&
-                    succeeded(mathematical::verifyNumericalLowering(*module,
-                                                                    *selected)),
-                "mixed retained body lost one numerical family");
-        auto checked = take(validatePhysical(*module, plan, catalog));
-        auto queries = catalog.queryCount();
-        frozen.check(*module);
-        accept(materializePhysical(*module, checked));
-        admitPhysical(*module);
-        require(catalog.queryCount() == queries,
-                "mixed materialization searched again");
-      });
+  cases.run("one final Local subject composes structured maps and Kernel calls",
+            [&] {
+              auto module = executable(mixedMapSource(), context);
+              FrozenInput frozen(*module);
+              CountingCatalog catalog;
+              auto plan = take(proposePhysical(*module, catalog));
+              auto selected = take(plan.cloneSelectedSubject(*module));
+              bool map = false, sum = false;
+              selected->walk([&](Operation *op) {
+                require(!mathematical::isComputationUnit(op) &&
+                            !isa<kernel::CallOp, algebra::MapRealizeOp,
+                                 local::ApplyOp, func::FuncOp>(op),
+                        "mixed final subject retained source work");
+                auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+                auto binding =
+                    ref ? SymbolTable(owner(*selected))
+                              .lookup<local::OperationBindingOp>(ref.getValue())
+                        : local::OperationBindingOp();
+                if (binding) {
+                  map |= binding.getContract() == "numerical.map";
+                  sum |= binding.getContract() == "numerical.sum";
+                }
+              });
+              require(map && sum &&
+                          succeeded(mathematical::verifyNumericalLowering(
+                              *module, *selected)),
+                      "mixed retained body lost one numerical family");
+              auto checked = take(validatePhysical(*module, plan, catalog));
+              auto queries = catalog.queryCount();
+              frozen.check(*module);
+              accept(materializePhysical(*module, checked));
+              admitPhysical(*module);
+              require(catalog.queryCount() == queries,
+                      "mixed materialization searched again");
+            });
   cases.run(
       "a fixed conversion endpoint permits its automatic peer to change", [&] {
         auto module = executable(fixedPeerSource(), context);

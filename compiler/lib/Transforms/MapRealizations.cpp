@@ -17,6 +17,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "zkc/Transforms/StructuredComputation.h"
 #include "llvm/ADT/DenseSet.h"
 #include <optional>
 
@@ -212,9 +213,22 @@ prepareMapFormula(algebra::MapRealizeOp map, RealizationWork &work) {
 }
 
 Expected<LaneRealizationResult>
-emitMapPayload(algebra::MapRealizeOp map, Block &formula, ValueRange inputs,
+emitMapPayload(algebra::MapRealizeOp map, Block &original, ValueRange inputs,
                MapPayloadForm form, MapEmitter emit,
                const SelectedReduction *dot) {
+  auto shape =
+      form == MapPayloadForm::Dot || form == MapPayloadForm::NumericalSum
+          ? StructuredResult::Sum
+          : StructuredResult::Map;
+  auto structured =
+      proposeStructuredComputation(original, map.getRowwise(), shape);
+  if (!structured || failed(optimizeStructuredComputation(*structured)))
+    return error("structured-computation", "candidate construction");
+  auto scalar = consumeStructuredComputation(original, map.getRowwise(), shape,
+                                             *structured);
+  if (!scalar)
+    return error("structured-computation", "candidate correspondence");
+  Block &formula = scalar->front();
   auto vector = map.getFunctionType().getResult(0);
   auto field = cast<algebra::FieldType>(
       algebra::mapField(map.getFunctionType(), map.getRowwise()));

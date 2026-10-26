@@ -129,6 +129,10 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
     cases args with
     | cons a rest => cases rest with
       | cons b rest => cases rest; cases bodies; rfl
+  | makeProduct => cases bodies; rfl
+  | getProduct =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; rfl
   | boundedAt domain =>
     cases args with
     | cons container rest => cases rest with

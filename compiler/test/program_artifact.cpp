@@ -155,7 +155,9 @@ int main() {
   run(*module, protocol::createLowerMathPass());
   cases.run("public readers refuse unresolved Kernel code", [&] {
     unsigned units = 0, calls = 0;
-    module->walk([&](kernel::ModuleOp) { ++units; });
+    module->walk([&](mlir::ModuleOp unit) {
+      units += mathematical::isComputationUnit(unit);
+    });
     module->walk([&](kernel::CallOp) { ++calls; });
     require(units && calls, "logical fixture lost numerical units");
     auto structural = protocol::readExecutionModel(module->getOperation());

@@ -243,8 +243,9 @@ void duplicatePair(ModuleOp module) {
 }
 void noResidualNumerics(ModuleOp module) {
   module.walk([&](Operation *op) {
-    require(!isa<kernel::ModuleOp, kernel::CallOp, algebra::MapRealizeOp,
-                 local::ApplyOp, func::FuncOp>(op),
+    require(!mathematical::isComputationUnit(op) &&
+                !isa<kernel::CallOp, algebra::MapRealizeOp, local::ApplyOp,
+                     func::FuncOp>(op),
             "final Local subject retained source numerical work");
   });
 }

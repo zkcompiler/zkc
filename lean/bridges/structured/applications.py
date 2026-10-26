@@ -175,13 +175,13 @@ module { "protocol.module"() ({
   ^entry(%x:!F,%unused:!F):
     %v = "protocol.local_call"(%x,%unused) {callee=@work,role="P",site="work"} : (!F,!F)->!F
     "protocol.return"(%v) : (!F)->()
-  }) {sym_name="child",function_type=(!F,!F)->!F,roles=["P","Q"],
+  }) {sym_name="child",origin=["child",[]],function_type=(!F,!F)->!F,roles=["P","Q"],
       input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
   "protocol.func"() ({
   ^entry(%x:!F,%unused:!F):
     %v = "protocol.apply"(%x,%unused) {callee=@child,roles=["P","Q"],site="A"} : (!F,!F)->!F
     "protocol.return"(%v) : (!F)->()
-  }) {sym_name="main",function_type=(!F,!F)->!F,roles=["P","Q"],
+  }) {sym_name="main",origin=["main",[]],function_type=(!F,!F)->!F,roles=["P","Q"],
       input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
@@ -215,12 +215,12 @@ module { "protocol.module"() ({
     %v = func.call @identity(%one) : (!F)->!F
     "protocol.local_call"() {callee=@stop,role="A",site="stop"} : ()->()
     "protocol.return"() : ()->()
-  }) {sym_name="child",function_type=()->(),roles=["A"],input_roles=[],output_roles=[]} : ()->()
+  }) {sym_name="child",origin=["child",[]],function_type=()->(),roles=["A"],input_roles=[],output_roles=[]} : ()->()
   "protocol.func"() ({
     "protocol.apply"() {callee=@child,roles=["P"],site="A"} : ()->()
     %answer = "algebra.constant"() {value="7"} : ()->!F
     "protocol.return"(%answer) : (!F)->()
-  }) {sym_name="main",function_type=()->!F,roles=["P","Q"],input_roles=[],output_roles=[["Q"]]} : ()->()
+  }) {sym_name="main",origin=["main",[]],function_type=()->!F,roles=["P","Q"],input_roles=[],output_roles=[["Q"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''
     subject = suite.export("subset-zero-result", subset)
@@ -239,7 +239,7 @@ def partial_math_cases(suite):
         %r:2 = "protocol.apply"(%xs,%a,%b) {callee=@child,roles=["P"],site="fold"}
           : (!V,!F,!F)->(!F,!F)
         "protocol.return"(%r#0,%r#1,%outside) : (!F,!F,!F)->()
-      }) {sym_name="main",function_type=(!V,!F,!F,!F)->(!F,!F,!F),roles=["P","Q"],
+      }) {sym_name="main",origin=["main",[]],function_type=(!V,!F,!F,!F)->(!F,!F,!F),roles=["P","Q"],
           input_roles=[["P"],["P"],["P"],["Q"]],output_roles=[["P"],["P"],["Q"]]} : ()->()
     '''
     for indirect in (False, True):
@@ -273,13 +273,13 @@ module { "protocol.module"() ({
   "protocol.func"() ({
   ^entry(%x:!F):
     "protocol.return"(%x) : (!F)->()
-  }) {sym_name="child",function_type=(!F)->!F,roles=["A"],
+  }) {sym_name="child",origin=["child",[]],function_type=(!F)->!F,roles=["A"],
       input_roles=[["A"]],output_roles=[["A"]]} : ()->()
   "protocol.func"() ({
   ^entry(%x:!F):
     %y = "protocol.apply"(%x) {callee=@child,roles=["P"],site="child_call"} : (!F)->!F
     "protocol.return"(%y) : (!F)->()
-  }) {sym_name="main",function_type=(!F)->!F,roles=["P"],
+  }) {sym_name="main",origin=["main",[]],function_type=(!F)->!F,roles=["P"],
       input_roles=[["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''

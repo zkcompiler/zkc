@@ -203,18 +203,22 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     cases args with
     | cons a rest => cases rest with
       | cons b rest => cases rest; cases bodies; rfl
+  | makeProduct => cases bodies; rfl
+  | getProduct =>
+    cases args with
+    | cons value rest => cases rest; cases bodies; rfl
   | boundedAt domain =>
     cases args with
     | cons container rest => cases rest with
       | cons index rest =>
         cases rest; cases bodies
-        change (match container[index]? with
+        change (match (show List F from container)[index]? with
           | some value => (PIR.Process.done (.cons value .nil) : PIR.Process I (Values (assignment F G) [.field domain]))
           | none => .halt .refused).interpret operations =
-          (match container[index]? with
+          (match (show List F from container)[index]? with
           | some value => .done (.cons value .nil)
           | none => .halt .refused)
-        cases container[index]? <;> rfl
+        cases (show List F from container)[index]? <;> rfl
   | select =>
     cases args with
     | cons condition rest => cases rest with

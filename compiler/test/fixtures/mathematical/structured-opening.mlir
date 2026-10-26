@@ -1,9 +1,9 @@
 !message = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
-!pk = !pcs.object<"multilinear.kzg.bls12-381/0", "prover_key">
-!vk = !pcs.object<"multilinear.kzg.bls12-381/0", "verifier_key">
-!c = !pcs.object<"multilinear.kzg.bls12-381/0", "commitment">
-!o = !pcs.object<"multilinear.kzg.bls12-381/0", "opening_state">
-!proof = !pcs.object<"multilinear.kzg.bls12-381/0", "proof">
+!pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
+!vk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">
+!c = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">
+!o = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "opening_state">
+!proof = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "proof">
 !f = !algebra.field<"bls12-381.fr">
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
@@ -24,19 +24,19 @@ module { "protocol.module"() ({
  "local.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  "local.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
  local.func @commit(%k:!pk,%t:!t) -> (!c,!o) attributes {logical_origin=["commit",[]]} {
-   %r:2 = "pcs.exec.commit"(%k,%t) {binding=@commit_kernel,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
+   %r:2 = "commitment.exec.polynomial_commit"(%k,%t) {binding=@commit_kernel,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
    local.return %r#0,%r#1 : !c,!o
  }
  local.func @open(%s:!o,%p:!p) -> (!f,!proof) attributes {logical_origin=["open",[]]} {
-   %r:2 = "pcs.exec.open"(%s,%p) {binding=@open_kernel,parameters=[],site="open"} : (!o,!p)->(!f,!proof)
+   %r:2 = "commitment.exec.polynomial_open"(%s,%p) {binding=@open_kernel,parameters=[],site="open"} : (!o,!p)->(!f,!proof)
    local.return %r#0,%r#1 : !f,!proof
  }
  local.func @check(%k:!vk,%c:!c,%p:!p,%v:!f,%proof:!proof) -> i1 attributes {logical_origin=["check",[]]} {
-   %ok = "pcs.exec.check"(%k,%c,%p,%v,%proof) {binding=@check_kernel,parameters=[],site="check"} : (!vk,!c,!p,!f,!proof)->i1
+   %ok = "commitment.exec.polynomial_check"(%k,%c,%p,%v,%proof) {binding=@check_kernel,parameters=[],site="check"} : (!vk,!c,!p,!f,!proof)->i1
    local.return %ok : i1
  }
  local.func @same_root(%a:!c,%b:!c) -> i1 attributes {logical_origin=["same_root",[]]} {
-   %ok = "pcs.exec.equal"(%a,%b) {binding=@equal_kernel,parameters=[],site="equal"} : (!c,!c)->i1
+   %ok = "commitment.exec.polynomial_equal"(%a,%b) {binding=@equal_kernel,parameters=[],site="equal"} : (!c,!c)->i1
    local.return %ok : i1
  }
  "local.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -50,7 +50,7 @@ module { "protocol.module"() ({
      %false = "local.bool_constant"() {value=false,site="absent"} : ()->i1
      "local.yield"(%zero,%false) : (!f,i1)->()
    }, { ^some(%v:!f,%proof:!proof,%key:!vk,%root:!c,%point:!p):
-     %ok = "pcs.exec.check"(%key,%root,%point,%v,%proof) {binding=@check_kernel,parameters=[],site="opening"} : (!vk,!c,!p,!f,!proof)->i1
+     %ok = "commitment.exec.polynomial_check"(%key,%root,%point,%v,%proof) {binding=@check_kernel,parameters=[],site="opening"} : (!vk,!c,!p,!f,!proof)->i1
      "local.yield"(%v,%ok) : (!f,i1)->()
    }) {alternatives=["none","some"],site="presence"} : (!message,!vk,!c,!p)->(!f,i1)
    local.return %result#0,%result#1 : !f,i1

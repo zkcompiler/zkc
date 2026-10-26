@@ -5,21 +5,6 @@ include "zkc/Dialect/Kernel/IR/KernelDialect.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
 
-def Kernel_ModuleOp : Op<KernelDialect, "module",
-    [Symbol, SymbolTable, IsolatedFromAbove, SingleBlock, NoTerminator]> {
-  let summary = "closed logical numerical compilation unit";
-  let description = [{
-    Owns exactly one public standard func.func entry, private standard function
-    helpers and private data.domain dependencies. The existing mathematical
-    vocabulary defines the body; no participant actions or runtime resources
-    enter this boundary. The parent profile owns phase legality.
-  }];
-  let arguments = (ins SymbolNameAttr:$sym_name);
-  let regions = (region AnyRegion:$body);
-  let assemblyFormat = "$sym_name attr-dict-with-keyword $body";
-  let hasRegionVerifier = 1;
-}
-
 def Kernel_CallOp : Op<KernelDialect, "call",
     [CallOpInterface, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let summary = "ordered invocation of a logical numerical entry from Local";

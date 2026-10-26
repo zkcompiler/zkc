@@ -9,7 +9,6 @@ include "zkc/Dialect/Exec/IR/ExecTypes.td"
 include "zkc/Dialect/Data/IR/DataTypes.td"
 include "zkc/Dialect/Crypto/IR/CryptoTypes.td"
 include "zkc/Dialect/Plan/IR/PlanTypes.td"
-include "zkc/Dialect/PCS/IR/PCSTypes.td"
-include "zkc/Dialect/Oracle/IR/OracleTypes.td"
+include "zkc/Dialect/Commitment/IR/CommitmentTypes.td"
 
 #endif

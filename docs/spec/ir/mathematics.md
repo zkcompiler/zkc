@@ -1,7 +1,7 @@
 # Structured native mathematics
 
 This profile extends [mathematical protocols](protocols.md) with
-formal polynomial SSA and static field data. Mathematical meaning belongs to
+formal polynomial and quotient SSA and static field data. Mathematical meaning belongs to
 [tables and polynomials](../domains/polynomials.md). It retains
 the profiles `protocol → participant → exec → physical`; an analysis or
 lowering does not introduce another editable mathematical graph.
@@ -14,6 +14,18 @@ This is a compile-time mathematical value. Transparent, acyclic private helpers
 may produce it; protocol inputs, outputs, messages and executable bindings may
 not contain it. Helper preparation exposes constructors before degree analysis.
 It is distinct from the existing normalized concrete `!poly.univariate` object.
+
+`!poly.quotient<q,n>` denotes `(Z/qZ)[X]/(X^n+1)`, for `2 <= q <= 2^64-1`
+and `1 <= n <= 2^64-1`. It is a total mathematical value with exact ring identity;
+composite moduli and zero divisors are allowed. It has no executable port,
+message or wire encoding. Transparent mathematical helpers may carry it.
+`poly.quotient_project` reduces an arbitrary finite `!algebra.indices` polynomial
+into the ring; `poly.quotient_coefficients` observes exactly `n` canonical
+ascending coefficients. `poly.quotient_add`, `poly.quotient_subtract` and
+`poly.quotient_multiply` require identical modulus and degree on all ports.
+Multiplication is negacyclic convolution, not coordinate-wise multiplication.
+No field inversion, cancellation or FFT capability follows from this type.
+The [quotient contract](../domains/quotient-rings.md) defines these meanings.
 
 Concrete field arrays use `!algebra.field_array<"F", N>`, with exact nominal
 field identity and `0 ≤ N ≤ 1048576`. Logical encoding remains
@@ -88,6 +100,56 @@ domain literal contract is not part of this implementation.
 
 ## Realization
 
+### Structured tensor computations
+
+Retained scalar maps and their selected sum reductions pass through a private
+standard `func.func` with `tensor` and `linalg.generic` operations. Rowwise
+arguments have type `tensor<?x!algebra.field<"F">>`; scalar arguments remain
+exact Algebra field values. Every input coordinate remains in the function
+signature, including unused columns. The execution boundary checks all rowwise
+lengths in source order before evaluating the computation. Equal lengths are a
+domain premise of this internal tensor profile, never inferred from the tensor
+type or from the inputs actually read by the scalar formula.
+
+A map has one parallel iterator, identity maps for rowwise inputs and output,
+and empty maps for scalar broadcasts. Its `tensor.empty` extent comes from the
+first rowwise input. The scalar region cannot read the uninitialized destination.
+A sum has one reduction iterator and a rank-zero destination initialized to the
+exact field zero. Its region adds each term to the accumulator; the function
+extracts and returns that same reduction result. Empty input therefore yields
+an empty map or a zero sum. These are exact field laws, not floating-point
+reassociation or machine-overflow assumptions.
+
+The canonical sum candidate retains a pointwise map followed by a reduction.
+Upstream elementwise fusion combines their actual regions, then scalar-region
+CSE/DCE shares repeated work. The independent reader admits both the original
+tensor graph and the fused form, reconstructs a scalar formula from actual
+pointwise SSA edges, and compares it with the original scalar DAG by ordered
+labelled bisimulation. Every operation, including unused work, is admitted.
+A bounded structural check rejects nested packets before recursive MLIR
+verification. It checks nominal fields, literals, input coordinates, iteration
+kinds, indexing maps, seeds, captures and the actual returned value. Unknown
+operations/attributes, nonmatching maps, extra work outside the admitted packet,
+and changed formulas refuse with `structured-computation`. The reader does not
+rerun the producer, fusion or CSE, and approval does not survive candidate mutation.
+
+The executable adapter reads the admitted candidate's scalar body into the
+existing typed native map/reduction handlers. The original-to-executable
+numerical reader still checks the actual final payload and all length guards.
+The private tensor program grants no general Tensor/Linalg admission, buffer
+ownership, vectorized machine representation, native correspondence theorem,
+or permission to change runtime refusal behavior.
+
+This is a checked compilation of total mathematics into a selected executable
+program. The observation relation requires equal returned mathematical values
+and preserves the surrounding ordered action/capture boundary. Each emitted
+program retains actual runtime work, scratch, fresh-output and retained-storage
+checks; no result is published after a stop. Fusion and scalar sharing need not
+preserve the budget threshold of a different emitted program. They grant
+neither same-artifact metering changes nor permission to classify malformed
+domain/codec inputs as resource exhaustion. Completeness is conditional on the
+selected program's resources; exact metering equivalence and native execution
+correspondence remain separate obligations.
 `data.index_power_of_two` uses a fixed 64-case circuit of existing
 `index.constant`, `index.equal`, `bool.and` and `bool.or` executable contracts.
 Only compile-time shifts with exponents 0 through 63 construct constants.

@@ -15,6 +15,11 @@ exact requests and receipts, rather than the former manifest's unresolved
 report. Historical reports remain historical. The old construction modules
 remain audited regression clients until their separate retirement.
 
+Configured normal-form outputs are built before dependent receipts and take
+part in the report's generated-module freshness comparison. Their request owns
+the output path; changing, deleting or omitting evidence for that output cannot
+retain a connected artifact report.
+
 The line between data and code is deliberate. Python holds the pipeline and
 the generic mutation kinds; it names no subject. A manifest holds per-subject
 data: paths, Entry names, profile switches, which mutation kinds apply, the
@@ -47,7 +52,7 @@ root.
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
 | `generated` | `artifacts`, `claims` | physical generated modules: artifact/compilation facts and exact source Wire.Request data with typed Lean resolution, evaluation and receipts |
-| `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check` |
+| `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check`, then its output built before dependent receipts |
 | `lean` | `namespace`, `imports` | generated declaration namespace and maintained Lean registration imports; physical configuration only |
 | `assumptions` | `requested` | identifiers of the assumption registry (`ZkcSecurity.Registry`) the author expects; the driver refuses others |
 | `mutations` | `kinds` | generic mutation kinds the driver applies (see below) |

@@ -145,7 +145,7 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
   auto prototype = helper(source, "total");
   SmallVector<Type> results(totals.size(), prototype.getResultTypes().front());
   OpBuilder builder(source.getContext());
-  builder.setInsertionPointToEnd(&numerical->getBody().front());
+  builder.setInsertionPointToEnd(numerical->getBody());
   auto function = func::FuncOp::create(
       builder, source.getLoc(), "selected",
       builder.getFunctionType(prototype.getArgumentTypes(), results));
@@ -160,8 +160,8 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
     values.push_back(occurrence->getResult(0));
   }
   func::ReturnOp::create(builder, source.getLoc(), values);
-  OwningOpRef<kernel::ModuleOp> original(
-      cast<kernel::ModuleOp>(numerical->clone()));
+  OwningOpRef<mlir::ModuleOp> original(
+      cast<mlir::ModuleOp>(numerical->clone()));
   auto candidate = realizeKernelEntry(*numerical, "selection",
                                       {optimize, false}, work, limits, trace);
   require(bool(candidate), "checked callback lowering failed");

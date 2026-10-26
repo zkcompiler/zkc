@@ -59,7 +59,9 @@ instruction budget.
   requirement that a Boolean is true, numerical expression calls, occurrence
   coordinates, and observation and challenge on the ideal transcript model. A
   constant takes its value from the operation's single canonical decimal
-  parameter.
+  parameter. The current native vocabulary separately installs the default and
+  explicit BLS12-381 scalar/G1 transcript payload layouts. A different layout,
+  crossed payload sort or additional physical argument does not resolve.
 - Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
   binding names its field and an operand mask, and its operation carries one
   `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a

@@ -2250,7 +2250,9 @@ class Module:
         out.append(f"theorem relation_iff {binders}:\n    Relation {argument_names} ↔ {decision_prop} := by\n"
                    f"  unfold Relation\n  rw [formula_process]\n"
                    f"  change (PIR.Process.done (I := closedInterface) (.cons {paren(decision_bool)} .nil :\n"
-                   f"    Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _\n  simp\n")
+                   f"    Values (assignment F G) [.boolean]) = .done (.cons true .nil)) ↔ _\n  simp\n"
+                   f"  all_goals change {paren(decision_bool)} = true ↔ {decision_prop}\n"
+                   f"  all_goals simp\n")
         gets = {name: "args.get " + paren("(.there " * position + ".here" + ")" * position)
                 for position, (name, _, _, _) in enumerate(arguments)}
         substituted = substitute(decision_prop, gets)

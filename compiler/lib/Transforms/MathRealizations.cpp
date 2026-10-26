@@ -68,8 +68,8 @@ LogicalResult checkRealizations(ModuleOp original, ModuleOp candidate) {
     auto call = dyn_cast<kernel::CallOp>(wrapper.getBody().front().front());
     auto returned = dyn_cast<local::ReturnOp>(wrapper.getBody().front().back());
     auto entry = call ? kernel::resolve(call, symbols) : func::FuncOp();
-    auto unit = entry ? cast<kernel::ModuleOp>(entry->getParentOp())
-                      : kernel::ModuleOp();
+    auto unit =
+        entry ? cast<mlir::ModuleOp>(entry->getParentOp()) : mlir::ModuleOp();
     if (!entry || !returned || call.getSite() != "kernel" ||
         call.getInputs() != wrapper.getArguments() ||
         returned.getInputs() != call.getResults() ||

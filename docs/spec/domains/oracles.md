@@ -15,6 +15,16 @@ or hiding. A protocol can use this domain without using AIR, FRI or polynomials.
 The table is a flat, row-major field vector with positive width and height.
 This capability is separate from `MultilinearOpening`.
 
+The native MLIR owner for both families is Commitment. Polynomial objects use
+`!commitment.polynomial<"scheme", "kind">`; authenticated-vector objects use
+`!commitment.vector<"scheme", "kind">`. The binding adapter resolves the scheme's
+actual capability and rejects missing or conflicting family facts. Substituting
+one family for the other is invalid even when their object kinds coincide.
+Polynomial keys and vector custody collections retain their separate admitted
+kind inventories. MLIR operations use `commitment.exec.polynomial_*` and
+`commitment.exec.vector_*`; ordered collection operations belong to the same
+owner. Native contract identifiers below remain the execution authority.
+
 | Operation | Meaning |
 |---|---|
 | `oracle.commit<C>(values,width)` | Commit one rectangular table; return public root and private immutable opening state |

@@ -196,7 +196,7 @@ module { "protocol.module"() ({
   ^entry(%x:!V):
     %y = "protocol.exchange"(%x) {sender="P",receiver="V",site="vector"} : (!V)->!V
     "protocol.return"(%y) : (!V)->()
-  }) {sym_name="main",function_type=(!V)->!V,roles=["P","V"],
+  }) {sym_name="main",origin=["main",[]],function_type=(!V)->!V,roles=["P","V"],
       input_roles=[["P"]],output_roles=[["V"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 '''

@@ -209,8 +209,8 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            RealizationTrace *trace = nullptr,
                            finite::VerificationLimits limits = {}) {
   auto numerical = kernelRecipeSource(unit(source), "total", "selected");
-  OwningOpRef<kernel::ModuleOp> original(
-      cast<kernel::ModuleOp>(numerical->clone()));
+  OwningOpRef<mlir::ModuleOp> original(
+      cast<mlir::ModuleOp>(numerical->clone()));
   // The entry contains the original standard-function fold. Optional callback
   // preparation and required ordered fallback share the caller's work object.
   MathematicalSelectionPolicy policy{optimize, false};

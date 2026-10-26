@@ -34,12 +34,14 @@ def project {F G : Type} : PIR.OperationInterpretation
   | .send (ty := .group domain) site receiver value => .call (.send (ty := .group domain) site receiver value) .done
   | .send (ty := .service contract) site receiver value =>
     .call (.send (ty := .service contract) site receiver value) .done
-  | .send (ty := .index) .. | .send (ty := .vector _) .. => .halt .refused
+  | .send (ty := .index) .. | .send (ty := .vector _) ..
+  | .send (ty := .sequence _) .. | .send (ty := .product ..) .. => .halt .refused
   | .receive .boolean site sender => .call (.receive .boolean site sender) .done
   | .receive (.field domain) site sender => .call (.receive (.field domain) site sender) .done
   | .receive (.group domain) site sender => .call (.receive (.group domain) site sender) .done
   | .receive (.service contract) site sender => .call (.receive (.service contract) site sender) .done
-  | .receive .index .. | .receive (.vector _) .. => .halt .refused
+  | .receive .index .. | .receive (.vector _) ..
+  | .receive (.sequence _) .. | .receive (.product ..) .. => .halt .refused
   | .query site field (.cons handle .nil) => .call (.query site field (.cons handle .nil)) .done
 
 theorem project_embed_operation {F G : Type} (op : (commonInterface F G).Op) :

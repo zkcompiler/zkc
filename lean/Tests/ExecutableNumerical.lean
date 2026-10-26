@@ -209,4 +209,37 @@ theorem shape_refused :
       apply .map [true, true] (.input 0) [.index 2, vector [1, 2], vector [3]] = .stopped .refused := by
   decide +kernel
 
+/-! ## Exact physical specialization -/
+
+def observeBinding (physical : List PhysicalType) : Binding :=
+  ⟨"observe", "transcript.native.indexed.observe.data", [nativeSuite, "field:bls12-381.fr"],
+    "arkworks/transcript.native.indexed.observe.data", physical⟩
+
+theorem missing_observation_specialization_refused :
+    installed.installed? (observeBinding []) = none := by decide +kernel
+
+theorem explicit_observation_installed :
+    (installed.installed? (observeBinding
+      [⟨.data (.field scalarField), "arkworks.fr/0"⟩])).isSome = true := by decide +kernel
+
+/-- The logical field does not authorize a different physical layout. -/
+theorem foreign_observation_layout_refused :
+    installed.installed? (observeBinding
+      [⟨.data (.field scalarField), "foreign.fr/0"⟩]) = none := by decide +kernel
+
+/-- A known layout of a different payload cannot substitute for the field. -/
+theorem crossed_observation_layout_refused :
+    installed.installed? (observeBinding
+      [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩]) = none := by decide +kernel
+
+theorem duplicate_observation_layout_refused :
+    installed.installed? (observeBinding
+      [⟨.data (.field scalarField), "arkworks.fr/0"⟩,
+       ⟨.data (.field scalarField), "arkworks.fr/0"⟩]) = none := by decide +kernel
+
+/-- Admitting a transcript layout grants no specialization to other kernels. -/
+theorem numerical_specialization_refused :
+    installed.installed? { mapBinding "1" with
+      physicalArguments := [⟨.data (.field scalarField), "arkworks.fr/0"⟩] } = none := by decide +kernel
+
 end Tests.ExecutableNumerical

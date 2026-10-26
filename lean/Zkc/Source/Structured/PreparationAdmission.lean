@@ -46,14 +46,19 @@ def checkPreparationPreconditions (snapshot : Snapshot) (profile : PreparationPr
       !pending.contains dependency && !visited.contains dependency
     checkPreparationPreconditions snapshot profile remaining (pending ++ discovered) visited
 
-/-- Resolve the exact private Math root and ABI, then check source preconditions.
-The existing definition ordering and availability checks own dependency depth. -/
+/-- Resolve the exact private Math root and ABI. A realization has no external
+premises; ordinary formation discharges internal call and callback premises.
+Scalar maps additionally require an empty-premise transitive closure. -/
 def checkPreparationClosure (snapshot : Snapshot) (profile : PreparationProfile)
     (helper : Helper) : Except String Unit := do
   let root ← lookupDefinition snapshot helper.name
   if !root.acceptsEdge .call || helper.kind != .math ||
       root.inputs != helper.inputs || root.outputs != helper.outputs then throw profile.error
-  checkPreparationPreconditions snapshot profile snapshot.definitions.length [helper.name] []
+  if profile == .map then
+    checkPreparationPreconditions snapshot profile snapshot.definitions.length [helper.name] []
+  else
+    let .function function := root | throw profile.error
+    if !function.preconditions.isEmpty then throw profile.error
 
 def RealizationDeclaration.helperSpec (declaration : RealizationDeclaration) : Helper :=
   ⟨declaration.helper, .math, declaration.inputs, declaration.outputs⟩
@@ -100,8 +105,16 @@ def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
   | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength _ |
       .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
+  | .makeProduct .. | .getProduct .. => profile == .realization
   | .select type => profile == .realization && profile.typeAllowed type
   | _ => false
+
+/-- Finite computation admission retains reached domain exhaustion and checked
+reads. It does not establish the immediate-return law of preparationAllowed. -/
+def Op.computationAllowed : Op → Bool
+  | .boundedAt _ => true
+  | .fold spec => spec.kind == .math
+  | op => op.preparationAllowed .realization
 
 end Zkc.Source.Structured
 
@@ -116,19 +129,102 @@ def preparationAllowed (profile : PreparationProfile) : RawRegion Ty Op → Bool
     op.preparationAllowed profile && profile.typesAllowed results && next.preparationAllowed profile
   | _ => false
 
+/-- A named finite fold carries its checked callbacks in the shared helper
+inventory. Arbitrary nested regions and Local control remain outside Math. -/
+def computationAllowed : RawRegion Ty Op → Bool
+  | .ret _ => true
+  | .letOp op _ results .nil next =>
+    op.computationAllowed && PreparationProfile.realization.typesAllowed results &&
+      next.computationAllowed
+  | _ => false
+
+/-- Every intermediate scalar belongs to the selected map field, including
+discarded results. Helper port and dependency checks are supplied by selection. -/
+def mapFieldAllowed (field : String) : RawRegion Ty Op → Bool
+  | .ret _ => true
+  | .letOp _ _ results .nil next =>
+    results.all (· == .field field) && next.mapFieldAllowed field
+  | _ => false
+
 end Zkc.Source.RawRegion
 
 namespace Zkc.Source.Structured
 
-/-- Compute a selected Math closure inside the existing declaration order.
-An unrelated Local body or partial Math helper is never given a total profile. -/
-def preparationHelpers (profile : PreparationProfile) (definitions : List CheckedDefinition) :
-    List Helper :=
+/-- One closure selector over the actual checked dependency inventory. Calls,
+steps and predicates all require exact earlier signatures, even when dormant. -/
+def selectMathHelpers (typesAllowed : List Ty → Bool)
+    (bodyAllowed : RawRegion Ty Op → Bool) (definitions : List CheckedDefinition) : List Helper :=
   definitions.foldl (fun selected definition =>
-    if definition.kind == .math && profile.typesAllowed definition.inputs &&
-        profile.typesAllowed definition.outputs && definition.raw.preparationAllowed profile &&
+    if definition.kind == .math && typesAllowed definition.inputs &&
+        typesAllowed definition.outputs && bodyAllowed definition.raw &&
         definition.helpers.all selected.contains then definition.helper :: selected
     else selected) []
+
+/-- The narrow region-free closure used by immediate-return proofs. -/
+def preparationHelpers (profile : PreparationProfile) : List CheckedDefinition → List Helper :=
+  selectMathHelpers profile.typesAllowed (·.preparationAllowed profile)
+
+/-- A scalar map uses one exact field throughout its complete checked closure.
+The generic preparation profile remains the independent return certificate. -/
+def mapHelpers (field : String) : List CheckedDefinition → List Helper :=
+  selectMathHelpers
+    (fun types => PreparationProfile.map.typesAllowed types && types.all (· == .field field))
+    (fun body => body.preparationAllowed .map && body.mapFieldAllowed field)
+
+theorem selectMathHelpers_mono
+    {types₁ types₂ : List Ty → Bool} {body₁ body₂ : RawRegion Ty Op → Bool}
+    (types : ∀ ts, types₁ ts = true → types₂ ts = true)
+    (bodies : ∀ raw, body₁ raw = true → body₂ raw = true)
+    (definitions : List CheckedDefinition) :
+    selectMathHelpers types₁ body₁ definitions ⊆ selectMathHelpers types₂ body₂ definitions := by
+  unfold selectMathHelpers
+  suffices monotone : ∀ (left right : List Helper), left ⊆ right →
+      definitions.foldl (fun selected definition =>
+        if definition.kind == .math && types₁ definition.inputs && types₁ definition.outputs &&
+            body₁ definition.raw && definition.helpers.all selected.contains then
+          definition.helper :: selected else selected) left ⊆
+      definitions.foldl (fun selected definition =>
+        if definition.kind == .math && types₂ definition.inputs && types₂ definition.outputs &&
+            body₂ definition.raw && definition.helpers.all selected.contains then
+          definition.helper :: selected else selected) right from
+    monotone [] [] (by intro _ h; exact h)
+  induction definitions with
+  | nil => intro left right subset; exact subset
+  | cons definition rest ih =>
+    intro left right subset
+    simp only [List.foldl_cons]
+    apply ih
+    split
+    · rename_i selected
+      have parts := Bool.and_eq_true_iff.mp selected
+      have deps : definition.helpers.all right.contains = true := by
+        have used := parts.2
+        rw [List.all_eq_true] at used ⊢
+        intro helper member
+        exact List.contains_iff_mem.mpr (subset (List.contains_iff_mem.mp (used helper member)))
+      have facts : definition.kind == .math ∧ types₁ definition.inputs = true ∧
+          types₁ definition.outputs = true ∧ body₁ definition.raw = true := by
+        simpa only [Bool.and_eq_true, and_assoc] using parts.1
+      have selected₂ : (definition.kind == .math && types₂ definition.inputs &&
+          types₂ definition.outputs && body₂ definition.raw &&
+          definition.helpers.all right.contains) = true := by
+        simp only [Bool.and_eq_true]
+        exact ⟨⟨⟨⟨facts.1, types _ facts.2.1⟩, types _ facts.2.2.1⟩, bodies _ facts.2.2.2⟩, deps⟩
+      simp only [selected₂, ↓reduceIte]
+      exact List.cons_subset_cons _ subset
+    · split
+      · exact fun _ member => List.mem_cons_of_mem _ (subset member)
+      · exact subset
+
+theorem mapHelpers_subset (field : String) (definitions : List CheckedDefinition) :
+    mapHelpers field definitions ⊆ preparationHelpers .map definitions :=
+  selectMathHelpers_mono (fun _ accepted => (Bool.and_eq_true_iff.mp accepted).1)
+    (fun _ accepted => (Bool.and_eq_true_iff.mp accepted).1) definitions
+
+/-- General Math computations may stop at reached finite-domain admission.
+Selection supplies structural closure, never an unconditional return theorem. -/
+def computationHelpers : List CheckedDefinition → List Helper :=
+  selectMathHelpers PreparationProfile.realization.typesAllowed (·.computationAllowed)
 
 /-- Structural closure evidence over the original checked table. The semantic
 implication is a separate theorem; this proposition makes no execution claim. -/

@@ -175,7 +175,7 @@ private theorem sourceElaborated (application : String) (charged : Bool) :
       .ok (.ok (sourceRequest application charged)) := by
   cases charged <;>
     simp [soundnessArguments, sourceWire, subject, resolveModel, models, modelSchema,
-      modelSchemaWith, named,
+      modelSchemaWith, named, soundnessParameters, decodeSoundnessParameters, requireExactSoundness,
       checkArguments, reference, Subject.check, Subject.targetReference, Subject.acceptance,
       Wire.TargetRef.matches, sourceCardinality, sourceRequest, sourceModel, checkCapabilities,
       show artifacts.original.catalogue.identitySort "bls12-381.fr" = some .field from rfl,

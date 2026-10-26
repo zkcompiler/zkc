@@ -33,6 +33,6 @@ mlir::LogicalResult verifyKernelLowering(mlir::ModuleOp original,
 /// visibility may change; dependency names and domain identities may not.
 mlir::LogicalResult verifyKernelClosure(mlir::Operation *sourceOwner,
                                         mlir::func::FuncOp sourceEntry,
-                                        ModuleOp candidate);
+                                        mlir::ModuleOp candidate);
 } // namespace zkc::kernel
 #endif

@@ -46,13 +46,13 @@ fixture(mlir::MLIRContext &context, llvm::StringRef field = "bls12-381.fr",
           "collect-fold fixture refused");
   return result;
 }
-inline mlir::OwningOpRef<kernel::ModuleOp>
+inline mlir::OwningOpRef<mlir::ModuleOp>
 source(mlir::MLIRContext &context, llvm::StringRef helper,
        llvm::StringRef field = "bls12-381.fr", bool sequence = false) {
   auto original = fixture(context, field, sequence);
   return kernelRecipeSource(&original->getBody()->front(), helper, "evaluate");
 }
-inline mlir::func::FuncOp helper(kernel::ModuleOp unit, llvm::StringRef name) {
+inline mlir::func::FuncOp helper(mlir::ModuleOp unit, llvm::StringRef name) {
   auto result = mlir::SymbolTable(unit).lookup<mlir::func::FuncOp>(name);
   require(bool(result), "missing numerical helper");
   return result;
@@ -92,7 +92,7 @@ inline llvm::SmallVector<local::LocalForOp> stateLoops(mlir::ModuleOp output) {
   return result;
 }
 inline mlir::OwningOpRef<mlir::ModuleOp>
-realize(kernel::ModuleOp unit, MathematicalSelectionPolicy policy = fused,
+realize(mlir::ModuleOp unit, MathematicalSelectionPolicy policy = fused,
         finite::VerificationLimits limits = {},
         mathematical::RealizationWork *available = nullptr) {
   mathematical::RealizationWork work;
@@ -101,7 +101,7 @@ realize(kernel::ModuleOp unit, MathematicalSelectionPolicy policy = fused,
   require(bool(result), "numerical realization failed");
   return result;
 }
-inline void accepts(kernel::ModuleOp unit, mlir::ModuleOp output,
+inline void accepts(mlir::ModuleOp unit, mlir::ModuleOp output,
                     MathematicalSelectionPolicy policy = fused,
                     finite::VerificationLimits limits = {}) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
@@ -110,7 +110,7 @@ inline void accepts(kernel::ModuleOp unit, mlir::ModuleOp output,
               outcome.status == finite::VerificationStatus::Verified,
           "original source does not match actual numerical output");
 }
-inline void mismatch(kernel::ModuleOp unit, mlir::ModuleOp output,
+inline void mismatch(mlir::ModuleOp unit, mlir::ModuleOp output,
                      MathematicalSelectionPolicy policy = fused) {
   finite::VerificationResult outcome{finite::VerificationStatus::Verified, {}};
   require(mlir::failed(kernel::verifyEntryRecipes(unit, output, "collect_fold",

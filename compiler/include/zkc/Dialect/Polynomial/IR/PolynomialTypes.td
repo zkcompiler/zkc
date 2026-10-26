@@ -55,4 +55,13 @@ def Polynomial : TypeDef<PolynomialDialect, "Polynomial"> {
   let genVerifyDecl = 1;
 }
 
+// A total mathematical value with no executable port or wire encoding.
+def Quotient : TypeDef<PolynomialDialect, "Quotient"> {
+  let mnemonic = "quotient";
+  let summary = "element of (Z/qZ)[X]/(X^n+1), including rings with zero divisors";
+  let parameters = (ins "uint64_t":$modulus, "uint64_t":$degree);
+  let assemblyFormat = "`<` $modulus `,` $degree `>`";
+  let genVerifyDecl = 1;
+}
+
 #endif
