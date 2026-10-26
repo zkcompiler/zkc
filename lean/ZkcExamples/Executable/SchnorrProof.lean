@@ -5,6 +5,7 @@ public import ZkcExamples.Construction.SchnorrProof
 public import Zkc.Executable.ByteParticipantTransport
 public import Zkc.Executable.StaticBudgetRejection
 public import Zkc.Executable.HelperSchemas
+public import Zkc.Executable.DomainVerifierTransport
 
 @[expose] public section
 /-! The actual Schnorr native-byte consumer, composed through canonical Domain
@@ -168,22 +169,18 @@ theorem domain_prunes
   have pruning := checked_validate_prunes SchnorrProof.program SchnorrProof.context initial challenge installed
     SchnorrProof.participant validator codec budget native_prepared lowered nativeFinal native_checked binding
     SchnorrProof.acceptancePosition (data (F := F) base key) bytes (admitted base key) (nominalData (F := F) base key) (embedded base key)
-  rw [run_nominalAcceptance] at pruning
-  rw [schedule_keys] at pruning
-  rw [ScalarVerifier.verify_eq_runK SchnorrProof.program SchnorrProof.context SchnorrProof.participant
+  rw [verifier_observation SchnorrProof.program SchnorrProof.context SchnorrProof.participant
     SchnorrProof.acceptancePosition challenge (data (F := F) base key)
-    (nominalData (F := F) base key ++ [Domain.Value.transcript SchnorrProof.context.suite []]) rfl initial]
+    (nominalData (F := F) base key ++ [Domain.Value.transcript SchnorrProof.context.suite []])
+    rfl rfl return_schema, Functor.map_map]
   have finite : ScalarVerifier.origin SchnorrProof.participant = SourceProcess.legacyOrigin := by kernel_rfl
-  rw [finite]
-  have participant := runK_participant (F := F) (G := G) SchnorrProof.program SchnorrProof.context SchnorrProof.participant
-    (nominalData (F := F) base key ++ [Domain.Value.transcript SchnorrProof.context.suite []]) rfl return_schema
-    SourceProcess.legacyOrigin initial challenge
-    (decodeProof codec (Plan.types (data (F := F) base key) lowered.plan) (bytes.drop 40))
-    (fun values unread => pure (.returned (selected SchnorrProof.acceptancePosition values), unread))
-  rw [← schedule_instructions, ← schedule_returned] at participant
+  rw [finite, ← schedule_instructions, ← schedule_returned]
+  unfold DomainAdapter.run at pruning ⊢
+  rw [schedule_keys] at pruning
   convert pruning using 1
-  rw [← participant]
-  rfl
+  congr 1
+  funext result
+  exact (nominalAcceptance_selected SchnorrProof.acceptancePosition result).symm
 
 /-- Exact header and sufficient budget: canonical participant acceptance of the
 actual decoded bytes. This replaces the old independently interpreted RHS. -/
