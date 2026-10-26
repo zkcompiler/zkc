@@ -136,6 +136,23 @@ root. The six maintained Sumcheck/TwoSums compiled-ideal receipts keep their
 exact requests; model-transition acceptance and independent replay remain
 separate review obligations.
 
+## Selected finite codecs
+
+The [finite codec model](spec/data-codecs.md) proves partial-encoder success,
+roundtrip, canonical accepted bytes, prefix separation and complete-decoder
+trailing-byte refusal, with reusable pair and bounded sequence composition.
+`ZkcExamples.Construction.BatchOpeningCodec` instantiates it over the exact
+nominal point/value record layout and `ZMod 2130706433`, admits up to sixteen
+openings and proves typed delivery and a 264-byte accepted-message bound.
+`BatchOpeningCodecTransport` proves the selected action skeletons' process
+equations under an interpreted-byte handler, for all peer bytes.
+`Tests.DataCodec` checks reordered fields, nominal and collection distinctions,
+malformed bytes, scalar canonicality and limits. The context is checked exactly
+and must be bound externally. Actual artifact send/receive and helper
+correspondence remain separate integration obligations. These are interpreted
+bytes, without native provider correspondence or a commitment-security claim;
+existing Sumcheck codec meanings are unchanged.
+
 ## Original-component construction transport
 
 The SmallSumcheck and TwoSums canonical typed-history roots bind the admitted

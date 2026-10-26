@@ -17,6 +17,8 @@ that all native behavior already has a Lean model.
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.
 - [Exact tables](spec/table-relations.md): complete Boolean membership and indexed-read evaluator laws.
+- [Selected data codecs](spec/data-codecs.md): executable partial encoding,
+  canonical acceptance, compositional framing and nominal batch payloads.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.
