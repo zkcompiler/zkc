@@ -117,7 +117,13 @@ CFG bodies. Mathematical closure, invoking the premise checker and realization
 comparison remain consumer duties. Source-closure admission checks actual
 mathematical bodies, selected modules, call premises and logical affine
 ownership before realization, including malformed dormant definitions. The
-execution readers refuse unresolved mathematical requests. This is the default
+shared expanded-helper ceiling counts each actual computation request, even
+when repeated requests reuse one helper summary. Source and selected-module
+controls retain the oversized refusal and bounded realization cases before
+dead mathematics can be erased. Independent closure and recipe controls also
+cover changed polynomial operands, shortened arrays, inserted stops and partial
+operations, and changed result coordinates. The execution readers refuse
+unresolved mathematical requests. This is the default
 mathematical invocation; the replaced `kernel.call` registration and its
 remaining test consumers still await removal. See
 [mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).

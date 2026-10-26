@@ -193,6 +193,15 @@ own realization. Ordered finite requests use the additional callback closure
 checks below. Source-equation correspondence,
 candidate comparison and executable extraction remain separate checks.
 
+Source admission shares the 100,000 expanded-helper-operation allowance across
+all retained `exec.compute` requests. Each request debits its actual callee's
+expanded mathematical summary, including repeated requests to one helper,
+dormant scoped definitions, and entries of selected computation modules. A
+cached signature or summary does not waive an occurrence's debit. This check
+precedes liveness and numerical normalization; exhaustion reports
+`mathematical-analysis-limit`. Later substitution, normalization, and executable
+construction retain their separate bounds.
+
 ## Ordered finite requests
 
 `exec.fold` and `exec.collect` retain finite computation before selection. Each

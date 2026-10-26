@@ -8,6 +8,7 @@
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
@@ -1009,9 +1010,43 @@ readSourceExecutionClosure(Operation *symbolTable) {
   auto admitted = reader.run(/*mixed=*/true);
   if (!admitted)
     return error("execution-source-closure", toString(admitted.takeError()));
+  auto bodies = reader.takeBodies();
+  // Each retained computation occurrence may require a distinct expanded
+  // body. Reusing a checked helper signature must not reset or bypass the
+  // shared expansion ceiling. Count actual requests, including dormant roots,
+  // before liveness or numerical normalization can erase their mathematics.
+  SymbolTableCollection symbols;
+  llvm::DenseMap<Operation *, std::unique_ptr<mathematical::TotalClosure>>
+      mathematicalClosures;
+  unsigned expansion = mathematical::realizedHelperOperationLimit;
+  for (const auto &body : bodies)
+    for (const auto &step : body.second) {
+      auto call = dyn_cast<exec::ComputeOp>(step.operation);
+      if (!call)
+        continue;
+      auto helper = call.resolveCallee(symbols);
+      if (!helper)
+        return error("execution-source-closure", "missing computation body");
+      auto *owner = helper->getParentOp();
+      auto &closure = mathematicalClosures[owner];
+      if (!closure) {
+        auto unit = dyn_cast<ModuleOp>(owner);
+        auto entry =
+            unit ? mathematical::getComputationEntry(unit) : func::FuncOp();
+        closure =
+            std::make_unique<mathematical::TotalClosure>(owner, symbols, entry);
+      }
+      const mathematical::TotalSummary *summary;
+      if (failed(closure->get(helper, summary)))
+        return error("execution-source-closure", "invalid computation summary");
+      if (summary->expandedOperations > expansion)
+        return error("mathematical-analysis-limit",
+                     "computation requests exceed the shared expansion budget");
+      expansion -= summary->expandedOperations;
+    }
   return SourceExecutionClosure{std::move(*admitted), reader.takeComputations(),
                                 reader.takeComputationOrigins(),
-                                reader.takeBodies()};
+                                std::move(bodies)};
 }
 Error verifySourceExecutionClosure(Operation *symbolTable) {
   auto admitted = readSourceExecutionClosure(symbolTable);
