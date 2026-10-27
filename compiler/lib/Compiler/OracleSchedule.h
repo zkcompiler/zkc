@@ -14,6 +14,8 @@ public:
   OracleObservationSummary();
   static OracleObservationSummary query();
   static OracleObservationSummary draw();
+  /// Terminates this observation flow. A helper return or another participant's
+  /// completion is not a stop of the flow being summarized.
   static OracleObservationSummary stop();
   /// Choice joins the possible paths, without inventing a cross-arm path.
   OracleObservationSummary either(const OracleObservationSummary &) const;

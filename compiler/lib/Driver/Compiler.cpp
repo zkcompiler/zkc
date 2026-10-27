@@ -436,7 +436,7 @@ int zkc::runCompiler(int argc, char **argv,
       auto result = protocol::exportStructuredSource(*text, symbol, context);
       if (!result)
         return fail(result.takeError());
-      outs() << *result;
+      outs() << result->bytes;
       return 0;
     }
     if (sourceExport) {

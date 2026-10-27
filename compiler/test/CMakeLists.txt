@@ -30,6 +30,9 @@ function(zkc_source_project target manifest)
 endfunction()
 
 add_zkc_test(oracle_realization Compiler oracle-realization)
+add_zkc_test(structured_associations Compiler structured-associations)
+target_compile_definitions(zkc-structured_associations-test PRIVATE
+  ZKC_ASSOCIATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 add_zkc_test(computation_unit IR computation-unit)
 mlir_target_link_libraries(zkc-computation_unit-test PRIVATE MLIRParser)
