@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Polynomial.Multilinear.Concat
 
 @[expose] public section
@@ -98,3 +101,8 @@ theorem values_succ (add mul : Nat → Wiring F w) (inputs : Table F w) (remaini
 end Tables
 
 end Zkc.Protocols.Gkr
+
+-- Materialize the unfolding equation in its defining module so joint imports
+-- share one stored declaration instead of generating client-local proof copies.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Protocols.Gkr.values

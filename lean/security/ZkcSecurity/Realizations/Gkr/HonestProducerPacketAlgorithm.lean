@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import ZkcExamples.Structured.GkrSourceCallbacks
 
 @[expose] public section
@@ -45,3 +48,8 @@ theorem reconstruct [Zero F] (line : List F) (count : Nat) (size : line.length =
       simp [tail, List.getElem?_eq_getElem hj]
 
 end ZkcSecurity.Realizations.Gkr.HonestProducerPackets
+
+-- Materialize the unfolding equation in its defining module so joint imports
+-- share one stored declaration instead of generating client-local proof copies.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``ZkcSecurity.Realizations.Gkr.HonestProducerPackets.sendTail

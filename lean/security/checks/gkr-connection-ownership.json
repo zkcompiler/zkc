@@ -629,9 +629,9 @@
     },
     {
       "path": "lean/Zkc/Protocols/Gkr/Circuit.lean",
-      "sha256": "37f22af753766faa8908853687b483d93b825bb7e22f722ffcbceb3be7e88245",
-      "bytes": 4414,
-      "lines": 100
+      "sha256": "45a0070d6b2766f055e93c16c0a517ef9670e1a15729a7e6df08b45cb43278dd",
+      "bytes": 4737,
+      "lines": 108
     },
     {
       "path": "lean/Zkc/Protocols/Sumcheck/Multilinear/Reduction.lean",
@@ -2321,9 +2321,9 @@
     },
     {
       "path": "lean/security/ZkcSecurity/Realizations/Gkr/HonestProducerPacketAlgorithm.lean",
-      "sha256": "409bc333942a4bafd60793c281ec214c80cf546753f6b0770bdc5574f74f89df",
-      "bytes": 1602,
-      "lines": 47
+      "sha256": "b9d1bc96e5cd6df01928ff8abe7bee2de816e44f3fb8b5e3079feb1e76d220de",
+      "bytes": 1960,
+      "lines": 55
     },
     {
       "path": "lean/security/ZkcSecurity/Realizations/Gkr/HonestProducerPackets.lean",
