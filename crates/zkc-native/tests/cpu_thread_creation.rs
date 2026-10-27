@@ -35,7 +35,10 @@ fn installed_resident_scaling_creates_only_owned_workers() {
 
 fn assert_owned_workers(stem: &str, child: &str, variable: &str) {
     let evidence = zkc_test_support::evidence(stem);
-    for workers in [1, 4] {
+    for workers in [1, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let directory = evidence.nested(&format!("workers-{workers}"));
         let tasks = zkc_test_support::task_trace::test(
             directory.path(),
@@ -47,7 +50,15 @@ fn assert_owned_workers(stem: &str, child: &str, variable: &str) {
         );
         // The only non-owner task is libtest's runner thread. The mismatched
         // environment makes ambient Rayon initialization exceed this budget.
-        assert_eq!(tasks, 1 + workers, "unowned tasks with {workers} workers");
+        assert_eq!(
+            tasks,
+            1 + if cfg!(feature = "parallel") {
+                workers
+            } else {
+                0
+            },
+            "unowned tasks with {workers} workers"
+        );
     }
 }
 

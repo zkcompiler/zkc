@@ -291,7 +291,10 @@ mod tests {
 
     #[test]
     fn single_transforms_and_zero_preserving_inversion_share_the_supplied_owner() {
-        for workers in [1, 4] {
+        for workers in [1, 4]
+            .into_iter()
+            .filter(|&n| cfg!(feature = "parallel") || n == 1)
+        {
             let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
             cpu.enter(|| {
                 for size in [1, 2, 32, 1024] {
@@ -403,7 +406,10 @@ mod tests {
 
     #[test]
     fn coefficient_batches_reuse_dirty_scratch_across_prefix_lengths_and_cpu_owners() {
-        for workers in [1, 4] {
+        for workers in [1, 4]
+            .into_iter()
+            .filter(|&n| cfg!(feature = "parallel") || n == 1)
+        {
             let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
             cpu.enter(|| {
                 for shift in [F::one(), F::from(7)] {
@@ -451,7 +457,10 @@ mod tests {
 
     #[test]
     fn extension_interpolates_horner_values_without_reallocating_scratch() {
-        for workers in [1, 4] {
+        for workers in [1, 4]
+            .into_iter()
+            .filter(|&n| cfg!(feature = "parallel") || n == 1)
+        {
             let cpu = crate::cpu::CpuExecution::new(workers).unwrap();
             cpu.enter(|| {
                 for width in [1, 3, 16] {

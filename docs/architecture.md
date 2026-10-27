@@ -77,6 +77,7 @@ judgment.
 | Rust Host drivers | `zkc-runtime::host::{joint,proof,wire}`: ordered scheduling, proof transport, completion, cancellation and bounded reports |
 | Rust command-line application | [zkc-cli](../crates/zkc-cli/README.md): arguments, presentation, command orchestration and manifest recipes |
 | Rust application Hosts | [zkc](../crates/zkc/README.md): Entry, proof and joint authority, authentication, preparation and publication |
+| Browser adapter | [zkc-web](../crates/zkc-web/README.md): in-memory SDK proof calls, Wasm bindings and a dedicated Worker boundary |
 | Mathematical kernels | [zkc-kernels](../crates/zkc-kernels/README.md): typed arithmetic, transforms, commitments, curve operations and scoped numerical storage |
 | Backend integration | [zkc-native](../crates/zkc-native/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |

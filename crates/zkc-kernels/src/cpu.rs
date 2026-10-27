@@ -1,14 +1,22 @@
 //! Application-owned CPU execution for typed numerical phases.
 //!
-//! A context bounds its Rayon workers. Caller validation, other contexts and
+//! The default `parallel` feature bounds owned Rayon workers. Without it, all
+//! phases execute inline and worker counts other than one are refused.
+//! A parallel context bounds its Rayon workers. Caller validation, other contexts and
 //! foreign threads are outside that bound. Entering a context leaves the caller
 //! on its own thread; only explicitly installed numerical work moves to workers.
+#[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use std::{cell::RefCell, sync::Arc};
+use std::cell::RefCell;
+#[cfg(feature = "parallel")]
+use std::sync::Arc;
 
 /// Immutable execution policy and shared worker lifetime.
 #[derive(Clone)]
-pub struct CpuExecution(Arc<ThreadPool>);
+pub struct CpuExecution {
+    #[cfg(feature = "parallel")]
+    pool: Arc<ThreadPool>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -38,31 +46,51 @@ thread_local! {
 }
 
 impl CpuExecution {
-    /// Create one finite pool. Clones and concurrent callers share its workers.
+    /// Create one finite pool, or a caller-thread context without `parallel`.
+    /// Clones share the policy and any owned workers.
     pub fn new(workers: usize) -> Result<Self, Error> {
         if !(1..=256).contains(&workers) {
             return Err(Error::WorkerCount);
         }
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(workers)
-            .thread_name(|index| format!("zkc-cpu-{index}"))
-            .build()
-            .map_err(|_| Error::PoolCreation)?;
-        // Construction includes readiness of every worker. Admission and timed
-        // numerical phases do not inherit deferred thread startup.
-        pool.broadcast(|_| ());
-        Ok(Self(Arc::new(pool)))
+        #[cfg(not(feature = "parallel"))]
+        {
+            if workers != 1 {
+                return Err(Error::WorkerCount);
+            }
+            Ok(Self {})
+        }
+        #[cfg(feature = "parallel")]
+        {
+            let pool = ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .thread_name(|index| format!("zkc-cpu-{index}"))
+                .build()
+                .map_err(|_| Error::PoolCreation)?;
+            // Construction includes readiness of every worker. Admission and timed
+            // numerical phases do not inherit deferred thread startup.
+            pool.broadcast(|_| ());
+            Ok(Self {
+                pool: Arc::new(pool),
+            })
+        }
     }
 
-    /// Create an explicitly owned one-worker context. No environment variable
-    /// changes this policy. Dropping the last clone requests worker shutdown;
-    /// it does not provide a join receipt for worker thread termination.
+    /// Create a one-worker context with `parallel`, otherwise execute inline.
+    /// No environment variable changes this policy. A parallel context requests
+    /// shutdown on last drop; this is not a worker termination join receipt.
     pub fn serial() -> Result<Self, Error> {
         Self::new(1)
     }
 
     pub fn workers(&self) -> usize {
-        self.0.current_num_threads()
+        #[cfg(feature = "parallel")]
+        {
+            self.pool.current_num_threads()
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            1
+        }
     }
 
     /// Supply a context on the calling thread, restoring the outer context on
@@ -83,7 +111,14 @@ impl CpuExecution {
     /// Execute a typed numerical phase. Nested Rayon work uses the same pool.
     /// Do not capture VM custody, partial effects or caller accounting scopes.
     pub fn execute<R: Send>(&self, action: impl FnOnce() -> R + Send) -> R {
-        self.0.install(|| self.enter(action))
+        #[cfg(feature = "parallel")]
+        {
+            self.pool.install(|| self.enter(action))
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.enter(action)
+        }
     }
 }
 
@@ -125,6 +160,7 @@ pub(crate) fn chunks_mut<T: Send>(
     grain: usize,
     action: impl Fn(usize, &mut [T]) + Send + Sync,
 ) {
+    #[cfg(feature = "parallel")]
     if let Some(context) = parallel_context(values.len(), grain) {
         context.execute(|| {
             use rayon::prelude::*;
@@ -133,14 +169,14 @@ pub(crate) fn chunks_mut<T: Send>(
                 .enumerate()
                 .for_each(|(i, chunk)| context.enter(|| action(i * grain, chunk)));
         });
-    } else {
-        for (i, chunk) in values.chunks_mut(grain).enumerate() {
-            action(i * grain, chunk);
-        }
+        return;
+    }
+    for (i, chunk) in values.chunks_mut(grain).enumerate() {
+        action(i * grain, chunk);
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parallel"))]
 mod tests {
     use super::*;
     #[test]
@@ -216,11 +252,11 @@ mod tests {
         cpu.enter(|| {
             phase(63, 32, || assert_eq!(std::thread::current().id(), caller));
             phase(64, 32, || {
-                assert!(cpu.0.current_thread_index().is_some());
+                assert!(cpu.pool.current_thread_index().is_some());
                 for _ in 0..8 {
                     let mut values = [0; 64];
                     chunks_mut(&mut values, 32, |_, chunk| {
-                        assert!(cpu.0.current_thread_index().is_some());
+                        assert!(cpu.pool.current_thread_index().is_some());
                         assert_eq!(install(rayon::current_num_threads), 4);
                         chunk.fill(7);
                     });
@@ -237,5 +273,38 @@ mod tests {
             assert_eq!(install(rayon::current_num_threads), 4);
         });
         assert!(CURRENT.with(|slot| slot.borrow().is_none()));
+    }
+}
+
+#[cfg(all(test, not(feature = "parallel")))]
+mod inline_tests {
+    use super::*;
+    #[test]
+    fn phases_stay_on_caller_and_restore_after_nesting_and_unwind() {
+        for count in [0, 2, 256, 257, usize::MAX] {
+            assert!(matches!(CpuExecution::new(count), Err(Error::WorkerCount)));
+        }
+        let cpu = CpuExecution::serial().unwrap();
+        let caller = std::thread::current().id();
+        cpu.enter(|| {
+            assert_eq!(cpu.execute(|| std::thread::current().id()), caller);
+            assert_eq!(install(|| std::thread::current().id()), caller);
+            let mut values = [0; 1024];
+            phase(1024, 32, || {
+                chunks_mut(&mut values, 32, |offset, v| {
+                    assert_eq!(std::thread::current().id(), caller);
+                    v.fill(offset);
+                })
+            });
+            assert_eq!(values[1023], 992);
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    || cpu.enter(|| panic!("test unwind"))
+                ))
+                .is_err()
+            );
+            assert_eq!(CURRENT.with(|v| v.borrow().as_ref().unwrap().workers()), 1);
+        });
+        assert!(CURRENT.with(|v| v.borrow().is_none()));
     }
 }

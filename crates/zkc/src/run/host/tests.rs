@@ -73,10 +73,18 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     let original_worker = worker(original.cpu());
     assert_eq!(worker(original.clone().cpu()), original_worker);
     let independent = host(&raw, HostLimits::default());
-    assert_ne!(worker(independent.cpu()), original_worker);
+    if cfg!(feature = "parallel") {
+        assert_ne!(worker(independent.cpu()), original_worker);
+    } else {
+        assert_eq!(worker(independent.cpu()), original_worker);
+    }
     let cpu = CpuExecution::serial().unwrap();
     let id = worker(&cpu);
-    assert_ne!(id, original_worker);
+    if cfg!(feature = "parallel") {
+        assert_ne!(id, original_worker);
+    } else {
+        assert_eq!(id, original_worker);
+    }
     let admission = RunHost::admission_backend(HostLimits::default(), cpu.clone()).unwrap();
     assert_eq!(worker(admission.cpu()), id);
     let configured = RunHost::admit_with_cpu(

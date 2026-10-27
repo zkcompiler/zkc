@@ -271,7 +271,12 @@ macro_rules! group_tests {
 
             #[test]
             fn vector_scaling_and_arithmetic_match_arkworks_across_chunks_and_cpu_contexts() {
-                let cpu = zkc_kernels::cpu::CpuExecution::new(2).unwrap();
+                let cpu = zkc_kernels::cpu::CpuExecution::new(if cfg!(feature = "parallel") {
+                    2
+                } else {
+                    1
+                })
+                .unwrap();
                 let serial = zkc_kernels::cpu::CpuExecution::serial().unwrap();
                 for len in [0, 1, 3, 65, 257] {
                     let inputs: Vec<_> = (0..len).map(|i| point((i % 5) as u64)).collect();

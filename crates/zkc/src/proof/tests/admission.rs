@@ -232,9 +232,17 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
     let original_worker = worker(original.cpu());
     let cpu = CpuExecution::new(1).unwrap();
     let id = worker(&cpu);
-    assert_ne!(id, original_worker);
+    if cfg!(feature = "parallel") {
+        assert_ne!(id, original_worker);
+    } else {
+        assert_eq!(id, original_worker);
+    }
     assert_eq!(worker(original.clone().cpu()), original_worker);
-    assert_ne!(worker(admit(&deployment()).unwrap().cpu()), original_worker);
+    if cfg!(feature = "parallel") {
+        assert_ne!(worker(admit(&deployment()).unwrap().cpu()), original_worker);
+    } else {
+        assert_eq!(worker(admit(&deployment()).unwrap().cpu()), original_worker);
+    }
     assert_eq!(worker(original.clone().with_cpu(cpu.clone()).cpu()), id);
     let bytes = serde_json::to_vec(&deployment()).unwrap();
     let host = NativeDeployment::admit_with_cpu(

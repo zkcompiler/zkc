@@ -8,8 +8,8 @@ toml.workspace = true
 rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 zkc-runtime.workspace = true
-zkc-native.workspace = true
-zkc-kernels.workspace = true
+zkc-native = { workspace = true, default-features = false }
+zkc-kernels = { workspace = true, default-features = false }
 sha2.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
@@ -23,6 +23,8 @@ workspace = true
 ark-std = { workspace = true, features = ["getrandom"] }
 zkc-test-support.workspace = true
 [features]
+default = ["parallel"]
+parallel = ["zkc-native/parallel", "zkc-kernels/parallel"]
 execution-counts = ["zkc-runtime/execution-counts"]
 test-utils = ["zkc-native/test-utils"]
 

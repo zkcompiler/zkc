@@ -372,7 +372,10 @@ fn check_scaling(
 
 #[test]
 fn resident_scaling_matches_addition_across_worker_grain_and_chunk_boundaries() {
-    for workers in [1, 4] {
+    for workers in [1, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let cpu = zkc_native::CpuExecution::new(workers).unwrap();
         for len in [0, 1, 31, 32, 33, 63, 64, 65, 255, 256, 257] {
             for case in cases_with_len(len) {
@@ -390,7 +393,8 @@ fn resident_scaling_matches_addition_across_worker_grain_and_chunk_boundaries() 
 
 #[test]
 fn resident_scaling_has_exact_mandatory_and_optional_storage_boundaries() {
-    let cpu = zkc_native::CpuExecution::new(4).unwrap();
+    let cpu =
+        zkc_native::CpuExecution::new(if cfg!(feature = "parallel") { 4 } else { 1 }).unwrap();
     for len in [0, 1, 2, 65, 257] {
         for case in cases_with_len(len) {
             let mandatory = 256 + len * case.width;

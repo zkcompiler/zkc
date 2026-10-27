@@ -468,7 +468,10 @@ fn workers_preserve_complete_roots_rows_and_single_and_multi_proofs() {
     macro_rules! equal_workers {
         ($instance:ty) => {
             let expected = worker_receipt::<$instance>(1);
-            for workers in [2, 4] {
+            for workers in [1, 2, 4]
+                .into_iter()
+                .filter(|&n| cfg!(feature = "parallel") || n == 1)
+            {
                 assert_eq!(worker_receipt::<$instance>(workers), expected);
             }
         };
