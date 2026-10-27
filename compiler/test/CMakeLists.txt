@@ -29,6 +29,7 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(source_correspondence Compiler source-correspondence)
 add_zkc_test(structured_associations Compiler structured-associations)
 target_compile_definitions(zkc-structured_associations-test PRIVATE
   ZKC_ASSOCIATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

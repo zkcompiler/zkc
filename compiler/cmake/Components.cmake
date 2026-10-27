@@ -323,6 +323,7 @@ add_zkc_component(Compiler
   lib/Compiler/Observation.cpp
   lib/Compiler/SourceClaims.cpp
   lib/Compiler/ComponentContracts.cpp
+  lib/Compiler/SourceCorrespondence.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
   lib/Compiler/StructuredSource.cpp

@@ -472,7 +472,11 @@ source/exporter trusted links. `inspectSourceBindings` retains local read, call
 and assignment associations in written AST coordinates, including shadowing,
 combined input order and finite binders. Generated syntax without a written
 association is reported explicitly. The remaining elaboration proposals and
-their independent correctness checks remain open.
+their independent correctness checks remain open. `exportSourceCorrespondence`
+and `language-check --source-correspondence` join the written syntax and binding
+proposals to the exact structured unit using its own row producer. The artifact
+shares source claims' existing admission association and reports missing source
+matches explicitly; its native publication check is not a Lean proof.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
