@@ -18,7 +18,7 @@ open ZkcExamples.Structured.OriginalArtifacts
 open ZkcSecurity.Generation.ConstructionBindings
 open ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding
 
-def validatorLoop : Zkc.Construction.Instruction := TwoSums.validatorArtifact.instructions[1]'(by decide +kernel)
+def validatorLoop : Zkc.Construction.Instruction := TwoSums.validatorArtifact.instructions[2]'(by decide +kernel)
 def producerLoop : Zkc.Construction.Instruction := TwoSums.producerArtifact.instructions[10]'(by decide +kernel)
 
 /-- Syntax refusals concern method applicability, including mutations whose
@@ -33,45 +33,49 @@ def mutations (instruction : Zkc.Construction.Instruction) (fresh : Nat) : List 
       ⟨.guard "extra-stop", [fresh], [], []⟩] }]
 
 -- All six actual installed bodies: distinct captures and labels for both roles.
-example : templateMatches false SmallSumcheck.context SmallSumcheck.occurrence0 5
-    (SmallSumcheck.validatorArtifact.instructions[1]'(by decide +kernel)) = true := by kernel_rfl
+example : templateMatches false SmallSumcheck.context SmallSumcheck.occurrence0 8
+    (SmallSumcheck.validatorArtifact.instructions[2]'(by decide +kernel)) = true := by kernel_rfl
 example : templateMatches true SmallSumcheck.context SmallSumcheck.occurrence0 13
     (SmallSumcheck.producerArtifact.instructions[10]'(by decide +kernel)) = true := by kernel_rfl
-example : templateMatches false TwoSums.context TwoSums.occurrence0 7 validatorLoop = true := by kernel_rfl
+example : templateMatches false TwoSums.context TwoSums.occurrence0 10 validatorLoop = true := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence0 14 producerLoop = true := by kernel_rfl
-example : templateMatches false TwoSums.context TwoSums.occurrence1 12
-    (TwoSums.validatorArtifact.instructions[4]'(by decide +kernel)) = true := by kernel_rfl
+example : templateMatches false TwoSums.context TwoSums.occurrence1 20
+    (TwoSums.validatorArtifact.instructions[7]'(by decide +kernel)) = true := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence1 29
     (TwoSums.producerArtifact.instructions[21]'(by decide +kernel)) = true := by kernel_rfl
 
 -- Removed instructions, loop metadata, output sorts, order and an added stop.
 example : (mutations validatorLoop 34).map
-    (templateMatches false TwoSums.context TwoSums.occurrence0 7) =
+    (templateMatches false TwoSums.context TwoSums.occurrence0 10) =
     [false, false, false, false, false] := by kernel_rfl
 example : (mutations producerLoop 39).map
     (templateMatches true TwoSums.context TwoSums.occurrence0 14) =
     [false, false, false, false, false] := by kernel_rfl
 
 -- Incorrect captures, output references and occurrence labels refuse separately.
-example : templateMatches false TwoSums.context TwoSums.occurrence0 8 validatorLoop = false := by kernel_rfl
+example : templateMatches false TwoSums.context TwoSums.occurrence0 11 validatorLoop = false := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence0 15 producerLoop = false := by kernel_rfl
-example : templateMatches false TwoSums.context TwoSums.occurrence0 7
+example : templateMatches false TwoSums.context TwoSums.occurrence0 10
     { validatorLoop with operation := .loop (qualifyProtocolSite
-        TwoSums.occurrence0.protocol.applicationPrefix "s15") 4 [28, 34, 27] } = false := by kernel_rfl
+        TwoSums.occurrence0.protocol.applicationPrefix
+        ZkcExamples.Structured.SumcheckVerifierBodies.repeatSite) 4 [31, 37, 30] } = false := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence0 14
     { producerLoop with operation := .loop (qualifyProtocolSite
-        TwoSums.occurrence0.protocol.applicationPrefix "s15") 4 [35, 36, 37, 39, 34] } = false := by kernel_rfl
-example : templateMatches false TwoSums.context TwoSums.occurrence0 7
+        TwoSums.occurrence0.protocol.applicationPrefix
+        ZkcExamples.Structured.SumcheckVerifierBodies.repeatSite) 4 [35, 36, 37, 39, 34] } = false := by kernel_rfl
+example : templateMatches false TwoSums.context TwoSums.occurrence0 10
     { validatorLoop with operation := .loop (qualifyProtocolSite
-        TwoSums.occurrence0.protocol.applicationPrefix "s15") 4 [33, 28, 27] } = false := by kernel_rfl
+        TwoSums.occurrence0.protocol.applicationPrefix
+        ZkcExamples.Structured.SumcheckVerifierBodies.repeatSite) 4 [36, 31, 30] } = false := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence0 14
     { producerLoop with operation := .loop (qualifyProtocolSite
-        TwoSums.occurrence0.protocol.applicationPrefix "s15") 4 [35, 37, 36, 38, 34] } = false := by kernel_rfl
-example : templateMatches false TwoSums.context TwoSums.occurrence1 7 validatorLoop = false := by kernel_rfl
+        TwoSums.occurrence0.protocol.applicationPrefix
+        ZkcExamples.Structured.SumcheckVerifierBodies.repeatSite) 4 [35, 37, 36, 38, 34] } = false := by kernel_rfl
+example : templateMatches false TwoSums.context TwoSums.occurrence1 10 validatorLoop = false := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence1 14 producerLoop = false := by kernel_rfl
 
 -- A changed diagnostic guard label is invisible to View.guard but is checked syntax.
-example : templateMatches false TwoSums.context TwoSums.occurrence0 7
+example : templateMatches false TwoSums.context TwoSums.occurrence0 10
     { validatorLoop with body := validatorLoop.body.map fun step =>
       match step.operation with
       | .guard _ => { step with operation := .guard "changed-diagnostic" }

@@ -40,17 +40,22 @@ theorem producer_binding (inputs outputs add mul : Option (List F))
             (.cons width (.cons handle .nil))))))))).get).bind
           (fun result => .done ((maskValues 0 GkrSourceBodies.gkrSignature.outputScopes result).get .here))).interpret
             CommonAdapter.project := by
-  unfold producer
-  change (((invokeProtocol (GkrSourceViews.unit.protocolTable F G)
-    GkrSourceBodies.gkrSignature {} 0 _).interpret forgetSites).bind _).interpret _ = _
-  rw [GkrSourceViews.unit.protocolTable_forgetSites (F := F) (G := G)]
-  rw [protocol_invoke_body_view (.silent _) (participantActions F G)
-    (Zkc.Source.Structured.plainHelpers (F := F) (G := G) GkrSourceViews.unit)
-    GkrSourceViews.unit.protocols GkrSourceViews.unit.protocolsLinked
-    GkrSourceViews.gkrDefinition GkrSourceViews.gkr_member
-    GkrSourceCallbacks.gkrBody GkrSourceCallbacks.gkrBody_raw]
-  rw [PIR.Process.bind_assoc]
-  rfl
+  let args : Values (Component (assignment F G)) GkrSourceBodies.gkrSignature.inputs :=
+    .cons inputs (.cons outputs (.cons add (.cons mul (.cons layers (.cons selector
+      (.cons width (.cons handle .nil)))))))
+  have view := (GkrSourceViews.unit.protocolTable_forgetSites (F := F) (G := G)
+    GkrSourceBodies.gkrSignature {} 0 args).trans
+    (protocol_invoke_body_view (.silent _) (participantActions F G)
+      (Zkc.Source.Structured.plainHelpers (F := F) (G := G) GkrSourceViews.unit)
+      GkrSourceViews.unit.protocols GkrSourceViews.unit.protocolsLinked
+      GkrSourceViews.gkrDefinition GkrSourceViews.gkr_member
+      GkrSourceCallbacks.gkrBody GkrSourceCallbacks.gkrBody_raw {} 0 args)
+  exact (congrArg (fun process : PIR.Process (participantInterface F G)
+      (Values (Component (assignment F G)) GkrSourceBodies.gkrSignature.outputs) =>
+    (process.bind fun result => .done (result.get .here)).interpret CommonAdapter.project)
+    view).trans (by
+      apply congrArg (PIR.Process.interpret CommonAdapter.project)
+      exact PIR.Process.bind_assoc _ _ _)
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews

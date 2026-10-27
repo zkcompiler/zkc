@@ -73,12 +73,12 @@ run_cmd do
         sources := sources ++ [(wrong.moduleName, TemplateInstallation.source wrong)]
     else
       let signature : Signature := { signature with callees := Bindings.keys program }
-      let rootOutput := { selected with moduleName := "ParametricClients.GatesRoot", definitionIndex := 1, signature }
+      let rootOutput := { selected with moduleName := "ParametricClients.GatesRoot", definitionIndex := 2, signature }
       let rootSource ← require (OriginalRoot.templateSource program rootOutput)
       sources := sources ++ [(rootOutput.moduleName, rootSource)]
       sources := sources ++ [("ParametricClients.WrongCapture",
         ((rootSource.replace rootOutput.moduleName "ParametricClients.WrongCapture").replace
-          "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  (program.payload.protocols.take 1)"
+          "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  (program.payload.protocols.take 2)"
           "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  (program.payload.protocols.take 0)"))]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `sources) : List (String × String) := $(Lean.quote sources)))
 

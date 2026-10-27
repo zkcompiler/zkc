@@ -71,8 +71,9 @@ def main() -> None:
     # prefix. The actual source lookup must refuse the altered equation.
     original = (generated / "ParametricClients/GatesRoot.lean").read_text()
     wrong = original.replace("ParametricClients.GatesRoot", "ParametricClients.WrongCapture")
-    assert "protocols.take 1" in wrong
-    wrong = wrong.replace("protocols.take 1", "protocols.take 0", 1)
+    if "protocols.take 2" not in wrong:
+        raise ValueError("the GKR root must capture its two preceding declarations")
+    wrong = wrong.replace("protocols.take 2", "protocols.take 0", 1)
     # Check the exact immutable-prefix evidence first. Comparing entire failed
     # open processes would unfold large unrelated continuations in the control.
     wrong = wrong.split("theorem source_capture", 1)[0] + "end\nend ParametricClients.WrongCapture\n"

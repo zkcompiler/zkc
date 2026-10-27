@@ -50,12 +50,18 @@ theorem actual_scalar :
 
 /-- A checked map refuses unequal rows before invoking any scalar callback. -/
 theorem unequal_slope_rows :
-    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.helper61Helper
+    invoke (helpers (F := ℚ) (G := ℚ)) GkrSourceBodies.scopedHelper70Helper
       (.cons [1, 2] (.cons [3] (.cons 4 .nil))) = .halt .refused := by
-  rw [HonestLine.helper61_association.invoke GkrSourceViews.unit.linked, HonestLine.slope_map_body]
-  rw [Evaluation.denoteMap_shape_stops _ _ _ .refused (by
-    change Evaluation.mapShape [2, 1] = .stopped .refused
-    norm_num [Evaluation.mapShape, Evaluation.mapShapeRemaining, indexLimit])]
+  rw [HonestLine.scopedHelper70_association.invoke GkrSourceViews.unit.linked, HonestLine.slope_map_body]
+  have stopped : Evaluation.denoteCollect (helpers (F := ℚ) (G := ℚ)) HonestLine.slopeCollection
+      (.cons ([1, 2] : List ℚ) (.cons [3] (.cons 4 .nil))) = .halt .refused :=
+    Evaluation.denoteCollect_admission_stop (carriers := uniformCarriers ℚ ℚ)
+      (helpers (F := ℚ) (G := ℚ)) HonestLine.slopeCollection
+      ((.cons [1, 2] (.cons [3] .nil)) :
+        Values (assignment ℚ ℚ) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
+      (.cons (4 : ℚ) .nil) .refused
+      (by rfl)
+  rw [stopped]
   rfl
 
 /-- Every field point is covered by the full actual helper specification. -/

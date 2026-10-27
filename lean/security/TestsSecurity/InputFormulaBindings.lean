@@ -19,7 +19,7 @@ def meanings : (index : Fin reductionOwner.contract.clauses.length) →
   bind_input_meanings
 
 example : (match (meanings ⟨0, by decide⟩ rfl).meaning with
-    | .formula binding => binding.original = reductionFormula.original
+    | .formula binding => binding.original = reductionShapeFormula.original
     | .opaque _ => False) := rfl
 
 -- Metadata construction cannot discharge an arbitrary mathematical proposition.

@@ -165,12 +165,17 @@ theorem unchanged_suffix (suffix : List ℚ) :
 
 /-- Shape mismatch is refused before any scalar map callback. -/
 theorem malformed_gate_map :
-    invoke (helpers (G := ℚ)) GkrSourceBodies.helper32Helper
+    invoke (helpers (G := ℚ)) GkrSourceBodies.scopedHelper44Helper
       (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused := by
-  rw [HonestCircuit.helper32_association.invoke GkrSourceViews.unit.linked]
-  change (Evaluation.denoteMap (helpers (G := ℚ)) HonestCircuit.gateMap
+  rw [HonestCircuit.scopedHelper44_association.invoke GkrSourceViews.unit.linked]
+  change (Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
     (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil))))).bind _ = _
-  rw [Evaluation.denoteMap_shape_stops (helpers (G := ℚ)) HonestCircuit.gateMap _ .refused (by decide +kernel)]
+  have stopped : Evaluation.denoteCollect (helpers (G := ℚ)) HonestCircuit.gateCollection
+      (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) = .halt .refused :=
+    Evaluation.denoteCollect_admission_stop (helpers (G := ℚ)) HonestCircuit.gateCollection
+      (.cons ([0] : List ℚ) (.cons [] (.cons [3] (.cons [5] .nil)))) .nil .refused
+      (by rfl)
+  rw [stopped]
   rfl
 
 /-- Requesting a layer at the input boundary would subtract one from zero;
