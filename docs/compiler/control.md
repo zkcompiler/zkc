@@ -12,23 +12,23 @@ on continuing result types. Explicit captures are evaluated once. Affine capture
 are consumed once on branch entry and checked within each branch; reusable loop
 invariants and affine carried state occupy different ports.
 
-A finite loop reads its bounds once. Zero trips return initial state. The
-`local.condition` terminator yields a continue flag and carried values: false
+A finite loop reads its bounds once. Zero trips return initial state. A closed body
+completes with a continue flag and carried values: false
 returns the state from the reached trial and skips remaining iterations.
 
 ```text
-state = local.for(index = lower .. upper, state):
+state = bounded_loop(index = lower .. upper, state):
     state, found = trial(state)
-    local.condition(not found, state)
+    complete(not found, state)
 ```
 
-Isolated regions and explicit block arguments expose capture and backedge maps
-to MLIR. Helper expansion recurses without unrolling loops or executing both
+Closed scoped functions and explicit CFG block arguments expose capture and
+backedge maps to MLIR. Helper expansion recurses without unrolling loops or executing both
 arms. Physical conversions and releases stay in their actual control region.
-The Runner uses managed frames and cleans up on every outcome. Numerical
-[Numerical loops](../spec/ir/computation.md#numerical-loop-schedule) use a checked SCF
-schedule before Local execution. Extending SCF lowering to general Local control
-would also need to preserve its custody, early-exit, failure and work contracts.
+The Runner uses managed frames and cleans up on every outcome. [Numerical loops](../spec/ir/computation.md#numerical-loop-schedule) use a checked SCF
+schedule before scoped execution. Explicit outcomes preserve stopping and
+continuation through that schedule; generic control lifting alone is not a
+justification for preserving custody, early exits, failures or charged work.
 
 ## Participant completion
 

@@ -529,63 +529,22 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // actual scoped bodies, including dormant helpers and outlined regions.
   if (auto error = protocol::verifySourceExecutionClosure(module))
     return diagnostics::emit(module.emitOpError(), std::move(error));
-  // The enclosing profile also owns finite references in protocol and Local
-  // declarations, outside the scoped/Math definition component above.
+  // The enclosing profile also owns finite references in protocol
+  // definitions, outside the scoped/Math definition component above.
   if (failed(finite::verifyClosure(module)))
     return failure();
-  algebra::MapFormulas maps(tables);
   unsigned programs = 0;
-  unsigned remainingRealizations = realizedHelperOperationLimit;
   for (auto &op : module.getBody().front()) {
     if (auto program = dyn_cast<protocol_ir::MathematicalOp>(op)) {
       ++programs;
     } else if (isa<func::FuncOp>(op)) {
       // Complete mathematical/scoped admission was performed above.
-    } else if (auto realization = dyn_cast<local::RealizeOp>(op)) {
-      for (auto attr : realization->getAttrs())
-        if (!is_contained(realization.getAttributeNames(),
-                          attr.getName().getValue()))
-          return refuse(realization, "unsupported realization attribute");
-      const TotalSummary *summary;
-      auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
-          realization, realization.getHelperAttr());
-      if (failed(helpers.get(helper, summary)))
-        return failure();
-      if (auto assumptions =
-              helper->getAttrOfType<ArrayAttr>("data.preconditions");
-          assumptions && !assumptions.empty())
-        return diagnostics::emit(
-            realization.emitOpError(), "finite-bound",
-            "local.realize requires an unconditional total helper");
-      if (summary->expandedOperations > remainingRealizations)
-        return diagnostics::emit(
-            realization.emitOpError(), "mathematical-analysis-limit",
-            "realized helpers exceed the shared expansion budget");
-      remainingRealizations -= summary->expandedOperations;
-      // The local-definition reader independently checks data-only native
-      // ports.
-    } else if (auto map = dyn_cast<algebra::MapRealizeOp>(op)) {
-      // Admitted explicitly: its preparation-callable interface grants
-      // nothing. Algebra's formula rule reads the closure that helper analysis
-      // has bounded; preparation applies Ring limits to the expanded formula.
-      const TotalSummary *summary;
-      auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
-          map, map.getHelperAttr());
-      if (failed(helpers.get(helper, summary)) || failed(maps.verify(map)))
-        return failure();
-      if (summary->expandedOperations > remainingRealizations)
-        return diagnostics::emit(
-            map.emitOpError(), "mathematical-analysis-limit",
-            "realized helpers exceed the shared expansion budget");
-      remainingRealizations -= summary->expandedOperations;
-    } else if (isa<data::DomainOp, local::FiniteFoldOp, local::FiniteCollectOp>(
-                   op)) {
+    } else if (isa<data::DomainOp>(op)) {
       // The descriptor and finite closure were checked before any liveness.
-    } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
-                   runtime::BindingOp, mlir::ModuleOp, poly::RecipeOp,
-                   poly::RealizeOp>(op)) {
-      // Kernel already checked its owned closure; whole Local admission below
-      // checks even unused executable definitions.
+    } else if (isa<protocol_ir::ConstructionOp, runtime::BindingOp,
+                   mlir::ModuleOp, poly::RecipeOp, poly::RealizeOp>(op)) {
+      // The owning verifiers check every retained declaration, including
+      // dormant computation units and polynomial realizations.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
       for (auto attr : declaration->getAttrs())
         if (!is_contained(declaration.getAttributeNames(),
@@ -598,15 +557,12 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unclassified declaration in the 'protocol' profile");
     }
   }
-  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty() &&
-      module.getBody().front().getOps<local::FuncOp>().empty())
+  if (!programs && module.getBody().front().getOps<func::FuncOp>().empty())
     return diagnostics::emit(module.emitOpError(), "mathematical-module",
                              "expected a mathematical definition");
   if (failed(verifyApplications(module)))
     return failure();
   NativeTypePolicies types(module);
-  if (failed(verifyNativeLocals(module, true, types)))
-    return failure();
   if (failed(relation::verifyDeclarationConsistency({module.getOperation()})))
     return failure();
   // The enclosing isolated symbol table owns cross-definition analysis. Its
@@ -626,10 +582,6 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   // Every body is formed before a summary follows a forward callee reference.
   // Root obligations still cover every original repeat, including unused ones.
   ResourceOrigins origins(tables, types);
-  for (auto &declaration : module.getBody().front())
-    if (finite::isDeclaration(&declaration) &&
-        failed(origins.verifyFinite(&declaration)))
-      return failure();
   for (auto repeat : originQueries)
     if (failed(origins.verify(repeat)))
       return failure();

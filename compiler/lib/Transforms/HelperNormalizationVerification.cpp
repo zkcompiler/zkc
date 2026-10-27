@@ -182,7 +182,7 @@ struct HelperNormalizationChecker::Implementation {
       }
     }
     auto &ret = block.back();
-    if (!isa<func::ReturnOp, local::ReturnOp>(ret) || !ret.getAttrs().empty() ||
+    if (!isa<func::ReturnOp>(ret) || !ret.getAttrs().empty() ||
         !terms.charge(1 + ret.getNumOperands()))
       return failure();
     SmallVector<Term> result;

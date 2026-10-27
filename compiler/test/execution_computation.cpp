@@ -597,7 +597,7 @@ module {
         func.func @entry() { func.return }
       } }) {profile=#protocol.profile<physical>} : ()->()
     })mlir");
-    refuses("kernel-profile", context, [&] { return verify(*module); });
+    refuses("computation-profile", context, [&] { return verify(*module); });
   });
   cases.run("source closure checks dormant selected units", [&] {
     checkClosure(

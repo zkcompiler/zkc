@@ -71,7 +71,6 @@ mlir::FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
                                               mlir::Value scope = {});
 mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);
-bool isDeclaration(mlir::Operation *op);
 mlir::Type elementType(mlir::Type container, bool matrix = false);
 mlir::LogicalResult describe(mlir::Operation *op, Computation &result,
                              mlir::Operation *symbolRoot = nullptr,
@@ -90,8 +89,8 @@ mlir::LogicalResult verifyClosure(mlir::Operation *unit);
 // Apply the same finite-reference and bound-premise checks to explicitly owned,
 // already formed immediate definitions in a mixed symbol table. Finite cycle
 // traversal shares one budget. As above, ordinary helper admission remains the
-// mathematical/local owner's responsibility. The enclosing profile must account
-// for every omitted declaration separately.
+// mathematical/scoped owner's responsibility. The enclosing profile must
+// account for every omitted declaration separately.
 mlir::LogicalResult
 verifyDefinitionClosure(mlir::Operation *unit,
                         llvm::ArrayRef<mlir::Operation *> definitions);

@@ -10,6 +10,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
@@ -28,6 +29,7 @@ namespace {
 const char *laneFixture = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
+!O = !exec.outcome<(!V)>
 module { "protocol.module"() ({
  "runtime.binding"() {sym_name="add",contract="vector.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "runtime.binding"() {sym_name="mul",contract="vector.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
@@ -40,12 +42,23 @@ module { "protocol.module"() ({
    %result = "algebra.field_add"(%square,%c) : (!F,!F)->!F
    func.return %result : !F
  }
- local.func @candidate(%x:!V,%y:!V,%c:!F,%rows:ui64,%other_rows:ui64)->!V attributes {logical_origin=["candidate",[]]} {
-   %sum = "algebra.exec.vector_add"(%y,%x) {binding=@add,parameters=[],site="sum"} : (!V,!V)->!V
-   %square = "algebra.exec.vector_mul"(%sum,%sum) {binding=@mul,parameters=[],site="square"} : (!V,!V)->!V
-   %filled = "algebra.exec.vector_fill"(%c,%rows) {binding=@fill,parameters=[],site="fill"} : (!F,ui64)->!V
-   %result = "algebra.exec.vector_add"(%filled,%square) {binding=@add,parameters=[],site="result"} : (!V,!V)->!V
-   local.return %result : !V
+ func.func @candidate(%scope:!runtime.scope,%x:!V,%y:!V,%c:!F,%rows:ui64,%other_rows:ui64)->!O attributes {no_inline,runtime.origin=["candidate",[]]} {   %sum_attempt = "exec.apply"(%scope,%y,%x) {binding=@add,parameters=[],site="sum"} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>
+   "exec.dispatch"(%sum_attempt)[^sum,^failed] : (!exec.outcome<(!V)>)->()
+ ^sum(%sum:!V):
+   %square_attempt = "exec.apply"(%scope,%sum,%sum) {binding=@mul,parameters=[],site="square"} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>
+   "exec.dispatch"(%square_attempt)[^square,^failed] : (!exec.outcome<(!V)>)->()
+ ^square(%square:!V):
+   %fill_attempt = "exec.apply"(%scope,%c,%rows) {binding=@fill,parameters=[],site="fill"} : (!runtime.scope,!F,ui64)->!exec.outcome<(!V)>
+   "exec.dispatch"(%fill_attempt)[^fill,^failed] : (!exec.outcome<(!V)>)->()
+ ^fill(%filled:!V):
+   %result_attempt = "exec.apply"(%scope,%filled,%square) {binding=@add,parameters=[],site="result"} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>
+   "exec.dispatch"(%result_attempt)[^result,^failed] : (!exec.outcome<(!V)>)->()
+ ^result(%result:!V):
+   %done = "exec.returned"(%result) : (!V)->!O
+   func.return %done : !O
+ ^failed(%reason:!exec.stop):
+   %failed = "exec.failed"(%reason) : (!exec.stop)->!O
+   func.return %failed : !O
  }
  "protocol.func"() ({
    "protocol.return"() : ()->()
@@ -66,9 +79,17 @@ std::string formulaBodies(StringRef source, StringRef candidate) {
             "missing formula body");
     text.replace(begin, end - begin, body.str());
   };
-  replace("   %a =", "\n }\n local.func", source);
-  replace("   %sum =", "\n }\n", candidate);
+  replace("   %a =", "\n }\n func.func @candidate", source);
+  replace("   %sum_attempt =", " ^failed", candidate);
+  if (!candidate.contains("^failed")) {
+    auto begin = text.find(" ^failed");
+    text.erase(begin, text.find("\n }", begin) - begin);
+  }
   return text;
+}
+std::string laneReturn(StringRef value, StringRef type) {
+  return "   %done = \"exec.returned\"(" + value.str() + ") : (" + type.str() +
+         ")->!O\n   func.return %done : !O\n";
 }
 std::string additionChain(unsigned steps, bool candidate, bool doubling,
                           bool commute = false) {
@@ -78,37 +99,28 @@ std::string additionChain(unsigned steps, bool candidate, bool doubling,
     std::string left = previous, right = doubling && i ? previous : "%y";
     if (commute)
       std::swap(left, right);
-    text += "   " + name + " = \"" +
-            (candidate ? "algebra.exec.vector_add" : "algebra.field_add") +
-            "\"(" + left + "," + right + ")";
-    text += candidate ? " {binding=@add,parameters=[],site=\"chain_" +
-                            std::to_string(i) + "\"} : (!V,!V)->!V\n"
-                      : " : (!F,!F)->!F\n";
+    if (candidate)
+      text += scopedApply("add", "chain_" + std::to_string(i),
+                          left + "," + right, "!V,!V", name, "!V");
+    else
+      text += "   " + name + " = \"algebra.field_add\"(" + left + "," + right +
+              ") : (!F,!F)->!F\n";
     previous = name;
   }
-  return text + (candidate ? "   local.return " : "   func.return ") +
-         previous + (candidate ? " : !V\n" : " : !F\n");
-}
-local::FuncOp function(ModuleOp module, StringRef name) {
-  local::FuncOp result;
-  module.walk([&](local::FuncOp op) {
-    if (op.getSymName() == name)
-      result = op;
-  });
-  require(bool(result), "missing function " + name);
-  return result;
+  return text + (candidate ? laneReturn(previous, "!V")
+                           : "   func.return " + previous + " : !F\n");
 }
 Operation *bound(ModuleOp module, StringRef functionName, StringRef contract) {
-  SymbolTable symbols(&module.getBody()->front());
-  for (Operation &op : function(module, functionName).getBody().front()) {
-    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
-                       : runtime::BindingOp();
+  auto *owner = &module.getBody()->front();
+  SymbolTable symbols(owner);
+  Operation *result = nullptr;
+  symbols.lookup<func::FuncOp>(functionName).walk([&](exec::ApplyOp op) {
+    auto binding = symbols.lookup<runtime::BindingOp>(op.getBinding());
     if (binding && binding.getContract() == contract)
-      return &op;
-  }
-  require(false, "missing bound operation " + contract);
-  return nullptr;
+      result = op;
+  });
+  require(result, "missing bound operation " + contract);
+  return result;
 }
 func::FuncOp scopedFunction(ModuleOp module, StringRef name = "work") {
   auto owner = &module.getBody()->front();
@@ -173,28 +185,32 @@ std::string fixture(StringRef name) {
   return text.str();
 }
 bool compareMap(ModuleOp module, uint64_t budget = 100000, bool sum = false) {
-  SymbolTable symbols(&module.getBody()->front());
+  auto *owner = &module.getBody()->front();
+  SymbolTable symbols(owner);
   auto source = symbols.lookup<func::FuncOp>("formula");
-  auto &body = function(module, "candidate").getBody().front();
-  Operation *cursor = &body.front();
+  auto target = scopedFunction(module, "candidate");
+  auto view = mathematical::ScopedCandidate::read(owner);
+  if (!view) {
+    llvm::consumeError(view.takeError());
+    return false;
+  }
+  auto args = target.getArguments().drop_front();
+  auto end = returned(target);
+  Operation *cursor = (*view)->first(&target.front());
   Operation *originalCursor = cursor;
   llvm::DenseSet<Operation *> bindings;
   const bool rowwise[] = {true, true, false};
-  auto result =
-      sum ? mathematical::compareLaneSum(source.getBody().front(), rowwise,
-                                         body.getArguments().take_front(3),
-                                         body.getArgument(3), cursor, symbols,
-                                         bindings, budget, &body.back())
-          : mathematical::compareLaneFormula(
-                source.getBody().front(), rowwise,
-                body.getArguments().take_front(3), body.getArgument(3), cursor,
-                symbols, bindings, budget, &body.back());
+  auto compare =
+      sum ? mathematical::compareLaneSum : mathematical::compareLaneFormula;
+  auto result = compare(source.front(), rowwise, args.take_front(3), args[3],
+                        cursor, symbols, bindings, budget, end, nullptr,
+                        nullptr, end.getOperand(0), view->get());
   if (failed(result)) {
     require(cursor == originalCursor && bindings.empty(),
             "failed comparison changed caller context");
     return false;
   }
-  return cursor == &body.back() && body.back().getOperand(0) == *result;
+  return cursor == end && end.getOperand(0) == *result;
 }
 void pruneAddedBindings(ModuleOp before, ModuleOp after) {
   SymbolTable original(&before.getBody()->front());
@@ -476,17 +492,24 @@ int main() {
         "   %a = \"algebra.field_add\"(%x,%y) : (!F,!F)->!F\n"
         "   %b = \"algebra.field_add\"(%a,%c) : (!F,!F)->!F\n"
         "   func.return %b : !F\n",
-        "   %cvec = \"algebra.exec.vector_fill\"(%c,%rows) "
-        "{binding=@fill,parameters=[],site=\"fill\"} : (!F,ui64)->!V\n"
-        "   %a = \"algebra.exec.vector_add\"(%cvec,%y) "
-        "{binding=@add,parameters=[],site=\"a\"} : (!V,!V)->!V\n"
-        "   %b = \"algebra.exec.vector_add\"(%a,%x) "
-        "{binding=@add,parameters=[],site=\"b\"} : (!V,!V)->!V\n"
-        "   local.return %b : !V\n");
+        "   %fill_attempt = \"exec.apply\"(%scope,%c,%rows) "
+        "{binding=@fill,parameters=[],site=\"fill\"} : "
+        "(!runtime.scope,!F,ui64)->!exec.outcome<(!V)>\n   "
+        "\"exec.dispatch\"(%fill_attempt)[^fill,^failed] : "
+        "(!exec.outcome<(!V)>)->()\n ^fill(%cvec:!V):\n   %a_attempt = "
+        "\"exec.apply\"(%scope,%cvec,%y) "
+        "{binding=@add,parameters=[],site=\"a\"} : "
+        "(!runtime.scope,!V,!V)->!exec.outcome<(!V)>\n   "
+        "\"exec.dispatch\"(%a_attempt)[^a,^failed] : "
+        "(!exec.outcome<(!V)>)->()\n ^a(%a:!V):\n   %b_attempt = "
+        "\"exec.apply\"(%scope,%a,%x) {binding=@add,parameters=[],site=\"b\"} "
+        ": (!runtime.scope,!V,!V)->!exec.outcome<(!V)>\n   "
+        "\"exec.dispatch\"(%b_attempt)[^b,^failed] : "
+        "(!exec.outcome<(!V)>)->()\n ^b(%b:!V):\n   %done = "
+        "\"exec.returned\"(%b) : (!V)->!O\n   func.return %done : !O\n");
     if (multiply) {
       for (unsigned i = 0; i < 2; ++i) {
         text = edit(text, "algebra.field_add", "algebra.field_multiply");
-        text = edit(text, "algebra.exec.vector_add", "algebra.exec.vector_mul");
         text = edit(text, "binding=@add", "binding=@mul");
       }
     }
@@ -494,7 +517,7 @@ int main() {
         text, true);
     map(multiply ? "multiplication operand multiplicity"
                  : "addition operand multiplicity",
-        edit(text, "(%a,%x)", "(%a,%y)"), false);
+        edit(text, "(%scope,%a,%x)", "(%scope,%a,%y)"), false);
   }
   constexpr unsigned maximumSteps = ring::Limits::depth - 1;
   for (bool doubling : {false, true}) {
@@ -509,7 +532,9 @@ int main() {
     candidate = additionChain(256, true, doubling, true);
     map(doubling ? "shared DAG multiplicity mutation"
                  : "addition chain multiplicity mutation",
-        formulaBodies(source, edit(candidate, "(%y,%x)", "(%x,%x)")), false);
+        formulaBodies(source,
+                      edit(candidate, "(%scope,%y,%x)", "(%scope,%x,%x)")),
+        false);
   }
   map("source depth beyond the Ring limit",
       formulaBodies(additionChain(maximumSteps + 1, false, false),
@@ -565,11 +590,13 @@ int main() {
             "empty-result helper hid an invalid unused instruction");
   });
   map("candidate computed from a different helper",
-      edit(wrapped, "\"algebra.exec.vector_add\"(%y,%x) {binding=@add",
-           "\"algebra.exec.vector_mul\"(%y,%x) {binding=@mul"),
+      edit(wrapped, "\"exec.apply\"(%scope,%y,%x) {binding=@add",
+           "\"exec.apply\"(%scope,%y,%x) {binding=@mul"),
       false);
   map("candidate computed with the wrong helper capture",
-      edit(wrapped, "(%y,%x) {binding=@add", "(%y,%y) {binding=@add"), false);
+      edit(wrapped, "(%scope,%y,%x) {binding=@add",
+           "(%scope,%y,%y) {binding=@add"),
+      false);
   map("helper capture mutation",
       edit(wrapped, "func.call @addhelper(%x,%y)",
            "func.call @addhelper(%x,%c)"),
@@ -609,33 +636,42 @@ int main() {
            "sym_name=\"sub\",contract=\"vector.sub\"");
   subtract = edit(subtract, "\"algebra.field_add\"(%square,%c)",
                   "\"algebra.field_subtract\"(%square,%c)");
-  subtract = edit(subtract,
-                  "\"algebra.exec.vector_add\"(%filled,%square) {binding=@add",
-                  "\"algebra.exec.vector_sub\"(%filled,%square) {binding=@sub");
+  subtract =
+      edit(subtract, "\"exec.apply\"(%scope,%filled,%square) {binding=@add",
+           "\"exec.apply\"(%scope,%filled,%square) {binding=@sub");
   map("subtraction has no commutative law", subtract, false);
   map("wrong input slot",
-      edit(laneFixture, "(%y,%x) {binding=@add", "(%x,%x) {binding=@add"),
+      edit(laneFixture, "(%scope,%y,%x) {binding=@add",
+           "(%scope,%x,%x) {binding=@add"),
       false);
   map("wrong broadcast shape witness",
-      edit(laneFixture, "(%c,%rows)", "(%c,%other_rows)"), false);
+      edit(laneFixture, "(%scope,%c,%rows)", "(%scope,%c,%other_rows)"), false);
   map("changed output",
-      edit(laneFixture, "local.return %result", "local.return %square"), false);
+      edit(laneFixture, "\"exec.returned\"(%result)",
+           "\"exec.returned\"(%square)"),
+      false);
   map("unused admitted source operation",
       edit(laneFixture, "   func.return",
            "   %unused = \"algebra.field_multiply\"(%x,%c) : (!F,!F)->!F\n   "
            "func.return"),
       true);
   map("unused supported candidate operation",
-      edit(laneFixture, "   local.return",
-           "   %unused = \"algebra.exec.vector_mul\"(%x,%y) "
-           "{binding=@mul,parameters=[],site=\"unused\"} : (!V,!V)->!V\n   "
-           "local.return"),
+      edit(laneFixture, "   %done = \"exec.returned\"",
+           "   %unused_attempt = \"exec.apply\"(%scope,%x,%y) "
+           "{binding=@mul,parameters=[],site=\"unused\"} : "
+           "(!runtime.scope,!V,!V)->!exec.outcome<(!V)>\n   "
+           "\"exec.dispatch\"(%unused_attempt)[^unused,^failed] : "
+           "(!exec.outcome<(!V)>)->()\n ^unused(%unused:!V):\n   %done = "
+           "\"exec.returned\""),
       true);
   map("unused partial candidate operation",
-      edit(laneFixture, "   local.return",
-           "   %unused = \"algebra.exec.field_inverse\"(%c) "
-           "{binding=@div,parameters=[],site=\"unused\"} : (!F)->!F\n   "
-           "local.return"),
+      edit(laneFixture, "   %done = \"exec.returned\"",
+           "   %unused_attempt = \"exec.apply\"(%scope,%c) "
+           "{binding=@div,parameters=[],site=\"unused\"} : "
+           "(!runtime.scope,!F)->!exec.outcome<(!F)>\n   "
+           "\"exec.dispatch\"(%unused_attempt)[^unused,^failed] : "
+           "(!exec.outcome<(!F)>)->()\n ^unused(%unused:!F):\n   %done = "
+           "\"exec.returned\""),
       false);
   cases.run("unused invalid source literal is checked", [&] {
     auto module = parseSourceString<ModuleOp>(laneFixture, &context);
@@ -704,21 +740,25 @@ int main() {
     text.replace(
         begin, end - begin,
         "   %result = \"algebra.field_multiply\"(%x,%y) : (!F,!F)->!F\n");
-    begin = text.find("   %sum =");
-    end = text.find("   local.return %result");
+    begin = text.find("   %sum_attempt =");
+    end = text.find("   %done = \"exec.returned\"(%result)");
     require(begin != std::string::npos && end != std::string::npos,
             "missing candidate formula");
     text.replace(begin, end - begin,
-                 "   %result = \"algebra.exec.vector_dot\"(%y,%x) "
-                 "{binding=@mul,parameters=[],site=\"dot\"} : (!V,!V)->!F\n");
+                 "   %dot_attempt = \"exec.apply\"(%scope,%y,%x) "
+                 "{binding=@mul,parameters=[],site=\"dot\"} : "
+                 "(!runtime.scope,!V,!V)->!exec.outcome<(!F)>\n   "
+                 "\"exec.dispatch\"(%dot_attempt)[^dot,^failed] : "
+                 "(!exec.outcome<(!F)>)->()\n ^dot(%result:!F):\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.dot\"");
-    text = edit(text, "%other_rows:ui64)->!V", "%other_rows:ui64)->!F");
-    text = edit(text, "local.return %result : !V", "local.return %result : !F");
+    text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
+    text = edit(text, "\"exec.returned\"(%result) : (!V)",
+                "\"exec.returned\"(%result) : (!F)");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module) && compareMap(*module, 100000, true),
             "commuted dot did not equal independently read sum of products");
     auto *dot = bound(*module, "candidate", "vector.dot");
-    dot->setOperand(0, dot->getOperand(1));
+    dot->setOperand(1, dot->getOperand(2));
     require(!compareMap(*module, 100000, true), "dot input mutation accepted");
   });
   for (unsigned steps : {maximumSteps, maximumSteps + 1})
@@ -738,12 +778,17 @@ int main() {
           }
           source += "   func.return " + previous + " : !F\n";
           auto text = formulaBodies(
-              source, "   %result = \"algebra.exec.vector_sum\"(%x) "
-                      "{binding=@mul,parameters=[],site=\"sum\"} : (!V)->!F\n"
-                      "   local.return %result : !F\n");
+              source, "   %sum_attempt = \"exec.apply\"(%scope,%x) "
+                      "{binding=@mul,parameters=[],site=\"sum\"} : "
+                      "(!runtime.scope,!V)->!exec.outcome<(!F)>\n   "
+                      "\"exec.dispatch\"(%sum_attempt)[^sum,^failed] : "
+                      "(!exec.outcome<(!F)>)->()\n ^sum(%result:!F):\n   %done "
+                      "= \"exec.returned\"(%result) : (!F)->!O\n   func.return "
+                      "%done : !O\n");
           text =
               edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
-          text = edit(text, "%other_rows:ui64)->!V", "%other_rows:ui64)->!F");
+          text = edit(text, "!O = !exec.outcome<(!V)>",
+                      "!O = !exec.outcome<(!F)>");
           auto module = parseSourceString<ModuleOp>(text, &context);
           require(bool(module), "neutral chain fixture refused");
           require(compareMap(*module, 100000, true) == (steps == maximumSteps),
@@ -764,11 +809,14 @@ int main() {
         "   %zero = \"algebra.constant\"() {value=\"0\"} : ()->!F\n"
         "   %r = \"algebra.field_add\"(%x,%zero) : (!F,!F)->!F\n"
         "   func.return %r : !F\n",
-        "   %result = \"algebra.exec.vector_sum\"(%x) "
-        "{binding=@mul,parameters=[],site=\"sum\"} : (!V)->!F\n"
-        "   local.return %result : !F\n");
+        "   %sum_attempt = \"exec.apply\"(%scope,%x) "
+        "{binding=@mul,parameters=[],site=\"sum\"} : "
+        "(!runtime.scope,!V)->!exec.outcome<(!F)>\n   "
+        "\"exec.dispatch\"(%sum_attempt)[^sum,^failed] : "
+        "(!exec.outcome<(!F)>)->()\n ^sum(%result:!F):\n   %done = "
+        "\"exec.returned\"(%result) : (!F)->!O\n   func.return %done : !O\n");
     text = edit(text, "contract=\"vector.mul\"", "contract=\"vector.sum\"");
-    text = edit(text, "%other_rows:ui64)->!V", "%other_rows:ui64)->!F");
+    text = edit(text, "!O = !exec.outcome<(!V)>", "!O = !exec.outcome<(!F)>");
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module) && compareMap(*module, 100000, true),
             "neutral sum fixture refused");

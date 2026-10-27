@@ -9,7 +9,6 @@
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Support/Refusal.h"
@@ -457,7 +456,7 @@ struct SourceBody {
       returned = scoped.back().inputs;
     } else {
       if (!block.getParent()->hasOneBlock() || block.empty() ||
-          !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
+          !isa<func::ReturnOp>(block.back()) ||
           !block.back().getAttrs().empty())
         return false;
       plain = &block;
@@ -753,9 +752,9 @@ class Comparison {
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
       // assignments and a shared work/depth bound, including unused calls.
-      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op)) {
+      if (isa<func::CallOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
-        if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
+        if (!helper || !isa<func::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return {};
         SmallVector<Meaning> arguments;
@@ -1431,9 +1430,9 @@ class ModuleComparison {
       if (!charge() || op.getNumRegions() || results.size() != 1)
         return 0;
       unsigned result = 0;
-      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op)) {
+      if (isa<func::CallOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
-        if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
+        if (!helper || !isa<func::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return 0;
         SmallVector<unsigned> arguments;

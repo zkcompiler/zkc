@@ -270,9 +270,8 @@ These facts constrain admitted transitions; they do not discharge executable
 realization or source correspondence.
 
 Unrealized finite requests are excluded from executable extraction. Source
-emission, selected realization and their independent comparisons must be
-connected before this component replaces the default finite compilation path;
-[status](../../status.md) records that migration boundary.
+emission, selected realization and their independent comparisons form the
+default finite compilation path; [status](../../status.md) records its coverage.
 
 ## Scoped native instruction profile
 
@@ -296,8 +295,8 @@ use this one declaration. Its name is resolved within the actual symbol table;
 the declaration alone grants no installed authority, timing permission or
 invocation success. Installation still checks the complete potential closure,
 and reached execution checks current operands, policy, custody and allowances.
-The Func/CF execution writer, reader and independent comparison require no Local
-dialect registration.
+The Func/CF execution writer, reader and independent comparison share this
+single scoped execution vocabulary.
 
 The standalone API accepts a closed, attribute-free builtin module. The
 `readExecutionDefinitions` and `verifyExecutionDefinitions` APIs instead select

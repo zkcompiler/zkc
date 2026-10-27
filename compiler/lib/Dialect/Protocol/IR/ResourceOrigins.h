@@ -33,12 +33,9 @@ class ResourceOrigins {
   mlir::LogicalResult charge(mlir::Operation *op, uint64_t amount);
   mlir::LogicalResult limit(mlir::Operation *op, llvm::StringRef detail);
   bool affine(mlir::Value value);
-  mlir::LogicalResult block(mlir::Block &body, bool local, unsigned depth,
-                            Summary &result);
+  mlir::LogicalResult block(mlir::Block &body, unsigned depth, Summary &result);
   mlir::LogicalResult call(mlir::Operation *op, unsigned depth,
                            const Summary *&result);
-  mlir::LogicalResult control(mlir::Operation *op, unsigned depth,
-                              Environment &environment, Summary &result);
   mlir::LogicalResult successors(mlir::Operation *op, Environment &environment);
 
 public:
@@ -48,7 +45,6 @@ public:
                   unsigned depth = 64)
       : symbols(symbols), types(types), remaining(work), depthLimit(depth) {}
   mlir::LogicalResult verify(protocol_ir::RepeatOp repeat);
-  mlir::LogicalResult verifyFinite(mlir::Operation *declaration);
 };
 } // namespace zkc::mathematical
 #endif

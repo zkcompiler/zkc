@@ -613,15 +613,11 @@ public:
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
-    llvm::DenseSet<Operation *> mapHelpers;
-    if (failed(algebra::collectMapHelpers(common, mapHelpers)))
-      return {};
     for (auto &op : common.getBody().front()) {
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
-      if (mapHelpers.contains(&op) || isa<algebra::MapRealizeOp>(op) ||
-          isa<data::DomainOp, func::FuncOp>(op) ||
-          isa<zkc::relation::DeclareOp, mlir::ModuleOp, zkc::local::FuncOp,
+      if (isa<data::DomainOp, func::FuncOp>(op) ||
+          isa<zkc::relation::DeclareOp, mlir::ModuleOp,
               zkc::runtime::BindingOp>(op)) {
         auto *copy = builder.clone(op);
         // Participant projection does not retain the original Math closure or
@@ -954,13 +950,9 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   // rewriting. Their executable realization is checked after placement.
   OwningOpRef<ModuleOp> frozenDefinitions(ModuleOp::create(unit.getLoc()));
   OpBuilder snapshotBuilder(frozenDefinitions->getBodyRegion());
-  llvm::DenseSet<Operation *> mapHelpers;
-  if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
-    return {};
   for (auto &op : unit.getBody().front())
-    if (mapHelpers.contains(&op) ||
-        isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, mlir::ModuleOp,
-            zkc::local::FuncOp, zkc::runtime::BindingOp>(op))
+    if (isa<data::DomainOp, func::FuncOp, mlir::ModuleOp,
+            zkc::runtime::BindingOp>(op))
       snapshotBuilder.clone(op);
   SymbolTableCollection helperSymbols;
   if (failed(stage("participant-mathematics", [&] {

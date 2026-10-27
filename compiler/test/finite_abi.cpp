@@ -4,8 +4,9 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::finite;
@@ -18,25 +19,45 @@ module { "protocol.module"() ({
    %d = "data.domain_product"(%r,%r) : (!data.domain<ui64>,!data.domain<ui64>)->!data.domain<ui64,ui64>
    "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()
  }) {sym_name="items",sym_visibility="private",function_type=(ui64,ui64)->!data.domain<ui64,ui64>} : ()->()
- local.func private @step(%a:ui64,%b:ui64,%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->(ui64,ui64) attributes {logical_origin=["step",[]]} {
-   local.return %b,%x : ui64,ui64
+ func.func private @step(%a:ui64,%b:ui64,%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->(ui64,ui64) {
+   func.return %b,%x : ui64,ui64
  }
- local.func private @predicate(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->i1 attributes {logical_origin=["predicate",[]]} {
-   %yes = "local.bool_constant"() {value=true,site="yes"} : ()->i1
-   local.return %yes : i1
+ func.func private @predicate(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->i1 {
+   %yes = arith.constant true
+   func.return %yes : i1
  }
- local.func private @body(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->ui64 attributes {logical_origin=["body",[]]} {
-   local.return %j : ui64
+ func.func private @body(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->ui64 {
+   func.return %j : ui64
  }
- local.func private @stop(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64) attributes {logical_origin=["stop",[]]} {
-   "local.stop"() {site="stop",reason="abort"} : ()->()
+ func.func private @fold(%lo:ui64,%hi:ui64,%a:ui64,%b:ui64,%x:ui64,%y:ui64)->(ui64,ui64) {
+   %r:2 = "algebra.finite_fold"(%lo,%hi,%a,%b,%x,%y) {domain=@items,step=@step,predicate=@predicate} : (ui64,ui64,ui64,ui64,ui64,ui64)->(ui64,ui64)
+   func.return %r#0,%r#1 : ui64,ui64
  }
- local.func private @empty(%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64) attributes {logical_origin=["empty",[]]} {
-   local.return
+ func.func private @collect(%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!algebra.indices {
+   %r = "algebra.finite_collect"(%lo,%hi,%x,%y) {domain=@items,body=@body,predicate=@predicate} : (ui64,ui64,ui64,ui64)->!algebra.indices
+   func.return %r : !algebra.indices
  }
- "local.finite_fold"() {sym_name="fold",function_type=(ui64,ui64,ui64,ui64,ui64,ui64)->(ui64,ui64),domain=@items,step=@step,predicate=@predicate} : ()->()
- "local.finite_collect"() {sym_name="collect",function_type=(ui64,ui64,ui64,ui64)->!algebra.indices,domain=@items,body=@body,predicate=@predicate} : ()->()
- "local.finite_fold"() {sym_name="zero",function_type=(ui64,ui64,ui64,ui64)->(),domain=@items,step=@stop,predicate=@predicate} : ()->()
+ func.func private @stop(%scope:!runtime.scope,%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!exec.outcome<> attributes {no_inline,runtime.origin=["stop",[]]} {
+   %reason = "exec.reject"(%scope) {site="stop",reason="abort"} : (!runtime.scope)->!exec.stop
+   cf.br ^failed(%reason : !exec.stop)
+ ^failed(%cause:!exec.stop):
+   %r = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
+   func.return %r : !exec.outcome<>
+ }
+ func.func private @empty(%scope:!runtime.scope,%i:ui64,%j:ui64,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!exec.outcome<> attributes {no_inline,runtime.origin=["empty",[]]} {
+   %r = "exec.returned"() : ()->!exec.outcome<>
+   func.return %r : !exec.outcome<>
+ }
+ func.func private @zero(%scope:!runtime.scope,%lo:ui64,%hi:ui64,%x:ui64,%y:ui64)->!exec.outcome<> attributes {no_inline,runtime.origin=["zero",[]]} {
+   %r = "exec.fold"(%scope,%lo,%hi,%x,%y) {domain=@items,step=@stop,site="fold"} : (!runtime.scope,ui64,ui64,ui64,ui64)->!exec.outcome<>
+   "exec.dispatch"(%r)[^ok,^failed] : (!exec.outcome<>)->()
+ ^ok:
+   %done = "exec.returned"() : ()->!exec.outcome<>
+   func.return %done : !exec.outcome<>
+ ^failed(%reason:!exec.stop):
+   %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<>
+   func.return %failure : !exec.outcome<>
+ }
  "protocol.func"() ({ ^entry(%x:ui64):
    "protocol.return"(%x) : (ui64)->()
  }) {sym_name="main",function_type=(ui64)->ui64,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
@@ -54,8 +75,11 @@ int main() {
   SymbolTableCollection symbols;
   auto describeSymbol = [&](StringRef name) {
     Computation c;
-    require(succeeded(describe(SymbolTable::lookupSymbolIn(unit, name), c, unit,
-                               &symbols)),
+    require(succeeded(describe(
+                &cast<func::FuncOp>(SymbolTable::lookupSymbolIn(unit, name))
+                     .front()
+                     .front(),
+                c, unit, &symbols)),
             "cannot describe callback");
     return c;
   };
@@ -141,20 +165,32 @@ int main() {
     require(failed(readCallback(describeSymbol("fold"), CallbackRole::Body)),
             "fold accepted body");
   });
-  cases.run("zero-state fold stop and fresh reread after helper change", [&] {
+  cases.run("zero-state scoped stop and fresh reread after helper change", [&] {
     auto c = describeSymbol("zero");
-    auto callback = readCallback(c, CallbackRole::Step);
+    auto callback = readCallbackABI(c, CallbackRole::Step);
     require(succeeded(callback) && !c.collect && c.states == 0 &&
-                callback->exit == CallbackExit::Stop &&
-                callback->returned.empty(),
-            "stop became empty normal return");
+                callback->scope && failed(readCallback(c, CallbackRole::Step)),
+            "scoped stop became an empty total returned expression");
+    auto closure = take(protocol::readSourceExecutionClosure(unit));
+    auto find = [&](StringRef name) -> const program::Function & {
+      auto found = llvm::find_if(closure.definitions.functions,
+                                 [&](const auto &f) { return f.name == name; });
+      require(found != closure.definitions.functions.end(),
+              "missing scoped callback");
+      return *found;
+    };
+    require(std::holds_alternative<program::Stop>(
+                find("stop").body.front().value) &&
+                std::holds_alternative<program::Return>(
+                    find("empty").body.front().value),
+            "scoped admission confused stopping and empty return");
     c.operation->setAttr("step", FlatSymbolRefAttr::get(&context, "empty"));
     c = describeSymbol("zero");
-    auto fresh = readCallback(c, CallbackRole::Step);
-    require(succeeded(fresh) && fresh->exit == CallbackExit::Return &&
-                fresh->returned.empty() &&
-                fresh->abi.symbol != callback->abi.symbol,
-            "reread retained stale helper or lost empty return");
+    auto fresh = readCallbackABI(c, CallbackRole::Step);
+    require(succeeded(fresh) && fresh->formals.state.empty() &&
+                fresh->symbol != callback->symbol &&
+                failed(readCallback(c, CallbackRole::Step)),
+            "reread retained stale helper or granted a total expression");
     require(succeeded(mlir::verify(*module)),
             "replacement did not remain admitted");
   });

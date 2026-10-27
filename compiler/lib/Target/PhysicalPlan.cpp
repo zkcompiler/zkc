@@ -1,6 +1,5 @@
 #include "PhysicalPlan.h"
 #include "../Transforms/Kernel/Support.h"
-#include "../Transforms/NumericalLowering.h"
 #include "../Transforms/NumericalSelection.h"
 #include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
@@ -1635,17 +1634,15 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!found)
       return error("binding-unknown-selection");
   }
-  bool hasKernels = false, hasMaps = false, hasFinite = false;
+  bool hasNumerical = false, hasFinite = false;
   root.walk([&](Operation *op) {
-    hasKernels |= (mathematical::isComputationUnit(op) ||
-                   isa<exec::ComputeOp, data::DomainOp>(op) ||
-                   (isa<func::FuncOp>(op) &&
-                    !isScopedExecutionFunction(cast<func::FuncOp>(op))));
-    hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
+    hasNumerical |= (mathematical::isComputationUnit(op) ||
+                     isa<exec::ComputeOp, data::DomainOp>(op) ||
+                     (isa<func::FuncOp>(op) &&
+                      !isScopedExecutionFunction(cast<func::FuncOp>(op))));
     hasFinite |= isa<exec::FoldOp, exec::CollectOp>(op);
   });
-  hasKernels |= hasFinite;
-  bool hasNumerical = hasKernels || hasMaps;
+  hasNumerical |= hasFinite;
   PhysicalSelection selection;
   if (options.numericalWork)
     selection.numerical.work = *options.numericalWork;
@@ -1704,7 +1701,6 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     mathematical::VerificationDecision numericalOutcome;
     bool constructionCapacity = false;
     OwningOpRef<ModuleOp> prepared;
-    mathematical::PreparedMaps maps;
     ModuleOp numericalSource = module;
     OwningOpRef<ModuleOp> finite;
     std::optional<CapacityCause> preparationCapacity;
@@ -1721,15 +1717,9 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         numericalSource = *finite;
       }
       if (hasNumerical) {
-        if (hasKernels)
-          prepared = kernel::prepareKernelLowering(
-              numericalSource, &selection.numerical.remainingCopy,
-              &preparationCapacity, &selection.numerical);
-        else {
-          if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
-            return error("kernel-lowering", "numerical source copy capacity");
-          prepared = cast<ModuleOp>(module->clone());
-        }
+        prepared = kernel::prepareKernelLowering(
+            numericalSource, &selection.numerical.remainingCopy,
+            &preparationCapacity, &selection.numerical);
         if (!prepared)
           return error("kernel-lowering", "numerical source preparation");
         // Checked mathematical normalization does not consult executable
@@ -1746,14 +1736,9 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         // Discover the current immutable prepared closure. Invocation
         // identities remain stable when another finite recipe changes the call
         // count.
-        if (hasKernels &&
-            failed(kernel::discoverKernelCalls(
+        if (failed(kernel::discoverKernelCalls(
                 *prepared, options.numericalPolicy, selection.numerical)))
           return error("kernel-lowering", "numerical occurrence discovery");
-        if (hasMaps &&
-            failed(mathematical::prepareRetainedMaps(
-                *prepared, maps, selection.numerical, options.numericalPolicy)))
-          return error("algebra-map-formula");
       }
       return Error::success();
     };
@@ -1787,8 +1772,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       // original numericalSource remains the correspondence authority.
       candidate = std::move(prepared);
       selected = *candidate;
-      if (hasKernels &&
-          failed(kernel::materializeKernelCalls(
+      if (failed(kernel::materializeKernelCalls(
               selected, options.numericalPolicy, nullptr, selection.numerical,
               &numericalOutcome, speculative))) {
         if (numericalOutcome.outcome ==
@@ -1802,22 +1786,6 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         } else
           return error("kernel-lowering", numericalOutcome.detail);
         refusal = error("finite-analysis-limit");
-      }
-      if (!refusal && hasMaps &&
-          failed(mathematical::materializeRetainedMaps(
-              selected, maps, selection.numerical, options.numericalPolicy,
-              numericalOutcome, speculative))) {
-        if (numericalOutcome.outcome ==
-            mathematical::VerificationObservation::OptionalCapacity) {
-          capacitySubject = numericalOutcome.subject;
-          constructionCapacity = speculative && numericalOutcome.capacity &&
-                                 (numericalOutcome.capacity->owner ==
-                                      WorkOwner::AlgorithmExpansion ||
-                                  numericalOutcome.capacity->owner ==
-                                      WorkOwner::AlgorithmOriginBytes);
-        } else
-          return error("algebra-map-lowering", numericalOutcome.detail);
-        refusal = error("mathematical-analysis-limit");
       }
       auto candidateRoot =
           cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());

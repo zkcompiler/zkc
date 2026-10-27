@@ -1,7 +1,7 @@
 # Structured local control
 
 This compiler profile extends [local algorithms](functions.md) with
-isolated conditional, finite-variant match and finite-loop regions. It applies inside local functions,
+closed conditional, finite-variant match and finite-loop bodies. It applies inside scoped functions,
 not protocol bodies. Language checks source captures and state results; native MLIR and executable
 admission check their explicit representation.
 
@@ -19,7 +19,7 @@ Each carried entry is `[region_argument, initial_outer_value]`. Every continuing
 region has one final yield; an explicitly stopped region has no yield. A
 continuing function has one final return. The program profile additionally admits
 [bounded conditional termination](completion.md#bounded-local-termination)
-through `local.condition` and its `for_while` record. Local function early return,
+through an explicit Boolean outcome payload and its `for_while` record. Local function early return,
 unbounded loops and arbitrary jumps are not admitted. Sites are unique throughout
 a function, including both arms and all nested regions. Regions obey the same
 source size, depth and value limits as other local instructions.
@@ -42,6 +42,15 @@ Finite local variants and exhaustive matches follow
 arguments are generated on region entry. Only captures are forwarded unchanged
 along MLIR region successor edges; the scrutinee is not an operand of the
 payload's type.
+
+The compiler expresses these boundaries with standard Func/CF plus Exec and
+Runtime operations. Closed region bodies are private `func.func` definitions
+marked `runtime.region`; their arguments explicitly name induction, carried state
+and captures. `exec.test`, `exec.range` and `exec.match` preserve reached admission
+before CF chooses an edge. Scope entry, transfer and cleanup remain explicit.
+Ordinary helper return packaging and charged region completion have distinct
+operations. The [scoped instruction profile](execution.md#scoped-native-instruction-profile)
+defines their exact forms; native records above are an independent carrier.
 
 ## Execution
 

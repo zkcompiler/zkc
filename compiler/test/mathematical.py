@@ -214,7 +214,7 @@ with case("projection exposes sender component equality before lowering"):
     }}) {{profile=#protocol.profile<protocol>}} : () -> () }}'''
     projected = commands.verified(alias, None, '--zkc-project-protocol')
     assert '#protocol.profile<participant>' in projected
-    assert 'local.func' not in projected and 'runtime.binding' not in projected
+    assert 'runtime.origin' not in projected and 'runtime.binding' not in projected
     assert projected.count('algebra.field_add') == 3
     optimized = commands.verified(projected, None, '--zkc-simplify-participant')
     assert optimized.count('algebra.field_add') == 2

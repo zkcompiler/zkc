@@ -31,7 +31,13 @@ int main() {
   require(!native.getLoadedDialect("table"));
   require(!native.isOperationRegistered("protocol.exec_func"));
   check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
-  check<zkc::local::LocalDialect>(native, "local");
+  for (auto name : {"local", "kernel", "plan"}) {
+    require(!nativeRegistry.getDialectAllocator(name));
+    require(!native.getLoadedDialect(name));
+  }
+  for (auto name :
+       {"local.func", "local.apply", "kernel.call", "algebra.map_realize"})
+    require(!native.isOperationRegistered(name));
   require(!nativeRegistry.getDialectAllocator("plan"));
   require(!native.getLoadedDialect("plan"));
   for (auto name : {"plan.apply", "plan.bool_constant", "plan.release"})
@@ -49,7 +55,7 @@ int main() {
   context.loadAllAvailableDialects();
   require(zkc::hasProtocolDialects(context));
   check<zkc::protocol_ir::ProtocolDialect>(context, "protocol");
-  check<zkc::local::LocalDialect>(context, "local");
+  require(!context.getLoadedDialect("local"));
   check<zkc::crypto::CryptoDialect>(context, "crypto");
   require(!registry.getDialectAllocator("table"));
   check<zkc::algebra::AlgebraDialect>(context, "algebra");

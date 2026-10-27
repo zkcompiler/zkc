@@ -268,8 +268,8 @@ loop fallback. `MathematicalSelectionPolicy` enables the finite bulk family by
 default and leaves both fusion families disabled. `--no-finite-bulk` selects
 the ordered finite fallback while retaining the same domain admission.
 `--no-simplify` controls generic total-expression folding independently; it does
-not disable mathematical selection. Explicit authored `map` plus reducer calls keep the separate
-`algebra.map_realize` path. Native `vector.product` reduces an already constructed
+not disable mathematical selection. Explicit authored `map` plus reducer calls retain their actual scoped collection
+and subsequent reducer occurrence until separately checked fusion applies. Native `vector.product` reduces an already constructed
 vector to a scalar with empty identity one, separately from elementwise
 multiplication. The [source contract](../spec/language/definitions.md#finite-reduction-binders)
 owns binder scope, captures and shared scoped extraction.
@@ -297,7 +297,18 @@ correspondence reconstruction all receive the same policy. Public preparation,
 projection and lowering passes expose `optimize-finite` and
 `fuse-vector-reductions` and `fuse-collect-fold` options, and the lowering pass also
 `calculation-batching`; the participant pipeline forwards these choices to its
-stages. Physical storage release remains a separate control.
+stages, including physical selection. Standalone `zkc-select-physical` exposes
+these numerical options as well; setting them only on an earlier pass does not
+configure a separately invoked selection pass. Physical storage release remains
+a separate control.
+
+Finite bulk and vector fusion choose recipes at numerical realization. A
+constructed participant can therefore retain the same actual mathematical
+functions and scoped finite requests under different recipe choices. The
+construction checker compares that retained behavior; the executable check
+compares the selected physical body. Tests of recipe selection inspect the
+emitted program and its bindings, rather than requiring a bulk operation or a
+recipe-policy marker in the constructed participant.
 
 Total Math demand lowering outlines a participant's pure calculations into
 calculation calls placed before actions. With batching, the default, each

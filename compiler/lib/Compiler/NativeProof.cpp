@@ -1900,8 +1900,7 @@ public:
       if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
             name.starts_with("crypto.") || name.starts_with("data.") ||
             name == "protocol.receive" || name == "protocol.send" ||
-            name == "protocol.service_query" || name == "local.bool_constant" ||
-            name == "protocol.guard"))
+            name == "protocol.service_query" || name == "protocol.guard"))
         return error("constructed-participant-operation", name);
       if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                         json::Array{}))

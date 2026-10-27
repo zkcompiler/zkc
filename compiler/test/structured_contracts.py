@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from cases import case, counted
+from scoped_sources import scoped_function
 from commands import Commands
 from entry_artifacts import compile_run_package
 from tools import compiler, records
@@ -181,8 +182,8 @@ for label, changed in [
     ('missing-formula', source.replace(',\n  formula=@predicate', '')),
     ('absent-helper', source.replace('formula=@predicate', 'formula=@missing')),
     ('wrong-helper-kind', source.replace('formula=@predicate', 'formula=@child')),
-    ('local-is-not-math', source.replace(helper, '''local.func @predicate(%x:i1,%y:i1)->i1 {
-       local.return %x : i1 }''')),
+    ('scoped-is-not-math', source.replace(helper, scoped_function(
+        'predicate', ['i1', 'i1'], ['i1'], '', ['%a0'], private=True))),
     ('full-input-abi', source.replace(helper, '''func.func private @predicate(%x:i1)->i1 {
        return %x : i1 }''')),
     ('full-output-abi', source.replace(helper, '''func.func private @predicate(%x:i1,%y:i1)->(i1,i1) {

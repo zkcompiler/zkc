@@ -33,11 +33,6 @@ public:
 
   mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
                                   const protocol::BindingApplication &);
-
-  mlir::Operation *emit(mlir::OpBuilder &, mlir::Location, llvm::StringRef site,
-                        const protocol::BindingApplication &,
-                        mlir::ValueRange inputs, mlir::TypeRange outputs,
-                        llvm::ArrayRef<std::string> parameters = {});
 };
 } // namespace zkc::mathematical
 

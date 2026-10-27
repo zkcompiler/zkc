@@ -2,6 +2,8 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ResourceSources.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 using namespace mlir;
@@ -44,6 +46,33 @@ std::string source(StringRef body = "", unsigned captures = 0,
          "output_roles=[[\"P\"]]} : ()->()\n"
          "}) {profile=#protocol.profile<protocol>} : ()->() }";
 }
+std::string definitions(resource_sources::Source &source) {
+  std::string text;
+  llvm::raw_string_ostream out(text);
+  for (auto &op : source.owner.getBody().front()) {
+    op.print(out);
+    out << "\n";
+  }
+  return text;
+}
+std::string scopedChain(unsigned length, bool twice = false) {
+  resource_sources::Source source;
+  for (unsigned i = 0; i < length; ++i) {
+    auto function =
+        source.function("f" + std::to_string(i), source.rng, source.rng);
+    exec::ScopedExecutionBuilder control(source.builder, function);
+    Value result = function.getArgument(1);
+    if (i) {
+      result = source.call(control, "f" + std::to_string(i - 1), result,
+                           source.rng, "first")[0];
+      if (twice)
+        result = source.call(control, "f" + std::to_string(i - 1), result,
+                             source.rng, "second")[0];
+    }
+    control.returned(result);
+  }
+  return definitions(source);
+}
 } // namespace
 int main() {
   Cases cases;
@@ -58,7 +87,8 @@ int main() {
     return success();
   });
   auto query = [&](StringRef text, uint64_t work, unsigned depth, bool accepted,
-                   bool verified = true) {
+                   bool verified = true,
+                   StringRef refusal = "mathematical-analysis-limit") {
     diagnostic.clear();
     auto module =
         parseSourceString<ModuleOp>(text, ParserConfig(&context, verified));
@@ -72,8 +102,7 @@ int main() {
     bool result = succeeded(origins.verify(repeat));
     require(result == accepted, "unexpected origin result: " + diagnostic);
     if (!accepted)
-      require(diagnostic.find("mathematical-analysis-limit") !=
-                  std::string::npos,
+      require(diagnostic.find(refusal.str()) != std::string::npos,
               "limit reported as root mismatch: " + diagnostic);
   };
   cases.run("exact work charge and exhaustion", [&] {
@@ -106,18 +135,7 @@ int main() {
   });
   cases.run("cached callee depth cannot hide nested calls", [&] {
     auto chain = [&](unsigned length, bool warmFirst) {
-      std::string definitions;
-      for (unsigned i = 0; i < length; ++i) {
-        definitions += "local.func @f" + std::to_string(i) +
-                       "(%x:!s)->!s attributes {logical_origin=[\"f" +
-                       std::to_string(i) + "\",[]]} {\n";
-        if (i)
-          definitions +=
-              "%out = local.apply @f" + std::to_string(i - 1) +
-              "(%x) {site=\"call\"} : (!s)->!s\nlocal.return %out : !s\n}\n";
-        else
-          definitions += "local.return %x : !s\n}\n";
-      }
+      auto definitions = scopedChain(length);
       std::string shallow =
           "%warm = \"protocol.local_call\"(%r) "
           "{callee=@f0,role=\"P\",site=\"warm\"} : (!s)->!s\n";
@@ -151,8 +169,15 @@ int main() {
   cases.run("per-program analysis accepts every verified composition", [&] {
     for (StringRef name : {"if", "for", "match", "apply", "execution"}) {
       diagnostic.clear();
-      auto module = parseSourceFile<ModuleOp>(
-          (Twine(ZKC_ORIGIN_FIXTURES) + "/" + name + ".mlir").str(), &context);
+      resource_sources::Source source;
+      if (name == "execution")
+        resource_sources::execution(source, name);
+      else
+        resource_sources::simple(source, name, false);
+      auto text = std::string();
+      llvm::raw_string_ostream stream(text);
+      source.module->print(stream);
+      auto module = parseSourceString<ModuleOp>(text, &context);
       require(bool(module), "composed module refused: " + diagnostic);
       auto unit =
           cast<protocol_ir::ProtocolModuleOp>(&module->getBody()->front());
@@ -183,37 +208,28 @@ int main() {
             "aggregate work is not a semantic root mismatch");
   });
   cases.run("repeated acyclic calls reuse formal summaries", [&] {
-    std::string definitions;
-    for (unsigned i = 0; i < 30; ++i) {
-      definitions += "local.func @f" + std::to_string(i) +
-                     "(%x:!s)->!s attributes {logical_origin=[\"f" +
-                     std::to_string(i) + "\",[]]} {\n";
-      if (i) {
-        definitions += "%a = local.apply @f" + std::to_string(i - 1) +
-                       "(%x) {site=\"first\"} : (!s)->!s\n";
-        definitions +=
-            "%b = local.apply @f" + std::to_string(i - 1) +
-            "(%a) {site=\"second\"} : (!s)->!s\nlocal.return %b : !s\n}\n";
-      } else {
-        definitions += "local.return %x : !s\n}\n";
-      }
-    }
+    auto definitions = scopedChain(30, true);
     // Linear analysis of the authored DAG; ordinary expansion refuses this
     // exponentially large executable using its separate formation limit.
     auto text = source("%out = \"protocol.local_call\"(%r) "
                        "{callee=@f29,role=\"P\",site=\"dag\"} : (!s)->!s\n",
                        0, definitions, "%out");
-    query(text, 301, 64, true, false);
-    query(text, 300, 64, false, false);
+    // Seven common visits, thirty declaration entries, five visits for the
+    // identity, twelve per added two-call function and one returned root.
+    query(text, 391, 64, true, false);
+    query(text, 390, 64, false, false);
   });
   cases.run("common calls without affine results need no callee summary", [&] {
-    std::string definitions =
-        "local.func @large() attributes {logical_origin=[\"large\",[]]} {\n";
+    resource_sources::Source scoped;
+    auto function = scoped.function("large", {}, {});
+    exec::ScopedExecutionBuilder control(scoped.builder, function);
     for (unsigned i = 0; i < 100; ++i)
-      definitions += "%v" + std::to_string(i) +
-                     " = \"local.bool_constant\"() {value=true,site=\"v" +
-                     std::to_string(i) + "\"} : ()->i1\n";
-    definitions += "local.return\n}\n";
+      control.invoke("exec.boolean", scoped.boolean, control.scoped({}),
+                     {scoped.text("site", "v" + std::to_string(i)),
+                      scoped.builder.getNamedAttr(
+                          "value", scoped.builder.getBoolAttr(true))});
+    control.returned({});
+    auto definitions = ::definitions(scoped);
     // The copyable body is still formed by ordinary verification. It does not
     // provide a root or common continuation and is outside this query's work.
     auto text = source("\"protocol.local_call\"() "
@@ -251,58 +267,65 @@ int main() {
         "origin analysis displaced the callee formation diagnostic: " +
             diagnostic);
   });
-  cases.run("local loop shape is checked before origin summaries", [&] {
+  cases.run("scoped loop shape is checked before origin summaries", [&] {
     diagnostic.clear();
-    auto module = parseSourceFile<ModuleOp>(
-        std::string(ZKC_ORIGIN_FIXTURES) + "/for.mlir", &context);
-    require(bool(module), "local loop fixture: " + diagnostic);
+    resource_sources::Source scoped;
+    resource_sources::simple(scoped, "for", false);
+    std::string text;
+    llvm::raw_string_ostream stream(text);
+    scoped.module->print(stream);
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "scoped loop fixture: " + diagnostic);
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(&module->getBody()->front());
-    local::LocalForOp loop;
-    module->walk([&](local::LocalForOp op) { loop = op; });
-    require(bool(loop), "missing local loop");
-    // Drop the initial carried value without changing the result or body.
-    SmallVector<Value> bounds(loop->getOperands().take_front(2));
-    loop->setOperands(bounds);
+    exec::RangeOp range;
+    module->walk([&](exec::RangeOp op) { range = op; });
+    require(bool(range), "missing scoped range");
+    // A malformed result is an ordinary source-profile failure before roots.
+    range.getOutcome().setType(
+        exec::OutcomeType::get(&context, {IntegerType::get(&context, 1)}));
     diagnostic.clear();
     require(failed(mathematical::verifyModule(unit)),
-            "unformed local loop admitted");
-    require(diagnostic.find("local-for-bounds") != std::string::npos,
-            "origin query bypassed ordinary local loop formation: " +
-                diagnostic);
+            "unformed scoped range admitted");
+    require(diagnostic.find("execution-formation") != std::string::npos,
+            "origin query bypassed scoped range formation: " + diagnostic);
   });
   cases.run("structured region nesting has its own depth boundary", [&] {
-    auto nested = [&](auto &self, unsigned n, const std::string &root,
-                      const std::string &flag) -> std::string {
-      if (!n)
-        return "\"local.yield\"(" + root + ") : (!s)->()\n";
-      auto id = std::to_string(n);
-      return "%out" + id + " = \"local.if\"(" + flag + "," + root + "," + flag +
-             ") ({ ^yes" + id + "(%a" + id + ":!s,%c" + id + ":i1):\n" +
-             self(self, n - 1, "%a" + id, "%c" + id) + "}, { ^no" + id + "(%b" +
-             id + ":!s,%d" + id +
-             ":i1):\n"
-             "\"local.yield\"(%b" +
-             id +
-             ") : (!s)->()\n"
-             "}) {site=\"branch" +
-             id +
-             "\"} : (i1,!s,i1)->!s\n"
-             "\"local.yield\"(%out" +
-             id + ") : (!s)->()\n";
-    };
-    for (unsigned depth : {62u, 63u}) {
-      std::string body = nested(nested, depth, "%x", "%go");
-      body.replace(body.rfind("local.yield"), 11, "local.return");
-      std::string definitions =
-          "local.func @nested(%x:!s,%go:i1)->!s attributes "
-          "{logical_origin=[\"nested\",[]]} {\n" +
-          body + "}\n";
+    // Origin nesting and carrier array depth are independent admission gates.
+    // Test the origin boundary below the carrier ceiling, then its ceiling.
+    for (unsigned depth : {10u, 11u, 29u, 30u}) {
+      resource_sources::Source scoped;
+      auto outer =
+          scoped.function("nested", {scoped.rng, scoped.boolean}, scoped.rng);
+      auto nested = [&](auto &self, func::FuncOp function,
+                        unsigned remaining) -> void {
+        exec::ScopedExecutionBuilder control(scoped.builder, function);
+        Value result = function.getArgument(1);
+        if (remaining)
+          result = control.conditional(
+              function.getArgument(2), function.getArguments().drop_front(),
+              scoped.rng, "branch" + std::to_string(remaining),
+              [&](unsigned arm) {
+                auto body =
+                    scoped.region({scoped.rng, scoped.boolean}, scoped.rng);
+                self(self, body, arm ? 0 : remaining - 1);
+                return body;
+              })[0];
+        if (function == outer)
+          control.returned(result);
+        else
+          control.complete(result);
+      };
+      nested(nested, outer, depth);
+      auto definitions = ::definitions(scoped);
       auto text =
           source("%out = \"protocol.local_call\"(%r,%k0) "
                  "{callee=@nested,role=\"P\",site=\"nested\"} : (!s,i1)->!s\n",
                  1, definitions, "%out");
-      query(text, 100000, 64, depth == 62, false);
+      query(text, 100000, depth <= 11 ? 12 : 64, depth == 10 || depth == 29,
+            false,
+            depth == 30 ? "interactive-json-depth"
+                        : "mathematical-analysis-limit");
     }
   });
   cases.run(
@@ -311,10 +334,18 @@ int main() {
             source("%out = \"protocol.local_call\"(%r) "
                    "{callee=@cycle,role=\"P\",site=\"cycle\"} : (!s)->!s\n",
                    0,
-                   "local.func @cycle(%x:!s)->!s attributes "
-                   "{logical_origin=[\"cycle\",[]]} {\n"
-                   "%out = local.apply @cycle(%x) {site=\"again\"} : "
-                   "(!s)->!s\nlocal.return %out : !s\n}\n",
+                   R"mlir(
+func.func @cycle(%scope:!runtime.scope,%x:!s)->!exec.outcome<(!s)> attributes {no_inline,runtime.origin=["cycle",[]]} {
+  %next = func.call @cycle(%scope,%x) {runtime.site="again"} : (!runtime.scope,!s)->!exec.outcome<(!s)>
+  "exec.dispatch"(%next)[^next,^failed] : (!exec.outcome<(!s)>)->()
+^next(%out:!s):
+  %done = "exec.returned"(%out) : (!s)->!exec.outcome<(!s)>
+  func.return %done : !exec.outcome<(!s)>
+^failed(%reason:!exec.stop):
+  %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!s)>
+  func.return %failure : !exec.outcome<(!s)>
+}
+)mlir",
                    "%out");
         diagnostic.clear();
         auto module =
@@ -327,7 +358,8 @@ int main() {
         mathematical::ResourceOrigins origins(symbols, types);
         require(failed(origins.verify(repeat)),
                 "cycle accepted by isolated analysis");
-        require(diagnostic.find("must be acyclic") != std::string::npos &&
+        require(diagnostic.find("interactive-call-cycle") !=
+                        std::string::npos &&
                     diagnostic.find("mathematical-analysis-limit") ==
                         std::string::npos,
                 "cycle hidden by limit diagnostic: " + diagnostic);

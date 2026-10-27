@@ -334,7 +334,7 @@ Original declarations own source contracts. `relation.declare` optionally has
 a flat symbol reference `formula`; the kind `zkc.language.formula/0` requires it
 in the `protocol` profile. It resolves in the same unit to a defined Math
 `func.func` with exactly the declaration's complete input/output ABI. Other
-kinds have no formula link. A Local helper is not Math, and a generated symbol
+kinds have no formula link. A scoped executable helper is not total Math, and a generated symbol
 spelling is not a binding rule. Ordinary MLIR symbol replacement updates these
 references. This is a structural association, not a proof of the formula's
 adequacy or totality.
@@ -538,7 +538,7 @@ coverage is recorded in [implementation status](../../status.md).
 The Transforms component then compares the verified `exec` candidate against its
 frozen `participant` input. This closed postcondition independently walks source
 dependencies at each first demand and matches the actual numerical body in source
-order. Kernel realization separately checks the generated executable recipes. It checks exact resolved contracts and their domain arguments, captures,
+order. Numerical realization separately checks the generated executable recipes. It checks exact resolved contracts and their domain arguments, captures,
 returned values, guard conditions and rejection, and ordered action operands.
 Entry arguments and actual receive/call/query results are distinct SSA anchors.
 Every generated calculation is a fresh symbol with one invocation and its own

@@ -4,7 +4,6 @@
 include "zkc/Dialect/Protocol/IR/ProtocolDialect.td"
 include "zkc/Dialect/Algebra/IR/AlgebraDialect.td"
 include "zkc/Dialect/Polynomial/IR/PolynomialDialect.td"
-include "zkc/Dialect/Local/IR/LocalDialect.td"
 include "zkc/Dialect/Exec/IR/ExecDialect.td"
 include "zkc/Dialect/Crypto/IR/CryptoDialect.td"
 include "zkc/Dialect/Commitment/IR/CommitmentDialect.td"

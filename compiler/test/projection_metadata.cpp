@@ -106,11 +106,12 @@ void queryAuthority(MLIRContext &context) {
 void unverifiedCompletion(MLIRContext &context) {
   auto source = parseSourceString<ModuleOp>(R"mlir(module {
     "protocol.module"() ({
-      local.func @identity(%x: i1) -> i1 attributes {logical_origin=["identity",[]]} {
-        local.return %x : i1
+      func.func @identity(%scope: !runtime.scope, %x: i1) -> !exec.outcome<(i1)> attributes {no_inline,runtime.origin=["identity",[]]} {
+        %r = "exec.returned"(%x) : (i1)->!exec.outcome<(i1)>
+        func.return %r : !exec.outcome<(i1)>
       }
       "protocol.participant"() ({ ^entry(%x: i1):
-        %ready = local.call @identity(%x) {site="ready"} : (i1) -> i1
+        %ready = "protocol.local_call"(%x) {callee=@identity,role="P",site="ready"} : (i1) -> i1
         "protocol.finish_if"(%ready,%x) {owner="P",site="done"} : (i1,i1) -> ()
         "protocol.finish"(%x) : (i1) -> ()
       }) {sym_name="p",function_type=(i1)->i1,instance="main",role="P"} : () -> ()
@@ -119,6 +120,9 @@ void unverifiedCompletion(MLIRContext &context) {
   })mlir",
                                             &context);
   require(bool(source), "completion reader fixture refused");
+  // Public executable extraction reads the selected native profile; source
+  // helper returns become charged native completions at physical selection.
+  run(*source, protocol::createSelectPhysicalPass());
   auto valid = protocol::readExecutionModel(source->getOperation());
   require(bool(valid), "public reader refused ordered completion");
   // Keep operation invariants valid while violating dominance. The public

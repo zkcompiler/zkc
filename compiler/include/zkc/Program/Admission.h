@@ -20,7 +20,7 @@ struct LocalRealization {
   program::Names callbacks = {};
 };
 /// Internal logical native locals, without any protocol or entry declarations.
-/// Realization signatures are permitted only for local.apply checking.
+/// Realization signatures are permitted only for internal LocalApply checking.
 llvm::Error
 admitNativeLocalDefinitions(const program::LocalDefinitions &,
                             llvm::ArrayRef<LocalRealization> realizations = {});
@@ -34,9 +34,9 @@ llvm::Error admitExecutionDefinitions(const program::LocalDefinitions &,
 llvm::Error admit(const program::Participants &);
 /// Internal validation of logical Participants with admitted mathematical and
 /// finite signatures, including the actual callback edges and affine fold
-/// roots. Only local.apply inside local functions may reference these
-/// realizations; this does not permit unresolved calls in physical programs or
-/// publication.
+/// roots. Only internal LocalApply instructions in functions may reference
+/// these realizations; this does not permit unresolved calls in physical
+/// programs or publication.
 llvm::Error admit(const program::Participants &,
                   llvm::ArrayRef<LocalRealization> realizations);
 } // namespace zkc::protocol

@@ -1047,8 +1047,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, local::FuncOp,
-            mlir::ModuleOp, runtime::BindingOp>(declaration))
+    if (isa<data::DomainOp, func::FuncOp, mlir::ModuleOp, runtime::BindingOp>(
+            declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;
@@ -1176,8 +1176,6 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     if (failed(check(check, participant.getBody().front(), 0)))
       return failure();
   }
-  if (failed(verifyNativeLocals(unit, false, types)))
-    return failure();
   return verifyProjectionMetadata(unit, types);
 }
 

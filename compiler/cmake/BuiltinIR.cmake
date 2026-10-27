@@ -2,7 +2,6 @@
 # Both contribution admission and TableGen generation consume these records.
 set(zkc_builtin_dialects
   "protocol|Protocol|types"
-  "local|Local|none"
   "exec|Exec|types"
   "runtime|Runtime|types"
   "data|Data|types"

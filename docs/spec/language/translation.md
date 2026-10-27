@@ -43,9 +43,9 @@ Closed finite operations emit private `data.domain` recipes and callback adapter
 with the finite IR's state, item, domain and capture ports. Ordinary scoped helpers
 retain their source calling convention. The adapter unpacks sequence products,
 calls that helper, and packs collected products where required. Exact SSA aliases
-reuse domain or capture ports; equal types do not justify reuse. Local definitions
-emit preparation callables and ordinary `local.apply` sites; Math definitions
-emit Algebra finite expressions. An independent reader checks constructor order,
+reuse domain or capture ports; equal types do not justify reuse. Ordered definitions
+emit scoped `exec.fold` and `exec.collect` occurrences; Math definitions emit
+Algebra finite expressions. An independent reader checks constructor order,
 callback targets, operand mappings, packing and complete auxiliary-definition
 coverage against the closed source operation. Fixed source-array operands are
 converted once to immutable sequences by private total helpers, using the
@@ -60,7 +60,7 @@ to their state/item/domain/capture ports. The source comparator reads each
 condition and selector independently; native finite analysis then discharges
 conditions at actual calls and consumers. Closure specialization independently
 recomputes residual requirements from the checked candidate body. These checks
-preserve the unconditional contract of `local.realize`.
+preserve the unconditional mathematical invocation contract of `exec.compute`.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
@@ -73,16 +73,20 @@ target adds the existing entry statement, which must agree with a retained
 target. Opaque and captured relations emit declarations
 only. Predicate helpers have no executable symbol uses. Every selected predicate
 undergoes bounded helper expansion and polynomial observation checks on scratch
-copies before interface admission, including unused observations. Ordered helpers become
-`local.func`. A math helper called inside ordered code retains its mathematical
-body and receives a data-only `local.realize` declaration. The local call is an
-ordered `local.apply` occurrence; native preparation realizes the helper through
-the common polynomial and calculation lowerers before expanding that call.
-Formal intermediates never become local runtime values. Inline arithmetic
-written directly inside `fn` remains an ordered primitive. A `map` emits one
-`algebra.map_realize` per helper instance and row mask, named from both, and an
-ordered `local.apply`; comparison checks the helper, mask, signature and site and
-accounts for every declaration.
+copies before interface admission, including unused observations. Ordered helpers
+become `func.func` definitions with a borrowed `!runtime.scope` argument and one
+`!exec.outcome` result. Ordinary calls use standard `func.call`, retaining actual
+source sites. A mathematical helper called inside ordered code keeps its total
+body and is invoked by `exec.compute` with the logical data ports. Formal
+intermediates never become runtime values. Inline arithmetic written directly
+inside `fn` remains an ordered `exec.apply` of its resolved runtime binding.
+
+A source `map` emits an actual `exec.collect`, a strict zip domain over its row
+arguments, and a private scoped callback that invokes the mathematical helper.
+Scalar broadcasts are explicit captures. Comparison checks the actual domain,
+callback, operand partitions, full signature and site, including every auxiliary
+definition. Numerical selection may choose a bulk expression, vector recipe or
+ordered loop only after the independent source/candidate check accepts it.
 
 Finite binders use ordinary scoped consumer calls, whose closure emits typed
 finite domains and fold/collect operations through the shared adapters. Lambda
@@ -95,8 +99,8 @@ fallback. Source notation introduces no runtime callback interpreter.
 Protocols become `protocol.func`, with explicit `protocol.local_call` for owned calls.
 Total operations use their admitted dialect identities; ordered operations use
 existing executable bindings. No additional protocol interpreter is introduced.
-Source `require` is one checked action: protocol checks emit `protocol.guard`; local checks emit `local.if` with a
-continuing true branch and `local.stop` with reason `reject` on false. Comparison
+Source `require` is one checked action: protocol checks emit `protocol.guard`; local checks emit scoped conditionals with a
+continuing true branch and `exec.reject` with reason `reject` on false. Comparison
 checks both branches, their sites and the rejection reason. Raw bound
 `control.require` remains a separate backend operation.
 
@@ -108,17 +112,17 @@ is empty. Custody slot identities use the complete SHA-256 digest of canonical s
 ## Selected constructions
 
 A closed programmable construction emits one `protocol.construction` symbol
-beside its target `protocol.func` and ordinary Local functions. It retains the
+beside its target `protocol.func` and ordinary scoped functions. It retains the
 provider identity, root kind, ordered state types, initializer symbol,
 sorted replacement service indices, native-base requirement and resolved handler rules.
-Rules refer to Local symbols. Start selectors identify original flattened input
+Rules refer to scoped function symbols. Start selectors identify original flattened input
 ports; message selectors retain the ordered native leaves of one logical
 payload. Query bodies retain the source `(state, value)` result order.
 Each rule dictionary contains `kind`, `handler`, `sites`, `inputs`, `payload`
 and `chunks`. Codec rules retain payload and chunk types separately. The optional
 `codec` dictionary contains exactly `provider`, `record`, `initialize`, `write`,
 `finish` and `inputs`: a closed provider identity, native Record types, three
-Local symbols and the ordered original layout input indices.
+scoped function symbols and the ordered original layout input indices.
 
 Independent source comparison checks the complete selection, including handler
 identity and every call-qualified site. Native record verification checks

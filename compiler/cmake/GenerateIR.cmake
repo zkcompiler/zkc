@@ -9,8 +9,7 @@ set(zkc_tablegen_includes ${CMAKE_CURRENT_SOURCE_DIR}/include
 set(zkc_generated_headers
   include/zkc/Interfaces/Collection.h.inc
   include/zkc/Interfaces/LinearContraction.h.inc
-  include/zkc/Interfaces/Mathematical.h.inc
-  include/zkc/Interfaces/PreparationCallable.h.inc)
+  include/zkc/Interfaces/Mathematical.h.inc)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect
   ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Interfaces)
 set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/Collection.td)
@@ -27,11 +26,6 @@ set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/Mathematical.td)
 mlir_tablegen(include/zkc/Interfaces/Mathematical.h.inc -gen-op-interface-decls
     EXTRA_INCLUDES ${zkc_tablegen_includes})
 mlir_tablegen(include/zkc/Interfaces/Mathematical.cpp.inc -gen-op-interface-defs
-    EXTRA_INCLUDES ${zkc_tablegen_includes})
-set(LLVM_TARGET_DEFINITIONS include/zkc/Interfaces/PreparationCallable.td)
-mlir_tablegen(include/zkc/Interfaces/PreparationCallable.h.inc -gen-op-interface-decls
-    EXTRA_INCLUDES ${zkc_tablegen_includes})
-mlir_tablegen(include/zkc/Interfaces/PreparationCallable.cpp.inc -gen-op-interface-defs
     EXTRA_INCLUDES ${zkc_tablegen_includes})
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/zkc/Dialect/Protocol/IR)
 set(LLVM_TARGET_DEFINITIONS include/zkc/Dialect/Protocol/IR/ProtocolAttrs.td)

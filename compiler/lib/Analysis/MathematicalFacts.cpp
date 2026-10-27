@@ -6,7 +6,6 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseMap.h"
@@ -27,7 +26,7 @@ Operation *owner(Value value) {
 }
 Operation *formationOwner(Value value) {
   for (auto *op = owner(value); op; op = op->getParentOp())
-    if (isa<func::FuncOp, local::FuncOp>(op))
+    if (isa<func::FuncOp>(op))
       return op;
   return nullptr;
 }
@@ -86,10 +85,9 @@ struct MathematicalFactAnalysis::Impl {
       return found->second.body ? &found->second : nullptr;
     }
     Helper result;
-    if (isa<func::FuncOp, local::FuncOp>(op) &&
-        op->getRegion(0).hasOneBlock()) {
+    if (isa<func::FuncOp>(op) && op->getRegion(0).hasOneBlock()) {
       auto &body = op->getRegion(0).front();
-      if (!body.empty() && isa<func::ReturnOp, local::ReturnOp>(body.back())) {
+      if (!body.empty() && isa<func::ReturnOp>(body.back())) {
         // Read the body, not a serialized summary claim. Return expressions
         // are interpreted below, with a fresh explicit call environment.
         if (!work.charge(body.back().getNumOperands()))
@@ -144,7 +142,7 @@ struct MathematicalFactAnalysis::Impl {
           return input;
         }
         auto *call = value.getDefiningOp();
-        if (!isa_and_nonnull<func::CallOp, local::ApplyOp>(call)) {
+        if (!isa_and_nonnull<func::CallOp>(call)) {
           inputs.try_emplace(key, std::nullopt);
           return std::nullopt;
         }
@@ -171,7 +169,7 @@ struct MathematicalFactAnalysis::Impl {
       };
       for (; enter(work, depth); ++depth) {
         auto *call = value.getDefiningOp();
-        if (!isa_and_nonnull<func::CallOp, local::ApplyOp>(call))
+        if (!isa_and_nonnull<func::CallOp>(call))
           return finish();
         auto input = forwardedInput(resolve(call, "callee"),
                                     cast<OpResult>(value).getResultNumber(),
@@ -237,7 +235,7 @@ struct MathematicalFactAnalysis::Impl {
         }
       }
       auto *call = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(call)) {
+      if (isa_and_nonnull<func::CallOp>(call)) {
         auto *view = helper(resolve(call, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -310,7 +308,7 @@ struct MathematicalFactAnalysis::Impl {
                           exact(appended));
       }
       auto *op = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(op)) {
+      if (isa_and_nonnull<func::CallOp>(op)) {
         auto *view = helper(resolve(op, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -359,7 +357,7 @@ struct MathematicalFactAnalysis::Impl {
         value = *forwarded.value;
       }
       auto *op = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(op)) {
+      if (isa_and_nonnull<func::CallOp>(op)) {
         auto *view = helper(resolve(op, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -459,8 +457,7 @@ struct MathematicalFactAnalysis::Impl {
       return result;
     }
     void formation(Operation *owner) {
-      if (!owner || !analysis.contains(owner) ||
-          !isa<func::FuncOp, local::FuncOp>(owner) ||
+      if (!owner || !analysis.contains(owner) || !isa<func::FuncOp>(owner) ||
           owner->getNumRegions() != 1 || owner->getRegion(0).empty())
         return;
       auto attrs = owner->getAttrOfType<ArrayAttr>("data.preconditions");

@@ -8,7 +8,6 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/BoundOperations.td"
 include "zkc/Interfaces/Mathematical.td"
-include "zkc/Interfaces/PreparationCallable.td"
 
 class TotalMathOp<Dialect dialect, string mnemonic, Type lhs, Type rhs,
                   Type result, list<Trait> traits = []>
@@ -268,21 +267,5 @@ class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
 def FiniteFoldOp : AlgebraFiniteOp<"finite_fold">;
 def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
 
-// A checked pointwise application of an existing private scalar helper over
-// runtime vectors. `rowwise[i]` selects whether input i is a whole vector of
-// the helper's scalar field (one row per element) or a scalar broadcast to
-// every row. Ordered local.apply calls retain this declaration until numerical
-// selection chooses and checks their actual Local payload. It is a
-// checked bulk operation: shapes are compared before arithmetic, so it has no
-// totality or purity contract. Algebra owns its formula vocabulary.
-def MapRealizeOp : Op<AlgebraDialect, "map_realize",
-    [Symbol, DeclareOpInterfaceMethods<SymbolUserOpInterface>,
-     PreparationCallableOpInterface]> {
-  let arguments = (ins SymbolNameAttr:$sym_name, FlatSymbolRefAttr:$helper,
-    TypeAttrOf<FunctionType>:$function_type, DenseBoolArrayAttr:$rowwise);
-  let assemblyFormat =
-    "$sym_name `=` $helper $rowwise attr-dict `:` $function_type";
-  let hasVerifier = 1;
-}
 
 #endif

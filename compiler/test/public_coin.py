@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from scoped_sources import scoped_function
 from commands import Commands
 from sumcheck_client import composed_sumcheck
 from tools import compiler, records
@@ -270,7 +271,7 @@ second = small(
     roles='[["Prover","Checker"],["Checker"],["Checker"]]',
 )
 analyze(second, shadow_req, "public-coin-service")
-local_declaration = '"local.func"() ({"local.return"() : () -> ()}) {sym_name="empty",function_type=()->(),logical_origin=["empty",[]]} : () -> ()'
+local_declaration = scoped_function("empty", [], [], "", [])
 local = '"protocol.local_call"() {callee=@empty,site="local",role="Checker"} : ()->()\n'
 analyze(
     small(

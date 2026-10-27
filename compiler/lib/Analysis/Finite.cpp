@@ -8,7 +8,6 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
@@ -61,8 +60,6 @@ ValueRange dataOperands(const Computation &c) {
                   : c.operation->getOperands();
 }
 FunctionType computationSignature(Operation *op) {
-  if (isDeclaration(op))
-    return signature(op);
   if (!isScoped(op))
     return FunctionType::get(op->getContext(), op->getOperandTypes(),
                              op->getResultTypes());
@@ -274,12 +271,8 @@ Type elementType(Type container, bool matrix) {
   return collection ? collection.getElementType() : Type();
 }
 bool isComputation(Operation *op) {
-  return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp,
-                         algebra::FiniteFoldOp, algebra::FiniteCollectOp,
+  return isa_and_nonnull<algebra::FiniteFoldOp, algebra::FiniteCollectOp,
                          exec::FoldOp, exec::CollectOp>(op);
-}
-bool isDeclaration(Operation *op) {
-  return isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp>(op);
 }
 bool provesEqualExtent(Value a, unsigned aa, Value b, unsigned ba) {
   EvidenceWork work(valueOwner(a));
@@ -391,10 +384,8 @@ LogicalResult describe(Operation *op, Computation &c, Operation *symbolRoot,
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
   c.scoped = isScoped(op);
-  c.total = !c.scoped && !isDeclaration(op);
-  c.collect =
-      isa<local::FiniteCollectOp, algebra::FiniteCollectOp, exec::CollectOp>(
-          op);
+  c.total = !c.scoped;
+  c.collect = isa<algebra::FiniteCollectOp, exec::CollectOp>(op);
   c.signature = computationSignature(op);
   auto reference = [&](StringRef name) {
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>(name);
@@ -467,9 +458,8 @@ FailureOr<CallbackABI> readCallbackABI(const Computation &c,
   auto visibility = helper ? helper->getAttrOfType<StringAttr>("sym_visibility")
                            : StringAttr();
   if (!type || !visibility || visibility.getValue() != "private" ||
-      ((c.total || c.scoped) ? !isa<func::FuncOp>(helper)
-                             : !isa<local::FuncOp>(helper)) ||
-      helper->getNumRegions() != 1 || helper->getRegion(0).empty())
+      !isa<func::FuncOp>(helper) || helper->getNumRegions() != 1 ||
+      helper->getRegion(0).empty())
     return failure();
   auto &body = helper->getRegion(0).front();
   auto items =
@@ -520,15 +510,11 @@ FailureOr<CallbackView> readCallback(const Computation &c, CallbackRole role) {
   if (failed(abi) || abi->scope || !abi->entry->getParent()->hasOneBlock())
     return failure();
   auto *terminator = &abi->entry->back();
-  bool stop = !c.total && isa<local::StopOp>(terminator);
-  if (!stop &&
-      ((c.total ? !isa<func::ReturnOp>(terminator)
-                : !isa<local::ReturnOp>(terminator)) ||
-       !sameTypes(terminator->getOperands(), abi->signature.getResults())))
+  if (!c.total || !isa<func::ReturnOp>(terminator) ||
+      !sameTypes(terminator->getOperands(), abi->signature.getResults()))
     return failure();
-  return CallbackView{
-      *abi, terminator, stop ? CallbackExit::Stop : CallbackExit::Return,
-      stop ? ValueRange{} : ValueRange(terminator->getOperands())};
+  return CallbackView{*abi, terminator, CallbackExit::Return,
+                      terminator->getOperands()};
 }
 FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
                                         CallbackValues actuals, Value scope) {
@@ -558,17 +544,14 @@ FailureOr<Value> CallEnvironment::lookup(BlockArgument formal) const {
 LogicalResult verifyLocal(Operation *op) {
   if (!isComputation(op))
     return refuse(op, "expected finite computation");
-  bool declaration = isDeclaration(op), scoped = isScoped(op);
-  bool collect =
-      isa<local::FiniteCollectOp, algebra::FiniteCollectOp, exec::CollectOp>(
-          op);
+  bool scoped = isScoped(op);
+  bool collect = isa<algebra::FiniteCollectOp, exec::CollectOp>(op);
   for (auto attr : op->getAttrs()) {
     StringRef name = attr.getName().getValue();
     if (name == "domain" || name == "predicate" ||
         name == (collect ? "body" : "step"))
       continue;
-    if ((declaration && (name == "sym_name" || name == "function_type")) ||
-        (scoped && name == "site"))
+    if (scoped && name == "site")
       continue;
     return refuse(op, "unexpected finite attribute");
   }
@@ -696,15 +679,14 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
   for (auto *definition : definitions)
     definition->walk([&](Operation *op) { hasFinite |= isComputation(op); });
   if (!hasFinite) {
-    // Preserve the existing pure/local cycle diagnostics in units without a
-    // finite reference edge. Call premises and bounded accesses still require
-    // evidence from this verified symbol closure.
+    // Preserve the existing mathematical/scoped cycle diagnostics in units
+    // without a finite reference edge. Call premises and bounded accesses still
+    // require evidence from this verified symbol closure.
     for (auto *definition : definitions) {
       auto checked = definition->walk([&](Operation *op) -> WalkResult {
-        if (isa<func::FuncOp, local::FuncOp>(op) &&
-            failed(verifyPreconditions(op)))
+        if (isa<func::FuncOp>(op) && failed(verifyPreconditions(op)))
           return WalkResult::interrupt();
-        if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op) &&
+        if (isa<func::CallOp, exec::ComputeOp>(op) &&
             failed(verifyCallPreconditions(op)))
           return WalkResult::interrupt();
         if (failed(verifyBoundedAccess(op)))
@@ -739,10 +721,9 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
       // Symbol-table region verification has already checked each finite ABI.
       // This traversal owns reference cycles, call premises and access bounds,
       // not another replay of every finite computation's verification.
-      if (isa<func::FuncOp, local::FuncOp>(op) &&
-          failed(verifyPreconditions(op)))
+      if (isa<func::FuncOp>(op) && failed(verifyPreconditions(op)))
         return WalkResult::interrupt();
-      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op) &&
+      if (isa<func::CallOp, exec::ComputeOp>(op) &&
           failed(verifyCallPreconditions(op)))
         return WalkResult::interrupt();
       if (failed(verifyBoundedAccess(op)))
@@ -752,9 +733,7 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
           continue;
         Operation *callee = symbols.lookupNearestSymbolFrom(
             op, op->getAttrOfType<FlatSymbolRefAttr>(edge));
-        if (callee &&
-            (isa<func::FuncOp, local::FuncOp, local::RealizeOp>(callee) ||
-             isDeclaration(callee)))
+        if (callee && isa<func::FuncOp>(callee))
           if (failed(visit(callee, depth + 1)))
             return WalkResult::interrupt();
       }
@@ -781,17 +760,6 @@ LogicalResult verifyClosure(Operation *unit) {
 }
 } // namespace zkc::finite
 
-namespace zkc::local {
-LogicalResult FiniteFoldOp::verify() { return finite::verifyLocal(*this); }
-LogicalResult FiniteCollectOp::verify() { return finite::verifyLocal(*this); }
-LogicalResult FiniteFoldOp::verifySymbolUses(SymbolTableCollection &symbols) {
-  return finite::verifyReferences(*this, symbols);
-}
-LogicalResult
-FiniteCollectOp::verifySymbolUses(SymbolTableCollection &symbols) {
-  return finite::verifyReferences(*this, symbols);
-}
-} // namespace zkc::local
 namespace zkc::exec {
 LogicalResult FoldOp::verify() { return finite::verifyLocal(*this); }
 LogicalResult CollectOp::verify() { return finite::verifyLocal(*this); }
@@ -866,7 +834,7 @@ public:
       SmallVector<BitVector> args;
       for (Value v : nested->getOperands())
         args.push_back(env.lookup(v));
-      if (isa<func::ReturnOp, local::ReturnOp>(nested)) {
+      if (isa<func::ReturnOp>(nested)) {
         result.results = args;
         continue;
       }
@@ -874,21 +842,16 @@ public:
       if (isComputation(nested)) {
         if (failed(computation(nested, child)))
           return failure();
-      } else if (isa<func::CallOp, local::ApplyOp>(nested)) {
+      } else if (isa<func::CallOp>(nested)) {
         auto callee = resolve(nested, "callee");
         if (!callee)
           return refuse(nested, "missing summary callee");
-        if (isDeclaration(callee)) {
-          if (failed(computation(callee, child)))
-            return failure();
-        } else {
-          const Summary *summary;
-          if (failed(helper(callee, summary)))
-            return failure();
-          child = *summary;
-        }
+        const Summary *summary;
+        if (failed(helper(callee, summary)))
+          return failure();
+        child = *summary;
       } else {
-        // Local regions conservatively depend on all explicit captures. Their
+        // Nested regions conservatively depend on all explicit captures. Their
         // complete syntax is separately checked by native/control admission.
         BitVector all(args.size(), true);
         child.results.assign(nested->getNumResults(), all);

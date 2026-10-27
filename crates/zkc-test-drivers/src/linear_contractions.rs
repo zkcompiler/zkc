@@ -138,9 +138,9 @@ fn main() {
         let site = if control == "direct" {
             "work"
         } else if allowed {
-            "second"
+            "lc_6_second"
         } else {
-            "between"
+            "lc_7_between"
         };
         assert_eq!(stop.site.as_deref(), Some(site));
         let local = stop.local.as_ref().expect("local failure context");

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import struct
 
+from scoped_sources import invocation, scoped_function
 from commands import Commands
 from tools import compiler, records
 from sumcheck_client import composed_sumcheck
@@ -349,11 +350,9 @@ commands.run(
 
 # A changed supporting local definition must fail correspondence even when
 # every composed participant body is unchanged.
-local = f""""runtime.binding"() {{sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""}} : ()->()
-local.func @unused() -> {F} attributes {{logical_origin=["unused",[]]}} {{
- %c="algebra.exec.field_constant"() {{binding=@constant,parameters=["0"],site="constant"}} : ()->{F}
- local.return %c : {F}
-}}"""
+local = """"runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+""" + scoped_function("unused", [], [F], invocation(
+    "exec.apply", [], [F], 'binding=@constant,parameters=["0"],site="constant"'), ['%r'])
 local_source = source.replace("func.func private", local + "\nfunc.func private", 1)
 # This dependency is retained and verified even when the author does not use it.
 commands.verified(local_source)

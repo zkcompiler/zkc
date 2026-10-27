@@ -56,13 +56,9 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.discardedRecipeCopy == b.discardedRecipeCopy &&
          a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes &&
          a.discardedRecipeExpansion == b.discardedRecipeExpansion &&
-         a.requiredMapChecking == b.requiredMapChecking &&
-         a.optionalMapChecking == b.optionalMapChecking &&
          a.numericalContextChecking == b.numericalContextChecking &&
          a.numericalCheckCopy == b.numericalCheckCopy &&
          a.numericalCheckSiteBytes == b.numericalCheckSiteBytes &&
-         a.requiredMapConstruction == b.requiredMapConstruction &&
-         a.optionalMapConstruction == b.optionalMapConstruction &&
          a.requiredFiniteChecking == b.requiredFiniteChecking &&
          a.optionalFiniteChecking == b.optionalFiniteChecking &&
          a.selectionBookkeeping == b.selectionBookkeeping &&

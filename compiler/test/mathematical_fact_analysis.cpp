@@ -7,8 +7,9 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -513,30 +514,58 @@ int main() {
   cases.run("guards stay ordered and zero-trip control is conservative", [&] {
     auto module = parse(R"mlir(
  "runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
- local.func private @guarded(%ok:i1,%i:ui64,%xs:!S)->!S attributes {
-   logical_origin=["guarded",[]]
- } {
-   "local.exec.require"(%ok) {binding=@require,parameters=[],site="guard"} : (i1)->()
-   %result = "local.for"(%i,%i,%xs) ({ ^body(%j:ui64,%state:!S):
-     "local.yield"(%state) : (!S)->()
-   }) {site="zero"} : (ui64,ui64,!S)->!S
-   local.return %result : !S
- }
 )mlir");
-    local::FuncOp subject;
-    module->walk([&](local::FuncOp op) { subject = op; });
-    auto result = subject.getBody().front().back().getOperand(0);
+    auto unit = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
+    OpBuilder builder(&context);
+    auto scope = runtime::ScopeType::get(&context);
+    auto sequence = data::SequenceType::get(&context, builder.getI1Type());
+    auto index = IntegerType::get(&context, 64, IntegerType::Unsigned);
+    auto outcome = exec::OutcomeType::get(&context, {sequence});
+    auto make = [&](StringRef name, TypeRange inputs, bool region) {
+      builder.setInsertionPointToEnd(&unit.getBody().front());
+      auto function =
+          func::FuncOp::create(builder, unit.getLoc(), name,
+                               builder.getFunctionType(inputs, {outcome}));
+      function.setPrivate();
+      function.setNoInline(true);
+      if (region)
+        function->setAttr("runtime.region", builder.getUnitAttr());
+      else
+        function->setAttr("runtime.origin",
+                          builder.getArrayAttr({builder.getStringAttr(name),
+                                                builder.getArrayAttr({})}));
+      builder.setInsertionPointToEnd(function.addEntryBlock());
+      return function;
+    };
+    auto body = make("body", {scope, index, sequence}, true);
+    exec::ScopedExecutionBuilder bodyControl(builder, body);
+    bodyControl.complete(body.getArgument(2));
+    auto subject =
+        make("guarded", {scope, builder.getI1Type(), index, sequence}, false);
+    exec::ScopedExecutionBuilder control(builder, subject);
+    control.invoke(
+        "exec.apply", {}, control.scoped(subject.getArgument(1)),
+        {builder.getNamedAttr("binding",
+                              FlatSymbolRefAttr::get(&context, "require")),
+         builder.getNamedAttr("site", builder.getStringAttr("guard")),
+         builder.getNamedAttr("parameters", builder.getArrayAttr({}))});
+    auto values = control.loop(subject.getArgument(2), subject.getArgument(2),
+                               subject.getArgument(3), {}, {sequence}, false,
+                               "zero", [&](unsigned) { return body; });
+    require(values.size() == 1, "zero-trip fixture construction failed");
+    auto result = values.front();
+    control.returned(values);
     MathematicalFactAnalysis analysis(*module);
     uint64_t remaining = 65536;
     facts::Work work(remaining);
-    require(analysis.bound(subject.getArgument(1), subject.getArgument(2), 0,
+    require(analysis.bound(subject.getArgument(2), subject.getArgument(3), 0,
                            work) == Status::Unknown,
             "uninterpreted guard became a formation bound");
     require(analysis.extent(result, 0, work).status == Status::Unknown &&
                 analysis.origin(result, work).value == result,
             "loop result imported body or initial identity without analysis");
     unsigned guards = 0;
-    module->walk([&](local::RequireOp) { ++guards; });
+    module->walk([&](exec::ApplyOp) { ++guards; });
     require(guards == 1 && succeeded(verify(*module)),
             "fact query changed ordered guard/control structure");
   });

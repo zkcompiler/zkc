@@ -52,10 +52,6 @@ mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
-/// Admission of every map formula on an immutable original, using bounded
-/// scratch expansion. Refusals keep their algebra-map identifiers.
-llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
-
 /// Independently read original scoped execution against the actual scoped
 /// numerical candidate. Mathematical and finite requests retain their original
 /// callbacks, equations and policies; unchanged context stays exact. Explicit

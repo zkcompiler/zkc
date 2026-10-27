@@ -510,8 +510,8 @@ for label, old, new, diagnostic, invariant in [
     ('missing-maximum', ',maximum=4:i64', '', 'structured-source-original', "'protocol.repeat' op requires attribute 'maximum'"),
     ('missing-scope', ',carried_roles=[["P"]]', '', 'structured-source-original', "'protocol.repeat' op requires attribute 'carried_roles'"),
     ('callback-extra-argument', '%capture:!F', '%capture:!F,%extra:!F', 'mathematical-formation', None),
-    ('callback-condition', '"protocol.yield"(%s) : (!F)', '"local.condition"(%s) : (!F)', 'structured-source-original', "'local.condition' op expects parent op 'local.for'"),
-    ('callback-stop', '"protocol.yield"(%s) : (!F)->()', '"local.stop"() {reason="abort",site="stopped"} : ()->()', 'mathematical-formation', 'repeat must yield its carried interface'),
+    ('callback-return', '"protocol.yield"(%s) : (!F)', '"func.return"(%s) : (!F)', 'structured-source-original', "'func.return' op expects parent op 'func.func'"),
+    ('callback-stop', '"protocol.yield"(%s) : (!F)->()', '"exec.stop"() {reason="abort"} : ()->!exec.stop\n"protocol.yield"(%s) : (!F)->()', 'mathematical-formation', None),
     ('disjoint-capture', '["P"], ["P"], ["P"]', '["P"], ["P"], ["Q"]', 'mathematical-formation', None),
 ]:
     with case(label + '-zero-maximum'):

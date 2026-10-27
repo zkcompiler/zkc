@@ -1,7 +1,6 @@
 #include "RealizationEmission.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
@@ -46,22 +45,4 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
   return FlatSymbolRefAttr::get(builder.getContext(), found->second);
 }
 
-Operation *
-RealizationEmitter::emit(OpBuilder &builder, Location location, StringRef site,
-                         const protocol::BindingApplication &application,
-                         ValueRange inputs, TypeRange outputs,
-                         ArrayRef<std::string> parameters) {
-  auto operation = protocol::boundOperationName(application.contract);
-  assert(!operation.empty() && "realization requires an installed contract");
-  OperationState state(location, operation);
-  state.addOperands(inputs);
-  state.addTypes(outputs);
-  state.addAttribute("binding", binding(builder, location, application));
-  state.addAttribute("site", builder.getStringAttr(site));
-  SmallVector<Attribute> attributes;
-  for (const auto &parameter : parameters)
-    attributes.push_back(builder.getStringAttr(parameter));
-  state.addAttribute("parameters", builder.getArrayAttr(attributes));
-  return builder.create(state);
-}
 } // namespace zkc::mathematical

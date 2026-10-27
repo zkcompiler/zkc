@@ -9,7 +9,6 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -60,7 +59,7 @@ Value ComputationEnvironment::resolveCapture(Value value) const {
 namespace {
 // An invocation-local standard SSA view, not a normalizer. Call arguments and
 // every returned coordinate are substituted exactly. In particular, dead
-// arithmetic, pins and opaque Local control remain visible to recognition.
+// arithmetic, pins and opaque scoped control remain visible to recognition.
 class NumericalBodyReader {
   ComputationBody &result;
   ComputationWork &work;
@@ -77,7 +76,7 @@ class NumericalBodyReader {
         WorkOwner::Structural, &diagnostic.outcome);
   }
   FailureOr<SmallVector<Value>> copy(Block &source, ValueRange arguments,
-                                     Block &target, bool numerical) {
+                                     Block &target) {
     if (auto function = dyn_cast<func::FuncOp>(source.getParentOp());
         function && protocol::isScopedExecutionFunction(function))
       return copyScoped(function, arguments, target);
@@ -120,7 +119,7 @@ class NumericalBodyReader {
         if (!callee || !callee.getBody().hasOneBlock() ||
             callee.front().empty())
           return failure();
-        auto outputs = copy(callee.front(), inputs, target, true);
+        auto outputs = copy(callee.front(), inputs, target);
         if (failed(outputs) || outputs->size() != op.getNumResults())
           return failure();
         for (auto [expected, actual] : zip(op.getResultTypes(), *outputs))
@@ -133,7 +132,7 @@ class NumericalBodyReader {
       // substituted by this bounded view and conservatively keeps fallback.
       // Nested finite invocations inside standard numerical helpers also need
       // their own call-occurrence axes; this scalar view does not flatten them.
-      if (op.getNumRegions() || (numerical && isComputation(&op)))
+      if (op.getNumRegions() || isComputation(&op))
         return failure();
       // Exact pack projection is descriptor substitution, not arithmetic
       // simplification. Keep every scalar producer and its occurrence order.
@@ -168,8 +167,7 @@ class NumericalBodyReader {
       }
     }
     auto &end = source.back();
-    if (!charge(&end) ||
-        (numerical ? !isa<func::ReturnOp>(end) : !isa<local::ReturnOp>(end)))
+    if (!charge(&end) || !isa<func::ReturnOp>(end))
       return failure();
     SmallVector<Value> outputs;
     for (Value operand : end.getOperands()) {
@@ -177,13 +175,6 @@ class NumericalBodyReader {
       if (!actual)
         return failure();
       outputs.push_back(actual);
-    }
-    if (!numerical) {
-      for (Value argument : source.getArguments())
-        result.callbackValues[argument] = values.lookup(argument);
-      for (auto &op : source.without_terminator())
-        for (Value value : op.getResults())
-          result.callbackValues[value] = values.lookup(value);
     }
     return outputs;
   }
@@ -255,7 +246,7 @@ class NumericalBodyReader {
       if (isa<func::CallOp, exec::ComputeOp>(op)) {
         if (!callee || callee.empty())
           return failure();
-        auto outputs = copy(callee.front(), inputs, target, true);
+        auto outputs = copy(callee.front(), inputs, target);
         if (failed(outputs) || outputs->size() != step.outputs.size() ||
             ValueRange(*outputs).getTypes() !=
                 ValueRange(step.outputs).getTypes())
@@ -355,7 +346,7 @@ class NumericalBodyReader {
 public:
   NumericalBodyReader(ComputationBody &result, ComputationWork &work,
                       ComputationDiagnostic &diagnostic,
-                      const protocol::SourceExecutionClosure *source = nullptr)
+                      const protocol::SourceExecutionClosure *source)
       : result(result), work(work), diagnostic(diagnostic),
         builder(result.helper.getContext()), targetSymbols(*result.storage),
         scopedSource(source) {}
@@ -370,35 +361,21 @@ public:
         scopedSource->bodies.at(source.getSymName().str()).back().operation;
     return discardUnusedPacks(*body);
   }
-  LogicalResult read(local::FuncOp source) {
-    auto *body = result.helper.addEntryBlock();
-    auto outputs =
-        copy(source.getBody().front(), body->getArguments(), *body, false);
-    if (failed(outputs))
-      return failure();
-    builder.setInsertionPointToEnd(body);
-    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
-    result.sources[end] = &source.getBody().front().back();
-    return discardUnusedPacks(*body);
-  }
 };
 
 std::shared_ptr<ComputationBody>
 readNumericalBody(CallbackView &callback, ComputationWork &work,
                   ComputationDiagnostic &diagnostic,
-                  const protocol::SourceExecutionClosure *source = nullptr) {
+                  const protocol::SourceExecutionClosure *source) {
   // The original ABI has already been checked. This standard function is only
   // owned SSA storage; it does not change the partial callback's contract.
   auto *helper = callback.abi.symbol;
-  bool scoped = bool(callback.abi.scope);
-  if ((!isa<local::FuncOp>(helper) && !scoped) ||
+  if (!callback.abi.scope || !source || !isa<func::FuncOp>(helper) ||
       callback.exit != CallbackExit::Return)
     return {};
   auto result = std::make_shared<ComputationBody>();
   result->storage = mlir::ModuleOp::create(helper->getLoc());
-  auto signature =
-      scoped ? protocol::scopedDataSignature(cast<func::FuncOp>(helper))
-             : callback.abi.signature;
+  auto signature = protocol::scopedDataSignature(cast<func::FuncOp>(helper));
   if (!signature)
     return {};
   result->helper = func::FuncOp::create(
@@ -411,9 +388,7 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
       if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
                                   &diagnostic.outcome))
         return {};
-      if (!scoped)
-        translated.push_back(premise);
-      else if (auto bound = dyn_cast<data::IndexBoundAttr>(premise)) {
+      if (auto bound = dyn_cast<data::IndexBoundAttr>(premise)) {
         if (!bound.getIndexArg() || !bound.getContainerArg())
           return {};
         translated.push_back(data::IndexBoundAttr::get(
@@ -433,14 +408,12 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
   }
   result->storage->getBody()->push_back(result->helper);
   NumericalBodyReader reader(*result, work, diagnostic, source);
-  if (failed(scoped ? reader.read(cast<func::FuncOp>(helper))
-                    : reader.read(cast<local::FuncOp>(helper))))
+  if (failed(reader.read(cast<func::FuncOp>(helper))))
     return {};
   auto &body = result->helper.front();
   auto *terminator = &body.back();
   ValueRange arguments = body.getArguments();
-  if (arguments.size() + unsigned(scoped) !=
-          callback.abi.entry->getNumArguments() ||
+  if (arguments.size() + 1 != callback.abi.entry->getNumArguments() ||
       !isa<func::ReturnOp>(terminator) ||
       terminator->getNumOperands() != callback.returned.size())
     return {};
@@ -454,7 +427,7 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
         return {};
       auto formal = dyn_cast<BlockArgument>(original);
       if (!formal || formal.getOwner() != callback.abi.entry ||
-          formal.getArgNumber() != position + unsigned(scoped) ||
+          formal.getArgNumber() != position + 1 ||
           position >= arguments.size() ||
           original.getType() != arguments[position].getType() ||
           result->callbackValues.lookup(original) != arguments[position])
@@ -841,18 +814,6 @@ public:
           readNumericalBody(*callback, work, diagnostic, c.scopedSource);
       if (!numericalBody)
         return std::nullopt;
-    } else if (auto helper = dyn_cast<local::FuncOp>(c.helper)) {
-      bool calls = false;
-      for (auto &op : helper.getBody().front().without_terminator()) {
-        if (!charge())
-          return std::nullopt;
-        calls |= isa<func::CallOp>(op);
-      }
-      if (calls) {
-        numericalBody = readNumericalBody(*callback, work, diagnostic);
-        if (!numericalBody)
-          return std::nullopt;
-      }
     }
     auto &body = *callback->abi.entry;
     ComputationView result;
@@ -972,8 +933,8 @@ public:
     append_range(entryFormals, callback->abi.formals.state);
     append_range(entryFormals, callback->abi.formals.captures);
     auto entry = partitionEntry(c, entryFormals);
-    if (failed(entry) || (occurrence && !isDeclaration(occurrence) &&
-                          failed(partitionEntry(c, actualOperands))))
+    if (failed(entry) ||
+        (occurrence && failed(partitionEntry(c, actualOperands))))
       return std::nullopt;
     for (auto [input, formal] : enumerate(entryFormals)) {
       bool state = input >= entry->domain.size() &&
@@ -1014,7 +975,7 @@ public:
         payload.push_back(&op);
         Operation *source = result.sourceOperation(&op);
         Operation *definition = source;
-        if (!isComputation(source) && isa<local::ApplyOp, func::CallOp>(op)) {
+        if (!isComputation(source) && isa<func::CallOp>(op)) {
           auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
           definition = reference
                            ? symbols.lookupNearestSymbolFrom(source, reference)

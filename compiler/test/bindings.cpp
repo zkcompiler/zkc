@@ -59,8 +59,13 @@ int main() {
   for (const auto &kernel : operationShapes()) {
     require(contracts.insert(kernel.key).second, "unique installed contract");
     auto operation = boundOperationName(kernel.key);
-    require(!operation.empty(), kernel.key);
-    require(context.isOperationRegistered(operation), operation);
+    bool scopedOnly = kernel.key == "resource_unit.create" ||
+                      kernel.key == "resource_unit.pass" ||
+                      kernel.key == "resource_unit.consume" ||
+                      kernel.key == "control.require";
+    require(operation.empty() == scopedOnly, kernel.key);
+    if (!scopedOnly)
+      require(context.isOperationRegistered(operation), operation);
   }
   require(boundOperationName("uninstalled.contract").empty(),
           "unknown contracts have no IR mapping");

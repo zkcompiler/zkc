@@ -161,8 +161,7 @@ LogicalResult zkc::protocol_ir::ProtocolLoopOp::verifyRegions() {
 LogicalResult
 zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto *callee = tables.lookupNearestSymbolFrom(*this, getCalleeAttr());
-  if (!callee ||
-      !isa<func::FuncOp, zkc::local::FuncOp, zkc::poly::RealizeOp>(callee))
+  if (!callee || !isa<func::FuncOp, zkc::poly::RealizeOp>(callee))
     return diagnostics::emit(
         emitOpError(), "interactive-symbol-kind",
         "expected scoped source execution or a checked local realization");

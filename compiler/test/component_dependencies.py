@@ -208,8 +208,6 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
-        ROOT / "lib/Transforms/MapOccurrence.h",
-        ROOT / "lib/Transforms/NumericalLowering.h",
         ROOT / "lib/Transforms/NumericalSelection.h",
         ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",

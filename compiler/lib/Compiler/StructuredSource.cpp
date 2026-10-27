@@ -311,8 +311,6 @@ StringRef kind(Operation &op) {
     return "protocol";
   if (auto function = dyn_cast<func::FuncOp>(op))
     return isScopedExecutionFunction(function) ? "local" : "math";
-  if (isa<algebra::MapRealizeOp>(op))
-    return "map";
   if (isa<data::DomainOp>(op))
     return "domain";
   return "";
@@ -1034,104 +1032,33 @@ class Exporter {
                        std::move(constructors), returned->second};
   }
 
-  Expected<json::Value> mapPreparation(algebra::MapRealizeOp map) {
-    Operation &op = *map;
-    StringRef code = "structured-source-map";
-    if (auto e =
-            attributes(op, {"sym_name", "function_type", "helper", "rowwise"}))
-      return std::move(e);
-    if (op.getNumOperands() || op.getNumResults() || op.getNumRegions())
-      return error(code);
-    if (++instructions > instructionLimit)
-      return error("structured-source-limit");
-    auto type = signature(op);
-    if (!type)
-      return error(code);
-    auto inputs = sorts(type.getInputs());
-    if (!inputs)
-      return inputs.takeError();
-    auto outputs = sorts(type.getResults());
-    if (!outputs)
-      return outputs.takeError();
-    auto helperName = reference(op, "helper", {"math"});
-    if (!helperName)
-      return helperName.takeError();
-    auto helper = cast<func::FuncOp>(symbols.lookup(*helperName));
-    if (!helper.isPrivate() || helper.isExternal() ||
-        helper->getParentOp() != op.getParentOp())
-      return error(code, "private sibling helper required");
-    json::Array rowwise;
-    auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
-    auto lifted = type.getNumResults() == 1
-                      ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
-                      : algebra::FieldVectorType();
-    if (!lifted)
-      return error(code, "scalar helper ABI or row mask");
-    Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
-    Type vector = lifted;
-    if (!mask || mask.size() != type.getNumInputs() ||
-        !llvm::is_contained(mask.asArrayRef(), true) ||
-        type.getNumResults() != 1 || type.getResult(0) != vector ||
-        helper.getFunctionType() !=
-            FunctionType::get(op.getContext(),
-                              SmallVector<Type>(mask.size(), field), {field}))
-      return error(code, "scalar helper ABI or row mask");
-    for (auto [input, row] : llvm::zip(type.getInputs(), mask.asArrayRef())) {
-      if (input != (row ? vector : field))
-        return error(code, "lifted input type");
-      rowwise.push_back(row);
-    }
-    return json::Array{
-        "map",       map.getSymName(),  std::move(*inputs), std::move(*outputs),
-        *helperName, std::move(rowwise)};
-  }
-
   // Whole-unit bodies have already passed ordinary instruction admission and
-  // cycle/depth checks. These two memoized profiles additionally constrain
+  // cycle/depth checks. This memoized profile additionally constrains
   // every transitive instruction, including unused calls and discarded results.
   Error preparationProfiles() {
     llvm::DenseSet<Operation *> computationChecked;
-    llvm::DenseMap<Operation *, Type> ringChecked;
-    // A ring closure is checked against the one field its map lifts.
-    std::function<Error(Operation *, Type)> check = [&](Operation *op,
-                                                        Type field) -> Error {
-      bool ring = static_cast<bool>(field);
-      if (ring ? ringChecked.lookup(op) == field
-               : computationChecked.contains(op))
+    std::function<Error(Operation *)> check = [&](Operation *op) -> Error {
+      if (computationChecked.contains(op))
         return Error::success();
-      StringRef code =
-          ring ? "structured-source-map" : "structured-source-realization";
+      StringRef code = "structured-source-realization";
       auto helper = dyn_cast<func::FuncOp>(op);
       if (!helper || helper.isExternal() || !helper.isPrivate() ||
           helper->getParentOp() != unit.getOperation())
         return error(code, "private Math closure required");
-      if (ring) {
-        if (auto premises =
-                helper->getAttrOfType<ArrayAttr>("data.preconditions");
-            premises && !premises.empty())
-          return error(code, "helper preconditions");
-        if (ringChecked.contains(op))
-          return error(code, "scalar closure ABI");
-        auto type = helper.getFunctionType();
-        for (Type port :
-             llvm::concat<const Type>(type.getInputs(), type.getResults()))
-          if (port != field)
-            return error(code, "scalar closure ABI");
-      }
       for (Operation &instruction : helper.getBody().front()) {
         if (auto call = dyn_cast<func::CallOp>(instruction)) {
-          if (auto e = check(symbols.lookup(call.getCallee()), field))
+          if (auto e = check(symbols.lookup(call.getCallee())))
             return e;
           continue;
         }
-        if (!ring && isa<algebra::FiniteFoldOp>(instruction)) {
+        if (isa<algebra::FiniteFoldOp>(instruction)) {
           // Ordinary formation discharges callback bounds at each call edge.
           // Both callbacks belong to admission even for an empty domain.
           for (StringRef attribute : {"step", "predicate"}) {
             auto reference =
                 instruction.getAttrOfType<FlatSymbolRefAttr>(attribute);
             if (reference)
-              if (auto e = check(symbols.lookup(reference.getValue()), field))
+              if (auto e = check(symbols.lookup(reference.getValue())))
                 return e;
           }
           continue;
@@ -1139,46 +1066,20 @@ class Exporter {
         bool allowed = isa<algebra::ConstantFieldOp, algebra::FieldAddOp,
                            algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
                            func::ReturnOp>(instruction);
-        if (!ring)
-          allowed |=
-              isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
-                  algebra::GroupAddOp, algebra::GroupScaleOp,
-                  algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
-                  data::LessOp, data::PowerOfTwoOp, data::DimOp, data::MakeOp,
-                  data::GetOp, data::BoundedAtOp, arith::ConstantOp,
-                  arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp,
-                  arith::SelectOp>(instruction);
+        allowed |=
+            isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
+                algebra::GroupAddOp, algebra::GroupScaleOp,
+                algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
+                data::LessOp, data::PowerOfTwoOp, data::DimOp, data::MakeOp,
+                data::GetOp, data::BoundedAtOp, arith::ConstantOp,
+                arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp,
+                arith::SelectOp>(instruction);
         if (!allowed || instruction.getNumRegions())
           return error(code, instruction.getName().getStringRef());
       }
-      if (ring)
-        ringChecked[op] = field;
-      else
-        computationChecked.insert(op);
+      computationChecked.insert(op);
       return Error::success();
     };
-    for (Operation &op : unit.getBody().front()) {
-      if (!isa<algebra::MapRealizeOp>(op))
-        continue;
-      auto type = signature(op);
-      auto lifted = type && type.getNumResults() == 1
-                        ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
-                        : algebra::FieldVectorType();
-      if (!lifted)
-        return error("structured-source-map", "scalar closure ABI");
-      Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
-      Operation *root = symbols.lookup(
-          op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue());
-      // A preparation has no caller-supplied premise. Internal helper premises
-      // remain lawful when discharged by ordinary calls or finite binders.
-      if (root)
-        if (auto premises =
-                root->getAttrOfType<ArrayAttr>("data.preconditions");
-            premises && !premises.empty())
-          return error("structured-source-map", "root preconditions");
-      if (auto e = check(root, field))
-        return e;
-    }
     for (const auto &[name, origin] : execution.computationOrigins)
       if (auto call = dyn_cast<exec::ComputeOp>(origin)) {
         auto *root = symbols.lookup(call.getCallee().getRootReference());
@@ -1189,7 +1090,7 @@ class Exporter {
                 root->getAttrOfType<ArrayAttr>("data.preconditions");
             premises && !premises.empty())
           return error("structured-source-realization", "root preconditions");
-        if (auto e = check(root, {}))
+        if (auto e = check(root))
           return e;
       }
     return Error::success();
@@ -1230,8 +1131,6 @@ class Exporter {
   }
 
   Expected<json::Value> function(Operation &op) {
-    if (auto map = dyn_cast<algebra::MapRealizeOp>(op))
-      return mapPreparation(map);
     StringRef owner = kind(op);
     auto scoped = dyn_cast<func::FuncOp>(op);
     if (scoped && !isScopedExecutionFunction(scoped))

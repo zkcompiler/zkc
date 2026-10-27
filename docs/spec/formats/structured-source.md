@@ -277,12 +277,12 @@ its body returns that collection's single element type. False predicates skip
 an item. Predicate and body stops retain the first reached stopping reason.
 
 A realization record associates an actual `exec.compute` occurrence with its
-exact private Math helper and full data ABI. A map record retains an explicit
-`algebra.map_realize` declaration and its ordered row mask. Ordinary frontend
-maps instead export their actual collect, domain and scoped callback. Their
-scalar-map equations are proof obligations over those bodies, not an export
-classification inferred from a generated name. Every declaration and callback
-is checked, including dormant ones.
+exact private Math helper and full data ABI. Native frontend maps export their
+actual collect, domain and scoped callback. Their scalar-map equations are proof
+obligations over those bodies, not an export classification inferred from a
+generated name. Every declaration and callback is checked, including dormant
+ones. The independent formal vocabulary also admits the `map` record below;
+the native exporter does not produce that constructor or a separate map callable.
 
 A realization has exactly the helper's full ordered input/output ABI, including
 unused inputs and zero or multiple results. Its derived Local meaning is one
@@ -307,19 +307,19 @@ only to the root. All helper preconditions are empty. Equality, selection,
 indices, groups, finite operations and other fields are outside this map profile.
 
 Both native tools run native formation before their separate structured checks.
-Native formation owns the map ABI, mask, helper identity and transitive ring
-fragment rules, including dead operations. Each structured reader repeats these
-checks, but malformed-map controls through these tools observe the native
-formation refusal first; they do not isolate the redundant structured closure
-checks. The independent C++ observer's Fr-only restriction and structural capacity
-limits remain independently observable. Native formation accepts a wider realization fragment
-than the conservative structured closure above.
+Native formation checks the complete actual scoped closure and mathematical
+bodies, including dormant definitions. The independent C++ observer's Fr-only
+restriction and structural capacity limits remain independently observable.
+Native formation accepts a wider realization fragment than the conservative
+structured closure above. Formal map records have their own checked ring
+fragment; their admission is not evidence about a native source map.
 
-Preparation declarations are invoked only by `local.apply` in a Local function.
-`protocol.local_call` requires an actual Local function, so an ordinary wrapper
-is necessary. Math calls cannot invoke preparations. Finite callbacks still
-require actual private functions of the appropriate kind; a derived Local
-meaning does not change the original native kind.
+Preparation records are export-local associations with actual `exec.compute`,
+`exec.fold` or `exec.collect` occurrences in scoped functions. Ordinary
+`func.call` composes those functions; `protocol.local_call` enters an actual
+scoped function from protocol control. Math calls cannot invoke ordered
+preparations. Finite callbacks remain actual private scoped definitions with the
+borrowed scope and outcome ABI, not derived callable declarations.
 
 ## Blocks, binding and control
 
@@ -526,8 +526,9 @@ parent invariant first, reported as `structured-source-original` or independent
 `structured-reference-source`.
 These wrapper identifiers alone do not identify which verification layer
 refused. Native controls also check the actual invariant message in both tools.
-A callback ending with `local.stop` instead reaches `mathematical-formation`
-because it does not yield the carried interface.
+A scoped execution stop inside a common repeat callback reaches
+`mathematical-formation`; common callbacks admit protocol actions and must
+yield the carried interface.
 
 The repeat roster is a nonempty subset of the enclosing active roster. Count
 availability covers it. Every state scope is nonempty, contained in that roster,
@@ -792,8 +793,8 @@ value list and are also at most 4096. The instruction count includes nested
 bodies, domain constructors and one derived instruction per finite, realization,
 collection or map declaration; it excludes terminators. The independent native
 reference has a separate 4096-operation admission budget over actual native
-nonterminators, including outcome packaging, and counts actual native
-definitions rather than export-local derived rows. Neither tool expands calls
+nonterminators, including outcome packaging, and all domain-body operations. It
+counts actual native definitions rather than export-local derived rows. Neither tool expands calls
 for these counts. Both capacities are independent of runtime fuel; equality of
 their numeric limits does not imply identical admitted source sets.
 General lexical JSON and region nesting are bounded by 64. Only slot 8 of an

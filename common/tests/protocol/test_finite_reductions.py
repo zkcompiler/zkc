@@ -356,20 +356,18 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         candidate = entry.directory / 'candidate.mlir'
         candidate.write_text(journal.run([
             toolchain.compiler, 'protocol-construct-proof', original, policy, *flags]))
-        # Projection retains the map and its policy; physical selection owns
-        # the concrete dot or map realization. Check both boundaries.
+        # Projection retains the actual collect request. Physical selection
+        # consumes the policy and chooses the concrete dot or map realization.
         projected = candidate.read_text()
-        assert 'algebra.map_realize' in projected
+        assert 'exec.collect' in projected
         assert 'algebra.exec.vector_dot' not in projected
-        assert f'policy = [true, {str(bool(flags)).lower()}, false]' in projected
         sites = operation_sites(json.loads(deployment[4]))
         assert bool(sites['vector.dot']) == bool(flags), sites
         assert bool(sites['numerical.map']) != bool(flags), sites
         journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
                      candidate, *flags])
         journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
-                     candidate, *([] if flags else ['--fuse-vector-reductions'])],
-                    refuses='native-proof-correspondence')
+                     candidate, *([] if flags else ['--fuse-vector-reductions'])])
         request = input_files(journal, f'{name}.proof-inputs.json',
                               public={'a': [2, 3], 'b': [5, 7]})
         proof = entry.directory / 'proof.bin'
@@ -400,7 +398,7 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
 
 @pytest.mark.parametrize('bulk', [False, True])
 @pytest.mark.parametrize('simplify', [False, True])
-def test_finite_proof_policy_reconstructs_actual_candidate(
+def test_finite_proof_keeps_selection_at_realization(
     toolchain, journal, directory, bulk, simplify,
 ):
     source = PROOF.replace('fn sum(v:Vector<F>)->F=primitive("vector.sum");', FINITE)
@@ -421,12 +419,22 @@ def test_finite_proof_policy_reconstructs_actual_candidate(
     candidate = directory / 'candidate.mlir'
     candidate.write_text(journal.run([
         toolchain.compiler, 'protocol-construct-proof', original, policy, *selection]))
-    assert ('algebra.exec.vector_dot' in candidate.read_text()) == bulk
+    # Construction preserves original total mathematics; finite recipe policy
+    # belongs to later realization, not to the constructed participant proof.
+    candidate_text = candidate.read_text()
+    assert 'exec.fold' in candidate_text
+    sites = operation_sites(json.loads(deployment[4]))
+    assert bool(sites['vector.dot']) == bulk, sites
+    for options in (selection, ['--no-finite-bulk'] if bulk else []):
+        journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
+                     candidate, *options])
+    # A changed mathematical body is still rejected independently of policy.
+    mutated = candidate_text.replace('contract = "field.mul"', 'contract = "field.add"')
+    assert mutated != candidate_text
+    changed = directory / 'changed-candidate.mlir'
+    changed.write_text(mutated)
     journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
-                 candidate, *selection])
-    journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
-                 candidate, *(['--no-finite-bulk'] if bulk else [])],
-                refuses='native-proof-correspondence')
+                 changed, *selection], refuses='native-proof-correspondence')
     request = input_files(journal, 'inputs.json', public={'a': [2, 3], 'b': [5, 7]})
     proof = directory / 'proof.bin'
     journal.json([toolchain.runtime, '--json', 'prove', f'--package={entry.package}',
@@ -483,9 +491,8 @@ def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, dir
         projected = journal.run([
             toolchain.optimizer, original,
             f'--zkc-participant-pipeline=project-only=true fuse-vector-reductions={choice}'])
-        assert 'algebra.map_realize' in projected
+        assert 'exec.collect' in projected
         assert 'algebra.exec.vector_dot' not in projected
-        assert f'policy = [true, {choice}, false]' in projected
         physical = journal.run([
             toolchain.optimizer, original,
             f'--zkc-participant-pipeline=fuse-vector-reductions={choice}'])
@@ -495,3 +502,10 @@ def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, dir
             toolchain.compiler, 'protocol-export', physical_file]))
         assert bool(sites['vector.dot']) == fuse, sites
         assert bool(sites['numerical.map']) != fuse, sites
+        # The explicit pass sequence and registered pipeline must install the
+        # same realization policy at the stage that actually consumes it.
+        standalone = journal.run([
+            toolchain.optimizer, original, '--zkc-project-protocol',
+            '--zkc-lower-math',
+            f'--zkc-select-physical=fuse-vector-reductions={choice}'])
+        assert standalone == physical

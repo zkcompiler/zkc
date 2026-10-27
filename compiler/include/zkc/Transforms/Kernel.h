@@ -4,7 +4,6 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Analysis/ComputationUnit.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 
 namespace zkc::mathematical {

@@ -163,19 +163,11 @@ LogicalResult verifyProtocolPreparationPreserved(Operation *before,
 LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
                                             Operation *after) {
   SymbolTable sourceSymbols(before), targetSymbols(after);
-  llvm::DenseSet<Operation *> sourceHelpers, targetHelpers;
-  if (failed(algebra::collectMapHelpers(before, sourceHelpers)) ||
-      failed(algebra::collectMapHelpers(after, targetHelpers)))
-    return failure();
   auto profile = cast<protocol_ir::ProtocolModuleOp>(after).getProfile();
   const bool retainsMathematics = profile == protocol_ir::Profile::Protocol ||
                                   profile == protocol_ir::Profile::Participant;
-  auto retained = [&](Operation *op,
-                      const llvm::DenseSet<Operation *> &mapHelpers) {
-    if (isa<func::FuncOp, data::DomainOp>(op))
-      return true;
-    return mapHelpers.contains(op) ||
-           isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
+  auto retained = [](Operation *op) {
+    return isa<func::FuncOp, data::DomainOp, mlir::ModuleOp,
                runtime::BindingOp>(op);
   };
   // Projection and mathematical simplification cannot invent executable work.
@@ -183,13 +175,13 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   // one.
   if (retainsMathematics) {
     for (auto &op : after->getRegion(0).front())
-      if (retained(&op, targetHelpers) &&
+      if (retained(&op) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!retained(&op, sourceHelpers))
+    if (!retained(&op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);

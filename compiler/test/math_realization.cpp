@@ -149,8 +149,7 @@ int main(int argc, char **argv) {
                 require(succeeded(manager.run(*module)),
                         "realized program did not compile");
                 module->walk([&](Operation *op) {
-                  require(!isa<local::RealizeOp, local::ApplyOp, local::FuncOp,
-                               exec::ComputeOp>(op),
+                  require(!isa<exec::ComputeOp>(op),
                           "preparation construct escaped into execution");
                   if (auto f = dyn_cast<func::FuncOp>(op))
                     require(protocol::isScopedExecutionFunction(f),

@@ -1,7 +1,6 @@
 #include "ComputationEquations.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <limits>
@@ -394,8 +393,7 @@ std::optional<Elementwise> analyzeLanes(
     ArrayRef<ComputationDiagnostic> accessDeclines = {}, Value yielded = {},
     Value state = {}, ValueRange additionalYields = {}) {
   if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
-      !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
-      body.back().getNumOperands() != 1 ||
+      !isa<func::ReturnOp>(body.back()) || body.back().getNumOperands() != 1 ||
       body.back().getOperand(0).getType() != field)
     return std::nullopt;
   if (!payload.work.take(body.getNumArguments() + laneArguments.size() + 1 +
@@ -601,8 +599,7 @@ matchLaneFormula(Block &body, Type field, ValueRange laneArguments,
   ComputationWork remaining;
   remaining.equations = std::numeric_limits<uint64_t>::max();
   EquationWork work{remaining};
-  PayloadAnalysis payload(operations, body.back().getOperands(),
-                          isa<local::FuncOp>(body.getParentOp()), work);
+  PayloadAnalysis payload(operations, body.back().getOperands(), false, work);
   llvm::DenseMap<Value, Value> lookups;
   for (Operation *op : operations) {
     auto *facet = payload.contracts.lookup(op);

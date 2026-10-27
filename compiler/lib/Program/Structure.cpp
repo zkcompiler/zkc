@@ -231,7 +231,7 @@ class Structure {
 public:
   // Reconstructed IR may precede physical selection. Interchange accepts only
   // physical programs. Realization applications require an internal logical
-  // opt-in; default native reconstruction still rejects projected local.apply.
+  // opt-in; publication still rejects unresolved LocalApply instructions.
   explicit Structure(bool allowNativeIR = false,
                      bool allowLogicalRealizations = false)
       : nativeIR(allowNativeIR), logicalRealizations(allowLogicalRealizations) {

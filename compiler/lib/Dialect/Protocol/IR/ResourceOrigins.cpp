@@ -1,6 +1,4 @@
 #include "ResourceOrigins.h"
-#include "mlir/Interfaces/ControlFlowInterfaces.h"
-#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -81,18 +79,8 @@ LogicalResult ResourceOrigins::call(Operation *op, unsigned depth,
         &summaries.insert_or_assign(callee, std::move(summary)).first->second;
     return success();
   }
-  if (finite::isDeclaration(callee)) {
-    if (failed(verifyFinite(callee)))
-      return failure();
-    result = &summaries.find(callee)->second;
-    if (depth > depthLimit || result->depth > depthLimit - depth)
-      return limit(op, "resource-origin nesting limit exceeded");
-    return success();
-  }
-  bool local = isa_and_nonnull<local::FuncOp>(callee);
-  if (!callee ||
-      (isa<protocol_ir::ApplyOp>(op) ? !isa<protocol_ir::MathematicalOp>(callee)
-                                     : !local) ||
+  if (!callee || !isa<protocol_ir::ApplyOp>(op) ||
+      !isa<protocol_ir::MathematicalOp>(callee) ||
       callee->getNumRegions() != 1 || !hasSingleElement(callee->getRegion(0)) ||
       callee->getRegion(0).front().empty())
     return malformed(op, "resource origins require a defined matching callee");
@@ -113,7 +101,7 @@ LogicalResult ResourceOrigins::call(Operation *op, unsigned depth,
   active.insert(callee);
   auto cleanup = scope_exit([&] { active.erase(callee); });
   Summary summary;
-  if (failed(block(callee->getRegion(0).front(), local, depth + 1, summary)))
+  if (failed(block(callee->getRegion(0).front(), depth + 1, summary)))
     return failure();
   result = &summaries.try_emplace(callee, std::move(summary)).first->second;
   return success();
@@ -164,75 +152,7 @@ LogicalResult ResourceOrigins::successors(Operation *op,
   return success();
 }
 
-LogicalResult ResourceOrigins::control(Operation *op, unsigned depth,
-                                       Environment &environment,
-                                       Summary &result) {
-  auto interface = cast<RegionBranchOpInterface>(op);
-  bool loop = isa<local::LocalForOp>(op);
-  bool continuingArm = false;
-  llvm::DenseMap<unsigned, unsigned> joined;
-  for (auto &region : op->getRegions()) {
-    if (failed(charge(op, 1))) // region entry
-      return failure();
-    Summary nested;
-    if (failed(block(region.front(), true, depth + 1, nested)))
-      return failure();
-    result.depth = std::max(result.depth, nested.depth + 1);
-    RegionSuccessor successor(&region);
-    auto inputs = interface.getEntrySuccessorOperands(successor);
-    auto arguments = interface.getSuccessorInputs(successor);
-    if (inputs.size() != arguments.size())
-      return malformed(op, "inconsistent resource-origin region mapping");
-    if (failed(charge(op, inputs.size() + op->getNumResults())))
-      return failure();
-    Environment mapped;
-    for (auto [argument, input] : zip(arguments, inputs)) {
-      auto found = environment.find(input);
-      if (affine(argument) && affine(input) && found != environment.end())
-        mapped[argument] = found->second;
-    }
-    llvm::DenseMap<unsigned, unsigned> roots;
-    for (auto [index, output] : enumerate(op->getResults())) {
-      if (!affine(output))
-        continue;
-      auto root = nested.roots.find(index);
-      if (loop) {
-        // Each carried slot is its own symbol. Other slots may remain unknown.
-        auto carried = cast<BlockArgument>(arguments[index]);
-        if (nested.continues && (root == nested.roots.end() ||
-                                 root->second != carried.getArgNumber()))
-          continue;
-        if (auto initial = mapped.find(carried); initial != mapped.end())
-          roots[index] = initial->second;
-      } else if (root != nested.roots.end()) {
-        auto argument = region.front().getArgument(root->second);
-        // Payload arguments of a match are absent from mapped.
-        if (auto actual = mapped.find(argument); actual != mapped.end())
-          roots[index] = actual->second;
-      }
-    }
-    if (loop || nested.continues) {
-      if (!continuingArm)
-        joined = std::move(roots);
-      else {
-        for (auto it = joined.begin(); it != joined.end();) {
-          auto found = roots.find(it->first);
-          if (found == roots.end() || found->second != it->second)
-            joined.erase(it++);
-          else
-            ++it;
-        }
-      }
-      continuingArm = true;
-    }
-  }
-  result.continues = continuingArm;
-  for (auto [index, root] : joined)
-    environment[op->getResult(index)] = root;
-  return success();
-}
-
-LogicalResult ResourceOrigins::block(Block &body, bool local, unsigned depth,
+LogicalResult ResourceOrigins::block(Block &body, unsigned depth,
                                      Summary &result) {
   auto *owner = body.getParentOp();
   if (depth > depthLimit)
@@ -250,49 +170,22 @@ LogicalResult ResourceOrigins::block(Block &body, bool local, unsigned depth,
     if (failed(charge(op, 1 + uint64_t(op->getNumOperands()) +
                               op->getNumResults())))
       return failure();
-    if (isa<local::StopOp>(op)) {
-      if (!local)
-        return malformed(op, "local stop requires local execution");
-      result.continues = false;
-      return success();
-    }
-    if (isa<local::ReturnOp, local::LocalYieldOp, local::LocalConditionOp,
-            protocol_ir::MathematicalReturnOp, protocol_ir::ProtocolYieldOp>(
+    if (isa<protocol_ir::MathematicalReturnOp, protocol_ir::ProtocolYieldOp>(
             op)) {
-      for (auto [index, input] : enumerate(op->getOperands().drop_front(
-               isa<local::LocalConditionOp>(op) ? 1 : 0)))
+      for (auto [index, input] : enumerate(op->getOperands()))
         if (auto found = environment.find(input); found != environment.end())
           result.roots[index] = found->second;
       return success();
     }
-    if (isa<local::LocalIfOp, local::LocalMatchOp, local::LocalForOp>(op)) {
-      if (!local)
-        return malformed(op, "local control requires local execution");
-      if (failed(control(op, depth, environment, result)))
-        return failure();
-      if (!result.continues)
-        return success();
-    } else if (isa<local::CallOp, local::ApplyOp, protocol_ir::LocalCallOp,
-                   protocol_ir::ApplyOp>(op)) {
-      // Common execution ignores role-local continuation and needs a summary
-      // only if this call could supply an affine result. A preparation-time
-      // declaration has no body yet; its profile admits only data ports.
-      auto name = op->getAttrOfType<FlatSymbolRefAttr>("callee");
-      bool prepared = isa<local::ApplyOp>(op) && name &&
-                      isa_and_nonnull<PreparationCallableOpInterface>(
-                          symbols.lookupNearestSymbolFrom(op, name));
-      if ((!local || prepared) &&
-          none_of(op->getResults(), [&](Value v) { return affine(v); }))
+    if (isa<protocol_ir::LocalCallOp, protocol_ir::ApplyOp>(op)) {
+      // Common protocol flow needs origins only for affine results.
+      if (none_of(op->getResults(), [&](Value v) { return affine(v); }))
         continue;
       const Summary *callee;
       if (failed(call(op, depth, callee)))
         return failure();
       result.depth = std::max(result.depth, callee->depth + 1);
       if (!callee->continues) {
-        if (local) {
-          result.continues = false;
-          return success();
-        }
         // A role's stop cannot prune another role's common actions.
         continue;
       }
@@ -333,47 +226,12 @@ LogicalResult ResourceOrigins::block(Block &body, bool local, unsigned depth,
   return malformed(owner, "resource-origin body has no terminator");
 }
 
-LogicalResult ResourceOrigins::verifyFinite(Operation *declaration) {
-  if (summaries.count(declaration))
-    return success();
-  finite::Computation c;
-  if (failed(finite::describe(declaration, c)))
-    return failure();
-  if (!active.insert(declaration).second)
-    return malformed(declaration, "finite resource-origin cycle");
-  auto cleanup = scope_exit([&] { active.erase(declaration); });
-  if (failed(charge(declaration, 1)))
-    return failure();
-  Summary result;
-  if (!c.collect) {
-    Summary step;
-    if (failed(block(c.helper->getRegion(0).front(), true, 1, step)))
-      return failure();
-    result.depth = step.depth + 1;
-    if (result.depth > depthLimit)
-      return limit(declaration, "resource-origin nesting limit exceeded");
-    for (unsigned i = 0; i < c.states; ++i) {
-      auto policy = types.get(c.signature.getResult(i));
-      if (!policy || !policy->affine)
-        continue;
-      auto root = step.roots.find(i);
-      if (step.continues && (root == step.roots.end() || root->second != i))
-        return malformed(
-            declaration,
-            "finite state transition must preserve each exact affine root");
-      result.roots[i] = c.arguments + i;
-    }
-  }
-  summaries[declaration] = std::move(result);
-  return success();
-}
-
 LogicalResult ResourceOrigins::verify(protocol_ir::RepeatOp repeat) {
   // Do not spend origin work on programs without affine root obligations.
   if (none_of(repeat.getResults(), [&](Value v) { return affine(v); }))
     return success();
   Summary summary;
-  if (failed(block(repeat.getBody().front(), false, 1, summary)))
+  if (failed(block(repeat.getBody().front(), 1, summary)))
     return failure();
   for (auto [index, output] : enumerate(repeat.getResults())) {
     if (!affine(output))

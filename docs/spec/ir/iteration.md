@@ -72,7 +72,7 @@ The operations are:
   field matrix, field array or bytes, including a zero extent. Sequences and fixed
   vectors do not gain admission through the collection interface.
 
-Sum elimination uses ordered `local.match`. Dynamic indexing, equal-length zip,
+Sum elimination uses ordered `exec.match`. Dynamic indexing, equal-length zip,
 shape conversion and inverse remain checked local work unless a separate total
 contract establishes their preconditions. Structural similarity and generic
 tensor operations confer no mathematical admission. Shape evidence supplies

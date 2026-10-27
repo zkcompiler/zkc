@@ -222,7 +222,8 @@ int main() {
     auto &function = calculation(candidate);
     function.body.front().value = program::LocalApply{"callee", {}, {}};
     auto refusal = program::checkStructure(candidate);
-    require(bool(refusal), "unexpanded local.apply entered physical carrier");
+    require(bool(refusal),
+            "unexpanded algorithm request entered physical carrier");
     llvm::consumeError(std::move(refusal));
   });
   cases.run("program codecs require defined callable bodies", [&] {

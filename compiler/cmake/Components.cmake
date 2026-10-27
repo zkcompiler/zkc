@@ -171,7 +171,6 @@ add_zkc_component(IR
   lib/Dialect/Collection.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
-  lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
   lib/Dialect/Exec/IR/Instructions.cpp
   lib/Dialect/Exec/Builders.cpp
@@ -182,8 +181,6 @@ add_zkc_component(IR
   lib/Dialect/Runtime/IR/RuntimeDialect.cpp
   lib/Dialect/Runtime/IR/Scopes.cpp
   lib/Dialect/Runtime/Ownership.cpp
-  lib/Dialect/Local/IR/Functions.cpp
-  lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
   lib/Dialect/Data/IR/Variant.cpp
@@ -197,12 +194,10 @@ add_zkc_component(IR
   lib/Analysis/MathematicalFacts.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
-  lib/Dialect/Algebra/IR/Maps.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/BoundOperations.cpp
   lib/Dialect/MathematicalInterfaces.cpp
-  lib/Dialect/PreparationCallable.cpp
   lib/Dialect/LinearContraction.cpp
   lib/Dialect/Algebra/IR/Types.cpp
   lib/Dialect/Polynomial/IR/Types.cpp
@@ -288,12 +283,10 @@ add_zkc_component(Transforms
   lib/Transforms/ComputationEquations.cpp
   lib/Transforms/ComputationSelection.cpp
   lib/Transforms/NumericalSelection.cpp
-  lib/Transforms/NumericalLowering.cpp
   lib/Transforms/MathematicalRecipes.cpp
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp
   lib/Transforms/ScopedNestedContraction.cpp
-  lib/Transforms/MapRealizations.cpp
   lib/Transforms/StructuredComputation.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp

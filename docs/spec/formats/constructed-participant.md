@@ -116,7 +116,7 @@ induction indices of its enclosing loops.
 
 Participant operations retain the regionless mathematical operations of the
 `algebra`, `arith`, `crypto` and `data` dialects, `protocol.receive`,
-`protocol.send`, `protocol.service_query`, `local.bool_constant`, `protocol.guard`
+`protocol.send`, `protocol.service_query`, `protocol.guard`
 and `protocol.loop`. A guard has exactly `site` and `owner` string attributes;
 the native participant profile requires that owner to match the enclosing
 participant role. The renderer checks its Boolean input and emits the guard

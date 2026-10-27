@@ -1466,8 +1466,7 @@ module @difference attributes {exec.computation} {
         bool map = false, sum = false;
         selected->walk([&](Operation *op) {
           require(!mathematical::isComputationUnit(op) &&
-                      !isa<exec::ComputeOp, algebra::MapRealizeOp,
-                           exec::CollectOp, exec::FoldOp>(op),
+                      !isa<exec::ComputeOp, exec::CollectOp, exec::FoldOp>(op),
                   "mixed final subject retained source work");
           auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
           auto binding = ref ? SymbolTable(owner(*selected))

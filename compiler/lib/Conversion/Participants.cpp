@@ -49,18 +49,20 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
                ArrayRef<target::FunctionPortSelection> functionPorts,
                MathematicalSelectionPolicy numericalPolicy)
       : selections(std::move(selected)), output(output),
-        functionPorts(functionPorts), numericalPolicy(numericalPolicy) {
+        functionPorts(functionPorts) {
     linearContractions = linear;
     releaseStorage = release;
+    optimizeFinite = numericalPolicy.finiteBulk;
+    fuseVectorReductions = numericalPolicy.vectorReductionFusion;
+    fuseCollectFold = numericalPolicy.collectFoldFusion;
+    calculationBatching = numericalPolicy.calculationBatching;
   }
   PhysicalPass(const PhysicalPass &other)
       : PassWrapper(other), selections(other.selections), output(other.output),
-        functionPorts(other.functionPorts),
-        numericalPolicy(other.numericalPolicy) {}
+        functionPorts(other.functionPorts) {}
   protocol::Assignments selections;
   LinearContractionStats *output;
   SmallVector<target::FunctionPortSelection> functionPorts;
-  MathematicalSelectionPolicy numericalPolicy;
   Option<bool> linearContractions{
       *this, "linear-contractions",
       llvm::cl::desc("Select local all-uses depth-one diagonal contractions"),
@@ -69,6 +71,18 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       *this, "release-storage",
       llvm::cl::desc("Release discardable local storage after last use"),
       llvm::cl::init(false)};
+  Option<bool> optimizeFinite{
+      *this, "optimize-finite", llvm::cl::init(true),
+      llvm::cl::desc("Select checked bulk finite realizations")};
+  Option<bool> fuseVectorReductions{
+      *this, "fuse-vector-reductions", llvm::cl::init(false),
+      llvm::cl::desc("Fuse admitted vector maps and reductions")};
+  Option<bool> fuseCollectFold{
+      *this, "fuse-collect-fold", llvm::cl::init(false),
+      llvm::cl::desc("Compose total collect and ordered fold traversals")};
+  Option<bool> calculationBatching{
+      *this, "calculation-batching", llvm::cl::init(true),
+      llvm::cl::desc("Realize the selected calculation schedule")};
   Statistic eligible{this, "linear-contraction-eligible",
                      "Semantic all-uses contraction pairs"};
   Statistic selected{this, "linear-contraction-selected",
@@ -88,7 +102,8 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
     LinearContractionStats stats;
     if (failed(lowerPhysical(getOperation(), selections, linearContractions,
                              &stats, releaseStorage, functionPorts,
-                             numericalPolicy))) {
+                             {optimizeFinite, fuseVectorReductions,
+                              fuseCollectFold, calculationBatching}))) {
       signalPassFailure();
       return;
     }

@@ -12,7 +12,6 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -45,7 +44,7 @@ class Reader {
     auto suffix = std::to_string(occurrence++);
     auto size =
         limits.finiteSite.size() + StringRef("_finite_").size() + suffix.size();
-    if (size > 128 && ports.isScoped()) {
+    if (size > 128) {
       uint64_t standaloneBytes = 16 * 1024 * 1024;
       auto &bytes =
           limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
@@ -135,16 +134,6 @@ class Reader {
     return SmallVector<Value>(ports.arguments(block));
   }
   Operation *consume(StringRef name) {
-    if (ports.isScoped()) {
-      if (name == "local.for")
-        name = "exec.range";
-      else if (name == "local.if")
-        name = "exec.test";
-      else if (name == "local.yield" || name == "local.condition")
-        name = "exec.complete";
-      else if (name == "local.return")
-        name = "exec.returned";
-    }
     if (!valid || !ports.contains(cursor) ||
         cursor->getName().getStringRef() != name) {
       fail();
@@ -159,9 +148,7 @@ class Reader {
   Value kernel(StringRef contract, ValueRange operands, Type result,
                ArrayRef<std::string> arguments = {},
                ArrayRef<std::string> parameters = {}) {
-    auto *op =
-        consume(ports.isScoped() ? exec::ApplyOp::getOperationName()
-                                 : protocol::boundOperationName(contract));
+    auto *op = consume(exec::ApplyOp::getOperationName());
     if (!op)
       return {};
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
@@ -241,9 +228,8 @@ class Reader {
       fail();
       return nullptr;
     }
-    if (ports.isScoped())
-      regionReturns[block->getParentOp()] = ports.outputs(op).size();
-    if (ports.isScoped() && !limits.finiteSite.empty()) {
+    regionReturns[block->getParentOp()] = ports.outputs(op).size();
+    if (!limits.finiteSite.empty()) {
       auto function = cast<func::FuncOp>(block->getParentOp());
       NamedAttrList expected;
       expected.set("sym_name", function.getSymNameAttr());
@@ -270,7 +256,7 @@ class Reader {
     auto *op = consume(name);
     if (!op)
       return;
-    if (ports.isScoped() && isa<exec::CompleteOp>(op)) {
+    if (isa<exec::CompleteOp>(op)) {
       auto found = regionReturns.find(op->getParentOp());
       if (found == regionReturns.end() || inputs.size() < found->second) {
         fail();
@@ -283,10 +269,10 @@ class Reader {
       fail();
   }
   void bound(Value value) {
-    auto *loop = control("local.for", {value, value}, {}, 1);
+    auto *loop = control("exec.range", {value, value}, {}, 1);
     Operation *after = cursor;
     if (enter(loop, 0, {index}))
-      end("local.yield", {});
+      end("exec.complete", {});
     cursor = after;
   }
   Value range(Value lower, Value upper) {
@@ -295,17 +281,17 @@ class Reader {
     if (upper != lower)
       inputs.push_back(upper);
     SmallVector<Type> types(inputs.size() - 1, index);
-    auto *branch = control("local.if", inputs, {index}, 2);
+    auto *branch = control("exec.test", inputs, {index}, 2);
     auto *after = cursor;
     if (auto *yes = enter(branch, 0, types)) {
       Value size = kernel(
           "index.sub",
           {arguments(yes)[upper == lower ? 0 : 1], arguments(yes)[0]}, index);
-      end("local.yield", size ? ValueRange{size} : ValueRange{});
+      end("exec.complete", size ? ValueRange{size} : ValueRange{});
     }
     if (enter(branch, 1, types)) {
       Value zero = natural(0);
-      end("local.yield", zero ? ValueRange{zero} : ValueRange{});
+      end("exec.complete", zero ? ValueRange{zero} : ValueRange{});
     }
     cursor = after;
     return branch ? ports.outputs(branch)[0] : Value();
@@ -322,7 +308,7 @@ class Reader {
     append_range(inputs, entry);
     inputs.push_back(size);
     inputs.push_back(zero);
-    auto *branch = control("local.if", inputs, output, 2);
+    auto *branch = control("exec.test", inputs, output, 2);
     if (!branch)
       return false;
     auto *after = cursor;
@@ -334,7 +320,7 @@ class Reader {
       auto captures = arguments(block);
       if (arm) {
         Value empty = kernel("vector.empty", {}, output, parameters);
-        end("local.yield", empty ? ValueRange{empty} : ValueRange{});
+        end("exec.complete", empty ? ValueRange{empty} : ValueRange{});
         continue;
       }
       auto &domain = source.inner.domain->getRegion(0).front();
@@ -383,7 +369,7 @@ class Reader {
       Value initial = kernel("vector.fill", {seed, captures[entry.size()]},
                              output, parameters);
       Value value = kernel("vector.add", {initial, result}, output, parameters);
-      end("local.yield", value ? ValueRange{value} : ValueRange{});
+      end("exec.complete", value ? ValueRange{value} : ValueRange{});
     }
     cursor = after;
     if (valid)
@@ -508,7 +494,7 @@ class Reader {
       return {};
     }
     Value scope;
-    if (c.scoped && cursor && ports.isScoped())
+    if (c.scoped && cursor)
       scope = cast<func::FuncOp>(cursor->getParentOp()).getArgument(0);
     auto environment = bindCallback(*callback, actuals, scope);
     if (failed(environment)) {
@@ -551,18 +537,8 @@ class Reader {
       }
       return *result;
     }
-    auto *op = consume("local.apply");
-    if (!op)
-      return {};
-    auto type = callback->signature;
-    auto ref = op->getAttrOfType<FlatSymbolRefAttr>("callee");
-    if (!ref ||
-        ref.getValue() != SymbolTable::getSymbolName(helper).getValue() ||
-        op->getOperands() != args ||
-        op->getResultTypes() != type.getResults() ||
-        op->getAttrs().size() != 2 || !op->getAttrOfType<StringAttr>("site"))
-      fail();
-    return SmallVector<Value>(op->getResults());
+    fail();
+    return {};
   }
   SmallVector<Value> transition(ValueRange state, ValueRange items,
                                 ValueRange env, Value position = {}) {
@@ -670,7 +646,7 @@ public:
     auto declaration =
         binding ? symbols.lookup<runtime::BindingOp>(binding.getValue())
                 : runtime::BindingOp();
-    if (allowBulk && ports.isScoped() && c.collect && declaration &&
+    if (allowBulk && c.collect && declaration &&
         declaration.getContract() == "index.constant") {
       // The optional source interpreter has its own comparison allowance. It
       // consumes actual scoped instructions, never the producer's selection.
@@ -802,7 +778,7 @@ public:
     SmallVector<Type> types;
     for (Value v : state)
       types.push_back(v.getType());
-    auto *loop = control("local.for", inputs, types, 1);
+    auto *loop = control("exec.range", inputs, types, 1);
     auto *after = cursor;
     SmallVector<Type> bt{index};
     append_range(bt, types);
@@ -841,7 +817,7 @@ public:
               capturedValues.push_back(value);
         SmallVector<Value> bi{pred[0]};
         append_range(bi, capturedValues);
-        auto *branch = control("local.if", bi, types, 2);
+        auto *branch = control("exec.test", bi, types, 2);
         auto *following = cursor;
         SmallVector<Type> branchTypes;
         for (Value v : capturedValues)
@@ -858,11 +834,11 @@ public:
         if (auto *yes = enter(branch, 0, branchTypes)) {
           auto result = transition(remap(yes, current), remap(yes, item),
                                    remap(yes, environment));
-          end("local.yield", result);
+          end("exec.complete", result);
         }
         stoppedCallback = false;
         if (auto *no = enter(branch, 1, branchTypes))
-          end("local.yield", remap(no, current));
+          end("exec.complete", remap(no, current));
         cursor = following;
         if (!valid)
           return false;
@@ -871,7 +847,7 @@ public:
     } else
       next = transition(current, item, environment, bodyArguments[0]);
     append_range(next, captured);
-    end("local.yield", next);
+    end("exec.complete", next);
     stoppedCallback = false;
     cursor = after;
     if (!valid)
@@ -890,25 +866,12 @@ public:
 } // namespace
 FailureOr<SmallVector<Value>>
 verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
-                 HelperReader helper, Operation *symbolRoot) {
-  VerificationResult outcome{VerificationStatus::Mismatch, {}};
-  auto result =
-      verifyExpression(source, inputs, cursor, helper, symbolRoot, {}, outcome);
-  if (outcome.status == VerificationStatus::OptionalCapacity ||
-      outcome.status == VerificationStatus::RequiredCapacity)
-    diagnostics::emit(source->emitError(), "finite-verification-capacity",
-                      outcome.detail);
-  return result;
-}
-
-FailureOr<SmallVector<Value>>
-verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
                  HelperReader helper, Operation *symbolRoot,
                  VerificationLimits limits, VerificationResult &outcome,
                  MathematicalSelectionPolicy policy) {
   outcome = {VerificationStatus::Mismatch,
              "finite expression differs from its domain/helper"};
-  if (!cursor)
+  if (!cursor || !limits.candidate)
     return failure();
   auto *unit = SymbolTable::getNearestSymbolTable(cursor);
   if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
@@ -936,7 +899,7 @@ verifyCollectFold(const CollectFold &pair, ValueRange producerInputs,
                   VerificationLimits limits, VerificationResult &outcome) {
   outcome = {VerificationStatus::Mismatch,
              "collect-fold recipe differs from its domain/helpers"};
-  if (!cursor)
+  if (!cursor || !limits.candidate)
     return failure();
   auto *unit = SymbolTable::getNearestSymbolTable(cursor);
   if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())

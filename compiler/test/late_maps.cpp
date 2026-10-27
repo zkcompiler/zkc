@@ -1135,23 +1135,19 @@ int main() {
                 mathematical::RealizationWork work;
                 work.helperOperations = work.finiteExpressions = 1;
                 work.helperSlots = work.polynomial = 1;
-                work.requiredMapConstruction = 6;
                 mathematical::RecipeConstructionWork snapshot(work);
-                work.discardedRecipeExpansion = 9;
+                work.discardedRecipeExpansion = 3;
                 require(!snapshot.canDiscard(work),
-                        "speculation omitted the required map reserve");
-                work.discardedRecipeExpansion = 10;
+                        "speculation omitted an expansion reserve");
+                work.discardedRecipeExpansion = 4;
                 require(snapshot.canDiscard(work),
                         "exact aggregate incoming reserve refused");
                 work.helperOperations = work.finiteExpressions = 0;
                 work.helperSlots = work.polynomial = 0;
-                work.requiredMapConstruction = 3;
-                work.discardedRecipeExpansion = oneShort ? 6 : 7;
+                work.discardedRecipeExpansion = oneShort ? 3 : 4;
                 require(snapshot.discard(work) == !oneShort,
                         "discard transfer misclassified aggregate capacity");
-                require(work.discardedRecipeExpansion == (oneShort ? 6 : 0) &&
-                            work.requiredMapConstruction ==
-                                (oneShort ? 3 : 6) &&
+                require(work.discardedRecipeExpansion == (oneShort ? 3 : 0) &&
                             work.helperOperations == unsigned(!oneShort) &&
                             work.finiteExpressions == unsigned(!oneShort) &&
                             work.helperSlots == unsigned(!oneShort) &&

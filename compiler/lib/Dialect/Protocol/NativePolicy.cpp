@@ -7,7 +7,6 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
@@ -21,116 +20,12 @@ LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "native-local-policy", detail);
 }
 } // namespace
-LogicalResult verifyNativeLocals(Operation *unit, bool allowApply) {
-  NativeTypePolicies types(unit);
-  return verifyNativeLocals(unit, allowApply, types);
-}
-LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
-                                 NativeTypePolicies &types) {
-  auto root = cast<protocol_ir::ProtocolModuleOp>(unit);
-  const bool physical = root.getProfile() == protocol_ir::Profile::Physical;
-  // Phase legality belongs to the enclosing profile, including dormant units.
-  if (physical) {
-    auto residual = unit->walk([](Operation *op) -> WalkResult {
-      if (isa<algebra::MapRealizeOp>(op)) {
-        (void)refuse(op, "physical profile requires realized map requests");
-        return WalkResult::interrupt();
-      }
-      if (isa<local::ApplyOp>(op)) {
-        (void)refuse(op, "physical profile requires expanded local requests");
-        return WalkResult::interrupt();
-      }
-      if (isa<mlir::ModuleOp>(op)) {
-        (void)diagnostics::emit(
-            op->emitOpError(), "kernel-profile",
-            "physical profile requires realized Kernel units and calls");
-        return WalkResult::interrupt();
-      }
-      return WalkResult::advance();
-    });
-    if (residual.wasInterrupted())
-      return failure();
-  }
-
-  llvm::DenseSet<Operation *> mapHelpers;
-  if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
-    return failure();
-  SymbolTableCollection symbols;
-
-  auto admitted = [&](Type type) {
-    if (physical) {
-      auto selected = dyn_cast<runtime::RepresentedType>(type);
-      if (!selected)
-        return false;
-      type = selected.getLogical();
-    }
-    return !mathematical::isFormalType(type) && bool(types.get(type));
-  };
-  unsigned remaining = 100000;
-  for (auto &op : unit->getRegion(0).front()) {
-    auto function = dyn_cast<local::FuncOp>(op);
-    if (!function)
-      continue;
-    if (function.isExternal() || function->hasAttr("relation") ||
-        function->hasAttr("relation_view"))
-      return refuse(function, "expected a closed executable definition");
-    for (auto type : function.getArgumentTypes())
-      if (!admitted(type))
-        return refuse(function, "unsupported local input type");
-    for (auto type : function.getResultTypes())
-      if (!admitted(type))
-        return refuse(function, "unsupported local result type");
-    auto result = function.walk([&](Operation *nested) -> WalkResult {
-      if (!remaining--) {
-        (void)refuse(nested, "local definition work limit");
-        return WalkResult::interrupt();
-      }
-      if (!allowApply) {
-        if (auto call = dyn_cast<local::ApplyOp>(nested)) {
-          auto map = symbols.lookupNearestSymbolFrom<algebra::MapRealizeOp>(
-              call, call.getCalleeAttr());
-          if (physical || !map || map->getParentOp() != unit ||
-              call.getOperandTypes() != map.getFunctionType().getInputs() ||
-              call.getResultTypes() != map.getFunctionType().getResults()) {
-            (void)refuse(nested,
-                         "local.apply requires an admitted map request");
-            return WalkResult::interrupt();
-          }
-        }
-      }
-      for (auto type : nested->getResultTypes())
-        if (!admitted(type)) {
-          (void)refuse(nested, "unsupported local result type");
-          return WalkResult::interrupt();
-        }
-      for (auto &region : nested->getRegions())
-        for (auto &block : region)
-          for (auto argument : block.getArguments())
-            if (!admitted(argument.getType())) {
-              (void)refuse(nested, "unsupported local block type");
-              return WalkResult::interrupt();
-            }
-      return WalkResult::advance();
-    });
-    if (result.wasInterrupted())
-      return failure();
-  }
-  // Reuse the installed executable grammar, binding signatures, control and
-  // affine-use admission for every definition, including unreferenced ones.
-  // Executable profiles receive full source admission immediately afterwards
-  // in ProtocolModuleOp verification, including selected representations.
-  return protocol_ir::isExecutableProfile(root.getProfile())
-             ? success()
-             : protocol::verifyLocalDefinitions(unit);
-}
 LogicalResult verifyNativeExecution(Operation *unit) {
   NativeTypePolicies types(unit);
   return verifyNativeExecution(unit, types);
 }
 LogicalResult verifyNativeExecution(Operation *unit,
                                     NativeTypePolicies &types) {
-  if (failed(verifyNativeLocals(unit, false, types)))
-    return failure();
   const bool physical =
       cast<protocol_ir::ProtocolModuleOp>(unit).getProfile() ==
       protocol_ir::Profile::Physical;
