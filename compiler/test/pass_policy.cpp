@@ -5,6 +5,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Target/CpuTarget.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <functional>
@@ -82,36 +83,57 @@ int main(int argc, char **argv) {
   MLIRContext context(registry);
   for (bool explicitRealization : {false, true})
     for (bool vectorOnly : {false, true})
-      cases.run(
-          llvm::Twine("cloned execution pipeline explicit=") +
-              llvm::Twine(explicitRealization) +
-              " vector=" + llvm::Twine(vectorOnly),
-          [&] {
-            auto source =
-                parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
-            require(bool(source), "source parsing");
-            MathematicalSelectionPolicy policy;
-            policy.numericalExpressions =
-                vectorOnly ? NumericalExpressionMode::VectorOnly
-                           : NumericalExpressionMode::PreferNative;
-            OpPassManager original("builtin.module");
-            original.addPass(
-                protocol::createProjectProtocolPass(false, policy));
-            original.addPass(protocol::createLowerMathPass(policy));
-            if (explicitRealization)
+      for (bool available : {false, true})
+        cases.run(
+            llvm::Twine("cloned execution pipeline explicit=") +
+                llvm::Twine(explicitRealization) +
+                " vector=" + llvm::Twine(vectorOnly) +
+                " available=" + llvm::Twine(available),
+            [&] {
+              auto source =
+                  parseSourceString<ModuleOp>((*bytes)->getBuffer(), &context);
+              require(bool(source), "source parsing");
+              MathematicalSelectionPolicy policy;
+              policy.numericalExpressions =
+                  vectorOnly ? NumericalExpressionMode::VectorOnly
+                             : NumericalExpressionMode::PreferNative;
+              OpPassManager original("builtin.module");
               original.addPass(
-                  computation::createRealizeComputationsPass(policy));
-            original.addPass(protocol::createSelectPhysicalPass(
-                {}, false, false, nullptr, {}, policy));
-            PassManager copied(&context);
-            static_cast<OpPassManager &>(copied) = original;
-            require(succeeded(copied.run(*source)), "copied pipeline failed");
-            require(
-                vectorOnly ? calls(*source, "vector.mul") &&
-                                 !calls(*source, "numerical.map")
-                           : calls(*source, "numerical.map") &&
-                                 !calls(*source, "vector.mul"),
-                "executed representation differs from the requested policy");
-          });
+                  protocol::createProjectProtocolPass(false, policy));
+              original.addPass(protocol::createLowerMathPass(policy));
+              if (explicitRealization)
+                original.addPass(
+                    computation::createRealizeComputationsPass(policy));
+              auto cpuTarget = take(target::CpuTarget::parse(
+                  available
+                      ? R"({"format":"zkc.cpu-target/0","providers":["arkworks"]})"
+                      : R"({"format":"zkc.cpu-target/0","providers":[]})"));
+              original.addPass(protocol::createSelectPhysicalPass(
+                  {}, false, false, nullptr, {}, policy, cpuTarget));
+              PassManager copied(&context);
+              static_cast<OpPassManager &>(copied) = original;
+              std::string diagnostic;
+              ScopedDiagnosticHandler handler(&context, [&](Diagnostic &item) {
+                diagnostic += item.str();
+                return success();
+              });
+              auto outcome = copied.run(*source);
+              if (!available) {
+                require(
+                    failed(outcome) &&
+                        namesIdentifier(diagnostic, "cpu-target-unavailable"),
+                    "copied pipeline lost its target restriction: " +
+                        diagnostic);
+                return;
+              }
+              require(succeeded(outcome),
+                      "copied pipeline failed: " + diagnostic);
+              require(
+                  vectorOnly ? calls(*source, "vector.mul") &&
+                                   !calls(*source, "numerical.map")
+                             : calls(*source, "numerical.map") &&
+                                   !calls(*source, "vector.mul"),
+                  "executed representation differs from the requested policy");
+            });
   return cases.result();
 }

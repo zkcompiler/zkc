@@ -214,6 +214,11 @@ compiler selection and final validation, including defaults, explicit choices,
 fallback, conversions, table relayout, nested layouts and codecs. Candidate
 preferences are separate from installation authority. Runtime owns the frozen
 installation; compiler integration preserves its restrictions at every route.
+The CPU implementation uses the immutable `CpuTarget` descriptor paired with
+`CpuInstallation`. Its provider restrictions travel with the numerical policy
+through pass cloning, proposal and independent final validation; selecting the
+explicit-vector mode does not restore a withheld provider. See the
+[CPU installation contract](../../crates/zkc-cpu/README.md#provider-composition).
 
 External dialects remain useful at bounded adapters where their semantics match.
 HEIR reuse should be evaluated against represented polynomial/modular workloads;

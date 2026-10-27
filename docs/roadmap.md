@@ -152,8 +152,8 @@ complete representative assets, preserving unsupported predicates as opaque.
   speculation conditions, index/overflow laws and analysis invalidation. State
   the observation and budget relation for ordered refusals and residual state;
   sufficient-capacity value equality is not equal exhaustion at arbitrary caps.
-- Review target installation jointly with runtime when that contract lands.
-  A restricted CPU installation and a distinct target must constrain defaults,
+- Preserve the landed CPU installation contract and review each additional
+  target jointly with runtime. Restricted installations must constrain defaults,
   explicit choices, fallback, conversions, table relayout, aggregate children,
   codecs and final validation. Candidate preference never grants installation
   authority. The runtime package owns installation; the compiler integration
