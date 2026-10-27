@@ -98,8 +98,8 @@ import Zkc.Executable.DomainNativeLocalOperations
 import Zkc.Executable.DomainNativeLocalSoundness
 import Zkc.Executable.DomainNativeLoopScopes
 import Zkc.Executable.DomainNativeOccurrences
-import Zkc.Executable.DomainCpuOperationSoundness
-import Zkc.Executable.DomainCpuOperations
+import Zkc.Executable.DomainNativeOperationSoundness
+import Zkc.Executable.DomainNativeOperations
 import Zkc.Executable.DomainNativeReadback
 import Zkc.Executable.DomainNativeReadingLaws
 import Zkc.Executable.DomainNativeReceive

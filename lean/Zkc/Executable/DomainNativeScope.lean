@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Executable.DomainCpuOperations
+public import Zkc.Executable.DomainNativeOperations
 public import Zkc.Executable.DomainHelpers
 
 @[expose] public section

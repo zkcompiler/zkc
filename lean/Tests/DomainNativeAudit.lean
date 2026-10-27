@@ -61,8 +61,8 @@ import all Zkc.Executable.DomainNativeLocalOperations
 import all Zkc.Executable.DomainNativeLocalSoundness
 import all Zkc.Executable.DomainNativeLoopScopes
 import all Zkc.Executable.DomainNativeOccurrences
-import all Zkc.Executable.DomainCpuOperationSoundness
-import all Zkc.Executable.DomainCpuOperations
+import all Zkc.Executable.DomainNativeOperationSoundness
+import all Zkc.Executable.DomainNativeOperations
 import all Zkc.Executable.DomainNativeReadback
 import all Zkc.Executable.DomainNativeReadingLaws
 import all Zkc.Executable.DomainNativeReceive
