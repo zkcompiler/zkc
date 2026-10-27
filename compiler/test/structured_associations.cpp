@@ -59,6 +59,10 @@ std::set<Path> expectedRows(const json::Value &snapshot) {
       }
     }
   }
+  const auto &declarations = *at(snapshot, {10}).getAsArray();
+  for (unsigned table : {0, 1})
+    for (unsigned i = 0; i < declarations[table].getAsArray()->size(); ++i)
+      expected.insert({10, table, i});
   return expected;
 }
 void coverage(StringRef original, const StructuredSource &source) {

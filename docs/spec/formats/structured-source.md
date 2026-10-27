@@ -909,6 +909,10 @@ in its region `r`. The function row selects its ports, so argument/result/operan
 positions are obtained from that actual row rather than a second semantic graph.
 Associations also cover relation, binding and domain declarations, domain
 constructors and results, contracts, nested regions and block terminators.
+Retained source-declaration rows use `[10,table,index]`, where table zero is
+records and table one is protocol ports. Their producer is the `protocol.module`
+carrying the checked `source_declarations` attribute; this does not invent an
+executable declaration operation or assert an exact authored-node match.
 Catalogue rows are installed meaning, not emitted source operations.
 
 The producer distinguishes direct rows, decoded scoped execution and derived

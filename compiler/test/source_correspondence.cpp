@@ -1,7 +1,9 @@
+#include "../lib/Compiler/ComponentContracts.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/SourceClaims.h"
 #include "zkc/Compiler/SourceCorrespondence.h"
 #include "zkc/Support/Json.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include <map>
 #include <set>
 using namespace llvm;
@@ -123,6 +125,43 @@ int main() {
         accepted(
             checkSourceCorrespondenceExport(value, zkc::printJson(document)));
       });
+  cases.run("component context and seams retain the same actual snapshot", [] {
+    auto file = MemoryBuffer::getFile(ZKC_CORRESPONDENCE_FIXTURES
+                                      "/components-local-fields.zkc");
+    require(bool(file), "component fixture cannot be read");
+    auto project = take(
+        analyze(take(capture({{"claims", (*file)->getBuffer().str(), {}}})))
+            .checkedProject());
+    auto value =
+        take(prepareOriginal(take(closeSubject(project, "claims::Run"))));
+    auto document = report(value);
+    auto &root = *document.getAsObject();
+    auto claims = take(json::parse(take(exportSourceClaims(value))));
+    require(*root.get("admission") == *claims.getAsObject()->get("admission"),
+            "component claims acquired a different association");
+    require(!claims.getAsObject()->getArray("seams")->empty(),
+            "component seams disappeared during integration");
+    cantFail(
+        checkComponentContracts(*root.get("snapshot"), *claims.getAsObject()));
+    const auto &declarations = *(*root.getArray("snapshot"))[10].getAsArray();
+    std::set<std::string> expected, actual;
+    for (unsigned table : {0, 1})
+      for (unsigned i = 0; i < declarations[table].getAsArray()->size(); ++i)
+        expected.insert(zkc::printJson(json::Array{10, table, i}));
+    for (const auto &item : *root.getArray("rows")) {
+      const auto &row = *item.getAsObject();
+      const auto &path = *row.getArray("row");
+      if (path.front().getAsInteger() == 10) {
+        require(row.getString("operation") == "protocol.module",
+                "declaration context has an invented executable origin");
+        actual.insert(zkc::printJson(json::Array(path)));
+      }
+    }
+    require(!expected.empty() && expected == actual,
+            "retained source declarations lack row associations");
+    associations(document);
+    accepted(checkSourceCorrespondenceExport(value, zkc::printJson(document)));
+  });
   cases.run(
       "a different body with the same signature has different evidence", [] {
         auto first = original("x"), second = original("!x");

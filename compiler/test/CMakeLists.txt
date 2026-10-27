@@ -30,6 +30,8 @@ function(zkc_source_project target manifest)
 endfunction()
 
 add_zkc_test(source_correspondence Compiler source-correspondence)
+target_compile_definitions(zkc-source_correspondence-test PRIVATE
+  ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")
 add_zkc_test(structured_associations Compiler structured-associations)
 target_compile_definitions(zkc-structured_associations-test PRIVATE
   ZKC_ASSOCIATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
