@@ -8,11 +8,11 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{NativeDeployment, NativeProofReport};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_test_support::hex;
 
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("Alice", "test", "main", None), None),
         Default::default(),
@@ -168,7 +168,7 @@ fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
 }
 fn admitted_mutation_refuses(envelope: &Json, candidate: &Json, reason: &str) {
     let candidate_bytes = serde_json::to_vec(candidate).unwrap();
-    zkc_runtime::vm::Program::decode(&candidate_bytes, zkc_native::native_contracts())
+    zkc_runtime::vm::Program::decode(&candidate_bytes, zkc_cpu::cpu_contracts())
         .and_then(|program| {
             program.check_installation(&backend())?;
             Ok(program)
@@ -206,7 +206,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
     }
     zkc_runtime::vm::Program::decode(
         &serde_json::to_vec(&candidate).unwrap(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
         program.check_installation(&backend())?;
@@ -312,7 +312,7 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
         binding[3] = json!(format!("arkworks/{contract}"));
         let error = zkc_runtime::vm::Program::decode(
             &serde_json::to_vec(&candidate).unwrap(),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
         )
         .and_then(|program| {
             program.check_installation(&backend())?;

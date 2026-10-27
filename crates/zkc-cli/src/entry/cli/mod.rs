@@ -6,8 +6,8 @@ mod inputs;
 mod invocation;
 mod target;
 use super::{
-    AttemptOptions, BindingPolicy, BindingScope, Interface, Package, ProofEntry, ProofOperation,
-    ProofOptions, ProofRequest, RoleInputs, SetupAuthority, files,
+    AttemptOptions, BindingPolicy, BindingScope, Package, ProofEntry, ProofOperation, ProofOptions,
+    SetupAuthority, files,
 };
 use crate::{
     cli::Arguments,
@@ -137,15 +137,13 @@ fn execute(
     let mut documents = files::Documents::new(options.proof.capacity)?;
     {
         let host = measured(args, report, "admission", |_| {
-            ProofEntry::admit_with_cpu(package, options.proof, options.setups.clone(), cpu.clone())
+            ProofEntry::admit_with_cpu(
+                package,
+                options.proof.clone(),
+                options.setups.clone(),
+                cpu.clone(),
+            )
         })?;
-        if invocation.results.is_some() {
-            host.check_result_encoding(if operation == Operation::Prove {
-                ProofOperation::Prove
-            } else {
-                ProofOperation::Verify
-            })?;
-        }
         report["entry"] = json!(host.interface().entry());
         report["binding_scope"] = json!(match host.binding_scope() {
             BindingScope::Transcript => "transcript",
@@ -159,38 +157,40 @@ fn execute(
                 .role_names()
                 .collect::<std::collections::BTreeMap<_, _>>()
         );
-        let request = measured(args, report, "input_decoding_and_validation", |report| {
-            options.request(
-                host.interface(),
-                &invocation,
-                operation,
-                &mut documents,
-                report,
-            )
+        let proof_operation = if operation == Operation::Prove {
+            ProofOperation::Prove
+        } else {
+            ProofOperation::Verify
+        };
+        let call = measured(args, report, "input_decoding_and_validation", |report| {
+            documents
+                .preflight_call(
+                    &host,
+                    proof_operation,
+                    &invocation.inputs,
+                    options.call_options(),
+                    options.attempts,
+                    invocation.results.is_some(),
+                )
+                .map_err(|error| {
+                    if let Some(path) = error.path() {
+                        report["input_path"] = json!(path);
+                        if let Some(file) = path
+                            .split('.')
+                            .next()
+                            .and_then(|group| invocation.inputs.get(group))
+                        {
+                            report["input_file"] = json!(file);
+                        }
+                    }
+                    error.code().to_owned()
+                })
         })?;
         documents.protect(&mut destinations)?;
         if checking {
-            host.check_inputs(
-                request,
-                if operation == Operation::Prove {
-                    ProofOperation::Prove
-                } else {
-                    ProofOperation::Verify
-                },
-                options.attempts,
-            )?;
+            call.check_inputs()?;
             report["status"] = json!("inputs-checked");
         } else {
-            let call = host.preflight_file_call(
-                if operation == Operation::Prove {
-                    ProofOperation::Prove
-                } else {
-                    ProofOperation::Verify
-                },
-                request,
-                options.attempts,
-                invocation.results.is_some(),
-            )?;
             let proof = if operation == Operation::Verify {
                 Some(read(
                     invocation
@@ -246,11 +246,11 @@ fn execute(
     Ok(())
 }
 // Keep the encoding/publication boundary explicit and independently testable.
-fn publish_proof(
+fn publish_proof<T: AsRef<[u8]>>(
     destinations: &Outputs,
     proof: Option<&[u8]>,
     report: &mut Json,
-    encode_results: impl FnOnce() -> Result<Option<Vec<u8>>>,
+    encode_results: impl FnOnce() -> Result<Option<T>>,
 ) -> Result<()> {
     report["phase"] = json!("results");
     let values = encode_results()?;
@@ -261,7 +261,7 @@ fn publish_proof(
         publications.push(("proof", proof));
     }
     if let Some(values) = &values {
-        publications.push(("results", values.as_slice()));
+        publications.push(("results", values.as_ref()));
     }
     if !publications.is_empty() {
         report["phase"] = json!("publication");
@@ -296,7 +296,7 @@ mod tests {
         let values = [("field".into(), crate::entry::Value::from(true))].into();
         let mut report = json!({"status":"refused"});
         let error = publish_proof(&destinations, Some(b"new proof"), &mut report, || {
-            files::proof_outputs(&values, capacity, Default::default()).map(Some)
+            zkc::entry::outputs::proof_outputs(&values, capacity, Default::default()).map(Some)
         })
         .unwrap_err();
         assert_eq!(error, "entry-output-encoding");

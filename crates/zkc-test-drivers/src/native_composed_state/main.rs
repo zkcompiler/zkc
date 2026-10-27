@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
@@ -21,7 +21,7 @@ fn data(len: usize) -> (Vec<Scalar>, Vec<G1>) {
     )
 }
 fn inputs(envelope: &Json, producing: bool, n: u64, a: &[Scalar], g: &[G1]) -> Json {
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "composed", None), None),
         Default::default(),

@@ -263,7 +263,7 @@ fn unicode_roles_enum_payloads_and_output_keys_round_trip_through_native_host() 
         assert_eq!(alternative, "有値");
         assert!(fields.contains_key("値"));
         let bytes =
-            entry::files::run_outputs(&outputs, Default::default(), Default::default()).unwrap();
+            entry::outputs::run_outputs(&outputs, Default::default(), Default::default()).unwrap();
         let output: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(output["roles"]["role00000001"]["結果"]["case"], "有値");
         assert_eq!(output["roles"]["検証者"]["結果"]["case"], "空");
@@ -409,13 +409,13 @@ fn unicode_setup_material_reaches_native_admission_and_results() {
     let report = entry.prepare(request).unwrap().execute();
     assert!(report.is_success());
     let outputs = report.outputs.unwrap();
-    entry::files::output_setups(&material, &authority, capacity).unwrap();
+    entry::outputs::output_setups(&material, &authority, capacity).unwrap();
     let entry::Value::Leaf(crate::execution::InputValue::Native(returned)) =
         &outputs["受信者"]["結果"]
     else {
         panic!("native key");
     };
-    let zkc_native::Value::VerifierKey(returned) = returned.as_ref() else {
+    let zkc_cpu::Value::VerifierKey(returned) = returned.as_ref() else {
         panic!("verifier key");
     };
     assert_eq!(returned.metadata().key_id(), key.metadata().key_id());
@@ -541,7 +541,7 @@ fn distinct_setup_slots_preserve_authority_and_reject_swapped_material() {
         else {
             panic!("native key");
         };
-        let zkc_native::Value::VerifierKey(key) = value.as_ref() else {
+        let zkc_cpu::Value::VerifierKey(key) = value.as_ref() else {
             panic!("verifier key");
         };
         assert_eq!(key.metadata().key_id(), identity);
@@ -680,10 +680,13 @@ fn prepared_public_data_uses_the_named_entry_schema_and_fresh_invocations() {
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
-    let entry =
-        ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
-    let material =
-        PreparedData::from_value(zkc_native::Value::Bool(true), options.capacity).unwrap();
+    let entry = ProofEntry::admit(
+        package(&doc, &artifact),
+        options.clone(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    let material = PreparedData::from_value(zkc_cpu::Value::Bool(true), options.capacity).unwrap();
     let ordinary = entry.prove(proof_request(entry.interface(), true)).unwrap();
     assert!(ordinary.is_success());
     let proof = ordinary.native.outcome.unwrap();
@@ -720,10 +723,18 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
-    let prover =
-        ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
-    let verifier =
-        ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
+    let prover = ProofEntry::admit(
+        package(&doc, &artifact),
+        options.clone(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    let verifier = ProofEntry::admit(
+        package(&doc, &artifact),
+        options.clone(),
+        SetupAuthority::default(),
+    )
+    .unwrap();
     let request = proof_request(prover.interface(), true);
     let report = prover.prove(request).unwrap();
     assert!(report.is_success(), "{:?}", report.native.outcome);
@@ -752,8 +763,11 @@ fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices()
             rename(&mut bad, "検証者", "role00000001");
             // Source spellings that resemble labels are harmless: roster wins.
         }
-        let result =
-            ProofEntry::admit(package(&bad, &artifact), options, SetupAuthority::default());
+        let result = ProofEntry::admit(
+            package(&bad, &artifact),
+            options.clone(),
+            SetupAuthority::default(),
+        );
         if swapped {
             assert_eq!(
                 result.err().unwrap().to_string(),
@@ -817,8 +831,12 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
     let authority = SetupAuthority {
         keys: [("鍵₂".into(), keys.verifier_key().metadata().key_id())].into(),
     };
-    let entry =
-        ProofEntry::admit(package(&doc, &artifact.to_string()), options, authority).unwrap();
+    let entry = ProofEntry::admit(
+        package(&doc, &artifact.to_string()),
+        options.clone(),
+        authority,
+    )
+    .unwrap();
     let request = |producer: bool, key: &str, material: &[u8]| {
         let mut request = proof_request(entry.interface(), producer);
         request.setups.insert(key.to_owned(), material.to_vec());
@@ -847,6 +865,63 @@ fn unicode_setup_material_is_injected_into_both_independent_proof_requests() {
             .is_err()
         );
     }
+    // The common memory call reuses only numerical material; every statement
+    // still supplies its own data and the admitted independent setup authority.
+    for statement in [true, false, true] {
+        let public = json!({"公開":statement}).to_string();
+        let options = || crate::entry::memory::ProofCallOptions {
+            setups: [("鍵₂".into(), bytes.clone())].into(),
+            ..Default::default()
+        };
+        let produced = entry
+            .preflight_memory_call(
+                ProofOperation::Prove,
+                Some(public.as_bytes()),
+                Some(r#"{"秘密":false}"#.as_bytes()),
+                &Default::default(),
+                options(),
+                None,
+                true,
+            )
+            .unwrap()
+            .execute(None)
+            .unwrap();
+        assert!(produced.report.is_success());
+        assert!(produced.encode_results().unwrap().is_some());
+        let proof = produced.report.native.outcome.as_ref().unwrap();
+        let checked = entry
+            .preflight_memory_call(
+                ProofOperation::Verify,
+                Some(public.as_bytes()),
+                None,
+                &Default::default(),
+                options(),
+                None,
+                true,
+            )
+            .unwrap()
+            .execute(Some(proof))
+            .unwrap();
+        assert_eq!(checked.report.is_success(), statement);
+        let malformed = crate::entry::memory::ProofCallOptions {
+            setups: [("鍵₂".into(), vec![0])].into(),
+            ..Default::default()
+        };
+        assert!(
+            entry
+                .preflight_memory_call(
+                    ProofOperation::Verify,
+                    Some(public.as_bytes()),
+                    None,
+                    &Default::default(),
+                    malformed,
+                    None,
+                    true
+                )
+                .is_err()
+        );
+        entry.invalidate_setup("鍵₂").unwrap();
+    }
 }
 
 #[test]
@@ -874,7 +949,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
             binding: BindingPolicy::AllowAuthored,
             ..Default::default()
         };
-        let refused = ProofEntry::admit(changed, options, SetupAuthority::default());
+        let refused = ProofEntry::admit(changed, options.clone(), SetupAuthority::default());
         assert_eq!(
             refused.err().unwrap().to_string(),
             "entry-interface-native-binding",
@@ -910,7 +985,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
             ..Default::default()
         };
         assert_eq!(
-            ProofEntry::admit(capture(&frame), options, SetupAuthority::default())
+            ProofEntry::admit(capture(&frame), options.clone(), SetupAuthority::default())
                 .err()
                 .unwrap()
                 .to_string(),
@@ -919,7 +994,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
         );
         frame["options"][key] = json!(enabled);
         assert!(
-            ProofEntry::admit(capture(&frame), options, SetupAuthority::default()).is_ok(),
+            ProofEntry::admit(capture(&frame), options.clone(), SetupAuthority::default()).is_ok(),
             "matching {key}"
         );
     }
@@ -993,11 +1068,28 @@ fn proof_file_preparation_checks_selected_codecs_before_setup_material() {
     // The selected verifier result has no file codec. Refuse before attempting
     // to import deliberately missing setup material or executing any role.
     assert_eq!(
-        host.preflight_file_call(ProofOperation::Verify, Default::default(), None, true)
+        host.preflight_call(ProofOperation::Verify, Default::default(), None, true)
             .err()
             .unwrap()
             .to_string(),
         "entry-output-codec"
+    );
+    let memory = host
+        .preflight_memory_call(
+            ProofOperation::Verify,
+            Some(b"bad input"),
+            None,
+            &Default::default(),
+            Default::default(),
+            None,
+            true,
+        )
+        .err()
+        .unwrap();
+    assert_eq!(memory.code(), "entry-output-codec");
+    assert!(
+        host.preflight_call(ProofOperation::Verify, Default::default(), None, false)
+            .is_ok()
     );
 }
 
@@ -1014,10 +1106,7 @@ fn proof_file_calls_retain_operation_errors_and_results() {
         SetupAuthority::default(),
     )
     .unwrap();
-    let call = |operation, request| {
-        host.preflight_file_call(operation, request, None, true)
-            .unwrap()
-    };
+    let call = |operation, request| host.preflight_call(operation, request, None, true).unwrap();
     let produced = call(ProofOperation::Prove, proof_request(host.interface(), true))
         .execute(None)
         .unwrap();
@@ -1036,7 +1125,7 @@ fn proof_file_calls_retain_operation_errors_and_results() {
     let mut unknown = proof_request(host.interface(), true);
     unknown.public.insert(
         "unknown".into(),
-        entry::Value::from(zkc_native::Value::Bool(true)),
+        entry::Value::from(zkc_cpu::Value::Bool(true)),
     );
     let error = call(ProofOperation::Prove, unknown)
         .execute(None)
@@ -1063,7 +1152,7 @@ fn proof_file_calls_retain_operation_errors_and_results() {
         assert_eq!(error.code(), "entry-proof-operation");
     }
     let error = host
-        .preflight_file_call(
+        .preflight_call(
             ProofOperation::Verify,
             Default::default(),
             Some(Default::default()),
@@ -1073,4 +1162,234 @@ fn proof_file_calls_retain_operation_errors_and_results() {
         .unwrap();
     assert_eq!(error.phase, EntryPhase::Request);
     assert_eq!(error.code(), "entry-attempt-operation");
+}
+
+#[test]
+fn memory_calls_use_common_schema_preflight_and_late_proof_handling() {
+    use crate::entry::memory::ProofCallOptions;
+    let (doc, artifact) = proof_fixture();
+    let host = ProofEntry::admit(
+        package(&doc, &artifact),
+        ProofOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        },
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    let public = r#"{"公開":true}"#.as_bytes();
+    let witness = r#"{"秘密":false}"#.as_bytes();
+    let bindings = Default::default();
+    let produced = host
+        .preflight_memory_call(
+            ProofOperation::Prove,
+            Some(public),
+            Some(witness),
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .unwrap()
+        .execute(None)
+        .unwrap();
+    assert!(produced.report.is_success());
+    let encoded = produced.encode_results().unwrap().unwrap();
+    let output: Value = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(output["values"]["結果"], false);
+    let proof = produced.report.native.outcome.as_ref().unwrap();
+    // A verifier never decodes an unused witness or a proof before preflight.
+    let verified = host
+        .preflight_memory_call(
+            ProofOperation::Verify,
+            Some(public),
+            Some(b"malformed witness"),
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .unwrap()
+        .execute(Some(proof))
+        .unwrap();
+    assert!(verified.report.is_success());
+    assert!(verified.encode_results().unwrap().is_some());
+    let error = host
+        .preflight_memory_call(
+            ProofOperation::Verify,
+            Some(b"bad public"),
+            None,
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .err()
+        .unwrap();
+    assert_eq!(error.phase, EntryPhase::Request);
+    assert_eq!(error.code(), "entry-request-format");
+    assert_eq!(error.path(), Some("public"));
+    let failed = host
+        .preflight_memory_call(
+            ProofOperation::Verify,
+            Some(public),
+            None,
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .unwrap()
+        .execute(Some(b"bad proof"))
+        .unwrap();
+    assert!(!failed.report.is_success());
+    assert!(failed.report.native.outcome.is_err());
+    assert!(failed.report.outputs.is_none());
+    assert_eq!(
+        failed.encode_results().err().unwrap(),
+        "entry-proof-incomplete"
+    );
+    // No numerical import or proof parse occurs when transport operation differs.
+    let error = host
+        .preflight_memory_call(
+            ProofOperation::Prove,
+            Some(public),
+            Some(witness),
+            &bindings,
+            ProofCallOptions::default(),
+            None,
+            false,
+        )
+        .unwrap()
+        .execute(Some(b"bad proof"))
+        .err()
+        .unwrap();
+    assert_eq!(error.code(), "entry-proof-operation");
+}
+
+#[cfg(feature = "files")]
+#[test]
+fn file_and_memory_document_calls_agree_on_success_errors_and_resource_failure() {
+    use crate::entry::{files::Documents, memory::ProofCallOptions};
+    let (doc, artifact) = proof_fixture();
+    let directory = tempfile::tempdir().unwrap();
+    let public = r#"{"公開":true}"#.as_bytes();
+    let witness = r#"{"秘密":false}"#.as_bytes();
+    let paths: std::collections::BTreeMap<_, _> = [
+        ("public".into(), directory.path().join("public.json")),
+        ("witness".into(), directory.path().join("witness.json")),
+    ]
+    .into();
+    let run = |host: &ProofEntry, public: &[u8], witness: &[u8], files: bool| {
+        let call = if files {
+            std::fs::write(&paths["public"], public).unwrap();
+            std::fs::write(&paths["witness"], witness).unwrap();
+            Documents::with_installation(host.capacity(), host.installation().clone())
+                .unwrap()
+                .preflight_call(
+                    host,
+                    ProofOperation::Prove,
+                    &paths,
+                    ProofCallOptions::default(),
+                    None,
+                    true,
+                )
+        } else {
+            host.preflight_memory_call(
+                ProofOperation::Prove,
+                Some(public),
+                Some(witness),
+                &Default::default(),
+                ProofCallOptions::default(),
+                None,
+                true,
+            )
+        };
+        match call.and_then(|call| call.execute(None)) {
+            Err(error) => {
+                json!({"code":error.code(),"phase":format!("{:?}",error.phase),"path":error.path()})
+            }
+            Ok(result) => json!({"outcome":result.report.native.outcome,
+                "output_error":result.report.output_error,"success":result.report.is_success(),
+                "cleanup":result.report.native.cleanup_errors,
+                "outputs":result.encode_results().map(|value|value.map(|bytes|bytes.to_vec()))}),
+        }
+    };
+    for instructions in [0, 1, 1000] {
+        let mut options = ProofOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        };
+        options.capacity.work.instructions = instructions;
+        let host = ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default())
+            .unwrap();
+        for (public, witness) in [
+            (public, witness),
+            (b"bad public".as_slice(), b"bad witness".as_slice()),
+            (public, b"bad witness".as_slice()),
+            (r#"{"公開":null}"#.as_bytes(), witness),
+            (r#"{"公開":true,"unknown":true}"#.as_bytes(), witness),
+        ] {
+            assert_eq!(
+                run(&host, public, witness, false),
+                run(&host, public, witness, true)
+            );
+        }
+    }
+}
+
+#[test]
+fn memory_bindings_share_digest_checks_and_document_budgets() {
+    use crate::entry::memory::{Documents, ProofCallOptions};
+    use std::{collections::BTreeMap, sync::Arc};
+    let (doc, artifact) = proof_fixture();
+    let host = ProofEntry::admit(
+        package(&doc, &artifact),
+        ProofOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        },
+        SetupAuthority::default(),
+    )
+    .unwrap();
+    let typed = proof_request(host.interface(), true);
+    let entry::Value::Leaf(crate::execution::InputValue::Wire(bytes)) = &typed.public["公開"]
+    else {
+        panic!()
+    };
+    let reference =
+        json!({"公開":{"file":"statement","sha256":crate::host::inputs::hash(bytes)}}).to_string();
+    let mut bindings: BTreeMap<String, Arc<Vec<u8>>> = [("statement".into(), bytes.clone())].into();
+    let execute = |bindings: &BTreeMap<String, Arc<Vec<u8>>>| {
+        host.preflight_memory_call(
+            ProofOperation::Prove,
+            Some(reference.as_bytes()),
+            Some(r#"{"秘密":false}"#.as_bytes()),
+            bindings,
+            ProofCallOptions::default(),
+            None,
+            true,
+        )
+        .unwrap()
+        .execute(None)
+    };
+    assert!(execute(&bindings).unwrap().report.is_success());
+    bindings.insert("statement".into(), Arc::new(vec![0]));
+    assert_eq!(
+        execute(&bindings).err().unwrap().code(),
+        "entry-input-reference-digest"
+    );
+    let groups = host.interface().input_groups();
+    let empty = Default::default();
+    let mut documents =
+        Documents::new(Default::default(), host.installation().clone(), &empty).unwrap();
+    assert_eq!(
+        documents.load(&groups[0], None).unwrap_err().code,
+        "entry-input-missing"
+    );
+    let large = vec![b' '; crate::entry::inputs::MAX_REQUEST_BYTES + 1];
+    assert_eq!(
+        documents.load(&groups[0], Some(&large)).unwrap_err().code,
+        "entry-request-limit"
+    );
 }

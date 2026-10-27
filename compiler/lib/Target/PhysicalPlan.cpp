@@ -63,6 +63,7 @@ struct InputSnapshot {
   MathematicalSelectionPolicy numericalPolicy;
   SmallVector<FunctionPortSelection> functionPorts;
   SmallVector<ValueLayoutSelection> valueLayouts;
+  CpuTarget cpuTarget;
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
   // Accessible only inside Target; callers can obtain independent clones.
@@ -234,6 +235,69 @@ std::string fresh(std::set<std::string> &used, StringRef prefix,
   } while (!used.insert(result).second);
   return result;
 }
+// Availability is separate from preference and from Contracts admission.
+// This reader also sees unused bindings, unused services and every aggregate
+// child; actual service draw support cannot be inferred from an index result.
+Error checkTargetPlan(ModuleOp module, const PhysicalPlan &plan,
+                      const CpuTarget &cpuTarget, Location *failureLocation) {
+  auto type = [&](Type physical) -> Error {
+    auto encoded = encodeBoundType(physical, true);
+    if (!encoded)
+      return encoded.takeError();
+    return cpuTarget.checkType(*encoded);
+  };
+  auto ports = [&](TypeRange physical) -> Error {
+    for (auto port : physical)
+      if (auto e = type(port))
+        return e;
+    return Error::success();
+  };
+  auto operations = physicalPlanOperations(module);
+  for (const auto &binding : plan.bindings) {
+    if (binding.location < operations.size())
+      locate(failureLocation, operations[binding.location]);
+    auto installed = resolveBinding(binding.binding.application, true);
+    if (!installed)
+      return installed.takeError();
+    if (auto e =
+            cpuTarget.checkBinding(binding.binding.application, *installed))
+      return e;
+  }
+  for (auto [index, decision] : enumerate(plan.operations)) {
+    if (index < operations.size())
+      locate(failureLocation, operations[index]);
+    if (auto e = ports(decision.inputs))
+      return e;
+    if (auto e = ports(decision.outputs))
+      return e;
+    for (const auto &arguments : decision.blockArguments)
+      if (auto e = ports(arguments))
+        return e;
+    if (decision.functionType) {
+      if (auto e = ports(decision.functionType.getInputs()))
+        return e;
+      if (auto e = ports(decision.functionType.getResults()))
+        return e;
+    }
+  }
+  Error refusal = Error::success();
+  module.walk([&](zkc::protocol_ir::ParticipantOp participant) {
+    if (refusal)
+      return;
+    locate(failureLocation, participant);
+    if (auto services = participant->getAttrOfType<ArrayAttr>("service_ports"))
+      for (auto item : services) {
+        auto port = cast<ArrayAttr>(item);
+        if (auto e =
+                cpuTarget.checkService(cast<StringAttr>(port[1]).getValue())) {
+          refusal = std::move(e);
+          return;
+        }
+      }
+  });
+  return refusal;
+}
+
 // Match only an explicitly classified refusal. Unknown errors retain their
 // original type and payload; diagnostic prose is never a retry protocol.
 Error decline(Error e, ArrayRef<StringRef> allowed, bool &declined) {
@@ -254,11 +318,13 @@ struct ImplementationCursor {
   std::vector<std::string> candidates;
   size_t next = 0;
   std::optional<size_t> parent;
+  bool targetWithheld = false;
 };
 class PhysicalSelection {
 public:
   mathematical::NumericalSelection numerical;
-  SmallVector<ImplementationCursor> implementations;
+  CpuTarget cpuTarget;
+  SmallVector<ImplementationCursor, 2> implementations;
   using ImplementationKey =
       std::tuple<std::string, std::vector<std::string>,
                  std::vector<mathematical::NumericalOccurrence>, std::string>;
@@ -284,7 +350,7 @@ public:
          ArrayRef<mathematical::NumericalOccurrence> owners, StringRef authored,
          std::optional<size_t> &cursor) {
     if (request || !application.implementation.empty())
-      return selectImplementation(application, request);
+      return selectImplementation(application, request, cpuTarget);
     auto logical = resolveBinding(application, false);
     if (!logical)
       return logical.takeError();
@@ -335,6 +401,7 @@ public:
       if (source.candidates != target.candidates)
         return error("binding-operation");
       target.next = std::max(target.next, source.next);
+      target.targetWithheld |= source.targetWithheld;
       source.parent = id;
     }
     for (auto &key : keys)
@@ -358,15 +425,30 @@ public:
                                selected.physicalArguments.empty()
                            ? resolveBinding(selected, false)
                            : resolveBinding(selected, true);
-      if (installed)
+      Error refusal = installed ? cpuTarget.checkImplementation(selected)
+                                : installed.takeError();
+      if (!refusal &&
+          !(descriptor &&
+            descriptor->family != ImplementationDescriptor::Family::Exact &&
+            selected.physicalArguments.empty()))
+        refusal = cpuTarget.checkBinding(selected, *installed);
+      if (!refusal)
         return ImplementationChoice{std::move(selected), false};
+      if (refusal)
+        visitErrors(refusal, [&](const ErrorInfoBase &info) {
+          if (info.isA<Refusal>())
+            entry.targetWithheld |= static_cast<const Refusal &>(info).code ==
+                                    "cpu-target-unavailable";
+        });
       bool unavailable;
-      if (auto e = decline(installed.takeError(), {"binding-implementation"},
+      if (auto e = decline(std::move(refusal),
+                           {"binding-implementation", "cpu-target-unavailable"},
                            unavailable))
         return e;
     }
     failure.kind = PhysicalFailureKind::ImplementationUnavailable;
-    return error("binding-implementation");
+    return error(entry.targetWithheld ? "cpu-target-unavailable"
+                                      : "binding-implementation");
   }
   Expected<bool> advance() {
     // An exhausted implementation at one endpoint can still leave a usable
@@ -398,7 +480,8 @@ public:
 };
 Expected<BindingApplication>
 chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
-                 mathematical::NumericalSelection &selection) {
+                 mathematical::NumericalSelection &selection,
+                 const CpuTarget &cpuTarget) {
   auto source = encodeBoundType(from, true);
   if (!source)
     return source.takeError();
@@ -420,6 +503,18 @@ chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
                       {"binding-no-conversion", "binding-implementation",
                        "binding-conversion"},
                       unavailable))
+        return terminal;
+      continue;
+    }
+    // Special adapters bypass ImplementationCatalog. Check both independently
+    // resolved endpoints after their conversion law has been admitted.
+    auto installed = resolveBinding(candidate, true);
+    if (!installed)
+      return installed.takeError();
+    if (auto e = cpuTarget.checkBinding(candidate, *installed)) {
+      bool unavailable;
+      if (auto terminal =
+              decline(std::move(e), {"cpu-target-unavailable"}, unavailable))
         return terminal;
       continue;
     }
@@ -1471,6 +1566,11 @@ public:
             }
             continue;
           }
+          if (auto e =
+                  selection.cpuTarget.checkBinding(candidate, *installed)) {
+            consumeError(std::move(e));
+            continue;
+          }
           clone.binding.application = std::move(candidate);
           available = true;
           break;
@@ -1524,8 +1624,8 @@ public:
         Type to = decision.inputs[operand];
         if (from == to)
           continue;
-        auto application =
-            chooseConversion(from, to, catalog, selection.numerical);
+        auto application = chooseConversion(
+            from, to, catalog, selection.numerical, selection.cpuTarget);
         if (!application) {
           bool unavailable;
           if (auto e = decline(application.takeError(),
@@ -1605,7 +1705,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     auto found = requests.find(binding->name);
     if (found == requests.end())
       continue;
-    auto fixed = selectImplementation(binding->application, found->second);
+    auto fixed = selectImplementation(binding->application, found->second,
+                                      options.cpuTarget);
     if (!fixed)
       return fixed.takeError();
     fixedFiniteBindings.insert(declaration);
@@ -1622,6 +1723,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                     options.numericalPolicy,
                     options.functionPorts,
                     options.valueLayouts,
+                    options.cpuTarget,
                     {},
                     {}});
   for (const auto &choice : options.functionPorts) {
@@ -1646,6 +1748,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   });
   hasNumerical |= hasFinite;
   PhysicalSelection selection;
+  selection.cpuTarget = options.cpuTarget;
   if (options.numericalWork)
     selection.numerical.work = *options.numericalWork;
   if (options.numericalCopy)
@@ -1828,6 +1931,9 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       }
       groupLimit = plan.contractions.size() - 1;
     }
+    if (!refusal)
+      refusal =
+          checkTargetPlan(selected, plan, options.cpuTarget, failureLocation);
     if (!refusal && options.releaseStorage) {
       auto releases =
           proposeStorage(selected, plan.operations, failureLocation);
@@ -2090,7 +2196,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       auto decoded = readBinding(binding);
       if (!decoded)
         return decoded.takeError();
-      auto fixed = selectImplementation(decoded->application, implementation);
+      auto fixed = selectImplementation(decoded->application, implementation,
+                                        plan.input->cpuTarget);
       if (!fixed)
         return fixed.takeError();
       fixedFiniteBindings.insert(binding);
@@ -2293,6 +2400,10 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
         return e;
     }
   }
+
+  if (auto e = checkTargetPlan(selected, plan, plan.input->cpuTarget,
+                               failureLocation))
+    return e;
 
   // Independently check actual entry/capture/join/backedge/return equations.
   // This reader does not run forward propagation or select a join preference.

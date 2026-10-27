@@ -397,8 +397,9 @@ fn authored(directory: &Path) {
     };
     let interface: Json = serde_json::from_str(package.interface()).unwrap();
     let codec = backend(&json!({"entry":interface["protocol"]}), "role00000000");
-    let prover = ProofEntry::admit(package.clone(), options, ProofSetups::default()).unwrap();
-    let verifier = ProofEntry::admit(package, options, ProofSetups::default()).unwrap();
+    let prover =
+        ProofEntry::admit(package.clone(), options.clone(), ProofSetups::default()).unwrap();
+    let verifier = ProofEntry::admit(package, options.clone(), ProofSetups::default()).unwrap();
     assert_eq!(prover.binding_scope(), BindingScope::HeaderOnly);
     for pair in [false, true] {
         let payload = |wire: bool| {

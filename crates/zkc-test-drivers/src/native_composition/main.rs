@@ -6,14 +6,14 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc::execution::Capacity;
 use zkc::proof::NativeDeployment;
-use zkc_native::{
-    Bn254G1, Bn254G2, Bn254Scalar as F, Domain, EntryPolicy, KoalaBear as B, KoalaBearExt8 as E,
-    NativeBackend, Policy, Sequence, Value,
+use zkc_cpu::{
+    Bn254G1, Bn254G2, Bn254Scalar as F, CpuBackend, Domain, EntryPolicy, KoalaBear as B,
+    KoalaBearExt8 as E, Policy, Sequence, Value,
 };
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
-fn codec() -> NativeBackend {
-    NativeBackend::new(
+fn codec() -> CpuBackend {
+    CpuBackend::new(
         Policy {
             max_groups: 8192,
             ..Policy::default()
@@ -287,12 +287,12 @@ fn main() {
                 let replacements = match family {
                     "qap-composition" => vec![
                         (1, Value::Bn254G1(Bn254G1::generator())),
-                        (2, Value::Bn254Gt(zkc_native::Bn254Gt::generator())),
+                        (2, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator())),
                     ],
                     "air-composition" => {
                         vec![(3, Value::KoalaBearExt8Vector(vec![E::ZERO].into()))]
                     }
-                    _ => vec![(0, Value::Bn254Gt(zkc_native::Bn254Gt::generator()))],
+                    _ => vec![(0, Value::Bn254Gt(zkc_cpu::Bn254Gt::generator()))],
                 };
                 for (index, replacement) in replacements {
                     let encoded = codec().encode_native_value(&replacement).unwrap();

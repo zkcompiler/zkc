@@ -1,6 +1,9 @@
 # CMake and Cargo build outputs.
 build/
 target/
+# Generated browser glue and matching Wasm artifacts.
+/crates/zkc-web/web/pkg/
+/crates/zkc-web/web/pkg-simd/
 compile_commands.json
 CMakeUserPresets.json
 

@@ -7,16 +7,16 @@ use crate::{
     execution::{Capacity, InputValue, PreparedData},
     proof::{Invocation, NativeDeployment, ProofInputs},
 };
+use zkc_cpu::{Policy, Sequence, Value as NativeValue, cpu_contracts};
 use zkc_kernels::blst::bls12_381 as kernel;
-use zkc_native::{Policy, Sequence, Value as NativeValue, native_contracts};
 use zkc_runtime::vm::{LogicalType, PhysicalType, Representation, Value as _};
 
 fn sequence(number: u64) -> (Value, NativeValue) {
-    let child = native_contracts()
+    let child = cpu_contracts()
         .physical_type("field:bls12-381.fr@blst/fr")
         .unwrap();
     let logical = LogicalType::sequence(child.logical().clone()).unwrap();
-    let ty = native_contracts()
+    let ty = cpu_contracts()
         .aggregate_type(logical.clone(), Representation::Sequence, vec![child])
         .unwrap();
     let value = NativeValue::Sequence(
@@ -43,7 +43,7 @@ fn variant() -> (Value, NativeValue) {
         "groups:bls12-381.g2@blst/g2",
     ]
     .iter()
-    .map(|s| native_contracts().physical_type(s).unwrap())
+    .map(|s| cpu_contracts().physical_type(s).unwrap())
     .collect();
     let leaves: Vec<_> = children.iter().map(|t| t.logical().spelling()).collect();
     let spelling = zkc_test_support::variants::encode_tree(json!([
@@ -76,7 +76,7 @@ fn variant() -> (Value, NativeValue) {
         {"name":"Empty","fields":[]}, {"name":"Other","fields":[]},
         {"name":"Payload","fields":fields}
     ]);
-    let ty = native_contracts()
+    let ty = cpu_contracts()
         .aggregate_type(
             LogicalType::parse(&spelling).unwrap(),
             Representation::Variant,
@@ -444,7 +444,7 @@ fn selected_public_role_disagreement_in_inactive_children_is_rejected() {
         for index in 0..children.len() {
             let mut changed = children.clone();
             changed[index] = PhysicalType::default_for(changed[index].logical().clone()).unwrap();
-            let wrong = native_contracts()
+            let wrong = cpu_contracts()
                 .aggregate_type(ty.logical().clone(), ty.representation(), changed)
                 .unwrap();
             assert_ne!(wrong, ty);
@@ -718,6 +718,7 @@ fn verifier_only_public_storage_uses_only_the_canonical_default() {
             Default::default(),
             Some(true),
             crate::execution::CpuExecution::serial().unwrap(),
+            Default::default(),
         )
         .unwrap();
         let default = PhysicalType::default_for(logical).unwrap();

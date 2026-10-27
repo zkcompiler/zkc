@@ -1,10 +1,9 @@
 //! Execute unmodified compiler-emitted BN254 provider programs.
 use serde_json::{Value as Json, json};
-use zkc_kernels::arkworks::bn254 as ark;
-use zkc_native::{
-    Domain, EntryPolicy, NativeBackend, Policy, Value, native_contracts,
-    native_contracts_with_policy,
+use zkc_cpu::{
+    CpuBackend, Domain, EntryPolicy, Policy, Value, cpu_contracts, cpu_contracts_with_policy,
 };
+use zkc_kernels::arkworks::bn254 as ark;
 use zkc_runtime::{
     interpreter::Runner,
     vm::{Action, ExecutionPolicy, Program, Value as _},
@@ -23,9 +22,9 @@ pub(super) fn run(bytes: &[u8], mode: &str) {
             | "bulk-resident"
     ));
     if bulk {
-        assert!(Program::decode(bytes, native_contracts()).is_err());
+        assert!(Program::decode(bytes, cpu_contracts()).is_err());
     }
-    let contracts = native_contracts_with_policy(ExecutionPolicy {
+    let contracts = cpu_contracts_with_policy(ExecutionPolicy {
         allow_unspecified_timing: true,
         allow_variable_time: bulk,
     });
@@ -45,7 +44,7 @@ pub(super) fn run(bytes: &[u8], mode: &str) {
         ark::Scalar::from(3),
         -ark::Scalar::from(6),
     ] {
-        let native = NativeBackend::new(
+        let native = CpuBackend::new(
             Policy::default(),
             EntryPolicy::new(Domain::new(role, "halo2curves-fixture", entry, None), None),
             Default::default(),

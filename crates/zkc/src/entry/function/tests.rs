@@ -282,8 +282,8 @@ fn standalone_numerical_assets_are_authenticated_including_dormant_branches() {
             .prepare(request(vec![
                 (
                     "x",
-                    zkc_native::Value::KoalaBearVector(
-                        vec![zkc_native::KoalaBear::new(3), zkc_native::KoalaBear::new(4)].into(),
+                    zkc_cpu::Value::KoalaBearVector(
+                        vec![zkc_cpu::KoalaBear::new(3), zkc_cpu::KoalaBear::new(4)].into(),
                     )
                     .into(),
                 ),
@@ -298,10 +298,10 @@ fn standalone_numerical_assets_are_authenticated_including_dormant_branches() {
         else {
             panic!("vector")
         };
-        let zkc_native::Value::KoalaBearVector(values) = *v else {
+        let zkc_cpu::Value::KoalaBearVector(values) = *v else {
             panic!("vector")
         };
-        assert_eq!(values.as_ref(), &[zkc_native::KoalaBear::new(expected)]);
+        assert_eq!(values.as_ref(), &[zkc_cpu::KoalaBear::new(expected)]);
     }
 }
 fn numeric_document() -> Json {
@@ -325,11 +325,11 @@ fn numerical_standalone_uses_native_field_calculation_and_named_plans() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_native::Value::Field(zkc_native::Scalar::from(7u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7u64)).into(),
             ),
             (
                 "b",
-                zkc_native::Value::Field(zkc_native::Scalar::from(9u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(9u64)).into(),
             ),
         ]))
         .unwrap()
@@ -348,10 +348,10 @@ fn numerical_standalone_uses_native_field_calculation_and_named_plans() {
     else {
         panic!("native result")
     };
-    let zkc_native::Value::Field(v) = *v else {
+    let zkc_cpu::Value::Field(v) = *v else {
         panic!("field")
     };
-    assert_eq!(v, zkc_native::Scalar::from(16u64));
+    assert_eq!(v, zkc_cpu::Scalar::from(16u64));
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn cpu_context_reaches_numerical_backends_and_all_admitted_children() {
     assert_eq!(worker(backend.cpu()), id);
     assert_eq!(
         worker(
-            data::backend(Default::default(), cpu.clone())
+            data::backend(Default::default(), cpu.clone(), Default::default())
                 .unwrap()
                 .cpu()
         ),
@@ -392,11 +392,11 @@ fn cpu_context_reaches_numerical_backends_and_all_admitted_children() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_native::Value::Field(zkc_native::Scalar::from(7u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7u64)).into(),
             ),
             (
                 "b",
-                zkc_native::Value::Field(zkc_native::Scalar::from(9u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(9u64)).into(),
             ),
         ]))
         .unwrap()
@@ -432,6 +432,7 @@ fn cpu_context_reaches_numerical_backends_and_all_admitted_children() {
     )
     .unwrap()
     .with_cpu(cpu.clone());
+    #[allow(clippy::drop_non_drop)] // Serial builds have no owned pool to release.
     drop(cpu);
     for entry in [&joint, &producer, &verifier, &rebound] {
         assert_eq!(worker(entry.cpu()), id);
@@ -692,16 +693,16 @@ fn repeated_children_exhaust_one_cumulative_meter_and_suppress_return() {
     let mut options = FunctionOptions::default();
     options.limits.capacity.work.instructions = 14;
     options.journal_events = 1;
-    let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
+    let entry = FunctionEntry::admit(capture(&d), options.clone(), BTreeMap::new()).unwrap();
     let r = entry
         .prepare(request(vec![
             (
                 "a",
-                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
             ),
             ("lo", 0u64.into()),
             ("hi", 20u64.into()),
@@ -721,11 +722,11 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
         request(vec![
             (
                 "a",
-                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_native::Value::Field(zkc_native::Scalar::from(2u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(2u64)).into(),
             ),
         ])
     };
@@ -748,7 +749,7 @@ fn repeated_children_share_logical_work_and_fresh_allocation_before_dispatch() {
             options.limits.capacity.values.total_bytes =
                 one.usage.execution.total_value_bytes + 16 * 1024;
         }
-        let entry = FunctionEntry::admit(capture(&d), options, BTreeMap::new()).unwrap();
+        let entry = FunctionEntry::admit(capture(&d), options.clone(), BTreeMap::new()).unwrap();
         let report = entry.prepare(input()).unwrap().execute();
         assert!(report.value.is_none());
         assert!(report.failure.is_some());
@@ -778,11 +779,11 @@ fn stop_retains_reached_prefix_and_never_executes_later_children() {
         .prepare(request(vec![
             (
                 "a",
-                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
             ),
             (
                 "b",
-                zkc_native::Value::Field(zkc_native::Scalar::from(1u64)).into(),
+                zkc_cpu::Value::Field(zkc_cpu::Scalar::from(1u64)).into(),
             ),
             ("flag", false.into()),
         ]))
@@ -801,8 +802,11 @@ fn child_package(interface: &Json, artifact: &str) -> String {
     String::from_utf8(package(interface, artifact).bytes().to_vec()).unwrap()
 }
 fn joint_document() -> Json {
+    joint_document_with_schema(boolean())
+}
+fn joint_document_with_schema(leaf: Json) -> Json {
     let (mut interface, artifact) = crate::entry::interface::tests::unicode::run_fixture(
-        &boolean(),
+        &leaf,
         &["P", "V"],
         &["role00000000", "role00000001"],
     );
@@ -812,11 +816,11 @@ fn joint_document() -> Json {
         vec![
             (
                 "P",
-                record("main::Inputs::P", vec![("入力", boolean())], true),
+                record("main::Inputs::P", vec![("入力", leaf.clone())], true),
             ),
             (
                 "V",
-                record("main::Inputs::V", vec![("入力", boolean())], true),
+                record("main::Inputs::V", vec![("入力", leaf.clone())], true),
             ),
         ],
         true,
@@ -826,11 +830,11 @@ fn joint_document() -> Json {
         vec![
             (
                 "P",
-                record("main::RunResult::P", vec![("結果", boolean())], false),
+                record("main::RunResult::P", vec![("結果", leaf.clone())], false),
             ),
             (
                 "V",
-                record("main::RunResult::V", vec![("結果", boolean())], false),
+                record("main::RunResult::V", vec![("結果", leaf.clone())], false),
             ),
         ],
         false,
@@ -900,7 +904,7 @@ fn concurrently_live_joint_runners_share_instruction_and_live_limits() {
     options.limits.capacity.work.instructions = 3;
     let entry = FunctionEntry::admit(
         capture(&joint_document()),
-        options,
+        options.clone(),
         BTreeMap::from([("joint".into(), SetupAuthority::default())]),
     )
     .unwrap();
@@ -991,7 +995,7 @@ fn proof_entry(producing: bool) -> FunctionEntry {
     };
     FunctionEntry::admit(
         capture(&proof_document(producing)),
-        options,
+        options.clone(),
         BTreeMap::from([("proof".into(), SetupAuthority::default())]),
     )
     .unwrap()
@@ -1002,10 +1006,7 @@ fn proof_request(producing: bool, public: bool, proof: Vec<u8>) -> FunctionReque
     } else {
         (
             "proof",
-            row(vec![(
-                "bytes",
-                zkc_native::Value::Bytes(proof.into()).into(),
-            )]),
+            row(vec![("bytes", zkc_cpu::Value::Bytes(proof.into()).into())]),
         )
     };
     let mut request = request(vec![
@@ -1034,7 +1035,7 @@ fn produced_bytes() -> Vec<u8> {
     else {
         panic!("bytes")
     };
-    let zkc_native::Value::Bytes(b) = *v else {
+    let zkc_cpu::Value::Bytes(b) = *v else {
         panic!("bytes")
     };
     b.to_vec()
@@ -1083,7 +1084,7 @@ fn disabled_journal_keeps_reserved_final_failure_without_source_output() {
     };
     let entry = FunctionEntry::admit(
         capture(&proof_document(false)),
-        options,
+        options.clone(),
         BTreeMap::from([("proof".into(), SetupAuthority::default())]),
     )
     .unwrap();
@@ -1119,7 +1120,7 @@ fn verification_rejection_has_no_outputs_and_cleanup_remains_separate() {
     else {
         panic!("bytes")
     };
-    let zkc_native::Value::Bytes(bytes) = *v else {
+    let zkc_cpu::Value::Bytes(bytes) = *v else {
         panic!("bytes")
     };
     let report = proof_entry(false)
@@ -1235,20 +1236,16 @@ fn native_output_retention_does_not_require_public_input_codec() {
     );
     let entry = admit(&d).unwrap();
     let schema = &entry.signature().result;
-    let backing = [
-        zkc_native::Scalar::from(2u64),
-        zkc_native::Scalar::from(3u64),
-    ]
-    .into();
-    let native = zkc_native::Value::Polynomial(backing);
-    assert!(!zkc_native::has_native_wire(&native.physical_type()));
+    let backing = [zkc_cpu::Scalar::from(2u64), zkc_cpu::Scalar::from(3u64)].into();
+    let native = zkc_cpu::Value::Polynomial(backing);
+    assert!(!zkc_cpu::has_native_wire(&native.physical_type()));
     let ledger = ExecutionLedger::new(Default::default(), Default::default());
     let typed = data::from_output(entry.host(), schema, native.into(), &ledger).unwrap();
     assert!(ledger.snapshot().live_reserved_bytes > 0);
     let Value::Leaf(crate::execution::InputValue::Native(v)) = typed.into_value() else {
         panic!("native polynomial")
     };
-    assert!(matches!(*v, zkc_native::Value::Polynomial(_)));
+    assert!(matches!(*v, zkc_cpu::Value::Polynomial(_)));
     assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
 }
 #[test]
@@ -1323,14 +1320,11 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
         BTreeMap::from([("joint".into(), SetupAuthority::default())]),
     )
     .unwrap();
-    let coefficients: zkc_native::Buffer<_> = [
-        zkc_native::Scalar::from(2u64),
-        zkc_native::Scalar::from(3u64),
-    ]
-    .into();
+    let coefficients: zkc_cpu::Buffer<_> =
+        [zkc_cpu::Scalar::from(2u64), zkc_cpu::Scalar::from(3u64)].into();
     let mut request = request(vec![(
         "coefficients",
-        zkc_native::Value::Vector(coefficients.clone()).into(),
+        zkc_cpu::Value::Vector(coefficients.clone()).into(),
     )]);
     request.context.deployments.insert(
         "joint".into(),
@@ -1351,7 +1345,7 @@ fn numerical_polynomial_flows_directly_into_joint_child_without_wire_ingress() {
     else {
         panic!("polynomial")
     };
-    let zkc_native::Value::Polynomial(output) = *value else {
+    let zkc_cpu::Value::Polynomial(output) = *value else {
         panic!("polynomial")
     };
     assert_eq!(output.as_ref(), coefficients.as_ref());
@@ -1385,7 +1379,7 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     };
     let refused = super::super::ProofEntry::admit_operation(
         package(&interface, &artifact.to_string()),
-        options,
+        options.clone(),
         SetupAuthority::default(),
         super::super::ProofOperation::Prove,
     )
@@ -1458,16 +1452,13 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
         BTreeMap::from([("proof".into(), SetupAuthority::default())]),
     )
     .unwrap();
-    let coefficients: zkc_native::Buffer<_> = [
-        zkc_native::Scalar::from(2u64),
-        zkc_native::Scalar::from(3u64),
-    ]
-    .into();
+    let coefficients: zkc_cpu::Buffer<_> =
+        [zkc_cpu::Scalar::from(2u64), zkc_cpu::Scalar::from(3u64)].into();
     let mut request = request(vec![
         ("public", row(vec![("公開", true.into())])),
         (
             "coefficients",
-            zkc_native::Value::Vector(coefficients.clone()).into(),
+            zkc_cpu::Value::Vector(coefficients.clone()).into(),
         ),
     ]);
     request.context.deployments.insert(
@@ -1486,7 +1477,7 @@ fn producer_accepts_internal_polynomial_witness_without_relaxing_public_ingress(
     else {
         panic!("polynomial")
     };
-    let zkc_native::Value::Polynomial(output) = *value else {
+    let zkc_cpu::Value::Polynomial(output) = *value else {
         panic!("polynomial")
     };
     assert_eq!(output.as_ref(), coefficients.as_ref());
@@ -1529,8 +1520,8 @@ fn single_endpoint_proof_children_preserve_independent_operation_closures() {
         ..Default::default()
     };
     let authority = || BTreeMap::from([("proof".into(), SetupAuthority::default())]);
-    let producer = FunctionEntry::admit(capture(&producer), options, authority()).unwrap();
-    let verifier = FunctionEntry::admit(capture(&verifier), options, authority()).unwrap();
+    let producer = FunctionEntry::admit(capture(&producer), options.clone(), authority()).unwrap();
+    let verifier = FunctionEntry::admit(capture(&verifier), options.clone(), authority()).unwrap();
     let report = producer
         .prepare(proof_request(true, true, vec![]))
         .unwrap()
@@ -1546,7 +1537,7 @@ fn single_endpoint_proof_children_preserve_independent_operation_closures() {
     else {
         panic!("bytes")
     };
-    let zkc_native::Value::Bytes(bytes) = *v else {
+    let zkc_cpu::Value::Bytes(bytes) = *v else {
         panic!("bytes")
     };
     let report = verifier
@@ -1588,7 +1579,7 @@ fn service_allowances_are_cumulative_before_issuance_with_usable_default() {
         service_draws: super::super::DEFAULT_DRAW_BUDGET,
         ..Default::default()
     };
-    let entry = FunctionEntry::admit(capture(&d), options, authority()).unwrap();
+    let entry = FunctionEntry::admit(capture(&d), options.clone(), authority()).unwrap();
     let report = entry.prepare(joint_request()).unwrap().execute();
     assert!(report.value.is_none());
     assert_eq!(report.failure.unwrap().code, "entry-host-service-limit");
@@ -1764,9 +1755,9 @@ fn pair_variant_document(leaf: Json, nested: bool) -> Json {
 fn admit_with_capacity(doc: &Json, capacity: crate::execution::Capacity) -> FunctionEntry {
     let mut options = FunctionOptions::default();
     options.limits.capacity = capacity;
-    FunctionEntry::admit(capture(doc), options, BTreeMap::new()).unwrap()
+    FunctionEntry::admit(capture(doc), options.clone(), BTreeMap::new()).unwrap()
 }
-fn pair_value(value: &zkc_native::Value, nested: bool) -> Value {
+fn pair_value(value: &zkc_cpu::Value, nested: bool) -> Value {
     let child = || {
         if nested {
             Value::Variant {
@@ -1797,9 +1788,9 @@ fn host_variant_pack_and_owned_outputs_enforce_complete_active_counts() {
                 vector.clone()
             };
             let native = if group {
-                zkc_native::Value::Groups(vec![zkc_native::G1::generator(); 3].into())
+                zkc_cpu::Value::Groups(vec![zkc_cpu::G1::generator(); 3].into())
             } else {
-                zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 3].into())
+                zkc_cpu::Value::Vector(vec![zkc_cpu::Scalar::from(7); 3].into())
             };
             let doc = pair_variant_document(leaf, nested);
             for legal in [false, true] {
@@ -1859,7 +1850,7 @@ fn owned_variants_accept_internal_polynomials_and_count_shared_occurrences() {
     use zkc_runtime::vm::ExecutionLedger;
     let polynomial = schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]));
     let doc = pair_variant_document(polynomial, true);
-    let native = zkc_native::Value::Polynomial(vec![zkc_native::Scalar::from(7); 3].into());
+    let native = zkc_cpu::Value::Polynomial(vec![zkc_cpu::Scalar::from(7); 3].into());
     for elements in [5, 6] {
         let capacity = Capacity {
             elements,
@@ -1877,7 +1868,8 @@ fn owned_variants_accept_internal_polynomials_and_count_shared_occurrences() {
         if elements == 5 {
             assert_eq!(result.unwrap_err(), "native-wire-limit");
         }
-        let backend = data::backend(capacity, entry.cpu().clone()).unwrap();
+        let backend =
+            data::backend(capacity, entry.cpu().clone(), entry.installation().clone()).unwrap();
         assert!(
             backend.measure_native_input(&native).is_err(),
             "public codec stays closed"
@@ -1907,9 +1899,10 @@ fn host_variant_retention_preflight_checks_peak_before_assembly() {
     let vector = schema("builtin", "Vector", json!(["vector:bls12-381.fr"]));
     let doc = pair_variant_document(vector, false);
     let entry = admit(&doc).unwrap();
-    let native = zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 3].into());
+    let native = zkc_cpu::Value::Vector(vec![zkc_cpu::Scalar::from(7); 3].into());
     let capacity = Capacity::default();
-    let backend = data::backend(capacity, entry.cpu().clone()).unwrap();
+    let backend =
+        data::backend(capacity, entry.cpu().clone(), entry.installation().clone()).unwrap();
     let sizes = [
         backend.measure_native_value(&native).unwrap(),
         backend.measure_native_value(&native).unwrap(),
@@ -1927,7 +1920,8 @@ fn host_variant_retention_preflight_checks_peak_before_assembly() {
             ..capacity
         };
         let entry = admit_with_capacity(&doc, capacity);
-        let backend = data::backend(capacity, entry.cpu().clone()).unwrap();
+        let backend =
+            data::backend(capacity, entry.cpu().clone(), entry.installation().clone()).unwrap();
         assert!(
             backend.measure_native_input(&native).is_ok(),
             "each child fits"
@@ -1978,15 +1972,19 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
     use crate::execution::Capacity;
     use zkc_runtime::vm::{Backend, ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let group = schema("group", "Group", json!(["group:bls12-381.g1"]));
-    let native = zkc_native::Value::Curve(zkc_native::G1::generator());
+    let native = zkc_cpu::Value::Curve(zkc_cpu::G1::generator());
     let capacity = Capacity {
         groups: 0,
         ..Capacity::default()
     };
-    data::backend(capacity, CpuExecution::serial().unwrap())
-        .unwrap()
-        .validate_value(&native)
-        .unwrap();
+    data::backend(
+        capacity,
+        CpuExecution::serial().unwrap(),
+        Default::default(),
+    )
+    .unwrap()
+    .validate_value(&native)
+    .unwrap();
     let product = record(
         "Groups",
         vec![("a", group.clone()), ("b", group.clone())],
@@ -2001,7 +1999,7 @@ fn standalone_outputs_keep_owner_policy_without_native_measurement() {
                 ("b".into(), native.clone().into()),
             ])),
         ),
-        (index(), Value::from(zkc_native::Value::Index(7))),
+        (index(), Value::from(zkc_cpu::Value::Index(7))),
     ] {
         let doc = document(vec![("x", s.clone())], s, json!([]), json!([0]));
         let entry = admit_with_capacity(&doc, capacity);
@@ -2062,7 +2060,7 @@ fn nested_variant_measurement_refuses_with_exhausted_shared_work() {
     use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let capacity = Capacity::default();
     let entry = admit_with_capacity(&pair_variant_document(index(), true), capacity);
-    let scalar = zkc_native::Value::Index(7);
+    let scalar = zkc_cpu::Value::Index(7);
     let work = scalar.retained_bytes() as u64;
     let ledger = ExecutionLedger::new(
         capacity.values,
@@ -2117,9 +2115,9 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     use zkc_runtime::vm::{ExecutionLedger, Value as RuntimeValue, WorkBudget};
     let capacity = Capacity::default();
     let policy = capacity.backend();
-    let scalar = zkc_native::Value::Field(zkc_native::Scalar::from(7));
-    let inner = zkc_native::Value::Sequence(
-        zkc_native::Sequence::new(
+    let scalar = zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7));
+    let inner = zkc_cpu::Value::Sequence(
+        zkc_cpu::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
                 zkc_runtime::vm::LogicalType::sequence(scalar.physical_type().logical().clone())
                     .unwrap(),
@@ -2130,8 +2128,8 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         )
         .unwrap(),
     );
-    let native = zkc_native::Value::Sequence(
-        zkc_native::Sequence::new(
+    let native = zkc_cpu::Value::Sequence(
+        zkc_cpu::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
                 zkc_runtime::vm::LogicalType::sequence(inner.physical_type().logical().clone())
                     .unwrap(),
@@ -2206,11 +2204,15 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
         },
     );
     assert_eq!(
-        data::backend(strict.host().options.limits.capacity, strict.cpu().clone())
-            .unwrap()
-            .measure_native_value(&native)
-            .unwrap_err()
-            .to_string(),
+        data::backend(
+            strict.host().options.limits.capacity,
+            strict.cpu().clone(),
+            strict.installation().clone()
+        )
+        .unwrap()
+        .measure_native_value(&native)
+        .unwrap_err()
+        .to_string(),
         "native-wire-limit"
     );
     for host in [entry.host(), strict.host()] {
@@ -2303,4 +2305,202 @@ fn repeated_native_measurements_share_logical_work_before_walking() {
     assert_eq!(usage.live_reserved_bytes, 0);
     assert_eq!(usage.pending_logical_bytes, 0);
     assert_eq!(usage.pending_value_bytes, 0);
+}
+
+fn plonky3_installation() -> zkc_cpu::CpuInstallation {
+    zkc_cpu::CpuInstallation::builder()
+        .include(zkc_cpu::providers::Plonky3)
+        .finish()
+        .unwrap()
+}
+#[test]
+fn selected_installation_checks_typed_and_encoded_inputs_without_numerical_calls() {
+    let leaf = schema(
+        "field",
+        "field<bls12-381.fr>",
+        json!(["field:bls12-381.fr"]),
+    );
+    let doc = document(vec![("x", leaf.clone())], leaf, json!([]), json!([0]));
+    let entry = FunctionEntry::admit(
+        capture(&doc),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let native = zkc_cpu::Value::Field(zkc_cpu::Scalar::from(7));
+    let prepared = crate::execution::PreparedData::from_value(
+        native.clone(),
+        crate::execution::Capacity::default(),
+    )
+    .unwrap();
+    for argument in [
+        native.into(),
+        crate::execution::InputValue::Wire(prepared.canonical_bytes().to_vec().into()).into(),
+        crate::execution::InputValue::Prepared(prepared).into(),
+    ] {
+        assert!(
+            admit(&doc)
+                .unwrap()
+                .prepare(request(vec![("x", data::duplicate(&argument))]))
+                .unwrap()
+                .execute()
+                .is_success()
+        );
+        let failure = entry.prepare(request(vec![("x", argument)])).err().unwrap();
+        assert_eq!(failure.phase, EntryPhase::Preparation);
+        assert_eq!(failure.code(), "native-input-type");
+    }
+    assert_eq!(
+        entry.check_result_encoding().unwrap_err().code(),
+        "entry-output-codec"
+    );
+    assert_eq!(
+        entry
+            .interface()
+            .check_result_encoding()
+            .unwrap_err()
+            .code(),
+        "entry-output-codec"
+    );
+}
+#[test]
+fn selected_installation_checks_calculations_and_nested_children_before_execution() {
+    assert!(admit(&numeric_document()).is_ok());
+    let failure = FunctionEntry::admit(
+        capture(&numeric_document()),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        BTreeMap::new(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(failure.phase, EntryPhase::Admission);
+    assert_eq!(failure.code(), "Backend: installation-binding");
+
+    let leaf = schema(
+        "field",
+        "field<bls12-381.fr>",
+        json!(["field:bls12-381.fr"]),
+    );
+    let doc = joint_document_with_schema(leaf);
+    let authority = || BTreeMap::from([("joint".into(), SetupAuthority::default())]);
+    assert!(FunctionEntry::admit(capture(&doc), Default::default(), authority()).is_ok());
+    let failure = FunctionEntry::admit(
+        capture(&doc),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        authority(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(failure.phase, EntryPhase::Admission);
+    assert_eq!(
+        failure.code(),
+        "run-Candidate(\"Representation: installation-type\")"
+    );
+
+    // The permitted numerical child still executes under the same selection.
+    let entry = FunctionEntry::admit(
+        capture(&joint_document()),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        authority(),
+    )
+    .unwrap();
+    assert!(
+        entry
+            .prepare(joint_request())
+            .unwrap()
+            .execute()
+            .is_success()
+    );
+}
+#[test]
+fn selected_installation_rejects_inactive_variant_payload_and_private_typed_results() {
+    let leaf = schema(
+        "field",
+        "field<bls12-381.fr>",
+        json!(["field:bls12-381.fr"]),
+    );
+    let mixed = variant(
+        "Mixed",
+        vec![("Empty", vec![]), ("Hidden", vec![("value", leaf)])],
+        true,
+    );
+    let doc = document(vec![("x", mixed.clone())], mixed, json!([]), json!([0]));
+    let entry = FunctionEntry::admit(
+        capture(&doc),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let failure = entry
+        .prepare(request(vec![(
+            "x",
+            Value::Variant {
+                alternative: "Empty".into(),
+                fields: BTreeMap::new(),
+            },
+        )]))
+        .err()
+        .unwrap();
+    assert_eq!(failure.code(), "native-input-type");
+
+    let polynomial = schema("builtin", "Polynomial", json!(["polynomial:koala-bear"]));
+    let doc = document(
+        vec![("x", polynomial.clone())],
+        polynomial,
+        json!([]),
+        json!([0]),
+    );
+    let entry = FunctionEntry::admit(
+        capture(&doc),
+        FunctionOptions::default().with_installation(plonky3_installation()),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let ledger = zkc_runtime::vm::ExecutionLedger::new(Default::default(), Default::default());
+    let value = zkc_cpu::Value::KoalaBearPolynomial(vec![zkc_cpu::KoalaBear::new(7)].into());
+    // Typed result retention adds no codec check.
+    assert!(
+        data::from_output(
+            entry.host(),
+            &entry.signature().result,
+            value.into(),
+            &ledger
+        )
+        .is_ok()
+    );
+    assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+}
+
+#[test]
+fn selected_installation_reaches_nested_proof_program_decoding() {
+    let mut doc = proof_document(true);
+    let mut child: Json =
+        serde_json::from_str(doc["deployments"][0]["package"].as_str().unwrap()).unwrap();
+    let mut artifact: Json = serde_json::from_str(child["artifact"].as_str().unwrap()).unwrap();
+    let mut program: Json = serde_json::from_str(artifact[4].as_str().unwrap()).unwrap();
+    let numeric: Json = serde_json::from_str(calculation()["program"].as_str().unwrap()).unwrap();
+    program[1] = numeric[1].clone();
+    program[2] = numeric[2].clone();
+    artifact[4] = json!(program.to_string());
+    artifact[3] = json!(crate::host::inputs::hash(
+        &zkc_runtime::logical::encode_tree(&artifact[2]).unwrap()
+    ));
+    artifact[5] = json!(digest(artifact[4].as_str().unwrap()));
+    child["artifact"] = json!(artifact.to_string());
+    doc["deployments"][0]["package"] = json!(child.to_string());
+    let authority = || BTreeMap::from([("proof".into(), SetupAuthority::default())]);
+    let options = || FunctionOptions {
+        binding: super::super::BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    assert!(FunctionEntry::admit(capture(&doc), options(), authority()).is_ok());
+    let failure = FunctionEntry::admit(
+        capture(&doc),
+        options().with_installation(plonky3_installation()),
+        authority(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(failure.phase, EntryPhase::Admission);
+    assert_eq!(failure.code(), "Backend: installation-binding");
 }

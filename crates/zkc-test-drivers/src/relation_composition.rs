@@ -2,8 +2,8 @@
 //! an independent finite-field evaluator, including explicitly accepted bad events.
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::services::ServiceRegistry;
-use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::services::ServiceRegistry;
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, FieldArray, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
 
@@ -54,8 +54,8 @@ fn elements(value: &Value) -> &[Scalar] {
     };
     array.ark_elements().unwrap()
 }
-fn backend(role: &str, entry: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str, entry: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "composition", entry, None), None),
         Default::default(),
@@ -66,7 +66,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &std::fs::read(directory.join(format!("{name}.bundle"))).unwrap(),
         &backend("admission", "main"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap()
@@ -76,7 +76,7 @@ struct Wire {
     messages: Vec<(String, Vec<u8>)>,
     replacement: Option<Vec<u8>>,
 }
-impl Hooks<NativeBackend> for Wire {
+impl Hooks<CpuBackend> for Wire {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -99,7 +99,7 @@ fn execute(
     wire: &mut Wire,
     limits: RunLimits,
     changed_prover: Option<Vec<Value>>,
-) -> (Report<NativeBackend>, u64) {
+) -> (Report<CpuBackend>, u64) {
     let registry = ServiceRegistry::new(Policy::default());
     let verifier = bundle
         .roles()
@@ -144,7 +144,7 @@ fn execute(
         .unwrap_or(0);
     (report, count)
 }
-fn decision(report: &Report<NativeBackend>, role: &str) -> bool {
+fn decision(report: &Report<CpuBackend>, role: &str) -> bool {
     assert_eq!(report.outcome, Outcome::Completed);
     match report
         .roles
@@ -158,7 +158,7 @@ fn decision(report: &Report<NativeBackend>, role: &str) -> bool {
         _ => panic!("one actual decision"),
     }
 }
-fn stopped<'a>(report: &'a Report<NativeBackend>, site: &str) -> &'a StopSummary {
+fn stopped<'a>(report: &'a Report<CpuBackend>, site: &str) -> &'a StopSummary {
     let role = report.roles.iter().find(|r| r.role == "Checker").unwrap();
     let State::Stopped(stop) = &role.before else {
         panic!("expected Checker stop: {:?}", report.outcome)

@@ -7,6 +7,12 @@ pub(crate) const INPUT_LIMIT: usize = 16 * 1024 * 1024;
 pub(crate) const RESOURCE_BUDGET_LIMIT: u64 = 1_000_000;
 
 pub(crate) fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>> {
+    #[cfg(not(feature = "files"))]
+    {
+        let _ = (path, limit);
+        Err("artifact-io".into())
+    }
+    #[cfg(feature = "files")]
     crate::host::io::read_regular(path, limit).map_err(|error| match error {
         crate::host::io::ReadError::Io(_) => "artifact-io".into(),
         crate::host::io::ReadError::Limit => "artifact-byte-limit".into(),

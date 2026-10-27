@@ -4,8 +4,8 @@ use crate::{Failure, Operation, Report, Request, Result, measure};
 use ark_ff::PrimeField;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use zkc_cpu::Value;
 use zkc_kernels::{arkworks::bn254 as ark, halo2curves::bn254 as halo};
-use zkc_native::Value;
 
 fn scalars(n: usize) -> Vec<ark::Scalar> {
     scalars_for(b"scalars", n)

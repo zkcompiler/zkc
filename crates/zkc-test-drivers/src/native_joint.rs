@@ -2,13 +2,13 @@
 //! This is an executable integration client: expectations come from each source
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::services::{ServiceObservation, ServiceReference, ServiceRegistry};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{CutKind, DecodeReason, ServiceContract};
 
-fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str, session: &str, entry: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, session, entry, None), None),
         Default::default(),
@@ -20,7 +20,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &bytes,
         &backend("Alice", "admission", "main"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap()
@@ -59,7 +59,7 @@ impl Audit {
         }
     }
 }
-impl Hooks<NativeBackend> for Audit {
+impl Hooks<CpuBackend> for Audit {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -81,7 +81,7 @@ impl Hooks<NativeBackend> for Audit {
     fn observe(
         &mut self,
         role: &str,
-        _: &NativeBackend,
+        _: &CpuBackend,
         phase: Phase,
     ) -> Result<Option<String>, String> {
         let observations: Vec<_> = self
@@ -105,7 +105,7 @@ fn run_case(
     session: &str,
     mut values: Inputs,
     audit: &mut Audit,
-) -> Report<NativeBackend> {
+) -> Report<CpuBackend> {
     let inputs = bundle
         .roles()
         .iter()
@@ -135,10 +135,10 @@ fn run_case(
     assert!(audit.after.values().flatten().all(|o| !o.leased));
     report
 }
-fn role<'a>(report: &'a Report<NativeBackend>, name: &str) -> &'a RoleReport<Value> {
+fn role<'a>(report: &'a Report<CpuBackend>, name: &str) -> &'a RoleReport<Value> {
     report.roles.iter().find(|r| r.role == name).unwrap()
 }
-fn acceptance(report: &Report<NativeBackend>, name: &str, index: usize) -> bool {
+fn acceptance(report: &Report<CpuBackend>, name: &str, index: usize) -> bool {
     // This host-selected role/result coordinate is not inferred by the driver.
     let Value::Bool(value) = role(report, name).outputs[index] else {
         panic!("Boolean acceptance")
@@ -379,7 +379,7 @@ fn services(directory: &Path) {
     let b = Bundle::admit(
         raw.to_string().as_bytes(),
         &backend("Alice", "admission", "main"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap();

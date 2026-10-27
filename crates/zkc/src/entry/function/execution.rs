@@ -441,7 +441,7 @@ impl Execution<'_> {
                     .saturating_sub(self.usage.external_work),
             )
             .with_ring_work_limit(
-                zkc_native::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
+                zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
             )
             .with_sequence_work_limit(16_777_216u64.saturating_sub(self.usage.sequence_work));
         let result = LocalRunner::new_with_ledger(
@@ -556,7 +556,7 @@ impl Execution<'_> {
                     })
                     .collect::<Vec<_>>();
                 self.reserve_services(service_budgets.into_iter())?;
-                let mut limits = self.host.options.limits;
+                let mut limits = self.host.options.limits.clone();
                 limits.capacity = self.child_capacity(entry.interface().roles().len());
                 limits.steps = limits.steps.saturating_sub(self.usage.dispatches);
                 limits.total_wire_bytes = limits
@@ -566,8 +566,7 @@ impl Execution<'_> {
                     .external_work
                     .saturating_sub(self.usage.external_work)
                     / entry.interface().roles().len() as u64;
-                let ring = zkc_native::ring::DEFAULT_WORK_LIMIT
-                    .saturating_sub(self.usage.ring_work)
+                let ring = zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work)
                     / entry.interface().roles().len() as u64;
                 let sequence = 16_777_216u64.saturating_sub(self.usage.sequence_work)
                     / entry.interface().roles().len() as u64;
@@ -645,7 +644,7 @@ impl Execution<'_> {
                             .limits
                             .external_work
                             .saturating_sub(self.usage.external_work),
-                        zkc_native::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
+                        zkc_cpu::ring::DEFAULT_WORK_LIMIT.saturating_sub(self.usage.ring_work),
                         16_777_216u64.saturating_sub(self.usage.sequence_work),
                         proof_limit,
                         self.ledger.clone(),

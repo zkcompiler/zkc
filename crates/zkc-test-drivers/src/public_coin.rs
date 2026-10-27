@@ -2,8 +2,8 @@
 use serde::Deserialize;
 use serde_json::Value as Json;
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::services::ServiceRegistry;
-use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::services::ServiceRegistry;
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, FieldArray, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{Identity, LogicalType, ProgramAction};
 
@@ -63,8 +63,8 @@ fn value(v: &Json) -> Value {
         )
     }
 }
-fn backend(role: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "views", "main", None), None),
         Default::default(),
@@ -77,7 +77,7 @@ struct Wire {
     malformed: bool,
     coins: Vec<Scalar>,
 }
-impl Hooks<NativeBackend> for Wire {
+impl Hooks<CpuBackend> for Wire {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -119,7 +119,7 @@ fn execute(
     budget: u64,
     wire: &mut Wire,
     limits: RunLimits,
-) -> (Report<NativeBackend>, u64) {
+) -> (Report<CpuBackend>, u64) {
     let registry = ServiceRegistry::new(Policy::default());
     let reference = registry
         .issue_test_tape("Checker", budget, tape.to_vec())
@@ -150,7 +150,7 @@ fn execute(
     assert!(!state.leased);
     (report, state.state.unwrap().draw_count)
 }
-fn trace(bundle: &Bundle, view: &View, report: &Report<NativeBackend>) -> usize {
+fn trace(bundle: &Bundle, view: &View, report: &Report<CpuBackend>) -> usize {
     let mut observed: Vec<(&str, &str)> = vec![];
     let mut queries = 0;
     for reached in &report.reached {
@@ -182,7 +182,7 @@ fn trace(bundle: &Bundle, view: &View, report: &Report<NativeBackend>) -> usize 
     }
     queries
 }
-fn decision(report: &Report<NativeBackend>) -> bool {
+fn decision(report: &Report<CpuBackend>) -> bool {
     assert_eq!(report.outcome, Outcome::Completed);
     let output = &report
         .roles
@@ -195,7 +195,7 @@ fn decision(report: &Report<NativeBackend>) -> bool {
         _ => panic!("selected Boolean decision"),
     }
 }
-fn stopped(report: &Report<NativeBackend>) -> &StopSummary {
+fn stopped(report: &Report<CpuBackend>) -> &StopSummary {
     assert!(matches!(report.outcome, Outcome::ParticipantStopped { .. }));
     let verifier = report.roles.iter().find(|r| r.role == "Checker").unwrap();
     assert!(verifier.outputs.is_empty());
@@ -215,7 +215,7 @@ fn main() {
         let bundle = Bundle::admit(
             &std::fs::read(directory.join(format!("{}.bundle", case.name))).unwrap(),
             &backend("admission"),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
         .unwrap();

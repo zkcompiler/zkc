@@ -70,7 +70,7 @@ impl Options {
             options.run = options.run.with_work_limits(&read(file, 4096)?)?;
         }
         if let Some(file) = args.value("--setups") {
-            options.setups = files::authority(&read(file, 65536)?)?;
+            options.setups = SetupAuthority::from_bytes(&read(file, 65536)?)?;
         }
         if args.has("--allow-authored") {
             options.proof.binding = BindingPolicy::AllowAuthored;
@@ -138,54 +138,13 @@ impl Options {
         }
         Ok(options)
     }
-    pub fn request(
-        &mut self,
-        interface: &Interface,
-        invocation: &super::invocation::Invocation,
-        operation: Operation,
-        documents: &mut files::Documents,
-        report: &mut Json,
-    ) -> Result<ProofRequest> {
-        let mut load = |group: &super::super::inputs::InputGroup<'_>,
-                        path: Option<&std::path::PathBuf>| {
-            documents
-                .load(group, path.map(|p| p.as_path()))
-                .map_err(|e| {
-                    report["input_path"] = json!(e.path);
-                    if let Some(path) = path {
-                        report["input_file"] = json!(path);
-                    }
-                    e.code
-                })
-        };
-        let groups = interface.input_groups();
-        let public = load(&groups[0], invocation.inputs.get("public"))?;
-        let private = if operation == Operation::Prove {
-            load(&groups[1], invocation.inputs.get("witness"))?
-        } else {
-            Default::default()
-        };
-        let role = interface
-            .proof_role(if operation == Operation::Prove {
-                ProofOperation::Prove
-            } else {
-                ProofOperation::Verify
-            })
-            .ok_or("entry-job-kind")?;
-        let services = self.services.remove(role).unwrap_or_default();
-        if !self.services.is_empty() {
-            return Err("entry-service-names".into());
-        }
-        Ok(ProofRequest {
-            public,
-            private: RoleInputs {
-                inputs: private,
-                services,
-            },
+    pub fn call_options(&mut self) -> zkc::entry::memory::ProofCallOptions {
+        zkc::entry::memory::ProofCallOptions {
             context: std::mem::take(&mut self.context),
             transcript_budget: self.transcript_budget,
             setups: std::mem::take(&mut self.material),
-        })
+            services: std::mem::take(&mut self.services),
+        }
     }
 }
 pub(super) fn assignment(value: &str) -> Result<(&str, &str)> {

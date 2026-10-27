@@ -42,7 +42,7 @@ crate separately from consumers that enable parallelism.
 
 The [runtime crate](../../crates/zkc-runtime/README.md) owns the interpreter and custody
 API; [mathematical kernels](../../crates/zkc-kernels/README.md) own typed
-arithmetic without VM authority; [native backend](../../crates/zkc-native/README.md) owns installed bindings;
+arithmetic without VM authority; [native backend](../../crates/zkc-cpu/README.md) owns installed bindings;
 [SDK](../../crates/zkc/README.md) owns application Host APIs; the separate
 [CLI](../../crates/zkc-cli/README.md) owns arguments, commands and presentation. The
 [representation laws](../spec/realization/representations.md) state the

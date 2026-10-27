@@ -10,6 +10,35 @@ type Result<T> = std::result::Result<T, String>;
 pub struct SetupAuthority {
     pub keys: BTreeMap<String, [u8; 32]>,
 }
+#[derive(serde::Deserialize)]
+#[serde(remote = "Self", deny_unknown_fields)]
+struct AuthorityDocument {
+    format: String,
+    keys: BTreeMap<String, String>,
+}
+super::decode::objects!(AuthorityDocument);
+impl SetupAuthority {
+    /// Decode independently authorized setup pins; material confers no authority.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() > 64 * 1024 {
+            return Err("entry-request-limit".into());
+        }
+        let value = crate::host::document::read(bytes, 64 * 1024)?;
+        let value: AuthorityDocument =
+            serde_json::from_value(value).map_err(|_| "entry-request-format")?;
+        if value.format != "zkc.entry-setups/0" {
+            return Err("entry-request-format".into());
+        }
+        Ok(Self {
+            keys: value
+                .keys
+                .into_iter()
+                .map(|(name, pin)| Ok((name, crate::host::inputs::digest(&pin)?)))
+                .collect::<Result<_>>()?,
+        })
+    }
+}
+
 fn check(interface: &Interface, authority: &SetupAuthority) -> Result<()> {
     if authority.keys.len() != interface.setups.len()
         || interface
@@ -142,6 +171,7 @@ pub(super) fn check_pinned_material(
     material: &BTreeMap<String, Vec<u8>>,
     capacity: crate::execution::Capacity,
     imports: &mut crate::host::setups::VerifierKeys,
+    installation: &zkc_cpu::CpuInstallation,
 ) -> Result<BTreeMap<String, std::sync::Arc<zkc_kernels::arkworks::bls12_381::VerifierKey>>> {
     check(interface, authority)?;
     material_bytes(interface, material, capacity)?;
@@ -149,10 +179,12 @@ pub(super) fn check_pinned_material(
         .setups
         .iter()
         .map(|slot| {
-            Ok((
-                slot.name.clone(),
-                imports.import(&material[&slot.name], authority.keys[&slot.name])?,
-            ))
+            Ok((slot.name.clone(), {
+                if !installation.supports_setup() {
+                    return Err("cpu-installation-setup".into());
+                }
+                imports.import(&material[&slot.name], authority.keys[&slot.name])?
+            }))
         })
         .collect()
 }

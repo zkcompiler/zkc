@@ -2217,7 +2217,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkc-native"
+name = "zkc-cpu"
 version = "0.0.0"
 dependencies = [
  "ark-ff",
@@ -2269,7 +2269,7 @@ dependencies = [
  "p3-matrix 0.8.0",
  "serde_json",
  "zkc-kernels",
- "zkc-native",
+ "zkc-cpu",
  "zkc-plonky3-air",
  "zkc-plonky3-air-client",
  "zkc-runtime",

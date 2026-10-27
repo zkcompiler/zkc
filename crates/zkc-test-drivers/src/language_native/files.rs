@@ -9,8 +9,9 @@ use zkc::{
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-fn named(values: &NamedValues, registry: &zkc_native::SetupRegistry) -> Json {
-    let bytes = entry::files::proof_outputs(values, Capacity::default(), registry.clone()).unwrap();
+fn named(values: &NamedValues, registry: &zkc_cpu::SetupRegistry) -> Json {
+    let bytes =
+        entry::outputs::proof_outputs(values, Capacity::default(), registry.clone()).unwrap();
     serde_json::from_slice::<Json>(&bytes).unwrap()["values"].take()
 }
 fn save(directory: &Path, name: &str, value: &Json) -> String {
@@ -36,7 +37,7 @@ pub(super) fn setups(
     keys: Vec<(Vec<u8>, [u8; 32])>,
 ) {
     let registry =
-        entry::files::output_setups(&producer.setups, &authority, Capacity::default()).unwrap();
+        entry::outputs::output_setups(&producer.setups, &authority, Capacity::default()).unwrap();
     let mut imports = Vec::new();
     for (i, (bytes, pin)) in keys.into_iter().enumerate() {
         let name = format!("pk{i}");

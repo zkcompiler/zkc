@@ -2,12 +2,12 @@
 use super::{data, reference};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::{
-    Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value, services::ServiceRegistry,
+use zkc_cpu::{
+    CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value, services::ServiceRegistry,
 };
 use zkc_runtime::host::joint::*;
-fn backend(role: &str, entry: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str, entry: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "composed", entry, None), None),
         Default::default(),
@@ -29,7 +29,7 @@ struct Audit {
     scenario: Scenario,
     received: usize,
 }
-impl Hooks<NativeBackend> for Audit {
+impl Hooks<CpuBackend> for Audit {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -68,7 +68,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
     let b = Bundle::admit(
         &bytes,
         &backend("P", family),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap();
@@ -79,7 +79,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
             Bundle::admit(
                 &serde_json::to_vec(&bad).unwrap(),
                 &backend("P", family),
-                zkc_native::native_contracts(),
+                zkc_cpu::cpu_contracts(),
                 BundleLimits::default()
             )
             .is_err()
@@ -97,7 +97,7 @@ pub fn run(directory: &Path, family: &str, mode: &str) {
         Bundle::admit(
             &serde_json::to_vec(&missing).unwrap(),
             &backend("P", family),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default()
         )
         .is_err()

@@ -5,11 +5,11 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{NativeDeployment, NativeProofReport};
-use zkc_native::{Domain, EntryPolicy, FieldArray, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, FieldArray, G1, Policy, Scalar, Value};
 use zkc_runtime::vm::{Identity, LogicalType};
 use zkc_test_support::hex;
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),

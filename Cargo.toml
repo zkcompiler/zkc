@@ -5,7 +5,7 @@ members = [
   "crates/zkc-cli",
   "crates/zkc-web",
   "crates/zkc-kernels",
-  "crates/zkc-native",
+  "crates/zkc-cpu",
   "crates/zkc-test-support",
   "crates/zkc-test-drivers",
   "crates/zkc-benchmarks",
@@ -79,8 +79,14 @@ p3-challenger-043 = { package = "p3-challenger", version = "=0.4.3" }
 
 zkc = { path = "crates/zkc" }
 zkc-runtime = { path = "crates/zkc-runtime" }
-zkc-native = { path = "crates/zkc-native" }
+zkc-cpu = { path = "crates/zkc-cpu" }
 zkc-kernels = { path = "crates/zkc-kernels" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+# Browser deployment profile; keep ordinary native release builds unchanged.
+[profile.web]
+inherits = "release"
+lto = "thin"
+codegen-units = 1

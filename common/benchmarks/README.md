@@ -803,3 +803,99 @@ For exploratory resident measurements use `--processes=3`, bounded build workers
 (`cargo build --release --locked --jobs=2 -p zkc-benchmarks`) and the existing
 scheduler without `--exclusive`. Preserve each process's samples and variability;
 these operation/control measurements do not establish protocol throughput.
+
+## Browser module and proof-client observations
+
+The `browser` adapter uses prepared ordinary `ProofClient` cases, the same
+`Capture`/`Journal` evidence owners and optional measurement lock as native
+benchmarks. Supply prebuilt portable `pkg/` and, for matched SIMD runs,
+`pkg-simd/` alongside the production client and Worker modules. It downloads no
+tools or browsers. Playwright is pinned to **1.64.1**, matching the manual browser
+roundtrip check. Each process repetition starts a fresh Chromium process.
+
+```sh
+python3 common/benchmarks/run.py browser-fixtures \
+  --compiler build/compiler/zkc-compile --output build/experiments/browser-fixtures
+python3 common/benchmarks/run.py browser \
+  --web /absolute/path/to/web --cases build/experiments/browser-fixtures/cases.json \
+  --node /usr/bin/node --playwright /absolute/path/to/playwright/index.mjs \
+  --variant portable --variant simd --revision SOURCE_REVISION \
+  --processes 2 --samples 5 --warmups 1 --output build/experiments/browser
+```
+
+`browser-fixtures --source-only` generates source and inputs without compiling.
+`--case NAME` selects controls. The panel reuses the existing checked vector,
+transform and FRI generators, the retained independent Keccak reference, and
+Plonky3's Poseidon2 known answer. Goldilocks base/extension empty and tail lengths,
+small NTT/FRI, distinct Poseidon2 states, scalar Keccak, Keccak row commitments at
+the two-lane 32 KiB staging neighbors, blst G2/pairing, and byte publication are
+separate cases. The wrapper for local computations uses an authored proof Entry
+whose verifier repeats the public computation; these are workload controls with
+no cryptographic security claim. Distinct Poseidon2 compares every batch result
+with scalar calls and checks the first state against the retained known answer.
+The row commitment controls cross-verify scalar/batched root/path proofs across
+variants; they do not have an independent root oracle. Source equality checks
+and conversions remain inside the SDK call.
+
+External prepared fixtures use one exact case document, with paths relative to
+that document (and statement/material paths relative to the case directory):
+
+```json
+{"format":"zkc.browser-cases/0","cases":[
+  {"name":"schnorr","directory":"fixtures/schnorr","providers":["arkworks","blst"],
+   "options":{},"statements":[{"public":"public.json","witness":"witness.json"}]}
+]}
+```
+
+Each directory supplies `entry.zkpkg` and an independently recorded SHA-256
+`pin.txt`; the adapter checks the candidate against that pin. `providers` is
+required and identical for both module variants. Installation restriction does
+not exclude compiled dependencies. Optional `authority` names an independent
+`zkc.entry-setups/0` document, `setups` is `[{"slot":"key","path":"vk.bin"}]`,
+and `bindings` is `[{"name":"pk.bin","path":"pk.bin"}]` for ordinary opaque
+`setInput` bindings. The SDK retains semantic decoding, pin checking and setup
+authority. Multiple statements run a complete round-robin cycle in every warmup
+and sample. `expected_outputs` optionally names a full verifier output document.
+
+`browser-fixtures --setup-material DIR` additionally reuses the compiler's
+existing two-slot PCS source fixture with actual development key material. DIR
+supplies `public-0.json`/`witness-0.json` and a distinct `-1` statement,
+`authority.json`, `setups.json` and `bindings.json`; material paths in the latter
+two arrays are relative to DIR. Key generation is an explicit preparation step,
+never browser benchmark setup or a trusted ceremony.
+
+Add `--native-example /absolute/path/to/memory` for native/browser proof
+cross-verification in both directions for every variant and statement. The
+matching `zkc-web` memory example reads the same options, authority and opaque
+bindings; its additional controls and complete report are retained. Native
+process times have a different boundary and are not browser kernel ratios.
+
+The default `--transport borrowed` preserves caller inputs. `--transport consume`
+passes disposable input copies through the production consuming transfer API;
+making those copies is included in client latency. Both modes require matching
+outputs and proof verification. Neither mode isolates JS/Wasm copying from the
+SDK call. The report records the observed page timer increment; intervals below
+that increment cannot support fine speed comparisons.
+
+Reports retain raw/gzip deployment bytes, exact physical bindings, module fetch,
+`WebAssembly.compile`, instantiation inside glue startup, Worker readiness,
+admission, setup-byte installation, first/repeated calls, encoded output sizes,
+and a separate transferable MessageChannel calibration. HTTP is local and
+uncompressed. Every measured Worker receives a precompiled module, including the
+first case. Compilation can use browser engine caches; fresh Workers reset
+mutable state, not code caches. `setSetup` timing is byte installation; semantic
+output-key import is nested in SDK preflight, while input prover-key import is
+nested in Host preparation inside the execute/cleanup interval.
+
+Worker call time includes JS/Wasm conversion, SDK decoding/preflight, execution,
+cleanup, encoding and report construction. It excludes result getters. SDK
+instrumentation, when supplied, separately records package capture/admission,
+document/codec/output-key preflight, Host preparation/import/execution/cleanup,
+output encoding and diagnostics;
+missing observations remain unavailable. Client latency also includes snapshots,
+queueing, transfer, dispatch, getters and publication/delivery. Subtracting the
+Worker call gives a residual containing all those costs, not an exact transfer
+timer. These nested intervals must not be summed. Browser reports share `report`
+republication; `compare` refuses their overlapping boundaries. Compare explicit
+stage distributions in `summary.json`, retaining artifact and workload identities.
+No whole-browser memory, constant-time or security claim follows from the panel.

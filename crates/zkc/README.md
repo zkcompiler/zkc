@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         binding: BindingPolicy::AllowAuthored, ..Default::default()
     };
     let bytes = include_bytes!("proof.zkpkg");
-    let prover = proof::admit(bytes, options, Default::default())?;
+    let prover = proof::admit(bytes, options.clone(), Default::default())?;
     let verifier = proof::admit(bytes, options, Default::default())?;
     let proving = || ProofRequest {
         public: proof::PublicInputs { expected: true }.into(),
@@ -113,7 +113,8 @@ Admission retains immutable package identity and checks the executable, interfac
 and limits. Preparation checks arguments and invocation policies before execution
 resources are issued. `check_inputs` performs preparation and discards the plan;
 it does not execute or publish results. Prepared calls borrow their Host. Create
-a fresh request for each call; there is no implicit retry or session cache.
+a fresh request for each call; there is no implicit retry. Reusable immutable
+material does not retain invocation authority or reservations.
 
 An automatic protocol Entry or a closed generic selector such as `Echo<index>`
 also generates function bindings. For functions with child deployments, inspect
@@ -124,9 +125,34 @@ replace setup authority or child policies. `RunContext` defaults to a fresh
 OS-random session per reached call; explicit session freshness belongs to the
 application.
 
+## Memory and optional adapters
+
+Default features include `parallel`, `files` and `project`. With
+`default-features = false`, the SDK retains package admission, typed calls,
+bounded memory documents and result encoding, with inline numerical execution.
+`files` adds bounded file I/O and confined references; `project` adds manifests
+and the compiler subprocess service and implies `files`. Neither adapter is
+required to execute an authenticated package.
+
+`entry::memory::ProofCallOptions` and `ProofEntry::preflight_memory_call` use the
+same schema decoder, setup authority and proof Host as file calls. An explicit
+map of immutable `Arc<Vec<u8>>` bindings resolves document references; names
+confer no filesystem access or setup authority. `SetupAuthority::from_bytes`
+parses independently authorized setup pins. CPU material imports are reusable
+only for identical material, pin, bounds and installation; invocation authority
+and resource reservations are checked anew. Result encoding returns a guarded
+envelope; retain it through the transport copy or publication.
+
+`execution::CpuInstallation` composes the known providers before admission.
+`ProofOptions::with_installation` and the corresponding function/Host options
+retain that view through nested calls, services, input decoding and result
+encoding. The [CPU backend](../zkc-cpu/README.md#provider-composition) documents
+selection and the matching compiler target descriptor. This support policy is
+separate from numerical worker ownership.
+
 ## CPU execution
 
-Create `zkc::execution::CpuExecution::new(workers)?` with `1..=256` workers and
+With `parallel`, create `zkc::execution::CpuExecution::new(workers)?` with `1..=256` workers and
 pass it as the last argument to `admit_with_cpu` on `RunHost`,
 `NativeDeployment`, `RunEntry`, `ProofEntry` or `FunctionEntry`. For example:
 
@@ -141,14 +167,14 @@ construction onward. `ProofEntry::admit_operation_with_cpu` admits a selected
 proof operation. All five Hosts expose `cpu()` and `with_cpu` for rebinding an
 idle admitted Host; use `admit_with_cpu` when the context is known at construction
 to avoid creating an unused default pool. CPU ownership stays outside the
-copyable limit and option structs.
+limit and option structs.
 
-Each default `admit` creates one fresh, explicitly owned one-worker pool before
+With `parallel`, each default `admit` creates one fresh, explicitly owned one-worker pool before
 admission. Each independent `CpuExecution::serial()?` also creates a fresh pool;
 there is no process-global singleton. Clone a context to share one worker
 ceiling between independently admitted Hosts. `PreparedData` constructors and
 Entry result encoders also offer variants ending in `_with_cpu`;
-`FunctionResultEncoder::encode_with_cpu` and proof file results preserve sharing
+`FunctionResultEncoder::encode_with_cpu` and proof results preserve sharing
 through serialization.
 
 `cpu.enter` supplies the context lexically while validation, imports, partial
@@ -159,6 +185,10 @@ outside the ceiling. Dropping the last clone requests Rayon worker shutdown;
 drop does not guarantee that worker threads have joined. CPU policy is separate
 from capacity, authority, invocation data and artifact identity. The SDK does
 not read Rayon environment variables to select its worker count.
+
+Without `parallel`, only a worker count of one is accepted. Numerical work runs
+inline on the caller, including `serial()` and default admission; no pool is
+created. This is the browser build's execution policy.
 
 ## Proof authority and outcomes
 
@@ -219,8 +249,8 @@ sharing aggregate decode limits. `entry::files::Invocations` imports child
 policies and setup material under their independent authorities.
 Its `into_parts` transfers admission pins, decoded invocation context and a result
 encoder that retains the original capacity and authenticated setup material.
-`ProofEntry::preflight_file_call` retains the selected operation, input imports and
-result codecs through execution and encoding. It checks file codecs and setup
+`ProofEntry::preflight_call` retains the selected operation, input imports and
+result codecs through execution and encoding. It checks requested codecs and setup
 imports before reading candidate proof bytes; request validation and execution
 preparation occur during `execute`. Errors retain their phase and code.
 
@@ -262,7 +292,7 @@ of their returned package uses the same admission APIs as precompiled inputs.
 | `run`, `proof` | Native deployments, setup/public authority and typed execution reports |
 
 The CLI owns argument grammar and command reports. Portable scheduling and
-framing live in `zkc-runtime::host`; native adaptation lives in `zkc-native`.
+framing live in `zkc-runtime::host`; native adaptation lives in `zkc-cpu`.
 The [generated consumer](../../common/tests/protocol/test_rust_sdk.py) and
 [staged SDK consumer](../../common/tests/check_rust_sdk.py) build independent
 normal-feature applications and execute outside the checkout without compiler

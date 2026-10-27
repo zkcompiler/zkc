@@ -300,6 +300,7 @@ add_zkc_component(Transforms
   lib/Transforms/Storage.cpp
   lib/Transforms/LinearContraction.cpp
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
+  lib/Target/CpuTarget.cpp
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
   lib/Target/ExecutionPorts.cpp

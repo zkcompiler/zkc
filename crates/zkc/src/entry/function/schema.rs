@@ -26,6 +26,7 @@ impl FunctionSignature {
 /// Only FunctionEntry binds it to the authenticated artifact.
 #[derive(Debug)]
 pub struct FunctionInterface {
+    pub(super) installation: zkc_cpu::CpuInstallation,
     pub(super) document: super::carrier::Interface,
     types: std::collections::BTreeMap<String, zkc_runtime::vm::LogicalType>,
 }
@@ -61,7 +62,7 @@ impl FunctionInterface {
             crate::host::inputs::digest(&document.capture).is_ok()
                 && !document.toolchain.is_empty()
                 && document.toolchain.len() <= 256 * 1024
-                && crate::project::selection::canonical_name(&document.entry),
+                && crate::source_names::canonical_name(&document.entry),
             "entry-host-identity",
         )?;
         let mut schemas = crate::entry::interface::schemas::Schemas::new();
@@ -94,7 +95,11 @@ impl FunctionInterface {
         crate::host::inputs::digest(&document.original)
             .map_err(|e| super::EntryError::new(super::EntryPhase::Interface, e))?;
         let types = schemas.finish();
-        Ok(Self { document, types })
+        Ok(Self {
+            document,
+            types,
+            installation: Default::default(),
+        })
     }
     pub fn signature(&self) -> &FunctionSignature {
         self.document
@@ -224,7 +229,17 @@ impl super::FunctionInterface {
             .collect()
     }
     pub fn check_result_encoding(&self) -> super::Result<()> {
-        if self.result_types()?.iter().all(zkc_native::has_native_wire) {
+        self.check_result_encoding_with_installation(&self.installation)
+    }
+    pub fn check_result_encoding_with_installation(
+        &self,
+        installation: &zkc_cpu::CpuInstallation,
+    ) -> super::Result<()> {
+        if self
+            .result_types()?
+            .iter()
+            .all(|ty| installation.supports_wire(ty))
+        {
             Ok(())
         } else {
             Err(super::error("entry-output-codec"))
@@ -236,6 +251,6 @@ impl super::FunctionInterface {
             .leaves
             .iter()
             .filter_map(|leaf| self.logical_type(leaf))
-            .any(|ty| zkc_native::requires_setup(ty.clone()))
+            .any(|ty| zkc_cpu::requires_setup(ty.clone()))
     }
 }

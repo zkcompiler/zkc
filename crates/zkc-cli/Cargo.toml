@@ -16,7 +16,7 @@ tempfile.workspace = true
 
 [dev-dependencies]
 ark-std = { workspace = true, features = ["getrandom"] }
-zkc-native.workspace = true
+zkc-cpu.workspace = true
 zkc-kernels.workspace = true
 zkc-runtime.workspace = true
 zkc-test-support.workspace = true

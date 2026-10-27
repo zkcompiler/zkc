@@ -5,15 +5,15 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::NativeDeployment;
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value, Variant};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value, Variant};
 use zkc_runtime::vm::{LogicalType, Value as RuntimeValue};
 use zkc_test_support::hex;
 use zkc_test_support::variants::logical;
 fn digest(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("Alice", "test", "main", None), None),
         Default::default(),
@@ -459,7 +459,7 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     // Unknown deployment formats refuse before message-type interpretation.
     zkc_runtime::vm::Program::decode(
         envelope[4].as_str().unwrap().as_bytes(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
         program.check_installation(&backend())?;

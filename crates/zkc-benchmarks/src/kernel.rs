@@ -6,8 +6,8 @@ use ark_ff::PrimeField;
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use zkc_cpu::Value;
 use zkc_kernels::{arkworks::bls12_381 as ark, blst::bls12_381 as blst};
-use zkc_native::Value;
 
 mod bn254;
 mod installed;
@@ -693,7 +693,7 @@ fn kernel_diagnostics(
     chain_length: usize,
 ) -> Result<serde_json::Value> {
     use zkc_runtime::vm::{ExecutionPolicy, PhysicalType, Type};
-    let contracts = zkc_native::native_contracts_with_policy(ExecutionPolicy {
+    let contracts = zkc_cpu::cpu_contracts_with_policy(ExecutionPolicy {
         allow_unspecified_timing: true,
         allow_variable_time: kernel == Kernel::Msm,
     });

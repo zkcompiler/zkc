@@ -160,6 +160,7 @@ pub(super) fn proof_inputs(
     public_types: &[zkc_runtime::vm::PhysicalType],
     private: NamedValues,
     capacity: crate::host::capacity::Capacity,
+    installation: &zkc_cpu::CpuInstallation,
 ) -> Result<Vec<InputValue>, String> {
     let private = values(interface.named_inputs(role), private, None)?;
     let mut private = private.into_iter();
@@ -173,7 +174,7 @@ pub(super) fn proof_inputs(
                 .iter()
                 .zip(&public_types[start..start + len])
             {
-                crate::host::admission::check_native_data(physical, input, capacity)?;
+                crate::host::admission::check_native_data(physical, input, capacity, installation)?;
                 inputs.push(duplicate(input, capacity, &mut public_wire_bytes)?);
             }
         } else {
@@ -200,7 +201,7 @@ fn duplicate(
         }
         InputValue::Native(value) => InputValue::Native(value.clone()),
         InputValue::Prepared(data) => InputValue::Prepared(data.clone()),
-        InputValue::WireFile { file, sha256 } => InputValue::WireFile {
+        InputValue::WireSource { file, sha256 } => InputValue::WireSource {
             file: file.clone(),
             sha256: *sha256,
         },

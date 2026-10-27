@@ -4,10 +4,24 @@ use std::{fs, path::Path, time::Instant};
 use zkc_web::{ProofResult, ProofSession};
 fn observation(result: Result<ProofResult, String>) -> Json {
     match result {
-        Err(e) => json!({"error":e}),
+        Err(e) => match serde_json::from_str::<Json>(&e)
+            .ok()
+            .and_then(|v| v.get("sdk_refusal").cloned())
+        {
+            Some(refusal) => json!({"error":refusal["code"], "refusal":refusal}),
+            None => json!({"error":e}),
+        },
         Ok(result) => {
             json!({"report":serde_json::from_str::<Json>(&result.report()).unwrap(), "proof_bytes":result.proof().len(), "has_outputs":result.outputs().is_some()})
         }
+    }
+}
+
+fn optional_json(path: &Path, default: Json) -> Result<Json, Box<dyn std::error::Error>> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(default),
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -27,7 +41,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(out)?;
     let package = fs::read(dir.join("entry.zkpkg"))?;
     let start = Instant::now();
-    let mut session = ProofSession::new(&package, &pin, "{}", &[])?;
+    let options = optional_json(&dir.join("options.json"), json!({}))?;
+    let authority = optional_json(&dir.join("authority.json"), Json::Null)?;
+    let authority = if authority.is_null() {
+        Vec::new()
+    } else {
+        serde_json::to_vec(&authority)?
+    };
+    let mut session = ProofSession::new(&package, &pin, &options.to_string(), &authority)?;
+    for binding in optional_json(&dir.join("setups.json"), json!([]))?
+        .as_array()
+        .ok_or("setup bindings")?
+    {
+        session.set_setup(
+            binding["slot"].as_str().ok_or("setup slot")?,
+            &fs::read(dir.join(binding["path"].as_str().ok_or("setup path")?))?,
+        )?;
+    }
+    for binding in optional_json(&dir.join("inputs.json"), json!([]))?
+        .as_array()
+        .ok_or("input bindings")?
+    {
+        session.set_input(
+            binding["name"].as_str().ok_or("input name")?,
+            &fs::read(dir.join(binding["path"].as_str().ok_or("input path")?))?,
+        )?;
+    }
     let admission_ms = start.elapsed().as_secs_f64() * 1000.;
     let public = fs::read(dir.join("public.json"))?;
     let witness = fs::read(dir.join("witness.json"))?;
@@ -56,31 +95,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
-    let mut unfilled: Json = serde_json::from_slice(&witness)?;
-    let first = unfilled
-        .as_object()
-        .ok_or("witness map")?
-        .keys()
-        .next()
-        .ok_or("witness field")?
-        .clone();
-    unfilled[&first] = Json::Null;
-    let mut reference: Json = serde_json::from_slice(&public)?;
-    let first = reference
-        .as_object()
-        .ok_or("public map")?
-        .keys()
-        .next()
-        .ok_or("public field")?
-        .clone();
-    reference[&first] = json!({"file":"forbidden.bin","sha256":"00".repeat(32)});
-    let controls = json!({
+    let mut controls = json!({
         "malformed": observation(session.prove(b"{", &witness, &[], None)),
-        "unfilled": observation(session.prove(&public, &serde_json::to_vec(&unfilled)?, &[], None)),
-        "reference": observation(session.prove(&serde_json::to_vec(&reference)?, &witness, &[], None)),
-        "truncated": observation(session.verify(&public, &result.proof()[..5], &[], None)),
+        "truncated": observation(session.verify(&public, &result.proof()[..result.proof().len().min(5)], &[], None)),
         "limited": observation(session.prove(&public, &witness, &[], Some(0))),
     });
+    let mut unfilled: Json = serde_json::from_slice(&witness)?;
+    if let Some(first) = unfilled
+        .as_object()
+        .and_then(|object| object.keys().next())
+        .cloned()
+    {
+        unfilled[&first] = Json::Null;
+        controls["unfilled"] =
+            observation(session.prove(&public, &serde_json::to_vec(&unfilled)?, &[], None));
+    }
+    let mut reference: Json = serde_json::from_slice(&public)?;
+    if let Some(first) = reference
+        .as_object()
+        .and_then(|object| object.keys().next())
+        .cloned()
+    {
+        reference[&first] = json!({"file":"forbidden.bin","sha256":"00".repeat(32)});
+        controls["reference"] =
+            observation(session.prove(&serde_json::to_vec(&reference)?, &witness, &[], None));
+    }
     session.dispose();
     if session.describe().err().as_deref() != Some("web-session-disposed") {
         return Err("dispose failed".into());

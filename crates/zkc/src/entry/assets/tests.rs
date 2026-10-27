@@ -10,7 +10,7 @@ use crate::run::HostLimits;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zkc_native::{KoalaBear, KoalaBearExt8, Value as Native};
+use zkc_cpu::{KoalaBear, KoalaBearExt8, Value as Native};
 use zkc_runtime::{
     logical,
     ring::{Expression, Node},
@@ -631,7 +631,7 @@ fn selected_verifier_assets_exclude_producer_only_numerical_roots() {
     };
     let producer = ProofEntry::admit_operation(
         package(&interface, &artifact, &pairs),
-        options,
+        options.clone(),
         SetupAuthority::default(),
         crate::entry::ProofOperation::Prove,
     )
@@ -647,7 +647,7 @@ fn selected_verifier_assets_exclude_producer_only_numerical_roots() {
         .collect::<Vec<_>>();
     let validator = ProofEntry::admit_operation(
         package(&interface, &artifact, &validator_assets),
-        options,
+        options.clone(),
         SetupAuthority::default(),
         crate::entry::ProofOperation::Verify,
     )
@@ -659,7 +659,7 @@ fn selected_verifier_assets_exclude_producer_only_numerical_roots() {
     assert!(report.is_success(), "{:?}", report.native.outcome);
     let refused = ProofEntry::admit_operation(
         package(&interface, &artifact, &validator_assets),
-        options,
+        options.clone(),
         SetupAuthority::default(),
         crate::entry::ProofOperation::Prove,
     )

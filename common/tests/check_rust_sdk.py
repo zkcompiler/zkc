@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
-CRATES = ('zkc', 'zkc-runtime', 'zkc-native', 'zkc-kernels', 'zkc-test-support')
+CRATES = ('zkc', 'zkc-runtime', 'zkc-cpu', 'zkc-kernels', 'zkc-test-support')
 SOURCE = '''module application;
 entry fn Twice(値:index) { return 値 + 2; }
 entry fn Checked(value:index,valid:bool){require valid;return value+1;}
@@ -103,7 +103,7 @@ def check(output, sdk_source, prepared):
     metadata = json.loads(run([*cargo, 'metadata', '--format-version=1'], cwd=consumer, env=env))
     names = {p['id']: p['name'] for p in metadata['packages']}
     for node in metadata['resolve']['nodes']:
-        if names[node['id']] in ('zkc', 'zkc-native', 'zkc-runtime', 'zkc-kernels'):
+        if names[node['id']] in ('zkc', 'zkc-cpu', 'zkc-runtime', 'zkc-kernels'):
             assert not {'test-utils', 'execution-counts'} & set(node['features']), node
     run([*cargo, 'build', '--target-dir', target], cwd=consumer, env=env)
     execution = output / 'execution'

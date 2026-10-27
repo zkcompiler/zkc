@@ -1,5 +1,6 @@
 #include "zkc/Compiler/Host.h"
 #include "../Transforms/PreparedProtocol.h"
+#include "CompilationState.h"
 #include "LanguageInterface.h"
 #include "LanguagePackageReader.h"
 #include "NativeDeployment.h"
@@ -32,6 +33,8 @@ namespace {
 Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
                                 const EntryOptions &options) {
   TimeTraceScope timing("zkc.lower-entry-calculation");
+  zkc::detail::Diagnostics diagnostics(*original.getContext());
+  diagnostics.atRoot(original.getLoc());
   auto *observations = options.observations;
   if (observations)
     observations->phase("protocol", original);
@@ -42,10 +45,12 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
   if (observations)
     observations->decisions(original, trace);
   if (!preparation)
-    return error("entry.numeric", "numerical helper preparation failed");
+    return diagnostics.failure(
+        error("entry.numeric", "numerical helper preparation failed"));
   auto prepared = std::move(*preparation).execute();
   if (!prepared)
-    return error("entry.numeric", "numerical execution preparation failed");
+    return diagnostics.failure(
+        error("entry.numeric", "numerical execution preparation failed"));
   if (observations)
     observations->phase("execution", *prepared);
   mlir::PassManager pipeline(prepared->getContext());
@@ -53,10 +58,11 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
     observations->instrument(pipeline);
   pipeline.addPass(protocol::createSelectPhysicalPass(
       {}, false, options.releaseStorage, nullptr, {},
-      options.mathematicalSelection));
+      options.mathematicalSelection, options.cpuTarget));
   auto outcome = pipeline.run(*prepared);
-  if (mlir::failed(outcome))
-    return error("entry.numeric", "numerical physical lowering failed");
+  if (mlir::failed(outcome) || diagnostics.hasErrors())
+    return diagnostics.failure(
+        error("entry.numeric", "numerical physical lowering failed"));
   if (observations)
     observations->phase("physical", *prepared);
   auto result = protocol::exportModule(*prepared);
@@ -84,6 +90,60 @@ json::Array schemas(ArrayRef<Port> ports, Layouts &layouts, Error &failure) {
   }
   return out;
 }
+// Host pass-through values may never enter a numerical Program. Check their
+// existing logical layouts here, including inactive and zero-length children.
+class HostTargetCheck {
+  Layouts &layouts;
+  const target::CpuTarget &cpuTarget;
+  std::set<const Layout *> visited;
+
+  Error checkLayout(const Layout &layout) {
+    if (!visited.insert(&layout).second)
+      return Error::success();
+    for (const auto &leaf : layout.leaves)
+      if (const auto *data = leaf.data()) {
+        auto logical = protocol::parseBoundType(*data, false);
+        if (!logical)
+          return logical.takeError();
+        auto physical = protocol::defaultRepresentation(*logical);
+        if (!physical)
+          return physical.takeError();
+        if (auto e = cpuTarget.checkType(*physical))
+          return e;
+      }
+    for (const auto &field : layout.fields)
+      if (auto e = checkLayout(*field.layout))
+        return e;
+    for (const auto &alternative : layout.alternatives)
+      for (const auto &field : alternative.fields)
+        if (auto e = checkLayout(*field.layout))
+          return e;
+    if (layout.type.kind == Type::Kind::Array && layout.fields.empty())
+      return check(layout.type.arguments.front());
+    return Error::success();
+  }
+
+public:
+  HostTargetCheck(Layouts &layouts, const target::CpuTarget &cpuTarget)
+      : layouts(layouts), cpuTarget(cpuTarget) {}
+  Error check(const Type &type) {
+    auto layout = layouts.get(type);
+    if (!layout)
+      return layout.takeError();
+    return checkLayout(**layout);
+  }
+  Error check(const Body &body) {
+    for (const auto &value : body.values)
+      if (auto e = check(value.type))
+        return e;
+    for (const auto &operation : body.operations)
+      if (const auto *control = std::get_if<LocalControl>(&operation.action))
+        for (const auto &region : control->regions)
+          if (auto e = check(*region))
+            return e;
+    return Error::success();
+  }
+};
 Error references(
     const json::Value &block,
     std::map<std::string, std::pair<json::Array, json::Array>> &deployments,
@@ -147,6 +207,18 @@ Expected<CompiledHost> compileHost(const CheckedOriginal &original,
     return analysis.takeError();
   json::Array calculations, deployments;
   Layouts layouts(entry, limits);
+  HostTargetCheck targetCheck(layouts, options.cpuTarget);
+  for (const auto &declaration : entry.declarations()) {
+    if (declaration.kind != Declaration::Kind::EntryFunction ||
+        !declaration.body || !declaration.parameters.empty())
+      continue;
+    for (const auto *ports : {&declaration.inputs, &declaration.outputs})
+      for (const auto &port : *ports)
+        if (auto e = targetCheck.check(port.type))
+          return e;
+    if (auto e = targetCheck.check(*declaration.body))
+      return e;
+  }
   Error failure = Error::success();
   for (const auto &fragment : analysis->calculations) {
     mlir::ModuleOp nested;
@@ -948,7 +1020,7 @@ public:
             auto role =
                 nativeRoleName(operation == "verify" ? child->proof->verifier
                                                      : child->proof->prover);
-            if (auto e = zkc::detail::checkNativeOperationArtifact(
+            if (auto e = zkc::detail::checkCpuOperationArtifact(
                     package->artifact, child->original, role))
               return e;
           }

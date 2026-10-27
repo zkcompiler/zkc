@@ -171,17 +171,18 @@ native slices and nominal descriptors; display type strings are not executable
 layout descriptions.
 
 Ordinary leaves use `entry::Value::Leaf` with `InputValue::Native`, `Wire`,
-`Prepared`, or `WireFile`. `Wire` owns shared `Arc<Vec<u8>>` bytes; public-to-role
+`Prepared`, or `WireSource`. `Wire` owns shared `Arc<Vec<u8>>` bytes; public-to-role
 duplication shares that owner. Every occurrence, including nested/repeated
 aliases, retains its ordinary quota and loading charges. Canonical content and
 the admitted physical type determine agreement; pointer identity grants no
 authority. Loaded native values own their storage independently of the request
 and Wire owners. `Prepared` retains decoded immutable data with its canonical
 encoding; each invocation still checks type, policy, setup and loading limits.
-`WireFile` retains an opened regular descriptor and an expected
-SHA-256; common Host preparation reads and authenticates it under input limits.
-Applications can use `InputFile::read_verified` to materialize the same pinned
-descriptor under an explicit byte ceiling before constructing a `Wire` input.
+`WireSource` retains an `InputSource` and an expected SHA-256. A source owns
+shared immutable bytes or, with the SDK's `files` feature, an opened regular
+descriptor. Common Host preparation reads and authenticates it under input limits.
+Applications can use `InputSource::read_verified` to materialize the same pinned
+source under an explicit byte ceiling before constructing a `Wire` input.
 Materialization checks the pin; ordinary Host type and capacity checks still apply.
 The admitted source schema's `constructible` authority applies recursively
 through products and alternative payloads. A matching native representation does
@@ -219,6 +220,24 @@ native admission still checks canonical agreement. Setup imports may reuse
 identical canonical bytes under the same authorized pin within an invocation;
 each native operand retains its usual resource charge.
 
+`preflight_document_call` owns common request assembly: requested output codecs
+are checked before loading documents, public data precedes the witness, and
+the selected role's services are checked before ordinary call preflight.
+`preflight_memory_call` and `files::Documents::preflight_call` use this path with
+the same schema decoder. Memory references resolve only explicit named bytes;
+they confer no filesystem access. Candidate proof bytes enter `ProofCall::execute`
+after document preflight. `ProofCall::check_inputs` validates the assembled
+request without executing or issuing resources.
+
+An admitted CPU proof Entry can retain immutable numerical imports across calls,
+bounded by the smaller admitted live/total value-byte ceiling. Reuse requires
+exact bytes, independent pins, fixed bounds and installation; prover imports also
+match the selected verifier snapshot and material fingerprint. Replacement
+invalidates affected imports before validation. Adapters replacing named input
+bytes call `invalidate_prover_inputs`; setup replacement uses `invalidate_setup`.
+Eviction or disabled retention never grants authority or changes a valid import's
+meaning. Every invocation retains its own charges and reservations.
+
 Each request also supplies application context bytes and an optional transcript
 budget. Public values remain independently authorized by the application.
 Zero-leaf public and private inputs remain required in their respective maps.
@@ -243,6 +262,12 @@ means preparation succeeded, not proof acceptance. The report is `must_use`;
 `is_success()` checks execution, cleanup and output reconstruction together.
 `into_result()` returns the entire report on either branch, preserving rejection
 and cleanup details.
+
+`ProofResult::encode_results` returns a borrowed `EncodedResults` envelope;
+`encode_results_owned` on an `Arc<ProofResult>` returns `OwnedEncodedResults`.
+Both retain the original result's custody and charged encoded storage through
+publication or transport copying. Encoding failure publishes no partial buffer.
+Callers check the execution report separately from encoding and delivery.
 
 ## Attempts and operational defaults
 

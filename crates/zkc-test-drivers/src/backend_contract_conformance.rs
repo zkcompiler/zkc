@@ -1,6 +1,6 @@
 //! Observe the executing backend's own registry and physical signatures.
 use serde_json::{Value, json};
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy};
 use zkc_runtime::vm::{
     AttributeRule, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding,
     PhysicalType,
@@ -8,11 +8,11 @@ use zkc_runtime::vm::{
 
 // Admission-only adapter: preserve the native backend's ports and deliberately
 // change its attribute contract. Any execution attempt is a harness defect.
-struct AttributeDrift<'a>(&'a NativeBackend);
+struct AttributeDrift<'a>(&'a CpuBackend);
 impl Backend for AttributeDrift<'_> {
     type Call = ();
     type Checkpoint = ();
-    type Value = <NativeBackend as Backend>::Value;
+    type Value = <CpuBackend as Backend>::Value;
     type Operation = zkc_runtime::vm::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         let mut signature = self.0.binding_signature(binding)?;
@@ -45,7 +45,7 @@ impl Backend for AttributeDrift<'_> {
     }
 }
 
-fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
+fn installation(native: &CpuBackend, drift: bool) -> Option<Value> {
     let binding = OperationBinding {
         contract: "field.add".into(),
         arguments: vec!["bls12-381.fr".into()],
@@ -90,19 +90,15 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
     let original = native.binding_signature(&binding)?;
     let mutated = AttributeDrift(native).binding_signature(&binding)?;
     let result = if drift {
-        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts()).and_then(
-            |program| {
-                program.check_installation(&AttributeDrift(native))?;
-                Ok(program)
-            },
-        )
+        zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).and_then(|program| {
+            program.check_installation(&AttributeDrift(native))?;
+            Ok(program)
+        })
     } else {
-        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts()).and_then(
-            |program| {
-                program.check_installation(native)?;
-                Ok(program)
-            },
-        )
+        zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).and_then(|program| {
+            program.check_installation(native)?;
+            Ok(program)
+        })
     };
     Some(json!({"accepted": true, "admitted": result.is_ok(),
         "error": result.err().map(|error| error.code.as_str()),
@@ -110,7 +106,7 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
         "same_attributes": original.attributes == mutated.attributes}))
 }
 
-fn respond(native: &NativeBackend, line: &[u8]) -> Option<Value> {
+fn respond(native: &CpuBackend, line: &[u8]) -> Option<Value> {
     let request = zkc_test_support::json_lines::request(line)?;
     if request.len() == 1 && request.contains_key("attribute_drift") {
         return installation(native, request.get("attribute_drift")?.as_bool()?);
@@ -154,13 +150,13 @@ fn main() -> std::io::Result<()> {
         eprintln!("usage: backend_contract_conformance");
         std::process::exit(2);
     }
-    let native = NativeBackend::new(
+    let native = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "session", "main", None), None),
         Default::default(),
     )
     .map_err(|error| std::io::Error::other(error.code))?
-    .with_contracts(zkc_native::native_contracts_with_policy(
+    .with_contracts(zkc_cpu::cpu_contracts_with_policy(
         zkc_runtime::vm::ExecutionPolicy::general_purpose(),
     ))
     .map_err(|error| std::io::Error::other(error.code))?;

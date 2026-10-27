@@ -666,6 +666,7 @@ impl ContractsBuilder {
             }),
             policy,
             timing_grants: Arc::new(Vec::new()),
+            support: None,
         }
     }
 }
@@ -677,6 +678,37 @@ struct ContractContext {
     aggregates: BTreeMap<&'static str, AggregateRepresentation>,
     representations: BTreeMap<&'static str, BTreeMap<LogicalType, PhysicalType>>,
 }
+
+/// A trusted, subtractive deployment view. It can withhold compiled support;
+/// independently installed declarations still determine all types and laws.
+/// Called during admission and linking, never as a numerical dispatch policy.
+pub trait ContractSupport: std::fmt::Debug + Send + Sync {
+    fn permits_type(&self, ty: &PhysicalType) -> bool;
+    fn permits_binding(&self, binding: &OperationBinding) -> bool;
+}
+
+#[derive(Debug)]
+struct SupportView {
+    parent: Option<Arc<SupportView>>,
+    restriction: Arc<dyn ContractSupport>,
+}
+impl SupportView {
+    fn permits_type(&self, ty: &PhysicalType) -> bool {
+        self.permits_node(ty)
+            && ty
+                .children()
+                .is_none_or(|children| children.iter().all(|child| self.permits_type(child)))
+    }
+    fn permits_node(&self, ty: &PhysicalType) -> bool {
+        self.parent.as_ref().is_none_or(|p| p.permits_node(ty)) && self.restriction.permits_type(ty)
+    }
+    fn permits_binding(&self, binding: &OperationBinding) -> bool {
+        self.parent
+            .as_ref()
+            .is_none_or(|p| p.permits_binding(binding))
+            && self.restriction.permits_binding(binding)
+    }
+}
 /// Immutable trusted context retained by each admitted Program. There is no
 /// registration at execution time and no backend is constructed by admission.
 #[derive(Clone)]
@@ -685,6 +717,7 @@ pub struct Contracts {
     timing_grants: Arc<Vec<TimingGrant>>,
     context: Arc<ContractContext>,
     policy: ExecutionPolicy,
+    support: Option<Arc<SupportView>>,
 }
 impl std::fmt::Debug for Contracts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -696,6 +729,29 @@ impl std::fmt::Debug for Contracts {
     }
 }
 impl Contracts {
+    /// Retain catalog/layout identity while narrowing support. Repeated
+    /// restrictions intersect; a new view cannot restore an omitted capability.
+    pub fn restricted(&self, restriction: impl ContractSupport + 'static) -> Self {
+        let mut view = self.clone();
+        view.authorization = AuthorizationId::fresh();
+        view.support = Some(Arc::new(SupportView {
+            parent: self.support.clone(),
+            restriction: Arc::new(restriction),
+        }));
+        view
+    }
+
+    /// Constant-time retained-handle compatibility, separate from timing grants.
+    /// Identical names from independently built catalogs do not imply identity.
+    pub fn same_support(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.context, &other.context)
+            && match (&self.support, &other.support) {
+                (None, None) => true,
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                _ => false,
+            }
+    }
+
     pub fn standard(policy: ExecutionPolicy) -> Self {
         ContractsBuilder::standard().finish(policy)
     }
@@ -732,6 +788,7 @@ impl Contracts {
             context: self.context.clone(),
             timing_grants: self.timing_grants.clone(),
             policy,
+            support: self.support.clone(),
         }
     }
     /// Grant an exact implementation's complete timing premise. This immutable
@@ -741,11 +798,15 @@ impl Contracts {
         declaration: OperationBinding,
         requirements: ImplementationRequirements,
     ) -> Result<Self> {
+        self.check_binding_support(&declaration)?;
         let physical = self.physical_arguments(&declaration)?;
         let (signature, id, expected) = self
             .context
             .registry
             .resolve_physical(&declaration, &physical)?;
+        for ty in signature.inputs.iter().chain(&signature.outputs) {
+            self.validate_type(ty)?;
+        }
         requirements.validate(signature.inputs.len())?;
         if expected != requirements {
             return Err(AdmissionError::new(
@@ -786,6 +847,16 @@ impl Contracts {
     /// Check complete layout ownership in this immutable catalog, including
     /// inactive alternatives. This does not grant a wire codec or execution policy.
     pub fn validate_type(&self, ty: &PhysicalType) -> Result<()> {
+        if self
+            .support
+            .as_ref()
+            .is_some_and(|view| !view.permits_type(ty))
+        {
+            return Err(AdmissionError::new(
+                ErrorCode::Representation,
+                "installation-type",
+            ));
+        }
         check_type(
             self.context.standard,
             &self.context.representations,
@@ -805,12 +876,14 @@ impl Contracts {
     }
 
     pub fn physical_type(&self, spelling: &str) -> Result<PhysicalType> {
-        parse_type(
+        let ty = parse_type(
             self.context.standard,
             &self.context.representations,
             &self.context.aggregates,
             spelling,
-        )
+        )?;
+        self.validate_type(&ty)?;
+        Ok(ty)
     }
     pub fn aggregate_type(
         &self,
@@ -819,12 +892,7 @@ impl Contracts {
         children: Vec<PhysicalType>,
     ) -> Result<PhysicalType> {
         let ty = PhysicalType::aggregate(logical, representation, children)?;
-        check_type(
-            self.context.standard,
-            &self.context.representations,
-            &self.context.aggregates,
-            &ty,
-        )?;
+        self.validate_type(&ty)?;
         Ok(ty)
     }
     fn physical_arguments(&self, declaration: &OperationBinding) -> Result<Vec<PhysicalType>> {
@@ -837,6 +905,7 @@ impl Contracts {
     /// Resolve exact choices only after trusted eligibility filtering. A caller
     /// ranking candidates must use this same operation before ranking them.
     pub fn resolve(&self, declaration: OperationBinding) -> Result<ResolvedBinding> {
+        self.check_binding_support(&declaration)?;
         let physical = self.physical_arguments(&declaration)?;
         let (signature, id, requirements) = self
             .context
@@ -849,12 +918,7 @@ impl Contracts {
             ));
         }
         for ty in signature.inputs.iter().chain(&signature.outputs) {
-            check_type(
-                self.context.standard,
-                &self.context.representations,
-                &self.context.aggregates,
-                ty,
-            )?;
+            self.validate_type(ty)?;
         }
         if declaration.contract == "transcript.native.indexed.observe.data"
             && !self.permits_wire(&signature.inputs[1], WireCodec::Native)
@@ -888,6 +952,20 @@ impl Contracts {
             physical
         };
         ResolvedBinding::admitted(declaration, signature, id, requirements, physical)
+    }
+
+    fn check_binding_support(&self, declaration: &OperationBinding) -> Result<()> {
+        if self
+            .support
+            .as_ref()
+            .is_some_and(|view| !view.permits_binding(declaration))
+        {
+            return Err(AdmissionError::new(
+                ErrorCode::Backend,
+                "installation-binding",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -1020,5 +1098,43 @@ fn permits_wire(
     } else {
         permissions.contains(&(ty.clone(), codec))
             || standard && codec == WireCodec::Native && ty.is_message_type()
+    }
+}
+
+#[cfg(test)]
+mod support_view_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    #[derive(Debug)]
+    struct Count(Arc<AtomicUsize>);
+    impl ContractSupport for Count {
+        fn permits_type(&self, _: &PhysicalType) -> bool {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+        fn permits_binding(&self, _: &OperationBinding) -> bool {
+            true
+        }
+    }
+    #[test]
+    fn composed_restrictions_visit_each_descriptor_node_once_per_restriction() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut view = Arc::new(SupportView {
+            parent: None,
+            restriction: Arc::new(Count(calls.clone())),
+        });
+        for _ in 1..32 {
+            view = Arc::new(SupportView {
+                parent: Some(view),
+                restriction: Arc::new(Count(calls.clone())),
+            });
+        }
+        let mut logical = super::super::LogicalType::parse("index").unwrap();
+        for _ in 0..7 {
+            logical = super::super::LogicalType::sequence(logical).unwrap();
+        }
+        let ty = PhysicalType::default_for(logical).unwrap();
+        assert!(view.permits_type(&ty));
+        assert_eq!(calls.load(Ordering::Relaxed), 32 * 8);
     }
 }

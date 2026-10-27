@@ -1,7 +1,7 @@
 //! Execute fresh compiler carriers through the shared participant interpreter.
 //! Resource counts are derived from the authored loops, not the exported plan.
 use std::path::Path;
-use zkc_native::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_cpu::{Capability, CpuBackend, Domain, EntryPolicy, Policy, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::PathElement;
@@ -9,8 +9,8 @@ use zkc_runtime::vm::PathElement;
 fn domain() -> Domain {
     Domain::new("P", "origins", "main", None)
 }
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(domain(), None),
         Default::default(),
@@ -36,10 +36,10 @@ enum Mode {
 struct Audit {
     cancel: bool,
     roots: Vec<Capability>,
-    before: Vec<zkc_native::CapabilityObservation>,
-    after: Vec<zkc_native::CapabilityObservation>,
+    before: Vec<zkc_cpu::CapabilityObservation>,
+    after: Vec<zkc_cpu::CapabilityObservation>,
 }
-impl Hooks<NativeBackend> for Audit {
+impl Hooks<CpuBackend> for Audit {
     fn cancel_before(&mut self, _: usize, _: &Step, path: &[PathElement]) -> Option<String> {
         if self.cancel
             && path
@@ -54,7 +54,7 @@ impl Hooks<NativeBackend> for Audit {
     fn observe(
         &mut self,
         _: &str,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         phase: Phase,
     ) -> Result<Option<String>, String> {
         let observations = self
@@ -82,7 +82,7 @@ fn execute(directory: &Path, suffix: &str, mode: Mode, outer: u64, inner: u64, g
     let bundle = Bundle::admit(
         &bytes,
         &backend(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap();

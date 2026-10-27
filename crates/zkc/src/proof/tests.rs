@@ -34,7 +34,7 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
         ])
         .to_string()
         .as_bytes(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .unwrap();
     let binding = [7; 32];
@@ -51,7 +51,7 @@ fn native_measurement_preserves_proof_decode_stops_with_shared_capacity() {
                 Default::default(),
             )
         });
-        let backend = NativeBackend::new(
+        let backend = CpuBackend::new(
             Policy::default(),
             EntryPolicy::new(Domain::new("V", "session", "main", None), None),
             Default::default(),
@@ -108,7 +108,7 @@ fn nested_wire_permission_is_exact() {
         let logical = wire_type(spelling, false).unwrap();
         let physical = PhysicalType::default_for(logical.clone()).unwrap();
         assert_eq!(wire_codec(&logical).as_deref(), Some("zkc.native-data/0"));
-        assert_eq!(input_kind(&physical).unwrap(), "wire");
+        assert_eq!(input_kind(&physical, &Default::default()).unwrap(), "wire");
     }
     for spelling in [
         "polynomial:bn254.fr",
@@ -285,21 +285,19 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             // General Program callers can retain returned units. Use that real
             // backend path to inject residual custody into the proof finalizer,
             // independently of the proof deployment's earlier admission gate.
-            let backend = NativeBackend::new(
+            let backend = CpuBackend::new(
                 Policy::default(),
                 EntryPolicy::new(Domain::new("P", "s", "main", None), None),
                 Default::default(),
             )
             .unwrap();
-            let program = zkc_runtime::vm::Program::decode(
-                candidate.as_bytes(),
-                zkc_native::native_contracts(),
-            )
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap();
+            let program =
+                zkc_runtime::vm::Program::decode(candidate.as_bytes(), zkc_cpu::cpu_contracts())
+                    .and_then(|program| {
+                        program.check_installation(&backend)?;
+                        Ok(program)
+                    })
+                    .unwrap();
             let mut runner = Runner::new(&program, "main", "P", "s", backend, vec![])
                 .unwrap_or_else(|e| panic!("{}", e.error));
             let zkc_runtime::vm::Action::Local(action) = runner.poll() else {
@@ -344,7 +342,10 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             &request,
             deployment.entry.validator().unwrap(),
             false,
-            &mut crate::host::setups::VerifierKeys::new(deployment.capacity.backend().ark_bounds()),
+            &mut crate::host::setups::VerifierKeys::new(
+                deployment.capacity.backend().ark_bounds(),
+                deployment.installation().clone(),
+            ),
         )
         .unwrap();
         // Independently framed, frozen bytes: do not derive this expectation
@@ -498,8 +499,8 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
         external_work: 0,
         ring_work: 0,
         sequence_work: 0,
-        ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
-        external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+        ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
+        external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         cleanup_errors: vec![],
     }
 }
@@ -507,7 +508,7 @@ fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
 fn failed_retirement_discards_completed_bytes_and_preserves_a_primary_failure() {
     for primary in [Ok(vec![7, 8, 9]), Err("original-body-failure".to_owned())] {
         let failed_before_cleanup = primary.is_err();
-        let mut backend = NativeBackend::new(
+        let mut backend = CpuBackend::new(
             Policy::default(),
             EntryPolicy::new(Domain::new("P", "s", "main", None), None),
             Default::default(),
@@ -570,7 +571,7 @@ fn domain_inputs_use_current_native_codec() {
         "nonce:ristretto255.scalar",
     ] {
         let ty = PhysicalType::default_for(LogicalType::parse(spelling).unwrap()).unwrap();
-        assert!(input_kind(&ty).is_ok(), "{spelling}");
+        assert!(input_kind(&ty, &Default::default()).is_ok(), "{spelling}");
     }
 }
 #[test]

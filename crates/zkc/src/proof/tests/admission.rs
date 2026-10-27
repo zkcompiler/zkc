@@ -253,6 +253,7 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
     )
     .unwrap();
     assert_eq!(worker(host.clone().cpu()), id);
+    #[allow(clippy::drop_non_drop)] // Serial builds have no owned pool to release.
     drop(cpu);
     let ledger = zkc_runtime::vm::ExecutionLedger::new(host.capacity.values, host.capacity.work);
     let mut child_capacity = host.capacity;
@@ -268,8 +269,10 @@ fn cpu_context_reaches_both_proof_roles_without_changing_default_deployment() {
         )
         .with_shared_ledger(ledger);
     for producer in [true, false] {
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(host.capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            host.capacity.backend().ark_bounds(),
+            host.installation().clone(),
+        );
         let prepared = host
             .prepare_inputs(&request(producer, true, true), producer, &mut imports)
             .unwrap();
@@ -645,20 +648,19 @@ fn authentication_and_inner_bindings_precede_candidate_and_interface_checks() {
     assert_eq!(admit(&bad).unwrap_err(), "native-proof-candidate-binding");
     seal(&mut bad);
     // Compare with independent ordinary Program admission of the same bad bytes.
-    let backend = NativeBackend::new(
+    let backend = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "native-proof", "main", None), None),
         Default::default(),
     )
     .unwrap();
-    let expected =
-        zkc_runtime::vm::Program::decode(b"invalid candidate", zkc_native::native_contracts())
-            .and_then(|program| {
-                program.check_installation(&backend)?;
-                Ok(program)
-            })
-            .unwrap_err()
-            .to_string();
+    let expected = zkc_runtime::vm::Program::decode(b"invalid candidate", zkc_cpu::cpu_contracts())
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err()
+        .to_string();
     assert_eq!(admit(&bad).unwrap_err(), expected);
 }
 
@@ -683,7 +685,7 @@ fn message_origins_are_unique_complete_and_match_both_participants() {
 
 #[test]
 fn ring_work_limit_cannot_raise_the_host_ceiling() {
-    let limit = zkc_native::ring::DEFAULT_WORK_LIMIT;
+    let limit = zkc_cpu::ring::DEFAULT_WORK_LIMIT;
     for allowed in [0, limit] {
         assert!(
             admit(&deployment())
@@ -760,4 +762,52 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
             }
         }
     }
+}
+
+#[test]
+fn selected_installation_is_retained_by_low_level_proof_admission() {
+    let selected = || {
+        zkc_cpu::CpuInstallation::builder()
+            .include(zkc_cpu::providers::Plonky3)
+            .finish()
+            .unwrap()
+    };
+    let raw = deployment().to_string().into_bytes();
+    let host = NativeDeployment::admit_with_installation(
+        &raw,
+        &Sha256::digest(&raw).into(),
+        Default::default(),
+        CpuExecution::serial().unwrap(),
+        selected(),
+    )
+    .unwrap();
+    assert!(!host.installation().supports_setup());
+    let report = host
+        .execute(&request(true, true, true), Invocation::Prove)
+        .unwrap();
+    assert!(report.outcome.is_ok() && report.cleanup_errors.is_empty());
+    let mut value = deployment();
+    let mut program: Json = serde_json::from_str(value[4].as_str().unwrap()).unwrap();
+    program[3][0][4]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["omitted", "field:bls12-381.fr@arkworks.fr/0"]));
+    value[6][0][2]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["4", "field:bls12-381.fr"]));
+    value[4] = json!(program.to_string());
+    seal(&mut value);
+    assert!(admit(&value).is_ok());
+    let raw = value.to_string().into_bytes();
+    assert!(
+        NativeDeployment::admit_with_installation(
+            &raw,
+            &Sha256::digest(&raw).into(),
+            Default::default(),
+            CpuExecution::serial().unwrap(),
+            selected()
+        )
+        .is_err()
+    );
 }

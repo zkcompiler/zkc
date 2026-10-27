@@ -346,7 +346,7 @@ pub(super) fn proof_request(
     })
 }
 pub(super) fn proof_bytes(value: &TypedValue) -> Result<&[u8]> {
-    let zkc_native::Value::Bytes(bytes) = value.fields()[0]
+    let zkc_cpu::Value::Bytes(bytes) = value.fields()[0]
         .native()
         .map_err(|e| EntryError::new(EntryPhase::Request, e))?
     else {
@@ -377,7 +377,7 @@ pub(super) fn prove_value(outputs: NamedValues, bytes: Vec<u8>) -> super::super:
             "proof".into(),
             super::super::Value::Record(BTreeMap::from([(
                 "bytes".into(),
-                zkc_native::Value::Bytes(bytes.into()).into(),
+                zkc_cpu::Value::Bytes(bytes.into()).into(),
             )])),
         ),
         ("outputs".into(), super::super::Value::Record(outputs)),
@@ -448,8 +448,10 @@ pub(super) fn context_check(
         context.deployments.len() == host.deployments.len(),
         "entry-host-context",
     )?;
-    let mut imports =
-        crate::host::setups::VerifierKeys::new(host.options.limits.capacity.backend().ark_bounds());
+    let mut imports = crate::host::setups::VerifierKeys::new(
+        host.options.limits.capacity.backend().ark_bounds(),
+        host.options.limits.installation.clone(),
+    );
     imports.set_ledger(Some(ledger.clone()));
     for (id, deployment) in &host.deployments {
         let value = context
@@ -512,6 +514,7 @@ pub(super) fn context_check(
                     material,
                     host.options.limits.capacity,
                     &mut imports,
+                    &host.options.limits.installation,
                 )
             })
             .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
@@ -527,6 +530,7 @@ pub(super) fn context_check(
                             host.options.limits.capacity,
                             ledger,
                             host.cpu.clone(),
+                            host.options.limits.installation.clone(),
                         )
                         .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
                     }
@@ -547,6 +551,7 @@ pub(super) fn context_check(
                     host.options.limits.capacity,
                     ledger,
                     host.cpu.clone(),
+                    host.options.limits.installation.clone(),
                 )
                 .map_err(|e| EntryError::new(EntryPhase::Preparation, e))?;
             }
@@ -591,6 +596,7 @@ pub(super) fn context_bytes(context: &InvocationContext) -> usize {
 /// Authenticate context material independently of unavailable source arguments.
 /// This validates declarations and immutable data without issuing resources or
 /// asking a child to execute with invented public/witness values.
+#[allow(clippy::too_many_arguments)]
 fn check_context_data(
     interface: &super::super::Interface,
     role: &super::super::interface::RolePorts,
@@ -599,19 +605,20 @@ fn check_context_data(
     capacity: crate::execution::Capacity,
     ledger: &zkc_runtime::vm::ExecutionLedger,
     cpu: CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
 ) -> std::result::Result<(), String> {
     use crate::execution::InputValue;
     use crate::host::admission::{Admission, Input, KeySource};
     use zkc_runtime::vm::PhysicalType;
-    let registry = zkc_native::SetupRegistry::new(
+    let registry = zkc_cpu::SetupRegistry::new(
         keys.values().map(|k| k.as_ref().clone()).collect(),
         &capacity.backend(),
     )
     .map_err(|e| e.to_string())?;
-    let backend = zkc_native::NativeBackend::new_with_cpu(
+    let backend = zkc_cpu::CpuBackend::new_with_installation(
         capacity.backend(),
-        zkc_native::EntryPolicy::new(
-            zkc_native::Domain::new(
+        zkc_cpu::EntryPolicy::new(
+            zkc_cpu::Domain::new(
                 &role.native_name,
                 "entry-context",
                 interface.selected_protocol().symbol.as_str(),
@@ -621,6 +628,7 @@ fn check_context_data(
         ),
         registry,
         cpu.clone(),
+        installation,
     )
     .map_err(|e| e.to_string())?;
     let ports = interface.context_ports(role).collect::<Vec<_>>();
