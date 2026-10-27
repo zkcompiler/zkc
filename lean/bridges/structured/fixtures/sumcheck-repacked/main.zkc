@@ -13,7 +13,5 @@ entry fn Interactive(inputs: TwoSums<F,4>::Inputs) {
   return TwoSums<F,4>::run(inputs);
 }
 
-// Inspect the reusable round result without claiming proof acceptance.
-entry fn Reduction(inputs: sums::Reduction<F,4>::Inputs) {
-  return sums::Reduction<F,4>::run(inputs);
-}
+// Partial reductions are reusable protocols. Their pending residual must be
+// consumed by a caller before returning through an Entry.

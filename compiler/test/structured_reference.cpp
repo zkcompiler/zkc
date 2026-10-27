@@ -85,6 +85,7 @@ enum class Kind {
   IndexLess,
   IndexPowerOfTwo,
   VectorLength,
+  MultilinearRestrictPrefix,
   FieldConstant,
   Add,
   Subtract,
@@ -217,6 +218,8 @@ Kind kind(Operation &op) {
       .Case("data.index_less", Kind::IndexLess)
       .Case("data.index_power_of_two", Kind::IndexPowerOfTwo)
       .Case("data.dim", Kind::VectorLength)
+      .Case("algebra.multilinear_restrict_prefix",
+            Kind::MultilinearRestrictPrefix)
       .Case("algebra.constant", Kind::FieldConstant)
       .Case("algebra.field_add", Kind::Add)
       .Case("algebra.field_subtract", Kind::Subtract)
@@ -549,6 +552,12 @@ class Admission {
         return error("structured-reference-signature", "vector length");
       return attributes(op, {"axis"});
     }
+    case Kind::MultilinearRestrictPrefix:
+      if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
+          !primitivePorts(op.getOperandTypes(), "vv") ||
+          !primitivePorts(op.getResultTypes(), "v"))
+        return error("structured-reference-signature", "prefix restriction");
+      return attributes(op, {});
     case Kind::FieldConstant: {
       if (auto failure = attributes(op, {"value"}))
         return failure;
@@ -912,8 +921,25 @@ public:
 
   Error check() {
     unsigned domains = 0, definitions = 0, relations = 0;
-    if (auto failure = attributes(*unit, {"profile"}))
+    if (auto failure = attributes(*unit, {"profile", "source_declarations"}))
       return failure;
+    // Source declarations are retained metadata, not executable instructions.
+    // Native ownership admission checks their meaning; the observer bounds and
+    // parses the carrier without using it to supply values or control flow.
+    if (auto attr = unit->getAttr("source_declarations")) {
+      auto text = dyn_cast<StringAttr>(attr);
+      if (!text)
+        return error("structured-reference-unsupported", "source declarations");
+      auto parsed = parseNaturalJson(text.getValue(), 16 * 1024 * 1024, 256,
+                                     "structured-reference-unsupported",
+                                     "structured-reference-capacity");
+      if (!parsed)
+        return parsed.takeError();
+      auto rows = parsed->getAsArray();
+      if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
+          !(*rows)[1].getAsArray())
+        return error("structured-reference-unsupported", "source declarations");
+    }
     llvm::StringSet<> names;
     // Pre-admit even unused declarations, including forward references. Binding
     // rows are metadata, not graph nodes or callable function signatures.
@@ -943,9 +969,9 @@ public:
       if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (++relations > 128)
           return error("structured-reference-capacity", "relations");
-        if (auto failure = attributes(op, {"sym_name", "sym_visibility", "kind",
-                                           "key", "revision", "signature",
-                                           "purposes", "formula"}))
+        if (auto failure = attributes(
+                op, {"sym_name", "sym_visibility", "kind", "key", "revision",
+                     "static_arguments", "signature", "purposes", "formula"}))
           return failure;
         auto type = declaration.getSignature();
         auto formula = declaration.getFormulaAttr();
@@ -2021,6 +2047,32 @@ class Reference {
     case Kind::VectorLength:
       result.values.emplace_back(uint64_t(std::get<Vector>(args[0])->size()));
       break;
+    case Kind::MultilinearRestrictPrefix: {
+      const auto &input = *std::get<Vector>(args[0]);
+      const auto &fixed = *std::get<Vector>(args[1]);
+      if (auto failure = vectorWork(input.size()))
+        return std::move(failure);
+      if (auto failure = vectorWork(fixed.size()))
+        return std::move(failure);
+      auto values = std::make_shared<std::vector<APInt>>(input);
+      // Raw restriction uses contiguous halves, truncated to the shorter half.
+      // A relation's exact shape law is separate from this total operation.
+      for (const APInt &coordinate : fixed) {
+        size_t middle = values->size() / 2;
+        if (auto failure = vectorWork(middle))
+          return std::move(failure);
+        for (size_t i = 0; i < middle; ++i) {
+          const APInt &low = (*values)[i];
+          const APInt &high = (*values)[middle + i];
+          APInt difference = (high + modulus() - low).urem(modulus());
+          (*values)[i] =
+              (low + (difference * coordinate).urem(modulus())).urem(modulus());
+        }
+        values->resize(middle);
+      }
+      result.values.emplace_back(std::move(values));
+      break;
+    }
     case Kind::IndexEqual:
       result.values.emplace_back(std::get<uint64_t>(args[0]) ==
                                  std::get<uint64_t>(args[1]));

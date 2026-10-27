@@ -22,7 +22,7 @@ def terminal_rejected (raw point : List F) (scalar : F)
     (construction : ConstructionState (F := F) (G := G)) (history : Domain.History (uniformCarriers F G))
     (wrong : raw.length < indexLimit → raw.length ≠ 2 ^ point.length ∨
       scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum) :
-    Derivation (Nominal.interface (G := G) "bls12-381.fr") (boundedEscape charge)
+    Derivation (NominalField.interface (G := G) "bls12-381.fr") (boundedEscape charge)
       (fun _ result => acceptance result ≠ some true) history
       ((terminal raw point scalar).bind fun result => .done (result, construction)) := by
   unfold terminal
@@ -38,16 +38,16 @@ def terminal_rejected (raw point : List F) (scalar : F)
 
 theorem terminal_spec (raw point : List F) (scalar : F)
     (construction : ConstructionState (F := F) (G := G)) :
-    ChargedTriple (Nominal.interface (G := G) "bls12-381.fr") (boundedEscape charge)
+    ChargedTriple (NominalField.interface (G := G) "bls12-381.fr") (boundedEscape charge)
       (boundedEscape_antitone charge) (terminal raw point scalar)
       (fun _ => raw.length < indexLimit → raw.length ≠ 2 ^ point.length ∨
         scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum)
       (fun result _ => acceptance (result, construction) ≠ some true) estack⟨fun _ _ => True⟩ := by
-  let := chargedMonad (Nominal.interface (F := F) (G := G) "bls12-381.fr")
+  let := chargedMonad (NominalField.interface (F := F) (G := G) "bls12-381.fr")
     (boundedEscape charge) (boundedEscape_antitone charge)
   constructor
   intro history wrong
-  change (Nominal.interface (G := G) "bls12-381.fr").Charged (boundedEscape charge)
+  change (NominalField.interface (G := G) "bls12-381.fr").Charged (boundedEscape charge)
     (fun _ result => acceptance (result, construction) ≠ some true) (terminal raw point scalar) history
   have rejected := (terminal_rejected raw point scalar construction history wrong).charged
     (boundedEscape_antitone charge)
@@ -66,10 +66,10 @@ noncomputable def root_rejected
     (raw : List F) (scalar : F) (count : Nat)
     (construction : ConstructionState (F := F) (G := G)) (history : Domain.History (uniformCarriers F G))
     (wrong : raw.length < indexLimit → raw.length = 2 ^ count → scalar ≠ raw.sum) :
-    Derivation (Nominal.interface (G := G) "bls12-381.fr") (boundedEscape charge)
+    Derivation (NominalField.interface (G := G) "bls12-381.fr") (boundedEscape charge)
       (fun _ result => acceptance result ≠ some true) history
       (root maximum schedule raw scalar count construction) := by
-  let absorb := Nominal.interface (F := F) (G := G) "bls12-381.fr"
+  let absorb := NominalField.interface (F := F) (G := G) "bls12-381.fr"
   let := chargedMonad absorb (boundedEscape charge) (boundedEscape_antitone charge)
   apply ofTriple absorb (boundedEscape charge) (boundedEscape_antitone charge)
     (pre := fun _ => True) ?_ history trivial
@@ -93,7 +93,7 @@ omit [∀ event, SampleableType (@Domain.Raw (uniformCarriers F G) event)] in
 /-- A terminal helper never asks the random oracle, including exhaustion. -/
 theorem terminal_cost (raw point : List F) (scalar : F)
     (construction : ConstructionState (F := F) (G := G)) (history : Domain.History (uniformCarriers F G)) :
-    Typed.ChargedCostBound (Nominal.interface (G := G) "bls12-381.fr") charge
+    Typed.ChargedCostBound (NominalField.interface (G := G) "bls12-381.fr") charge
       ((terminal (G := G) raw point scalar).bind fun result => .done (result, construction)) history 0 := by
   unfold terminal
   split
@@ -111,9 +111,9 @@ theorem root_cost (price : ENNReal)
     (maximum : Nat) (schedule : Nominal.Schedule "bls12-381.fr")
     (raw : List F) (scalar : F) (count : Nat)
     (construction : ConstructionState (F := F) (G := G)) (history : Domain.History (uniformCarriers F G)) :
-    Typed.ChargedCostBound (Nominal.interface (G := G) "bls12-381.fr") charge
+    Typed.ChargedCostBound (NominalField.interface (G := G) "bls12-381.fr") charge
       (root maximum schedule raw scalar count construction) history (maximum • price) := by
-  let absorb := Nominal.interface (F := F) (G := G) "bls12-381.fr"
+  let absorb := NominalField.interface (F := F) (G := G) "bls12-381.fr"
   let := costMonad absorb charge
   apply cost_of_triple absorb charge (pre := fun _ cost => maximum • price ≤ cost) ?_ history _ le_rfl
   have bounded (reached) := TableComponent.Execution.run_cost "bls12-381.fr" schedule charge price priced

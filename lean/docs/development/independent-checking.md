@@ -3,8 +3,8 @@
 From the repository root, use `python3 lean/checks/check_independent.py` to
 capture existing compiled declarations, compare two explicit export captures,
 or replay a candidate under the current model.
-The default covers all 88 declarations in `checks/claims.lock.json`: main (41),
-security (24), ArkLib (20), and Clean (3). Each package's `comparator.json` must
+The default covers every declaration in `checks/claims.lock.json` across the
+main, security, ArkLib, and Clean packages. Each package's `comparator.json` must
 match its lock entries exactly and permit only `propext`, `Classical.choice`,
 and `Quot.sound`. Definition holes are forbidden.
 

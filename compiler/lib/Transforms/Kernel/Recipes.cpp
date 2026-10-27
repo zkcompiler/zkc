@@ -109,6 +109,11 @@ public:
 // and dependencies without selecting an executable contract.
 protocol::BindingApplication algebraBinding(Operation *op) {
   protocol::BindingApplication result;
+  if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
+    result.contract = "multilinear.restrict_prefix";
+    result.arguments = {restrict.getResult().getType().getDomain().str()};
+    return result;
+  }
   if (auto identity = dyn_cast<algebra::GroupIdentityOp>(op)) {
     result.contract = "curve.identity";
     result.arguments = {identity.getResult().getType().getDomain().str()};

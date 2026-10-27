@@ -67,7 +67,6 @@ def retained : RetainedTarget compiled.imported artifacts.participant.policy art
   noResidual := rfl
   decision := by decide +kernel
   application := application
-  formula := formulaBinding
   booleanOutput := rfl
   publicTypes := by decide +kernel
   publicArity := by decide +kernel
@@ -124,8 +123,8 @@ theorem arguments_read (statement : artifacts.Statement F G) (witnesses : F × F
 
 /-- The existing mathematical predicate is exactly the retained application. -/
 theorem holds_pinned (statement : artifacts.Statement F G) (witnesses : F × F) :
-    holds statement witnesses ↔ retained.Holds statement (embed witnesses) :=
-  (retained.holds_iff_of_arguments statement (embed witnesses) (arguments statement witnesses)
+    holds statement witnesses ↔ retained.Holds formulaBinding statement (embed witnesses) :=
+  (retained.holds_iff_of_arguments formulaBinding statement (embed witnesses) (arguments statement witnesses)
     (arguments_read statement witnesses)).symm
 
 end ZkcSecurity.Examples.Subjects.SchnorrAnd.Contract

@@ -51,13 +51,29 @@
         "installation"
       ],
       "additionalProperties": false
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component_proposal"
+      },
+      "maxItems": 100000
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component_seam"
+      },
+      "maxItems": 100000
     }
   },
   "required": [
     "format",
     "registry_resolution",
     "entry",
-    "claims"
+    "claims",
+    "proposals",
+    "seams"
   ],
   "additionalProperties": false,
   "$defs": {
@@ -619,6 +635,826 @@
         "site_bindings"
       ],
       "additionalProperties": false
+    },
+    "component_selector": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "instantiation_source": {
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "open"
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "operand"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "parameter",
+                "witness"
+              ]
+            },
+            {
+              "$ref": "#/$defs/component_selector"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "result"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "math"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/instantiation_source"
+              },
+              "maxItems": 512
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      ]
+    },
+    "instantiation_slot": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "enum": [
+            "parameter",
+            "witness"
+          ]
+        },
+        {
+          "$ref": "#/$defs/component_selector"
+        },
+        {
+          "$ref": "#/$defs/instantiation_source"
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "component_proposal": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxItems": 512
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "maxItems": 16
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/instantiation_slot"
+          },
+          "maxItems": 512,
+          "description": "At most 512 logical slots, deduplicated by purpose and selector across every subject and residual clause.",
+          "uniqueItems": true
+        }
+      ],
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "seam_route": {
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "input"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "result",
+                "repeat_input",
+                "repeat_result"
+              ]
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "pure",
+                "terminal",
+                "action"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_descriptor"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxItems": 128
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/seam_route"
+              },
+              "maxItems": 512
+            }
+          ],
+          "minItems": 6,
+          "maxItems": 6
+        }
+      ]
+    },
+    "seam_endpoint": {
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "guard"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "argument"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "output"
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "const": "residual"
+                }
+              ]
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "repeat_init",
+                "repeat_input",
+                "yield",
+                "repeat_result"
+              ]
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      ]
+    },
+    "component_seam": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "$ref": "#/$defs/seam_endpoint"
+        },
+        {
+          "enum": [
+            "direct",
+            "pure",
+            "terminal",
+            "method"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/seam_route"
+          },
+          "maxItems": 512
+        }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "structured_string": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "structured_optional_string": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "structured_strings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/structured_string"
+      },
+      "maxItems": 512
+    },
+    "structured_roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/structured_string"
+      },
+      "maxItems": 16
+    },
+    "structured_scopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/structured_roles"
+      },
+      "maxItems": 512
+    },
+    "structured_decimal": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(0|[1-9][0-9]*)(?![\\s\\S])"
+    },
+    "structured_index_decimal": {
+      "type": "string",
+      "maxLength": 20,
+      "pattern": "^(0|[1-9][0-9]{0,18}|18446744073709551615|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4])(?![\\s\\S])"
+    },
+    "structured_type": {
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "bool",
+                "index"
+              ]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "field",
+                "vector",
+                "group",
+                "service"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "sequence"
+            },
+            {
+              "$ref": "#/$defs/structured_type"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "product"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/structured_type"
+              },
+              "maxItems": 512
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      ]
+    },
+    "structured_descriptor": {
+      "description": "The tagged operation descriptor grammar of Zkc.Source.Structured.Format.descriptor. Name resolution and execution admission remain separate.",
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "exec"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_strings"
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "index.constant"
+            },
+            {
+              "$ref": "#/$defs/structured_index_decimal"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "index.equal",
+                "index.less",
+                "index.power_of_two",
+                "bool.and",
+                "bool.or",
+                "bool.xor",
+                "bool.equal",
+                "bool.not_equal",
+                "if",
+                "for",
+                "for_condition"
+              ]
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "multilinear.restrict_prefix",
+                "vector.length",
+                "field.add",
+                "field.subtract",
+                "field.multiply",
+                "field.equal",
+                "group.identity",
+                "group.add",
+                "group.equal",
+                "bounded_at"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "field.constant"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_decimal"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "field.embed",
+                "group.scale"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "bool.constant"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "select"
+            },
+            {
+              "$ref": "#/$defs/structured_type"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "product.make",
+                "call",
+                "apply",
+                "guard"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "product.get"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 511
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "protocol_apply"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_roles"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "protocol_repeat"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 512
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1048576
+            },
+            {
+              "$ref": "#/$defs/structured_roles"
+            },
+            {
+              "$ref": "#/$defs/structured_scopes"
+            }
+          ],
+          "minItems": 5,
+          "maxItems": 5
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "enum": [
+                "local_call",
+                "exchange",
+                "draw"
+              ]
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "fold"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_optional_string"
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "restrict"
+            },
+            {
+              "$ref": "#/$defs/structured_roles"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "statement"
+            },
+            {
+              "$ref": "#/$defs/structured_string"
+            },
+            {
+              "$ref": "#/$defs/structured_strings"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4096
+            },
+            {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/structured_string"
+                }
+              ]
+            }
+          ],
+          "minItems": 5,
+          "maxItems": 5
+        }
+      ]
     }
   }
 }

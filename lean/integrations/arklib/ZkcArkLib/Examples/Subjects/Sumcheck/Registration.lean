@@ -26,7 +26,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   stageMatched := rfl
   compiled := compiled
   connection := sourceConnection
-  target := .retained Contract.retained
+  target := .retained Contract.retained ZkcExamples.Structured.SumcheckContractBindings.publicFormula
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites
   sitesUnique := by decide +kernel

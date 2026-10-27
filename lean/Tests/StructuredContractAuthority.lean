@@ -14,8 +14,8 @@ private def subject : RelationApplication := ⟨"Initial", [⟨.input, 0, "P"⟩
 private def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [],
     [⟨"Initial", .publicDef, "opaque", "sum", "0", [.vector scalarDomain, .field scalarDomain],
-      [.boolean], ["parameter", "statement"], none⟩], [], [.function root],
-    [⟨"main", [⟨.input, "initial_sum", subject, none, none⟩]⟩], blsRows⟩
+      [.boolean], ["parameter", "statement"], none, []⟩], [], [.function root],
+    [⟨"main", [⟨.input, "initial_sum", subject, none, none⟩]⟩], blsRows, {}⟩
 private def body : Region protocolDialect [.vector scalarDomain, .field scalarDomain] [.boolean] :=
   .letOp (.mark "") .nil .nil
     (.letOp (.calculate (.booleanConstant true) rfl) .nil .nil (.ret (.cons .here .nil)))
@@ -50,12 +50,13 @@ private def choose (source : AssignmentSource (assignment Int Int) owner (.vecto
   witnesses _ _ := none
 private def fixed := choose (.supplied [2])
 private def proverRuntime := choose (.boundary tableP)
-private def environment : RelationEnvironment imported Int Int where
-  meanings index := by
-    rcases index with ⟨i, bound⟩
-    match i with
-    | 0 => exact fun arguments => (arguments.get .here).sum = arguments.get (.there .here)
-    | n + 1 => simp [snapshot] at bound
+private def registry : OpaqueRegistry (assignment Int Int) :=
+  ⟨[⟨⟨"opaque", "sum", "0"⟩, fun arguments =>
+    if arguments = [] then some ⟨[.vector scalarDomain, .field scalarDomain], [.boolean],
+      ["parameter", "statement"], fun args => (args.get .here).sum = args.get (.there .here)⟩
+    else none⟩], by simp⟩
+private def environment : RelationEnvironment imported Int Int :=
+  .ofChecked registry (by decide +kernel)
 private def relation : RelationBinding snapshot subject := ⟨⟨0, by decide⟩, rfl⟩
 private def interpreted : InterpretedApplication owner subject Int Int environment :=
   ⟨⟨relation, .cons tableP (.cons claimV .nil), rfl⟩, .opaque rfl (by decide)⟩

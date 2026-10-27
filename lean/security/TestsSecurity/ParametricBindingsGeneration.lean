@@ -1,20 +1,20 @@
 module
 
-public import ZkcSecurity.Generation.OriginalSecurityBindings
-meta import ZkcSecurity.Generation.OriginalSecurityBindings
+public import ZkcTools.StructuredSource.TemplateInstallation
+meta import ZkcTools.StructuredSource.TemplateInstallation
 public import TestsSecurity.ParametricBindings
 meta import TestsSecurity.ParametricBindings
 
 @[expose] public section
 
-/-! Fresh candidates through the production OriginalRoot and security printers.
+/-! Fresh candidates through the generic OriginalRoot template and library-law printer.
 The independent runner compiles emitted templates, installations and refusals. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 namespace TestsSecurity.ParametricBindingsGeneration
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
-open ZkcTools.StructuredSource ZkcSecurity.Generation
+open ZkcTools.StructuredSource
 
 private meta unsafe def evaluate (α : Type) (name : Lean.Name) (expression : Lean.Expr) :
     Lean.Elab.Command.CommandElabM α :=
@@ -38,29 +38,48 @@ run_cmd do
     let selected : OriginalRoot.TemplateOutput := {
       moduleName, sourceModule := "TestsSecurity.ParametricBindings"
       programExpression := fixture ++ ".program", definitionIndex := 0, role := 1, signature }
-    sources := sources ++ [(moduleName, ← require (OriginalRoot.templateSource program selected))]
-    let output : OriginalSecurityBindings.TemplateInstallation := {
+    let templateSource ← require (OriginalRoot.templateSource program selected)
+    sources := sources ++ [(moduleName, templateSource)]
+    if label == "Mixed" then
+      sources := sources ++ [("ParametricClients.WrongRole",
+        (templateSource.replace moduleName "ParametricClients.WrongRole").replace
+          "def role : Nat := 1" "def role : Nat := 0")]
+    let output : TemplateInstallation.Output := {
       moduleName := moduleName ++ "Installation", templateModule := moduleName
       mathematicsModule := "TestsSecurity.ParametricBindings"
       model := if label == "Mixed" then "ZkcSecurity.Domains.KoalaBearModel.model" else fixture ++ ".model"
       modelLaws := fixture ++ ".modelLaws"
-      domain := if label == "Mixed" then "koala-bear.ext8-binomial3" else "bls12-381.fr"
-      fieldLaw := if label == "Mixed" then fixture ++ ".fieldLaw" else "Field.toIsField (ZMod blsModulus)"
+      applicability := [
+        { name := "domainApplicable", proposition := "program.snapshot.catalogue.require " ++
+            (if label == "Mixed" then "\"koala-bear.ext8-binomial3\"" else "\"bls12-381.fr\"") ++ " .field \"Field\" = .ok ()",
+          proof := "by decide +kernel" },
+        { name := "fieldLaw", proposition := "IsField (model.Field " ++
+            (if label == "Mixed" then "\"koala-bear.ext8-binomial3\"" else "\"bls12-381.fr\"") ++ ")",
+          proof := if label == "Mixed" then fixture ++ ".fieldLaw" else "Field.toIsField (ZMod blsModulus)" }]
       results := if label == "Mixed" then fixture ++ ".results" else "emptyResults model"
       helperLaws := if label == "Mixed" then fixture ++ ".helperLaws input" else "emptyLaws _ input"
       processes := "fun entry => entry.elim0", calleeLaws := "fun entry => entry.elim0"
-      role := 1, roster := 2 }
-    sources := sources ++ [(output.moduleName, OriginalSecurityBindings.templateBindings output)]
+      }
+    sources := sources ++ [(output.moduleName, TemplateInstallation.source output)]
     if label == "Mixed" then
+      let wrongDomain : TemplateInstallation.Output := { output with
+        applicability := [{ name := "domainApplicable"
+                            proposition := "program.snapshot.catalogue.require \"uninstalled-field\" .field \"Field\" = .ok ()"
+                            proof := "by decide +kernel" }] }
       for (suffix, wrong) in [("WrongModel", { output with model := "ZkcSecurity.Domains.PrimeField.blsScalarModel" }),
           ("WrongHelper", { output with results := fixture ++ ".wrongResults" }),
-          ("WrongDomain", { output with domain := "uninstalled-field" })] do
+          ("WrongDomain", wrongDomain)] do
         let wrong := { wrong with moduleName := "ParametricClients." ++ suffix }
-        sources := sources ++ [(wrong.moduleName, OriginalSecurityBindings.templateBindings wrong)]
+        sources := sources ++ [(wrong.moduleName, TemplateInstallation.source wrong)]
     else
       let signature : Signature := { signature with callees := Bindings.keys program }
       let rootOutput := { selected with moduleName := "ParametricClients.GatesRoot", definitionIndex := 1, signature }
-      sources := sources ++ [(rootOutput.moduleName, ← require (OriginalRoot.templateSource program rootOutput))]
+      let rootSource ← require (OriginalRoot.templateSource program rootOutput)
+      sources := sources ++ [(rootOutput.moduleName, rootSource)]
+      sources := sources ++ [("ParametricClients.WrongCapture",
+        ((rootSource.replace rootOutput.moduleName "ParametricClients.WrongCapture").replace
+          "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  (program.payload.protocols.take 1)"
+          "def capture (model : DomainModel) : ProtocolTable model.Value (Interface model) :=\n  (program.payload.protocols.take 0)"))]
   Lean.Elab.Command.elabCommand (← `(def $(Lean.mkIdent `sources) : List (String × String) := $(Lean.quote sources)))
 
 def main (args : List String) : IO Unit := do

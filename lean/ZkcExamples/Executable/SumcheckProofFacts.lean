@@ -28,7 +28,7 @@ theorem accepted : checkLowering installed ZkcExamples.Construction.SumcheckProo
 
 set_option maxRecDepth 20000 in
 /-- The helpers the constructed validator calls. -/
-theorem helpers : Instruction.helpers ZkcExamples.Construction.SumcheckProof.participant.instructions = ["zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"] := by
+theorem helpers : Instruction.helpers ZkcExamples.Construction.SumcheckProof.participant.instructions = ["zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", "zkl_e8df957aab384c1d5416600c13a571512206e97abfbf6e0e9cddac5c84860d07", "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", "zkl_c36a2d2c6bd38573735fb9b90d1a3848c562d2c1f688234e2b669408e9c9eea9", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc"] := by
   rw [← Instruction.helperList_eq]
   decide +kernel
 

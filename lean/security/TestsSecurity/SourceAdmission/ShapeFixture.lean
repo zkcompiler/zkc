@@ -33,8 +33,9 @@ def shapeBlock : Block := .block
 
 def original : Snapshot := { source config with
   relations := (source config).relations ++
-    [⟨"TableShape", .publicDef, "zkc.language.formula/0", "shape", "0", shapeTypes,
-      [.boolean], ["parameter", "parameter"], some "shapeFormula"⟩]
+    [{ name := "TableShape", visibility := .publicDef, kind := "zkc.language.formula/0",
+       key := "shape", revision := "0", inputs := shapeTypes, outputs := [.boolean],
+       purposes := ["parameter", "parameter"], formula := some "shapeFormula" }]
   definitions := (source config).definitions ++
     [.function ⟨"shapeFormula", .math, .privateDef, shapeTypes, [.boolean], none, [], none, shapeBlock⟩]
   contracts := [⟨"main", ((source config).contracts.head (by decide +kernel)).clauses ++

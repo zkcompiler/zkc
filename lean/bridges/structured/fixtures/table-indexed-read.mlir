@@ -46,7 +46,7 @@
       %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
       "func.return"(%4) : (!exec.outcome<(i1)>) -> ()
     }) {runtime.origin = ["s14h7461626c655f72656c6174696f6e10h636865636b5f72656164", []]} : () -> ()
-    "relation.declare"() <{formula = @zkf_eeb8bf15a7659bce5aa909302f5a359e054778ba70f159e4c02088dc98b55444, key = "zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "statement"], revision = "ae9fe16a4a5ff9b0b0dea1491f4b761b2cb11e19451a102fb23355c2e24c644d", signature = (!algebra.field_vector<"koala-bear">, ui64, !algebra.field<"koala-bear">) -> i1, sym_name = "zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757"}> : () -> ()
+    "relation.declare"() <{formula = @zkf_eeb8bf15a7659bce5aa909302f5a359e054778ba70f159e4c02088dc98b55444, key = "zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "statement"], revision = "ae9fe16a4a5ff9b0b0dea1491f4b761b2cb11e19451a102fb23355c2e24c644d", signature = (!algebra.field_vector<"koala-bear">, ui64, !algebra.field<"koala-bear">) -> i1, static_arguments = [], sym_name = "zkl_4a7527ef14d9b3ec64519e018a58da326ed309327b8561291731722a15176757"}> : () -> ()
   }) : () -> ()
 }) : () -> ()
 

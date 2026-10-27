@@ -13,16 +13,19 @@ set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 4000000
 namespace TestsSecurity.CompiledRound
+open ZkcSecurity.FiatShamir
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.FiatShamir.DomainReduction ZkcSecurity.Families.Sumcheck
 
 abbrev artifact := ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.artifact
+abbrev capturedCount : Nat := artifact.inputs.length +
+  ((artifact.instructions.take 2).map (·.results.length)).sum
 abbrev context := TestsSecurity.DomainSourceBridge.context
 abbrev field := TestsSecurity.DomainSourceBridge.field
 noncomputable abbrev program := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported.program
 
 def roundInstruction (index : Fin 23) : Zkc.Construction.Instruction :=
-  ((artifact.instructions[1]'(by decide +kernel)).body[index.val]'(by
+  ((artifact.instructions[2]'(by decide +kernel)).body[index.val]'(by
     have bound := index.isLt
     change index.val < 23
     exact bound))
@@ -45,10 +48,10 @@ def plan : CompiledRound.Plan where
 /-- The actual block, with every checkpoint and result slot, has this view. -/
 theorem actual_block (F G : Type) [Field F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] :
-    Domain.evaluate (ringModel F G) program context (artifact.instructions[1]'(by decide +kernel)).body =
-      CompiledRound.block plan program context field 5 := by
+    Domain.evaluate (ringModel F G) program context (artifact.instructions[2]'(by decide +kernel)).body =
+      CompiledRound.block plan program context field capturedCount := by
   funext env
-  rw [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep1Body_eq]
+  rw [ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator.bodyStep2Body_eq]
   rfl
 
 def lowBase : Origin :=
@@ -119,7 +122,7 @@ variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
 /-- No arithmetic or helper premise is open: all received scalar pairs and
 challenge replies use the actual admitted source program's append helper. -/
 theorem actual_round
-    (captured : Domain.Environment (uniformCarriers F G)) (capturedLength : captured.length = 5)
+    (captured : Domain.Environment (uniformCarriers F G)) (capturedLength : captured.length = capturedCount)
     (index : Nat) (point : List F) (claim : F) (history : Domain.History (uniformCarriers F G))
     (Post : Domain.History (uniformCarriers F G) → Domain.Environment (uniformCarriers F G) → Prop)
     (post : ∀ low high challenge, claim = low + high →
@@ -127,8 +130,8 @@ theorem actual_round
         (queryOrigin index) (deliveryOrigin index) history low high challenge)
         (CompiledRound.output field context.suite captured index point claim history
           (lowOrigin index) (highOrigin index) (queryOrigin index) (deliveryOrigin index) low high challenge)) :
-    Bridge (TableComponent.Nominal.interface (F := F) (G := G) field) Post history
-      (Domain.evaluate (ringModel F G) program context (artifact.instructions[1]'(by decide +kernel)).body
+    Bridge (NominalField.interface (F := F) (G := G) field) Post history
+      (Domain.evaluate (ringModel F G) program context (artifact.instructions[2]'(by decide +kernel)).body
         (CompiledRound.input field context.suite captured index point claim history))
       (CompiledRound.presented field context.suite captured index point claim history
         (lowOrigin index) (highOrigin index) (queryOrigin index) (deliveryOrigin index) (query_request index)) := by

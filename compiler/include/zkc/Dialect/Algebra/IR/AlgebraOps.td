@@ -18,6 +18,12 @@ class TotalMathOp<Dialect dialect, string mnemonic, Type lhs, Type rhs,
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` functional-type(operands, results)";
 }
 
+def MultilinearRestrictPrefixOp : TotalMathOp<AlgebraDialect,
+    "multilinear_restrict_prefix", FieldVector, FieldVector, FieldVector,
+    [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
+def ExecuteMultilinearRestrictPrefixOp : BoundOp<AlgebraDialect,
+    "exec.multilinear_restrict_prefix", [OpMultilinearRestrictPrefix]>;
+
 def FieldCompareOp : BoundOp<AlgebraDialect, "exec.field_equal", [OpFieldEqual]>;
 
 def FieldConstantOp : BoundOp<AlgebraDialect, "exec.field_constant", [OpFieldConstant]>;

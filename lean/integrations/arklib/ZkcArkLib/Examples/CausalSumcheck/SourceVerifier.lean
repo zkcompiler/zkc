@@ -86,7 +86,7 @@ theorem source_present (n : Nat) (admitted : n ≤ 2) (rawV : List F)
       (PIR.repeatN n (SumcheckVerifierLaws.roundPresent SumcheckSourceVerifier.childContext handle)
         ([], claim)).bind (fun pc => .done (checkedResult n table pc)) := by
   change SumcheckSourceViews.program.participant F G 1 _ = _
-  rw [SumcheckSourceVerifier.verifier_checked n admitted rawV (some claim) (some handle)
+  rw [SumcheckSourceVerifier.verifier_checked n admitted rawV claim (some handle)
     table decoded (decoded_count_two_representable rawV table decoded admitted)]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle n ([], claim)]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
@@ -154,7 +154,7 @@ theorem source_returned_true_bound [Fintype F] [SampleableType F]
       pure (returnedSatisfies
         (fun outputs : Values (Component (assignment F G)) [.boolean] =>
           outputs.get .here = some true) e)) ≤ _
-    rw [SumcheckSourceVerifier.verifier_excess (some rawV) (some claim) n (some handle)
+    rw [SumcheckSourceVerifier.verifier_excess (some rawV) claim n (some handle)
       (Nat.lt_of_not_ge admitted)]
     simp [PIR.Process.runM, returnedSatisfies]
 
@@ -393,11 +393,11 @@ theorem reduction_present (xs : Option (List F)) (dimension : Option Nat)
     SumcheckReduceViews.imported.program.participant F G 1
       (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some n) (some handle)) =
       (PIR.repeatN n (SumcheckVerifierLaws.roundPresent
-        (ProtocolContext.enter {} "s3" [0,1]) handle) ([], claim)).bind
+        (ProtocolContext.enter {} "s5" [0,1]) handle) ([], claim)).bind
           (fun pc => .done (SumcheckReduceVerifier.reduceRootResults (some pc.1, some pc.2))) := by
   change SumcheckReduceViews.program.participant F G 1 _ = _
   rw [SumcheckReduceVerifier.verifier_optional]
-  simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
+  simp only [SumcheckVerifierPrelude.admittedRounds, SumcheckVerifierPrelude.pendingRounds, admitted, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present _ handle n ([], claim)]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
   rfl
@@ -414,7 +414,7 @@ theorem reduction_observation
           (some handle))).runM handler s
       pure (returnedSatisfies (residualObservation remaining n table) e)) = (do
       let e ← (PIR.repeatN n (SumcheckVerifierLaws.roundPresent
-        (ProtocolContext.enter {} "s3" [0,1]) handle) ([], claim)).runM handler s
+        (ProtocolContext.enter {} "s5" [0,1]) handle) ([], claim)).runM handler s
       pure (Causal.accepts (Causal.residualTerminal remaining n table) e)) := by
   change (do
     let e ← PIR.Process.runM
@@ -442,24 +442,24 @@ theorem reduction_residual_bound [Fintype F] [SampleableType F]
       let e ← (SumcheckReduceViews.imported.program.participant F G 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some n)
           (some handle))).runM
-            (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle]
+            (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle]
               before after) s
       pure (returnedSatisfies (residualObservation remaining n table) e)) ≤
         (n : ENNReal) / Fintype.card F := by
   by_cases admitted : n ≤ 4
   · rw [reduction_observation _ xs dimension remaining n admitted table claim handle s]
     exact repeat_uniform_residual_soundness network before after
-      (ProtocolContext.enter {} "s3" [0,1]) handle remaining n table claim falseClaim s
+      (ProtocolContext.enter {} "s5" [0,1]) handle remaining n table claim falseClaim s
   · change mass (do
       let e ← PIR.Process.runM
         (A := Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs)
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle]
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle]
           before after)
         (SumcheckReduceViews.program.participant F G 1
           (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some n)
             (some handle))) s
       pure (returnedSatisfies (residualObservation remaining n table) e)) ≤ _
-    rw [SumcheckReduceVerifier.verifier_excess xs dimension (some claim) n
+    rw [SumcheckReduceVerifier.verifier_excess xs dimension claim n
       (Nat.lt_of_not_ge admitted) (some handle)]
     simp [PIR.Process.runM, returnedSatisfies]
 
@@ -522,7 +522,7 @@ theorem reduction_typed_bound [Fintype F] [SampleableType F]
     (translation : (SumcheckContractRequests.reductionUse (G := G) (reductionEnvironment := environment)
       raw (remaining + count) claim count handle (.stopped .incomplete)).Translation) (s : S) :
     mass (acceptance
-      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after)
+      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after)
       (SumcheckReduceViews.imported.program.participant F G 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some count) (some handle))) s
       (wrapperResidualRequest raw remaining count xs dimension claim handle)) ≤
@@ -531,7 +531,7 @@ theorem reduction_typed_bound [Fintype F] [SampleableType F]
   · rw [reduction_request_observation _ xs dimension remaining count admitted raw table decoded claim handle s]
     change mass (do
       let e ← PIR.Process.runM (A := Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs)
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after)
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after)
         (SumcheckReductionRequests.childProcess claim count handle) s
       pure (returnedSatisfies (SumcheckReductionRequests.request raw remaining count claim handle) e)) ≤ _
     rw [SumcheckReductionRequests.child_present claim count handle admitted, observation_bind_done]
@@ -545,7 +545,7 @@ theorem reduction_typed_bound [Fintype F] [SampleableType F]
             (SumcheckVerifierPrelude.reduceResults (some pc.1, some pc.2))).mp holds)
       _ ≤ _ := by
         have bound := repeat_uniform_residual_soundness network before after
-          (ProtocolContext.enter {} "s3" [0, 1]) handle remaining count table claim falseSum s
+          (ProtocolContext.enter {} "s5" [0, 1]) handle remaining count table claim falseSum s
         have observation : (fun e : PIR.Execution S E (List F × F) =>
             returnedSatisfies (fun pc => Causal.residualTerminal remaining count table pc.1 pc.2) e) =
             Causal.accepts (Causal.residualTerminal remaining count table) := by
@@ -554,11 +554,11 @@ theorem reduction_typed_bound [Fintype F] [SampleableType F]
         simpa only [acceptance, observation] using bound
   · change mass (do
       let e ← PIR.Process.runM (A := Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs)
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after)
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after)
         (SumcheckReduceViews.program.participant F G 1
           (SumcheckReduceVerifier.reduceRootInputs xs dimension (some claim) (some count) (some handle))) s
       pure (returnedSatisfies (wrapperResidualRequest raw remaining count xs dimension claim handle) e)) ≤ _
-    rw [SumcheckReduceVerifier.verifier_excess xs dimension (some claim) count
+    rw [SumcheckReduceVerifier.verifier_excess xs dimension claim count
       (Nat.lt_of_not_ge admitted) (some handle)]
     simp [PIR.Process.runM, returnedSatisfies]
 

@@ -18,7 +18,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 def actualOwnedCheck (unit : UnitPayload) (self : Nat)
     (raw point : Option (List F)) (claim : Option F) :
     PIR.Process (participantInterface F G) (Values (Component (assignment F G)) [.boolean]) :=
-  Participant.owned self self (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed checkHelper)
+  Participant.owned self self (invoke (Zkc.Source.Structured.plainHelpers unit).closed checkHelper)
     (.cons raw (.cons point (.cons claim .nil)))
 
 /-- Any missing operand is incomplete; present operands invoke the actual helper. -/
@@ -36,9 +36,9 @@ theorem terminal_optional (unit : UnitPayload) (self : Nat)
     simp only [actualOwnedCheck, Participant.owned, ↓reduceIte]
   all_goals try rfl
   rename_i xs point claim
-  change (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed checkHelper
+  change (invoke (Zkc.Source.Structured.plainHelpers unit).closed checkHelper
     (checkInputs xs point claim)).bind _ = _
-  rw [SumcheckVerifierHelpers.closed_invoke_plain]
+  rw [Zkc.Source.Structured.closed_invoke_plain]
 
 open SumcheckSourceViews (unit)
 

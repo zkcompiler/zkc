@@ -48,7 +48,7 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
     have dimensionBound : input2 < 64 :=
       (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (tableSize ▸ lengthBound)
     exact ⟨by decide, dimensionBound, trivial, by simpa only [one_mul] using tableSize⟩
-  exact ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Honest.actual input0 input2 (input3.getD 0) shape0 (by assumption) (by assumption) (initialHistory input0 input0.sum input2)
+  exact ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Honest.actual input0 input2 0 shape0 (by assumption) (by assumption) (initialHistory input0 input0.sum input2)
 
 theorem compiled_ideal_complete : CanonicalCompleteness subject 0 :=
   Readback.perfect_abi subject abi ZkcSecurity.Examples.Components.SmallSumcheck.Formula.nonvacuous abi_readback

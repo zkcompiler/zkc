@@ -13,9 +13,10 @@ open Zkc.Source Zkc.Source.Structured
 
 set_option smartUnfolding false
 
+open ZkcExamples.Structured.ChaumPedersenBodies in
 structured_views ChaumPedersenData.snapshot
-  helpers [formula := ChaumPedersenBodies.formula]
-  protocols [interactive := ChaumPedersenBodies.interactive]
+  helpers [formula]
+  protocols [interactive]
 
 theorem admitted : check ChaumPedersenData.snapshot = .ok program := kernel_admission
 

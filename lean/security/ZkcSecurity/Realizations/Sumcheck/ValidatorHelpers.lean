@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 @[expose] public section

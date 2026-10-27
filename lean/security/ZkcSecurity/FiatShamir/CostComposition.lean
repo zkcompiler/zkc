@@ -36,6 +36,33 @@ theorem bind (head : PIR.Process I A) (next : A → PIR.Process I B)
     (fun value reached => (Typed.chargedCostBound_iff _ _ _ _ _).mp (suffix value reached))
     head ((Typed.chargedCostBound_iff _ _ _ _ _).mp headBound)
 
+/-- A pure result projection preserves the cost of every reached query. -/
+theorem map_iff (head : PIR.Process I A) (project : A → B)
+    (budget : ENNReal) :
+    Typed.ChargedCostBound absorb charge (head.bind fun value => .done (project value)) history budget ↔
+      Typed.ChargedCostBound absorb charge head history budget := by
+  induction head generalizing history budget with
+  | done value => rfl
+  | halt reason => rfl
+  | call operation next ih =>
+    rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+      ⟨event, decode⟩ | _
+    · simp only [PIR.Process.bind, Typed.ChargedCostBound, absorbed]
+      constructor
+      · intro bounded message value recovered
+        exact (ih value _).mp (bounded message value recovered)
+      · intro bounded message value recovered
+        exact (ih value _).mpr (bounded message value recovered)
+    · simp only [PIR.Process.bind, Typed.ChargedCostBound, absorbed]
+      exact ih value _
+    · simp only [PIR.Process.bind, Typed.ChargedCostBound, absorbed]
+      constructor
+      · rintro ⟨remaining, le, bounded⟩
+        exact ⟨remaining, le, fun value => (ih value _).mp (bounded value)⟩
+      · rintro ⟨remaining, le, bounded⟩
+        exact ⟨remaining, le, fun value => (ih value _).mpr (bounded value)⟩
+    · simp only [PIR.Process.bind, Typed.ChargedCostBound, absorbed]
+
 theorem branch (condition : Prop) [Decidable condition]
     (left right : PIR.Process I A) (first second : ENNReal)
     (yes : condition → Typed.ChargedCostBound absorb charge left history first)

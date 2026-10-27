@@ -70,7 +70,7 @@ noncomputable def run_residual
       (Nominal.layoutWithFrame field (frameUpdate (F := F) (G := G) field)).representation 1 1 charge)
     {n : Nat} (count : Nat) (state : ReferenceState F G (n + count))
     (history : Domain.History (uniformCarriers F G)) (wrong : state.scalar ≠ state.entries.sum) :
-    Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
+    Derivation (NominalField.interface (G := G) field) (boundedEscape charge)
       (fun _ result => ∃ final : ReferenceState F G n, final.original = state.original ∧
         final.scalar ≠ final.entries.sum ∧ result = project final)
       history (run field sites (List.range' state.point.length count) (project state)) := by
@@ -79,7 +79,7 @@ noncomputable def run_residual
   have residual := Consumers.residual layout.representation Message.endpoints_laws TableReference.laws
     (Nominal.queriesWithFrame (G := G) field (frameUpdate (F := F) (G := G) field)) sampling count sites state history
       ((layout.no_iff state).mpr wrong)
-  let interaction : PIR.Interaction (Nominal.signature F field) :=
+  let interaction : PIR.Interaction (NominalField.signature F field) :=
     ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
   have original := (component (G := G) field).returns interaction
     (fun {k} (s : ReferenceState F G k) => s.original = state.original)
@@ -94,12 +94,12 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
     (charge : Domain.History (uniformCarriers F G) → Domain.Event (uniformCarriers F G) → ENNReal)
     (price : ENNReal) (priced : ∀ history origin, charge history (.challenge origin) ≤ price)
     (indices : List Nat) (state : State F G) (history : Domain.History (uniformCarriers F G)) :
-    Typed.ChargedCostBound (Nominal.interface (G := G) field) charge
+    Typed.ChargedCostBound (NominalField.interface (G := G) field) charge
       (run field sites indices state) history (indices.length • price) := by
   induction indices generalizing state history with
   | nil => trivial
   | cons index rest ih =>
-    simp only [run, Typed.ChargedCostBound, Nominal.interface]
+    simp only [run, Typed.ChargedCostBound, NominalField.interface]
     intro payload low decoded payload' high decoded'
     split
     · refine ⟨rest.length • price, ?_, ?_⟩
@@ -111,7 +111,7 @@ omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
  theorem run_returns_length (field : String) (sites : Nominal.Schedule field)
-    (interaction : PIR.Interaction (Nominal.signature F field))
+    (interaction : PIR.Interaction (NominalField.signature F field))
     (indices : List Nat) (state : State F G) (phase : interaction.Phase) :
     PIR.Boundary.Returns interaction
       (fun final _ => final.point.length = state.point.length + indices.length)
@@ -144,12 +144,12 @@ noncomputable def run_rejecting
     (raw : List F) (claim : F) (count : Nat)
     (initial history : Domain.History (uniformCarriers F G))
     (wrong : raw.length = 2 ^ count → claim ≠ raw.sum) :
-    Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
+    Derivation (NominalField.interface (G := G) field) (boundedEscape charge)
       (fun _ final => (raw.length ≠ 2 ^ final.point.length ∨
         final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum) ∧
         final.point.length = count)
       history (run field sites (List.range count) ⟨[], claim, initial⟩) := by
-  have residual : Derivation (Nominal.interface (G := G) field) (boundedEscape charge)
+  have residual : Derivation (NominalField.interface (G := G) field) (boundedEscape charge)
       (fun _ final => raw.length ≠ 2 ^ final.point.length ∨
         final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum)
       history (run field sites (List.range count) ⟨[], claim, initial⟩) := by
@@ -162,15 +162,15 @@ noncomputable def run_rejecting
           final.scalar ≠ (Zkc.Polynomial.Multilinear.restrictPrefixValues raw final.point).sum) (fun reached final post => by
           obtain ⟨last, originalEq, different, rfl⟩ := post
           exact Or.inr (by simpa only [project, PrefixState.entries, originalEq] using different))
-    · let interaction : PIR.Interaction (Nominal.signature F field) :=
+    · let interaction : PIR.Interaction (NominalField.signature F field) :=
         ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
-      have head := (ZkcSecurity.Obligations.unrestricted (absorb := Nominal.interface (G := G) field)
+      have head := (ZkcSecurity.Obligations.unrestricted (absorb := NominalField.interface (G := G) field)
         (charge := charge) (run field sites (List.range count) ⟨[], claim, initial⟩) history).frameReturns
           interaction (fun final => final.point.length = count) () (by
             simpa only [List.length_nil, Nat.zero_add, List.length_range] using
               run_returns_length field sites interaction (List.range count) ⟨[], claim, initial⟩ ())
       exact head.consequence fun reached final post => Or.inl (by simpa only [post.2] using shape)
-  let interaction : PIR.Interaction (Nominal.signature F field) :=
+  let interaction : PIR.Interaction (NominalField.signature F field) :=
     ⟨Unit, Unit, fun _ => (), fun _ _ => True, fun _ _ _ => ()⟩
   exact residual.frameReturns interaction (fun final => final.point.length = count) () (by
     simpa only [List.length_nil, Nat.zero_add, List.length_range] using

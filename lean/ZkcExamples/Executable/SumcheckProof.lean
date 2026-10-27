@@ -22,19 +22,23 @@ open Zkc Zkc.Construction Zkc.Executable Zkc.Source
 open ZkcExamples.Construction
 open Zkc.Construction.Uniform.DomainAdapter
 
-/-- The constructed validator calls the empty point, the point extension and
-the terminal check by name. -/
+/-- The constructed validator calls the Pending constructor, both consuming wrappers,
+the point extension and terminal check by name. -/
 theorem helpers_named : Instruction.helpers SumcheckProof.participant.instructions =
-    [ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name,
+    [ZkcExamples.Structured.SumcheckPendingBodies.pendingHelper.name,
+      ZkcExamples.Structured.SumcheckPendingBodies.openClaimHelper.name,
       ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name,
+      ZkcExamples.Structured.SumcheckPendingBodies.atPrefixHelper.name,
       ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name] :=
   helpers
 
 /-- The helper calls of the constructed validator, at the result sorts of the
 called helpers. -/
 theorem calls : Instruction.callList SumcheckProof.participant.instructions =
-    [ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper,
+    [ZkcExamples.Structured.SumcheckPendingBodies.pendingHelper,
+      ZkcExamples.Structured.SumcheckPendingBodies.openClaimHelper,
       ZkcExamples.Structured.SumcheckHelperBodies.appendHelper,
+      ZkcExamples.Structured.SumcheckPendingBodies.atPrefixHelper,
       ZkcExamples.Structured.SumcheckHelperBodies.checkHelper].map
       fun helper => (helper.name, helper.outputs.map .data) := by
   decide +kernel
@@ -68,9 +72,11 @@ theorem helpersSorted : ∀ call ∈ Instruction.callList SumcheckProof.particip
   rw [calls]
   intro call member
   simp only [List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with rfl | rfl | rfl
-  · exact sorted _ ZkcExamples.Structured.SumcheckSourceContracts.bodies.empty
+  rcases member with rfl | rfl | rfl | rfl | rfl
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceAssociations.pending_association
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceAssociations.openClaim_association
   · exact sorted _ ZkcExamples.Structured.SumcheckSourceContracts.bodies.append
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceAssociations.atPrefix_association
   · exact sorted _ ZkcExamples.Structured.SumcheckSourceAssociations.check_association
 
 

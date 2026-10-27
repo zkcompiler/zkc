@@ -3,31 +3,20 @@ module
 public import ZkcExamples.Executable.SumcheckProofProgramData
 public import ZkcExamples.Construction.SumcheckArtifact
 public import ZkcExamples.Structured.SumcheckSourceContracts
+public import ZkcExamples.Structured.SumcheckPendingLaws
 public import Zkc.Executable.HelperSoundness
 public import Zkc.Executable.Installed
 
 @[expose] public section
 
-/-! Preparation of the helpers the executable Sumcheck validator calls.
+/-! Preparation of the current executable Sumcheck helpers.
 
-The constructed Sumcheck validator calls three checked helpers of the admitted
-source by name: the empty point, the extension of a point by a challenge, and
-the terminal multilinear check. The executable validator carries a local
-function of the same name for each (`emptyFunction`, `appendFunction`,
-`checkFunction`), and each implements its helper (`Zkc.Executable.Prepared`).
-
-The helper rule (`Zkc.Executable.checkHelpers`) accepts the empty point and the
-point extension (`rule_accepted`), so they are prepared by its soundness
-theorem (`empty_prepared`, `append_prepared`). The terminal check is outside
-the rule's recipe table: its body iterates, which the table refuses
-(`check_outside`). Its preparation is a proof of its own (`check_prepared`): the
-body evaluates the authored shape predicate, then folds the table over the point
-one coordinate at a time, interpolating its low and high halves with one native
-numerical call (`map_returns`). The fold is
-`Zkc.Polynomial.Multilinear.restrictPrefixValues`, whose sum the source contract
-compares with the claim. The body is evaluated once, with its charge
-(`check_shaped_cost`: `62 + 20 · n` instructions for a point of `n`
-coordinates), and both its result and its cost are read off that evaluation.
+The native validator calls the Pending constructor, openClaim, append, atPrefix,
+and the terminal multilinear check. The finite helper rule prepares the first
+four against their complete admitted source bodies. The terminal check iterates
+outside that rule's recipe table; its separate proof evaluates the actual native
+fold, including its map binding, and preserves resource stops. Its exact charge
+on a shaped table is `62 + 20 * point.length`.
 -/
 
 set_option autoImplicit false
@@ -37,21 +26,22 @@ open Zkc.Construction Zkc.Executable Zkc.Source
 open Zkc.Source.Structured
 open ZkcExamples.Structured ZkcExamples.Structured.SumcheckHelperBodies
 open Zkc.Polynomial.Multilinear
+open SumcheckPendingBodies
 
 abbrev validator : Validator := SumcheckProofProgramData.validator
 abbrev program := ZkcExamples.Construction.SumcheckProof.program
 
-/-- The empty point helper's local function. -/
-abbrev emptyFunction : Zkc.Executable.Function := SumcheckProofProgramData.function0
+/-- The current Pending constructor and its consuming wrappers. -/
+abbrev pendingFunction : Zkc.Executable.Function := SumcheckProofProgramData.function0
+abbrev openClaimFunction : Zkc.Executable.Function := SumcheckProofProgramData.function1
+abbrev appendFunction : Zkc.Executable.Function := SumcheckProofProgramData.function2
+abbrev atPrefixFunction : Zkc.Executable.Function := SumcheckProofProgramData.function3
+abbrev checkFunction : Zkc.Executable.Function := SumcheckProofProgramData.function4
 
-/-- The point extension helper's local function. -/
-abbrev appendFunction : Zkc.Executable.Function := SumcheckProofProgramData.function1
-
-/-- The terminal check helper's local function. -/
-abbrev checkFunction : Zkc.Executable.Function := SumcheckProofProgramData.function2
-
-theorem emptyFunction_eq : validator.function? emptyHelper.name = some emptyFunction := rfl
+theorem pendingFunction_eq : validator.function? pendingHelper.name = some pendingFunction := rfl
+theorem openClaimFunction_eq : validator.function? openClaimHelper.name = some openClaimFunction := rfl
 theorem appendFunction_eq : validator.function? appendHelper.name = some appendFunction := rfl
+theorem atPrefixFunction_eq : validator.function? atPrefixHelper.name = some atPrefixFunction := rfl
 theorem checkFunction_eq : validator.function? checkHelper.name = some checkFunction := rfl
 
 
@@ -110,9 +100,9 @@ theorem sorted_single {value : Value F G} {sort : ValueSort} (sorted : HasSort v
       exact sorted
   | _ + 1, _, _, isFound, _ => by simp at isFound
 
-/-- The helper rule accepts the empty point and the point extension. -/
+/-- The helper rule accepts Pending, both consuming wrappers, and point extension. -/
 theorem rule_accepted :
-    checkHelpers installed validator program [emptyHelper.name, appendHelper.name] = .ok () := by
+    checkHelpers installed validator program [pendingHelper.name, openClaimHelper.name, appendHelper.name, atPrefixHelper.name] = .ok () := by
   decide +kernel
 
 /-- The terminal check is outside the rule's recipe table: its body iterates. -/
@@ -120,12 +110,18 @@ theorem check_outside :
     checkHelper installed validator program.payload.definitions checkHelper.name = .error (.recipe "loop") := by
   decide +kernel
 
-/-- The empty point helper's body hands back the empty vector. -/
-theorem empty_prepared : Prepared installed validator (helperTable program F G) emptyHelper.name :=
+/-- The Pending constructor consumes the scalar and creates an empty prefix. -/
+theorem pending_prepared : Prepared installed validator (helperTable program F G) pendingHelper.name :=
   checkHelpers_sound installed validator program rule_accepted _ (by simp)
 
 /-- The point extension helper's body appends the challenge to the point. -/
 theorem append_prepared : Prepared installed validator (helperTable program F G) appendHelper.name :=
+  checkHelpers_sound installed validator program rule_accepted _ (by simp)
+
+theorem openClaim_prepared : Prepared installed validator (helperTable program F G) openClaimHelper.name :=
+  checkHelpers_sound installed validator program rule_accepted _ (by simp)
+
+theorem atPrefix_prepared : Prepared installed validator (helperTable program F G) atPrefixHelper.name :=
   checkHelpers_sound installed validator program rule_accepted _ (by simp)
 
 /-! ## Operations the check applies -/
@@ -352,43 +348,25 @@ local macro "returns_iterate " results:term : tactic =>
   `(tactic| refine Evaluated.Returns.iterate installed validator (results := $results) (by rfl) (by rfl)
     (by rfl) (by rfl) ?_ ?_ (by rfl) ?_)
 
-/-- The actual loop ports and body used by the retained executable check.
-Register names are local presentation choices, not part of the mathematical
-fold. Read them together with the body whose evaluation is proved below. -/
-structure RestrictionLoop where
-  induction : String
-  carried : List String
-  captures : List String
-  body : List Zkc.Executable.Step
-
-def restrictionLoop : RestrictionLoop :=
-  let view : Option RestrictionLoop :=
-    match checkFunction.body with
-    | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
-        match checked with
-        | [_, _, _, _, _, _, _, _, _, _, .iterate _ induction _ _ carried captures body _, _, _, _] =>
-            some ⟨induction, carried.map (·.1), captures, body⟩
-        | _ => none
-    | _ => none
-  view.get (by decide +kernel)
-
 /-- The body of the check's fold loop. -/
-abbrev restrictionBody : List Zkc.Executable.Step := restrictionLoop.body
+def restrictionBody : List Zkc.Executable.Step :=
+  match checkFunction.body with
+  | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
+      match checked with
+      | [_, _, _, _, _, _, _, _, _, _, .iterate _ _ _ _ _ _ body _, _, _, _] => body
+      | _ => []
+  | _ => []
 
-/-- The actual binding and parameters of the fold loop's numerical call.
-The resolution theorem checks this selected declaration, not a generated name
-copied from an earlier program. -/
-def interpolationCall : String × List Parameter :=
-  let call : Option (String × List Parameter) :=
-    match restrictionBody with
-    | [_, _, _, _, _, _, _, _, _, .operation _ binding parameters _ _, _, _, _] => some (binding, parameters)
-    | _ => none
-  call.get (by decide +kernel)
+/-- The parameters of the fold loop's numerical call: its expression. -/
+def interpolationParameters : List Parameter :=
+  match restrictionBody with
+  | [_, _, _, _, _, _, _, _, _, .operation _ _ parameters _ _, _, _, _] => parameters
+  | _ => []
 
 /-- The fold's numerical call resolves to the installed map over a low vector,
 a high vector and a scalar, with the decoded interpolation. -/
 theorem interpolation_resolves :
-    validator.binding? interpolationCall.1 >>= (installed.resolve · interpolationCall.2) =
+    validator.binding? "_finite_binding_10" >>= (installed.resolve · interpolationParameters) =
       some (.compute (.numerical .map "bls12-381.fr" [true, true, false] interpolation)) := by
   decide +kernel
 
@@ -406,8 +384,8 @@ theorem interpolate_eq (low high : List F) (r : F) :
 
 /-- The arguments of the check as the body names them. -/
 abbrev checkEnv (xs point : List F) (claim : F) : Env F G :=
-  (checkFunction.inputs.map (·.1)).zip
-    [.vector "bls12-381.fr" xs, .vector "bls12-381.fr" point, .data (.field "bls12-381.fr" claim)]
+  [("v119", .vector "bls12-381.fr" xs), ("v120", .vector "bls12-381.fr" point),
+    ("v121", .data (.field "bls12-381.fr" claim))]
 
 /-- One installed operation that returns, with its exact charge. -/
 local macro "charged_operation " evaluates:term : tactic =>
@@ -461,9 +439,9 @@ theorem doubling_cost {first second two doubled carried induction : String}
 theorem restriction_cost (point : List F) (small : point.length < 64) :
     ∀ (count start : Nat) (current : List F), start + count = point.length →
       current.length = 2 ^ count →
-      (evalFor (fun env => evalSteps installed validator restrictionBody env) restrictionLoop.induction
-          restrictionLoop.carried
-          (restrictionLoop.captures.zip [.vector "bls12-381.fr" point, .index point.length])
+      (evalFor (fun env => evalSteps installed validator restrictionBody env) "v180"
+          ["v181", "v182", "v183"]
+          [("v120", .vector "bls12-381.fr" point), ("v178", .index point.length)]
           (List.range' start count)
           [(.vector "bls12-381.fr" current : Value F G), .index count, .index 1]).ReturnsAfter
         [.vector "bls12-381.fr" (restrictPrefixValues current (point.drop start)), .index 0, .index 1]
@@ -733,13 +711,15 @@ theorem check_prepared : Prepared installed validator (helperTable program F G) 
       rfl
 
 /-- Every helper the constructed Sumcheck validator calls by name is prepared. -/
-theorem prepared : ∀ name ∈ [emptyHelper.name, appendHelper.name, checkHelper.name],
+theorem prepared : ∀ name ∈ [pendingHelper.name, openClaimHelper.name, appendHelper.name, atPrefixHelper.name, checkHelper.name],
     Prepared installed validator (helperTable program F G) name := by
   intro name member
   simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with rfl | rfl | rfl
-  · exact empty_prepared
+  rcases member with rfl | rfl | rfl | rfl | rfl
+  · exact pending_prepared
+  · exact openClaim_prepared
   · exact append_prepared
+  · exact atPrefix_prepared
   · exact check_prepared
 
 end Check
@@ -747,13 +727,6 @@ end Check
 /-! ## Calls of the source's helpers -/
 
 section Calls
-
-/-- The empty point helper returns the empty vector. -/
-theorem empty_call :
-    callHelper (helperTable program F G) emptyHelper.name [] = .returned [.vector "bls12-381.fr" []] := by
-  rw [call_eq SumcheckSourceContracts.bodies.empty [] .nil rfl,
-    SumcheckUnitContracts.empty_equation SumcheckSourceViews.unit.linked SumcheckSourceContracts.bodies]
-  rfl
 
 /-- The point extension helper appends the challenge to the point. -/
 theorem append_call (point : List F) (challenge : F) :

@@ -41,7 +41,7 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     (context : Realizations.Sumcheck.Original.Context) (schedule : Nominal.Schedule "bls12-381.fr")
     (index : Nat) (state : State F) (construction : ConstructionState (F := F) (G := G))
     (routes : OriginalSecurity.Routes routing context schedule construction.frames) :
-    DomainReduction.Bridge (Nominal.interface (G := G) "bls12-381.fr")
+    DomainReduction.Bridge (NominalField.interface (G := G) "bls12-381.fr")
       (fun reached result => result.2.history = reached ∧ result.2.frames = construction.frames)
       construction.history
       (Zkc.Construction.Original.fold routing (step context index state) construction)
@@ -56,22 +56,22 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
     Domain.Payload.ofValue, Ty.isService, eq_self, dite_true,
     PIR.Process.bind]
   constructor
-  · apply DomainReduction.ReadingTo.receive (I := Nominal.signature F "bls12-381.fr")
+  · apply DomainReduction.ReadingTo.receive (I := NominalField.signature F "bls12-381.fr")
       (.field "bls12-381.fr") _ _ _ _
       (.receive (schedule.low index)) _
-      (.message (schedule.low index)) (Nominal.received "bls12-381.fr" _)
-      (fun value => value) rfl (by intro payload; simpa using Nominal.received_message _ _ payload)
+      (.message (schedule.low index)) (NominalField.received "bls12-381.fr" _)
+      (fun value => value) rfl (by intro payload; simpa using NominalField.received_message _ _ payload)
     intro payload low decoded
     have payloadEq : payload = .field "bls12-381.fr" low := by
       simpa only [Domain.Payload.ofValue, Ty.isService, eq_self, dite_true, Option.some.injEq] using
         (Domain.Payload.ofValue_value decoded).symm
     subst payload
     apply DomainReduction.ReadingTo.observe
-    apply DomainReduction.ReadingTo.receive (I := Nominal.signature F "bls12-381.fr")
+    apply DomainReduction.ReadingTo.receive (I := NominalField.signature F "bls12-381.fr")
       (.field "bls12-381.fr") _ _ _ _
       (.receive (schedule.high index)) _
-      (.message (schedule.high index)) (Nominal.received "bls12-381.fr" _)
-      (fun value => value) rfl (by intro payload; simpa using Nominal.received_message _ _ payload)
+      (.message (schedule.high index)) (NominalField.received "bls12-381.fr" _)
+      (fun value => value) rfl (by intro payload; simpa using NominalField.received_message _ _ payload)
     intro payload high decoded
     have payloadEq : payload = .field "bls12-381.fr" high := by
       simpa only [Domain.Payload.ofValue, Ty.isService, eq_self, dite_true, Option.some.injEq] using
@@ -83,18 +83,18 @@ theorem step_bridge (routing : Zkc.Construction.Original.Routing)
         Zkc.Construction.Original.query, Zkc.Construction.Original.send, routes.mode, routes.draw,
         routes.delivery, Zkc.Construction.Original.record, Domain.Payload.ofValue, Ty.isService, eq_self,
         Zkc.Construction.Original.queryField, request, ↓reduceDIte, PIR.Process.bind]
-      apply DomainReduction.ReadingTo.query (I := Nominal.signature F "bls12-381.fr")
+      apply DomainReduction.ReadingTo.query (I := NominalField.signature F "bls12-381.fr")
         _ _ _ (.query _ request) _ (DomainReduction.fieldReply request)
       · exact DomainReduction.drawRequest_of_request request
       · rfl
       · intro challenge
         apply DomainReduction.ReadingTo.observe
-        apply DomainReduction.ReadingTo.absorbSend (I := Nominal.signature F "bls12-381.fr")
+        apply DomainReduction.ReadingTo.absorbSend (I := NominalField.signature F "bls12-381.fr")
           (.deliver _ _) _ _ () rfl
         simpa [unpack, nominal, TableComponent.Execution.advance, TableComponent.Execution.finalHistory,
           TableComponent.Execution.receivedHistory, advance, List.append_assoc,
           DomainReduction.fieldReply, PIR.Process.bind] using
-          (DomainReduction.ReadingTo.done (absorb := Nominal.interface (F := F) (G := G) "bls12-381.fr")
+          (DomainReduction.ReadingTo.done (absorb := NominalField.interface (F := F) (G := G) "bls12-381.fr")
             _ _ (show _ ∧ _ from ⟨rfl, rfl⟩))
     · simp only [passed, ite_false, PIR.Process.interpretState, PIR.Process.bind]
       exact .halt _ .reject
@@ -126,7 +126,7 @@ theorem run_bridge (routing : Zkc.Construction.Original.Routing)
     (context : Realizations.Sumcheck.Original.Context) (schedule : Nominal.Schedule "bls12-381.fr")
     (indices : List Nat) (state : State F) (construction : ConstructionState (F := F) (G := G))
     (routes : OriginalSecurity.Routes routing context schedule construction.frames) :
-    DomainReduction.Bridge (Nominal.interface (G := G) "bls12-381.fr")
+    DomainReduction.Bridge (NominalField.interface (G := G) "bls12-381.fr")
       (fun reached result => result.2.history = reached ∧ result.2.frames = construction.frames)
       construction.history (Zkc.Construction.Original.fold routing (run context indices state) construction)
       (presentedRun schedule indices state construction) := by

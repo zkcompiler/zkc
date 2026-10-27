@@ -27,7 +27,7 @@ theorem relation_iff (raw : List Scalar) (claim : Scalar) (count : Nat) (service
     (bounded : raw.length < indexLimit) :
     subject.Relation (inputs raw claim count service) ↔ raw.sum = claim := by
   refine (Subject.relation_iff_of_read subject _ _ (application_read raw claim count service)).trans ?_
-  change subject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+  change ZkcSecurity.Examples.Components.SmallSumcheck.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
     (.cons raw (.cons claim .nil)) =
       (.done (.cons true .nil) : Closed (Values (assignment Scalar Scalar) [.boolean])) ↔ _
   rw [equation raw claim bounded]
@@ -71,7 +71,7 @@ theorem relation_iff (left right : List Scalar) (leftClaim rightClaim : Scalar)
       left.sum = leftClaim ∧ right.sum = rightClaim := by
   refine (Subject.relation_iff_of_read subject _ _
     (application_read left right leftClaim rightClaim count service)).trans ?_
-  change subject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+  change ZkcSecurity.Examples.Components.TwoSums.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
     (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       (.done (.cons true .nil) : Closed (Values (assignment Scalar Scalar) [.boolean])) ↔ _
   rw [equation left right leftClaim rightClaim leftBound rightBound]

@@ -24,9 +24,10 @@ set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
+open ZkcExamples.Construction.GuessProofBodies in
 structured_views ZkcExamples.Construction.GuessProofData.snapshot
   helpers []
-  protocols [proof := ZkcExamples.Construction.GuessProofBodies.proof]
+  protocols [proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.GuessProofData.snapshot = .ok program := kernel_admission
 

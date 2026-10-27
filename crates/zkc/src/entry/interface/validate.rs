@@ -28,6 +28,11 @@ pub(super) fn check(document: &Interface, original: &str) -> Result<Checked> {
         schemas.charge(1 + relation.symbol.len())?;
         text(&relation.symbol, 4096)?;
         require(
+            matches!(relation.definition, Definition::Opaque {})
+                || relation.static_arguments.is_empty(),
+            E::Schema,
+        )?;
+        require(
             relations
                 .insert(relation.symbol.as_str(), relation)
                 .is_none(),

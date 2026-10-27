@@ -22,7 +22,7 @@ private def caller : Function :=
       (.ret [0, 1])⟩
 private def relation : Relation :=
   ⟨"Equal", .publicDef, "zkc.language.formula/0", "equality", "0", [.boolean, .boolean], [.boolean],
-    ["statement", "witness"], some "predicate"⟩
+    ["statement", "witness"], some "predicate", []⟩
 private def subject : RelationApplication := ⟨"Equal", [⟨.input, 0, "V"⟩, ⟨.input, 1, "P"⟩]⟩
 private def copiedSubject : RelationApplication := ⟨"Equal", [⟨.input, 0, "P"⟩, ⟨.input, 1, "P"⟩]⟩
 private def clause : ContractClause := ⟨.target, "claim", subject, none, some ⟨.output, 0, "V"⟩⟩
@@ -33,7 +33,7 @@ private def continuation : ContractClause :=
   ⟨.continuation, "carry", subject, some residual, some ⟨.output, 0, "V"⟩⟩
 private def snapshot : Snapshot :=
   ⟨digest, "main", [], [relation], [], [.function root, .function predicate, .function caller],
-    [⟨"main", [clause, continuation, copiedClause]⟩, ⟨"caller", []⟩], blsRows⟩
+    [⟨"main", [clause, continuation, copiedClause]⟩, ⟨"caller", []⟩], blsRows, {}⟩
 private def admits (snapshot : Snapshot) := (check snapshot).isOk
 private def withClause (changed : ContractClause) : Snapshot :=
   { snapshot with contracts := [⟨"main", [changed]⟩, ⟨"caller", []⟩] }
@@ -112,25 +112,25 @@ private def runDiagnostics : IO Unit := do
 
 private def arr (values : List Lean.Json) := Lean.Json.arr values.toArray
 private def wire : List Lean.Json := [.str "zkc.structured-source/0", .str "original",
-  .str digest, .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []]]
+  .str digest, .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr []]]
 private def selectorWire : Lean.Json := arr [.str "input", Lean.toJson (0 : Nat), .str "P"]
 private def applicationWire := arr [.str "Equal", arr [selectorWire]]
 private def clauseWire := arr [.str "target", .str "claim", applicationWire, .null,
   arr [.str "output", Lean.toJson (0 : Nat), .str "V"]]
 private def relationWire : List Lean.Json := [.str "relation", .str "Equal", .str "public",
-  .str "zkc.language.formula/0", .str "equality", .str "0", arr [arr [.str "bool"]],
+  .str "zkc.language.formula/0", .str "equality", .str "0", arr [], arr [arr [.str "bool"]],
   arr [arr [.str "bool"]], arr [.str "statement"], .str "predicate"]
 
 private def runWire : IO Unit := do
   let controls : List (String × Bool) := [
-    ("ten", (Format.snapshot (arr wire)).isOk),
-    ("nine-refused", refusal (Format.snapshot (arr (wire.take 9))) "structured-envelope"),
-    ("eleven-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
+    ("eleven", (Format.snapshot (arr wire)).isOk),
+    ("ten-refused", refusal (Format.snapshot (arr (wire.take 10))) "structured-envelope"),
+    ("twelve-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
     ("formula-field", (Format.relation (arr relationWire)).isOk),
     ("relation-missing", refusal (Format.relation (arr (relationWire.take 9))) "structured-relation"),
     ("relation-extra", refusal (Format.relation (arr (relationWire ++ [Lean.Json.null]))) "structured-relation"),
-    ("formula-type", refusal (Format.relation (arr (relationWire.set 9 (.bool true)))) "structured-string"),
-    ("formula-empty", refusal (Format.relation (arr (relationWire.set 9 (.str "")))) "structured-string"),
+    ("formula-type", refusal (Format.relation (arr (relationWire.set 10 (.bool true)))) "structured-string"),
+    ("formula-empty", refusal (Format.relation (arr (relationWire.set 10 (.str "")))) "structured-string"),
     ("selector", (Format.contractSelector selectorWire).isOk),
     ("selector-shape", refusal (Format.contractSelector (arr [.str "input", Lean.toJson (0 : Nat), .str "P", .null])) "structured-contract-selector"),
     ("selector-direction", refusal (Format.contractSelector (arr [.str "other", Lean.toJson (0 : Nat), .str "P"])) "structured-contract-direction"),
@@ -274,7 +274,8 @@ private def residualBinding : ApplicationBinding owner residual :=
   ⟨residualRelation, .cons decision (.cons wrongDecision .nil), rfl⟩
 private def equalArguments (args : Values (assignment Int Int) [.boolean, .boolean]) : Prop :=
   args.get .here = args.get (.there .here)
-private def environment : RelationEnvironment imported Int Int := ⟨fun _ _ => False⟩
+private def environment : RelationEnvironment imported Int Int :=
+  .formulaOnly (by intro row member; simp_all [snapshot, relation, Relation.isOpaque])
 private def subjectMeaning : InterpretedApplication owner subject Int Int environment :=
   ⟨subjectBinding, .formula formula rfl (fun _ => True) equalArguments
     (fun arguments => inferInstanceAs (Decidable (arguments.get .here = arguments.get (.there .here))))⟩
@@ -296,18 +297,18 @@ private def contractMeaning : ContractInterpretation owner Int Int environment w
     match i with
     | 0 | 1 => exact subjectMeaning
     | 2 => exact copiedMeaning
-    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound; omega
+    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound
   residuals index application selected := by
     rcases index with ⟨i, bound⟩
     match i with
     | 0 | 2 => cases selected
     | 1 => cases Option.some.inj selected; exact residualMeaning
-    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound; omega
+    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound
   decisions index selector selected := by
     rcases index with ⟨i, bound⟩
     match i with
     | 0 | 1 | 2 => cases Option.some.inj selected; exact ⟨decision, rfl⟩
-    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound; omega
+    | n + 3 => simp [owner, ContractBinding.contract, snapshot] at bound
 
 private theorem subjectLaw : subjectMeaning.interpretation.FormulaLaw := by
   intro arguments _
@@ -556,7 +557,7 @@ private def lookupFormula : Function :=
       .instruction (.fieldEqual scalarDomain) [0, 0] [.boolean] [] ""] (.ret [0])⟩
 private def lookupRelation : Relation :=
   ⟨"Lookup", .publicDef, "zkc.language.formula/0", "lookup", "0",
-    [.vector scalarDomain, .index], [.boolean], ["parameter", "statement"], some "lookupPredicate"⟩
+    [.vector scalarDomain, .index], [.boolean], ["parameter", "statement"], some "lookupPredicate", []⟩
 private def partialSnapshot : Snapshot :=
   { snapshot with
     relations := [relation, lookupRelation]
@@ -628,12 +629,12 @@ example : ¬ changedFormula.Realizes (F := Int) (G := Int) rfl (fun _ => True)
 private def opaqueSnapshot : Snapshot := { snapshot with relations := [{ relation with kind := "opaque", formula := none }] }
 private def opaqueImported : Imported opaqueSnapshot := ⟨⟨opaqueSnapshot, payload⟩, by rfl⟩
 private def opaqueOwner : ContractBinding opaqueImported := ⟨⟨0, by decide⟩, ⟨0, by decide⟩, rfl⟩
-private def opaqueEnvironment : RelationEnvironment opaqueImported Int Int where
-  meanings index := by
-    rcases index with ⟨index, bound⟩
-    match index with
-    | 0 => exact fun args => args.get .here = args.get (.there .here)
-    | _ + 1 => simp [opaqueSnapshot] at bound
+private def opaqueRegistry : OpaqueRegistry (assignment Int Int) :=
+  ⟨[⟨⟨"opaque", relation.key, relation.revision⟩, fun arguments =>
+    if arguments = [] then some ⟨[.boolean, .boolean], [.boolean], ["statement", "witness"],
+      fun args => args.get .here = args.get (.there .here)⟩ else none⟩], by simp⟩
+private def opaqueEnvironment : RelationEnvironment opaqueImported Int Int :=
+  .ofChecked opaqueRegistry (by decide +kernel)
 private def opaqueSubjectRelation : RelationBinding opaqueSnapshot subject := ⟨⟨0, by decide⟩, rfl⟩
 private def opaqueResidualRelation : RelationBinding opaqueSnapshot residual := ⟨⟨0, by decide⟩, rfl⟩
 private def opaqueSubject : RelationInterpretation opaqueImported opaqueSubjectRelation Int Int opaqueEnvironment :=

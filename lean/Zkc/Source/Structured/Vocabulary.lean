@@ -93,6 +93,7 @@ inductive Descriptor where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain decimal : String)
   | fieldAdd (domain : String)
@@ -243,6 +244,7 @@ structure Relation where
   outputs : List Ty
   purposes : List String
   formula : Option String := none
+  staticArguments : List OriginTerm := []
   deriving DecidableEq, Repr
 
 inductive ContractDirection where
@@ -277,6 +279,34 @@ structure ProtocolContract where
   clauses : List ContractClause
   deriving DecidableEq, Repr
 
+/-- Source records retain their declared usage attribute and closed field types.
+No resource property is inferred from a flattened native carrier. -/
+structure SourceRecord where
+  type : OriginTerm
+  resource : String
+  sealed : Bool
+  fields : List (String × OriginTerm)
+  deriving BEq, Repr
+
+structure SourcePort where
+  name : String
+  type : OriginTerm
+  roles : List String
+  offset : Nat
+  count : Nat
+  deriving BEq, Repr
+
+structure SourceProtocol where
+  name : String
+  inputs : List SourcePort
+  outputs : List SourcePort
+  deriving BEq, Repr
+
+structure SourceDeclarations where
+  records : List SourceRecord := []
+  protocols : List SourceProtocol := []
+  deriving BEq, Repr
+
 structure Snapshot where
   source : String
   entry : String
@@ -287,6 +317,7 @@ structure Snapshot where
   contracts : List ProtocolContract := []
   /-- The catalogue rows of the identities the unit uses. -/
   catalogue : Catalogue
+  sourceDeclarations : SourceDeclarations := {}
   deriving Repr
 
 def Definition.name : Definition → String

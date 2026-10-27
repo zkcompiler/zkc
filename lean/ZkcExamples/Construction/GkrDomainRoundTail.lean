@@ -22,66 +22,66 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 
 def leftTailBlocks : List (Domain.View.Block (uniformCarriers F G)) :=
   [
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep15 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep16 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep17 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep18 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep19 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep20 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep21 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep22 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep23 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep24 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep25 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep26 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep27 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep28 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep29 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep30 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep31 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep32 (ringModel F G) program context]
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep15 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep16 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep17 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep18 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep19 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep20 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep21 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep22 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep23 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep24 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep25 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep26 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep27 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep28 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep29 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep30 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep31 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep32 (ringModel F G) program context]
 
 def leftTail : Domain.View.Block (uniformCarriers F G) := sequenceBlocks leftTailBlocks
 
 /-- The actual left round suffix, after all three received coefficients.
 The guard is unrestricted and the challenge reply is arbitrary. -/
-def left_binding (env : Env (F := F) (G := G)) (length : env.length = 36)
+def left_binding (env : Env (F := F) (G := G)) (length : env.length = 69)
     (layerIndex index handle : Nat) (point : List F) (claim c0 c1 c2 : F)
     (suffix : Hist (F := F) (G := G))
-    (layerFound : env[12]? = some (.data (.index layerIndex)))
-    (roundFound : env[17]? = some (.data (.index index)))
-    (pointFound : env[18]? = some (.data (.vector "bls12-381.fr" point)))
-    (claimFound : env[19]? = some (.data (.field "bls12-381.fr" claim)))
-    (firstFound : env[21]? = some (.data (.field "bls12-381.fr" c0)))
-    (secondFound : env[26]? = some (.data (.field "bls12-381.fr" c1)))
-    (thirdFound : env[31]? = some (.data (.field "bls12-381.fr" c2)))
-    (historyFound : env[35]? = some (.transcript context.suite suffix)) :
+    (layerFound : env[40]? = some (.data (.index layerIndex)))
+    (roundFound : env[50]? = some (.data (.index index)))
+    (pointFound : env[51]? = some (.data (.vector "bls12-381.fr" point)))
+    (claimFound : env[52]? = some (.data (.field "bls12-381.fr" claim)))
+    (firstFound : env[54]? = some (.data (.field "bls12-381.fr" c0)))
+    (secondFound : env[59]? = some (.data (.field "bls12-381.fr" c1)))
+    (thirdFound : env[64]? = some (.data (.field "bls12-381.fr" c2)))
+    (historyFound : env[68]? = some (.transcript context.suite suffix)) :
     Original.Simulation RoundReturns (fun _ _ => True)
       (SourceProcess.sourceView context
         (GkrVerifier.roundCheck (GkrVerifier.leftContext {}) handle (point, claim) c0 c1 c2) (history suffix))
       (((leftTail env).bind
-          (yieldValues [49, 53, 48] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
+          (yieldValues [82, 86, 81] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
             .transcript context.suite])).interpret operations) := by
   unfold leftTail leftTailBlocks sequenceBlocks
   simp only [List.foldr_cons, List.foldr_nil]
-  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep15,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep16,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep17,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep18,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep19,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep20,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep21,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep22,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep23,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep24,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep25,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep26,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep27,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep28,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep29,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep30,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep31,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep1BodyStep32]
+  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep15,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep16,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep17,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep18,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep19,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep20,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep21,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep22,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep23,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep24,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep25,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep26,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep27,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep28,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep29,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep30,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep31,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep3BodyStep32]
   derive_artifact_binding [query_binding (F := F) (G := G)] normalizing (
     repeat' (first
     | (fail_if_no_progress normalize_artifact_operations [GkrDomainHelpers.append] unfolding
@@ -122,66 +122,66 @@ def left_binding (env : Env (F := F) (G := G)) (length : env.length = 36)
 
 def rightTailBlocks : List (Domain.View.Block (uniformCarriers F G)) :=
   [
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep15 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep16 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep17 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep18 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep19 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep20 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep21 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep22 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep23 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep24 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep25 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep26 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep27 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep28 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep29 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep30 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep31 (ringModel F G) program context,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep32 (ringModel F G) program context]
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep15 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep16 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep17 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep18 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep19 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep20 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep21 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep22 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep23 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep24 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep25 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep26 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep27 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep28 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep29 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep30 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep31 (ringModel F G) program context,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep32 (ringModel F G) program context]
 
 def rightTail : Domain.View.Block (uniformCarriers F G) := sequenceBlocks rightTailBlocks
 
 /-- The actual right round suffix, after all three received coefficients.
 The guard is unrestricted and the challenge reply is arbitrary. -/
-def right_binding (env : Env (F := F) (G := G)) (length : env.length = 40)
+def right_binding (env : Env (F := F) (G := G)) (length : env.length = 76)
     (layerIndex index handle : Nat) (point : List F) (claim c0 c1 c2 : F)
     (suffix : Hist (F := F) (G := G))
-    (layerFound : env[12]? = some (.data (.index layerIndex)))
-    (roundFound : env[21]? = some (.data (.index index)))
-    (pointFound : env[22]? = some (.data (.vector "bls12-381.fr" point)))
-    (claimFound : env[23]? = some (.data (.field "bls12-381.fr" claim)))
-    (firstFound : env[25]? = some (.data (.field "bls12-381.fr" c0)))
-    (secondFound : env[30]? = some (.data (.field "bls12-381.fr" c1)))
-    (thirdFound : env[35]? = some (.data (.field "bls12-381.fr" c2)))
-    (historyFound : env[39]? = some (.transcript context.suite suffix)) :
+    (layerFound : env[40]? = some (.data (.index layerIndex)))
+    (roundFound : env[57]? = some (.data (.index index)))
+    (pointFound : env[58]? = some (.data (.vector "bls12-381.fr" point)))
+    (claimFound : env[59]? = some (.data (.field "bls12-381.fr" claim)))
+    (firstFound : env[61]? = some (.data (.field "bls12-381.fr" c0)))
+    (secondFound : env[66]? = some (.data (.field "bls12-381.fr" c1)))
+    (thirdFound : env[71]? = some (.data (.field "bls12-381.fr" c2)))
+    (historyFound : env[75]? = some (.transcript context.suite suffix)) :
     Original.Simulation RoundReturns (fun _ _ => True)
       (SourceProcess.sourceView context
         (GkrVerifier.roundCheck (GkrVerifier.rightContext {}) handle (point, claim) c0 c1 c2) (history suffix))
       (((rightTail env).bind
-          (yieldValues [53, 57, 52] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
+          (yieldValues [89, 93, 88] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
             .transcript context.suite])).interpret operations) := by
   unfold rightTail rightTailBlocks sequenceBlocks
   simp only [List.foldr_cons, List.foldr_nil]
-  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep15,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep16,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep17,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep18,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep19,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep20,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep21,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep22,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep23,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep24,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep25,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep26,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep27,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep28,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep29,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep30,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep31,
-    Generated.Constructed.GkrValidator.bodyStep3BodyStep3BodyStep32]
+  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep15,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep16,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep17,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep18,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep19,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep20,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep21,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep22,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep23,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep24,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep25,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep26,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep27,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep28,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep29,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep30,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep31,
+    Generated.Constructed.GkrValidator.bodyStep37BodyStep6BodyStep32]
   derive_artifact_binding [query_binding (F := F) (G := G)] normalizing (
     repeat' (first
     | (fail_if_no_progress normalize_artifact_operations [GkrDomainHelpers.append] unfolding

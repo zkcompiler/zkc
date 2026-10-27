@@ -20,15 +20,15 @@ open ZkcExamples.Structured GkrSourceProtocol
 open GkrDomainPhaseBinding GkrDomainRoundReceives
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def output_step (outer : Env (F := F) (G := G)) (length : outer.length = 9)
+def output_step (outer : Env (F := F) (G := G)) (length : outer.length = 35)
     (handle index : Nat) (point : List F) (suffix : Hist (F := F) (G := G)) :
     Original.Simulation PointReturns (fun _ _ => True)
       (SourceProcess.sourceView context (GkrVerifier.outputRound {} handle point) (history suffix))
       (((View.output (ringModel F G) program context
         (outer ++ .data (.index index) :: pointValues point suffix)).bind
-          (yieldValues [19, 18] [.data (.vector "bls12-381.fr"), .transcript context.suite])).interpret operations) := by
+          (yieldValues [45, 44] [.data (.vector "bls12-381.fr"), .transcript context.suite])).interpret operations) := by
   unfold View.output
-  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep1Body]
+  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep34Body]
   derive_artifact_binding [query_binding (F := F) (G := G)] normalizing (
     repeat' (first
     | (fail_if_no_progress normalize_artifact_operations [GkrDomainHelpers.append] unfolding
@@ -66,16 +66,16 @@ def output_step (outer : Env (F := F) (G := G)) (length : outer.length = 9)
 
 /-- Exact left degree-two callback, including all three coefficients and
 its guard, query, delivery and physical yield. -/
-def coefficient_step (outer : Env (F := F) (G := G)) (length : outer.length = 30)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
+def coefficient_step (outer : Env (F := F) (G := G)) (length : outer.length = 72)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
     (index : Nat) (point : List F) (suffix : Hist (F := F) (G := G)) :
     Original.Simulation PointReturns (fun _ _ => True)
       (SourceProcess.sourceView context (GkrVerifier.lineCoefficient {} point) (history suffix))
       (((View.coefficient (ringModel F G) program context
         (outer ++ .data (.index index) :: pointValues point suffix)).bind
-          (yieldValues [38, 37] [.data (.vector "bls12-381.fr"), .transcript context.suite])).interpret operations) := by
+          (yieldValues [80, 79] [.data (.vector "bls12-381.fr"), .transcript context.suite])).interpret operations) := by
   unfold View.coefficient
-  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep3BodyStep10Body]
+  unfold_component_bodies [Generated.Constructed.GkrValidator.bodyStep37BodyStep16Body]
   derive_artifact_binding [query_binding (F := F) (G := G)] normalizing (
     repeat' (first
     | (fail_if_no_progress normalize_artifact_operations [GkrDomainHelpers.append] unfolding
@@ -111,22 +111,22 @@ def coefficient_step (outer : Env (F := F) (G := G)) (length : outer.length = 30
             Origin.withoutCoordinates]
           try rfl))
 
-def left_step (outer : Env (F := F) (G := G)) (length : outer.length = 17)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
+def left_step (outer : Env (F := F) (G := G)) (length : outer.length = 50)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
     (handle index : Nat) (point : List F) (claim : F) (suffix : Hist (F := F) (G := G)) :
     Original.Simulation RoundReturns (fun _ _ => True)
       (SourceProcess.sourceView context
         (GkrVerifier.round (GkrVerifier.leftContext {}) handle (point, claim)) (history suffix))
       (((View.left (ringModel F G) program context
         (outer ++ .data (.index index) :: roundValues point claim suffix)).bind
-          (yieldValues [49, 53, 48] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
+          (yieldValues [82, 86, 81] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
             .transcript context.suite])).interpret operations) := by
   unfold View.left
   rw [PIR.Process.interpret_bind, left_decomposition]
   simp only [PIR.Process.bind_assoc]
   unfold GkrVerifier.round GkrVerifier.scalar
   refine receive_continue (GkrVerifier.roundSite (GkrVerifier.leftContext {}) "0") 0 leftTemplate0
-    21 20 12 17 layerIndex index (leftOrigin0 layerIndex index)
+    54 53 40 50 layerIndex index (leftOrigin0 layerIndex index)
     _ _ _ _ ?_ ?_ ?_ ?_ (left_resolved0 layerIndex index) (left_projected0 layerIndex index) ?_
   · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,
@@ -151,7 +151,7 @@ def left_step (outer : Env (F := F) (G := G)) (length : outer.length = 17)
   · intro c0
     unfold GkrVerifier.roundFirst GkrVerifier.scalar
     refine receive_continue (GkrVerifier.roundSite (GkrVerifier.leftContext {}) "1") 0 leftTemplate1
-      26 25 12 17 layerIndex index (leftOrigin1 layerIndex index)
+      59 58 40 50 layerIndex index (leftOrigin1 layerIndex index)
       _ _ _ _ ?_ ?_ ?_ ?_ (left_resolved1 layerIndex index) (left_projected1 layerIndex index) ?_
     · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,
@@ -176,7 +176,7 @@ def left_step (outer : Env (F := F) (G := G)) (length : outer.length = 17)
     · intro c1
       unfold GkrVerifier.roundSecond GkrVerifier.scalar
       refine receive_continue (GkrVerifier.roundSite (GkrVerifier.leftContext {}) "2") 0 leftTemplate2
-        31 30 12 17 layerIndex index (leftOrigin2 layerIndex index)
+        64 63 40 50 layerIndex index (leftOrigin2 layerIndex index)
         _ _ _ _ ?_ ?_ ?_ ?_ (left_resolved2 layerIndex index) (left_projected2 layerIndex index) ?_
       · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,
@@ -208,22 +208,22 @@ def left_step (outer : Env (F := F) (G := G)) (length : outer.length = 17)
       List.cons_append, List.nil_append, ite_true, ite_false]
 
 
-def right_step (outer : Env (F := F) (G := G)) (length : outer.length = 21)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
+def right_step (outer : Env (F := F) (G := G)) (length : outer.length = 57)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
     (handle index : Nat) (point : List F) (claim : F) (suffix : Hist (F := F) (G := G)) :
     Original.Simulation RoundReturns (fun _ _ => True)
       (SourceProcess.sourceView context
         (GkrVerifier.round (GkrVerifier.rightContext {}) handle (point, claim)) (history suffix))
       (((View.right (ringModel F G) program context
         (outer ++ .data (.index index) :: roundValues point claim suffix)).bind
-          (yieldValues [53, 57, 52] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
+          (yieldValues [89, 93, 88] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
             .transcript context.suite])).interpret operations) := by
   unfold View.right
   rw [PIR.Process.interpret_bind, right_decomposition]
   simp only [PIR.Process.bind_assoc]
   unfold GkrVerifier.round GkrVerifier.scalar
   refine receive_continue (GkrVerifier.roundSite (GkrVerifier.rightContext {}) "0") 0 rightTemplate0
-    25 24 12 21 layerIndex index (rightOrigin0 layerIndex index)
+    61 60 40 57 layerIndex index (rightOrigin0 layerIndex index)
     _ _ _ _ ?_ ?_ ?_ ?_ (right_resolved0 layerIndex index) (right_projected0 layerIndex index) ?_
   · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,
@@ -248,7 +248,7 @@ def right_step (outer : Env (F := F) (G := G)) (length : outer.length = 21)
   · intro c0
     unfold GkrVerifier.roundFirst GkrVerifier.scalar
     refine receive_continue (GkrVerifier.roundSite (GkrVerifier.rightContext {}) "1") 0 rightTemplate1
-      30 29 12 21 layerIndex index (rightOrigin1 layerIndex index)
+      66 65 40 57 layerIndex index (rightOrigin1 layerIndex index)
       _ _ _ _ ?_ ?_ ?_ ?_ (right_resolved1 layerIndex index) (right_projected1 layerIndex index) ?_
     · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,
@@ -273,7 +273,7 @@ def right_step (outer : Env (F := F) (G := G)) (length : outer.length = 21)
     · intro c1
       unfold GkrVerifier.roundSecond GkrVerifier.scalar
       refine receive_continue (GkrVerifier.roundSite (GkrVerifier.rightContext {}) "2") 0 rightTemplate2
-        35 34 12 21 layerIndex index (rightOrigin2 layerIndex index)
+        71 70 40 57 layerIndex index (rightOrigin2 layerIndex index)
         _ _ _ _ ?_ ?_ ?_ ?_ (right_resolved2 layerIndex index) (right_projected2 layerIndex index) ?_
       · simp only [receivedFrame, pointValues, roundValues,
       List.length_append, List.length_cons, List.length_nil, length,

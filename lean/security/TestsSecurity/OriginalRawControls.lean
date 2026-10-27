@@ -30,7 +30,7 @@ example {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [De
       (.cons (some raw) (.cons (some scalar) (.cons (some count) (.cons (some handle) .nil)))) =
       .halt .refused := by
   rw [SmallSumcheck.Sources.source_root]
-  simp [sourceRoot, show ¬ count ≤ 2 by omega]
+  simp [sourceComposition, sourceSequence, SmallSumcheck.Sources.calls, sourceRoot, show ¬ count ≤ 2 by omega, PIR.Process.bind]
 
 example {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
     (left right : List F) (leftClaim rightClaim : F) (handle count : Nat) (excessive : 4 < count) :
@@ -38,32 +38,32 @@ example {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [De
       (.cons (some left) (.cons (some right) (.cons (some leftClaim) (.cons (some rightClaim)
         (.cons (some count) (.cons (some handle) .nil)))))) = .halt .refused := by
   rw [TwoSums.Sources.source_root]
-  simp [sourceTwoRoots, sourceRoot, show ¬ count ≤ 4 by omega, PIR.Process.bind]
+  simp [sourceComposition, sourceSequence, TwoSums.Sources.calls, sourceRoot, show ¬ count ≤ 4 by omega, PIR.Process.bind]
 
 /-- Checked index overflow is explicit, rather than an implicit shape premise. -/
 example {F G : Type} [Field F] [DecidableEq F] (raw point : List F) (scalar : F)
     (overflow : ¬ point.length < indexLimit) :
-    terminal (G := G) (I := TableComponent.Nominal.signature F "bls12-381.fr") raw point scalar = .halt .exhausted := by
+    terminal (G := G) (I := NominalField.signature F "bls12-381.fr") raw point scalar = .halt .exhausted := by
   simp only [terminal, ite_eq_right overflow]
 
 example {F G : Type} [Field F] [DecidableEq F] (raw point : List F) (scalar : F)
     (small : point.length < 64) (overflow : ¬ raw.length < indexLimit) :
-    terminal (G := G) (I := TableComponent.Nominal.signature F "bls12-381.fr") raw point scalar = .halt .exhausted := by
+    terminal (G := G) (I := NominalField.signature F "bls12-381.fr") raw point scalar = .halt .exhausted := by
   simp only [terminal, ite_eq_left (small.trans (by decide +kernel : 64 < indexLimit)),
     ite_eq_left small, ite_eq_right overflow]
 
 /-- Large representable dimensions return false before inspecting vector length. -/
 example {F G : Type} [Field F] [DecidableEq F] (raw point : List F) (scalar : F)
     (representable : point.length < indexLimit) (large : ¬ point.length < 64) :
-    terminal (G := G) (I := TableComponent.Nominal.signature F "bls12-381.fr") raw point scalar =
+    terminal (G := G) (I := NominalField.signature F "bls12-381.fr") raw point scalar =
       .done (.cons (some false) .nil) := by
   simp only [terminal, ite_eq_left representable, ite_eq_right large]
 
 /-- The actual mathematical conjunction preserves absent results. -/
-example : both (F := ℚ) (G := ℚ) (I := TableComponent.Nominal.signature ℚ "bls12-381.fr")
+example : both (F := ℚ) (G := ℚ) (I := NominalField.signature ℚ "bls12-381.fr")
     (.cons none .nil) (.cons (some true) .nil) = .done (.cons none .nil) := rfl
 
-def zeroReplies : PIR.Handler (TableComponent.Nominal.signature ℚ "bls12-381.fr") Unit String
+def zeroReplies : PIR.Handler (NominalField.signature ℚ "bls12-381.fr") Unit String
   | .receive _, _ => ⟨.returned 0, (), ["receive"]⟩
   | .query .., _ => ⟨.returned 0, (), ["query"]⟩
   | .deliver .., _ => ⟨.returned (), (), ["deliver"]⟩
@@ -72,7 +72,9 @@ def zeroReplies : PIR.Handler (TableComponent.Nominal.signature ℚ "bls12-381.f
 delivery before the original terminal helper rejects. -/
 example : ((SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] 0 1 []).run zeroReplies ()).events =
     ["receive", "receive", "query", "deliver"] := by
-  simp [SmallSumcheck.Sources.presented, root, TableComponent.Execution.run, TableComponent.Execution.advance,
+  simp [SmallSumcheck.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, SmallSumcheck.Sources.calls,
+    SmallSumcheck.Sources.terminalTree, root, TableComponent.Execution.run, TableComponent.Execution.advance,
     terminal, PIR.Process.bind, PIR.Process.run, PIR.Execution.follow, zeroReplies,
     PrimitiveLibrary.HasShape, indexLimit]
 
@@ -80,7 +82,9 @@ example : ((SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] 0 1 []).run
 example : (((SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] 0 1 []).bind
     (fun result => .done (acceptance result))).run zeroReplies ()).outcome =
       .returned (some false) := by
-  simp [SmallSumcheck.Sources.presented, root, TableComponent.Execution.run, TableComponent.Execution.advance,
+  simp [SmallSumcheck.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, SmallSumcheck.Sources.calls,
+    SmallSumcheck.Sources.terminalTree, root, TableComponent.Execution.run, TableComponent.Execution.advance,
     terminal, acceptance, ZkcSecurity.Realizations.Sumcheck.OriginalSecurity.acceptance,
     PIR.Process.bind, PIR.Process.run, PIR.Execution.follow, zeroReplies,
     PrimitiveLibrary.HasShape, indexLimit]
@@ -90,46 +94,59 @@ example : Occurrence.participant (ringModel ℚ ℚ) SmallSumcheck.Sources.progr
     (.cons (some []) (.cons (some 0) (.cons (some 0) (.cons (some 0) .nil)))) =
       .done (.cons (some false) .nil) := by
   rw [SmallSumcheck.Sources.source_root]
-  simp [sourceRoot, run, terminal, PrimitiveLibrary.HasShape, indexLimit, PIR.Process.bind]
+  simp [sourceComposition, sourceSequence, SmallSumcheck.Sources.calls, SmallSumcheck.Sources.terminalTree, sourceRoot, run, terminal, PrimitiveLibrary.HasShape, indexLimit, PIR.Process.bind]
 
 /-- A false scalar boundary stops after the two messages, before any query.
 The scalar is arbitrary, and no honest producer assumption is involved. -/
 example (scalar : ℚ) (nonzero : scalar ≠ 0) :
     ((SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] scalar 1 []).run zeroReplies ()).events =
       ["receive", "receive"] := by
-  simp [SmallSumcheck.Sources.presented, root, TableComponent.Execution.run, PIR.Process.bind,
+  simp [SmallSumcheck.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, SmallSumcheck.Sources.calls,
+    SmallSumcheck.Sources.terminalTree, root, TableComponent.Execution.run, PIR.Process.bind,
     PIR.Process.run, PIR.Execution.follow, zeroReplies, nonzero]
 
 example (scalar : ℚ) (nonzero : scalar ≠ 0) :
     ((SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] scalar 1 []).run zeroReplies ()).outcome =
       .stopped .reject := by
-  simp [SmallSumcheck.Sources.presented, root, TableComponent.Execution.run, PIR.Process.bind,
+  simp [SmallSumcheck.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, SmallSumcheck.Sources.calls,
+    SmallSumcheck.Sources.terminalTree, root, TableComponent.Execution.run, PIR.Process.bind,
     PIR.Process.run, PIR.Execution.follow, zeroReplies, nonzero]
 
 /-- TwoSums does not short-circuit on a returned false left Boolean: the
 right call still pays for its actual query before conjunction. -/
 example : ((TwoSums.Sources.presented (F := ℚ) (G := ℚ) [] [] 0 0 1 []).run zeroReplies ()).events =
     ["receive", "receive", "query", "deliver", "receive", "receive", "query", "deliver"] := by
-  simp [TwoSums.Sources.presented, twoRoots, root, TableComponent.Execution.run, TableComponent.Execution.advance,
-    terminal, both, PIR.Process.bind, PIR.Process.run, PIR.Execution.follow, zeroReplies,
+  simp [TwoSums.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, TwoSums.Sources.calls,
+    TwoSums.Sources.terminalTree, root, TableComponent.Execution.run, TableComponent.Execution.advance,
+    terminal, PIR.Process.bind, PIR.Process.run, PIR.Execution.follow, zeroReplies,
     PrimitiveLibrary.HasShape, indexLimit]
 
 example : SmallSumcheck.Sources.presented (F := ℚ) (G := ℚ) [] 0 3 [] = .halt .refused := by
-  simp [SmallSumcheck.Sources.presented, root]
+  simp [SmallSumcheck.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, SmallSumcheck.Sources.calls,
+    SmallSumcheck.Sources.terminalTree, root, PIR.Process.bind]
 
 example : TwoSums.Sources.presented (F := ℚ) (G := ℚ) [] [] 0 0 5 [] = .halt .refused := by
-  simp [TwoSums.Sources.presented, twoRoots, root, PIR.Process.bind]
+  simp [TwoSums.Sources.presented, composition,
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence, TwoSums.Sources.calls,
+    TwoSums.Sources.terminalTree, root, PIR.Process.bind]
 
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.source_step
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.source_reduce
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.source_terminal
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.run_bridge
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_bridge
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.twoRoots_bridge
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_bridge
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_returns
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.sequence_returns
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_soundness
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_rejected
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.twoRoots_rejected
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_rejected
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_cost
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.twoRoots_cost
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_cost
 #print axioms SmallSumcheck.Sources.source_root
 #print axioms TwoSums.Sources.source_root
 #print axioms SmallSumcheck.Sources.bridge

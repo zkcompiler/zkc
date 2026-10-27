@@ -64,7 +64,7 @@ def main() -> None:
 
     for name in ("Mixed", "MixedInstallation", "Gates", "GatesInstallation", "GatesRoot"):
         compile_module(name)
-    for name in ("WrongModel", "WrongHelper", "WrongDomain"):
+    for name in ("WrongModel", "WrongHelper", "WrongDomain", "WrongRole"):
         compile_module(name, refuses=True)
 
     # Keep every generated certificate while changing the captured operational
@@ -144,7 +144,7 @@ end ParametricClients.Calls{count}
                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                 for path in sorted(generated.rglob("*.lean"))]
     (records / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"PASS fresh parametric bindings and four refusal controls: {records}")
+    print(f"PASS fresh parametric bindings and five refusal controls: {records}")
 
 
 if __name__ == "__main__":

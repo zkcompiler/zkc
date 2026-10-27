@@ -132,7 +132,7 @@ map_args = [['2', '7'], ['11', '13'], ['8', '9'], '3']
 
 with case('exact-original-declaration-records-and-full-projection-abi'):
     snapshot = export(mapped)
-    assert len(snapshot) == 10
+    assert len(snapshot) == 11
     collection = next(row for row in snapshot[7] if row[0] == 'collect')
     assert collection[2:] == ['private', [vector_type] * 3 + [field_type],
                              [vector_type], 'rows', 'row', '']

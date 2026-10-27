@@ -11,6 +11,7 @@ set_option autoImplicit false
 namespace ZkcTools.ConstructionBindings.Source
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
 open ZkcTools.StructuredSource.Presentation ZkcTools.StructuredSource.OriginalRoot
+open ZkcTools.StructuredSource.Methods.SumcheckRoot
 
 def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     {Δ : Scope} → {outputs : List Ty} → List Binder → Form [] callees Δ outputs → Nat → Except String Assembly
@@ -22,7 +23,7 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let parameters ← selectParameters binders (← dependencies args)
     let arguments := valuesText (compsText (naming callees inputs) (binders.map (·.name)) args)
     let process := app "Participant.owned" ["0", toString owner, app "invoke" ["tables.closed", helperName], arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, helper := some helper }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, owner := some owner, helper := some helper }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple helper.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     return { tail with steps := step :: tail.steps }
   | _, _, binders, .math helper args next, number => do
@@ -30,7 +31,7 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let parameters ← selectParameters binders (← dependencies args)
     let arguments := valuesText (compsText (naming callees inputs) (binders.map (·.name)) args)
     let process := app "invoke" ["tables.components", helperName, arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, helper := some helper }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "tables", process, realized := process, outputs := helper.outputs, resultOrder := inputs.length + number, helper := some helper }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple helper.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     return { tail with steps := step :: tail.steps }
   | _, _, binders, .apply callee signature roles site args next, number => do
@@ -43,7 +44,7 @@ def assemble (program : Program) (callees : List CalleeKey) (inputs : List Ty) :
     let process := app "invokeProtocol" ["protocols", "sourceProtocol" ++ toString index ++ ".signature", context, "0", arguments]
     let realized := app "realizeProducerCall" ["(G := G)", "payload", "maximum" ++ toString index, context,
       "sourceProtocol" ++ toString index ++ ".outputScopes", arguments]
-    let step : Step := { name := "step" ++ toString number, parameters, arguments := "protocols", process, realized, outputs := signature.outputs, context := some context, callee := some index }
+    let step : Step := { name := "step" ++ toString number, parameters, arguments := "protocols", process, realized, outputs := signature.outputs, resultOrder := inputs.length + number, context := some context, callee := some index }
     let tail ← assemble program callees inputs (⟨"out" ++ toString number, .tuple signature.outputs, inputs.length + number⟩ :: binders) next (number + 1)
     return { tail with steps := step :: tail.steps }
   | _, _, _, _, _ => throw "construction-binding-source-form"
@@ -56,7 +57,10 @@ def assembly (program : Program) : Except String (List Binder × Assembly) := do
   let sig : Signature := ⟨[], false, true, program.payload.definitions.map (·.helper), keys⟩
   let form ← normalize sig root.body 0 root.roles.length (Bindings.optionalPattern root.inputs)
   unless ZkcTools.StructuredSource.NormalForms.callsMatch form do throw "construction-binding-source-call-identity"
-  let binders := root.inputs.zipIdx.map fun (ty, index) => Binder.mk ("input" ++ toString index) (.component ty) index
+  unless root.inputs.length == root.inputScopes.length do
+    throw "construction-binding-source-input-scope-arity"
+  let binders := (root.inputs.zip root.inputScopes).zipIdx.map fun ((ty, scope), index) =>
+    Binder.mk ((if scope.contains 0 then "input" else "_input") ++ toString index) (.component ty) index
   return (binders, ← assemble program keys root.inputs binders form 0)
 
 def realizationProof (assembly : Assembly) : String := Id.run do
@@ -76,8 +80,8 @@ def source (program : Program) (moduleName originalModule : String) : Except Str
   let parameters ← parameterText binders
   let inputNames := " ".intercalate (binders.map (·.name))
   let inputValues := valuesText (binders.map (·.name))
-  let visibleBinders := binders.filter fun binder =>
-    (program.payload.entry.inputScopes[binder.order]?.getD []).contains 0
+  let visibleBinders := (binders.zip program.payload.entry.inputScopes).filterMap fun (binder, scope) =>
+    if scope.contains 0 then some binder else none
   let participantParameters ← parameterText visibleBinders
   let participantArguments := binders.map fun binder =>
     if visibleBinders.any (·.name == binder.name) then binder.name else "none"

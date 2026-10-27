@@ -23,17 +23,17 @@ def childProcess (claim : F) (count handle : Nat) :=
 set_option backward.isDefEq.respectTransparency false in
 theorem child_present (claim : F) (count handle : Nat) (admitted : count ≤ 4) :
     childProcess (G := G) claim count handle =
-      (PIR.repeatN count (SumcheckVerifierLaws.roundPresent (ProtocolContext.enter {} "s3" [0, 1]) handle)
+      (PIR.repeatN count (SumcheckVerifierLaws.roundPresent (ProtocolContext.enter {} "s5" [0, 1]) handle)
         ([], claim)).bind (fun pc => .done (SumcheckVerifierPrelude.reduceResults (some pc.1, some pc.2))) := by
   change (invokeProtocol (SumcheckReduceViews.unit.protocolTable F G) SumcheckReduceBodies.reduceSignature
-    (ProtocolContext.enter {} "s3" [0, 1]) 1
-    (SumcheckVerifierPrelude.reduceArguments none none none (some claim) (some count) (some handle))).interpret
+    (ProtocolContext.enter {} "s5" [0, 1]) 1
+    (SumcheckVerifierPrelude.reduceArguments none none none (some []) (some claim) (some count) (some handle))).interpret
     forgetSites = _
   rw [SumcheckReduceViews.unit.protocolTable_forgetSites, SumcheckReduceVerifier.reduce_invoke_plain]
-  rw [SumcheckVerifierPrelude.reduce_optional SumcheckReduceViews.unit SumcheckReduceVerifier.helperBodies
-    (ProtocolContext.enter {} "s3" [0, 1]) 1 rfl (by decide)]
-  simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
-  rw [SumcheckVerifierLaws.repeat_present (ProtocolContext.enter {} "s3" [0, 1]) handle count ([], claim)]
+  rw [SumcheckVerifierPrelude.reduce_optional SumcheckReduceViews.unit SumcheckReduceVerifier.helperBodies SumcheckReduceVerifier.claimBodies
+    (ProtocolContext.enter {} "s5" [0, 1]) 1 rfl (by decide)]
+  simp only [SumcheckVerifierPrelude.pendingRounds, admitted, ↓reduceIte]
+  rw [SumcheckVerifierLaws.repeat_present (ProtocolContext.enter {} "s5" [0, 1]) handle count ([], claim)]
   exact PIR.Process.bind_assoc _ _ _
 
 def assignments (raw : List F) (dimension : Nat) :=
@@ -45,7 +45,7 @@ def terminal (remaining count : Nat) : ExternalTerminal reductionOwner F G :=
 
 def request (raw : List F) (remaining count : Nat) (claim : F) (handle : Nat)
     (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) : Prop :=
-  (terminal (G := G) remaining count).Holds (ProtocolContext.enter {} "s3" [0, 1])
+  (terminal (G := G) remaining count).Holds (ProtocolContext.enter {} "s5" [0, 1])
     (reductionBoundary claim count handle (.returned outputs)) (assignments raw (remaining + count))
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -59,7 +59,7 @@ theorem request_iff (raw : List F) (remaining count : Nat) (claim : F) (handle :
       | some point, some value => Residual remaining count table point value
       | _, _ => False := by
   refine (residual_terminal_iff (.parameter reductionTable) remaining count reductionPoint reductionValue rfl rfl
-    (ProtocolContext.enter {} "s3" [0, 1]) (reductionBoundary claim count handle (.returned outputs))
+    (ProtocolContext.enter {} "s5" [0, 1]) (reductionBoundary claim count handle (.returned outputs))
     (assignments raw (remaining + count)) raw rfl table decoded).trans ?_
   have pointRead := reductionCall.boundaryOfOutcome_returned_output {} 1
     (reductionCallEnvironment (G := G) claim count handle) outputs reductionPoint

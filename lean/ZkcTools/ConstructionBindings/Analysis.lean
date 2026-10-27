@@ -1,6 +1,6 @@
 module
 
-public import ZkcTools.StructuredSource.OriginalRoot
+public import ZkcTools.StructuredSource.Methods.SumcheckRoot
 public import Zkc.Construction.SourceDelivery
 
 @[expose] public section

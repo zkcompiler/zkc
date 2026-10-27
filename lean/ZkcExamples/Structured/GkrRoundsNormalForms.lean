@@ -16,37 +16,32 @@ namespace ZkcExamples.Structured.GkrRoundsNormalForms
 open Zkc.Source Zkc.Source.Structured SumcheckVerifierHelpers
 
 abbrev roundsInputs : List Ty :=
-  [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
+  [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
 
 abbrev roundsOutputs : List Ty :=
   [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]
 
-/-- The repeat-carried slots, which precede the unchanged outer SSA environment. -/
-abbrev repeatState : List Ty :=
+/-- The slots the `round` repeat carries, which precede its captures. -/
+abbrev roundState : List Ty :=
   [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]
 
-abbrev repeatSpec (maximum : Nat) : RepeatSpec :=
-  ⟨repeatState, [.service "random.bls12-381.fr/0"], [0, 1],
-    [[0], [0], [0], [0], [0], [1], [1]], maximum⟩
+/-- The values the `round` callback captures unchanged. -/
+abbrev roundCaptures : List Ty :=
+  [.service "random.bls12-381.fr/0"]
 
-/-- The state positions the retained return reads, in output order. -/
-abbrev roundsReturnIndices : List Nat := [4, 0, 1, 2, 3, 5, 6]
+/-- The static maximum of the `round` repeat in this unit. -/
+abbrev roundMaximum : Nat := 4
 
-/-- The retained return permutation of the repeat's state, for any value family. -/
-def roundsReturnValues {Value : Ty → Type} (state : Values Value repeatState) :
-    Values Value roundsOutputs :=
-  .cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there .here)))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) (.cons (state.get (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))
+/-- The `round` repeat: its state, captures, roster, state scopes and maximum. -/
+abbrev roundSpec : RepeatSpec :=
+  ⟨roundState, roundCaptures, [0, 1],
+    [[0], [0], [0], [0], [0], [1], [1]], roundMaximum⟩
 
-/-- The retained return of the repeat's state. -/
-def roundsReturn (tail : List Ty) : Region protocolDialect (repeatState ++ tail)
-    roundsOutputs :=
-  .ret (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))))))
-
-/-- One iteration of the repeat: every retained operation, with its site mark. -/
+/-- One iteration of the `round` repeat: every retained operation, with its site mark. -/
 def roundBody : Region protocolDialect
-    (.index :: (repeatState ++ [.service "random.bls12-381.fr/0"])) repeatState :=
-  .letOp (.mark "s7") .nil .nil <|
-  .letOp (.localCall GkrSourceBodies.helper41Helper rfl 0 "s7") (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil)))) .nil <|
+    (.index :: (roundState ++ roundCaptures)) roundState :=
+  .letOp (.mark "s10") .nil .nil <|
+  .letOp (.localCall GkrSourceBodies.helper41Helper rfl 0 "s10") (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil)))) .nil <|
   .letOp (.mark "label_726f756e64_0") .nil .nil <|
   .letOp (.exchange (.field "bls12-381.fr") 0 1 "label_726f756e64_0") (.cons .here .nil) .nil <|
   .letOp (.mark "") .nil .nil <|
@@ -67,20 +62,20 @@ def roundBody : Region protocolDialect
   .letOp (.calculate (.fieldAdd "bls12-381.fr") rfl) (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.fieldEqual "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons .here .nil)) .nil <|
-  .letOp (.mark "s18") .nil .nil <|
-  .letOp (.guard 1 "s18") (.cons .here .nil) .nil <|
+  .letOp (.mark "s21") .nil .nil <|
+  .letOp (.guard 1 "s21") (.cons .here .nil) .nil <|
   .letOp (.mark "label_6368616c6c656e6765") .nil .nil <|
   .letOp (.draw 1 "bls12-381.fr" "label_6368616c6c656e6765") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))) .nil) .nil <|
   .letOp (.mark "label_64656c6976657279_0") .nil .nil <|
   .letOp (.exchange (.field "bls12-381.fr") 1 0 "label_64656c6976657279_0") (.cons .here .nil) .nil <|
   .letOp (.mark "") .nil .nil <|
   .letOp (.restrict (.field "bls12-381.fr") [0]) (.cons .here .nil) .nil <|
-  .letOp (.mark "s23") .nil .nil <|
-  .letOp (.localCall GkrSourceBodies.helper45Helper rfl 0 "s23") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons .here .nil))))) .nil <|
-  .letOp (.mark "s25") .nil .nil <|
-  .letOp (.localCall GkrSourceBodies.appendHelper rfl 0 "s25") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
-  .letOp (.mark "s27") .nil .nil <|
-  .letOp (.localCall GkrSourceBodies.appendHelper rfl 1 "s27") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
+  .letOp (.mark "s26") .nil .nil <|
+  .letOp (.localCall GkrSourceBodies.helper45Helper rfl 0 "s26") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons .here .nil))))) .nil <|
+  .letOp (.mark "s28") .nil .nil <|
+  .letOp (.localCall GkrSourceBodies.appendHelper rfl 0 "s28") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
+  .letOp (.mark "s30") .nil .nil <|
+  .letOp (.localCall GkrSourceBodies.appendHelper rfl 1 "s30") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .nil <|
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) .nil)) .nil <|
   .letOp (.mark "") .nil .nil <|
@@ -91,22 +86,24 @@ def roundBody : Region protocolDialect
   .letOp (.calculate (.fieldAdd "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) (.cons .here .nil)) .nil <|
   .ret (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)))))))
 
-/-- The whole body, with the repeat maximum as a parameter. -/
-def roundsBody (maximum : Nat) : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
+/-- The whole body, every repeat through its named callback. -/
+def roundsBody : Region protocolDialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
     [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.localCall GkrSourceBodies.emptyHelper rfl 0 "s1") .nil .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.localCall GkrSourceBodies.emptyHelper rfl 1 "s3") .nil .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.repeat (repeatSpec maximum) "s6") (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there .here) (.cons .here (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil))))))))) (.cons roundBody .nil) <|
-  roundsReturn _
+  .letOp (.localCall GkrSourceBodies.sourceHelper40Helper rfl 1 "s3") (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)) .nil <|
+  .letOp (.mark "s9") .nil .nil <|
+  .letOp (.repeat roundSpec "s9") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there .here)) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil))))))))) (.cons roundBody .nil) <|
+  .letOp (.mark "s42") .nil .nil <|
+  .letOp (.localCall GkrSourceBodies.sourceHelper49Helper rfl 1 "s42") (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)) .nil <|
+  .ret (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here (.cons (.there .here) .nil)))))))
 
-/-- The admitted `rounds` declaration is this body at maximum 4. -/
+/-- The admitted `rounds` declaration is this body. -/
 theorem roundsBody_raw : GkrSourceViews.roundsDefinition.raw =
-    (roundsBody 4).erase := by
+    roundsBody.erase := by
   refine GkrSourceViews.rounds_raw.trans ?_
-  unfold roundsBody roundBody roundsReturn
+  unfold roundsBody roundBody
   rfl
 
 /-! Action sites of the body, qualified by the application prefix. -/
@@ -280,15 +277,15 @@ theorem verifier_process
 /-- The repeat of `roundFn` at the verifier on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
 theorem verifier_fold (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (service : Option Nat) (count : Nat) (bounded : count ≤ (repeatSpec 4).maximum)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ roundSpec.maximum)
     (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)) × (Option F))
-    (start : maskValues (ctx.roles 1) (ctx.mapScopes (repeatSpec 4).stateScopes) state =
+    (start : maskValues (ctx.roles 1) (ctx.mapScopes roundSpec.stateScopes) state =
       verifierState initial.1 initial.2) :
-    denoteRepeat (repeatSpec 4) ctx (ctx.roles 1) (some count) state
+    denoteRepeat roundSpec ctx (ctx.roles 1) (some count) state
       (.cons service .nil) (roundFn ctx (ctx.roles 1)) =
       (Finite.fold (fun result _ => verifierProcess ctx service result.1 result.2) (List.range' 0 count) initial).bind
         (fun result => .done (verifierState result.1 result.2)) :=
-  NormalFormSteps.repeat_embed (repeatSpec 4) ctx (ctx.roles 1) (by simp) _ _
+  NormalFormSteps.repeat_embed roundSpec ctx (ctx.roles 1) (by simp) _ _
     (fun result => verifierState result.1 result.2)
     (fun result => verifierState_masked ctx _ rfl result.1 result.2)
     _ (fun result index => verifier_process (ctx := ctx) (self := (ctx.roles 1)) (role := rfl) (separate := separate)
@@ -464,15 +461,15 @@ theorem prover_process
 /-- The repeat of `roundFn` at the prover on an admitted count: the fold of its normal
 form over the iteration indices, from any state whose masked slots are `initial`. -/
 theorem prover_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
-    (service : Option Nat) (count : Nat) (bounded : count ≤ (repeatSpec 4).maximum)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ roundSpec.maximum)
     (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)))
-    (start : maskValues (ctx.roles 0) (ctx.mapScopes (repeatSpec 4).stateScopes) state =
+    (start : maskValues (ctx.roles 0) (ctx.mapScopes roundSpec.stateScopes) state =
       proverState initial.1 initial.2.1 initial.2.2.1 initial.2.2.2.1 initial.2.2.2.2) :
-    denoteRepeat (repeatSpec 4) ctx (ctx.roles 0) (some count) state
+    denoteRepeat roundSpec ctx (ctx.roles 0) (some count) state
       (.cons service .nil) (roundFn ctx (ctx.roles 0)) =
       (Finite.fold (fun result _ => proverProcess ctx result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2) (List.range' 0 count) initial).bind
         (fun result => .done (proverState result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)) :=
-  NormalFormSteps.repeat_embed (repeatSpec 4) ctx (ctx.roles 0) (by simp) _ _
+  NormalFormSteps.repeat_embed roundSpec ctx (ctx.roles 0) (by simp) _ _
     (fun result => proverState result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)
     (fun result => proverState_masked ctx _ rfl result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)
     _ (fun result index => prover_process (ctx := ctx) (self := (ctx.roles 0)) (role := rfl) (separate := separate)
@@ -482,31 +479,48 @@ theorem prover_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.role
 /-- The typed body's process at one participant, with this unit's tables. -/
 def roundsFn (ctx : ProtocolContext) (self : Nat) :
     RegionFunction (Component (assignment F G)) (participantInterface F G)
-      ([.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"], [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
-  fun args => (roundsBody 4).denote
+      ([.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"], [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
+  fun args => roundsBody.denote
     (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers GkrSourceViews.unit) self (GkrSourceViews.unit.plainProtocolTable F G) ctx) args.get
 
 /-- The checked body of `rounds` at any context, between its input and output
 masks, with this unit's plain tables. -/
-theorem rounds_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"])
-    (mask : maskValues self (ctx.mapScopes [[0], [0], [0], [0], [1], [0, 1], [1]]) args = masked) :
+theorem rounds_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"])
+    (mask : maskValues self (ctx.mapScopes [[0], [0], [0], [0], [1], [1], [0, 1], [1]]) args = masked) :
     invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G) GkrSourceBodies.roundsSignature ctx self args =
-      ((roundsBody 4).denote
+      (roundsBody.denote
         (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit) self (GkrSourceViews.unit.plainProtocolTable F G) ctx) masked.get).bind
         (fun out => .done (maskValues self (ctx.mapScopes [[0], [0], [0], [0], [0], [1], [1]]) out)) := by
   rw [← mask]
   exact protocol_invoke_body_view (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit)
     GkrSourceViews.unit.protocols GkrSourceViews.unit.protocolsLinked GkrSourceViews.roundsDefinition
-    GkrSourceViews.rounds_member (roundsBody 4) roundsBody_raw ctx self args
+    GkrSourceViews.rounds_member (roundsBody) roundsBody_raw ctx self args
 
 /-- The verifierRounds's normal form of the whole body. -/
-def verifierRoundsProcess (ctx : ProtocolContext) (claim : Option F) (rounds service : Option Nat) :
+def verifierRoundsProcess (ctx : ProtocolContext) (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) :
     PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
-  (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
-  (denoteRepeat (repeatSpec 4) ctx (ctx.roles 1) rounds (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (some (emptyResults.get .here)) (.cons claim .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
-    (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn ctx (ctx.roles 1))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
-  .done (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there .here)))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) (.cons (state.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+  match initialPoint with
+  | none =>
+    .halt .incomplete
+  | some initialPoint =>
+    match claim with
+    | none =>
+      .halt .incomplete
+    | some claim =>
+      (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sourceHelper40Helper (.cons initialPoint (.cons claim .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (sourceHelper40Results : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+      (denoteRepeat (roundSpec) ctx (ctx.roles 1) rounds (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (some (sourceHelper40Results.get .here)) (.cons (some (sourceHelper40Results.get (.there .here))) .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn ctx (ctx.roles 1))).bind fun (roundReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+      match roundReturned.get (.there (.there (.there (.there (.there .here))))) with
+      | none =>
+        .halt .incomplete
+      | some point =>
+        match roundReturned.get (.there (.there (.there (.there (.there (.there .here)))))) with
+        | none =>
+          .halt .incomplete
+        | some claim2 =>
+          (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.sourceHelper49Helper (.cons point (.cons claim2 .nil) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])).bind fun (sourceHelper49Results : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+          .done (.cons (roundReturned.get (.there (.there (.there (.there .here))))) (.cons (roundReturned.get .here) (.cons (roundReturned.get (.there .here)) (.cons (roundReturned.get (.there (.there .here))) (.cons (roundReturned.get (.there (.there (.there .here)))) (.cons (some (sourceHelper49Results.get .here)) (.cons (some (sourceHelper49Results.get (.there .here))) .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
 
 /-- The verifierRounds's laws as the normalizer reads them, keyed by helper. -/
 def verifierRoundsSignature : NormalForm.Signature :=
@@ -517,58 +531,75 @@ def verifierRoundsResults : NormalForm.LawResults (ringModel F G) verifierRounds
   ⟨fun entry => entry.elim0⟩
 
 /-- The verifierRounds's inputs as the normalizer reads them. -/
-def verifierRoundsPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"] :=
-  .cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil))))))
+def verifierRoundsPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"] :=
+  .cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil)))))))
 
 /-- The verifierRounds's form, printed from the compiled normalizer; the kernel checks it. -/
 noncomputable def verifierRoundsForm : NormalForm.Form verifierRoundsSignature.laws verifierRoundsSignature.callees verifierRoundsPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
-  .strict GkrSourceBodies.emptyHelper .nil <|
-  .repeat (repeatSpec 4) "s6" roundBody (.input (.there (.there .here)))
-    (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons (.present (.result .here .here)) (.cons (.input (.there .here)) .nil)))))))
-    (.cons (.input (.there (.there (.there .here)))) .nil) <|
-  .done (.cons (.read .here (.there (.there (.there (.there .here))))) (.cons (.read .here .here) (.cons (.read .here (.there .here)) (.cons (.read .here (.there (.there .here))) (.cons (.read .here (.there (.there (.there .here)))) (.cons (.read .here (.there (.there (.there (.there (.there .here)))))) (.cons (.read .here (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))
+  .split (.input .here)
+    (
+      .halt .incomplete)
+    (
+      .split (.input (.there (.there .here)))
+        (
+          .halt .incomplete)
+        (
+          .strict GkrSourceBodies.sourceHelper40Helper (.cons (.var (.there .here)) (.cons (.var .here) .nil)) <|
+          .repeat roundSpec "s9" roundBody (.input (.there (.there (.there (.there (.there .here))))))
+            (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons .absent (.cons (.present (.result .here .here)) (.cons (.present (.result .here (.there .here))) .nil)))))))
+            (.cons (.input (.there (.there (.there (.there (.there (.there .here))))))) .nil) <|
+          .split (.read .here (.there (.there (.there (.there (.there .here))))))
+            (
+              .halt .incomplete)
+            (
+              .split (.read (.there .here) (.there (.there (.there (.there (.there (.there .here)))))))
+                (
+                  .halt .incomplete)
+                (
+                  .strict GkrSourceBodies.sourceHelper49Helper (.cons (.var (.there .here)) (.cons (.var .here) .nil)) <|
+                  .done (.cons (.read (.there (.there (.there .here))) (.there (.there (.there (.there .here))))) (.cons (.read (.there (.there (.there .here))) .here) (.cons (.read (.there (.there (.there .here))) (.there .here)) (.cons (.read (.there (.there (.there .here))) (.there (.there .here))) (.cons (.read (.there (.there (.there .here))) (.there (.there (.there .here)))) (.cons (.present (.result .here .here)) (.cons (.present (.result .here (.there .here))) .nil)))))))))))
 
 theorem verifierRounds_normalized :
-    NormalForm.normalize verifierRoundsSignature (roundsBody 4) 1 2 verifierRoundsPattern = .ok verifierRoundsForm := by
+    NormalForm.normalize verifierRoundsSignature roundsBody 1 2 verifierRoundsPattern = .ok verifierRoundsForm := by
   kernel_rfl
 
 theorem verifierRounds_lawsMatch : verifierRoundsForm.CallsMatch := by
   kernel_rfl
 
-theorem verifierRounds_environment (claim : Option F) (rounds service : Option Nat) :
-    verifierRoundsPattern.environment (ringModel F G) (.cons claim (.cons rounds (.cons service .nil))) =
-      (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) := by
+theorem verifierRounds_environment (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) :
+    verifierRoundsPattern.environment (ringModel F G) (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))) =
+      (.cons none (.cons none (.cons none (.cons none (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) := by
   kernel_rfl
 
 /-- The form's process is the readable process. -/
 theorem verifierRounds_presentation (ctx : ProtocolContext)
-    (claim : Option F) (rounds service : Option Nat) :
+    (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) :
     verifierRoundsForm.denote (ringModel F G) (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierRoundsResults ctx
         (NormalForm.Runs.uniform (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) ctx (ctx.roles 1)) (NormalForm.noCallees _)
-        (.cons claim (.cons rounds (.cons service .nil))) =
-      verifierRoundsProcess ctx claim rounds service := by
+        (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))) =
+      verifierRoundsProcess ctx initialPoint claim rounds service := by
   kernel_rfl
 
 /-- The verifierRounds's laws hold at its inputs, by the admitted helpers' laws. -/
-theorem verifierRounds_laws (claim : Option F) (rounds service : Option Nat) :
+theorem verifierRounds_laws (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) :
     NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn verifierRoundsResults
-      (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) :=
+      (.cons none (.cons none (.cons none (.cons none (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) :=
   fun entry => entry.elim0
 
 /-- The process equation of `verifierRoundsProcess`, an instance of the normalizer's soundness. -/
 theorem verifierRounds_process
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
-    (claim : Option F) (rounds service : Option Nat) :
+    (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) :
     roundsFn (F := F) (G := G) ctx self
-      (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil))))))) =
-      verifierRoundsProcess ctx claim rounds service := by
+      (.cons none (.cons none (.cons none (.cons none (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))))))) =
+      verifierRoundsProcess ctx initialPoint claim rounds service := by
   subst self
-  exact (NormalForm.sound_uniform verifierRoundsSignature (roundsBody 4) 1 2 verifierRoundsPattern
+  exact (NormalForm.sound_uniform verifierRoundsSignature roundsBody 1 2 verifierRoundsPattern
     verifierRoundsForm (verifierRounds_normalized ) (verifierRounds_lawsMatch ) ctx (.ofSeparate separate (by decide))
-    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierRoundsResults (NormalForm.noCallees _) (.cons claim (.cons rounds (.cons service .nil))) _
-    (verifierRounds_environment claim rounds service) (verifierRounds_laws claim rounds service) (NormalForm.noCallees_hold _ _)).trans
-    (verifierRounds_presentation ctx claim rounds service)
+    (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) verifierRoundsResults (NormalForm.noCallees _) (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))) _
+    (verifierRounds_environment initialPoint claim rounds service) (verifierRounds_laws initialPoint claim rounds service) (NormalForm.noCallees_hold _ _)).trans
+    (verifierRounds_presentation ctx initialPoint claim rounds service)
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The returned components kept at role 1; the others are masked away. -/
@@ -592,17 +623,17 @@ the body and the output masks, with this unit's protocol table. -/
 theorem verifierRounds_invoke
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
-    (claim : Option F) (rounds service : Option Nat) (input0 input1 input2 input3 : Option (List F)) :
+    (initialPoint : Option (List F)) (claim : Option F) (rounds service : Option Nat) (input0 input1 input2 input3 : Option (List F)) :
     invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G) GkrSourceBodies.roundsSignature ctx self
-      (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons claim (.cons rounds (.cons service .nil))))))) =
-      (verifierRoundsProcess ctx claim rounds service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there (.there .here)))))) (.cons (out.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))) := by
-  refine (rounds_view ctx self _ (.cons none (.cons none (.cons none (.cons none (.cons claim (.cons rounds (.cons service .nil))))))) ?_).trans ?_
+      (.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))))))) =
+      (verifierRoundsProcess ctx initialPoint claim rounds service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there (.there .here)))))) (.cons (out.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))) := by
+  refine (rounds_view ctx self _ (.cons none (.cons none (.cons none (.cons none (.cons initialPoint (.cons claim (.cons rounds (.cons service .nil)))))))) ?_).trans ?_
   · subst self
-    iterate 8 unfold maskValues
+    iterate 9 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
-    (verifierRounds_process (claim := claim) (rounds := rounds) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
+    (verifierRounds_process (initialPoint := initialPoint) (claim := claim) (rounds := rounds) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
       (separate := separate) )).trans ?_
   apply congrArg (PIR.Process.bind _)
   funext out
@@ -613,9 +644,9 @@ def proverRoundsProcess (ctx : ProtocolContext) (add mul left right : Option (Li
     PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
   (invoke (plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed GkrSourceBodies.emptyHelper (.nil : Values (assignment F G) [])).bind fun (emptyResults : Values (assignment F G) [.vector "bls12-381.fr"]) =>
-  (denoteRepeat (repeatSpec 4) ctx (ctx.roles 0) rounds (.cons add (.cons mul (.cons left (.cons right (.cons (some (emptyResults.get .here)) (.cons none (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
-    (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn ctx (ctx.roles 0))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
-  .done (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there .here)))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) (.cons (state.get (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+  (denoteRepeat (roundSpec) ctx (ctx.roles 0) rounds (.cons add (.cons mul (.cons left (.cons right (.cons (some (emptyResults.get .here)) (.cons none (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn ctx (ctx.roles 0))).bind fun (roundReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  .done (.cons (roundReturned.get (.there (.there (.there (.there .here))))) (.cons (roundReturned.get .here) (.cons (roundReturned.get (.there .here)) (.cons (roundReturned.get (.there (.there .here))) (.cons (roundReturned.get (.there (.there (.there .here)))) (.cons none (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
 
 /-- The proverRounds's laws as the normalizer reads them, keyed by helper. -/
 def proverRoundsSignature : NormalForm.Signature :=
@@ -626,19 +657,19 @@ def proverRoundsResults : NormalForm.LawResults (ringModel F G) proverRoundsSign
   ⟨fun entry => entry.elim0⟩
 
 /-- The proverRounds's inputs as the normalizer reads them. -/
-def proverRoundsPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"] :=
-  .cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent (.cons .optional (.cons .absent .nil))))))
+def proverRoundsPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"] :=
+  .cons .optional (.cons .optional (.cons .optional (.cons .optional (.cons .absent (.cons .absent (.cons .optional (.cons .absent .nil)))))))
 
 /-- The proverRounds's form, printed from the compiled normalizer; the kernel checks it. -/
 noncomputable def proverRoundsForm : NormalForm.Form proverRoundsSignature.laws proverRoundsSignature.callees proverRoundsPattern.scope [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .strict GkrSourceBodies.emptyHelper .nil <|
-  .repeat (repeatSpec 4) "s6" roundBody (.input (.there (.there (.there (.there (.there .here))))))
+  .repeat roundSpec "s9" roundBody (.input (.there (.there (.there (.there (.there .here))))))
     (.cons (.input (.there .here)) (.cons (.input (.there (.there .here))) (.cons (.input (.there (.there (.there .here)))) (.cons (.input (.there (.there (.there (.there .here))))) (.cons (.present (.result .here .here)) (.cons .absent (.cons .absent .nil)))))))
     (.cons .absent .nil) <|
-  .done (.cons (.read .here (.there (.there (.there (.there .here))))) (.cons (.read .here .here) (.cons (.read .here (.there .here)) (.cons (.read .here (.there (.there .here))) (.cons (.read .here (.there (.there (.there .here)))) (.cons (.read .here (.there (.there (.there (.there (.there .here)))))) (.cons (.read .here (.there (.there (.there (.there (.there (.there .here))))))) .nil)))))))
+  .done (.cons (.read .here (.there (.there (.there (.there .here))))) (.cons (.read .here .here) (.cons (.read .here (.there .here)) (.cons (.read .here (.there (.there .here))) (.cons (.read .here (.there (.there (.there .here)))) (.cons .absent (.cons .absent .nil)))))))
 
 theorem proverRounds_normalized :
-    NormalForm.normalize proverRoundsSignature (roundsBody 4) 0 2 proverRoundsPattern = .ok proverRoundsForm := by
+    NormalForm.normalize proverRoundsSignature roundsBody 0 2 proverRoundsPattern = .ok proverRoundsForm := by
   kernel_rfl
 
 theorem proverRounds_lawsMatch : proverRoundsForm.CallsMatch := by
@@ -646,7 +677,7 @@ theorem proverRounds_lawsMatch : proverRoundsForm.CallsMatch := by
 
 theorem proverRounds_environment (add mul left right : Option (List F)) (rounds : Option Nat) :
     proverRoundsPattern.environment (ringModel F G) (.cons add (.cons mul (.cons left (.cons right (.cons rounds .nil))))) =
-      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) := by
+      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons none (.cons rounds (.cons none .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) := by
   kernel_rfl
 
 /-- The form's process is the readable process. -/
@@ -661,7 +692,7 @@ theorem proverRounds_presentation (ctx : ProtocolContext)
 /-- The proverRounds's laws hold at its inputs, by the admitted helpers' laws. -/
 theorem proverRounds_laws (add mul left right : Option (List F)) (rounds : Option Nat) :
     NormalForm.LawsHold (plainHelpers (F := F) (G := G) GkrSourceViews.unit).toOn proverRoundsResults
-      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) :=
+      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons none (.cons rounds (.cons none .nil))))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) :=
   fun entry => entry.elim0
 
 /-- The process equation of `proverRoundsProcess`, an instance of the normalizer's soundness. -/
@@ -670,10 +701,10 @@ theorem proverRounds_process
     (separate : ctx.roles 1 ≠ self)
     (add mul left right : Option (List F)) (rounds : Option Nat) :
     roundsFn (F := F) (G := G) ctx self
-      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil))))))) =
+      (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons none (.cons rounds (.cons none .nil)))))))) =
       proverRoundsProcess ctx add mul left right rounds := by
   subst self
-  exact (NormalForm.sound_uniform proverRoundsSignature (roundsBody 4) 0 2 proverRoundsPattern
+  exact (NormalForm.sound_uniform proverRoundsSignature roundsBody 0 2 proverRoundsPattern
     proverRoundsForm (proverRounds_normalized ) (proverRounds_lawsMatch ) ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) GkrSourceViews.unit) (GkrSourceViews.unit.plainProtocolTable F G) proverRoundsResults (NormalForm.noCallees _) (.cons add (.cons mul (.cons left (.cons right (.cons rounds .nil))))) _
     (proverRounds_environment add mul left right rounds) (proverRounds_laws add mul left right rounds) (NormalForm.noCallees_hold _ _)).trans
@@ -701,13 +732,13 @@ the body and the output masks, with this unit's protocol table. -/
 theorem proverRounds_invoke
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self)
-    (add mul left right : Option (List F)) (rounds : Option Nat) (input4 : Option F) (input6 : Option Nat) :
+    (add mul left right : Option (List F)) (rounds : Option Nat) (input4 : Option (List F)) (input5 : Option F) (input7 : Option Nat) :
     invokeProtocol (GkrSourceViews.unit.plainProtocolTable F G) GkrSourceBodies.roundsSignature ctx self
-      (.cons add (.cons mul (.cons left (.cons right (.cons input4 (.cons rounds (.cons input6 .nil))))))) =
+      (.cons add (.cons mul (.cons left (.cons right (.cons input4 (.cons input5 (.cons rounds (.cons input7 .nil)))))))) =
       (proverRoundsProcess ctx add mul left right rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons (out.get (.there (.there (.there (.there .here))))) (.cons none (.cons none .nil)))))))) := by
-  refine (rounds_view ctx self _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons rounds (.cons none .nil))))))) ?_).trans ?_
+  refine (rounds_view ctx self _ (.cons add (.cons mul (.cons left (.cons right (.cons none (.cons none (.cons rounds (.cons none .nil)))))))) ?_).trans ?_
   · subst self
-    iterate 8 unfold maskValues
+    iterate 9 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)

@@ -41,6 +41,49 @@ examples. A family can require a typed helper-law record; an example supplies
 it by proving equations for the actual admitted bodies. Names, matching types
 or hashes alone do not prove a helper's mathematical behavior.
 
+`Zkc.Source.Structured.PlainHelpers` owns the silent helper table and its
+closed-call and optional-component body transport laws. Both transports retain
+the actual captured definition prefix. Sumcheck and GKR reuse these laws;
+protocol-specific mathematics supplies the remaining equations for each
+selected helper body.
+
+## Mathematical boundaries and connections
+
+`Zkc.Obligations.ClaimRelation` owns a witness predicate and a disjoint No
+predicate, with a permitted gap. Its Token view is derived. Declaration marks
+and request-fixed extractor registrations keep their existing owners; neither
+is evidence that a pending claim holds.
+
+`ComponentInterface` separates runtime inputs from logical parameters. Only
+runtime inputs enter its Process body. Its input and output readbacks are
+partial: `ReadbackHolds` requires an actual `some` result. Missing readback
+data cannot select a witness or discharge a claim. The execution scope is an
+explicit premise, which a caller must establish at its actual occurrence.
+
+`SoundnessContract` is a checked derivation from the input No side to the
+output No side at the reached history. `SoundnessContract.ofFamily` attaches
+existing family mathematics through one complete body equation and boundary
+implications. The Sumcheck installation in `Families.Sumcheck.Contract`
+uses the existing residual theorem for every remaining dimension and
+representation. Honest execution uses that same body equation, together with
+separate actual-handler and honest-message laws.
+
+A `Connection` has a runtime route and a mathematical map. Its square proves
+that the next input readback is defined and agrees with the map of the prior
+output. `SoundLink` and `HonestLink` are separate evidence indexed by that
+same map; agreement of Yes sets does not imply preservation of a proximity
+gap. `Connection.bind` composes existing Derivations at the actual reached
+history, requiring the next scope and final readback implication. Its result
+can itself be exported as a component contract. The pure connection contains
+no query or randomness; an effectful conversion needs a component theorem.
+
+Scope preservation is independent of the soundness precondition. Use
+`Boundary.Returns`, `returns_bind` and `Derivation.frameReturns` for returned
+coordinates and phases, and a handler/support invariant for state outside
+them. A conditional soundness theorem cannot frame a true or gap prefix.
+These contracts do not establish completeness, efficient knowledge extraction,
+or a canonical root receipt without their respective consumers and links.
+
 ## Generated binding and its scope
 
 The Lean normalizer supplies the meaning of a generated view. The printer
@@ -87,11 +130,12 @@ validator instruction sequences.
 dependent helper, callee, role and roster indices. `OriginalRoot.templateSource`
 emits that package with exact helper tables, an immutable earlier protocol
 prefix, and an equation from the actual full protocol-table lookup to the
-selected closure. `OriginalSecurityBindings.templateBindings` checks the
+selected closure. `TemplateInstallation.source` checks the
 installed nominal model's `DomainLaws`, selected field applicability, helper
 results and callee equations before applying the shared binding theorem.
 Selection strings supply no laws. This route supports heterogeneous carriers;
-the older table root printer retains its supported realization domain.
+the installed `Methods.SumcheckRoot` printer owns its supported realization
+domain and ABI without constraining the shared template printer.
 
 The fresh-client check in `security/checks/check_parametric_bindings.py` compiles
 the emitted KoalaBear base/octic embedding installation and GKR Rounds/caller
@@ -165,6 +209,25 @@ transports an all-reply source reading, its rejection derivation and its
 history-dependent cost into the existing charged endpoint. An honest input
 contract supplies completeness premises; it never restricts the adversary.
 
+The full GKR client instantiates these rules for both selected participants.
+Its source realization supplies circuit and helper laws once; the nominal
+occurrence reading is shared through `FiatShamir.OccurrenceReading`, and the
+field's reply/sampling laws through `FiatShamir.NominalField`. The artifact
+certificates retain every optional source input and complete target frame,
+including nested loops and all refusal paths. Those certificates are independent
+of the canonical target's truth. Completeness adds independent admission and
+circuit-output premises; soundness covers all typed adversarial statements.
+The installed GKR library still authors some frame and routing instantiations;
+that work is counted separately from generated views and new mathematics.
+
+The GKR Rounds interface requires both Pending point and scalar components
+before inspecting the round count. A missing component stops as incomplete,
+including at zero rounds. With both components present, zero rounds preserves
+them without requesting a service handle; an excessive count is refused.
+Generated caller equations retain the full Pending setup and every admission
+guard before the selected call or loop, together with the complete continuation.
+Producer and verifier points occupy separate role-indexed state positions.
+
 A nominal reading may erase information that remains in the artifact's final
 SSA environment. Therefore acceptance agreement alone cannot construct the
 full-result presentation required by a charged receipt. `LosslessInterface`
@@ -194,6 +257,33 @@ empty-selection outputs and tests catalogue growth. The security scope compiles
 fresh ABI installations and rejects incorrect argument orders, conditions and
 nonvacuity evidence. These checks exercise printer output, not just hand-written
 lookalike declarations.
+
+The installed raw-table Sumcheck root generator uses one finite call sequence
+for every positive number of calls. Each entry retains its raw statement,
+exact nominal context and challenge schedule. `OriginalRaw.sourceSequence`
+composes the actual source roots with `Process.bind`; `sequence` threads each
+returned construction state into the next actual root. The bridge carries the
+reached history and unchanged frames. `sequence_returns` establishes frame
+preservation independently of whether any statement is true or false.
+
+The supported terminal dataflow is a conjunction tree over the checked call
+results. The analyzer resolves exact tuple coordinates, requires each call to
+occur once in the returned tree, and checks every selected math helper against
+the complete pure Boolean-and body. A matching helper name or Boolean ABI is
+insufficient. Unknown effects, unrecognized terminal bodies, missing results,
+duplicate leaves and forward dependencies refuse. Calls still use the existing
+installed library declaration, immediate table checks and supported public ABI;
+this is not support for arbitrary interleaved protocol families.
+
+Soundness selects a false raw-root contract using conjunction coverage. Its
+`No` includes malformed raw shapes. Other calls remain arbitrary returned paths,
+including correct prefixes and every suffix after a rejected Boolean. A returned
+false result does not short-circuit later calls. The cost proof composes actual
+binds and adds one maximum-round budget per call, at every reached state and
+history. Generated honest proofs use the same helper and occurrence bindings
+and thread the actual reached history. Canonical endpoints additionally require
+the separately checked equation for the unchanged retained target and its
+nonvacuity evidence; conjunction structure never supplies target mathematics.
 
 For adversarial verification, `DomainReduction.ReadingTo` proves the endpoint
 execution reading, while `CoherentTo` proves locality at the actual reached
@@ -400,6 +490,9 @@ the actual clause conjunction.
 `Tools.SourceInputClauses` produces ordinary kernel-checked simplification proofs
 from the retained formulas. Optional presence is distinct from representability:
 an absent input cannot satisfy an accidentally simplified clause. The current
+elaborator splits presence only for coordinates selected by retained input
+clauses; unused optional coordinates remain arbitrary in the full equivalence.
+The current
 uniform ABI presentation explicitly refuses data inputs covered by neither the
 producer nor public projection, rather than silently requiring their presence
 in the subject's meaning. This is a presentation limit, not a security premise.
@@ -597,3 +690,128 @@ proved separately. Native codecs/arithmetic, deployed transcript bytes,
 computational commitment security, QROM security, knowledge extraction and
 full GKR circuit-output acceptance require their own results. Source mutations
 and finite experiments test boundaries but do not establish those results.
+
+## Associated component exports
+
+`ZkcTools.StructuredSource components SNAPSHOT CLAIMS` admits the complete
+original snapshot, strictly reads the current source-claims component fields,
+and recomputes `ComponentRoutes.derive`. Duplicate JSON keys are rejected
+before parsing can collapse them, including escaped duplicate spellings.
+Unknown root/admission fields and wrong array arities refuse. Claim request
+meaning remains with the existing request resolver. The tool reports
+`associated` with mathematical obligations `unresolved`; that status is not a
+receipt or a proof of a library theorem.
+
+`ComponentRoutes.deterministic` independently inventories Local helper effects
+through every stored branch, range-loop and conditional-loop region. Stops,
+zero iterations and an unselected branch do not exempt a stored callback from
+inspection. Direct calls resolve actual functions; computation applications
+resolve their realization/map helper or the body/step and optional predicate
+of an admitted finite/collect declaration and domain. Math bodies rely on
+whole-unit Math admission. Primitive applications retain exact admitted
+operation and binding resolution. Sampling, messages, oracle operations,
+unknown effects and protocol invocations refuse even when their result is
+unused. Nested regions and helper calls share depth 64 and the 100000-node
+inventory allowance. This structural inventory does not establish totality,
+readback definedness, terminal adequacy or a No transport. Those laws retain
+their existing owners and fixed relation meanings. Protocol seam traversal
+still supports only its existing one-yield repeat shape, preserving both
+initial and yielded alternatives. Every returned Local projection with Pending
+ancestry remains live. A complete port or repeat tuple consumes its projections
+atomically; missing or duplicate projections refuse. A guard observes live
+ancestry without consuming the residual, and its coverage applies only to the
+successful current block. It cannot cover a zero-iteration alternative.
+
+Ordinary repeat values use the same boundary association as Pending values.
+`repeatInput` endpoints identify operand zero (count), carried fields, and
+captures. Their rows retain the actual source routes, count control, and each
+carried field's yielded backedge. Every carried result has separate initial
+and yielded alternatives, even at maximum zero. `ComponentRoutes.block` runs
+its existing traversal to close input effects over carried backedges; only the
+stable candidate's rows survive, and all candidate work is charged. Existing
+nonempty effects persist unless a refusal supersedes a method effect, so each
+input can change at most twice. Ordinary dependencies introduce no linear
+ownership. The Pending tuple's atomic consumption and projection obligations
+are unchanged. Effectful ordinary values can feed an explicit method handoff;
+feeding them with Pending data to a pure accepting helper refuses. This
+conservative inventory proves neither effect independence nor security.
+
+`ComponentRoutes.slots` deduplicates by purpose and selector over every subject
+and residual clause. It refuses a 513th distinct logical slot with
+`component-instantiation-limit`, matching the native producer, strict reader
+and schema's 512-slot bound. Repeated clauses do not consume extra slots.
+`ComponentExport.route` continues to use the existing `Format.descriptor`
+decoder; the source-claims schema shares its tagged descriptor shape, without
+introducing another operation meaning.
+
+`ComponentExport.Associated` retains kernel equalities for the exact recomputed
+routes and checked per-call proposals. `CallProposalBinding` selects the actual
+`CheckedApplication`, callee `ContractBinding`, complete SSA context, operands
+and role substitution. `ResolvedInstantiation` supplies the existing
+`AssignmentInstantiation`; it does not introduce another logical store.
+`SourceResolution` connects each edited choice to that store or to an actual
+typed `some` observation and the existing checked Math invocation. Consumer
+assembly must prove those observations describe the reached execution. `open`
+can select an unavailable source and therefore does not establish definedness.
+
+Protocol sampling, exchange and guards are explicit method obligations.
+`action` routes retain their actual descriptor, position, role and arguments;
+guard endpoints retain their site and role. A `method` row requires the selected
+protocol's body theorem, including its scopes, effects and residual relation.
+A pure helper law nested in such a route establishes only that helper law.
+It does not discharge the surrounding method. Unknown effects still refuse.
+
+`PureSeamBinding` and `TerminalSeamBinding` select actual helper bodies from
+the imported payload. Their laws use the shared `Source.Structured.RelationMeaning`
+boundary also used by canonical claims. A formula means the actual admitted
+helper invocation completing with the sole Boolean result `true`; an opaque
+relation means the exact request-owned `OpaqueRegistry.Binding`, including its
+ordered ABI and purposes. The registry is an index of the law, so proof evidence
+cannot replace it or supply a different predicate. `unique_meaning` proves
+coherence, and `holds_iff_logical` identifies this boundary with the existing
+logical translation. Uniform clients use the same domain semantics at
+`ringModel`; nominal clients can use their own `DomainModel` directly.
+
+The mathematical `ClaimRelation`, map, encodings and readbacks are independent
+indices. `RelationMeaning.RealizesClaim` requires, for every statement and
+witness, equivalence between the claim's witness predicate and the conjunction
+of its encoding domain and the fixed relation meaning. Thus every affirmative
+witness belongs to the domain; an empty domain cannot establish an unrelated
+claim. On that domain, `RealizesClaim.rejects_no` follows from the claim's
+own disjointness law. It does not identify the possibly gapped No predicate
+with the complement of Yes.
+
+Pure laws apply to an exact Math call or an effect-free Local call, including
+its holder. They require total successful execution and defined readback on an
+explicit operational domain, the commuting readback square, Yes equivalence,
+and separate transport of the actual No predicates. A caller establishes this
+domain at the reached state through its scope and preservation law, independently
+of a false-claim premise. Partial decoding and rejection outside that domain
+are permitted; an empty domain cannot establish a live caller's scope. The
+relation encoding domain remains a separate mathematical obligation.
+
+Terminal laws require defined readback on their runtime domain and adequacy of
+the exact selected Math or Local helper's accepting returns. A stop supplies no
+accepting result.
+`AcceptancePath.sound` proves the direct/conjunction link. Neither structural
+association nor a formula binding discharges any of these mathematical laws.
+A Math call returning a Boolean is checked as a whole terminal helper; the
+exporter does not infer acceptance of its arguments from its name or ABI.
+Only literal Boolean conjunction routes supply the structural implication.
+
+The bound source-claim report keeps these mathematical obligations under
+`method_obligations` for `component-composition`. They are not universal
+`required_links`: a kernel-checked direct proof of the same fixed request
+meaning remains valid without using this method. Exact typed source association
+and the request's registered stage links remain required independently of the
+selected proof method.
+
+Root generators must retain `Snapshot.sourceDeclarations`, emit the
+current eleven-slot snapshot, construct `Associated` with kernel-checked
+equalities, resolve actual calls through these typed bindings and discharge
+formula/adapter/terminal laws using existing `CallSpecification` and
+`ContractApplication`. Generated assembly must also establish
+scopes, continuing-call definedness and reached-state preservation; structural
+association alone establishes none of them. Scoped helper imports must retain
+original-only metadata and bind private helper names to the actual imported
+body, using existing original identity and body-instance checks.

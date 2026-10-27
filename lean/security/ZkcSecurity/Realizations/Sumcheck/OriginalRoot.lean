@@ -4,7 +4,7 @@ public import ZkcSecurity.Realizations.Sumcheck.OriginalRawComposition
 public import ZkcSecurity.Realizations.Sumcheck.OriginalHonestReduce
 public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot
 public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
-public import ZkcSecurity.Families.Sumcheck.TableComponentNominalLossless
+public import ZkcSecurity.FiatShamir.NominalField
 
 @[expose] public section
 
@@ -24,24 +24,25 @@ open ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 abbrev verifierCall (payload : UnitPayload) (maximum : Nat) (context : ProtocolContext)
-    (scopes : List (List Nat)) (scalar : F) (count handle : Nat) :=
+    (scopes : List (List Nat)) (point : List F) (scalar : F) (count handle : Nat) :=
   (OriginalSumcheckLibrary.reduce (G := G) payload maximum context (context.roles 1) []
-    (.cons none (.cons none (.cons none (.cons (some scalar) (.cons (some count) (.cons (some handle) .nil))))))).bind
+    (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) (.cons (some count) (.cons (some handle) .nil)))))))).bind
     fun result => .done (maskValues (context.roles 1) (context.mapScopes scopes) result)
 
 theorem call_raw (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.Bodies payload.definitions)
+    (claims : SumcheckPendingLaws.Bodies payload.definitions)
     (maximum : Nat) (context : Realizations.Sumcheck.Original.Context)
     (separate : context.protocol.roles 0 ≠ context.protocol.roles 1)
-    (scopes : List (List Nat)) (count : Nat) (scalar : F) :
-    verifierCall (G := G) payload maximum context.protocol scopes scalar count context.handle =
+    (scopes : List (List Nat)) (count : Nat) (point : List F) (scalar : F) :
+    verifierCall (G := G) payload maximum context.protocol scopes point scalar count context.handle =
       if count ≤ maximum then
-        (run (G := G) context (List.range count) ⟨[], scalar⟩).bind fun result =>
+        (run (G := G) context (List.range count) ⟨point, scalar⟩).bind fun result =>
           .done (maskValues (context.protocol.roles 1) (context.protocol.mapScopes scopes) (output result))
       else .halt .refused := by
   unfold verifierCall
-  have reduced := source_reduce (G := G) payload bodies maximum context separate [] count scalar
+  have reduced := source_reduce (G := G) payload bodies claims maximum context separate [] count point scalar
   change OriginalSumcheckLibrary.reduce payload maximum context.protocol (context.protocol.roles 1) []
-    (.cons none (.cons none (.cons none (.cons (some scalar) (.cons (some count) (.cons (some context.handle) .nil)))))) = _ at reduced
+    (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) (.cons (some count) (.cons (some context.handle) .nil))))))) = _ at reduced
   rw [reduced]
   split <;> simp only [PIR.Process.bind_assoc, PIR.Process.bind]
 
@@ -81,7 +82,7 @@ def schedule (occurrence : ZkcExamples.Structured.SumcheckArtifacts.ArtifactBind
 theorem routes (routing : Original.Routing)
     (occurrence : ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Occurrence) (handle : Nat)
     (checked : ∀ index, ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Routes routing occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩] handle
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩] handle
       (occurrence.origins routing.context index)) :
     OriginalSecurity.Routes routing ⟨occurrence.protocol, handle⟩ (schedule occurrence routing.context) [] := by
   exact ⟨(checked 0).mode, fun index => (checked index).low, fun index => (checked index).high,

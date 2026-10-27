@@ -3,7 +3,9 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Protocol/Origins.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Support/Refusal.h"
 #include <map>
 #include <tuple>
 
@@ -60,11 +62,41 @@ bool logicalInputs(TypeRange inputs) {
   return true;
 }
 } // namespace
+Expected<json::Value> readStaticArguments(ArrayAttr arguments) {
+  if (!arguments || arguments.size() > 128)
+    return zkc::error("relation-static-arguments");
+  auto *context = arguments.getContext();
+  SmallVector<Attribute> bindings;
+  for (auto [index, argument] : enumerate(arguments))
+    bindings.push_back(ArrayAttr::get(
+        context, {StringAttr::get(context, "argument" + std::to_string(index)),
+                  argument}));
+  auto origin = protocol_ir::readProtocolOrigin(
+      ArrayAttr::get(context, {StringAttr::get(context, "opaque"),
+                               ArrayAttr::get(context, bindings)}));
+  if (!origin)
+    return origin.takeError();
+  json::Array result;
+  for (auto &binding : *(*origin->getAsArray())[1].getAsArray())
+    result.push_back(std::move((*binding.getAsArray())[1]));
+  return result;
+}
 LogicalResult DeclareOp::verify() {
   if (getKind().empty() || getKey().empty() || getRevision().empty())
     return diagnostics::emit(
         emitOpError(), "relation-declaration-identity",
         "external kind, key and revision must be explicit");
+  auto arguments = readStaticArguments(getStaticArguments());
+  if (!arguments) {
+    consumeError(arguments.takeError());
+    return diagnostics::emit(emitOpError(), "relation-static-arguments",
+                             "expected closed canonical typed static arguments "
+                             "within origin limits");
+  }
+  if (getKind().starts_with("zkc.") && !getStaticArguments().empty())
+    return diagnostics::emit(
+        emitOpError(), "relation-static-arguments",
+        "source formula and captured identities do not take opaque arguments");
   auto signature = getSignature();
   if (signature.getNumResults() != 1 ||
       !signature.getResult(0).isSignlessInteger(1) ||
@@ -103,7 +135,8 @@ LogicalResult DeclareOp::verifySymbolUses(SymbolTableCollection &tables) {
   return success();
 }
 LogicalResult verifyDeclarationConsistency(ArrayRef<Operation *> units) {
-  using Identity = std::tuple<std::string, std::string, std::string>;
+  using Identity =
+      std::tuple<std::string, std::string, std::string, std::string>;
   std::map<Identity, DeclareOp> declarations;
   for (auto *unit : units) {
     if (!unit)
@@ -111,8 +144,15 @@ LogicalResult verifyDeclarationConsistency(ArrayRef<Operation *> units) {
     auto result = unit->walk([&](DeclareOp declaration) {
       if (failed(declaration->getName().verifyInvariants(declaration)))
         return WalkResult::interrupt();
+      auto arguments = readStaticArguments(declaration.getStaticArguments());
+      if (!arguments) {
+        consumeError(arguments.takeError());
+        return WalkResult::interrupt();
+      }
+      std::string canonical;
+      raw_string_ostream(canonical) << *arguments;
       Identity identity{declaration.getKind().str(), declaration.getKey().str(),
-                        declaration.getRevision().str()};
+                        declaration.getRevision().str(), canonical};
       auto [it, added] = declarations.emplace(std::move(identity), declaration);
       if (!added && !sameSchema(it->second, declaration)) {
         auto diagnostic = diagnostics::emit(

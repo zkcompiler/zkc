@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.SumcheckSourceViews
-public import ZkcExamples.Structured.SumcheckRoundNormalForms
+public import ZkcExamples.Structured.SumcheckPreludeNormalForms
 public import ZkcExamples.Structured.NormalFormSteps
 public import Zkc.Source.Structured.NormalForm.Presentation
 
@@ -33,8 +33,8 @@ abbrev reduceMaximum : Nat := 2
 
 /-- The checked body of `reduce` at any context, between its input and output
 masks, with this unit's plain tables. -/
-theorem reduce_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"])
-    (mask : maskValues self (ctx.mapScopes [[0], [0], [0], [1], [0, 1], [1]]) args = masked) :
+theorem reduce_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"])
+    (mask : maskValues self (ctx.mapScopes [[0], [0], [0], [1], [1], [0, 1], [1]]) args = masked) :
     invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature ctx self args =
       ((SumcheckVerifierBodies.reduceBody reduceMaximum).denote
         (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) self (SumcheckSourceViews.unit.plainProtocolTable F G) ctx) masked.get).bind
@@ -100,8 +100,9 @@ theorem run_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Com
 def verifierProcess (ctx : ProtocolContext) (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
     PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
-  (SumcheckRoundNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) claim count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
-  (Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed SumcheckHelperBodies.checkHelper) (.cons raw (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun (checkReturned : Values (Component (assignment F G)) [.boolean]) =>
+  (Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed SumcheckSourceBodies.pendingHelper) (.cons claim .nil)).bind fun (pendingReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  (SumcheckPreludeNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) (pendingReturned.get .here) (pendingReturned.get (.there .here)) count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  (Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed SumcheckSourceBodies.checkHelper) (.cons raw (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind fun (checkReturned : Values (Component (assignment F G)) [.boolean]) =>
   .done (.cons (checkReturned.get .here) .nil : Values (Component (assignment F G)) [.boolean])
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -121,23 +122,23 @@ theorem reduce_verifierReduce_returned (ctx : ProtocolContext) (separate : ctx.r
                 Participant.restrict, Ne.symm separate, Values.get]
 
 /-- The `reduce` callee at role 1: its invocation in this unit at any child context. -/
-theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (claim : Option F) (count service : Option Nat) (input0 : Option (List F)) (input1 input2 : Option Nat) :
+theorem reduce_verifierReduce_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckSourceViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (point : Option (List F)) (claim : Option F) (count service : Option Nat) (input0 : Option (List F)) (input1 input2 : Option Nat) :
     invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature ctx (ctx.roles 1)
-      (.cons input0 (.cons input1 (.cons input2 (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
-      (SumcheckRoundNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum ctx claim count service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there .here))))) (.cons (out.get (.there (.there (.there (.there (.there .here)))))) .nil))))))) := by
-  refine (reduce_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
-  · iterate 7 unfold maskValues
+      (.cons input0 (.cons input1 (.cons input2 (.cons point (.cons claim (.cons count (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
+      (SumcheckPreludeNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum ctx point claim count service).bind (fun out => .done (.cons none (.cons none (.cons none (.cons none (.cons (out.get (.there (.there (.there (.there .here))))) (.cons (out.get (.there (.there (.there (.there (.there .here)))))) .nil))))))) := by
+  refine (reduce_view ctx (ctx.roles 1) _ (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
+  · iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
-    (SumcheckRoundNormalForms.verifierReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (claim := claim) (count := count) (service := service))).trans ?_
+    (SumcheckPreludeNormalForms.verifierReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (claims := claims) (ctx := ctx) (self := ctx.roles 1) (role := rfl) (separate := separate) (point := point) (claim := claim) (count := count) (service := service))).trans ?_
   apply congrArg (PIR.Process.bind _)
   funext out
   exact congrArg PIR.Process.done (reduce_verifierReduce_returned ctx separate out)
 
 /-- The verifier's laws as the normalizer reads them, keyed by helper. -/
 def verifierSignature : NormalForm.Signature :=
-  ⟨[], false, false, [SumcheckHelperBodies.checkHelper], [⟨SumcheckSourceBodies.reduceSignature, 1, (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional .nil)))))), [none, none, none]⟩]⟩
+  ⟨[], false, false, [SumcheckSourceBodies.checkHelper, SumcheckSourceBodies.pendingHelper], [⟨SumcheckSourceBodies.reduceSignature, 1, (.cons .absent (.cons .absent (.cons .absent (.cons .optional (.cons .optional (.cons .optional (.cons .optional .nil))))))), [none, none, none, none]⟩]⟩
 
 /-- The results the verifier's laws present, from the request's templates. -/
 def verifierResults : NormalForm.LawResults (ringModel F G) verifierSignature.laws :=
@@ -146,7 +147,7 @@ def verifierResults : NormalForm.LawResults (ringModel F G) verifierSignature.la
 /-- The verifier's callees' processes, by callee. -/
 def verifierCallees : NormalForm.CalleeProcesses (ringModel F G) verifierSignature.callees :=
   fun callee => match callee with
-  | ⟨0, _⟩ => fun ctx binders => SumcheckRoundNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here)))
+  | ⟨0, _⟩ => fun ctx binders => SumcheckPreludeNormalForms.verifierReduceProcess SumcheckSourceViews.unit reduceMaximum ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here))) (NormalForm.entryAt binders (.there (.there (.there .here))))
   | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierSignature])
 
 /-- The verifier's inputs as the normalizer reads them. -/
@@ -155,9 +156,10 @@ def verifierPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .field "b
 
 /-- The verifier's form, printed from the compiled normalizer; the kernel checks it. -/
 noncomputable def verifierForm : NormalForm.Form verifierSignature.laws verifierSignature.callees verifierPattern.scope [.boolean] :=
+  .owned 1 SumcheckSourceBodies.pendingHelper (.cons (.input (.there .here)) .nil) <|
   .apply ⟨0, by decide⟩ SumcheckSourceBodies.reduceSignature [0, 1] "label_726564756365"
-    (.cons (NormalForm.Comp.input (.there .here)) (.cons (NormalForm.Comp.input (.there (.there .here))) (.cons (NormalForm.Comp.input (.there (.there (.there .here)))) .nil)) : Values (NormalForm.Argument _ _) [.component (.field "bls12-381.fr"), .component .index, .component (.service "random.bls12-381.fr/0")]) <|
-  .owned 1 SumcheckHelperBodies.checkHelper (.cons (.input (.there .here)) (.cons (.read .here (.there (.there (.there (.there .here))))) (.cons (.read .here (.there (.there (.there (.there (.there .here)))))) .nil))) <|
+    (.cons (NormalForm.Comp.read .here .here) (.cons (NormalForm.Comp.read .here (.there .here)) (.cons (NormalForm.Comp.input (.there (.there (.there .here)))) (.cons (NormalForm.Comp.input (.there (.there (.there (.there .here))))) .nil))) : Values (NormalForm.Argument _ _) [.component (.vector "bls12-381.fr"), .component (.field "bls12-381.fr"), .component .index, .component (.service "random.bls12-381.fr/0")]) <|
+  .owned 1 SumcheckSourceBodies.checkHelper (.cons (.input (.there (.there .here))) (.cons (.read .here (.there (.there (.there (.there .here))))) (.cons (.read .here (.there (.there (.there (.there (.there .here)))))) .nil))) <|
   .done (.cons (.read .here .here) .nil)
 
 theorem verifier_normalized :
@@ -188,18 +190,18 @@ theorem verifier_laws (raw : Option (List F)) (claim : Option F) (count service 
   fun entry => entry.elim0
 
 /-- The verifier's callees present their applications: each callee's invocation in this unit. -/
-theorem verifier_callees (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
+theorem verifier_callees (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckSourceViews.unit.definitions) (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
     NormalForm.CalleesHold (SumcheckSourceViews.unit.plainProtocolTable F G) verifierCallees
       (.cons raw (.cons claim (.cons count (.cons service .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) :=
   fun callee => match callee with
   | ⟨0, _⟩ => fun ctx binders others pinned distinct =>
     match binders, others, pinned with
-    | .cons calleeClaim (.cons calleeCount (.cons calleeService .nil)), .cons input0 (.cons input1 (.cons input2 .nil)), _ => by
-      exact reduce_verifierReduce_invoke bodies ctx (distinct 0 (show 0 < 2 by decide) (show (0 : Nat) ≠ 1 by decide)) calleeClaim calleeCount calleeService input0 input1 input2
+    | .cons calleePoint (.cons calleeClaim (.cons calleeCount (.cons calleeService .nil))), .cons input0 (.cons input1 (.cons input2 .nil)), _ => by
+      exact reduce_verifierReduce_invoke bodies claims ctx (distinct 0 (show 0 < 2 by decide) (show (0 : Nat) ≠ 1 by decide)) calleePoint calleeClaim calleeCount calleeService input0 input1 input2
   | ⟨_ + 1, outside⟩ => absurd outside (by simp [verifierSignature])
 
 /-- The process equation of `verifierProcess`, an instance of the normalizer's soundness. -/
-theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)
+theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckSourceViews.unit.definitions)
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
     (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
@@ -210,7 +212,7 @@ theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckSource
   exact (NormalForm.sound_uniform verifierSignature SumcheckSourceBodies.runBody 1 2 verifierPattern
     verifierForm (verifier_normalized ) (verifier_lawsMatch ) ctx (.ofSeparate separate (by decide))
     (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit) (SumcheckSourceViews.unit.plainProtocolTable F G) verifierResults verifierCallees (.cons raw (.cons claim (.cons count (.cons service .nil)))) _
-    (verifier_environment raw claim count service) (verifier_laws raw claim count service) (verifier_callees bodies raw claim count service)).trans
+    (verifier_environment raw claim count service) (verifier_laws raw claim count service) (verifier_callees bodies claims raw claim count service)).trans
     (verifier_presentation ctx raw claim count service)
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -226,7 +228,7 @@ theorem verifier_outputs (ctx : ProtocolContext)
 
 /-- The verifier's invocation at any caller context: the input masks, the normal form of
 the body and the output masks, with this unit's protocol table. -/
-theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)
+theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckSourceViews.unit.definitions)
     (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
     (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
@@ -239,27 +241,27 @@ theorem verifier_invoke (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceV
     simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   subst self
   refine (congrArg (fun process => PIR.Process.bind process _)
-    (verifier_process (bodies := bodies) (raw := raw) (claim := claim) (count := count) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
+    (verifier_process (bodies := bodies) (claims := claims) (raw := raw) (claim := claim) (count := count) (service := service) (ctx := ctx) (self := ctx.roles 1) (role := rfl)
       (separate := separate) )).trans ?_
   apply congrArg (PIR.Process.bind _)
   funext out
   exact congrArg PIR.Process.done (verifier_outputs ctx out)
 
 /-- The verifier's participant of the admitted unit. -/
-theorem verifier_participant (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)
+theorem verifier_participant (bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckSourceViews.unit.definitions)
     (raw : Option (List F)) (claim : Option F) (count service : Option Nat) :
     SumcheckSourceViews.program.participant F G 1 (.cons raw (.cons claim (.cons count (.cons service .nil)))) =
       (verifierProcess ({} : ProtocolContext) raw claim count service).bind (fun out => .done (.cons (out.get .here) .nil)) :=
   (SumcheckSourceViews.unit.protocolTable_forgetSites (F := F) (G := G) SumcheckSourceBodies.runSignature {} 1
     (.cons raw (.cons claim (.cons count (.cons service .nil))))).trans
-    (verifier_invoke (bodies := bodies) (raw := raw) (claim := claim) (count := count) (service := service) (ctx := {}) (self := 1) (role := rfl)
+    (verifier_invoke (bodies := bodies) (claims := claims) (raw := raw) (claim := claim) (count := count) (service := service) (ctx := {}) (self := 1) (role := rfl)
       (separate := by decide))
 
 /-- The prover's normal form of the whole body. -/
 def proverProcess (ctx : ProtocolContext) (raw : List F) (rounds : Nat) :
     PIR.Process (participantInterface F G)
       (Values (Component (assignment F G)) [.boolean]) :=
-  (SumcheckRoundNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) raw rounds rounds).bind fun (_ : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  (SumcheckPreludeNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum (reduceContext ctx) raw rounds rounds).bind fun (_ : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons none .nil : Values (Component (assignment F G)) [.boolean])
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -280,22 +282,22 @@ theorem reduce_proverReduce_returned (ctx : ProtocolContext) (separate : ctx.rol
 
 /-- The `reduce` callee at role 0: its invocation in this unit at any child context. -/
 theorem reduce_proverReduce_invoke (bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews.unit.definitions) (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
-    (raw : List F) (rounds : Nat) (input3 : Option F) (input5 : Option Nat) (shape : HasShape raw rounds 1) :
+    (raw : List F) (rounds : Nat) (input3 : Option (List F)) (input4 : Option F) (input6 : Option Nat) (shape : HasShape raw rounds 1) :
     invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature ctx (ctx.roles 0)
-      (.cons (some raw) (.cons (some rounds) (.cons (some 1) (.cons input3 (.cons (some rounds) (.cons input5 .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
-      (SumcheckRoundNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum ctx raw rounds rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons none (.cons none .nil))))))) := by
-  refine (reduce_view ctx (ctx.roles 0) _ (.cons (some raw) (.cons (some rounds) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
-  · iterate 7 unfold maskValues
+      (.cons (some raw) (.cons (some rounds) (.cons (some 1) (.cons input3 (.cons input4 (.cons (some rounds) (.cons input6 .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) =
+      (SumcheckPreludeNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum ctx raw rounds rounds).bind (fun out => .done (.cons (out.get .here) (.cons (out.get (.there .here)) (.cons (out.get (.there (.there .here))) (.cons (out.get (.there (.there (.there .here)))) (.cons none (.cons none .nil))))))) := by
+  refine (reduce_view ctx (ctx.roles 0) _ (.cons (some raw) (.cons (some rounds) (.cons (some 1) (.cons none (.cons none (.cons (some rounds) (.cons none .nil)))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_).trans ?_
+  · iterate 8 unfold maskValues
     simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
   refine (congrArg (fun process => PIR.Process.bind process _)
-    (SumcheckRoundNormalForms.proverReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (entries := raw) (count := rounds) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (enough := Nat.le_refl _))).trans ?_
+    (SumcheckPreludeNormalForms.proverReduce_process (U := SumcheckSourceViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := ctx) (self := ctx.roles 0) (role := rfl) (separate := separate) (entries := raw) (count := rounds) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (enough := Nat.le_refl _))).trans ?_
   apply congrArg (PIR.Process.bind _)
   funext out
   exact congrArg PIR.Process.done (reduce_proverReduce_returned ctx separate out)
 
 /-- The prover's laws as the normalizer reads them, keyed by helper. -/
 def proverSignature : NormalForm.Signature :=
-  ⟨[⟨MapFirstBodies.tableHelper, .returns [.argument 0, .argument 1, .argument 2], [.input 0, .input 2, .literal 1]⟩], false, false, [], [⟨SumcheckSourceBodies.reduceSignature, 0, (.cons .present (.cons .present (.cons (.index 1) (.cons .absent (.cons .present (.cons .absent .nil)))))), [some 0, some 2, some 2]⟩]⟩
+  ⟨[⟨SumcheckSourceBodies.tableHelper, .returns [.argument 0, .argument 1, .argument 2], [.input 0, .input 2, .literal 1]⟩], false, false, [], [⟨SumcheckSourceBodies.reduceSignature, 0, (.cons .present (.cons .present (.cons (.index 1) (.cons .absent (.cons .absent (.cons .present (.cons .absent .nil))))))), [some 0, some 2, some 2]⟩]⟩
 
 /-- The results the prover's laws present, from the request's templates. -/
 def proverResults : NormalForm.LawResults (ringModel F G) proverSignature.laws :=
@@ -307,7 +309,7 @@ def proverResults : NormalForm.LawResults (ringModel F G) proverSignature.laws :
 /-- The prover's callees' processes, by callee. -/
 def proverCallees : NormalForm.CalleeProcesses (ringModel F G) proverSignature.callees :=
   fun callee => match callee with
-  | ⟨0, _⟩ => fun ctx binders => SumcheckRoundNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here)))
+  | ⟨0, _⟩ => fun ctx binders => SumcheckPreludeNormalForms.proverReduceProcess SumcheckSourceViews.unit reduceMaximum ctx (NormalForm.entryAt binders .here) (NormalForm.entryAt binders (.there .here)) (NormalForm.entryAt binders (.there (.there .here)))
   | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverSignature])
 
 /-- The prover's inputs as the normalizer reads them. -/
@@ -316,7 +318,7 @@ def proverPattern : NormalForm.InputPattern [.vector "bls12-381.fr", .field "bls
 
 /-- The prover's form, printed from the compiled normalizer; the kernel checks it. -/
 noncomputable def proverForm : NormalForm.Form proverSignature.laws proverSignature.callees proverPattern.scope [.boolean] :=
-  .byLaw ⟨0, by decide⟩ MapFirstBodies.tableHelper <|
+  .byLaw ⟨0, by decide⟩ SumcheckSourceBodies.tableHelper <|
   .apply ⟨0, by decide⟩ SumcheckSourceBodies.reduceSignature [0, 1] "label_726564756365"
     (.cons (NormalForm.Term.var .here) (.cons (NormalForm.Term.var (.there .here)) (.cons (NormalForm.Term.var (.there .here)) .nil)) : Values (NormalForm.Argument _ _) [.value (.vector "bls12-381.fr"), .value .index, .value .index]) <|
   .done (.cons .absent .nil)
@@ -352,7 +354,7 @@ theorem prover_laws (bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews.u
       obtain rfl : values = (.cons a0 (.cons a1 (.cons a2 .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]) :=
         Option.some.inj (found.symm.trans (by kernel_rfl))
       rw [← (Option.some.inj p0 : raw = a0), ← (Option.some.inj p1 : rounds = a1), ← (Option.some.inj (p2 : some 1 = some a2) : 1 = a2)]
-      show invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed MapFirstBodies.tableHelper _ = .done (.cons raw (.cons rounds (.cons 1 .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])
+      show invoke (plainHelpers (F := F) (G := G) SumcheckSourceViews.unit).closed SumcheckSourceBodies.tableHelper _ = .done (.cons raw (.cons rounds (.cons 1 .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index])
       exact SumcheckProverLaws.table_present SumcheckSourceViews.unit bodies raw rounds shape bound
   | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverSignature])
 
@@ -363,9 +365,9 @@ theorem prover_callees (bodies : SumcheckUnitContracts.Bodies SumcheckSourceView
   fun callee => match callee with
   | ⟨0, _⟩ => fun ctx binders others pinned distinct =>
     match binders, others, pinned with
-    | .cons calleeEntries (.cons calleeCount (.cons calleeRounds .nil)), .cons input3 (.cons input5 .nil), ⟨p0, p1, p2, _⟩ => by
+    | .cons calleeEntries (.cons calleeCount (.cons calleeRounds .nil)), .cons input3 (.cons input4 (.cons input6 .nil)), ⟨p0, p1, p2, _⟩ => by
       rw [← (Option.some.inj (p0 : some raw = some calleeEntries) : raw = calleeEntries), ← (Option.some.inj (p1 : some rounds = some calleeCount) : rounds = calleeCount), ← (Option.some.inj (p2 : some rounds = some calleeRounds) : rounds = calleeRounds)]
-      exact reduce_proverReduce_invoke bodies ctx (distinct 1 (show 1 < 2 by decide) (show (1 : Nat) ≠ 0 by decide)) raw rounds input3 input5 shape
+      exact reduce_proverReduce_invoke bodies ctx (distinct 1 (show 1 < 2 by decide) (show (1 : Nat) ≠ 0 by decide)) raw rounds input3 input4 input6 shape
   | ⟨_ + 1, outside⟩ => absurd outside (by simp [proverSignature])
 
 /-- The process equation of `proverProcess`, an instance of the normalizer's soundness. -/

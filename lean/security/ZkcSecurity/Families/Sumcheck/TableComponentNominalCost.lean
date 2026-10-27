@@ -22,13 +22,13 @@ theorem receive_cost (field : String) (update : FrameUpdate F Frame field)
       Domain.Event (Structured.uniformCarriers F G) → ENNReal)
     {n : Nat} (schedule : Schedule field) (state : PrefixState F Frame (n + 1))
     (history : Domain.History (Structured.uniformCarriers F G)) :
-    ((interface field).walk ((interface field).lossCharge charge)).Bound
+    ((NominalField.interface field).walk ((NominalField.interface field).lossCharge charge)).Bound
       ((programWithFrame field update).receive schedule state) history 0 := by
   refine ⟨trivial, 0, ?_, ?_⟩
-  · simp [Interface.walk_charge, Interface.lossCharge, interface]
+  · simp [Interface.walk_charge, Interface.lossCharge, NominalField.interface]
   · intro low reached _
     refine ⟨trivial, 0, ?_, ?_⟩
-    · simp [Interface.walk_charge, Interface.lossCharge, interface]
+    · simp [Interface.walk_charge, Interface.lossCharge, NominalField.interface]
     · intro high final _
       trivial
 
@@ -39,10 +39,10 @@ theorem delivery_cost (field : String) (update : FrameUpdate F Frame field)
     {n : Nat} (schedule : Schedule field) (state : PrefixState F Frame (n + 1))
     (message : F × F) (challenge : F)
     (history : Domain.History (Structured.uniformCarriers F G)) :
-    ((interface field).walk ((interface field).lossCharge charge)).Bound
+    ((NominalField.interface field).walk ((NominalField.interface field).lossCharge charge)).Bound
       ((programWithFrame field update).deliver schedule state message challenge) history 0 := by
   refine ⟨trivial, 0, ?_, ?_⟩
-  · simp [Interface.walk_charge, Interface.lossCharge, interface]
+  · simp [Interface.walk_charge, Interface.lossCharge, NominalField.interface]
   · intro reply reached _
     trivial
 
@@ -55,7 +55,7 @@ theorem root_chargedCost (field : String) (update : FrameUpdate F Frame field)
     (priced : ∀ history origin, charge history (.challenge origin) ≤ price)
     (count : Nat) (schedule : Schedule field) (state : PrefixState F Frame (0 + count))
     (history : Domain.History (Structured.uniformCarriers F G)) :
-    Typed.ChargedCostBound (interface field) charge
+    Typed.ChargedCostBound (NominalField.interface field) charge
       (root (layoutWithFrame field update) count schedule state) history (count • price) := by
   simpa only [zero_add, add_zero] using root_cost (layoutWithFrame field update)
     (queriesWithFrame field update) charge 0 price 0

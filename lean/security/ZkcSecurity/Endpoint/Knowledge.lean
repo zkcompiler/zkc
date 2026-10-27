@@ -92,10 +92,11 @@ structure KnowledgeEvidence (art : Artifacts) (endpoint : Semantics) (Stmt Wit C
   compiled : Compiled art
   connection : compiled.SourceConnection (F := F) (G := G)
   target : RetainedTarget compiled.imported art.participant.policy art.publics
+  formula : FormulaBinding compiled.imported target.application.relation
   /-- Embedding extracted witnesses cannot replace publications or parameters. -/
   witness : Wit → target.Witness F G
   relationPinned : ∀ statement extracted,
-    holds statement extracted ↔ target.Holds statement (witness extracted)
+    holds statement extracted ↔ target.Holds formula statement (witness extracted)
   /-- The replaced service handle at which the model equation is read. -/
   handle : Nat
   family : SigmaFamily (F := F) (G := G) compiled.context (art.Statement F G) Stmt Wit Commit PrvState Resp

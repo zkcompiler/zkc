@@ -10,23 +10,16 @@ public import ZkcSecurity.FiatShamir.HonestCompiled
 
 @[expose] public section
 
-/-! Source-owned honest inputs and retained formula truth. Neither a predicate
-nor a producer is a field of completeness evidence. Unsupported opaque input
-relations require a future registered interpretation and are not admitted here. -/
+/-! Source-owned honest inputs and request-fixed retained relation truth.
+The registry, every input clause and the target are selected before evidence. -/
 
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.HonestPair
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
-structure FormulaClause {snapshot : Snapshot} (imported : Imported snapshot)
-    (owner : ContractBinding imported) (application : RelationApplication) where
-  binding : ApplicationBinding owner application
-  formula : FormulaBinding imported binding.relation
-  booleanOutput : binding.relation.declaration.outputs = [.boolean]
-
 /-- All selections precede evidence. Exact artifacts, input clauses and target
 come from core pair admission; the retained target supplies checked selectors
-and the source formula body. The original export fixes the initial namespace. -/
+and the request fixes the relation meaning. The original export fixes the initial namespace. -/
 structure Subject (model : DomainModel) (original : Snapshot) (imported : Imported original)
     (selected : Zkc.Construction.AuthoredPair.Selection original) where
   /-- Physical export identities selected by the request. Pipeline read-back
@@ -41,15 +34,17 @@ structure Subject (model : DomainModel) (original : Snapshot) (imported : Import
   producerOccurrences : SourceOccurrences.check original selection.context selected.artifacts.producer = .ok ()
   validatorOccurrences : SourceOccurrences.check original selection.context selected.artifacts.validator = .ok ()
   target : RetainedTarget imported selected.policy selection.publics
+  relations : RegisteredRelations model.Value original.relations
+  meaning : RelationMeaning imported target.application.relation model.Value relations.registry
   targetExact : target.owner.clause target.clauseIndex = selected.target
   inputContractExact : Zkc.Construction.AuthoredPair.inputContract original = some selected.inputs
   inputClausesExact : selected.inputs.clauses = target.owner.contract.clauses.filter (·.kind == .input)
   /-- Protocol entries currently have no index-bound preconditions. Refuse a
   future unsupported contract rather than silently dropping it. -/
   preconditionsEmpty : selected.inputs.preconditions = []
-  inputFormulas : (index : Fin target.owner.contract.clauses.length) →
+  inputMeanings : (index : Fin target.owner.contract.clauses.length) →
     (target.owner.clause index).kind = .input →
-      FormulaClause imported target.owner (target.owner.clause index).subject
+      RetainedClause imported target.owner (target.owner.clause index).subject model.Value relations.registry
 
 namespace Subject
 variable {model : DomainModel} {original : Snapshot} {imported : Imported original}
@@ -81,21 +76,37 @@ def assignments (subject : Subject model original imported selected) (inputs : s
   ⟨fun _ selector => selector.read {} (subject.boundary inputs),
     fun _ selector => selector.read {} (subject.boundary inputs)⟩
 
-/-- The retained formula, on selectors reading the same inputs used by the
-compiled producer and verifier. A stopped formula is never true. -/
+/-- The selected meaning reads the same source inputs as both participants. -/
 def Relation (subject : Subject model original imported selected) (inputs : subject.Inputs) : Prop :=
-  ∃ arguments, subject.target.application.read {} (subject.boundary inputs)
-      (subject.assignments inputs) = some arguments ∧
-    subject.target.formula.invokeRelationOn model arguments =
-      .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil)
+  (subject.target.clause subject.meaning).Holds {} (subject.boundary inputs) (subject.assignments inputs)
 
 def inputClause (subject : Subject model original imported selected) (inputs : subject.Inputs)
     (index : Fin subject.target.owner.contract.clauses.length)
     (isInput : (subject.target.owner.clause index).kind = .input) : Prop :=
-  let clause := subject.inputFormulas index isInput
-  ∃ arguments, clause.binding.read {} (subject.boundary inputs) (subject.assignments inputs) =
-      some arguments ∧ clause.formula.invokeRelationOn model arguments =
-        .done (clause.booleanOutput.symm ▸ Values.cons true .nil)
+  (subject.inputMeanings index isInput).Holds {} (subject.boundary inputs) (subject.assignments inputs)
+
+/-- Formula targets retain precisely their previous authored-pair meaning. -/
+theorem relation_formula_iff (subject : Subject model original imported selected)
+    (binding : FormulaBinding imported subject.target.application.relation) (inputs : subject.Inputs) :
+    subject.Relation inputs ↔
+      ∃ arguments, subject.target.application.read {} (subject.boundary inputs)
+        (subject.assignments inputs) = some arguments ∧
+        binding.invokeRelationOn model arguments =
+          .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil) :=
+  exists_congr fun arguments => and_congr Iff.rfl
+    (subject.meaning.formula_exact binding subject.target.booleanOutput arguments)
+
+/-- Every original input formula keeps its actual selector read and invocation. -/
+theorem inputClause_formula_iff (subject : Subject model original imported selected)
+    (inputs : subject.Inputs) (index : Fin subject.target.owner.contract.clauses.length)
+    (isInput : (subject.target.owner.clause index).kind = .input)
+    (binding : FormulaBinding imported (subject.inputMeanings index isInput).binding.relation) :
+    subject.inputClause inputs index isInput ↔
+      ∃ arguments, (subject.inputMeanings index isInput).binding.read {} (subject.boundary inputs)
+        (subject.assignments inputs) = some arguments ∧ binding.invokeRelationOn model arguments =
+          .done ((subject.inputMeanings index isInput).booleanOutput.symm ▸ Values.cons true .nil) :=
+  exists_congr fun arguments => and_congr Iff.rfl
+    ((subject.inputMeanings index isInput).meaning.formula_exact binding _ arguments)
 
 /-- Source positions are retained even for absent values and service handles.
 Dropping an absent input must not shift later public or witness coordinates. -/
@@ -134,6 +145,26 @@ def HonestInput (subject : Subject model original imported selected) (inputs : s
     ∃ producer validator, subject.runtimeInputs inputs = some (producer, validator) ∧
       Domain.sortsMatch selected.artifacts.producer.inputs producer = true ∧
       Domain.sortsMatch selected.artifacts.validator.inputs validator = true
+
+/-- Exact preservation of the complete formula-only honest-input domain,
+including all actual clauses, representability and both executable ABIs. -/
+theorem honestInput_formula_iff (subject : Subject model original imported selected)
+    (bindings : (index : Fin subject.target.owner.contract.clauses.length) →
+      (isInput : (subject.target.owner.clause index).kind = .input) →
+      FormulaBinding imported (subject.inputMeanings index isInput).binding.relation)
+    (inputs : subject.Inputs) :
+    subject.HonestInput inputs ↔
+      inputsRepresentable inputs ∧
+        (∀ index isInput, ∃ arguments,
+          (subject.inputMeanings index isInput).binding.read {} (subject.boundary inputs)
+            (subject.assignments inputs) = some arguments ∧
+          (bindings index isInput).invokeRelationOn model arguments =
+            .done ((subject.inputMeanings index isInput).booleanOutput.symm ▸ Values.cons true .nil)) ∧
+        ∃ producer validator, subject.runtimeInputs inputs = some (producer, validator) ∧
+          Domain.sortsMatch selected.artifacts.producer.inputs producer = true ∧
+          Domain.sortsMatch selected.artifacts.validator.inputs validator = true :=
+  and_congr Iff.rfl (and_congr (forall_congr' fun index => forall_congr' fun isInput =>
+    subject.inputClause_formula_iff inputs index isInput (bindings index isInput)) Iff.rfl)
 
 end Subject
 end ZkcSecurity.Claims.HonestPair

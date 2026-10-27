@@ -51,7 +51,7 @@ def nominalSimp (layout : Layout) : String :=
     "SumcheckVerifierLaws.deliverySite", "Context.message", "Context.query", "Context.role",
     "Context.service", "Context.request", "Context.contract", "Context.replacement?",
     "Origin.message", "Origin.query", "Domain.atCoordinates", "decimal", "decimalDigit", "Request.draw",
-    "Occurrence.round_label", "Occurrence.challenge_label", "Occurrence.delivery_label"])
+    "SumcheckVerifierBodies.repeatSite", "SumcheckVerifierBodies.serviceInput", "Occurrence.round_label", "Occurrence.challenge_label", "Occurrence.delivery_label"])
 
 def routes (layout : Layout) (index : Nat) : String := Id.run do
   let occurrence := occurrenceName index
@@ -63,7 +63,7 @@ def routes (layout : Layout) (index : Nat) : String := Id.run do
     "List.cons_append, List.nil_append, "
   return "theorem " ++ occurrence ++ "_routes (handle index : Nat) :\n" ++
     "    Routes (routing handle) " ++ occurrence ++ ".protocol\n" ++
-    "      [⟨qualifyProtocolSite " ++ occurrence ++ ".protocol.applicationPrefix \"s15\", index⟩]\n" ++
+    "      [⟨qualifyProtocolSite " ++ occurrence ++ ".protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]\n" ++
     "      handle (" ++ occurrence ++ ".origins context index) := by\n" ++
     "  constructor\n  · rfl\n  all_goals\n" ++
     "    simp only [Original.Routing.message, Original.Routing.draw, Occurrence.messages,\n" ++
@@ -88,7 +88,7 @@ def templateMatches (producer : Bool) (context : Zkc.Construction.Context)
     else VerifierOutputs.sorts context.suite
   match instruction.operation with
   | .loop site _ yielded =>
-    decide (site = qualifyProtocolSite occurrence.protocol.applicationPrefix "s15") &&
+    decide (site = qualifyProtocolSite occurrence.protocol.applicationPrefix ZkcExamples.Structured.SumcheckVerifierBodies.repeatSite) &&
     decide (yielded = outputs) && decide (instruction.results = sorts) &&
     @decide (instruction.body = expected) (Instruction.decideList instruction.body expected)
   | _ => false
@@ -153,6 +153,7 @@ def source (program : Program) (validator producer : Participant)
     listText (names.map fun name => "⟨" ++ name ++ ".draw, " ++ name ++ ".delivery⟩") ++ ", []⟩\n\n"
   for index in List.range layout.calls.length do text := text ++ routes layout index
   text := text ++ (← ZkcSecurity.Generation.SumcheckSourceHelpers.source program.payload.definitions "program.payload.definitions") ++
+    "theorem claim_bodies : SumcheckPendingLaws.Bodies program.payload.definitions := by\n  bind_structured_bodies\n\n" ++
     "theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program :=\n  ⟨producer_bodies, terminal_bodies⟩\n" ++
     "theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=\n  ⟨helper_bodies.sumcheck.empty, helper_bodies.sumcheck.append, helper_bodies.sumcheck.width, helper_bodies.sumcheck.«variables», helper_bodies.sumcheck.values⟩\n\n"
   for (role, selected) in [("Validator", layout), ("Producer", producerLayout)] do
@@ -209,7 +210,7 @@ def source (program : Program) (validator producer : Participant)
         "theorem loop_sorts : " ++ selectedInstruction ++ ".results = " ++
         (if role == "Validator" then "VerifierOutputs" else "ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Outputs") ++
         ".sorts context.suite := by kernel_rfl\n" ++
-        "theorem loop_site : " ++ quoted loop.site ++ " = qualifyProtocolSite occurrence.protocol.applicationPrefix \"s15\" := by kernel_rfl\n"
+        "theorem loop_site : " ++ quoted loop.site ++ " = qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite := by kernel_rfl\n"
       if method == .sharedTemplate then
         text := text ++ "theorem body_instance : " ++ body ++ " (ringModel F G) program context =\n    " ++
           owner ++ "." ++ roleName ++ "Body (ringModel F G) program context occurrence " ++ toString loop.offset ++ " := by kernel_rfl\n" ++

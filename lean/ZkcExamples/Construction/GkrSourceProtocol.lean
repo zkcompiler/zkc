@@ -1,8 +1,10 @@
 module
 
 public import ZkcExamples.Structured.GkrSourceVerifier
+public import ZkcExamples.Structured.GkrRootNormalForms
 public import Zkc.Construction.Compiled
 public import ZkcExamples.Construction.GkrProofParticipant
+public meta import Mathlib.Tactic.FailIfNoProgress
 
 @[expose] public section
 
@@ -47,25 +49,31 @@ def sourceVerifier (inputs outputs add mul : List F) (layers selector width hand
 
 def helper (entry : Helper) (args : Values (assignment F G) entry.inputs) :
     PIR.Process (Actions F G) (Values (assignment F G) entry.outputs) :=
-  (invoke (GkrSourceVerifier.closed (F := F) (G := G)) entry args).interpret CommonAdapter.project
+  (invoke (GkrRoundsReading.closed (F := F) (G := G)) entry args).interpret CommonAdapter.project
 
-def rounds (ctx : ProtocolContext) (handle count : Nat) (claim : F) :
+def rounds (ctx : ProtocolContext) (handle count : Nat) (point : List F) (claim : F) :
     PIR.Process (Actions F G) (List F × F) :=
-  if count ≤ 4 then GkrVerifier.rounds ctx handle count claim else .halt .refused
+  if count ≤ 4 then PIR.repeatN count (GkrVerifier.round ctx handle) (point, claim)
+  else .halt .refused
 
 theorem rounds_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
-    (handle count : Nat) (claim : F) :
-    (GkrRoundsNormalForms.verifierRoundsProcess (F := F) (G := G) ctx (some claim)
-      (some count) (some handle)).interpret CommonAdapter.project =
-      (rounds ctx handle count claim).bind fun result => .done (GkrSourceVerifier.roundsResults result) := by
+    (handle count : Nat) (point : List F) (claim : F) :
+    (GkrRoundsNormalForms.verifierRoundsProcess (F := F) (G := G) ctx (some point)
+      (some claim) (some count) (some handle)).interpret CommonAdapter.project =
+      (rounds ctx handle count point claim).bind fun result => .done (GkrRoundsReading.roundsResults result) := by
   by_cases bounded : count ≤ 4
-  · simpa only [rounds, bounded, ite_true] using
-      GkrSourceVerifier.rounds_reads ctx separate handle count bounded claim
-  · simp only [GkrRoundsNormalForms.verifierRoundsProcess, GkrSourceVerifier.empty_plain,
-      PIR.Process.bind, Values.get, rounds, bounded, ite_false,
-      denoteRepeat, denoteRepeatOn, GkrRoundsNormalForms.repeatSpec,
-      List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
-      beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.interpret]
+  · rw [GkrRoundsReading.reads ctx separate handle count bounded point claim]
+    simp only [rounds, bounded, ite_true]
+    have prefixed := GkrRoundsReading.repeat_prefix (G := G) ctx handle count point ([], claim)
+    simp only [List.append_nil] at prefixed
+    rw [prefixed, PIR.Process.bind_assoc]
+    rfl
+  · simp only [GkrRoundsNormalForms.verifierRoundsProcess,
+      GkrRoundsReading.tuple40_plain, PIR.Process.bind, Values.get_cons,
+      rounds, bounded, ite_false, denoteRepeat, denoteRepeatOn,
+      GkrRoundsNormalForms.roundSpec, List.map_cons, List.map_nil,
+      List.contains_cons, List.contains_nil, beq_self_eq_true, Bool.or_true,
+      Bool.true_or, ↓reduceIte, PIR.Process.interpret]
 
 def coefficients (ctx : ProtocolContext) (width : Nat) (initial : List F) :
     PIR.Process (Actions F G) (List F) :=
@@ -73,118 +81,106 @@ def coefficients (ctx : ProtocolContext) (width : Nat) (initial : List F) :
 
 theorem coefficients_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (width : Nat) (initial : List F) :
-    ((denoteRepeat GkrSourceNormalForms.coefficientSpec ctx (ctx.roles 1) (some width)
+    ((denoteRepeat GkrSourceCallbacks.coefficientSpec ctx (ctx.roles 1) (some width)
       (.cons (some initial) .nil) (.cons none .nil)
-      (GkrSourceNormalForms.coefficientFn (F := F) (G := G) ctx (ctx.roles 1))).bind
+      (GkrSourceCallbacks.coefficientFn (F := F) (G := G) ctx (ctx.roles 1))).bind
         fun result => .done (result.get .here)).interpret CommonAdapter.project =
       (coefficients ctx width initial).bind fun result => .done (some result) := by
   by_cases bounded : width ≤ 4
-  · rw [GkrSourceNormalForms.verifierCoefficient_fold ctx separate none width bounded
+  · rw [GkrSourceCallbacks.verifierCoefficient_fold ctx separate none width bounded
       (.cons (some initial) .nil) (some initial)
-      (GkrSourceNormalForms.verifierCoefficientState_masked ctx _ rfl (some initial))]
+      (GkrSourceCallbacks.verifierCoefficientState_masked ctx _ rfl (some initial))]
     rw [Finite.fold_range_repeatN _ 0 width]
     simp only [PIR.Process.bind_assoc, PIR.Process.bind, Values.get, PIR.Process.interpret_bind]
-    rw [GkrSourceVerifier.repeatN_reads CommonAdapter.project _ (GkrVerifier.lineCoefficient ctx)
-      some (fun state => GkrSourceVerifier.coefficient_reads ctx state) width initial]
-    simp only [coefficients, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceNormalForms.verifierCoefficientState, Values.get, PIR.Process.interpret]
+    rw [GkrRoundsReading.repeatN_reads CommonAdapter.project _ (GkrVerifier.lineCoefficient ctx)
+      some (fun state => GkrLayerReading.coefficient_reads ctx state) width initial]
+    simp only [coefficients, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceCallbacks.verifierCoefficientState, Values.get, PIR.Process.interpret]
   · simp only [coefficients, bounded, ite_false, denoteRepeat, denoteRepeatOn,
-      GkrSourceNormalForms.coefficientSpec, GkrSourceNormalForms.coefficientMaximum,
+      GkrSourceCallbacks.coefficientSpec, GkrSourceCallbacks.coefficientMaximum,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
-def layer (ctx : ProtocolContext) (index handle selector width : Nat)
-    (add mul point : List F) (claim : F) : PIR.Process (Actions F G) (List F × F) :=
-  (rounds (GkrSourceNormalForms.leftContext ctx) handle width claim).bind fun left =>
-  (rounds (GkrSourceNormalForms.rightContext ctx) handle width left.2).bind fun right =>
-  .call (.receive (.field "bls12-381.fr") (GkrSourceNormalForms.lineConstantSite ctx) (ctx.roles 0)) fun first =>
-  (coefficients ctx width [first]).bind fun line =>
+def afterCoefficients (ctx : ProtocolContext) (index handle selector : Nat)
+    (add mul : List F)
+    (current combined : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr"])
+    (split : Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])
+    (first : F) (line : List F) : PIR.Process (Actions F G) (List F × F) :=
   (helper GkrSourceBodies.sumHelper (.cons line .nil)).bind fun total =>
   (helper GkrSourceBodies.selectBlockHelper (.cons add (.cons index (.cons selector .nil)))).bind fun addBlock =>
   (helper GkrSourceBodies.evaluateWiringHelper (.cons (addBlock.get .here)
-    (.cons point (.cons left.1 (.cons right.1 .nil))))).bind fun addValue =>
+    (.cons (current.get .here) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun addValue =>
   (helper GkrSourceBodies.selectBlockHelper (.cons mul (.cons index (.cons selector .nil)))).bind fun mulBlock =>
   (helper GkrSourceBodies.evaluateWiringHelper (.cons (mulBlock.get .here)
-    (.cons point (.cons left.1 (.cons right.1 .nil))))).bind fun mulValue =>
-  if right.2 = (addValue.get .here) * (first + total.get .here) +
+    (.cons (current.get .here) (.cons (split.get .here) (.cons (split.get (.there .here)) .nil))))).bind fun mulValue =>
+  if combined.get (.there .here) = (addValue.get .here) * (first + total.get .here) +
       (mulValue.get .here) * first * total.get .here then
-    .call (.query (GkrSourceNormalForms.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
-    .call (.send (ty := .field "bls12-381.fr") (GkrSourceNormalForms.lineDeliverySite ctx)
+    .call (.query (GkrSourceCallbacks.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
+    .call (.send (ty := .field "bls12-381.fr") (GkrSourceCallbacks.lineDeliverySite ctx)
       (ctx.roles 0) challenge) fun _ =>
+    (helper GkrSourceBodies.linePointHelper (.cons (split.get .here)
+      (.cons (split.get (.there .here)) (.cons challenge .nil)))).bind fun next =>
     (helper GkrSourceBodies.evaluateCoefficientsHelper (.cons line (.cons challenge .nil))).bind fun value =>
-    (helper GkrSourceBodies.linePointHelper (.cons left.1 (.cons right.1 (.cons challenge .nil)))).bind fun next =>
-    .done (next.get .here, value.get .here)
+    (helper GkrSourceBodies.sourceHelper19Helper (.cons (next.get .here)
+      (.cons (value.get .here) .nil))).bind fun packed =>
+    .done (packed.get .here, packed.get (.there .here))
   else .halt .reject
+
+def layer (ctx : ProtocolContext) (index handle selector width : Nat)
+    (add mul point : List F) (claim : F) : PIR.Process (Actions F G) (List F × F) :=
+  (helper GkrSourceBodies.sourceHelper20Helper (.cons point (.cons claim .nil))).bind fun current =>
+  (helper GkrSourceBodies.sourceHelper37Helper (.cons (current.get (.there .here)) .nil)).bind fun pending =>
+  (rounds (GkrSourceCallbacks.leftContext ctx) handle width (pending.get .here)
+    (pending.get (.there .here))).bind fun left =>
+  (rounds (GkrSourceCallbacks.rightContext ctx) handle width left.1 left.2).bind fun right =>
+  (helper GkrSourceBodies.sourceHelper40Helper (.cons right.1 (.cons right.2 .nil))).bind fun combined =>
+  (helper GkrSourceBodies.sourceHelper50Helper (.cons (combined.get .here) .nil)).bind fun split =>
+  .call (.receive (.field "bls12-381.fr") (GkrSourceCallbacks.lineConstantSite ctx) (ctx.roles 0)) fun first =>
+  (coefficients ctx width [first]).bind fun line =>
+  afterCoefficients ctx index handle selector add mul current combined split first line
 
 theorem layer_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (index handle selector width : Nat) (add mul point : List F) (claim : F) :
-    (GkrSourceNormalForms.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
+    (GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
       (some selector) (some width) (some handle) (some point) (some claim)).interpret CommonAdapter.project =
       (layer ctx index handle selector width add mul point claim).bind fun result =>
         .done (some result.1, some result.2) := by
-  have leftSeparate : (GkrSourceNormalForms.leftContext ctx).roles 0 ≠
-      (GkrSourceNormalForms.leftContext ctx).roles 1 := by simpa [GkrSourceNormalForms.leftContext, GkrSourceNormalForms.rightContext, ProtocolContext.enter, roleSubstitution] using separate
-  have rightSeparate : (GkrSourceNormalForms.rightContext ctx).roles 0 ≠
-      (GkrSourceNormalForms.rightContext ctx).roles 1 := by simpa [GkrSourceNormalForms.leftContext, GkrSourceNormalForms.rightContext, ProtocolContext.enter, roleSubstitution] using separate
-  simp only [GkrSourceNormalForms.verifierLayerProcess, PIR.Process.interpret_bind,
+  have leftSeparate : (GkrSourceCallbacks.leftContext ctx).roles 0 ≠
+      (GkrSourceCallbacks.leftContext ctx).roles 1 := by
+    simpa [GkrSourceCallbacks.leftContext, ProtocolContext.enter, roleSubstitution] using separate
+  have rightSeparate : (GkrSourceCallbacks.rightContext ctx).roles 0 ≠
+      (GkrSourceCallbacks.rightContext ctx).roles 1 := by
+    simpa [GkrSourceCallbacks.rightContext, ProtocolContext.enter, roleSubstitution] using separate
+  simp only [GkrSourceCallbacks.verifierLayerProcess, layer, helper,
+    PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind,
     rounds_source _ leftSeparate, rounds_source _ rightSeparate,
-    PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceVerifier.roundsResults, Values.get,
-    PIR.Process.interpret, CommonAdapter.project, GkrSourceVerifier.empty_plain,
-    GkrSourceVerifier.append_plain, List.nil_append, layer, helper]
-  congr 1
-  funext left
-  congr 1
-  funext right
-  congr 1
-  funext first
+    GkrRoundsReading.roundsResults, Values.get_cons, TypedABI.get_cons_here,
+    TypedABI.get_cons_there, GkrRoundsReading.empty_plain, GkrRoundsReading.append_plain,
+    List.nil_append]
+  apply congrArg (PIR.Process.bind _); funext current
+  apply congrArg (PIR.Process.bind _); funext pending
+  apply congrArg (PIR.Process.bind _); funext left
+  apply congrArg (PIR.Process.bind _); funext right
+  apply congrArg (PIR.Process.bind _); funext combined
+  apply congrArg (PIR.Process.bind _); funext split
+  apply congrArg (PIR.Process.call _); funext first
   have coefficient := coefficients_source (F := F) (G := G) ctx separate width [first]
-  have coefficient' := congrArg (fun process => process.bind fun coefficients =>
-    match coefficients with
+  have continued := congrArg (fun process => process.bind fun maybe =>
+    match maybe with
     | none => (.halt .incomplete : PIR.Process (Actions F G) (Option (List F) × Option F))
-    | some line => ((helper GkrSourceBodies.sumHelper (.cons line .nil)).bind fun total =>
-        (helper GkrSourceBodies.selectBlockHelper (.cons add (.cons index (.cons selector .nil)))).bind fun addBlock =>
-        (helper GkrSourceBodies.evaluateWiringHelper (.cons (addBlock.get .here) (.cons point (.cons left.1 (.cons right.1 .nil))))).bind fun addValue =>
-        (helper GkrSourceBodies.selectBlockHelper (.cons mul (.cons index (.cons selector .nil)))).bind fun mulBlock =>
-        (helper GkrSourceBodies.evaluateWiringHelper (.cons (mulBlock.get .here) (.cons point (.cons left.1 (.cons right.1 .nil))))).bind fun mulValue =>
-        if right.2 = (addValue.get .here) * (first + total.get .here) + (mulValue.get .here) * first * total.get .here then
-          .call (.query (GkrSourceNormalForms.lineChallengeSite ctx) "bls12-381.fr" (.cons handle .nil)) fun challenge =>
-          .call (.send (ty := .field "bls12-381.fr") (GkrSourceNormalForms.lineDeliverySite ctx) (ctx.roles 0) challenge) fun _ =>
-          (helper GkrSourceBodies.evaluateCoefficientsHelper (.cons line (.cons challenge .nil))).bind fun value =>
-          (helper GkrSourceBodies.linePointHelper (.cons left.1 (.cons right.1 (.cons challenge .nil)))).bind fun next =>
-          .done (some (next.get .here), some (value.get .here))
-        else .halt .reject)) coefficient
-  convert coefficient' using 1 <;>
+    | some line => (afterCoefficients ctx index handle selector add mul current combined split first line).bind
+        fun next => .done (some next.1, some next.2)) coefficient
+  convert continued using 1 <;>
     simp only [PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind,
-      PIR.Process.interpret, helper, GkrSourceVerifier.closed, CommonAdapter.project,
-      scalarDomain]
-  · congr 1
-    funext result
-    cases result.get .here <;> simp only [PIR.Process.interpret, PIR.Process.interpret_bind]
-    congr 1
-    funext total
-    congr 1
-    funext addBlock
-    congr 1
-    funext addValue
-    congr 1
-    funext mulBlock
-    congr 1
-    funext mulValue
-    split <;> simp only [PIR.Process.interpret, CommonAdapter.project, PIR.Process.bind,
-      PIR.Process.interpret_bind, scalarDomain]
-  · congr 1
-    funext line
-    congr 1
-    funext total
-    congr 1
-    funext addBlock
-    congr 1
-    funext addValue
-    congr 1
-    funext mulBlock
-    congr 1
-    funext mulValue
-    split <;> simp only [PIR.Process.bind]
-    simp only [PIR.Process.bind, PIR.Process.bind_assoc]
+      PIR.Process.interpret, CommonAdapter.project, scalarDomain, afterCoefficients, helper,
+      PIR.Process.bind_ite]
+  apply congrArg (PIR.Process.bind _)
+  funext result
+  cases result.get .here <;>
+    simp only [PIR.Process.interpret, PIR.Process.interpret_bind, PIR.Process.bind_assoc, PIR.Process.bind,
+      CommonAdapter.project, scalarDomain]
+  repeat' (apply congrArg (PIR.Process.bind _); funext result)
+  split <;> simp only [PIR.Process.interpret, PIR.Process.interpret_bind, PIR.Process.bind,
+    CommonAdapter.project, scalarDomain]
 
 
 theorem finite_reads {I J : PIR.Signature} {Item S T : Type}
@@ -211,22 +207,22 @@ def output (ctx : ProtocolContext) (handle count : Nat) (point : List F) :
 
 theorem output_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle count : Nat) (point : List F) :
-    (denoteRepeat GkrSourceNormalForms.outputSpec ctx (ctx.roles 1) (some count)
+    (denoteRepeat GkrSourceCallbacks.outputSpec ctx (ctx.roles 1) (some count)
       (.cons (some point) (.cons none .nil)) (.cons (some handle) .nil)
-      (GkrSourceNormalForms.outputFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
+      (GkrSourceCallbacks.outputFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
       (output ctx handle count point).bind fun result =>
-        .done (GkrSourceNormalForms.verifierOutputState (some result)) := by
+        .done (GkrSourceCallbacks.verifierOutputState (some result)) := by
   by_cases bounded : count ≤ 4
-  · rw [GkrSourceNormalForms.verifierOutput_fold ctx separate (some handle) count bounded
+  · rw [GkrSourceCallbacks.verifierOutput_fold ctx separate (some handle) count bounded
       (.cons (some point) (.cons none .nil)) (some point)
-      (GkrSourceNormalForms.verifierOutputState_masked ctx _ rfl (some point))]
+      (GkrSourceCallbacks.verifierOutputState_masked ctx _ rfl (some point))]
     rw [Finite.fold_range_repeatN _ 0 count]
     simp only [PIR.Process.interpret_bind]
-    rw [GkrSourceVerifier.repeatN_reads CommonAdapter.project _ (GkrVerifier.outputRound ctx handle)
-      some (GkrSourceVerifier.output_reads ctx handle) count point]
+    rw [GkrRoundsReading.repeatN_reads CommonAdapter.project _ (GkrVerifier.outputRound ctx handle)
+      some (GkrLayerReading.output_reads ctx handle) count point]
     simp only [output, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret]
-  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceNormalForms.outputSpec, output,
-      GkrSourceNormalForms.outputMaximum, bounded, ite_false,
+  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceCallbacks.outputSpec, output,
+      GkrSourceCallbacks.outputMaximum, bounded, ite_false,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
@@ -238,21 +234,21 @@ def layers (ctx : ProtocolContext) (handle selector width count : Nat)
 
 theorem layers_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
     (handle selector width count : Nat) (inputs add mul point : List F) (claim : F) :
-    (denoteRepeat GkrSourceNormalForms.layerSpec ctx (ctx.roles 1) (some count)
-      (GkrSourceNormalForms.verifierLayerState (some point) (some claim))
+    (denoteRepeat GkrSourceCallbacks.layerSpec ctx (ctx.roles 1) (some count)
+      (GkrSourceCallbacks.verifierLayerState (some point) (some claim))
       (.cons (some inputs) (.cons (some add) (.cons (some mul) (.cons (some count)
         (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
-      (GkrSourceNormalForms.layerFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
+      (GkrSourceCallbacks.layerFn (F := F) (G := G) ctx (ctx.roles 1))).interpret CommonAdapter.project =
       (layers ctx handle selector width count add mul (point, claim)).bind fun result =>
-        .done (GkrSourceNormalForms.verifierLayerState (some result.1) (some result.2)) := by
+        .done (GkrSourceCallbacks.verifierLayerState (some result.1) (some result.2)) := by
   by_cases bounded : count ≤ 4
-  · rw [GkrSourceNormalForms.verifierLayer_fold ctx separate (some inputs) (some add) (some mul)
+  · rw [GkrSourceCallbacks.verifierLayer_fold ctx separate (some inputs) (some add) (some mul)
       (some count) (some selector) (some width) (some handle) count bounded _ (some point, some claim)
-      (GkrSourceNormalForms.verifierLayerState_masked ctx _ rfl (some point) (some claim))]
+      (GkrSourceCallbacks.verifierLayerState_masked ctx _ rfl (some point) (some claim))]
     simp only [PIR.Process.interpret_bind]
     have foldLaw := finite_reads CommonAdapter.project
       (fun (state : Option (List F) × Option F) index =>
-        GkrSourceNormalForms.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
+        GkrSourceCallbacks.verifierLayerProcess (F := F) (G := G) ctx index (some add) (some mul)
           (some selector) (some width) (some handle) state.1 state.2)
       (fun (state : List F × F) index => layer ctx index handle selector width add mul state.1 state.2)
       (fun (state : List F × F) => (some state.1, some state.2))
@@ -260,44 +256,98 @@ theorem layers_source (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.ro
       (List.range' 0 count) (point, claim)
     rw [foldLaw]
     simp only [layers, bounded, ite_true, PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret]
-  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceNormalForms.layerSpec, layers,
-      GkrSourceNormalForms.layerMaximum, bounded, ite_false,
+  · simp only [denoteRepeat, denoteRepeatOn, GkrSourceCallbacks.layerSpec, layers,
+      GkrSourceCallbacks.layerMaximum, bounded, ite_false,
       List.map_cons, List.map_nil, List.contains_cons, List.contains_nil,
       beq_self_eq_true, Bool.or_true, Bool.true_or, ↓reduceIte, PIR.Process.bind, PIR.Process.interpret]
 
+/-- The actual admission calls and guards, including all closed-helper stops. -/
 def verifier (inputs outputs add mul : List F) (count selector width handle : Nat) :
     PIR.Process (Actions F G) Bool :=
+  (helper PrimitiveShapeViews.lessHelper (.cons 4 (.cons width .nil))).bind fun wide =>
+  if wide.get .here = false then
+  (helper PrimitiveShapeViews.lessHelper (.cons 4 (.cons count .nil))).bind fun deep =>
+  if deep.get .here = false then
+  (helper GkrSourceBodies.helper4Helper (.cons inputs (.cons width (.cons 1 .nil)))).bind fun initialShape =>
+  if initialShape.get .here = true then
+  (helper GkrSourceBodies.helper4Helper (.cons outputs (.cons width (.cons 1 .nil)))).bind fun outputShape =>
+  if outputShape.get .here = true then
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons selector (.cons width .nil))).bind fun a1 =>
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons (a1.get .here) (.cons width .nil))).bind fun a2 =>
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons (a2.get .here) (.cons width .nil))).bind fun a3 =>
+  (helper GkrSourceBodies.helper4Helper (.cons add (.cons (a3.get .here) (.cons 1 .nil)))).bind fun addShape =>
+  if addShape.get .here = true then
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons selector (.cons width .nil))).bind fun m1 =>
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons (m1.get .here) (.cons width .nil))).bind fun m2 =>
+  (helper GkrSourceBodies.sourceHelper4Helper (.cons (m2.get .here) (.cons width .nil))).bind fun m3 =>
+  (helper GkrSourceBodies.helper4Helper (.cons mul (.cons (m3.get .here) (.cons 1 .nil)))).bind fun mulShape =>
+  if mulShape.get .here = true then
+  (helper GkrSourceBodies.helper18Helper (.cons selector .nil)).bind fun power =>
+  (helper PrimitiveShapeViews.lessHelper (.cons (power.get .here) (.cons count .nil))).bind fun capacity =>
+  if capacity.get .here = false then
   (output {} handle width []).bind fun point =>
   (helper GkrSourceBodies.evaluateHelper (.cons outputs (.cons point .nil))).bind fun initial =>
-  (layers {} handle selector width count add mul (point, initial.get .here)).bind fun state =>
-  (helper GkrSourceBodies.evaluateHelper (.cons inputs (.cons state.1 .nil))).bind fun final =>
-  .done (decide (final.get .here = state.2))
+  (helper GkrSourceBodies.sourceHelper19Helper (.cons point (.cons (initial.get .here) .nil))).bind fun packed =>
+  (layers {} handle selector width count add mul (packed.get .here, packed.get (.there .here))).bind fun state =>
+  (helper GkrSourceBodies.sourceHelper84Helper (.cons inputs (.cons state.1 (.cons state.2 .nil)))).bind fun final =>
+  .done (final.get .here)
+  else .halt .reject
+  else .halt .reject
+  else .halt .reject
+  else .halt .reject
+  else .halt .reject
+  else .halt .reject
+  else .halt .reject
 
+set_option maxHeartbeats 300000 in
 theorem source_equation (inputs outputs add mul : List F) (count selector width handle : Nat) :
     sourceVerifier (F := F) (G := G) inputs outputs add mul count selector width handle =
       (verifier inputs outputs add mul count selector width handle).bind fun decision => .done (some decision) := by
   unfold sourceVerifier sourceInputs
-  rw [GkrSourceNormalForms.verifier_participant]
-  simp only [GkrSourceNormalForms.verifierProcess, GkrSourceVerifier.empty_plain,
-    PIR.Process.bind, Values.get, PIR.Process.bind_assoc, PIR.Process.interpret_bind]
-  rw [output_source {} (by decide)]
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceNormalForms.verifierOutputState, Values.get,
+  change ((GkrSourceViews.program.participant F G 1
+    (.cons (some inputs) (.cons (some outputs) (.cons (some add) (.cons (some mul)
+      (.cons (some count) (.cons (some selector) (.cons (some width)
+        (.cons (some handle) .nil))))))))).bind
+      fun result => .done (result.get .here)).interpret CommonAdapter.project = _
+  rw [GkrRootNormalForms.verifier_participant]
+  have output_fn (ctx : ProtocolContext) (self : Nat) :
+      GkrRootNormalForms.outputFn (F := F) (G := G) ctx self =
+        GkrSourceCallbacks.outputFn ctx self := rfl
+  have layer_fn (ctx : ProtocolContext) (self : Nat) :
+      GkrRootNormalForms.layerFn (F := F) (G := G) ctx self =
+        GkrSourceCallbacks.layerFn ctx self := rfl
+  have interpret_branch {A : Type} (condition : Prop) [Decidable condition]
+      (yes no : PIR.Process (participantInterface F G) A) :
+      (if condition then yes else no).interpret CommonAdapter.project =
+        (if condition then yes.interpret CommonAdapter.project else no.interpret CommonAdapter.project) := by
+    split <;> rfl
+  have false_guard (value : Bool) : ((value == false) = true) ↔ value = false := by
+    cases value <;> decide
+  have branch_congr {A : Type} (condition : Prop) [Decidable condition]
+      {yes no yes' no' : PIR.Process (Actions F G) A}
+      (yesEq : yes = yes') (noEq : no = no') :
+      (if condition then yes else no) = (if condition then yes' else no') := by
+    rw [yesEq, noEq]
+  simp only [GkrRootNormalForms.verifierProcess, output_fn, layer_fn,
+    sourceInputs, GkrRoundsReading.closed,
+    PIR.Process.bind_assoc, PIR.Process.bind, Values.get, PIR.Process.interpret_bind,
+    PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
+    TypedABI.get_cons_here, TypedABI.get_cons_there,
+    GkrRoundsReading.empty_plain, output_source {} (by decide),
+    layers_source {} (by decide), GkrSourceCallbacks.verifierOutputState,
+    GkrSourceCallbacks.verifierLayerState, GkrInputNormalForms.verifierProcess,
+    PIR.Process.interpret, CommonAdapter.project, scalarDomain, verifier, helper]
+  repeat' first
+    | (fail_if_no_progress (simp only [PIR.Process.bind_assoc, PIR.Process.bind, PIR.Process.interpret_bind,
+        PIR.Process.bind_ite, interpret_branch, false_guard, Values.get_cons,
+        TypedABI.get_cons_here, TypedABI.get_cons_there,
+        output_source {} (by decide), layers_source {} (by decide),
+        GkrSourceCallbacks.verifierOutputState, GkrSourceCallbacks.verifierLayerState]))
+    | (apply congrArg (PIR.Process.bind _); funext result)
+    | (apply branch_congr)
+  erw [layers_source {} (by decide)]
+  simp only [PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceCallbacks.verifierLayerState,
+    TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.interpret_bind,
     PIR.Process.interpret]
-  unfold verifier helper
-  simp only [PIR.Process.bind_assoc]
-  congr 1
-  funext point
-  simp only [PIR.Process.interpret_bind, PIR.Process.bind_assoc, Values.get]
-  congr 1
-  funext initial
-  change ((denoteRepeat GkrSourceNormalForms.layerSpec {} 1 (some count)
-    (GkrSourceNormalForms.verifierLayerState (some point) (some (initial.get .here)))
-    (.cons (some inputs) (.cons (some add) (.cons (some mul) (.cons (some count)
-      (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
-    (GkrSourceNormalForms.layerFn (F := F) (G := G) {} 1)).interpret CommonAdapter.project).bind _ = _
-  erw [layers_source {} (by decide) handle selector width count inputs add mul point (initial.get .here)]
-  simp only [PIR.Process.bind_assoc, PIR.Process.bind, GkrSourceNormalForms.verifierLayerState, Values.get,
-    PIR.Process.interpret, PIR.Process.interpret_bind]
-  rfl
 
 end ZkcExamples.Construction.GkrSourceProtocol

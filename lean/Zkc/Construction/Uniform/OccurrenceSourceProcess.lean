@@ -83,6 +83,42 @@ inductive Routed (routing : Original.Routing) : Original.Frames → Original.Fra
   | nil => exact .done _ _
   | cons item rest ih => exact (law _ _).bind fun next => ih next
 
+/-- Route one retained operation and its reply-dependent source continuation.
+The callback meanings remain the actual region denotations. -/
+noncomputable def Routed.letOp {dialect : Dialect} {routing : Original.Routing}
+    {frames middle final : Original.Frames}
+    (meaning : RegionMeaning dialect (Occurrence.signature (uniformCarriers F G)))
+    {inputs outputs : List dialect.Ty} (operation : dialect.Op)
+    (arguments : Operands inputs (dialect.arguments operation))
+    (callbacks : Regions dialect (dialect.regions operation))
+    (next : Region dialect (dialect.results operation ++ inputs) outputs)
+    (environment : Environment meaning.Value inputs)
+    (head : Routed routing frames middle
+      (meaning.operation operation (arguments.eval environment) (callbacks.denote meaning)))
+    (tail : ∀ values, Routed routing middle final
+      (next.denote meaning (environment.prepend values))) :
+    Routed routing frames final
+      ((Region.letOp operation arguments callbacks next).denote meaning environment) :=
+  head.bind tail
+
+/-- A checked pure operation needs only its actual continuation value. -/
+noncomputable def Routed.pureLet {dialect : Dialect} {routing : Original.Routing}
+    {frames final : Original.Frames}
+    (meaning : RegionMeaning dialect (Occurrence.signature (uniformCarriers F G)))
+    {inputs outputs : List dialect.Ty} (operation : dialect.Op)
+    (arguments : Operands inputs (dialect.arguments operation))
+    (callbacks : Regions dialect (dialect.regions operation))
+    (next : Region dialect (dialect.results operation ++ inputs) outputs)
+    (environment : Environment meaning.Value inputs)
+    (values : Values meaning.Value (dialect.results operation))
+    (pure : meaning.operation operation (arguments.eval environment) (callbacks.denote meaning) =
+      .done values)
+    (tail : Routed routing frames final (next.denote meaning (environment.prepend values))) :
+    Routed routing frames final
+      ((Region.letOp operation arguments callbacks next).denote meaning environment) := by
+  rw [Region.denote, pure]
+  exact tail
+
 noncomputable def Routed.closed {routing : Original.Routing} (frames : Original.Frames)
     (process : PIR.Process closedInterface A) :
     Routed routing frames frames (process.interpret (closedLift (I := Occurrence.signature (uniformCarriers F G)))) := by
@@ -117,6 +153,83 @@ noncomputable def Routed.owned {routing : Original.Routing} (frames : Original.F
     | none => exact .halt _ _ _
     | some values => exact (law values).bind fun output => .done _ _
   · exact .done _ _
+
+/-- A local guard has no externally answered effect, for either participant
+and every optional Boolean component. Its stopped branches remain stopped. -/
+noncomputable def Routed.guard {routing : Original.Routing} (frames : Original.Frames)
+    (self owner : Nat) (condition : Option Bool) :
+    Routed routing frames frames
+      ((Participant.guard (services := services) (Value := (uniformCarriers F G).Value)
+        self owner condition).interpret Occurrence.actions) := by
+  unfold Participant.guard
+  split
+  · cases condition with
+    | none => exact .halt _ _ _
+    | some value => cases value <;> first | exact .halt _ _ _ | exact .done _ _
+  · exact .done _ _
+
+/-- A retained repeat checks its bound and masks before entering each actual
+source coordinate. Callback routing covers every carried tuple. -/
+noncomputable def Routed.repeat {routing : Original.Routing} (frames : Original.Frames)
+    (spec : RepeatSpec) (context : ProtocolContext) (self : Nat) (site : String)
+    (count : Option Nat)
+    (state : Values (Component (uniformCarriers F G).Value) spec.state)
+    (captures : Values (Component (uniformCarriers F G).Value) spec.captures)
+    (body : RegionFunction (Component (uniformCarriers F G).Value)
+      (Occurrence.signature (uniformCarriers F G))
+      (.index :: (spec.state ++ spec.captures), spec.state))
+    (law : ∀ index arguments,
+      Routed routing (frames ++ [⟨qualifyProtocolSite context.applicationPrefix site, index⟩])
+        (frames ++ [⟨qualifyProtocolSite context.applicationPrefix site, index⟩])
+        (body (.cons (some index) arguments))) :
+    Routed routing frames frames
+      (denoteRepeatOn spec context self count state captures body Occurrence.iterations site) := by
+  cases count with
+  | none =>
+      simp only [denoteRepeatOn]
+      split <;> first | exact .halt _ _ _ | exact .done _ _
+  | some count =>
+      simp only [denoteRepeatOn]
+      split
+      · split
+        · apply Routed.finite
+          intro state index
+          unfold Repeat.stepOn
+          exact (Routed.within _ _ (law index _)).bind fun _ => .done _ _
+        · exact .halt _ _ _
+      · exact .done _ _
+
+/-- The capture tuple is immutable throughout a retained repeat. Routing may
+use its actual service capability while still covering every carried state. -/
+noncomputable def Routed.repeatCaptured {routing : Original.Routing} (frames : Original.Frames)
+    (spec : RepeatSpec) (context : ProtocolContext) (self : Nat) (site : String)
+    (count : Option Nat)
+    (state : Values (Component (uniformCarriers F G).Value) spec.state)
+    (captures : Values (Component (uniformCarriers F G).Value) spec.captures)
+    (body : RegionFunction (Component (uniformCarriers F G).Value)
+      (Occurrence.signature (uniformCarriers F G))
+      (.index :: (spec.state ++ spec.captures), spec.state))
+    (law : ∀ index carried,
+      Routed routing (frames ++ [⟨qualifyProtocolSite context.applicationPrefix site, index⟩])
+        (frames ++ [⟨qualifyProtocolSite context.applicationPrefix site, index⟩])
+        (body (.cons (some index)
+          ((maskValues self (context.mapScopes spec.stateScopes) carried).append captures)))) :
+    Routed routing frames frames
+      (denoteRepeatOn spec context self count state captures body Occurrence.iterations site) := by
+  cases count with
+  | none =>
+      simp only [denoteRepeatOn]
+      split <;> first | exact .halt _ _ _ | exact .done _ _
+  | some count =>
+      simp only [denoteRepeatOn]
+      split
+      · split
+        · apply Routed.finite
+          intro state index
+          unfold Repeat.stepOn
+          exact (Routed.within _ _ (law index state)).bind fun _ => .done _ _
+        · exact .halt _ _ _
+      · exact .done _ _
 
  theorem history_append (first second : Domain.History (uniformCarriers F G)) :
     history (first ++ second) = history first ++ history second := List.map_append ..

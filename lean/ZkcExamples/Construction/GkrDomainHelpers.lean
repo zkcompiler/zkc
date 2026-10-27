@@ -26,8 +26,8 @@ theorem source_helper (entry : Helper) (arguments : Values (assignment F G) entr
     helper entry arguments =
       ((invoke (closedMeanings program.payload.definitions) entry arguments).interpret
         (closedLift (I := participantInterface F G))).interpret CommonAdapter.project := by
-  unfold helper GkrSourceVerifier.closed
-  rw [SumcheckVerifierHelpers.closed_invoke_plain]
+  unfold helper GkrRoundsReading.closed
+  rw [Zkc.Source.Structured.closed_invoke_plain]
   rfl
 
 def HelperReturns {tys : List Ty} (encode : Values (assignment F G) tys → Domain.Environment (uniformCarriers F G))

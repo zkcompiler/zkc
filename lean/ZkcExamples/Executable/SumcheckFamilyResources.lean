@@ -22,7 +22,7 @@ def roundPrefix (shape : Shape) : List Code := (roundCode shape.names).take 27
 def roundSuffix (shape : Shape) : List Code := (roundCode shape.names).drop 28
 
 theorem round_split (shape : Shape) : roundCode shape.names = roundPrefix shape ++
-    [.helper ⟨.call shape.names.appendHelper, [6,21], [.data (.vector shape.names.scalar)], []⟩] ++
+    [.helper ⟨.call shape.names.appendHelper, [9,24], [.data (.vector shape.names.scalar)], []⟩] ++
       roundSuffix shape := rfl
 
 theorem roundPrefix_static (shape : Shape) : Code.static (roundPrefix shape) = some 28 := rfl
@@ -33,7 +33,11 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 /-- Only local helper prices are admitted. The round certificate and total
 budget are generated below, rather than supplied by a realization. -/
 structure Prices (shape : Shape) (price : String → List (Value F G) → Nat) (appendBound : Nat) : Prop where
-  empty : price shape.names.emptyHelper [] ≤ 2
+  pending : ∀ (claim : F), price shape.names.pendingHelper [.data (.field shape.names.scalar claim)] ≤ 2
+  openClaim : ∀ (point : List F) (claim : F),
+    price shape.names.openClaimHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 1
+  atPrefix : ∀ (point : List F) (claim : F),
+    price shape.names.atPrefixHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar claim)] ≤ 1
   append : ∀ (point : List F) (answer : F),
     price shape.names.appendHelper [.vector shape.names.scalar point, .data (.field shape.names.scalar answer)] ≤ appendBound
   check : ∀ (values point : List F) (claim : F), point.length < 64 → values.length = 2 ^ point.length →
@@ -44,11 +48,11 @@ structure Prices (shape : Shape) (price : String → List (Value F G) → Nat) (
 point extension; all result declarations and continuation branches are checked. -/
 theorem round_fits (shape : Shape) (occurrences : Occurrences shape) (helpers : Helpers (F := F) (G := G) shape)
     (price : String → List (Value F G) → Nat) (appendBound : Nat) (prices : Prices shape price appendBound)
-    (a b c d e : Domain.Value (Structured.uniformCarriers F G))
+    (a b c d e f g h : Domain.Value (Structured.uniformCarriers F G))
     (index : Nat) (point : List F) (scalar : F) (history : Domain.History (Structured.uniformCarriers F G))
     (proof : Proof F G) (used budget : Nat) (within : used + (36 + appendBound) ≤ budget) :
     DomainVM.FitsK shape.program shape.context price budget (roundCode shape.names)
-      ([a,b,c,d,e] ++ .data (.index index) :: ProgramShape.carried shape point scalar history) proof used
+      ([a,b,c,d,e,f,g,h] ++ .data (.index index) :: ProgramShape.carried shape point scalar history) proof used
       (fun final unread charged => charged ≤ used + (36 + appendBound) ∧ ∀ values,
         Domain.read final yielded = some values →
           Domain.sortsMatch (carriedSorts shape.names) values = true →
@@ -75,7 +79,7 @@ theorem round_fits (shape : Shape) (occurrences : Occurrences shape) (helpers : 
   all_goals simp only [valid, decide_true, decide_false]
   all_goals normalize_artifact_operations [lowResolved, highResolved, drawResolved, deliveryResolved,
       firstRequest, secondRequest, deliveryRequest, shape.suite]
-    unfolding [PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true, drawOrigin]
+    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true, drawOrigin]
   intro ignored24 ignored25 ignored26 ignored27 ignored28 ignored29 answer
   change F at answer
   intros
@@ -109,8 +113,12 @@ theorem round_fits (shape : Shape) (occurrences : Occurrences shape) (helpers : 
 theorem budgetContract (shape : Shape) (occurrences : Occurrences shape) (helpers : Helpers (F := F) (G := G) shape)
     (price : String → List (Value F G) → Nat) (appendBound : Nat) (prices : Prices shape price appendBound) :
     ProgramShape.Contract shape price (36 + appendBound) where
-  empty := helpers.empty
-  emptyCost := prices.empty
+  pending := helpers.pending
+  openClaim := helpers.openClaim
+  atPrefix := helpers.atPrefix
+  pendingCost := prices.pending
+  openClaimCost := prices.openClaim
+  atPrefixCost := prices.atPrefix
   checkCost := prices.check
   round := round_fits shape occurrences helpers price appendBound prices
 

@@ -69,7 +69,7 @@ subjects = ["schnorr"]
 [[proved]]
 subject = "Executable Sumcheck proof and normalization"
 result = '''
-Canonical normalization proves equal observations of actual Domain execution, including stops and exact returned values. The native bridge covers the looped Sumcheck validator and its proved helper bodies, as well as the rescheduled DeferredRounds validator. Host validation prunes the original Sumcheck transform at every budget. Parameterized local helper, occurrence and price laws derive actual native byte completeness; the retained Entry instantiates the family at `68 + 59 · rounds` with the original message codec, shape and maximum hypotheses. Typed request admission is explicit, and the family theorem has no whole-program success premise. No separate Instruction evaluator supplies these proofs'''
+Canonical normalization proves equal observations of actual Domain execution, including stops and exact returned values. The native bridge covers the looped Sumcheck validator and its proved helper bodies, as well as the rescheduled DeferredRounds validator. Host validation prunes the original Sumcheck transform at every budget. Parameterized local helper, occurrence and price laws derive actual native byte completeness; the retained Entry instantiates the family at `72 + 59 · rounds` with the original message codec, shape and maximum hypotheses. Typed request admission is explicit, and the family theorem has no whole-program success premise. No separate Instruction evaluator supplies these proofs'''
 owners = [["Executable stage", "docs/spec/executable.md#the-compiled-sumcheck-proof-verifier"], ["normalization", "docs/spec/executable.md#normalization"], ["support", "docs/support.md"]]
 theorems = [
   "Zkc.Executable.CanonicalNormalization.accepted_sound",
@@ -227,9 +227,9 @@ theorems = [
   "Zkc.Source.Structured.NormalForm.callback_sound_uniform",
   "ZkcExamples.Structured.SumcheckSourceNormalForms.verifier_invoke",
   "ZkcExamples.Structured.GkrRoundsNormalForms.verifierRounds_invoke",
-  "ZkcExamples.Structured.GkrSourceNormalForms.verifierLayer_process",
+  "ZkcExamples.Structured.GkrRootNormalForms.verifierLayer_process",
   "ZkcExamples.Structured.NormalFormSteps.repeat_embed",
-  "ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant",
+  "ZkcExamples.Structured.GkrRootNormalForms.verifier_participant",
 ]
 
 [[proved]]
@@ -315,6 +315,31 @@ theorems = [
   "ZkcExamples.Construction.BatchOpeningByteConnection.produce_encoded",
   "ZkcExamples.Construction.BatchOpeningByteConnection.validate_equation",
   "ZkcExamples.Construction.BatchOpeningByteConnection.validate_malformed",
+]
+
+[[proved]]
+subject = "Generated table composition"
+result = '''
+The actual SmallSumcheck and TwoSums compiled pairs have fixed perfect-completeness, adaptive scalar-soundness and charged-soundness meanings. The installed table method reuses one all-reply source/artifact simulation for both properties and assembles the actual source calls and terminal coverage. Honest inputs must satisfy the request's honest-input contract; adversarial inputs remain the complete validator ABI. Scalar bounds are `(Q + 2) / |F|` and `(Q + 8) / |F|` respectively over the registered BLS scalar field, with charge `1 / |F|` at each selected challenge site. These are compiled-ideal claims, not native byte or computational polynomial-commitment security'''
+owners = [["Checked components", "docs/spec/components.md"], ["Formal support", "docs/support.md"]]
+theorems = [
+  "ZkcSecurity.Examples.Generated.Components.SmallSumcheckCompleteness.compiled_ideal_complete",
+  "ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness.scalar_meaning",
+  "ZkcSecurity.Examples.Generated.Components.SmallSumcheckSoundness.charged_meaning",
+  "ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness.compiled_ideal_complete",
+  "ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.scalar_meaning",
+  "ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness.charged_meaning",
+]
+
+[[proved]]
+subject = "Canonical GKR pair"
+result = '''
+The actual compiled GKR pair has perfect completeness and adaptive scalar and charged soundness for the fixed registered circuit-output relation over the BLS scalar field, with width and layer count at most four. Completeness uses the actual producer-computed proof under the independent honest-input contract; soundness covers every typed validator input, including malformed tables. Both properties reuse the full nominal validator simulation, preserving all replies, stops, frames and transcript state. The scalar bound is `4 * (Q + 40) / |F|`, with price `4 / |F|` at each selected challenge and total validator cost `160 / |F|`. These are compiled-ideal meanings; they do not establish native byte execution, zero knowledge or commitment security'''
+owners = [["GKR canonical claims", "security/ZkcSecurity/Realizations/Gkr/README.md"], ["Formal support", "docs/support.md"]]
+theorems = [
+  "ZkcSecurity.Realizations.Gkr.Generated.Completeness.compiled_ideal_complete",
+  "ZkcSecurity.Realizations.Gkr.Generated.Soundness.scalar_meaning",
+  "ZkcSecurity.Realizations.Gkr.Generated.Soundness.charged_meaning",
 ]
 
 [[proved]]

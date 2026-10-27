@@ -1,0 +1,34 @@
+module sample;
+domain F = field("bls12-381.fr");
+type Vector<T:Field> = builtin("vector", T);
+math fn restrict_prefix<T:Field>(values:Vector<T>,point:Vector<T>)->Vector<T> = primitive("multilinear.restrict_prefix");
+math fn length<T:Field>(values:Vector<T>)->index = primitive("vector.length");
+math fn less(left:index,right:index)->bool = primitive("index.less");
+math fn power_of_two(value:index,exponent:index)->bool = primitive("index.power_of_two");
+math fn restrict_intrinsic<T:Field>(values:Vector<T>,point:Vector<T>)->Vector<T> {
+  return intrinsic<T>("multilinear.restrict_prefix",values,point);
+}
+domain fn elements<T:Field>(values:Vector<T>)->domain<T> = domain("elements");
+math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,
+    step:math fn(S,item:I)->S where item_from(item,rows))->S = finite("math.fold");
+math fn total<T:Field>(values:Vector<T>)->T {
+  return fold(elements(values),0,fn(sum,value)=>sum+value);
+}
+// A residual-sum relation, using an existing finite fold after restriction.
+// Shape is a separate relation premise; the Math helper remains total.
+relation ResidualSum(parameter values:Vector<F>,statement point:Vector<F>,
+                  statement variables:index,statement claimed:F) {
+  return power_of_two(length(values),variables) && (less(variables,length(point)) == false) &&
+    total(restrict_prefix(values,point)) == claimed;
+}
+protocol Run roles(P)(values:Vector<F>@P,point:Vector<F>@P)->(residual:Vector<F>@P) {
+  return(residual=restrict_prefix(values,point));
+}
+entry fn Demo(inputs:Run::Inputs) { return Run::run(inputs); }
+
+// A fixture target retains the relation without migrating a library protocol.
+protocol CheckResidual roles(P)(values:Vector<F>@P,point:Vector<F>@P,
+    variables:index@P,claimed:F@P)->(ok:bool@P)
+  spec {target residual=ResidualSum(in.values,in.point,in.variables,in.claimed) accept out.ok;}
+{return(ok=true);}
+entry fn Check(inputs:CheckResidual::Inputs) { return CheckResidual::run(inputs); }

@@ -30,7 +30,7 @@ def source (domain : Domain) (items : List Ty) (collection : Collection) (body :
   let definitions := match predicate with
     | none => definitions
     | some predicate => localFunction "predicate" callback [.boolean] predicate :: definitions
-  return ⟨digest, "main", [domain], [], [], definitions, [⟨"main", []⟩], blsRows⟩
+  return ⟨digest, "main", [domain], [], [], definitions, [⟨"main", []⟩], blsRows, {}⟩
 
 def zipped : Domain := ⟨"rows", [vector, vector], [.elements 0, .elements 1, .zip [1, 0]], 0⟩
 def product : Domain := { zipped with constructors := [.elements 0, .elements 1, .product [1, 0]] }

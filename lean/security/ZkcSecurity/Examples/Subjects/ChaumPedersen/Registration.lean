@@ -22,6 +22,7 @@ variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
 /-- Registered transcript and scalar-coordinate interpretation, fixed independently of evidence. -/
 def extractionProfile : ExtractionProfile compiled F G where
   target := Contract.retained
+  formula := ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.formulaBinding
   layout := .scalar 4
   domain := "bls12-381.fr"
   coordinates := by decide +kernel
@@ -41,13 +42,13 @@ def subject : Subject F G artifacts .idealMeaning where
   stageMatched := rfl
   compiled := compiled
   connection := sourceConnection
-  target := .retained Contract.retained
+  target := .retained Contract.retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites
   sitesUnique := by decide +kernel
   sitesNativeUnique := by decide +kernel
   lowering := PUnit.unit
-  extractors := extractionProfile.registry (.retained Contract.retained) rfl
+  extractors := extractionProfile.registry (.retained Contract.retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.formulaBinding) rfl
 
 def subjectIdeal := subject (F := F) (G := G)
 

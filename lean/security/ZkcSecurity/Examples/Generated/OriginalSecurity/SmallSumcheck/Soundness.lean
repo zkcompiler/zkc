@@ -31,27 +31,31 @@ local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw e
 def budget : Nat := 2
 def price : ENNReal := 1 / (Fintype.card Scalar : ENNReal)
 
+set_option linter.unusedSimpArgs false in
 /-- The formula is an explicit mathematical selection. This implication is
 checked against the unchanged retained target, separately from the ABI. -/
 def rejectedInputs (input0 : List Scalar) (input1 : Scalar) (input2 : Nat)
     (falseStatement : validatorSubject.FalseStatement (statement input0 input1 input2))
     (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Group) "bls12-381.fr")
+    Zkc.Obligations.Derivation (NominalField.interface (G := Group) "bls12-381.fr")
       (boundedEscape (fun _ _ => price)) (fun _ result => acceptance result ≠ some true) initial
       (presentedInputs input0 input1 input2 initial) := by
-  apply root_rejected
+  apply composition_rejected
     (PrimeField.conditionalWithFrame blsModulus "bls12-381.fr"
       (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) "bls12-381.fr"))
-  intro bounded0 shape0 equal0
+    2 (ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.calls input0 input1 input2 0) ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.terminalTree
+    (ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.terminal_coverage input0 input1 input2 0) ⟨[], initial⟩ initial
+  intro all
+  obtain ⟨bounded0, shape0, equal0⟩ := all ⟨⟨input0, input1, input2⟩, ⟨ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol, 0⟩, ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.schedule0⟩ (by simp only [ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.calls, List.mem_cons]; tauto)
   apply falseStatement
   refine ⟨fun _ _ => none, ?_⟩
   prove_retained_target [Scalar, Group] reading (validator_application_read input0 input1 input2 _)
     evaluating ZkcSecurity.Examples.Components.SmallSumcheck.Formula.equation solving (first | assumption | simp [equal0])
 
 theorem inputCosts (input0 : List Scalar) (input1 : Scalar) (input2 : Nat) (initial : Domain.History carriers) :
-    Typed.ChargedCostBound (Nominal.interface (G := Group) "bls12-381.fr") (fun _ _ => price)
+    Typed.ChargedCostBound (NominalField.interface (G := Group) "bls12-381.fr") (fun _ _ => price)
       (presentedInputs input0 input1 input2 initial) initial (budget • price) :=
-  root_cost price (fun _ _ => le_rfl) 2 ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.schedule0 input0 input1 input2 ⟨[], initial⟩ initial
+  composition_cost price (fun _ _ => le_rfl) 2 (ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.calls input0 input1 input2 0) ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.terminalTree ⟨[], initial⟩ initial
 
 def rejected (statement : Statement) (falseStatement : validatorSubject.FalseStatement statement)
     (initial : Domain.History carriers) :
@@ -76,7 +80,7 @@ theorem schedule_prices (queries : Nat) : ∀ entry ∈ schedule.entries, entry.
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport validatorSubject schedule queries (budget • price) :=
-  installation.losslessChargedExport (Nominal.lossless "bls12-381.fr") schedule queries (budget • price)
+  installation.losslessChargedExport (NominalField.lossless "bls12-381.fr") schedule queries (budget • price)
     (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact rejected)
     (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact costs)
 

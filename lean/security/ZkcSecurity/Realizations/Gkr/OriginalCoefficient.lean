@@ -1,0 +1,205 @@
+module
+
+public import ZkcExamples.Construction.GkrOriginalCoefficient
+public import ZkcSecurity.Realizations.Gkr.Generated.Producer
+public import ZkcSecurity.Realizations.Gkr.Generated.Validator
+public import ZkcSecurity.Realizations.Gkr.HonestProducerSource
+
+@[expose] public section
+/-! The exact s91 loop in the authored CanonicalPair, retaining its enclosing
+layer coordinate, original optional slots, transcript and physical capture. -/
+set_option autoImplicit false
+set_option maxRecDepth 50000
+set_option maxHeartbeats 2000000
+set_option backward.isDefEq.respectTransparency false
+noncomputable section
+namespace ZkcSecurity.Realizations.Gkr.OriginalCoefficient
+open Zkc.Source Zkc.Source.Structured Zkc.Construction
+open ZkcExamples.Structured GkrSourceCallbacks
+open ZkcExamples.Construction GkrSourceRouting GkrOriginalCoefficient
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+theorem validator_body :
+    Generated.Validator.bodyStep37BodyStep16Body (ringModel F G) GkrSourceViews.program context =
+      validatorBody (ringModel F G) 72 40 := by kernel_rfl
+
+abbrev ValidatorCertificate (handle layer index : Nat)
+    (captured : Domain.Environment (uniformCarriers F G))
+    (coefficients : List F) (history : Domain.History (uniformCarriers F G))
+    (compiled : Domain.View.Block (uniformCarriers F G)) :=
+    Original.Simulation
+      (Original.IterationReturns (ValidatorReturns layer) (outer layer) "s91" index
+        [80, 79] [.data (.vector scalarDomain), .transcript context.suite])
+      (fun _ frame => ArtifactBinding.Captures captured frame)
+      (Original.fold (routing handle .validator)
+        (coefficientBody.denote
+          (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+            HonestProducerSource.observedHelpers 1 [] {} Occurrence.iterations)
+          ((Values.cons (some index) ((verifierCoefficientState (some coefficients)).append
+            (.cons none .nil))) :
+            Values (Component (assignment F G)) (.index :: (coefficientState ++ coefficientCaptures))).get)
+        ⟨frames layer index, history⟩)
+      (compiled (captured ++ .data (.index index) :: carried coefficients history))
+
+def validator (handle layer index : Nat)
+    (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = 72)
+    (layerRead : captured[40]? = some (.data (.index layer)))
+    (coefficients : List F) (history : Domain.History (uniformCarriers F G))
+    (routes : Routes .validator handle layer index) :
+    ValidatorCertificate handle layer index captured coefficients history
+      (Generated.Validator.bodyStep37BodyStep16Body (ringModel F G) GkrSourceViews.program context) := by
+  unfold ValidatorCertificate
+  rw [HonestProducerSource.coefficient_callback, validator_body]
+  exact validatorCallback handle 72 40 layer index captured size layerRead coefficients history routes
+
+abbrev ValidatorRepeatCertificate (handle layer : Nat)
+    (captured : Domain.Environment (uniformCarriers F G))
+    (coefficients : List F) (history : Domain.History (uniformCarriers F G))
+    (count : Nat) (compiled : Domain.View.Block (uniformCarriers F G)) :=
+    Original.Simulation
+      (fun original final => ∃ next, ValidatorReturns layer original next ∧ final = captured ++ next)
+      (fun _ frame => ArtifactBinding.Captures captured frame)
+      (Original.fold (routing handle .validator)
+        (denoteRepeatOn coefficientSpec {} 1 (some count) (verifierCoefficientState (some coefficients))
+          (.cons none .nil)
+          (fun args => coefficientBody.denote
+            (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+              HonestProducerSource.observedHelpers 1 [] {} Occurrence.iterations) args.get)
+          Occurrence.iterations "s91") ⟨outer layer, history⟩)
+      (compiled captured)
+
+theorem validator_repeat_body :
+    Generated.Validator.bodyStep37BodyStep16 (ringModel F G) GkrSourceViews.program context =
+      Domain.View.loop 4 [80, 79] 6 [71, 69]
+        [.data (.vector scalarDomain), .transcript context.suite]
+        (validatorBody (ringModel F G) 72 40) := by kernel_rfl
+
+def validatorRepeat (handle layer : Nat)
+    (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = 72)
+    (layerRead : captured[40]? = some (.data (.index layer)))
+    (coefficients : List F) (history : Domain.History (uniformCarriers F G)) (count : Nat)
+    (countRead : captured[6]? = some (.data (.index count)))
+    (initialRead : Domain.read captured [71, 69] = some (carried coefficients history))
+    (routes : ∀ index, Routes .validator handle layer index) :
+    ValidatorRepeatCertificate handle layer captured coefficients history count
+      (Generated.Validator.bodyStep37BodyStep16 (ringModel F G) GkrSourceViews.program context) := by
+  unfold ValidatorRepeatCertificate
+  rw [validator_repeat_body]
+  apply Original.Simulation.occurrenceRepeat (routing handle .validator) coefficientSpec {} 1
+    (captures := .cons none .nil)
+    (sourceBody := fun args => coefficientBody.denote
+      (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+        HonestProducerSource.observedHelpers 1 [] {} Occurrence.iterations) args.get)
+    (site := "s91") (relation := ValidatorReturns layer)
+  · rfl
+  · intro original frame related
+    obtain ⟨next, history, rfl, rfl⟩ := related
+    exact ⟨next, history, rfl, rfl⟩
+  · intro value state frame index related
+    apply Classical.choice
+    obtain ⟨next, history, pair, rfl⟩ := related
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj pair
+    refine ⟨?_⟩
+    rw [HonestProducerSource.coefficient_callback]
+    exact validatorCallback handle 72 40 layer index captured size layerRead next history (routes index)
+  · intro original frame related
+    obtain ⟨next, history, rfl, rfl⟩ := related
+    rfl
+  · exact countRead
+  · exact initialRead
+  · rfl
+  · exact ⟨coefficients, history, rfl, rfl⟩
+
+
+theorem producer_body :
+    Generated.Producer.bodyStep2BodyStep15Body (ringModel F G) GkrSourceViews.program context =
+      producerBody (ringModel F G) 40 10 34 := by kernel_rfl
+
+abbrev ProducerCertificate (handle layer index : Nat)
+    (captured : Domain.Environment (uniformCarriers F G))
+    (line : List F) (history : Domain.History (uniformCarriers F G))
+    (compiled : Domain.View.Block (uniformCarriers F G)) :=
+    Original.Simulation
+      (Original.IterationReturns (ProducerReturns layer) (outer layer) "s91" index
+        [46] [.transcript context.suite])
+      (fun _ frame => ArtifactBinding.Captures captured frame)
+      (Original.fold (routing handle .producer)
+        (coefficientBody.denote
+          (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+            HonestProducerSource.observedHelpers 0 [] {} Occurrence.iterations)
+          ((Values.cons (some index) (proverCoefficientState.append (.cons (some line) .nil))) :
+            Values (Component (assignment F G)) (.index :: (coefficientState ++ coefficientCaptures))).get)
+        ⟨frames layer index, history⟩)
+      (compiled (captured ++ [.data (.index index), .transcript context.suite history]))
+
+def producer (handle layer index : Nat)
+    (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = 40)
+    (layerRead : captured[10]? = some (.data (.index layer))) (line : List F)
+    (lineRead : captured[34]? = some (.data (.vector scalarDomain line)))
+    (history : Domain.History (uniformCarriers F G))
+    (routes : Routes .producer handle layer index) :
+    ProducerCertificate handle layer index captured line history
+      (Generated.Producer.bodyStep2BodyStep15Body (ringModel F G) GkrSourceViews.program context) := by
+  unfold ProducerCertificate
+  rw [HonestProducerSource.coefficient_callback, producer_body]
+  exact producerCallback handle 40 10 34 layer index captured size layerRead line lineRead history routes
+
+abbrev ProducerRepeatCertificate (handle layer : Nat)
+    (captured : Domain.Environment (uniformCarriers F G))
+    (line : List F) (history : Domain.History (uniformCarriers F G))
+    (count : Nat) (compiled : Domain.View.Block (uniformCarriers F G)) :=
+    Original.Simulation
+      (fun original final => ∃ next, ProducerReturns layer original next ∧ final = captured ++ next)
+      (fun _ frame => ArtifactBinding.Captures captured frame)
+      (Original.fold (routing handle .producer)
+        (denoteRepeatOn coefficientSpec {} 0 (some count) proverCoefficientState
+          (.cons (some line) .nil)
+          (fun args => coefficientBody.denote
+            (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+              HonestProducerSource.observedHelpers 0 [] {} Occurrence.iterations) args.get)
+          Occurrence.iterations "s91") ⟨outer layer, history⟩)
+      (compiled captured)
+
+theorem producer_repeat_body :
+    Generated.Producer.bodyStep2BodyStep15 (ringModel F G) GkrSourceViews.program context =
+      Domain.View.loop 4 [46] 5 [39] [.transcript context.suite]
+        (producerBody (ringModel F G) 40 10 34) := by kernel_rfl
+
+def producerRepeat (handle layer : Nat)
+    (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = 40)
+    (layerRead : captured[10]? = some (.data (.index layer))) (line : List F)
+    (lineRead : captured[34]? = some (.data (.vector scalarDomain line)))
+    (history : Domain.History (uniformCarriers F G)) (count : Nat)
+    (countRead : captured[5]? = some (.data (.index count)))
+    (initialRead : Domain.read captured [39] = some [.transcript context.suite history])
+    (routes : ∀ index, Routes .producer handle layer index) :
+    ProducerRepeatCertificate handle layer captured line history count
+      (Generated.Producer.bodyStep2BodyStep15 (ringModel F G) GkrSourceViews.program context) := by
+  unfold ProducerRepeatCertificate
+  rw [producer_repeat_body]
+  apply Original.Simulation.occurrenceRepeat (routing handle .producer) coefficientSpec {} 0
+    (captures := .cons (some line) .nil)
+    (sourceBody := fun args => coefficientBody.denote
+      (participantMeaningWithOn (ringModel F G) (.silent _) Occurrence.actions
+        HonestProducerSource.observedHelpers 0 [] {} Occurrence.iterations) args.get)
+    (site := "s91") (relation := ProducerReturns layer)
+  · rfl
+  · intro original frame related
+    obtain ⟨history, rfl, rfl⟩ := related
+    exact ⟨history, rfl, rfl⟩
+  · intro value state frame index related
+    apply Classical.choice
+    obtain ⟨history, pair, rfl⟩ := related
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj pair
+    refine ⟨?_⟩
+    rw [HonestProducerSource.coefficient_callback]
+    exact producerCallback handle 40 10 34 layer index captured size layerRead line lineRead history (routes index)
+  · intro original frame related
+    obtain ⟨history, rfl, rfl⟩ := related
+    rfl
+  · exact countRead
+  · exact initialRead
+  · rfl
+  · exact ⟨history, rfl, rfl⟩
+
+end ZkcSecurity.Realizations.Gkr.OriginalCoefficient

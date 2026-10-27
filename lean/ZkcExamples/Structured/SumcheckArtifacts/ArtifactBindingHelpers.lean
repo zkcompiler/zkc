@@ -82,7 +82,7 @@ def terminal (program : Structured.Program)
   simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence,
     Bind.bind, Pure.pure, Option.bind]
   rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).closed,
-    SumcheckVerifierHelpers.closed_invoke_plain]
+    Zkc.Source.Structured.closed_invoke_plain]
   simp only []
   cases computed : invoke (closedMeanings (F := F) (G := G) program.payload.definitions)
       SumcheckHelperBodies.checkHelper (SumcheckHelperLaws.checkInputs entries point scalar) with

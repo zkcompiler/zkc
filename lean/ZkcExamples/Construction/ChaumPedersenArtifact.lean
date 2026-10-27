@@ -24,9 +24,10 @@ set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
+open ZkcExamples.Construction.ChaumPedersenProofBodies in
 structured_views ZkcExamples.Construction.ChaumPedersenProofData.snapshot
-  helpers [formula := ZkcExamples.Construction.ChaumPedersenProofBodies.formula]
-  protocols [proof := ZkcExamples.Construction.ChaumPedersenProofBodies.proof]
+  helpers [formula]
+  protocols [proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.ChaumPedersenProofData.snapshot = .ok program := kernel_admission
 

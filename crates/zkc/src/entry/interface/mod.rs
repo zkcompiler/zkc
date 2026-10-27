@@ -1,6 +1,7 @@
 //! Checked metadata for an authenticated source package. Reading this interface
 //! checks structure and internal consistency, not MLIR meaning or native code.
 mod binding;
+mod origin;
 mod ports;
 pub(in crate::entry) use ports::{InputPort, RolePorts};
 pub(in crate::entry) mod preflight;

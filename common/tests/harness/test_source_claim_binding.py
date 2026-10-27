@@ -22,6 +22,7 @@ def fixture(claims, stage="compiled-ideal"):
             "admission":{"format":"zkc.structured-source/0", "original_sha256":claims.digest(source),
                          "interface_sha256":claims.digest(interface.encode()), "protocol_symbol":"protocol",
                          "capture":"source-capture", "installation":"library-installation"},
+            "proposals":[], "seams":[],
             "claims":[{"request":{"subject":{"entry":"test::Proof", "stage":stage},
                                   "target":{"protocol":"protocol","clause":0,"name":"valid"},
                                   "quantity":{"kind":"scalar","expression":{"kind":"natural","value":"0"}},
@@ -215,3 +216,30 @@ def test_protocol_bridge_does_not_discover_a_child_from_a_host(flags):
         pytest.fail("ambiguous subject reached the compiler")
     with pytest.raises(ValueError, match="one explicit --subject"):
         bridge.native_subject(unexpected, "compiler", flags)
+
+
+def test_component_proposals_remain_unresolved_and_separate_from_request(claims):
+    export, args = fixture(claims)
+    before = claims.bind_export(export, **args)
+    export["proposals"] = [["caller", "site", "callee", [0], ["V"],
+                            [["parameter", ["input", 0, "V"], ["open"]]]]]
+    export["seams"] = [["caller", ["argument", "site", 0], "direct", [["input", 0, "V"]]]]
+    after = claims.bind_export(export, **args)
+    assert after["proposals"] == export["proposals"]
+    assert after["seams"] == export["seams"]
+    assert "typed-component-association" in after["required_links"]
+    assert "component-law-obligations" not in after["required_links"]
+    assert before["method_obligations"] == []
+    assert after["method_obligations"] == [{"method": "component-composition",
+        "required": ["component-law-obligations"]}]
+    assert before["claims"][0]["request_digest"] == after["claims"][0]["request_digest"]
+    export["proposals"][0][0] = "edited"
+    assert after["proposals"][0][0] == "caller"
+
+
+@pytest.mark.parametrize("field", ["proposals", "seams"])
+def test_component_arrays_are_required_current_schema(claims, field):
+    export, args = fixture(claims)
+    del export[field]
+    with pytest.raises(claims.Refused):
+        claims.bind_export(export, **args)

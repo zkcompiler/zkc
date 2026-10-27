@@ -1,23 +1,56 @@
 module
 
-public import ZkcSecurity.Families.Sumcheck.TableComponentNominal
+public import Zkc.Construction.DomainTranscript
 public import ZkcSecurity.FiatShamir.LosslessPresentation
 
 @[expose] public section
 
-/-! The table component's nominal interface loses no typed replies. The proof
-uses decoder equality on actual payloads, including nominal sort rejection;
-uniform host field carriers alone never justify a change of nominal field.
+/-! Field operations with exact nominal transcript occurrences and payload sorts.
+The uniform host carriers never identify distinct nominal fields. The lossless
+law uses the actual decoder equations and preserves every typed reply.
 -/
 set_option autoImplicit false
-namespace ZkcSecurity.Families.Sumcheck.TableComponent.Nominal
+namespace ZkcSecurity.FiatShamir.NominalField
 open Zkc.Source Zkc.Source.Structured Zkc.Construction Zkc.Transcript
 open ZkcSecurity.FiatShamir.Original
 
 variable {F G : Type} [Field F]
 
+inductive Operation (F : Type) (field : String) where
+  | receive (origin : Origin)
+  | deliver (origin : Origin) (value : F)
+  | query (origin : Origin) (request : origin.request = some (.draw field))
+
+abbrev signature (F : Type) (field : String) : PIR.Signature where
+  Op := Operation F field
+  Reply
+    | .receive _ => F
+    | .deliver .. => Unit
+    | .query .. => F
+
+def received (field : String) (origin : Origin) :
+    Domain.Event (uniformCarriers F G) → Option F
+  | .message actual payload => if actual = origin then payload.value (.field field) else none
+  | _ => none
+
+def interface (field : String) : Interface (signature F field)
+    (Domain.Event (uniformCarriers F G)) (Domain.Payload (uniformCarriers F G)) Domain.Raw
+  | .receive origin =>
+      .receive (.message origin) (received field origin)
+  | .deliver origin value => .send (.message origin (.field field value)) ()
+  | .query origin request => .query (.challenge origin) fun raw =>
+      some (by simpa only [Domain.Raw, request, Request.draw] using raw)
+
+omit [Field F] in
+/-- The nominal decoder checks both the occurrence and the precise field sort.
+Malformed messages are refused by the existing transcript transform. -/
+theorem received_message (field : String) (origin : Origin)
+    (payload : Domain.Payload (uniformCarriers F G)) :
+    received field origin (.message origin payload) = payload.value (.field field) := by
+  simp only [received, ite_true]
+
 /-- The laws are global for this interface: no schedule, root, configuration
-or full-result encoder is required by a table-component caller. -/
+or full-result encoder is required by a caller. -/
 theorem lossless (field : String) :
     LosslessInterface (interface (F := F) (G := G) field) where
   receive := by
@@ -63,4 +96,4 @@ theorem lossless (field : String) :
     | query => cases absorbed
     | deliver origin sent => exact Subsingleton.elim reply value
 
-end ZkcSecurity.Families.Sumcheck.TableComponent.Nominal
+end ZkcSecurity.FiatShamir.NominalField

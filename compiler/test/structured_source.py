@@ -69,7 +69,7 @@ def simple(declarations='', body='', result='%flag'):
 
 with case('original-total-state-and-exact-ssa-order'):
     data = export(total)
-    assert len(data) == 10
+    assert len(data) == 11
     # The catalogue slot carries the rows of every identity used, closed under
     # associated members, in native catalogue order.
     assert data[9] == [bls_rows, []]

@@ -202,7 +202,7 @@ theorem verifier_role_refused :
 /-- The verifier's own point slot is hidden from the prover (scope). -/
 theorem hidden_slot_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2,
+      ⟨"s18", 0, [⟨partialIdentity 2,
         [.binder 0, .carried verifierPointPosition, .carried proverEntriesPosition]⟩]⟩ =
       .error (.slotScope verifierPointPosition 0) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
@@ -213,7 +213,7 @@ theorem hidden_slot_refused :
 /-- The prover's own dimension slot is an index, not a point vector (type). -/
 theorem wrong_type_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2,
+      ⟨"s18", 0, [⟨partialIdentity 2,
         [.binder 0, .carried proverDimensionPosition, .carried proverEntriesPosition]⟩]⟩ =
       .error (.slotType proverDimensionPosition) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
@@ -231,14 +231,14 @@ theorem unknown_repeat_refused :
 /-- A role outside the repeat's roster is refused, even for atoms reading no slot. -/
 theorem unknown_role_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 2, [⟨widthIdentity, [.iteration]⟩]⟩ = .error (.unknownRole 2) := by
+      ⟨"s18", 2, [⟨widthIdentity, [.iteration]⟩]⟩ = .error (.unknownRole 2) := by
   simp only [checkFrame]
   rfl
 
 /-- The iteration index is not a vector. -/
 theorem iteration_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried proverEntriesPosition]⟩]⟩ =
+      ⟨"s18", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried proverEntriesPosition]⟩]⟩ =
       .error .iterationMismatch := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,

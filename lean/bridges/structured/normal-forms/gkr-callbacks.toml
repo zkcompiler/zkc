@@ -2,10 +2,10 @@
 # output-point, layer and line-coefficient callbacks named, read from the
 # retained export of the admitted unit.
 fixture = "lean/bridges/structured/fixtures/gkr-source.json"
-output = "lean/ZkcExamples/Structured/GkrSourceNormalForms.lean"
-namespace = "ZkcExamples.Structured.GkrSourceNormalForms"
+output = "lean/ZkcExamples/Structured/GkrSourceCallbacks.lean"
+namespace = "ZkcExamples.Structured.GkrSourceCallbacks"
 summary = "The root of the original GKR Entry and its participants' normal forms"
-imports = ["ZkcExamples.Structured.GkrRoundsNormalForms", "ZkcExamples.Structured.NormalFormSteps"]
+imports = ["ZkcExamples.Structured.GkrRoundsNormalForms", "ZkcExamples.Structured.GkrInputNormalForms", "ZkcExamples.Structured.NormalFormSteps"]
 open = ["SumcheckVerifierHelpers"]
 helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
 
@@ -80,7 +80,7 @@ function = "layerFn"
 [[shared.applications]]
 name = "left"
 declaration = "rounds"
-body = "GkrRoundsNormalForms.roundsBody roundsMaximum"
+body = "GkrRoundsNormalForms.roundsBody"
 raw = "GkrRoundsNormalForms.roundsBody_raw"
 callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
 function = "roundsFn"
@@ -91,7 +91,7 @@ roles.proverRounds = {}
 [[shared.applications]]
 name = "right"
 declaration = "rounds"
-body = "GkrRoundsNormalForms.roundsBody roundsMaximum"
+body = "GkrRoundsNormalForms.roundsBody"
 raw = "GkrRoundsNormalForms.roundsBody_raw"
 callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
 function = "roundsFn"
@@ -121,31 +121,4 @@ captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "opti
             { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
             { name = "selector", mode = "optional" }, { name = "width", mode = "optional" },
             { name = "service", mode = "optional" }]
-strict = ["*"]
-
-# The whole root: the output point, the layers and the input check.
-[[shared]]
-body = "gkrBody"
-function = "gkrFn"
-declaration = "gkr"
-raw = "gkrBody_raw"
-
-[[shared.roles]]
-role = 1
-name = "verifier"
-proof = "normal-form"
-inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "optional" },
-          { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
-          { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
-          { name = "width", mode = "optional" }, { name = "service", mode = "optional" }]
-strict = ["*"]
-
-[[shared.roles]]
-role = 0
-name = "prover"
-proof = "normal-form"
-inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "absent" },
-          { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
-          { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
-          { name = "width", mode = "optional" }, { name = "service", mode = "absent" }]
 strict = ["*"]

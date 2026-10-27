@@ -23,6 +23,7 @@ variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
 /-- Registered transcript and scalar-coordinate interpretation, fixed independently of evidence. -/
 def extractionProfile : ExtractionProfile compiled F G where
   target := Contract.retained
+  formula := ZkcExamples.Construction.SchnorrProofBinding.formulaBinding
   layout := .scalar 2
   domain := "bls12-381.fr"
   coordinates := by decide +kernel
@@ -42,7 +43,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   stageMatched := rfl
   compiled := compiled
   connection := sourceConnection
-  target := .retained Contract.retained
+  target := .retained Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites
   sitesUnique := by decide +kernel
@@ -50,7 +51,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   lowering := match endpoint with
     | .idealMeaning => PUnit.unit
     | .executableBytes => lowering
-  extractors := extractionProfile.registry (.retained Contract.retained) rfl
+  extractors := extractionProfile.registry (.retained Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding) rfl
 
 def subjectIdeal := subject (F := F) (G := G) .idealMeaning
 

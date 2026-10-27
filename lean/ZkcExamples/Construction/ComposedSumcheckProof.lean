@@ -50,9 +50,11 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
       | transcript => rfl
       | indices => rfl
   simp only [accepts, context_same]
-  convert ComposedSumcheckDomainConnection.domain_to_source challenge left right leftSum rightSum rounds handle initial proof using 1;
+  convert ComposedSumcheckDomainConnection.domain_to_source challenge left right leftSum rightSum rounds handle initial proof using 1
+  · kernel_rfl
+  · apply congrArg (fun source => transform ComposedSumcheckDomainConnection.context challenge source initial proof)
     simp only [verifier, process, ComposedSumcheckDomainConnection.sourceVerifier,
       PIR.Process.interpret_bind, PIR.Process.interpret]
-  all_goals rfl
+    kernel_rfl
 
 end ZkcExamples.Construction.ComposedSumcheckProof

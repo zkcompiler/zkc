@@ -5,7 +5,7 @@ public import ZkcSecurity.Claims.AuthoredPair
 @[expose] public section
 
 /-! A checked source-selector read reduces the existing retained relation to
-its actual formula invocation. This lemma neither supplies selectors nor
+its fixed relation meaning. This lemma neither supplies selectors nor
 replaces the retained source predicate. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.HonestPair.Subject
@@ -20,14 +20,8 @@ theorem relation_iff_of_read (subject : Subject model original imported selected
     (read : subject.target.application.read {} (subject.boundary inputs)
       (subject.assignments inputs) = some arguments) :
     subject.Relation inputs ↔
-      subject.target.formula.invokeRelationOn model arguments =
-        .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil) := by
-  constructor
-  · rintro ⟨actual, actualRead, truth⟩
-    have same := Option.some.inj (read.symm.trans actualRead)
-    cases same
-    exact truth
-  · intro truth
-    exact ⟨arguments, read, truth⟩
+      subject.meaning.HoldsOn subject.target.booleanOutput arguments :=
+  (subject.target.clause subject.meaning).holds_iff_of_read {} (subject.boundary inputs)
+    (subject.assignments inputs) arguments read
 
 end ZkcSecurity.Claims.HonestPair.Subject

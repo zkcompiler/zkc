@@ -2,7 +2,7 @@ module gkr;
 
 use zkc::vector::{Vector, empty, append, sum, elements, length, split};
 use zkc::multilinear as multilinear;
-use zkc::multilinear::{Evaluation, fix_prefix};
+use zkc::multilinear::{fix_prefix};
 use zkc::indices::{divide, remainder};
 
 // Layered arithmetic circuits of uniform width. Every layer has 2^width gates;
@@ -160,6 +160,81 @@ pub struct Gates<F: Field> {
   pub right: Vector<F>
 }
 
+#[linear]
+pub struct Pending<F: Field> {
+  pub point: Vector<F>,
+  pub value: F
+}
+
+// The registered relation decodes four exact Boolean-cube tables, fixes the
+// ordered prefix in each extension, then sums the gate expression. Extending
+// their pointwise product would give a different polynomial off the cube.
+pub relation Residual<F: Field>(parameter gates: Gates<F>,
+    statement point: Vector<F>, statement claim: F)
+  = opaque("gkr.rounds/0", "residual", "0");
+
+// Cube dimension, prefix length and the active-variable degree bound are
+// additional family applicability obligations, independent of this equality.
+pub relation Shape<F: Field>(parameter gates: Gates<F>) {
+  return intrinsic<F>("vector.length", gates.add) == intrinsic<F>("vector.length", gates.mul)
+    && intrinsic<F>("vector.length", gates.add) == intrinsic<F>("vector.length", gates.left)
+    && intrinsic<F>("vector.length", gates.add) == intrinsic<F>("vector.length", gates.right);
+}
+
+pub fn pending<F: Field>(claim: F) -> Pending<F> effects(stop) where () {
+  return Pending<F> { point: empty<F>(), value: claim };
+}
+
+fn open_rounds<F: Field>(claim: Pending<F>) -> (Vector<F>, F) {
+  return unpack(claim);
+}
+
+fn split_point<F: Field>(point: Vector<F>) -> (Vector<F>, Vector<F>) {
+  return if length(point) == 0 { (point, point) } else { split(point) };
+}
+
+fn at_prefix<F: Field>(point: Vector<F>, value: F) -> Pending<F> {
+  return Pending<F> { point: point, value: value };
+}
+
+// A layer evaluation has a different relation from the four-factor sum.
+// Its reference is the mathematical layer table, not P's working factors.
+#[linear]
+pub struct LayerClaim<F: Field> {
+  pub point: Vector<F>,
+  pub value: F
+}
+
+pub relation LayerEvaluation<F: Field>(parameter values: Vector<F>,
+    statement point: Vector<F>, statement claim: F) {
+  return claim == zkc::finite_math::fold(elements(
+    intrinsic<F>("multilinear.restrict_prefix", values, point)), 0,
+    fn(current, value) => current + value);
+}
+
+fn layer_claim<F: Field>(point: Vector<F>, value: F) -> LayerClaim<F> {
+  return LayerClaim<F> { point: point, value: value };
+}
+
+fn open_layer<F: Field>(claim: LayerClaim<F>) -> (Vector<F>, F) {
+  return unpack(claim);
+}
+
+fn check_input<F: Field>(values: Vector<F>, claim: LayerClaim<F>) -> bool {
+  let payload = unpack(claim);
+  return evaluate(values, payload.0) == payload.1;
+}
+
+pub protocol Input<F: Field> roles(V)
+    (values: Vector<F> @V, claim: LayerClaim<F> @V) -> (accepted: bool @V)
+    where () spec {
+      target input_value = LayerEvaluation<F>(in.values, in.claim.point, in.claim.value)
+        accept out.accepted;
+    }
+{
+  return check_input(values, claim);
+}
+
 fn restrict<F: Field>(values: Vector<F>, dimensions: index, point: Vector<F>) -> Vector<F> {
   return multilinear::values(fix_prefix(multilinear::table(values, dimensions, 1), point));
 }
@@ -240,13 +315,18 @@ fn line_coefficients<F: Field>(values: Vector<F>, start: Vector<F>, end: Vector<
 // the coefficients (c0, c1, c2) of the round polynomial; V checks
 // g(0) + g(1) = 2 c0 + c1 + c2 against its current claim before drawing.
 pub protocol Rounds<F: Field, Max: nat> roles(P,V)
-    (gates: Gates<F> @P, claim: F @V, rounds: index @(P,V), challenges: Random<F> @V)
-    -> (point: Vector<F> @P, residual: Gates<F> @P, evaluation: Evaluation<F> @V)
-where () {
+    (gates: Gates<F> @P, claim: Pending<F> @V, rounds: index @(P,V), challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Gates<F> @P, evaluation: Pending<F> @V)
+where () spec {
+  input shape = Shape<F>(in.gates);
+  continuation gate_sum = Residual<F>(in.gates, in.claim.point, in.claim.value)
+    residual Residual<F>(in.gates, out.evaluation.point, out.evaluation.value);
+} {
   let mut tablesP = gates;
   let mut pointP @P = empty<F>();
-  let mut pointV @V = empty<F>();
-  let mut current = claim;
+  let initial @V = open_rounds(claim);
+  let mut pointV @V = initial.0;
+  let mut current = initial.1;
   for _ in 0..rounds roles(P,V) max Max {
     #[site(round)] let message = send P -> V(round_message(tablesP));
     require current == message.0 + message.0 + message.1 + message.2;
@@ -257,18 +337,46 @@ where () {
     pointV = append(pointV, cv);
     current = message.0 + cv * (message.1 + cv * message.2);
   }
-  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  let evaluation @V = at_prefix(pointV, current);
   return (point = pointP, residual = tablesP, evaluation = evaluation);
 }
 
 // GKR for a layered circuit with public wiring: V checks that `outputs` are
 // the outputs of the circuit on `inputs`.
+// These identities select registered mathematics, independently of a proof
+// method. The shape relation is also enforced by the validator below.
+pub relation CircuitShape<F: Field, MaxLayers: nat, MaxWidth: nat>(
+    parameter inputs: Vector<F>, parameter outputs: Vector<F>,
+    parameter add: Vector<F>, parameter mul: Vector<F>,
+    parameter layers: index, parameter selector: index, parameter width: index)
+  = opaque("gkr.circuit/0", "shape", "0");
+
+pub relation CircuitOutputs<F: Field>(parameter inputs: Vector<F>,
+    parameter add: Vector<F>, parameter mul: Vector<F>,
+    parameter layers: index, parameter selector: index, parameter width: index,
+    statement outputs: Vector<F>)
+  = opaque("gkr.circuit/0", "outputs", "0");
+
 pub protocol Gkr<F: Field, MaxLayers: nat, MaxWidth: nat> roles(P,V)
     (inputs: Vector<F> @(P,V), outputs: Vector<F> @V,
      add: Vector<F> @(P,V), mul: Vector<F> @(P,V),
      layers: index @(P,V), selector: index @(P,V), width: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)
-where () {
+where () spec {
+  input shape = CircuitShape<F, MaxLayers, MaxWidth>(in.inputs@V, in.outputs,
+    in.add@V, in.mul@V, in.layers@V, in.selector@V, in.width@V);
+  target circuit_outputs = CircuitOutputs<F>(in.inputs@V, in.add@V, in.mul@V,
+    in.layers@V, in.selector@V, in.width@V, in.outputs) accept out.accepted;
+} {
+  // Admission is independent of whether an execution enters a round or layer.
+  // In particular, a zero-layer proof cannot bypass malformed wiring inputs.
+  require @V !zkc::indices::less(index<MaxWidth>(), width);
+  require @V !zkc::indices::less(index<MaxLayers>(), layers);
+  require @V multilinear::has_shape(inputs, width, 1);
+  require @V multilinear::has_shape(outputs, width, 1);
+  require @V multilinear::has_shape(add, selector + width + width + width, 1);
+  require @V multilinear::has_shape(mul, selector + width + width + width, 1);
+  require @V !zkc::indices::less(power_of_two(selector), layers);
   let mut pointV @V = empty<F>();
   let mut pointP @P = empty<F>();
   for _ in 0..width roles(P,V) max MaxWidth {
@@ -277,14 +385,18 @@ where () {
     pointV = append(pointV, r);
     pointP = append(pointP, rp);
   }
-  let mut claim @V = evaluate(outputs, pointV);
+  let mut claim @V = layer_claim(pointV, evaluate(outputs, pointV));
   for layer in 0..layers roles(P,V) max MaxLayers {
+    let current @V = open_layer(claim);
     let below @P = values_below(add, mul, inputs, layers, selector, width, layer);
     let gates @P = layer_gates(select_block(add, layer, selector),
       select_block(mul, layer, selector), pointP, below, width);
-    #[site(left)] let (leftP, leftGates, left) = Rounds<F, MaxWidth>(gates, claim, width, challenges);
+    let initial @V = pending(current.1);
+    #[site(left)] let (leftP, leftGates, left) = Rounds<F, MaxWidth>(gates, initial, width, challenges);
     #[site(right)] let (rightP, _, right) =
-      Rounds<F, MaxWidth>(leftGates, left.value, width, challenges);
+      Rounds<F, MaxWidth>(leftGates, left, width, challenges);
+    let final_round @V = open_rounds(right);
+    let points @V = split_point(final_round.0);
     let line @P = line_coefficients(below, leftP, rightP, width);
     #[site(line_constant)] let first = send P -> V(element(line, 0));
     let mut coefficients @V = append(empty<F>(), first);
@@ -293,17 +405,16 @@ where () {
       coefficients = append(coefficients, coefficient);
     }
     let at_one @V = sum(coefficients);
-    let wiring_add @V = evaluate_wiring(select_block(add, layer, selector), pointV,
-      left.point, right.point);
-    let wiring_mul @V = evaluate_wiring(select_block(mul, layer, selector), pointV,
-      left.point, right.point);
-    require right.value == wiring_add * (first + at_one) + wiring_mul * first * at_one;
+    let wiring_add @V = evaluate_wiring(select_block(add, layer, selector), current.0,
+      points.0, points.1);
+    let wiring_mul @V = evaluate_wiring(select_block(mul, layer, selector), current.0,
+      points.0, points.1);
+    require final_round.1 == wiring_add * (first + at_one) + wiring_mul * first * at_one;
     #[site(line_challenge)] let t = challenges.draw();
     #[site(line_delivery)] let tp = send V -> P(t);
-    claim = evaluate_coefficients(coefficients, t);
-    pointV = line_point(left.point, right.point, t);
+    claim = layer_claim(line_point(points.0, points.1, t), evaluate_coefficients(coefficients, t));
     pointP = line_point(leftP, rightP, tp);
   }
-  let accepted @V = evaluate(inputs, pointV) == claim;
+  #[site(input)] let accepted = Input<F> roles(V)(inputs, claim);
   return accepted;
 }

@@ -23,7 +23,7 @@ requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcTools"
-globs = ["ZkcTools.JsonSupport", "ZkcTools.ProofAccount", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.+", "ZkcTools.ConstructionBindings.+"]
+globs = ["ZkcTools.JsonSupport", "ZkcTools.ProofAccount", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.+", "ZkcTools.SourceClaims.+", "ZkcTools.ConstructionBindings.+"]
 requiresModuleSystem = true
 
 [[lean_exe]]

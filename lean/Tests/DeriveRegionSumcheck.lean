@@ -4,6 +4,7 @@ import Zkc.Source.Structured.ProjectedBody
 import Zkc.Source.Structured.DerivationRules
 import Zkc.Source.Structured.EqualityDerivationRules
 import ZkcExamples.Structured.SumcheckSourceViews
+import ZkcExamples.Structured.SumcheckRelationContract
 
 /-! Automation clients of maintained admitted bodies. No source operation tree
 is restated here. The generated target uses a nondefinitional addition rewrite. -/

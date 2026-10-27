@@ -116,7 +116,8 @@ public:
   std::optional<Type> projectedType(const Declaration &, Type,
                                     llvm::ArrayRef<unsigned>, Span);
   std::optional<unsigned> fieldIndex(const Declaration &, const Type &,
-                                     llvm::StringRef, Span);
+                                     llvm::StringRef, Span,
+                                     bool specificationRead = false);
   std::optional<Type> selectedType(const Declaration &,
                                    const SpecificationSelector &);
   /// Literal parameters are validated unless a parameter is still an open

@@ -26,5 +26,3 @@ func.return %failure : {outcome}''' if '^failed' in body else ''
 func.return %done : {outcome}
 {failure}
 }}'''
-
-

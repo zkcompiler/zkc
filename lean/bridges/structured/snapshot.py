@@ -48,6 +48,9 @@ def descriptor(value):
     if tag == "vector.length":
         record(args, 1)
         return f".vectorLength {text(args[0])}"
+    if tag == "multilinear.restrict_prefix":
+        record(args, 1)
+        return f".multilinearRestrictPrefix {text(args[0])}"
     unary, nullary = lean_render.UNARY_OPERATIONS, lean_render.NULLARY_OPERATIONS
     if tag in unary:
         record(args, 1)
@@ -167,12 +170,16 @@ def protocol_interface(value):
 
 
 def relation(value):
-    tag, name, visibility, kind, key, revision, inputs, outputs, purposes, formula = record(value, 10)
+    tag, name, visibility, kind, key, revision, statics, inputs, outputs, purposes, formula = record(value, 11)
     if tag != "relation" or visibility not in ("public", "private"):
         raise ValueError("invalid relation")
+    if not isinstance(statics, list) or len(statics) > 128:
+        raise ValueError("invalid relation static arguments")
+    remaining = [4096]
+    arguments = seq(statics, lambda term: origin_term(term, remaining=remaining))
     return (f"⟨{text(name)}, .{visibility}Def, {text(kind)}, {text(key)}, {text(revision)}, "
             f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}, "
-            f"{optional(formula, text)}⟩")
+            f"{optional(formula, text)}, {arguments}⟩")
 
 
 def contract_selector(value):
@@ -369,8 +376,38 @@ def catalogue(value):
     return f"{{ nominals := {seq(nominals, nominal)}, services := {seq(services, service_row)} }}"
 
 
+def source_record(value):
+    type_, resource, sealed, fields = record(value, 4)
+    if resource not in ("ordinary", "affine", "linear") or type(sealed) is not bool:
+        raise ValueError("invalid source record")
+
+    def field(value):
+        name, type_ = record(value, 2)
+        return f"({text(name)}, {origin_term(type_)})"
+
+    return (f"⟨{origin_term(type_)}, {text(resource)}, {str(sealed).lower()}, "
+            f"{seq(fields, field)}⟩")
+
+
+def source_port(value):
+    name, type_, roles, offset, count = record(value, 5)
+    return (f"⟨{text(name)}, {origin_term(type_)}, {seq(roles, text, limit=16)}, "
+            f"{nat(offset)}, {nat(count, 512)}⟩")
+
+
+def source_protocol(value):
+    name, inputs, outputs = record(value, 3)
+    return f"⟨{text(name)}, {seq(inputs, source_port)}, {seq(outputs, source_port)}⟩"
+
+
+def source_declarations(value):
+    records, protocols = record(value, 2)
+    return (f"{{ records := {seq(records, source_record)}, "
+            f"protocols := {seq(protocols, source_protocol)} }}")
+
+
 def render(data, namespace):
-    version, stage, source, entry, domains, relations, bindings, definitions, contracts, rows = record(data, 10)
+    version, stage, source, entry, domains, relations, bindings, definitions, contracts, rows, declarations = record(data, 11)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     lean_render.namespace(namespace)
@@ -396,6 +433,7 @@ def snapshot : Snapshot where
   definitions := {seq(definitions, definition)}
   contracts := {seq(contracts, protocol_contract)}
   catalogue := {catalogue(rows)}
+  sourceDeclarations := {source_declarations(declarations)}
 
 end {namespace}
 '''

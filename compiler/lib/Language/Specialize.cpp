@@ -9,6 +9,7 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/SourceTerms.h"
 #include <algorithm>
 using namespace llvm;
 namespace zkc::language::detail {
@@ -1476,6 +1477,54 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
           return false;
       } else if (!types.ingress(port.type, port.span))
         return false;
+    }
+    // Compare canonical typed terms, including parameters absent from runtime
+    // inputs. Source names are aliases; one closed identity has one ABI.
+    std::map<std::tuple<std::string, std::string, std::string, std::string>,
+             const Declaration *>
+        opaqueInstances;
+    for (const auto &decl : declarations) {
+      if (!decl.origin || !decl.relation ||
+          decl.relation->kind != RelationDefinition::Kind::Opaque)
+        continue;
+      json::Array arguments;
+      for (const auto &argument : decl.staticArguments) {
+        if (!types.chargeType(argument, decl.span))
+          return false;
+        auto encoded = encodeStaticTerm(argument);
+        if (!encoded) {
+          consumeError(encoded.takeError());
+          return types.fail("source.relation",
+                            "opaque static argument is not closed", decl.span);
+        }
+        arguments.push_back(std::move(*encoded));
+      }
+      std::string canonical;
+      raw_string_ostream(canonical) << json::Value(std::move(arguments));
+      const auto &definition = *decl.relation;
+      auto [at, added] = opaqueInstances.emplace(
+          std::make_tuple(definition.externalKind, definition.key,
+                          definition.revision, canonical),
+          &decl);
+      if (added)
+        continue;
+      const auto &previous = *at->second;
+      if (definition.purposes != previous.relation->purposes ||
+          decl.inputs.size() != previous.inputs.size())
+        return types.fail(
+            "source.relation",
+            "one opaque instance has conflicting logical signatures", decl.span,
+            {previous.span});
+      for (unsigned i = 0; i < decl.inputs.size(); ++i) {
+        if (!types.chargeType(decl.inputs[i].type, decl.span) ||
+            !types.chargeType(previous.inputs[i].type, previous.span))
+          return false;
+        if (decl.inputs[i].type != previous.inputs[i].type)
+          return types.fail(
+              "source.relation",
+              "one opaque instance has conflicting logical signatures",
+              decl.span, {previous.span});
+      }
     }
     declarations[selected.index].target = *instance;
     for (auto id : generatedTemplates)

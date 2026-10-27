@@ -18,7 +18,7 @@ private def unit (definitions : List Definition) (entry : String := "main") : Sn
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
     entry, [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 
 private def child := protocol "child" ["A", "B"] [.boolean, .boolean] [.boolean]
   [["A"], ["B"]] [["A"]] (.block [] (.ret [0]))
@@ -99,7 +99,7 @@ private def statementUnit (called : Bool) : Snapshot :=
     contracts := [⟨"main", [⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P"⟩]⟩,
       none, some ⟨.output, 0, "P"⟩⟩]⟩] ++ (if called then [⟨"dormant", []⟩] else [])
     relations := [⟨"relation", .publicDef, "opaque", "key", "rev",
-      [.boolean], [.boolean], ["statement"], none⟩] }
+      [.boolean], [.boolean], ["statement"], none, []⟩] }
 
 private def erasedHeader := unit [
   protocol "main" ["P"] [.boolean] [] [["P"]] []

@@ -30,7 +30,7 @@ noncomputable def sourceRoot (maximum : Nat) (context : Realizations.Sumcheck.Or
 noncomputable def root (maximum : Nat) (schedule : Nominal.Schedule "bls12-381.fr")
     (raw : List F) (scalar : F) (count : Nat)
     (construction : ConstructionState (F := F) (G := G)) :
-    PIR.Process (Nominal.signature F "bls12-381.fr") (Result (F := F) (G := G)) :=
+    PIR.Process (NominalField.signature F "bls12-381.fr") (Result (F := F) (G := G)) :=
   if count ≤ maximum then
     (TableComponent.Execution.run "bls12-381.fr" schedule (List.range count) ⟨[], scalar, construction.history⟩).bind
       fun final => (terminal raw final.point final.scalar).bind
@@ -39,7 +39,7 @@ noncomputable def root (maximum : Nat) (schedule : Nominal.Schedule "bls12-381.f
 
 theorem terminal_bridge (routing : Zkc.Construction.Original.Routing)
     (raw point : List F) (scalar : F) (construction : ConstructionState (F := F) (G := G)) :
-    DomainReduction.Bridge (Nominal.interface (G := G) "bls12-381.fr")
+    DomainReduction.Bridge (NominalField.interface (G := G) "bls12-381.fr")
       (fun reached (result : Result (F := F) (G := G)) =>
         result.2.history = reached ∧ result.2.frames = construction.frames)
       construction.history
@@ -61,7 +61,7 @@ theorem root_bridge (routing : Zkc.Construction.Original.Routing)
     (maximum : Nat) (raw : List F) (scalar : F) (count : Nat)
     (construction : ConstructionState (F := F) (G := G))
     (routes : OriginalSecurity.Routes routing context schedule construction.frames) :
-    DomainReduction.Bridge (Nominal.interface (G := G) "bls12-381.fr")
+    DomainReduction.Bridge (NominalField.interface (G := G) "bls12-381.fr")
       (fun reached (result : Result (F := F) (G := G)) =>
         result.2.history = reached ∧ result.2.frames = construction.frames)
       construction.history

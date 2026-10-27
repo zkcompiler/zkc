@@ -16,6 +16,7 @@ set_option autoImplicit false
 set_option maxRecDepth 10000
 set_option maxHeartbeats 4000000
 namespace ZkcSecurity.Families.Sumcheck.CompiledRound
+open ZkcSecurity.FiatShamir
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.FiatShamir.DomainReduction
 open TableComponent.Execution
@@ -135,7 +136,7 @@ noncomputable def presented (field suite : String)
     (history : Domain.History (carriers (F := F) (G := G)))
     (lowOrigin highOrigin queryOrigin deliveryOrigin : Origin)
     (request : queryOrigin.request = some (.draw field)) :
-    PIR.Process (TableComponent.Nominal.signature F field)
+    PIR.Process (NominalField.signature F field)
       (Domain.Environment (carriers (F := F) (G := G))) :=
   .call (.receive lowOrigin) fun low =>
   .call (.receive highOrigin) fun high =>
@@ -173,17 +174,17 @@ theorem reading
       Post (finalHistory field lowOrigin highOrigin queryOrigin deliveryOrigin history low high challenge)
         (output field context.suite captured index point claim history
           lowOrigin highOrigin queryOrigin deliveryOrigin low high challenge)) :
-    ReadingTo (TableComponent.Nominal.interface (F := F) (G := G) field) Post history
+    ReadingTo (NominalField.interface (F := F) (G := G) field) Post history
       (block plan program context field captured.length (input field context.suite captured index point claim history))
       (presented field context.suite captured index point claim history
         lowOrigin highOrigin queryOrigin deliveryOrigin request) := by
   simp only [block, presented, Domain.View.sequence, Domain.View.receive, Domain.dataType, Ty.isService, Bool.not_false,
     true_and, ite_true, PIR.Process.bind]
   apply ReadingTo.checkpoint
-  apply ReadingTo.receive (I := TableComponent.Nominal.signature F field) (.field field)
+  apply ReadingTo.receive (I := NominalField.signature F field) (.field field)
     plan.lowSite plan.lowSite plan.producer _ (.receive lowOrigin) _ (.message lowOrigin)
-    (TableComponent.Nominal.received field lowOrigin) id rfl
-      (by intro payload; simpa using TableComponent.Nominal.received_message (F := F) (G := G) field lowOrigin payload)
+    (NominalField.received field lowOrigin) id rfl
+      (by intro payload; simpa using NominalField.received_message (F := F) (G := G) field lowOrigin payload)
   intro payload low decoded
   have same := Domain.Payload.ofValue_value decoded
   have payload_eq : payload = .field field low := by
@@ -193,10 +194,10 @@ theorem reading
     Domain.Value.sort, input, List.append_assoc, Domain.View.indicesEmpty, Domain.View.indicesAppend,
     Domain.View.observe, lowFound, lowMessage]
   repeat' first | apply ReadingTo.checkpoint | apply ReadingTo.observe
-  apply ReadingTo.receive (I := TableComponent.Nominal.signature F field) (.field field)
+  apply ReadingTo.receive (I := NominalField.signature F field) (.field field)
     plan.highSite plan.highSite plan.producer _ (.receive highOrigin) _ (.message highOrigin)
-    (TableComponent.Nominal.received field highOrigin) id rfl
-      (by intro payload; simpa using TableComponent.Nominal.received_message (F := F) (G := G) field highOrigin payload)
+    (NominalField.received field highOrigin) id rfl
+      (by intro payload; simpa using NominalField.received_message (F := F) (G := G) field highOrigin payload)
   intro payload high decoded
   have same := Domain.Payload.ofValue_value decoded
   have payload_eq : payload = .field field high := by
@@ -216,16 +217,16 @@ theorem reading
       Domain.Calculations.fieldMultiply (F := F) (G := G),
       Domain.Calculations.fieldAdd (F := F) (G := G)]
     repeat' apply ReadingTo.checkpoint
-    apply ReadingTo.query (I := TableComponent.Nominal.signature F field) _ queryOrigin _
+    apply ReadingTo.query (I := NominalField.signature F field) _ queryOrigin _
       (.query queryOrigin request) _ (fieldReply request) (drawRequest_of_request request) rfl
     intro raw
-    apply ReadingTo.absorbSend (I := TableComponent.Nominal.signature F field)
+    apply ReadingTo.absorbSend (I := NominalField.signature F field)
       (.deliver deliveryOrigin (fieldReply request raw)) _
       (.message deliveryOrigin (.field field (fieldReply request raw))) () rfl
     repeat' first | apply ReadingTo.checkpoint | apply ReadingTo.observe
     simpa [Domain.View.empty, output, input, finalHistory, receivedHistory,
       List.append_assoc, boundary, fieldReply] using
-      (ReadingTo.done (absorb := TableComponent.Nominal.interface (F := F) (G := G) field)
+      (ReadingTo.done (absorb := NominalField.interface (F := F) (G := G) field)
         _ _ (post low high (fieldReply request raw) boundary))
   · simp [boundary, PIR.Process.bind]
     exact .halt _ .reject

@@ -26,8 +26,8 @@ theorem public_positions : selected.policy.publicInputs = ([0, 1]) := rfl
 theorem public_types : validatorArtifacts.publics = ([Zkc.Source.Structured.Ty.vector "koala-bear",  Zkc.Source.Structured.Ty.sequence    (Zkc.Source.Structured.Ty.product      "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"      "case00000000"      (Zkc.Source.Structured.ProductFields.cons        (Zkc.Source.Structured.Ty.boolean)        (Zkc.Source.Structured.ProductFields.cons          (Zkc.Source.Structured.Ty.field "koala-bear")          (Zkc.Source.Structured.ProductFields.nil))))]) := rfl
 theorem target_positions : selectorPositions subject.target.application.selectors = .ok ([0, 1]) := rfl
 theorem artifact_identities :
-    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:bffc188ca392be022ddf0fbef687ceb2404fdb5a9210a0aff8ce5c96c20cb921",  "sha256:5c9c7d62147e8e3357a2969255722853f887853d43dbbe09a60cdb7de309d1e4",  "_math_0")) ∧
-    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:bffc188ca392be022ddf0fbef687ceb2404fdb5a9210a0aff8ce5c96c20cb921",  "sha256:5c9c7d62147e8e3357a2969255722853f887853d43dbbe09a60cdb7de309d1e4",  "_math_1")) := by decide +kernel
+    (artifacts.producer.source, artifacts.producer.candidate, artifacts.producer.symbol) = (("sha256:948ba8a715c8ae5c29f96fa533926344994ad8bf011eb511b5f1fa3977672b12",  "sha256:ffc9cc24c0d80f5b2a2fa1058b575111072e9259540ce96cee11c0b8d111d498",  "_math_0")) ∧
+    (artifacts.validator.source, artifacts.validator.candidate, artifacts.validator.symbol) = (("sha256:948ba8a715c8ae5c29f96fa533926344994ad8bf011eb511b5f1fa3977672b12",  "sha256:ffc9cc24c0d80f5b2a2fa1058b575111072e9259540ce96cee11c0b8d111d498",  "_math_1")) := by decide +kernel
 
 def sourceInputs (input0 : Option (model.Value (Zkc.Source.Structured.Ty.vector "koala-bear"))) (input1 : Option (model.Value (Zkc.Source.Structured.Ty.sequence   (Zkc.Source.Structured.Ty.product     "[\"zkc.language.pack\",\"373a303a32313a7461626c655f72656c6174696f6e3a3a5175657279313a30313a32323a313a303a31303a6b6f616c612d62656172313a30303a\"]"     "case00000000"     (Zkc.Source.Structured.ProductFields.cons       (Zkc.Source.Structured.Ty.boolean)       (Zkc.Source.Structured.ProductFields.cons         (Zkc.Source.Structured.Ty.field "koala-bear")         (Zkc.Source.Structured.ProductFields.nil))))))) : subject.Inputs :=
   (.cons input0 (.cons input1 .nil))
@@ -141,8 +141,8 @@ theorem context_eq : subject.selection.context = (Context.plain ("zkl_a640d0482d
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 
-theorem original_export : subject.originalExport = ("sha256:4f999b8a75cff894105d7a535f7b16453d7635ddc3af3b73f49415833b295617") := rfl
-theorem producer_export : subject.producerExport = ("sha256:e7d8db9a3a3140e28a5167809f95e3df45507cd76fa3080a3478366abea814cb") := rfl
-theorem validator_export : subject.validatorExport = ("sha256:c93e2b6585b74d9eaee11131fb3a5676e56d9aab511dc1810bae4ce31d4616d6") := rfl
+theorem original_export : subject.originalExport = ("sha256:f9ad0166f81e29dacbc6be4e2e674912a349fcff66f6cf01826b81b8511326fc") := rfl
+theorem producer_export : subject.producerExport = ("sha256:031121c1a6117b34ca2edacf20d589dd65958524d9054cb3edf674278330a977") := rfl
+theorem validator_export : subject.validatorExport = ("sha256:fdb65e400d7005ce06cbeddeda37f05f2ab0f24dab1625f9198b9dc65a45d59d") := rfl
 
 end ZkcSecurity.Examples.TableMembership.ABI

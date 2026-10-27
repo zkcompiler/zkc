@@ -26,6 +26,7 @@ def routes1 (handle : Nat) : OriginalHonest.Routes (ZkcExamples.Structured.Origi
     ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol handle :=
   ⟨_, ZkcExamples.Structured.OriginalArtifacts.TwoSums.ProducerCall1.routes handle, ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1_routes handle⟩
 
+set_option linter.unusedSimpArgs false in
 theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input4 1) (bounded0 : input0.length < indexLimit) (shape1 : PrimitiveLibrary.HasShape input1 input4 1) (bounded1 : input1.length < indexLimit)
     (admitted : input4 ≤ 4) (history : Domain.History (uniformCarriers F G)) :
     Readback RootPost
@@ -35,7 +36,8 @@ theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat)
   rw [ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.producer_source input0 input1 input4 shape0 bounded0 shape1 bounded1, ZkcExamples.Structured.Generated.Original.TwoSums.participant_binding]
   simp only [ZkcExamples.Structured.Generated.Original.TwoSums.realized, Original.fold_bind,
     PIR.Process.bind_assoc, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
-  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.sumcheck 4
+  simp only [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.pending0_raw, ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.pending1_raw, PIR.Process.bind, Zkc.Construction.ArtifactBinding.fold_done]
+  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.sumcheck ZkcExamples.Structured.OriginalArtifacts.TwoSums.claim_bodies 4
     (ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.routing handle) (ZkcExamples.Structured.OriginalArtifacts.TwoSums.routing handle) ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol (by change 0 ≠ 1; decide)
     handle (routes0 handle) input0 input4 shape0 bounded0 admitted history).bind
   intro left0 right0 returned0
@@ -45,7 +47,7 @@ theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat)
   rw [original0] at checked0
   erw [checked0]
   simp only [honest0, decide_true, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
-  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.sumcheck 4
+  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.sumcheck ZkcExamples.Structured.OriginalArtifacts.TwoSums.claim_bodies 4
     (ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.routing handle) (ZkcExamples.Structured.OriginalArtifacts.TwoSums.routing handle) ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol (by change 0 ≠ 1; decide)
     handle (routes1 handle) input1 input4 shape1 bounded1 admitted reached0).bind
   intro left1 right1 returned1
@@ -55,13 +57,13 @@ theorem source (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat)
   rw [original1] at checked1
   erw [checked1]
   simp only [honest1, decide_true, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
-  rw [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.combine]
-  simp only [both, Values.get, Option.bind, Option.map, Bool.true_and, Zkc.Construction.ArtifactBinding.fold_done]
+  rw [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.combine_step6]
+  simp only [both, Values.get, Option.bind, Option.map, Bool.true_and, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
   exact .done ⟨reached1, rfl, rfl⟩
 
 theorem readback (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input4 1) (bounded0 : input0.length < indexLimit) (shape1 : PrimitiveLibrary.HasShape input1 input4 1) (bounded1 : input1.length < indexLimit)
     (admitted : input4 ≤ 4) (history : Domain.History (uniformCarriers F G)) :
-    Readback (ActualPost ZkcExamples.Structured.OriginalArtifacts.TwoSums.context 33 34 16 14)
+    Readback (ActualPost ZkcExamples.Structured.OriginalArtifacts.TwoSums.context 33 34 26 22)
       (Domain.participant (ringModel F G) ZkcExamples.Structured.OriginalArtifacts.TwoSums.program ZkcExamples.Structured.OriginalArtifacts.TwoSums.context ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.artifact (ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.inputs input0 input1 input4 history))
       (Domain.participant (ringModel F G) ZkcExamples.Structured.OriginalArtifacts.TwoSums.program ZkcExamples.Structured.OriginalArtifacts.TwoSums.context ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.artifact (ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.inputs input0 input1 input0.sum input1.sum input4 history)) :=
   Readback.original (ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.producer input0 input1 input4 handle shape0 bounded0 shape1 bounded1 history)

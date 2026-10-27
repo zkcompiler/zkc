@@ -25,7 +25,7 @@ example (ctx : ProtocolContext) (rho : ℚ) :
     GkrCallerSetup.setup (G := ℚ) ctx rho = .done
       (.cons (some (raw rho).add) (.cons (some (raw rho).mul)
         (.cons (some (raw rho).left) (.cons (some (raw rho).right)
-          (.cons none (.cons (some 1) (.cons none .nil))))))) :=
+          (.cons none (.cons none (.cons (some 1) (.cons none .nil)))))))) :=
   GkrCallerSetup.setup_input ctx rho
 
 example : (firstLeftContext {}).applicationPrefix ≠
@@ -34,7 +34,7 @@ example : (firstLeftContext {}).applicationPrefix ≠
 /-- Query and delivery stops retain the exact emitted prefix of the full caller. -/
 def caller := invokeProtocol
   (ZkcExamples.Structured.Generated.Bindings.GkrRounds.payload.plainProtocolTable ℚ ℚ)
-  ZkcExamples.Structured.Generated.Bindings.GkrRounds.definition1.signature {} 1
+  ZkcExamples.Structured.Generated.Bindings.GkrRounds.definition2.signature {} 1
   (callerInput wrongOutputs 83)
 
 def stopQuery : PIR.Handler (participantInterface ℚ ℚ) Unit (participantInterface ℚ ℚ).Op
@@ -46,12 +46,22 @@ def stopDelivery : PIR.Handler (participantInterface ℚ ℚ) Unit (participantI
 
 theorem query_stop : (caller.run stopQuery ()).outcome = .stopped .refused ∧
     (caller.run stopQuery ()).events = [outputQuery {} 83] := by
+  have distinct : RosterDistinct ({} : ProtocolContext) 1 2 := by
+    intro other inside separate
+    exact separate
   unfold caller
+  erw [fixture_invocation (F := ℚ) (G := ℚ) _ distinct,
+    caller_equation (F := ℚ) (G := ℚ) _ distinct]
   exact ⟨rfl, rfl⟩
 
 theorem delivery_stop : (caller.run stopDelivery ()).outcome = .stopped .exhausted ∧
     (caller.run stopDelivery ()).events = [outputQuery {} 83, outputDelivery {} (2 : ℚ)] := by
+  have distinct : RosterDistinct ({} : ProtocolContext) 1 2 := by
+    intro other inside separate
+    exact separate
   unfold caller
+  erw [fixture_invocation (F := ℚ) (G := ℚ) _ distinct,
+    caller_equation (F := ℚ) (G := ℚ) _ distinct]
   exact ⟨rfl, rfl⟩
 
 /-- Residual outputs have exactly one point and all five private ports absent. -/

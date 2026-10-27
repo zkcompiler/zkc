@@ -77,18 +77,18 @@ def producerRound (program : Structured.Program)
     (bounded : raw.length < indexLimit) (positive : 0 < dimension)
     (history : Domain.History (uniformCarriers F G))
     (routes : ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Routes routing occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       (occurrence.origins context index)) :
     Original.Simulation
       (RoundReturns (F := F) (G := G) context (producerOutputs context offset)
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         raw dimension width point)
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold routing
         (OriginalSumcheckLibrary.round program.payload occurrence.protocol (occurrence.protocol.roles 0)
           (.cons (some index) ((SumcheckProverLaws.embedP (raw, dimension, width, point)).append
             (.cons none .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       (producerBody (ringModel F G) program context occurrence offset
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" raw),
           .data (.index dimension), .data (.index width),
@@ -104,7 +104,7 @@ def producerRound (program : Structured.Program)
   have appendEq := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.append (F := F) (G := G) program helpers
   simp only [producerBody, Domain.View.sequence]
   derive_artifact_binding
-    normalizing (
+    normalizing (saturate_artifact (
       try normalize_artifact_operations
         [sumsEq, firstEq, appendEq, origins.low, origins.high, origins.draw, origins.delivery]
         unfolding [producer, Original.queryField,
@@ -113,7 +113,7 @@ def producerRound (program : Structured.Program)
       try simp (disch := omega) only [PIR.Process.bind, List.append_assoc, List.cons_append, List.nil_append,
         List.getElem?_append_right, size, Nat.add_sub_cancel_left,
         List.getElem?_cons_zero, List.getElem?_cons_succ]
-      change Original.Simulation _ _ _ _)
+      change Original.Simulation _ _ _ _))
     solving (first
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
       | (unfold RoundReturns

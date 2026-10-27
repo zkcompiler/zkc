@@ -1,6 +1,7 @@
 #include "LanguageInterface.h"
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Translation/Entry.h"
@@ -460,6 +461,18 @@ class Comparison {
         actual.kind != definition.kind ||
         actual.inputs.size() != decl.inputs.size())
       return fail("source relation definition differs");
+    json::Array arguments;
+    if (definition.kind == RelationDefinition::Kind::Opaque)
+      for (const auto &argument : decl.staticArguments) {
+        auto encoded = encodeStaticTerm(argument);
+        if (!encoded) {
+          failure = encoded.takeError();
+          return false;
+        }
+        arguments.push_back(std::move(*encoded));
+      }
+    if (json::Value(std::move(arguments)) != actual.staticArguments)
+      return fail("source relation typed static arguments differ");
     unsigned flat = 0;
     for (unsigned i = 0; i < decl.inputs.size(); ++i) {
       auto expected = layout(decl.inputs[i].type);

@@ -22,6 +22,7 @@ variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F]
 /-- Registered transcript and scalar-coordinate interpretation, fixed independently of evidence. -/
 def extractionProfile : ExtractionProfile compiled F G where
   target := Contract.retained
+  formula := ZkcSecurity.Examples.Subjects.Okamoto.Contract.formulaBinding
   layout := .pair (.scalar 3) (.scalar 4)
   domain := "bls12-381.fr"
   coordinates := by decide +kernel
@@ -41,13 +42,13 @@ def subject : Subject F G artifacts .idealMeaning where
   stageMatched := rfl
   compiled := compiled
   connection := sourceConnection
-  target := .retained Contract.retained
+  target := .retained Contract.retained ZkcSecurity.Examples.Subjects.Okamoto.Contract.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites
   sitesUnique := by decide +kernel
   sitesNativeUnique := by decide +kernel
   lowering := PUnit.unit
-  extractors := extractionProfile.registry (.retained Contract.retained) rfl
+  extractors := extractionProfile.registry (.retained Contract.retained ZkcSecurity.Examples.Subjects.Okamoto.Contract.formulaBinding) rfl
 
 def subjectIdeal := subject (F := F) (G := G)
 
@@ -73,7 +74,7 @@ def justification : SigmaJustification (subject (F := F) (G := G)) (extractionPr
       by_cases coordinate : selector.port.index = 3 <;>
         simp [ExtractionProfile.embed, Extraction.Layout.embed, Extraction.Layout.read_pair, Extraction.Layout.read_scalar,
           extractionProfile, Contract.embed, coordinate]
-    change Contract.retained.Holds statement (extractionProfile.embed witness) ↔ _
+    change Contract.retained.Holds (by bind_contract) statement (extractionProfile.embed witness) ↔ _
     rw [embed]
     exact pinned
   shape := rfl

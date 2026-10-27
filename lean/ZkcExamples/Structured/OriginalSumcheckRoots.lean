@@ -24,9 +24,9 @@ theorem singleton_eta {Value : Ty → Type} {ty : Ty} (out : Values Value [ty]) 
 
 /-- The full output mask is explicit, rather than a scalar-only readback. -/
 abbrev call (payload : UnitPayload) (maximum : Nat) (context : ProtocolContext)
-    (outputs : List (List Nat)) (claim : Option F) (count service : Option Nat) :=
+    (outputs : List (List Nat)) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :=
   (OriginalSumcheckLibrary.reduce payload maximum context (context.roles 1) []
-    (verifierInputs (G := G) claim count service)).bind
+    (verifierInputs (G := G) point claim count service)).bind
       (fun result => .done (maskValues (context.roles 1) (context.mapScopes outputs) result))
 
 namespace Small
@@ -37,16 +37,16 @@ abbrev context := OriginalSumcheckInstances.Small.context
 
 def protocolPrefix := Generated.Original.SmallSumcheck.protocolPrefix (F := F) (G := G)
 
-abbrev reduce (claim : Option F) (count service : Option Nat) :=
-  call (G := G) payload Generated.Original.SmallSumcheck.maximum context definition.outputScopes claim count service
+abbrev reduce (point : Option (List F)) (claim : Option F) (count service : Option Nat) :=
+  call (G := G) payload Generated.Original.SmallSumcheck.maximum context definition.outputScopes point claim count service
 
 theorem root_body : root.body = Generated.Bindings.SmallSumcheckInputs.protocol1Body :=
   Generated.Original.SmallSumcheck.root_body.trans Generated.Original.SmallSumcheck.source_body
 
-theorem call_binding (claim : Option F) (count service : Option Nat) :
+theorem call_binding (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     invokeProtocol (protocolPrefix (F := F) (G := G)) definition.signature context 1
-      (verifierInputs claim count service) = reduce claim count service :=
-  Generated.Original.SmallSumcheck.step0_binding claim count service
+      (verifierInputs point claim count service) = reduce point claim count service :=
+  Generated.Original.SmallSumcheck.library_call_binding "label_726564756365" point claim count service
 
 abbrev check (entries : Option (List F))
     (result : Values (Component (assignment F G)) reduceOutputs) :=
@@ -89,15 +89,15 @@ abbrev rightContext := OriginalSumcheckInstances.Two.rightContext
 
 def protocolPrefix := Generated.Original.TwoSums.protocolPrefix (F := F) (G := G)
 
-abbrev reduce (site : String) (claim : Option F) (count service : Option Nat) :=
+abbrev reduce (site : String) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :=
   call (G := G) payload Generated.Original.TwoSums.maximum (({} : ProtocolContext).enter site [0, 1])
-    definition.outputScopes claim count service
+    definition.outputScopes point claim count service
 
-theorem call_binding (site : String) (claim : Option F) (count service : Option Nat) :
+theorem call_binding (site : String) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     invokeProtocol (protocolPrefix (F := F) (G := G)) definition.signature
-      (({} : ProtocolContext).enter site [0, 1]) 1 (verifierInputs claim count service) =
-      reduce site claim count service :=
-  Generated.Original.TwoSums.library_call_binding site claim count service
+      (({} : ProtocolContext).enter site [0, 1]) 1 (verifierInputs point claim count service) =
+      reduce site point claim count service :=
+  Generated.Original.TwoSums.library_call_binding site point claim count service
 
 abbrev checkWith (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (entries : Option (List F)) (result : Values (Component (assignment F G)) reduceOutputs) :=

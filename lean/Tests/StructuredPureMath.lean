@@ -83,7 +83,7 @@ private def root : Definition := .function ⟨"main", .protocol, .publicDef, [],
 private def snapshot (definitions : List Definition) : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], definitions,
     definitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩
 
 private def mathHelper (name : String) (op : Descriptor) (inputs outputs : List Ty)
     (site : String := "") (regions : List WireRegion := []) : Definition :=

@@ -20,7 +20,7 @@ private def subject (endpoint : Semantics) : Subject F G ZkcSecurity.Examples.Su
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.Schnorr.compiled
   connection := ZkcSecurity.Examples.Subjects.Schnorr.sourceConnection
-  target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
+  target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []
   sitesUnique := .nil
@@ -29,7 +29,7 @@ private def subject (endpoint : Semantics) : Subject F G ZkcSecurity.Examples.Su
     | .idealMeaning => PUnit.unit
     | .executableBytes => ZkcSecurity.Examples.Subjects.Schnorr.lowering
   extractors := ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile.registry
-    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained) rfl
+    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding) rfl
 
 private def model : Model := ⟨.fixed, .symbolic "Q", "Q", "", .constant 0, none⟩
 

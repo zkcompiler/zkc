@@ -196,5 +196,35 @@ relation.declare @predicate {
   require(!parse(computationCall, context) &&
               refusal.find("execution-computation-symbol") != std::string::npos,
           "mathematical invocation accepted a relation symbol");
+  auto withArguments = [&](const std::string &text, llvm::StringRef natural) {
+    auto result = text;
+    result.insert(
+        result.find("signature ="),
+        "static_arguments = [[\"field\", \"bls12-381.fr\"], [\"nat\", \"" +
+            natural.str() + "\"]], ");
+    return result;
+  };
+  auto genericA = parse(withArguments(declaration, "7"), context);
+  auto genericB = parse(withArguments(declaration, "7"), otherContext);
+  require(genericA && genericB &&
+              succeeded(relation::verifyDeclarationConsistency(
+                  {genericA->getOperation(), genericB->getOperation()})),
+          "equal typed generic identity refused across contexts");
+  auto changedPurpose = declaration;
+  changedPurpose.replace(changedPurpose.find("statement"), 9, "witness");
+  auto genericConflict =
+      parse(withArguments(changedPurpose, "7"), otherContext);
+  require(genericA && genericConflict &&
+              failed(relation::verifyDeclarationConsistency(
+                  {genericA->getOperation(), genericConflict->getOperation()})),
+          "one generic instance changed purposes");
+  auto distinctUnused = parse(withArguments(changedPurpose, "8"), otherContext);
+  require(genericA && distinctUnused &&
+              succeeded(relation::verifyDeclarationConsistency(
+                  {genericA->getOperation(), distinctUnused->getOperation()})),
+          "distinct phantom arguments were merged");
+  require(!parse(withArguments(declaration, "07"), context) &&
+              refusal.find("relation-static-arguments") != std::string::npos,
+          "noncanonical generic static argument accepted");
   return failures != 0;
 }

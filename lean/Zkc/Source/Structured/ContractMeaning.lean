@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.ContractBoundary
+public import Zkc.Source.Structured.OpaqueRegistry
 
 @[expose] public section
 
@@ -12,12 +13,11 @@ variable {application : RelationApplication} {relation : RelationBinding snapsho
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-/-- One explicit interpretation environment per imported subject/experiment.
-Every use of an opaque declaration retrieves the same predicate by table index.
+/-- One registered interpretation environment per imported subject/experiment.
+Every opaque declaration resolves to its family instance before evidence.
 Formula meanings ignore this environment and remain actual helper invocation. -/
-structure RelationEnvironment {snapshot : Snapshot} (imported : Imported snapshot) (F G : Type) where
-  meanings : (index : Fin snapshot.relations.length) →
-    Values (assignment F G) (snapshot.relations.get index).inputs → Prop
+abbrev RelationEnvironment {snapshot : Snapshot} (_imported : Imported snapshot) (F G : Type) :=
+  RegisteredRelations (assignment F G) snapshot.relations
 
 /-- Invocation at the relation ABI uses the exact retained formula symbol and
 admitted helper table; it is not an externally chosen predicate. -/
@@ -38,7 +38,7 @@ theorem FormulaBinding.invokeRelation_body_view (binding : FormulaBinding import
   (BodyIn.of_mem (List.get_mem ..) binding.signature_eq exactRaw).invoke
     imported.program.payload.linked arguments
 
-/-- Opaque meanings are explicit interpretation choices. Formula meanings are
+/-- Opaque meanings are fixed by the admitted registry. Formula meanings are
 fixed by actual invocation; domain/predicate data describe a proposed local law,
 whose proof is required separately by the obligation record. -/
 inductive RelationInterpretation (imported : Imported snapshot)
@@ -50,7 +50,7 @@ inductive RelationInterpretation (imported : Imported snapshot)
       (domain predicate : Values (assignment F G) relation.declaration.inputs → Prop)
       (decidablePredicate : DecidablePred predicate)
   | opaque (noFormula : relation.declaration.formula = none)
-      (opaqueKind : relation.declaration.kind ≠ "zkc.language.formula/0")
+      (opaqueKind : relation.declaration.isOpaque = true)
 
 namespace RelationInterpretation
 variable {environment : RelationEnvironment imported F G}

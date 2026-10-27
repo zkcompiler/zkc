@@ -69,6 +69,9 @@ def validatorSubject (subject : Subject model original imported selected)
     Domain.Subject model subject.validatorArtifacts where
   compiled := subject.validatorCompiled
   target := subject.validatorTarget
+  relations := subject.relations
+  meaning := subject.target.transportMeaning
+    (AuthoredPair.admitted_validator_policy subject.admitted).symm subject.meaning
   originalExport := subject.originalExport
   participantExport := subject.validatorExport
   sites := sites

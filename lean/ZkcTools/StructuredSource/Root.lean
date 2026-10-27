@@ -133,6 +133,7 @@ structure FixedSubjectOutput where
   artifactsExpression : String
   modelModule : String
   modelExpression : String
+  registryExpression : String
   targetName : String
   originalExportExpression : String
   producerExportExpression : String
@@ -154,7 +155,7 @@ def fixedSubjectSource (output : FixedSubjectOutput) : String :=
   "  (Zkc.Construction.AuthoredPair.select original artifacts " ++ target ++ ").toOption.get (by decide +kernel)\n\n" ++
   "def subject : ZkcSecurity.Claims.HonestPair.Subject\n" ++
   "    " ++ paren output.modelExpression ++ " original imported selected := by\n" ++
-  "  bind_authored_subject " ++ target ++ "\n" ++
+  "  bind_authored_subject " ++ target ++ " with_registry " ++ output.registryExpression ++ "\n" ++
   "    exports " ++ output.originalExportExpression ++ ", " ++ output.producerExportExpression ++ ", " ++
   output.validatorExportExpression ++ "\n\n" ++
   "abbrev validatorArtifacts := subject.validatorArtifacts\n" ++

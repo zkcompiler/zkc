@@ -25,7 +25,7 @@ private def ports : Json := arr [
 
 private def relationFields : List Json := [
   .str "relation", .str "Proof", .str "public", .str "opaque.kind",
-  .str "opaque/key:007", .str "revision:0009", arr [fieldTy, groupTy, groupTy],
+  .str "opaque/key:007", .str "revision:0009", empty, arr [fieldTy, groupTy, groupTy],
   arr [boolTy], strings ["parameter", "statement", "witness"], .null]
 
 private def instruction (op : Json) (operands : List Nat := [])
@@ -102,7 +102,7 @@ private def noRows : Json := arr [empty, empty]
 
 private def envelope (domains relations definitions : List Json) : Json :=
   arr [.str "zkc.structured-source/0", .str "original", .str digest, .str "main",
-    arr domains, arr relations, empty, arr definitions, empty, rows]
+    arr domains, arr relations, empty, arr definitions, empty, rows, noRows]
 
 private def subject : Json := envelope [arr domainFields]
   [arr relationFields, arr (relationFields.set 1 (.str "Unused"))]
@@ -157,7 +157,7 @@ private def run : IO Unit := do
     check "domain-retained" (snapshot.domains == [⟨"items", [.vector scalarDomain], [.indices 0 0], 0⟩])
     check "relation-exact" (snapshot.relations.head? == some ⟨"Proof", .publicDef, "opaque.kind",
       "opaque/key:007", "revision:0009", [.field scalarDomain, .group groupDomain, .group groupDomain],
-      [.boolean], ["parameter", "statement", "witness"], none⟩)
+      [.boolean], ["parameter", "statement", "witness"], none, []⟩)
     match snapshot.definitions with
     | [.function root, .function other, .function localFn, .function mathFn, .finite finite] =>
       check "protocol-interface-order" (root.interface == some ⟨["Prover", "Verifier"],
@@ -234,6 +234,18 @@ private def run : IO Unit := do
         else Format.definition (arr malformed) |>.map (fun _ => ())
       check s!"record-arity: {label}" (hasError actual code)
 
+  check "relation-static-noncanonical-natural" (hasError
+    (Format.relation (arr (relationFields.set 6 (arr [strings ["nat", "02"]]))))
+    "structured-origin-decimal")
+  check "relation-static-count-limit" (hasError
+    (Format.relation (arr (relationFields.set 6 (arr (List.replicate 129 (strings ["bool"]))))))
+    "structured-origin-list-limit")
+  let oversizedArguments := arr (List.replicate 8
+    (arr [.str "tuple", arr (List.replicate 512 (strings ["bool"]))]))
+  check "relation-static-aggregate-limit" (hasError
+    (Format.relation (arr (relationFields.set 6 oversizedArguments)))
+    "structured-relation-static-arguments")
+
   for (label, value, code) in [
       ("unknown-type", strings ["tuple"], "structured-type-unsupported"),
       ("service-empty", strings ["service", ""], "structured-string"),
@@ -303,12 +315,12 @@ private def run : IO Unit := do
 
   for badPurpose in ["", "Parameter", "public", "unknown"] do
     check s!"relation-purpose: {badPurpose}" (hasError
-      (Format.relation (arr (relationFields.set 8 (strings [badPurpose])))) "structured-relation-purpose")
+      (Format.relation (arr (relationFields.set 9 (strings [badPurpose])))) "structured-relation-purpose")
   for index in [1, 3, 4, 5] do
     check s!"relation-empty-string: {index}" (hasError
       (Format.relation (arr (relationFields.set index (.str "")))) "structured-string")
   check "relation-purpose-type" (hasError
-    (Format.relation (arr (relationFields.set 8 (arr [.null])))) "structured-relation-purpose")
+    (Format.relation (arr (relationFields.set 9 (arr [.null])))) "structured-relation-purpose")
   check "relation-visibility" (hasError
     (Format.relation (arr (relationFields.set 2 (.str "export")))) "structured-visibility")
   check "relation-not-a-definition" (hasError (Format.definition (arr relationFields)) "structured-definition")
@@ -323,13 +335,15 @@ private def run : IO Unit := do
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty],
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty],
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty,
-        noRows, empty]] do
+        noRows],
+      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty,
+        noRows, noRows, empty]] do
     check "envelope-tag-or-arity" (hasError (decode (arr envelopeFields)) "structured-envelope")
   for badDigest in ["sha256:" ++ String.ofList (List.replicate 64 'A'),
       "sha256:" ++ String.ofList (List.replicate 64 'g'), "sha256:0", "SHA256:" ++
         String.ofList (List.replicate 64 '0')] do
     check "digest-canonical" (hasError (decode (arr [.str "zkc.structured-source/0",
-      .str "original", .str badDigest, .str "main", empty, empty, empty, empty, empty, noRows]))
+      .str "original", .str badDigest, .str "main", empty, empty, empty, empty, empty, noRows, noRows]))
         "structured-source-digest")
 
   -- Bounded shapes apply to all declarations, even unused metadata and bodies.
@@ -337,7 +351,7 @@ private def run : IO Unit := do
       ("domains-capacity", envelope (List.replicate 129 (arr domainFields)) [] []),
       ("relations-capacity", envelope [] (List.replicate 129 (arr relationFields)) []),
       ("definitions-capacity", envelope [] [] (List.replicate 129 (arr rootFields))),
-      ("unused-relation-purpose", envelope [] [arr (relationFields.set 8 (strings ["bad"]))] [arr rootFields]),
+      ("unused-relation-purpose", envelope [] [arr (relationFields.set 9 (strings ["bad"]))] [arr rootFields]),
       ("unused-helper-type", envelope [] [] [arr rootFields, arr (mathFields.set 4 (arr [strings ["unknown"]]))])
     ] do
     let expected := if label == "unused-relation-purpose" then "structured-relation-purpose"

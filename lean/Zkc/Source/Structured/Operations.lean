@@ -146,6 +146,7 @@ inductive Op where
   | indexEqual
   | indexLess
   | indexPowerOfTwo
+  | multilinearRestrictPrefix (domain : String)
   | vectorLength (domain : String)
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
@@ -177,6 +178,7 @@ def Op.arguments : Op → List Ty
   | .exec primitive => primitive.arguments
   | .indexConstant _ => []
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.index, .index]
+  | .multilinearRestrictPrefix d => [.vector d, .vector d]
   | .vectorLength d => [.vector d]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
@@ -200,6 +202,7 @@ def Op.results : Op → List Ty
   | .exec primitive => primitive.results
   | .indexConstant _ => [.index]
   | .indexEqual | .indexLess | .indexPowerOfTwo => [.boolean]
+  | .multilinearRestrictPrefix d => [.vector d]
   | .vectorLength _ => [.index]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
   | .fieldEmbed extension _ => [.field extension]
@@ -233,7 +236,7 @@ def Op.helpers : Op → List Helper
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
-  | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+  | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. | .makeProduct .. | .getProduct .. |

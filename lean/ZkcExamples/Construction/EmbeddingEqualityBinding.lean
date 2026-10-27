@@ -75,7 +75,6 @@ def retained : RetainedTarget imported artifact.policy [.field "koala-bear", .fi
   noResidual := by decide +kernel
   decision := by decide +kernel
   application := application
-  formula := formula
   booleanOutput := rfl
   publicTypes := rfl
   publicArity := rfl

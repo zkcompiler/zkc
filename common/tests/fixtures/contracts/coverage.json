@@ -117,7 +117,8 @@
       "poly.table_arity",
       "pairing.apply",
       "vector.equal",
-      "vector.find_last"
+      "vector.find_last",
+      "multilinear.restrict_prefix"
     ],
     "group": [
       "encoding.groups_compressed",

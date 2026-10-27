@@ -25,7 +25,7 @@ example {F G : Type} [Field F] [DecidableEq F]
       (terminal entries [] scalar).bind (fun result => .done (result, construction)) := rfl
 
 example {F G : Type} (right : Values (Component (assignment F G)) [.boolean]) :
-    both (I := Nominal.signature F "bls12-381.fr") (.cons none .nil) right =
+    both (I := NominalField.signature F "bls12-381.fr") (.cons none .nil) right =
       .done (.cons none .nil) := by
   cases right with
   | cons value rest =>
@@ -34,7 +34,7 @@ example {F G : Type} (right : Values (Component (assignment F G)) [.boolean]) :
 
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.run_bridge
 #print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_bridge
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.twoRoots_bridge
+#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_bridge
 #print axioms SmallSumcheck.Soundness.rejected
 #print axioms SmallSumcheck.Soundness.costs
 #print axioms TwoSums.Soundness.rejected

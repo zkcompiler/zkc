@@ -4,6 +4,7 @@ meta import Lean.Elab.Command
 meta import Lean.Meta.Eqns
 
 public import Zkc.Semantics.Interaction
+public import Zkc.Semantics.Interpretation
 
 @[expose] public section
 
@@ -55,6 +56,24 @@ theorem Yields.mono {I : Signature} {A : Type} {property weaker : A → Prop}
   | done value => exact implies value yields
   | halt reason => trivial
   | call operation continuation ih => exact fun reply => ih reply (yields reply)
+
+/-- Replacing operations preserves a fact that holds for every possible
+returned value. Interpreted operations may themselves stop or make calls. -/
+theorem Yields.interpret {I J : Signature} {A : Type} {property : A → Prop}
+    {process : Process I A} (yields : Yields property process)
+    (operations : OperationInterpretation I J) :
+    Yields property (process.interpret operations) := by
+  have all {B : Type} (process : Process J B) : Yields (fun _ => True) process := by
+    induction process with
+    | done => trivial
+    | halt => trivial
+    | call _ _ ih => exact ih
+  induction process with
+  | done => exact yields
+  | halt => trivial
+  | call operation next ih =>
+    change Yields property ((operations operation).bind _)
+    exact (all (operations operation)).bind fun reply _ => ih reply (yields reply)
 
 /-- Repeated steps preserve a counted invariant. -/
 theorem Yields.repeatN {I : Signature} {A : Type} {invariant : Nat → A → Prop}

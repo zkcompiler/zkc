@@ -80,7 +80,7 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     cases arguments
     cases callbacks
     rfl
-  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with

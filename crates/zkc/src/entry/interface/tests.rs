@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::{Value, json};
+mod static_arguments;
 fn digest(s: &str) -> String {
     crate::host::inputs::hex(&Sha256::digest(s.as_bytes()))
 }
@@ -24,7 +25,7 @@ fn document() -> Value {
             "clauses":[{"name":"knowledge","kind":"target","subject":{"relation":"Predicate",
                 "operands":[selector("input",0,"V"),selector("input",1,"P")]},
                 "residual":null,"decision":selector("output",0,"V")}]}],
-        "relations":[{"symbol":"Predicate","inputs":[
+        "relations":[{"symbol":"Predicate","static_arguments":[],"inputs":[
             {"name":"s","purpose":"statement","native":[0],"schema":boolean.clone()},
             {"name":"w","purpose":"witness","native":[1],"schema":boolean}],"definition":{"kind":"opaque"}}],
         "job":{"kind":"proof","prover":"P","verifier":"V","public":[0],
@@ -303,7 +304,7 @@ fn bundle_document() -> Value {
     let index = schema("index", "index", json!(["index"]));
     let boolean = schema("boolean", "bool", json!(["bool"]));
     let vector = schema("builtin", "vector:koala-bear", json!(["vector:koala-bear"]));
-    value["relations"] = json!([{"symbol":"Machine","inputs":[
+    value["relations"] = json!([{"symbol":"Machine","static_arguments":[],"inputs":[
         {"name":"x0","purpose":"statement","native":[0],"schema":field},
         {"name":"height","purpose":"parameter","native":[1],"schema":index},
         {"name":"present","purpose":"statement","native":[2],"schema":boolean},

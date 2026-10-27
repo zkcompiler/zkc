@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.ArtifactBinding
+public import Zkc.Construction.OriginalHeadReduction
 public meta import Lean.Elab.Tactic
 public meta import Zkc.Construction.TransportReduction
 
@@ -13,12 +14,50 @@ set_option autoImplicit false
 namespace Zkc.Construction.ArtifactBinding
 open Lean Meta Elab Tactic
 
+/-- Saturate explicit local equations, retaining reductions that expose a head
+constructor even when they are definitionally equal. Errors are not hidden as
+an unsupported structural case. The supplied pass must also succeed at rest. -/
+elab "saturate_artifact " body:tacticSeq : tactic => do
+  let mut changed := true
+  while changed do
+    let beforeGoals ← getGoals
+    let before ← beforeGoals.mapM fun goal => do instantiateMVars (← goal.getType)
+    evalTactic body
+    let afterGoals ← getGoals
+    let after ← afterGoals.mapM fun goal => do instantiateMVars (← goal.getType)
+    changed := before != after && !afterGoals.isEmpty
+
 partial def startsCheckpoint (expression : Expr) : Bool :=
   if expression.isAppOf ``PIR.Process.call then
     expression.getAppArgs[expression.getAppArgs.size - 2]!.isAppOf ``Domain.Effect.checkpoint
   else if expression.isAppOf ``PIR.Process.bind then
     startsCheckpoint expression.getAppArgs[expression.getAppArgs.size - 2]!
   else false
+
+/-- A supplied component certificate can close a reached prefix. Composition
+uses the ordinary Simulation.bind rule and retains its frame and return laws. -/
+def applyComponent (goal : MVarId) (rule : TSyntax `term) : TacticM (List MVarId) := do
+  let target ← instantiateMVars (← goal.getType)
+  let indices := target.getAppArgs
+  unless indices.size ≥ 2 && indices[indices.size - 2]!.isAppOf ``PIR.Process.bind &&
+      indices.back!.isAppOf ``PIR.Process.bind do
+    throwError "expected two reached component prefixes"
+  let proof ← Term.elabTerm rule none
+  let (arguments, _, type) ← forallMetaTelescopeReducing (← inferType proof)
+  let type ← whnf type
+  unless type.isAppOf ``Original.Simulation do
+    throwError "expected a structural component certificate"
+  let application := mkAppN proof arguments
+  let obligations ← goal.apply (← mkConstWithFreshMVarLevels ``Original.Simulation.bind)
+  let head :: remaining := obligations
+    | throwError "component composition did not expose its prefix certificate"
+  let conditions ← head.apply application
+  let mut pending := conditions ++ remaining
+  for argument in arguments do
+    if argument.isMVar && !(← argument.mvarId!.isAssigned) then
+      unless pending.contains argument.mvarId! do
+        pending := pending ++ [argument.mvarId!]
+  return pending
 
 partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
     (normalize side : TSyntax `tactic) : TacticM Unit :=
@@ -48,12 +87,45 @@ partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
     if (← getGoals).isEmpty then return
     let [current] ← getGoals | throwError "normalizer must leave one simulation goal"
     current.withContext do
-      let target ← instantiateMVars (← current.getType)
+      let target ← whnf (← instantiateMVars (← current.getType))
       unless target.isAppOf ``Original.Simulation do
         throwError "expected a structural simulation: {target}"
+      let args := target.getAppArgs
+      let source := args[args.size - 2]!
+      let actual := args.back!
+      let condition := if source.isAppOf ``ite then some source.getAppArgs[1]!
+        else if actual.isAppOf ``ite then some actual.getAppArgs[1]! else none
+      if source.isAppOf ``ite && actual.isAppOf ``ite then
+       if let some condition := condition then
+        let condition ← Term.exprToSyntax condition
+        evalTactic (← `(tactic| by_cases artifactCondition : $condition))
+        for branch in ← getGoals do derive branch rules normalize side
+        return
       let saved ← saveState
       let mut applied : Option (List MVarId) := none
+      -- Normalization can expose a checkpoint that was hidden by a view
+      -- wrapper. Discharge that reached frame before matching components.
+      if startsCheckpoint actual then
+        try
+          applied := some (← current.apply (← mkConstWithFreshMVarLevels ``Original.Simulation.checkpoint))
+        catch _ => pure ()
+      let processes := target.getAppArgs
+      let source := processes[processes.size - 2]!
+      let actual := processes.back!
+      -- A reached concrete constructor needs no component unification. In
+      -- particular, do not unfold an unrelated closed helper while matching
+      -- an already exposed nominal call and its universally quantified reply.
+      for (constructor, rule) in [(``PIR.Process.done, ``Original.Simulation.done),
+          (``PIR.Process.halt, ``Original.Simulation.halt),
+          (``PIR.Process.call, ``Original.Simulation.call)] do
+        if applied.isSome then break
+        if source.isAppOf constructor && actual.isAppOf constructor then
+          saved.restore
+          try
+            applied := some (← current.apply (← mkConstWithFreshMVarLevels rule))
+          catch _ => pure ()
       for rule in rules do
+        if applied.isSome then break
         saved.restore
         try
           let proof ← Term.elabTerm rule none
@@ -61,6 +133,13 @@ partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
           applied := some obligations
           break
         catch _ => pure ()
+      if applied.isNone then
+        for rule in rules do
+          saved.restore
+          try
+            applied := some (← applyComponent current rule)
+            break
+          catch _ => pure ()
       for rule in [``Original.Simulation.done, ``Original.Simulation.halt,
           ``Original.Simulation.checkpoint, ``Original.Simulation.call] do
         if applied.isSome then break
@@ -96,9 +175,6 @@ partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
               throwError "local frame or return obligation remains: {MessageData.ofGoal (← getMainGoal)}"
         return
       saved.restore
-      let args := target.getAppArgs
-      let source := args[args.size - 2]!
-      let actual := args.back!
       let condition := if source.isAppOf ``ite then some source.getAppArgs[1]!
         else if actual.isAppOf ``ite then some actual.getAppArgs[1]! else none
       if let some condition := condition then
@@ -130,7 +206,7 @@ macro "normalize_artifact_operations " "[" laws:term,* "]"
     " unfolding " "[" definitions:term,* "]" : tactic => do
   let lemmas ← (definitions.getElems ++ laws.getElems).mapM fun term =>
     `(Parser.Tactic.simpLemma| $term:term)
-  `(tactic| simp only [$lemmas,*,
+  `(tactic| simp (config := { failIfUnchanged := false }) only [↓Original.stopAtCall, $lemmas,*,
     Domain.View.participant, Domain.View.sequence, Domain.View.calculation,
     Domain.View.helper, Domain.View.guard, Domain.View.append, Domain.View.empty,
     Domain.View.receive, Domain.View.send, Domain.View.indicesEmpty,

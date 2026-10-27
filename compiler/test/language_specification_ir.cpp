@@ -901,5 +901,61 @@ int main() {
                     baseline.interface().relations[0].revision,
                 "global flags erased predicate body identity");
       });
+  cases.run("opaque static arguments compare as ordered typed trees", [&] {
+    auto generic = close(R"zkc(module sample;
+domain A = field("bls12-381.fr");
+domain B = field("koala-bear");
+
+relation Layer<F:Field, N:nat, Unused:nat>(statement point:F, witness value:F)
+  = opaque("vendor.layer/0", "layer", "0");
+relation Alias<F:Field, N:nat, Unused:nat>(statement renamed:F, witness other:F)
+  = opaque("vendor.layer/0", "layer", "0");
+
+protocol Run roles(P,V)(a:A@(P,V), b:B@(P,V))->(accepted:bool@V)
+spec {
+  input first = Layer<A,2,7>(in.a@V, in.a@P);
+  input other_domain = Layer<B,2,7>(in.b@V, in.b@P);
+  input other_natural = Layer<A,3,7>(in.a@V, in.a@P);
+  input other_unused = Layer<A,2,8>(in.a@V, in.a@P);
+  target alias = Alias<A,2,7>(in.a@V, in.a@P) accept out.accepted;
+} {
+  let accepted@V = true;
+  return (accepted=accepted);
+}
+
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+)zkc");
+    auto original = parse(take(emitOriginal(generic, context)));
+    take(compareOriginal(generic, *original));
+    auto declaration = relation(*original);
+    auto arguments = declaration.getStaticArguments();
+    require(arguments.size() == 3, "relation omitted unused static argument");
+    std::vector<mlir::Attribute> reordered(arguments.begin(), arguments.end());
+    std::swap(reordered[1], reordered[2]);
+    declaration.setStaticArgumentsAttr(
+        mlir::ArrayAttr::get(&context, reordered));
+    require(succeeded(mlir::verify(*original)),
+            "well-typed reordered tree fixture rejected structurally");
+    refuses(compareOriginal(generic, *original), "source.correspondence");
+    declaration.setStaticArgumentsAttr(mlir::ArrayAttr::get(
+        &context, {arguments[0], arguments[1],
+                   mlir::ArrayAttr::get(
+                       &context, {mlir::StringAttr::get(&context, "nat"),
+                                  mlir::StringAttr::get(&context, "99")})}));
+    refuses(compareOriginal(generic, *original), "source.correspondence");
+    declaration.setStaticArgumentsAttr(mlir::ArrayAttr::get(
+        &context,
+        {mlir::ArrayAttr::get(&context,
+                              {mlir::StringAttr::get(&context, "field"),
+                               mlir::StringAttr::get(&context, "koala-bear")}),
+         arguments[1], arguments[2]}));
+    refuses(compareOriginal(generic, *original), "target.admission");
+    declaration.setStaticArgumentsAttr(mlir::ArrayAttr::get(
+        &context, {mlir::ArrayAttr::get(
+                      &context, {mlir::StringAttr::get(&context, "nat"),
+                                 mlir::StringAttr::get(&context, "02")})}));
+    require(failed(mlir::verify(*original)),
+            "noncanonical opaque natural accepted");
+  });
   return cases.result();
 }

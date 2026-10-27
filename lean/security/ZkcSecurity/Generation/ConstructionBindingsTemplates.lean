@@ -15,14 +15,14 @@ def validatorStatement : String :=
     (history : Domain.History (uniformCarriers F G)) :
     Original.Simulation
       (VerifierReturns (F := F) (G := G) context outputs
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩])
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩])
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold (routing handle)
         (OriginalSumcheckLibrary.round program.payload occurrence.protocol
           (occurrence.protocol.roles 1)
           (.cons (some index) ((SumcheckVerifierLaws.embedV (some point, some scalar)).append
             (.cons (some handle) .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       ($BODY (ringModel F G) program context
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" point),
           .data (.field "bls12-381.fr" scalar), .transcript context.suite history])) := by
@@ -50,7 +50,7 @@ def producerStatement : String :=
     (history : Domain.History (uniformCarriers F G)) :
     Original.Simulation
       (RoundReturns (F := F) (G := G) context outputs
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         raw dimension width point)
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold (routing handle)
@@ -58,7 +58,7 @@ def producerStatement : String :=
           (occurrence.protocol.roles 0)
           (.cons (some index) ((SumcheckProverLaws.embedP (raw, dimension, width, point)).append
             (.cons none .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       ($BODY (ringModel F G) program context
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" raw),
           .data (.index dimension), .data (.index width),
@@ -81,7 +81,7 @@ def producer (method : ConstructionBindings.ProofMethod := .sharedTemplate) : St
 def producerRoutes : String :=
   r###"theorem routes (handle index : Nat) :
     Routes (routing handle) occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       (occurrence.origins context index) := by
   constructor
   · rfl
@@ -106,16 +106,16 @@ def producerRoutes : String :=
       policy, Bool.false_eq_true, ↓reduceIte, candidates, drawSite]
     change ((OccurrenceResolution.resolve program.snapshot context
       (context.message (SumcheckVerifierLaws.deliverySite occurrence.protocol) 1 0)
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       [occurrence.delivery]).bind fun message =>
       (OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol)
           (.draw "bls12-381.fr"))
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         [occurrence.draw]).bind fun draw => some (draw, message)) = _
     have messageSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.message (SumcheckVerifierLaws.deliverySite occurrence.protocol) 1 0)
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         [occurrence.delivery] = some (occurrence.origins context index).delivery := by
       simp only [OccurrenceResolution.resolve, List.filter_cons, List.filter_nil,
         OccurrenceResolution.matchesOccurrence,
@@ -130,7 +130,7 @@ def producerRoutes : String :=
       kernel_rfl
     have drawSingleton : OccurrenceResolution.resolve program.snapshot context
         (context.query (SumcheckVerifierLaws.challengeSite occurrence.protocol) (.draw "bls12-381.fr"))
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         [occurrence.draw] = some (occurrence.origins context index).draw := by
       simp only [OccurrenceResolution.resolve, List.filter_cons, List.filter_nil,
         OccurrenceResolution.matchesOccurrence, $VALID_DRAW]

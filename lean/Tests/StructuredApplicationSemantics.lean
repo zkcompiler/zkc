@@ -403,7 +403,7 @@ private def snapshot : Snapshot :=
       .block [] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Flat", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 set_option smartUnfolding false in
 private def unit : UnitPayload where
   definitions := []

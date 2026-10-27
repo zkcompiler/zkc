@@ -184,7 +184,7 @@ this vector's shape at the supplied round count. -/
 theorem false_predicate_rejected {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G] :
     ¬ (∀ statement, False ↔
-      (SoundnessTarget.retained Sumcheck.Contract.retained).FalseStatement
+      (SoundnessTarget.retained Sumcheck.Contract.retained ZkcExamples.Structured.SumcheckContractBindings.publicFormula).FalseStatement
         (F := F) (G := G) statement) := by
   intro pin
   exact (pin malformed).mpr ((Sumcheck.Contract.falseStatement_pinned _).mp malformed_false)
@@ -193,7 +193,7 @@ theorem false_predicate_rejected {F G : Type} [Field F] [DecidableEq F]
 with False. The relation is read at the published zero base and point. -/
 theorem false_knowledge_relation_rejected {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G] :
-    ¬ (∀ statement witness, False ↔ Schnorr.Contract.retained.Holds statement
+    ¬ (∀ statement witness, False ↔ Schnorr.Contract.retained.Holds ZkcExamples.Construction.SchnorrProofBinding.formulaBinding statement
       (Schnorr.Contract.embed (F := F) (G := G) witness)) := by
   intro pin
   apply (pin (.cons (0 : G) (.cons 0 .nil)) (0 : F)).mpr

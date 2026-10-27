@@ -64,6 +64,7 @@ def knowledge (endpoint : Semantics) (lowering : LoweringRequirement artifacts c
   compiled := compiled
   connection := sourceConnection
   target := Contract.retained
+  formula := ZkcSecurity.Examples.Subjects.SchnorrAnd.Contract.formulaBinding
   witness := Contract.embed
   relationPinned := Contract.holds_pinned
   handle := 0

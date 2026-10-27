@@ -36,9 +36,9 @@ noncomputable instance samples : ∀ event : Domain.Event model.toCarriers,
 
 def subject : HonestPair.Subject model original imported selected := by
   bind_authored_subject "selected_rows" exports
-    "sha256:4f999b8a75cff894105d7a535f7b16453d7635ddc3af3b73f49415833b295617",
-    "sha256:e7d8db9a3a3140e28a5167809f95e3df45507cd76fa3080a3478366abea814cb",
-    "sha256:c93e2b6585b74d9eaee11131fb3a5676e56d9aab511dc1810bae4ce31d4616d6"
+    "sha256:f9ad0166f81e29dacbc6be4e2e674912a349fcff66f6cf01826b81b8511326fc",
+    "sha256:031121c1a6117b34ca2edacf20d589dd65958524d9054cb3edf674278330a977",
+    "sha256:fdb65e400d7005ce06cbeddeda37f05f2ab0f24dab1625f9198b9dc65a45d59d"
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled

@@ -1,0 +1,27 @@
+module sample;
+
+use sumcheck::{Reduce, pending, check};
+use zkc::multilinear as mle;
+use zkc::vector::{Vector};
+domain F = field("bls12-381.fr");
+
+fn terminal(values: Vector<F>, claim: sumcheck::Pending<F>, finish: bool) -> bool {
+  return if finish { check(values, claim) } else { check(values, claim) };
+}
+
+// The first call may stop at any prefix. Its pending claim moves directly
+// into the second call, and only the complete terminal reaches the Entry.
+protocol Run roles(P,V)
+    (values: Vector<F> @(P,V), variables: index @(P,V),
+     claim: F @V, rounds: index @(P,V), suffix_rounds: index @(P,V), finish: bool @V,
+     challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Vector<F> @P, accepted: bool @V) {
+  let table @P = mle::table(values, variables, 1);
+  let initial @V = pending(claim);
+  #[site(prefix)] let (point, residual, next) = Reduce<F,4>(table, initial, rounds, challenges);
+  #[site(suffix)] let (_, _, final) = Reduce<F,4>(residual, next, suffix_rounds, challenges);
+  let accepted @V = terminal(values, final, finish);
+  return (point=point, residual=mle::values(residual), accepted=accepted);
+}
+
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

@@ -1,0 +1,88 @@
+module mixed_sumcheck;
+
+use zkc::primitives::vector::{Vector, empty, append, length, sum};
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+
+fn embed(value: Base) -> Extension {
+  return kernel<Extension>("field.embed", value);
+}
+
+// One sealed linear claim carries the explicit prefix and scalar obligation.
+#[linear]
+struct Pending { pub point: Vector<Extension>, pub value: Extension }
+
+fn pending(value: Extension) -> Pending {
+  return Pending { point: empty<Extension>(), value: value };
+}
+fn open_claim(claim: Pending) -> (Vector<Extension>, Extension) {
+  return unpack(claim);
+}
+fn at_point(point: Vector<Extension>, value: Extension) -> Pending {
+  return Pending { point: point, value: value };
+}
+
+// The installed interpretation restricts the fixed embedded base table.
+relation Residual(parameter a: Base, parameter b: Base,
+    statement point: Vector<Extension>, statement value: Extension)
+  = opaque("mixed-sumcheck.residual/0", "koala-bear-octic", "0");
+
+protocol Round roles(P,V)
+    (a: Base @P, b: Base @P, claim: Pending @V,
+     challenges: Random<Extension> @V) -> (evaluation: Pending @V)
+  spec {
+    continuation sum = Residual(in.a,in.b,in.claim.point,in.claim.value)
+      residual Residual(in.a,in.b,out.evaluation.point,out.evaluation.value);
+  }
+{
+  let opened @V = open_claim(claim);
+  let low @P = embed(a);
+  let high @P = embed(b);
+  #[site(low)] let received_low = send P -> V(low);
+  #[site(high)] let received_high = send P -> V(high);
+  require @V received_low + received_high == opened.1;
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let delivered = send V -> P(challenge);
+  let residual @V = received_low + (received_high - received_low) * challenge;
+  let point @V = append(opened.0, challenge);
+  return (evaluation = at_point(point, residual));
+}
+
+// Injectivity of the declared embedding identifies this with the embedded sum.
+relation Sum(parameter a: Base, parameter b: Base, statement claim: Base) {
+  return claim == a + b;
+}
+
+math fn terminal_value(low: Extension, high: Extension, point: Extension, value: Extension) -> bool {
+  return value == low + (high - low) * point;
+}
+
+fn check(a: Base, b: Base, evaluation: Pending) -> bool {
+  let opened = unpack(evaluation);
+  require length(opened.0) == 1;
+  let point = sum(opened.0);
+  let low = embed(a);
+  let high = embed(b);
+  return terminal_value(low, high, point, opened.1);
+}
+
+// Public two-entry base table; Round has no verifier reference-table input.
+protocol Root roles(P,V)
+    (a: Base @(P,V), b: Base @(P,V), claim: Base @V,
+     challenges: Random<Extension> @V) -> (accepted: bool @V)
+  spec { target sum = Sum(in.a@V,in.b@V,in.claim) accept out.accepted; }
+{
+  let embedded_claim @V = embed(claim);
+  let initial @V = pending(embedded_claim);
+  #[site(round)] let (evaluation) = Round roles(P,V)(a,b,initial,challenges);
+  return (accepted = check(a,b,evaluation));
+}
+
+
+proof Proof = Root {
+  prover P;
+  verifier V;
+  public { a, b, claim };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
+}

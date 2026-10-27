@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.Components.TwoSumsHelpers
+public import ZkcExamples.Structured.Generated.Mathematics.TwoSums
 public import ZkcSecurity.Families.Sumcheck.TableComponentFold
 public import Zkc.Source.RegionDerivation
 
@@ -22,12 +22,15 @@ open ZkcSecurity.Families.Sumcheck.TableComponent
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
+noncomputable def targetMeanings : Meanings F G :=
+  closedMeanings TwoSumsInputs.imported.program.payload.definitions
+
 def targetFold : FoldSpec := public_sums.callee.fold
 
 theorem target_step (raw : List F) (a value : F) :
-    invoke (helperMeanings (G := G)) targetFold.stepHelper
+    invoke (targetMeanings (G := G)) targetFold.stepHelper
       (.cons a (.cons value (.cons raw .nil))) = .done (.cons (a + value) .nil) := by
-  change invoke (helperMeanings (G := G)) public_sums.callee.foldStep.helper _ = _
+  change invoke (targetMeanings (G := G)) public_sums.callee.foldStep.helper _ = _
   erw [public_sums.callee.foldStep.association.invoke TwoSumsInputs.unit.linked]
   simp only [public_sums.callee.foldStep.body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Values.get, Regions.denote]
@@ -35,7 +38,7 @@ theorem target_step (raw : List F) (a value : F) :
   rfl
 
 theorem target_total (raw : List F) (bounded : raw.length < indexLimit) :
-    invoke (helperMeanings (G := G)) public_sums.callee.helper (.cons raw .nil) =
+    invoke (targetMeanings (G := G)) public_sums.callee.helper (.cons raw .nil) =
       .done (.cons raw.sum .nil) := by
   erw [public_sums.callee.association.invoke TwoSumsInputs.unit.linked]
   simp only [public_sums.callee.body, Region.denote, meaning, Evaluation.meaning,
@@ -49,13 +52,13 @@ theorem target_total (raw : List F) (bounded : raw.length < indexLimit) :
 /-- Complete Boolean adequacy of the retained actual conjunction formula. -/
 theorem target_equation (left right : List F) (leftClaim rightClaim : F)
     (leftBound : left.length < indexLimit) (rightBound : right.length < indexLimit) :
-    invoke (helperMeanings (G := G)) public_sums.helper
+    invoke (targetMeanings (G := G)) public_sums.helper
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       .done (.cons (decide (left.sum = leftClaim ∧ right.sum = rightClaim)) .nil) := by
   erw [public_sums.association.invoke TwoSumsInputs.unit.linked]
   simp only [public_sums.body, Region.denote, meaning, Evaluation.meaning,
     Evaluation.operation, Operands.eval, Values.get, Regions.denote]
-  rw [target_total left leftBound]
+  erw [target_total left leftBound]
   simp only [PIR.Process.bind, Environment.prepend, Environment.push]
   erw [target_total right rightBound]
   simp only [PIR.Process.bind, Environment.prepend, Environment.push]

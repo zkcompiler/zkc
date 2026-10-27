@@ -16,18 +16,18 @@ namespace ZkcSecurity.Tools
 open Zkc.Source.Structured Zkc.Construction
 
 /-- Enumerate the retained finite clause index with the computational `Fin`
-recursor. A proof of list membership cannot eliminate into `FormulaClause`,
+recursor. A proof of list membership cannot eliminate into `RetainedClause`,
 which contains data as well as proofs. Every generated branch is checked. -/
-elab "bind_input_formulas" : tactic => Lean.Elab.Tactic.withMainContext do
+elab "bind_input_meanings" : tactic => Lean.Elab.Tactic.withMainContext do
   let target ← Lean.Meta.whnf (← Lean.Elab.Tactic.getMainTarget)
   let .forallE _ domain _ _ := target
-    | Lean.throwError "bind_input_formulas: expected a finite clause function"
+    | Lean.throwError "bind_input_meanings: expected a finite clause function"
   let domain ← Lean.Meta.whnf domain
   unless domain.getAppFn.constName? == some ``Fin do
-    Lean.throwError "bind_input_formulas: expected a Fin clause index"
+    Lean.throwError "bind_input_meanings: expected a Fin clause index"
   let count ← Lean.Meta.reduce domain.getAppArgs[0]!
   let some count := count.rawNatLit?
-    | Lean.throwError "bind_input_formulas: clause count is not closed"
+    | Lean.throwError "bind_input_meanings: clause count is not closed"
   let mut term ← `(fun index => Fin.elim0 index)
   for _ in [:count] do
     term ← `(Fin.cases (by
@@ -35,14 +35,14 @@ elab "bind_input_formulas" : tactic => Lean.Elab.Tactic.withMainContext do
       first
         | solve | cases isInput
         | exact { binding := by bind_contract
-                  formula := by bind_contract
+                  meaning := by bind_retained_meaning
                   booleanOutput := by rfl }) $term)
   let generated ← Lean.Elab.Term.elabTermEnsuringType term target
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)
   Lean.Elab.Tactic.replaceMainGoal []
 
-elab "bind_authored_subject " name:str
+elab "bind_authored_subject " name:str " with_registry " registry:term
     " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
     Lean.Elab.Tactic.withMainContext do
   let target ← Lean.Meta.whnf (← Lean.Elab.Tactic.getMainTarget)
@@ -70,6 +70,8 @@ elab "bind_authored_subject " name:str
                  exact ⟨producer, validator⟩
                let target : RetainedTarget $imported ($selected).policy selection.publics := by
                  bind_target $name
+               let relations : RegisteredRelations _ ($original).relations :=
+                 .ofChecked $registry (by kernel_rfl)
                { originalExport := $originalExport
                  producerExport := $producerExport
                  validatorExport := $validatorExport
@@ -80,14 +82,23 @@ elab "bind_authored_subject " name:str
                  producerOccurrences := occurrences.1
                  validatorOccurrences := occurrences.2
                  target := target
+                 relations := relations
+                 meaning := by bind_retained_meaning
                  targetExact := by decide +kernel
                  inputContractExact := by decide +kernel
                  inputClausesExact := by decide +kernel
                  preconditionsEmpty := by decide +kernel
-                 inputFormulas := by bind_input_formulas })
+                 inputMeanings := by bind_input_meanings })
   let generated ← Lean.Elab.Term.elabTermEnsuringType term target
   Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
   (← Lean.Elab.Tactic.getMainGoal).assign (← Lean.instantiateMVars generated)
   Lean.Elab.Tactic.replaceMainGoal []
+
+/-- Formula-only subjects use the same builder with the empty registry. The
+whole relation table must still pass admission; this is not a fallback. -/
+macro "bind_authored_subject " name:str
+    " exports " originalExport:term ", " producerExport:term ", " validatorExport:term : tactic =>
+  `(tactic| bind_authored_subject $name with_registry OpaqueRegistry.empty exports
+    $originalExport, $producerExport, $validatorExport)
 
 end ZkcSecurity.Tools

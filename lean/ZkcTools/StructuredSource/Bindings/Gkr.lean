@@ -78,6 +78,7 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
   let [(outputCallback, outputIndex)] := outputs | throw "gkr-output-callback-selection"
   text := text ++ "abbrev outputSpec : RepeatSpec := " ++ repeatText outputCallback.spec ++ "\n" ++
     "abbrev outputBody := " ++ roleName index 1 ++ "Callback" ++ toString outputIndex ++ "Body\n\n"
+  let mut layerCount := 0
   for (callback, callbackIndex) in (callbacks definition.body).zipIdx do
     let inputs := .index :: (callback.spec.state ++ callback.spec.captures)
     let pattern := optionalPattern inputs
@@ -88,7 +89,8 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
       runs := "Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx (ctx.roles 1)"
       processes := "actualCallees payload calleeKeys" }
     let form ← normalize signature callback.body 1 definition.roles.length pattern
-    let .apply _ _ _ "label_6c656674" _ _ := form | continue
+    let some _ := applicationCursor "label_6c656674" (inputNames naming.inputs 0) form | continue
+    layerCount := layerCount + 1
     let producer ← normalize signature callback.body 0 definition.roles.length pattern
     let .owned _ _ _ (.owned _ block _ _) := producer | throw "gkr-producer-block-selection"
     let [(_, blockIndex)] := program.payload.definitions.zipIdx.filter (fun (d, _) => d.helper == block)
@@ -100,11 +102,11 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
     text := text ++ (← callSplitSource producerNaming producer
       (roleName index 0 ++ "Callback" ++ toString callbackIndex) "label_6c656674")
     let name := roleName index 1 ++ "Callback" ++ toString callbackIndex
-    text := text ++ (← headCallSource naming form name)
+    text := text ++ (← callSplitSource naming form name "label_6c656674")
     text := text ++ "abbrev firstLeft := @" ++ name ++ "Process\n" ++
-      "abbrev firstLeftContext := " ++ name ++ "CallContext\n" ++
-      "abbrev firstLeftInput := @" ++ name ++ "CallInput\n" ++
-      "abbrev firstLeftContinuation := @" ++ name ++ "Continuation\n" ++
+      "abbrev firstLeftContext := " ++ name ++ "SetupContext\n" ++
+      "abbrev firstLeftInput := @" ++ name ++ "SetupInput\n" ++
+      "abbrev firstLeftContinuation := @" ++ name ++ "SetupContinuation\n" ++
       "abbrev layerSpec : RepeatSpec := " ++ repeatText callback.spec ++ "\n" ++
       "abbrev layerBody := " ++ name ++ "Body\n\n"
     let wholePattern := optionalPattern definition.inputs
@@ -118,6 +120,7 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
     let (_, named, _) ← request wholeSignature definition.body 1 definition.roles.length wholePattern wholeNaming
     let whole ← normalize {wholeSignature with names := named} definition.body 1 definition.roles.length wholePattern
     text := text ++ (← repeatSplitSource wholeNaming whole 1 (roleName index 1) callback.site)
+  unless layerCount == 1 do throw "gkr-layer-call-selection"
   return text ++ "end\nend " ++ output.moduleName ++ "Caller\n"
 
 /-- The admitted definitions are in dependency order. Follow their actual
@@ -156,8 +159,26 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
     (List.replicate 3 field) [field] (some interpolationCallback)
   let (_, interpolation) ← select "interpolation" .math
     (List.replicate 3 field) [field] (some maps)
-  let [roundsIndex, _] ← gkrProtocols program | throw "gkr-rounds-association"
+  let [roundsIndex, callerIndex] ← gkrProtocols program | throw "gkr-rounds-association"
   let some rounds := program.payload.protocols[roundsIndex]? | throw "gkr-rounds-definition"
+  let signature : Signature := ⟨[], false, false, program.payload.definitions.map (·.helper), keys program⟩
+  let roundsForm ← normalize signature rounds.body 1 rounds.roles.length (optionalPattern rounds.inputs)
+  let .owned _ roundsOpen _ (.repeat _ _ _ _ _ _ (.owned _ roundsClose _ _)) := roundsForm
+    | throw "gkr-rounds-pending-boundaries"
+  let some caller := program.payload.protocols[callerIndex]? | throw "gkr-caller-definition"
+  let mut pendingBoundaries := []
+  for callback in callbacks caller.body do
+    let form ← normalize signature callback.body 1 caller.roles.length
+      (optionalPattern (.index :: (callback.spec.state ++ callback.spec.captures)))
+    if let .owned _ layerOpen _ (.owned _ pending _ (.apply _ _ _ "label_6c656674" _ _)) := form then
+      pendingBoundaries := pendingBoundaries ++ [(layerOpen, pending)]
+  let [(layerOpen, pending)] := pendingBoundaries | throw "gkr-layer-pending-boundaries"
+  let mut pendingHelpers := []
+  for (name, helper) in [("roundsOpen", roundsOpen), ("roundsClose", roundsClose),
+      ("layerOpen", layerOpen), ("pending", pending)] do
+    let [(_, index)] := program.payload.definitions.zipIdx.filter (fun (d, _) => d.helper == helper)
+      | throw ("gkr-pending-helper-association-" ++ name)
+    pendingHelpers := pendingHelpers ++ [(name, index)]
   let [(_, append)] := program.payload.definitions.zipIdx.filter (fun (d, _) =>
     rounds.helpers.contains d.helper && d.kind == .local && d.inputs == [vector, field] && d.outputs == [vector] &&
       (match d.raw.operations.filter (fun | .mark _ => false | _ => true) with
@@ -187,7 +208,7 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
     (List.replicate 3 field) [field] (some message)
   let (_, linearCoefficient) ← select "linearCoefficient" .math
     (List.replicate 3 field) [field] (some wrapper)
-  return [("empty", empty), ("append", append), ("gateValue", gate.valueIndex),
+  return pendingHelpers ++ [("empty", empty), ("append", append), ("gateValue", gate.valueIndex),
     ("gateValuesLeft", leftValueIndex), ("gateValuesRight", rightValueIndex),
     ("gateValueCallback", valueCallbackIndex), ("gateValueRealization", valueRealization),
     ("gateQuadratic", gate.quadraticIndex), ("gateQuadratics", quadraticsIndex),

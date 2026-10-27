@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ContractBinding
+public import Zkc.Source.Structured.RelationMeaning
 public import Zkc.Claims.Wire
 
 @[expose] public section
@@ -20,7 +20,7 @@ def defaultRelationOperation : Op → Bool
     .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale .. |
     .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
-    .makeProduct .. | .getProduct .. | .invoke .. |
+    .makeProduct .. | .getProduct .. | .invoke .. | .multilinearRestrictPrefix .. |
     .fold .. | .collect .. | .map .. | .branch .. | .loop .. | .loopCondition .. | .guard => true
   | .exec .. | .mark .. => false
 
@@ -39,5 +39,16 @@ def checkDefaultRelation (definitions : List CheckedDefinition) (helper : Helper
     Except ResolutionError Unit :=
   if defaultRelationHelper (definitions.length + 1) definitions helper then .ok ()
   else .error (.schema ("default experiment requires pure registered relation dependencies: " ++ helper.name))
+
+/-- Formula dependencies keep the existing conservative closure check. Opaque
+meanings have already been selected by exact registry admission. -/
+def checkRetainedMeaning {snapshot : Snapshot} {imported : Imported snapshot}
+    {application : RelationApplication} {relation : RelationBinding snapshot application}
+    {Value : Zkc.Source.Structured.Ty → Type} {registry : OpaqueRegistry Value}
+    (meaning : Zkc.Source.Structured.RelationMeaning imported relation Value registry) :
+    Except ResolutionError Unit :=
+  match meaning with
+  | .formula binding => checkDefaultRelation imported.program.payload.definitions binding.definition.helper
+  | .opaque _ => .ok ()
 
 end ZkcSecurity.Claims

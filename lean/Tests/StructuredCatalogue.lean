@@ -158,7 +158,7 @@ example : code ((rows [fieldRow blsScalar (modulus := some blsModulus)]).agrees
 
 private def unit (type : Ty) (catalogue : Catalogue) : Snapshot :=
   ⟨digest, "main", [], [], [], [.function ⟨"main", .protocol, .publicDef, [type], [type],
-    some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩], [⟨"main", []⟩], catalogue⟩
+    some ⟨["P"], [["P"]], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩], [⟨"main", []⟩], catalogue, {}⟩
 
 example : code (check (unit (.field blsScalar) blsRows)) = "" := by decide +kernel
 -- The binary unit is well formed; the environment does not list its rows.
@@ -178,7 +178,7 @@ private def constantUnit (text : String) : Snapshot :=
   ⟨digest, "main", [], [], [], [.function ⟨"main", .protocol, .publicDef, [], [.field blsScalar],
     some ⟨["P"], [], [["P"]]⟩, [], some (.protocol ⟨"main", []⟩),
     .block [.instruction (.fieldConstant blsScalar text) [] [.field blsScalar] [] ""] (.ret [0])⟩],
-    [⟨"main", []⟩], blsRows⟩
+    [⟨"main", []⟩], blsRows, {}⟩
 
 example : code (check (constantUnit
     "52435875175126190479447740508185965837690552500527637822603658699938581184512")) = "" := by

@@ -89,7 +89,8 @@ def occurrenceAssociation (graph : Reachability) (proof step occurrence : Name)
   let occurrence := mkIdent occurrence
   let expected ← dataTerm (← `(∀ {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G] (scalar : F) (count handle : Nat),
-    $step (F := F) (G := G) (some scalar) (some count) (some handle) =
+    $step (F := F) (G := G) (some count) (some handle)
+      (.cons (some []) (.cons (some scalar) .nil)) =
       if count ≤ $(quote maximum) then
         (OriginalRaw.run (G := G) ⟨($occurrence).protocol, handle⟩
           (List.range count) ⟨[], scalar⟩).bind
@@ -126,23 +127,13 @@ unsafe def measure (root : Roots.Selection) (receipt : Name) : TermElabM Json :=
     identifier := "target-mathematics", phase := "initialization", responsibility := "M"
     owner := (root.securityModule ++ ".Soundness.rejectedInputs").toName
     callee := (root.formulaNamespace ++ ".equation").toName, route := .authorLemma }
-  let schedule (index : Nat) := (root.securityModule ++ ".Sources.schedule" ++ toString index).toName
-  let input (index : Nat) := ArgumentValue.binder ("input" ++ toString index).toName
-  let some first := binding.calls.head? | throwError "proof-account: missing call"
-  let common : List ArgumentBinding := [⟨`maximum, .natural binding.maximum⟩, ⟨`count, input binding.count⟩]
-  let (rootCallee, arguments) := if binding.calls.length == 1 then
-    (``OriginalRaw.root_rejected, common ++ [⟨`schedule, .declaration (schedule 0)⟩,
-      ⟨`raw, input first.raw⟩, ⟨`scalar, input first.claim⟩])
-    else
-      let second := binding.calls[1]?.getD first
-      (``OriginalRaw.twoRoots_rejected, common ++ [
-        ⟨`leftSchedule, .declaration (schedule 0)⟩, ⟨`rightSchedule, .declaration (schedule 1)⟩,
-        ⟨`left, input first.raw⟩, ⟨`right, input second.raw⟩,
-        ⟨`leftClaim, input first.claim⟩, ⟨`rightClaim, input second.claim⟩])
   let instantiation ← account graph {
     identifier := "root-instantiation", phase := "composition", responsibility := "I"
-    owner := (root.securityModule ++ ".Soundness.rejectedInputs").toName, callee := rootCallee
-    arguments, expectedUses := some 1, proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }
+    owner := (root.securityModule ++ ".Soundness.rejectedInputs").toName
+    callee := ``OriginalRaw.composition_rejected
+    arguments := [⟨`maximum, .natural binding.maximum⟩,
+      ⟨`tree, .declaration (root.securityModule ++ ".Sources.terminalTree").toName⟩]
+    expectedUses := some 1, proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }
   let sampling ← account graph {
     identifier := "conditional-sampling", phase := "preservation", responsibility := "D"
     owner := (root.securityModule ++ ".Soundness.rejectedInputs").toName
@@ -150,9 +141,9 @@ unsafe def measure (root : Roots.Selection) (receipt : Name) : TermElabM Json :=
   let cost ← account graph {
     identifier := "cost", phase := "cost", responsibility := "I"
     owner := (root.securityModule ++ ".Soundness.inputCosts").toName
-    callee := if binding.calls.length == 1 then ``OriginalRaw.root_cost else ``OriginalRaw.twoRoots_cost
+    callee := ``OriginalRaw.composition_cost
     expectedUses := some 1, route := .familyPackage }
-  let mut proofBindings := dischargers ++ #[authored, instantiation, sampling, cost]
+  let proofBindings := dischargers ++ #[authored, instantiation, sampling, cost]
   let mut occurrences := #[]
   let mut obligations := #[]
   for invocation in binding.calls do
@@ -169,21 +160,13 @@ unsafe def measure (root : Roots.Selection) (receipt : Name) : TermElabM Json :=
     let nominalValue ← mkAppM ``ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Occurrence.mk
       #[mkStrLit root.snapshot.entry, mkStrLit nominal.library, mkStrLit nominal.application]
     requireSame (← dataTerm (← `($occurrenceIdent))) nominalValue
-    let branchId := "branch-" ++ toString index
-    if binding.calls.length == 2 then
-      proofBindings := proofBindings.push (← account graph {
-        identifier := branchId, phase := "composition", responsibility := "I"
-        owner := ``OriginalRaw.twoRoots_rejected, callee := ``OriginalRaw.root_rejected
-        arguments := [⟨`schedule, .binder (if index == 0 then `leftSchedule else `rightSchedule)⟩]
-        expectedUses := some 1, proofObjectHeads := [``Zkc.Obligations.Derivation], route := .generalRule })
     let occurrenceId := root.snapshot.entry ++ "/" ++ nominal.application
     occurrences := occurrences.push <| Json.mkObj [
       ("id", toJson occurrenceId), ("application", toJson nominal.application),
       ("library", toJson nominal.library), ("source_step", toJson step.toString),
       ("nominal_occurrence", toJson occurrence.toString),
       ("context", toJson invocation.call.context), ("equation", sourceProof),
-      ("instantiation", "root-instantiation"),
-      ("branch_binding", if binding.calls.length == 2 then toJson branchId else Json.null)]
+      ("instantiation", "root-instantiation")]
     for checkpoint in checkpoints do
       obligations := obligations.push <| Json.mkObj [
         ("id", toJson (occurrenceId ++ "/" ++ checkpoint.identifier)),

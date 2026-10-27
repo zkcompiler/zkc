@@ -17,11 +17,11 @@ example : (callSites SumcheckSourceViews.runDefinition.body).map (·.signature) 
 example : (callSites SumcheckSourceViews.runDefinition.body).map (·.site) =
     ["label_726564756365"] := rfl
 example : (callSites SumcheckSourceViews.runDefinition.body).map (fun c => c.operands.indices) =
-    [[0, 1, 2, 5, 6, 7]] := rfl
+    [[2, 3, 4, 0, 1, 8, 9]] := rfl
 example : (callSites SumcheckReduceViews.runDefinition.body).map (·.signature) =
     [SumcheckReduceBodies.reduceSignature] := rfl
 example : (callSites SumcheckReduceViews.runDefinition.body).map (fun c => c.operands.indices) =
-    [[0, 1, 2, 6, 7, 8]] := rfl
+    [[2, 3, 4, 0, 1, 9, 10]] := rfl
 set_option maxRecDepth 20000 in
 example : (callInventory SumcheckSourceViews.reduceDefinition.body).length = 0 := rfl
 set_option maxRecDepth 20000 in

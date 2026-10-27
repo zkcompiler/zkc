@@ -90,7 +90,7 @@ private def source (maximum : Nat) : Snapshot :=
         "repeat"] (.ret [0])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 private def runSource (maximum : Nat) (request : Json) : Except String Json := do
   evaluateOpen (← check (source maximum)) request
 private def returned (values : List Json) : Json :=
@@ -115,7 +115,7 @@ private def serviceSource : Snapshot :=
         .instruction (.draw "P" scalarDomain) [2] [fieldType] [] "suffix"] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 private def drawRequest (site : String) : Json :=
   arr [.str "draw", .str site, .str "P", .str scalarServiceContract, .str "7", .str scalarDomain]
 private def drawReply (site : String) (response : Json) : Json :=

@@ -18,10 +18,10 @@ open Zkc Zkc.Source Zkc.Source.Structured Zkc.Construction
 open Zkc.Construction.Uniform Zkc.Construction.Uniform.LoopedSourceProcess
 open ZkcExamples.Structured GkrSourceProtocol
 namespace View
-abbrev output := Generated.Constructed.GkrValidator.bodyStep1Body
-abbrev left := Generated.Constructed.GkrValidator.bodyStep3BodyStep1Body
-abbrev right := Generated.Constructed.GkrValidator.bodyStep3BodyStep3Body
-abbrev coefficient := Generated.Constructed.GkrValidator.bodyStep3BodyStep10Body
+abbrev output := Generated.Constructed.GkrValidator.bodyStep34Body
+abbrev left := Generated.Constructed.GkrValidator.bodyStep37BodyStep3Body
+abbrev right := Generated.Constructed.GkrValidator.bodyStep37BodyStep6Body
+abbrev coefficient := Generated.Constructed.GkrValidator.bodyStep37BodyStep16Body
 end View
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 

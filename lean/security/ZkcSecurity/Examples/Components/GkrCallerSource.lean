@@ -74,6 +74,18 @@ theorem evaluate_pair (a b rho : F) : invoke (table (G := G)) evaluateHelper
   have arithmetic : 0 + (a + (b - a) * rho) = (1 - rho) * a + rho * b := by ring
   exact equation.trans (congrArg (fun value => PIR.Process.done (I := closedInterface) (Values.cons value .nil)) arithmetic)
 
+/-- The actual root's LayerClaim constructor. Its association with the
+emitted prefix is checked by the whole-prefix equation in GkrCallerPrefix. -/
+def layerClaimHelper : Helper :=
+  ⟨"zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17", .local,
+    [.vector "bls12-381.fr", .field "bls12-381.fr"],
+    [.vector "bls12-381.fr", .field "bls12-381.fr"]⟩
+
+theorem layer_claim (point : List F) (claim : F) :
+    invoke (table (G := G)) layerClaimHelper (.cons point (.cons claim .nil)) =
+      .done (.cons point (.cons claim .nil)) := by
+  kernel_rfl
+
 /-- Closed setup equations lift to the exact silent participant helper table;
 there is no hypothesis about adversarial runtime tables or coefficients. -/
 theorem lift_equation (helper : Helper) (args : Values (assignment F G) helper.inputs)
@@ -104,6 +116,12 @@ theorem owned_evaluate_pair (self : Nat) (a b rho : F) :
   change (invoke (helpers payload).closed evaluateHelper (.cons [a, b] (.cons [rho] .nil))).bind _ = _
   rw [lift_equation evaluateHelper _ _ (evaluate_pair (G := G) a b rho)]
   rfl
+
+theorem owned_layer_claim (self : Nat) (point : List F) (claim : F) :
+    Participant.owned self self (invoke (helpers (F := F) (G := G) payload).toOn.closed layerClaimHelper)
+      (.cons (some point) (.cons (some claim) .nil)) =
+      .done (.cons (some point) (.cons (some claim) .nil)) := by
+  exact owned_equation self layerClaimHelper _ _ (layer_claim (G := G) point claim)
 
 /-- The source setup's selected block/restriction/replicate/tile pipeline,
 using the actual finite circuit. This describes source construction only. -/

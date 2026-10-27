@@ -10,8 +10,9 @@ not change. Local validation receipts and measurements accompany the PR.
 The [WP specification](../spec/weakest-preconditions.md) gives the exact
 interpretations and adequacy boundaries. Charged rejection and pathwise cost
 use local `Std.WP` instances over the existing process, with primitive,
-component and bounded-loop specs. Raw Sumcheck root rejection, root cost and
-two-root cost use `vcgen`. Honest completeness uses a separate concrete-run WP;
+component and bounded-loop specs. Raw Sumcheck root rejection and root cost
+use `vcgen`; finite composition uses the shared iteration and component laws.
+Honest completeness uses a separate concrete-run WP;
 its pointwise shared-table theorem consumes the existing cached experiment
 bridge and explicitly requires empty private-service interfaces.
 
@@ -123,7 +124,7 @@ no current claim. These are semantic reasons, not version-compatibility excuses.
 
 ## Checking and warnings
 
-[Independent checking](independent-checking.md) exports all 88 locked statements
+[Independent checking](independent-checking.md) exports every currently locked statement
 and their dependencies across four packages. Explicit baseline and candidate
 artifacts feed `lake comparator` and `lake check --paranoid`; partial runs and
 resource failures cannot acquire a full verdict. The process checks preserve

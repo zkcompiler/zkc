@@ -70,6 +70,7 @@ def DeclareOp : Op<RelationDialect, "declare", [Symbol,
   let arguments = (ins SymbolNameAttr:$sym_name,
     OptionalAttr<StrAttr>:$sym_visibility,
     StrAttr:$kind, StrAttr:$key, StrAttr:$revision,
+    DefaultValuedAttr<ArrayAttr, "{}">:$static_arguments,
     TypeAttrOf<FunctionType>:$signature, StrArrayAttr:$purposes,
     OptionalAttr<FlatSymbolRefAttr>:$formula);
   let hasVerifier = 1;

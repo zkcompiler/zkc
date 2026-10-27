@@ -19,1077 +19,1397 @@ abbrev artifact : Participant := ZkcExamples.Construction.GkrProofParticipant.pa
 
 def inputSorts : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
 def outputSorts : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-def returned : List Nat := ([16, 14])
+def returned : List Nat := ([43, 42])
 
-def bodyStep0 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+def bodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 4) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
 
 theorem bodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[0]'(by decide +kernel)) (bodyStep0 model program context) :=
-  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 4) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
 
-def bodyStep1BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep1BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep1BodyStep0 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep1BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 12 9 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep1BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep1BodyStep1 model program context) :=
-  (Correspondence.indicesAppend 12 9 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep1BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s4" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f7574707574",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 11 13 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep1BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep1BodyStep2 model program context) :=
-  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s4" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f7574707574",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 11 13 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep1BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep1BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep1BodyStep3 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep1BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 16 9 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep1BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep1BodyStep4 model program context) :=
-  (Correspondence.indicesAppend 16 9 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep1BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s4" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001",             "role00000000"] }) 15 14 17 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep1BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep1BodyStep5 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s4" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001",             "role00000000"] }) 15 14 17 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep1BodyStep6 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([10, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep1BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[1]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep1BodyStep6 model program context) :=
-  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([10, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep1BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-
-theorem bodyStep1BodySlotInputs_eq : bodyStep1BodySlotInputs =
-    (((((artifact.instructions).take 1).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[1]'(by decide +kernel)).results)) := by kernel_rfl
-
-def bodyStep1BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]])
-
-theorem bodyStep1BodySlotResults_eq : bodyStep1BodySlotResults =
-    (((artifact.instructions)[1]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
-
-def bodyStep1BodySlotSorts : List (List ValueSort) :=
-  bodyStep1BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep1BodySlotInputs
-
-theorem bodyStep1BodySlotSorts_eq : bodyStep1BodySlotSorts =
-    (((artifact.instructions)[1]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
-      (((((artifact.instructions).take 1).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[1]'(by decide +kernel)).results)) := by
-  unfold bodyStep1BodySlotSorts
-  rw [bodyStep1BodySlotInputs_eq, bodyStep1BodySlotResults_eq, List.scanl_map]
-
-def bodyStep1Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep1BodyStep0 model program context) (View.sequence (bodyStep1BodyStep1 model program context) (View.sequence (bodyStep1BodyStep2 model program context) (View.sequence (bodyStep1BodyStep3 model program context) (View.sequence (bodyStep1BodyStep4 model program context) (View.sequence (bodyStep1BodyStep5 model program context) (View.sequence (bodyStep1BodyStep6 model program context) View.empty)))))))
-
-theorem bodyStep1Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Block (program := program) (context := context)
-      (((artifact.instructions)[1]'(by decide +kernel)).body) (bodyStep1Body model program context) :=
-  (Correspondence.sequence (bodyStep1BodyStep0_eq model program context) (Correspondence.sequence (bodyStep1BodyStep1_eq model program context) (Correspondence.sequence (bodyStep1BodyStep2_eq model program context) (Correspondence.sequence (bodyStep1BodyStep3_eq model program context) (Correspondence.sequence (bodyStep1BodyStep4_eq model program context) (Correspondence.sequence (bodyStep1BodyStep5_eq model program context) (Correspondence.sequence (bodyStep1BodyStep6_eq model program context) Correspondence.empty)))))))
-
-def bodyStep1 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.loop 4 ([19, 18]) 6 ([8, 7]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep1Body model program context))
+def bodyStep1 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h696e64696365734h6c657373") ([8, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
 theorem bodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[1]'(by decide +kernel)) (bodyStep1 model program context) :=
-  (Correspondence.loop ("s4") 4 ([19, 18]) 6 ([8, 7]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep1Body_eq model program context))
+  (Correspondence.helper ("s3h7a6b637h696e64696365734h6c657373") ([8, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
-def bodyStep2 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([1, 9]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+def bodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
 theorem bodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[2]'(by decide +kernel)) (bodyStep2 model program context) :=
-  (Correspondence.helper ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([1, 9]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
-def bodyStep3BodyStep0 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep3BodyStep0 model program context) :=
-  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_14_label_6c656674_label_726f756e64_0") ("apply_14_label_6c656674_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep0 model program context) :=
-  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_0") ("apply_14_label_6c656674_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep1 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 22 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep2 model program context) :=
-  (Correspondence.indicesAppend 22 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 23 17 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep3 model program context) :=
-  (Correspondence.indicesAppend 23 17 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 20 21 24 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep1BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep4 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 20 21 24 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep1BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_14_label_6c656674_label_726f756e64_1") ("apply_14_label_6c656674_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep5 model program context) :=
-  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_1") ("apply_14_label_6c656674_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep6 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep6 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 27 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep7 model program context) :=
-  (Correspondence.indicesAppend 27 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep8 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 28 17 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep8 model program context) :=
-  (Correspondence.indicesAppend 28 17 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep9 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 25 26 29 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep1BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep9 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 25 26 29 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep1BodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_14_label_6c656674_label_726f756e64_2") ("apply_14_label_6c656674_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep10 model program context) :=
-  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_2") ("apply_14_label_6c656674_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep11 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep11 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 32 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep12 model program context) :=
-  (Correspondence.indicesAppend 32 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 33 17 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep13 model program context) :=
-  (Correspondence.indicesAppend 33 17 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep14 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 30 31 34 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep1BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep14 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 30 31 34 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep1BodyStep15 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep15 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep16 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([36, 26]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep16 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([36, 26]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep17 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([37, 31]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep17 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([37, 31]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep18 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([19, 38]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-theorem bodyStep3BodyStep1BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep18 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([19, 38]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-def bodyStep3BodyStep1BodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.guard 39 ([]))
-
-theorem bodyStep3BodyStep1BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep19 model program context) :=
-  (Correspondence.guard ("apply_14_label_6c656674_s18") 39 ([]))
-
-def bodyStep3BodyStep1BodyStep20 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep20 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 40 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep21 model program context) :=
-  (Correspondence.indicesAppend 40 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 41 17 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep22 model program context) :=
-  (Correspondence.indicesAppend 41 17 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_6", "random.bls12-381.fr/0", "draw", "role00000001"] }) 35 42 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep1BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep23 model program context) :=
-  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_6", "random.bls12-381.fr/0", "draw", "role00000001"] }) 35 42 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep1BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep24 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 45 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep25 model program context) :=
-  (Correspondence.indicesAppend 45 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 46 17 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep1BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep26 model program context) :=
-  (Correspondence.indicesAppend 46 17 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep1BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 44 43 47 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep1BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep27 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 44 43 47 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep1BodyStep28 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([18, 43]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep28 model program context) :=
-  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([18, 43]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep29 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([43, 31]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep29 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([43, 31]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([26, 50]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep30 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([26, 50]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([43, 51]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[31]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep31 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([43, 51]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 52]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep1BodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body)[32]'(by decide +kernel)) (bodyStep3BodyStep1BodyStep32 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([21, 52]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep1BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-
-theorem bodyStep3BodyStep1BodySlotInputs_eq : bodyStep3BodyStep1BodySlotInputs =
-    (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 1).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).results)) := by kernel_rfl
-
-def bodyStep3BodyStep1BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]])
-
-theorem bodyStep3BodyStep1BodySlotResults_eq : bodyStep3BodyStep1BodySlotResults =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
-
-def bodyStep3BodyStep1BodySlotSorts : List (List ValueSort) :=
-  bodyStep3BodyStep1BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep3BodyStep1BodySlotInputs
-
-theorem bodyStep3BodyStep1BodySlotSorts_eq : bodyStep3BodyStep1BodySlotSorts =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
-      (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 1).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).results)) := by
-  unfold bodyStep3BodyStep1BodySlotSorts
-  rw [bodyStep3BodyStep1BodySlotInputs_eq, bodyStep3BodyStep1BodySlotResults_eq, List.scanl_map]
-
-def bodyStep3BodyStep1Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep3BodyStep1BodyStep0 model program context) (View.sequence (bodyStep3BodyStep1BodyStep1 model program context) (View.sequence (bodyStep3BodyStep1BodyStep2 model program context) (View.sequence (bodyStep3BodyStep1BodyStep3 model program context) (View.sequence (bodyStep3BodyStep1BodyStep4 model program context) (View.sequence (bodyStep3BodyStep1BodyStep5 model program context) (View.sequence (bodyStep3BodyStep1BodyStep6 model program context) (View.sequence (bodyStep3BodyStep1BodyStep7 model program context) (View.sequence (bodyStep3BodyStep1BodyStep8 model program context) (View.sequence (bodyStep3BodyStep1BodyStep9 model program context) (View.sequence (bodyStep3BodyStep1BodyStep10 model program context) (View.sequence (bodyStep3BodyStep1BodyStep11 model program context) (View.sequence (bodyStep3BodyStep1BodyStep12 model program context) (View.sequence (bodyStep3BodyStep1BodyStep13 model program context) (View.sequence (bodyStep3BodyStep1BodyStep14 model program context) (View.sequence (bodyStep3BodyStep1BodyStep15 model program context) (View.sequence (bodyStep3BodyStep1BodyStep16 model program context) (View.sequence (bodyStep3BodyStep1BodyStep17 model program context) (View.sequence (bodyStep3BodyStep1BodyStep18 model program context) (View.sequence (bodyStep3BodyStep1BodyStep19 model program context) (View.sequence (bodyStep3BodyStep1BodyStep20 model program context) (View.sequence (bodyStep3BodyStep1BodyStep21 model program context) (View.sequence (bodyStep3BodyStep1BodyStep22 model program context) (View.sequence (bodyStep3BodyStep1BodyStep23 model program context) (View.sequence (bodyStep3BodyStep1BodyStep24 model program context) (View.sequence (bodyStep3BodyStep1BodyStep25 model program context) (View.sequence (bodyStep3BodyStep1BodyStep26 model program context) (View.sequence (bodyStep3BodyStep1BodyStep27 model program context) (View.sequence (bodyStep3BodyStep1BodyStep28 model program context) (View.sequence (bodyStep3BodyStep1BodyStep29 model program context) (View.sequence (bodyStep3BodyStep1BodyStep30 model program context) (View.sequence (bodyStep3BodyStep1BodyStep31 model program context) (View.sequence (bodyStep3BodyStep1BodyStep32 model program context) View.empty)))))))))))))))))))))))))))))))))
-
-theorem bodyStep3BodyStep1Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Block (program := program) (context := context)
-      (((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)).body) (bodyStep3BodyStep1Body model program context) :=
-  (Correspondence.sequence (bodyStep3BodyStep1BodyStep0_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep1_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep2_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep3_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep4_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep5_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep6_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep7_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep8_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep9_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep10_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep11_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep12_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep13_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep14_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep15_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep16_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep17_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep18_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep19_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep20_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep21_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep22_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep23_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep24_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep25_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep26_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep27_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep28_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep29_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep30_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep31_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1BodyStep32_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))))
-
-def bodyStep3BodyStep1 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.loop 4 ([49, 53, 48]) 6 ([16, 14, 15]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep1Body model program context))
-
-theorem bodyStep3BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep3BodyStep1 model program context) :=
-  (Correspondence.loop ("apply_14_label_6c656674_s6") 4 ([49, 53, 48]) 6 ([16, 14, 15]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep1Body_eq model program context))
-
-def bodyStep3BodyStep2 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep3BodyStep2 model program context) :=
-  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_16_label_7269676874_label_726f756e64_0") ("apply_16_label_7269676874_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep0 model program context) :=
-  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_0") ("apply_16_label_7269676874_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep1 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 26 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep2 model program context) :=
-  (Correspondence.indicesAppend 26 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 27 21 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep3 model program context) :=
-  (Correspondence.indicesAppend 27 21 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 24 25 28 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep3BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep4 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 24 25 28 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep3BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_16_label_7269676874_label_726f756e64_1") ("apply_16_label_7269676874_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep5 model program context) :=
-  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_1") ("apply_16_label_7269676874_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep6 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep6 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 31 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep7 model program context) :=
-  (Correspondence.indicesAppend 31 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep8 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 32 21 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep8 model program context) :=
-  (Correspondence.indicesAppend 32 21 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep9 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 29 30 33 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep3BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep9 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 29 30 33 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep3BodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("apply_16_label_7269676874_label_726f756e64_2") ("apply_16_label_7269676874_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep10 model program context) :=
-  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_2") ("apply_16_label_7269676874_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep11 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep11 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 36 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep12 model program context) :=
-  (Correspondence.indicesAppend 36 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 37 21 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep13 model program context) :=
-  (Correspondence.indicesAppend 37 21 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep14 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 34 35 38 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep3BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep14 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 34 35 38 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep3BodyStep15 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([25, 25]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep15 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([25, 25]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep16 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([40, 30]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep16 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([40, 30]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep17 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([41, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep17 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([41, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep18 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([23, 42]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-theorem bodyStep3BodyStep3BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep18 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([23, 42]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-def bodyStep3BodyStep3BodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.guard 43 ([]))
-
-theorem bodyStep3BodyStep3BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep19 model program context) :=
-  (Correspondence.guard ("apply_16_label_7269676874_s18") 43 ([]))
-
-def bodyStep3BodyStep3BodyStep20 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep20 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 44 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep21 model program context) :=
-  (Correspondence.indicesAppend 44 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 45 21 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep22 model program context) :=
-  (Correspondence.indicesAppend 45 21 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_6", "random.bls12-381.fr/0", "draw", "role00000001"] }) 39 46 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep3BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep23 model program context) :=
-  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_6", "random.bls12-381.fr/0", "draw", "role00000001"] }) 39 46 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep3BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep24 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 49 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep25 model program context) :=
-  (Correspondence.indicesAppend 49 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 50 21 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep3BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep26 model program context) :=
-  (Correspondence.indicesAppend 50 21 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep3BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 48 47 51 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep3BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep27 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s6" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 48 47 51 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep3BodyStep28 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([22, 47]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep28 model program context) :=
-  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([22, 47]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep29 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([47, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep29 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([47, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([30, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep30 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([30, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([47, 55]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[31]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep31 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([47, 55]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([25, 56]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep3BodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[32]'(by decide +kernel)) (bodyStep3BodyStep3BodyStep32 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([25, 56]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep3BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-
-theorem bodyStep3BodyStep3BodySlotInputs_eq : bodyStep3BodyStep3BodySlotInputs =
-    (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 3).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).results)) := by kernel_rfl
-
-def bodyStep3BodyStep3BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]])
-
-theorem bodyStep3BodyStep3BodySlotResults_eq : bodyStep3BodyStep3BodySlotResults =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
-
-def bodyStep3BodyStep3BodySlotSorts : List (List ValueSort) :=
-  bodyStep3BodyStep3BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep3BodyStep3BodySlotInputs
-
-theorem bodyStep3BodyStep3BodySlotSorts_eq : bodyStep3BodyStep3BodySlotSorts =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
-      (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 3).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).results)) := by
-  unfold bodyStep3BodyStep3BodySlotSorts
-  rw [bodyStep3BodyStep3BodySlotInputs_eq, bodyStep3BodyStep3BodySlotResults_eq, List.scanl_map]
-
-def bodyStep3BodyStep3Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep3BodyStep3BodyStep0 model program context) (View.sequence (bodyStep3BodyStep3BodyStep1 model program context) (View.sequence (bodyStep3BodyStep3BodyStep2 model program context) (View.sequence (bodyStep3BodyStep3BodyStep3 model program context) (View.sequence (bodyStep3BodyStep3BodyStep4 model program context) (View.sequence (bodyStep3BodyStep3BodyStep5 model program context) (View.sequence (bodyStep3BodyStep3BodyStep6 model program context) (View.sequence (bodyStep3BodyStep3BodyStep7 model program context) (View.sequence (bodyStep3BodyStep3BodyStep8 model program context) (View.sequence (bodyStep3BodyStep3BodyStep9 model program context) (View.sequence (bodyStep3BodyStep3BodyStep10 model program context) (View.sequence (bodyStep3BodyStep3BodyStep11 model program context) (View.sequence (bodyStep3BodyStep3BodyStep12 model program context) (View.sequence (bodyStep3BodyStep3BodyStep13 model program context) (View.sequence (bodyStep3BodyStep3BodyStep14 model program context) (View.sequence (bodyStep3BodyStep3BodyStep15 model program context) (View.sequence (bodyStep3BodyStep3BodyStep16 model program context) (View.sequence (bodyStep3BodyStep3BodyStep17 model program context) (View.sequence (bodyStep3BodyStep3BodyStep18 model program context) (View.sequence (bodyStep3BodyStep3BodyStep19 model program context) (View.sequence (bodyStep3BodyStep3BodyStep20 model program context) (View.sequence (bodyStep3BodyStep3BodyStep21 model program context) (View.sequence (bodyStep3BodyStep3BodyStep22 model program context) (View.sequence (bodyStep3BodyStep3BodyStep23 model program context) (View.sequence (bodyStep3BodyStep3BodyStep24 model program context) (View.sequence (bodyStep3BodyStep3BodyStep25 model program context) (View.sequence (bodyStep3BodyStep3BodyStep26 model program context) (View.sequence (bodyStep3BodyStep3BodyStep27 model program context) (View.sequence (bodyStep3BodyStep3BodyStep28 model program context) (View.sequence (bodyStep3BodyStep3BodyStep29 model program context) (View.sequence (bodyStep3BodyStep3BodyStep30 model program context) (View.sequence (bodyStep3BodyStep3BodyStep31 model program context) (View.sequence (bodyStep3BodyStep3BodyStep32 model program context) View.empty)))))))))))))))))))))))))))))))))
-
-theorem bodyStep3BodyStep3Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Block (program := program) (context := context)
-      (((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)).body) (bodyStep3BodyStep3Body model program context) :=
-  (Correspondence.sequence (bodyStep3BodyStep3BodyStep0_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep1_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep2_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep3_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep4_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep5_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep6_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep7_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep8_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep9_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep10_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep11_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep12_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep13_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep14_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep15_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep16_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep17_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep18_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep19_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep20_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep21_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep22_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep23_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep24_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep25_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep26_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep27_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep28_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep29_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep30_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep31_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3BodyStep32_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))))
-
-def bodyStep3BodyStep3 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.loop 4 ([53, 57, 52]) 6 ([20, 18, 19]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep3Body model program context))
-
-theorem bodyStep3BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep3BodyStep3 model program context) :=
-  (Correspondence.loop ("apply_16_label_7269676874_s6") 4 ([53, 57, 52]) 6 ([20, 18, 19]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep3Body_eq model program context))
-
-def bodyStep3BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("label_6c696e655f636f6e7374616e74_0") ("label_6c696e655f636f6e7374616e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep3BodyStep4 model program context) :=
-  (Correspondence.receive ("label_6c696e655f636f6e7374616e74_0") ("label_6c696e655f636f6e7374616e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep3BodyStep5 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep6 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 25 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep3BodyStep6 model program context) :=
-  (Correspondence.indicesAppend 25 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000",             "role00000001"] }) 23 24 26 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep3BodyStep7 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000",             "role00000001"] }) 23 24 26 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep8 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep3BodyStep8 model program context) :=
-  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep9 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([28, 24]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep3BodyStep9 model program context) :=
-  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([28, 24]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep10BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.receive ("label_6c696e655f636f656666696369656e74_0") ("label_6c696e655f636f656666696369656e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep10BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep0 model program context) :=
-  (Correspondence.receive ("label_6c696e655f636f656666696369656e74_0") ("label_6c696e655f636f656666696369656e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep10BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep10BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep1 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep10BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 34 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep10BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep2 model program context) :=
-  (Correspondence.indicesAppend 34 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep10BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 35 30 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep10BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep3 model program context) :=
-  (Correspondence.indicesAppend 35 30 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep10BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s48" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000",             "role00000001"] }) 32 33 36 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep10BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep4 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" },             { kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s48" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000",             "role00000001"] }) 32 33 36 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep10BodyStep5 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([31, 33]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep10BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep3BodyStep10BodyStep5 model program context) :=
-  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([31, 33]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep10BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.indices,  Zkc.Construction.ValueSort.indices,  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-
-theorem bodyStep3BodyStep10BodySlotInputs_eq : bodyStep3BodyStep10BodySlotInputs =
-    (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 10).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).results)) := by kernel_rfl
-
-def bodyStep3BodyStep10BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]])
-
-theorem bodyStep3BodyStep10BodySlotResults_eq : bodyStep3BodyStep10BodySlotResults =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
-
-def bodyStep3BodyStep10BodySlotSorts : List (List ValueSort) :=
-  bodyStep3BodyStep10BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep3BodyStep10BodySlotInputs
-
-theorem bodyStep3BodyStep10BodySlotSorts_eq : bodyStep3BodyStep10BodySlotSorts =
-    (((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
-      (((((((artifact.instructions)[3]'(by decide +kernel)).body).take 10).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).results)) := by
-  unfold bodyStep3BodyStep10BodySlotSorts
-  rw [bodyStep3BodyStep10BodySlotInputs_eq, bodyStep3BodyStep10BodySlotResults_eq, List.scanl_map]
-
-def bodyStep3BodyStep10Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep3BodyStep10BodyStep0 model program context) (View.sequence (bodyStep3BodyStep10BodyStep1 model program context) (View.sequence (bodyStep3BodyStep10BodyStep2 model program context) (View.sequence (bodyStep3BodyStep10BodyStep3 model program context) (View.sequence (bodyStep3BodyStep10BodyStep4 model program context) (View.sequence (bodyStep3BodyStep10BodyStep5 model program context) View.empty))))))
-
-theorem bodyStep3BodyStep10Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Block (program := program) (context := context)
-      (((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)).body) (bodyStep3BodyStep10Body model program context) :=
-  (Correspondence.sequence (bodyStep3BodyStep10BodyStep0_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10BodyStep1_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10BodyStep2_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10BodyStep3_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10BodyStep4_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10BodyStep5_eq model program context) Correspondence.empty))))))
-
-def bodyStep3BodyStep10 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.loop 4 ([38, 37]) 6 ([29, 27]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep10Body model program context))
-
-theorem bodyStep3BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep3BodyStep10 model program context) :=
-  (Correspondence.loop ("s48") 4 ([38, 37]) 6 ([29, 27]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3BodyStep10Body_eq model program context))
-
-def bodyStep3BodyStep11 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216") ([30]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep3BodyStep11 model program context) :=
-  (Correspondence.helper ("zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216") ([30]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep12 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([2, 12, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep3BodyStep12 model program context) :=
-  (Correspondence.helper ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([2, 12, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep13 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([33, 13, 17, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep3BodyStep13 model program context) :=
-  (Correspondence.helper ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([33, 13, 17, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep14 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([3, 12, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep3BodyStep14 model program context) :=
-  (Correspondence.helper ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([3, 12, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodyStep15 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([35, 13, 17, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep3BodyStep15 model program context) :=
-  (Correspondence.helper ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([35, 13, 17, 21]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep16 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([24, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep3BodyStep16 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([24, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep17 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([34, 37]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep3BodyStep17 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([34, 37]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep18 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([36, 24]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep3BodyStep18 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([36, 24]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([39, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep3BodyStep19 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([39, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep20 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([38, 40]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep3BodyStep20 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([38, 40]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([22, 41]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-theorem bodyStep3BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep3BodyStep21 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([22, 41]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
-
-def bodyStep3BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.guard 42 ([]))
-
-theorem bodyStep3BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep3BodyStep22 model program context) :=
-  (Correspondence.guard ("s75") 42 ([]))
-
-def bodyStep3BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep3BodyStep23 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 43 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep3BodyStep24 model program context) :=
-  (Correspondence.indicesAppend 43 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f6368616c6c656e6765", "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 31 44 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep3BodyStep25 model program context) :=
-  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f6368616c6c656e6765", "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 31 44 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep3BodyStep26 model program context) :=
-  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.indicesAppend 47 12 ([Zkc.Construction.ValueSort.indices]))
-
-theorem bodyStep3BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep3BodyStep27 model program context) :=
-  (Correspondence.indicesAppend 47 12 ([Zkc.Construction.ValueSort.indices]))
-
-def bodyStep3BodyStep28 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f64656c6976657279_0", "label_6c696e655f64656c6976657279_0", "role00000001",             "role00000000"] }) 46 45 48 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-theorem bodyStep3BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep3BodyStep28 model program context) :=
-  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s23" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f64656c6976657279_0", "label_6c696e655f64656c6976657279_0", "role00000001",             "role00000000"] }) 46 45 48 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
-
-def bodyStep3BodyStep29 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7") ([30, 45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep3BodyStep29 model program context) :=
-  (Correspondence.helper ("zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7") ([30, 45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
-
-def bodyStep3BodyStep30 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434") ([17, 21, 45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-theorem bodyStep3BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Step (program := program) (context := context)
-      ((((artifact.instructions)[3]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep3BodyStep30 model program context) :=
-  (Correspondence.helper ("zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434") ([17, 21, 45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
-
-def bodyStep3BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
-
-theorem bodyStep3BodySlotInputs_eq : bodyStep3BodySlotInputs =
-    (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results)) := by kernel_rfl
-
-def bodyStep3BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]])
-
-theorem bodyStep3BodySlotResults_eq : bodyStep3BodySlotResults =
-    (((artifact.instructions)[3]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
-
-def bodyStep3BodySlotSorts : List (List ValueSort) :=
-  bodyStep3BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep3BodySlotInputs
-
-theorem bodyStep3BodySlotSorts_eq : bodyStep3BodySlotSorts =
-    (((artifact.instructions)[3]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
-      (((((artifact.instructions).take 3).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[3]'(by decide +kernel)).results)) := by
-  unfold bodyStep3BodySlotSorts
-  rw [bodyStep3BodySlotInputs_eq, bodyStep3BodySlotResults_eq, List.scanl_map]
-
-def bodyStep3Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep3BodyStep0 model program context) (View.sequence (bodyStep3BodyStep1 model program context) (View.sequence (bodyStep3BodyStep2 model program context) (View.sequence (bodyStep3BodyStep3 model program context) (View.sequence (bodyStep3BodyStep4 model program context) (View.sequence (bodyStep3BodyStep5 model program context) (View.sequence (bodyStep3BodyStep6 model program context) (View.sequence (bodyStep3BodyStep7 model program context) (View.sequence (bodyStep3BodyStep8 model program context) (View.sequence (bodyStep3BodyStep9 model program context) (View.sequence (bodyStep3BodyStep10 model program context) (View.sequence (bodyStep3BodyStep11 model program context) (View.sequence (bodyStep3BodyStep12 model program context) (View.sequence (bodyStep3BodyStep13 model program context) (View.sequence (bodyStep3BodyStep14 model program context) (View.sequence (bodyStep3BodyStep15 model program context) (View.sequence (bodyStep3BodyStep16 model program context) (View.sequence (bodyStep3BodyStep17 model program context) (View.sequence (bodyStep3BodyStep18 model program context) (View.sequence (bodyStep3BodyStep19 model program context) (View.sequence (bodyStep3BodyStep20 model program context) (View.sequence (bodyStep3BodyStep21 model program context) (View.sequence (bodyStep3BodyStep22 model program context) (View.sequence (bodyStep3BodyStep23 model program context) (View.sequence (bodyStep3BodyStep24 model program context) (View.sequence (bodyStep3BodyStep25 model program context) (View.sequence (bodyStep3BodyStep26 model program context) (View.sequence (bodyStep3BodyStep27 model program context) (View.sequence (bodyStep3BodyStep28 model program context) (View.sequence (bodyStep3BodyStep29 model program context) (View.sequence (bodyStep3BodyStep30 model program context) View.empty)))))))))))))))))))))))))))))))
-
-theorem bodyStep3Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
-    Correspondence.Block (program := program) (context := context)
-      (((artifact.instructions)[3]'(by decide +kernel)).body) (bodyStep3Body model program context) :=
-  (Correspondence.sequence (bodyStep3BodyStep0_eq model program context) (Correspondence.sequence (bodyStep3BodyStep1_eq model program context) (Correspondence.sequence (bodyStep3BodyStep2_eq model program context) (Correspondence.sequence (bodyStep3BodyStep3_eq model program context) (Correspondence.sequence (bodyStep3BodyStep4_eq model program context) (Correspondence.sequence (bodyStep3BodyStep5_eq model program context) (Correspondence.sequence (bodyStep3BodyStep6_eq model program context) (Correspondence.sequence (bodyStep3BodyStep7_eq model program context) (Correspondence.sequence (bodyStep3BodyStep8_eq model program context) (Correspondence.sequence (bodyStep3BodyStep9_eq model program context) (Correspondence.sequence (bodyStep3BodyStep10_eq model program context) (Correspondence.sequence (bodyStep3BodyStep11_eq model program context) (Correspondence.sequence (bodyStep3BodyStep12_eq model program context) (Correspondence.sequence (bodyStep3BodyStep13_eq model program context) (Correspondence.sequence (bodyStep3BodyStep14_eq model program context) (Correspondence.sequence (bodyStep3BodyStep15_eq model program context) (Correspondence.sequence (bodyStep3BodyStep16_eq model program context) (Correspondence.sequence (bodyStep3BodyStep17_eq model program context) (Correspondence.sequence (bodyStep3BodyStep18_eq model program context) (Correspondence.sequence (bodyStep3BodyStep19_eq model program context) (Correspondence.sequence (bodyStep3BodyStep20_eq model program context) (Correspondence.sequence (bodyStep3BodyStep21_eq model program context) (Correspondence.sequence (bodyStep3BodyStep22_eq model program context) (Correspondence.sequence (bodyStep3BodyStep23_eq model program context) (Correspondence.sequence (bodyStep3BodyStep24_eq model program context) (Correspondence.sequence (bodyStep3BodyStep25_eq model program context) (Correspondence.sequence (bodyStep3BodyStep26_eq model program context) (Correspondence.sequence (bodyStep3BodyStep27_eq model program context) (Correspondence.sequence (bodyStep3BodyStep28_eq model program context) (Correspondence.sequence (bodyStep3BodyStep29_eq model program context) (Correspondence.sequence (bodyStep3BodyStep30_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))
-
-def bodyStep3 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.loop 4 ([51, 50, 49]) 4 ([9, 11, 10]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3Body model program context))
+def bodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanEqual) ([9, 10]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
 theorem bodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[3]'(by decide +kernel)) (bodyStep3 model program context) :=
-  (Correspondence.loop ("s23") 4 ([51, 50, 49]) 4 ([9, 11, 10]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep3Body_eq model program context))
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanEqual) ([9, 10]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
-def bodyStep4 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.helper model program ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([0, 12]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+def bodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 11 ([]))
 
 theorem bodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[4]'(by decide +kernel)) (bodyStep4 model program context) :=
-  (Correspondence.helper ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([0, 12]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+  (Correspondence.guard ("s4") 11 ([]))
 
 def bodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
-  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([15, 13]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 4) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
 
 theorem bodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Step (program := program) (context := context)
       ((artifact.instructions)[5]'(by decide +kernel)) (bodyStep5 model program context) :=
-  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([15, 13]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 4) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep6 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h696e64696365734h6c657373") ([12, 4]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[6]'(by decide +kernel)) (bodyStep6 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h696e64696365734h6c657373") ([12, 4]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[7]'(by decide +kernel)) (bodyStep7 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep8 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanEqual) ([13, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[8]'(by decide +kernel)) (bodyStep8 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanEqual) ([13, 14]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep9 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 15 ([]))
+
+theorem bodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[9]'(by decide +kernel)) (bodyStep9 model program context) :=
+  (Correspondence.guard ("s9") 15 ([]))
+
+def bodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[10]'(by decide +kernel)) (bodyStep10 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep11 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([0, 6, 16]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[11]'(by decide +kernel)) (bodyStep11 model program context) :=
+  (Correspondence.helper ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([0, 6, 16]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 17 ([]))
+
+theorem bodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[12]'(by decide +kernel)) (bodyStep12 model program context) :=
+  (Correspondence.guard ("s12") 17 ([]))
+
+def bodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[13]'(by decide +kernel)) (bodyStep13 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep14 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([1, 6, 18]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[14]'(by decide +kernel)) (bodyStep14 model program context) :=
+  (Correspondence.helper ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([1, 6, 18]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep15 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 19 ([]))
+
+theorem bodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[15]'(by decide +kernel)) (bodyStep15 model program context) :=
+  (Correspondence.guard ("s15") 19 ([]))
+
+def bodyStep16 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([5, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[16]'(by decide +kernel)) (bodyStep16 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([5, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep17 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([20, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[17]'(by decide +kernel)) (bodyStep17 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([20, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep18 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([21, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[18]'(by decide +kernel)) (bodyStep18 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([21, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[19]'(by decide +kernel)) (bodyStep19 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep20 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([2, 22, 23]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[20]'(by decide +kernel)) (bodyStep20 model program context) :=
+  (Correspondence.helper ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([2, 22, 23]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 24 ([]))
+
+theorem bodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[21]'(by decide +kernel)) (bodyStep21 model program context) :=
+  (Correspondence.guard ("s21") 24 ([]))
+
+def bodyStep22 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([5, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[22]'(by decide +kernel)) (bodyStep22 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([5, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep23 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([25, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[23]'(by decide +kernel)) (bodyStep23 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([25, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep24 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([26, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[24]'(by decide +kernel)) (bodyStep24 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h7072656c7564659h696e6465785f616464") ([26, 6]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[25]'(by decide +kernel)) (bodyStep25 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.indexConstant 1) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep26 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([3, 27, 28]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[26]'(by decide +kernel)) (bodyStep26 model program context) :=
+  (Correspondence.helper ("zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655") ([3, 27, 28]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 29 ([]))
+
+theorem bodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[27]'(by decide +kernel)) (bodyStep27 model program context) :=
+  (Correspondence.guard ("s27") 29 ([]))
+
+def bodyStep28 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h676b7212h706f7765725f6f665f74776f") ([5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+theorem bodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[28]'(by decide +kernel)) (bodyStep28 model program context) :=
+  (Correspondence.helper ("s3h676b7212h706f7765725f6f665f74776f") ([5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)]))
+
+def bodyStep29 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("s3h7a6b637h696e64696365734h6c657373") ([30, 4]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[29]'(by decide +kernel)) (bodyStep29 model program context) :=
+  (Correspondence.helper ("s3h7a6b637h696e64696365734h6c657373") ([30, 4]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[30]'(by decide +kernel)) (bodyStep30 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanConstant false) ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.booleanEqual) ([31, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[31]'(by decide +kernel)) (bodyStep31 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.booleanEqual) ([31, 32]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 33 ([]))
+
+theorem bodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[32]'(by decide +kernel)) (bodyStep32 model program context) :=
+  (Correspondence.guard ("s32") 33 ([]))
+
+def bodyStep33 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep33_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[33]'(by decide +kernel)) (bodyStep33 model program context) :=
+  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep34BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep34BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep34BodyStep0 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep34BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 38 35 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep34BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep34BodyStep1 model program context) :=
+  (Correspondence.indicesAppend 38 35 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep34BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s37" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f7574707574",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 37 39 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep34BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep34BodyStep2 model program context) :=
+  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s37" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f7574707574",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 37 39 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep34BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep34BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep34BodyStep3 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep34BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 42 35 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep34BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep34BodyStep4 model program context) :=
+  (Correspondence.indicesAppend 42 35 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep34BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s37" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001",             "role00000000"] }) 41 40 43 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep34BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep34BodyStep5 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s37" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001",             "role00000000"] }) 41 40 43 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep34BodyStep6 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([36, 40]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep34BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[34]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep34BodyStep6 model program context) :=
+  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([36, 40]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep34BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
+
+theorem bodyStep34BodySlotInputs_eq : bodyStep34BodySlotInputs =
+    (((((artifact.instructions).take 34).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[34]'(by decide +kernel)).results)) := by kernel_rfl
+
+def bodyStep34BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]])
+
+theorem bodyStep34BodySlotResults_eq : bodyStep34BodySlotResults =
+    (((artifact.instructions)[34]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
+
+def bodyStep34BodySlotSorts : List (List ValueSort) :=
+  bodyStep34BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep34BodySlotInputs
+
+theorem bodyStep34BodySlotSorts_eq : bodyStep34BodySlotSorts =
+    (((artifact.instructions)[34]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
+      (((((artifact.instructions).take 34).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[34]'(by decide +kernel)).results)) := by
+  unfold bodyStep34BodySlotSorts
+  rw [bodyStep34BodySlotInputs_eq, bodyStep34BodySlotResults_eq, List.scanl_map]
+
+def bodyStep34Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.sequence (bodyStep34BodyStep0 model program context) (View.sequence (bodyStep34BodyStep1 model program context) (View.sequence (bodyStep34BodyStep2 model program context) (View.sequence (bodyStep34BodyStep3 model program context) (View.sequence (bodyStep34BodyStep4 model program context) (View.sequence (bodyStep34BodyStep5 model program context) (View.sequence (bodyStep34BodyStep6 model program context) View.empty)))))))
+
+theorem bodyStep34Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Block (program := program) (context := context)
+      (((artifact.instructions)[34]'(by decide +kernel)).body) (bodyStep34Body model program context) :=
+  (Correspondence.sequence (bodyStep34BodyStep0_eq model program context) (Correspondence.sequence (bodyStep34BodyStep1_eq model program context) (Correspondence.sequence (bodyStep34BodyStep2_eq model program context) (Correspondence.sequence (bodyStep34BodyStep3_eq model program context) (Correspondence.sequence (bodyStep34BodyStep4_eq model program context) (Correspondence.sequence (bodyStep34BodyStep5_eq model program context) (Correspondence.sequence (bodyStep34BodyStep6_eq model program context) Correspondence.empty)))))))
+
+def bodyStep34 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.loop 4 ([45, 44]) 6 ([34, 7]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep34Body model program context))
+
+theorem bodyStep34_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[34]'(by decide +kernel)) (bodyStep34 model program context) :=
+  (Correspondence.loop ("s37") 4 ([45, 44]) 6 ([34, 7]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep34Body_eq model program context))
+
+def bodyStep35 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([1, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep35_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[35]'(by decide +kernel)) (bodyStep35 model program context) :=
+  (Correspondence.helper ("zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496") ([1, 35]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep36 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17") ([35, 37]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep36_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[36]'(by decide +kernel)) (bodyStep36 model program context) :=
+  (Correspondence.helper ("zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17") ([35, 37]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep0 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_e0f7a4e58ae24eb13e9b2033c42c179b2766ff6cdb4ae1470bf7ef9b1721d646") ([41, 42]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep37BodyStep0 model program context) :=
+  (Correspondence.helper ("zkl_e0f7a4e58ae24eb13e9b2033c42c179b2766ff6cdb4ae1470bf7ef9b1721d646") ([41, 42]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep1 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_e1405e1bb4604e60f337203132c746492bf7c31b55302426ae19c2c021c2da1a") ([45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep37BodyStep1 model program context) :=
+  (Correspondence.helper ("zkl_e1405e1bb4604e60f337203132c746492bf7c31b55302426ae19c2c021c2da1a") ([45]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep2 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([46, 47]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep37BodyStep2 model program context) :=
+  (Correspondence.helper ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([46, 47]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_14_label_6c656674_label_726f756e64_0") ("apply_14_label_6c656674_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep0 model program context) :=
+  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_0") ("apply_14_label_6c656674_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep1 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 55 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep2 model program context) :=
+  (Correspondence.indicesAppend 55 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 56 50 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep3 model program context) :=
+  (Correspondence.indicesAppend 56 50 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 53 54 57 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep3BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep4 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 53 54 57 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep3BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_14_label_6c656674_label_726f756e64_1") ("apply_14_label_6c656674_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep5 model program context) :=
+  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_1") ("apply_14_label_6c656674_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep6 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep6 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 60 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep7 model program context) :=
+  (Correspondence.indicesAppend 60 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep8 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 61 50 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep8 model program context) :=
+  (Correspondence.indicesAppend 61 50 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep9 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 58 59 62 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep3BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep9 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 58 59 62 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep3BodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_14_label_6c656674_label_726f756e64_2") ("apply_14_label_6c656674_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep10 model program context) :=
+  (Correspondence.receive ("apply_14_label_6c656674_label_726f756e64_2") ("apply_14_label_6c656674_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep11 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep11 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 65 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep12 model program context) :=
+  (Correspondence.indicesAppend 65 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 66 50 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep13 model program context) :=
+  (Correspondence.indicesAppend 66 50 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep14 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 63 64 67 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep3BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep14 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 63 64 67 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep3BodyStep15 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([54, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep15 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([54, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep16 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([69, 59]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep16 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([69, 59]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep17 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([70, 64]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep17 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([70, 64]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep18 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([52, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep37BodyStep3BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep18 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([52, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep37BodyStep3BodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 72 ([]))
+
+theorem bodyStep37BodyStep3BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep19 model program context) :=
+  (Correspondence.guard ("apply_14_label_6c656674_s21") 72 ([]))
+
+def bodyStep37BodyStep3BodyStep20 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep20 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 73 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep21 model program context) :=
+  (Correspondence.indicesAppend 73 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 74 50 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep22 model program context) :=
+  (Correspondence.indicesAppend 74 50 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 68 75 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep3BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep23 model program context) :=
+  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 68 75 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep3BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep24 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 78 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep25 model program context) :=
+  (Correspondence.indicesAppend 78 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 79 50 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep3BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep26 model program context) :=
+  (Correspondence.indicesAppend 79 50 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep3BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 77 76 80 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep3BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep27 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_6c656674" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 77 76 80 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep3BodyStep28 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([51, 76]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep28 model program context) :=
+  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([51, 76]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep29 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 64]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep29 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 64]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([59, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep30 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([59, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 84]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[31]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep31 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 84]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([54, 85]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep3BodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body)[32]'(by decide +kernel)) (bodyStep37BodyStep3BodyStep32 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([54, 85]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep3BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
+
+theorem bodyStep37BodyStep3BodySlotInputs_eq : bodyStep37BodyStep3BodySlotInputs =
+    (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 3).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).results)) := by kernel_rfl
+
+def bodyStep37BodyStep3BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]])
+
+theorem bodyStep37BodyStep3BodySlotResults_eq : bodyStep37BodyStep3BodySlotResults =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
+
+def bodyStep37BodyStep3BodySlotSorts : List (List ValueSort) :=
+  bodyStep37BodyStep3BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep37BodyStep3BodySlotInputs
+
+theorem bodyStep37BodyStep3BodySlotSorts_eq : bodyStep37BodyStep3BodySlotSorts =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
+      (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 3).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).results)) := by
+  unfold bodyStep37BodyStep3BodySlotSorts
+  rw [bodyStep37BodyStep3BodySlotInputs_eq, bodyStep37BodyStep3BodySlotResults_eq, List.scanl_map]
+
+def bodyStep37BodyStep3Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.sequence (bodyStep37BodyStep3BodyStep0 model program context) (View.sequence (bodyStep37BodyStep3BodyStep1 model program context) (View.sequence (bodyStep37BodyStep3BodyStep2 model program context) (View.sequence (bodyStep37BodyStep3BodyStep3 model program context) (View.sequence (bodyStep37BodyStep3BodyStep4 model program context) (View.sequence (bodyStep37BodyStep3BodyStep5 model program context) (View.sequence (bodyStep37BodyStep3BodyStep6 model program context) (View.sequence (bodyStep37BodyStep3BodyStep7 model program context) (View.sequence (bodyStep37BodyStep3BodyStep8 model program context) (View.sequence (bodyStep37BodyStep3BodyStep9 model program context) (View.sequence (bodyStep37BodyStep3BodyStep10 model program context) (View.sequence (bodyStep37BodyStep3BodyStep11 model program context) (View.sequence (bodyStep37BodyStep3BodyStep12 model program context) (View.sequence (bodyStep37BodyStep3BodyStep13 model program context) (View.sequence (bodyStep37BodyStep3BodyStep14 model program context) (View.sequence (bodyStep37BodyStep3BodyStep15 model program context) (View.sequence (bodyStep37BodyStep3BodyStep16 model program context) (View.sequence (bodyStep37BodyStep3BodyStep17 model program context) (View.sequence (bodyStep37BodyStep3BodyStep18 model program context) (View.sequence (bodyStep37BodyStep3BodyStep19 model program context) (View.sequence (bodyStep37BodyStep3BodyStep20 model program context) (View.sequence (bodyStep37BodyStep3BodyStep21 model program context) (View.sequence (bodyStep37BodyStep3BodyStep22 model program context) (View.sequence (bodyStep37BodyStep3BodyStep23 model program context) (View.sequence (bodyStep37BodyStep3BodyStep24 model program context) (View.sequence (bodyStep37BodyStep3BodyStep25 model program context) (View.sequence (bodyStep37BodyStep3BodyStep26 model program context) (View.sequence (bodyStep37BodyStep3BodyStep27 model program context) (View.sequence (bodyStep37BodyStep3BodyStep28 model program context) (View.sequence (bodyStep37BodyStep3BodyStep29 model program context) (View.sequence (bodyStep37BodyStep3BodyStep30 model program context) (View.sequence (bodyStep37BodyStep3BodyStep31 model program context) (View.sequence (bodyStep37BodyStep3BodyStep32 model program context) View.empty)))))))))))))))))))))))))))))))))
+
+theorem bodyStep37BodyStep3Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Block (program := program) (context := context)
+      (((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)).body) (bodyStep37BodyStep3Body model program context) :=
+  (Correspondence.sequence (bodyStep37BodyStep3BodyStep0_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep1_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep2_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep3_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep4_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep5_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep6_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep7_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep8_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep9_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep10_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep11_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep12_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep13_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep14_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep15_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep16_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep17_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep18_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep19_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep20_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep21_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep22_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep23_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep24_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep25_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep26_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep27_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep28_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep29_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep30_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep31_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3BodyStep32_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))))
+
+def bodyStep37BodyStep3 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.loop 4 ([82, 86, 81]) 6 ([48, 49, 43]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep3Body model program context))
+
+theorem bodyStep37BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep37BodyStep3 model program context) :=
+  (Correspondence.loop ("apply_14_label_6c656674_s9") 4 ([82, 86, 81]) 6 ([48, 49, 43]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep3Body_eq model program context))
+
+def bodyStep37BodyStep4 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3") ([50, 51]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep37BodyStep4 model program context) :=
+  (Correspondence.helper ("zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3") ([50, 51]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep5 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([53, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep37BodyStep5 model program context) :=
+  (Correspondence.helper ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([53, 54]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_16_label_7269676874_label_726f756e64_0") ("apply_16_label_7269676874_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep0 model program context) :=
+  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_0") ("apply_16_label_7269676874_label_726f756e64_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep1 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 62 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep2 model program context) :=
+  (Correspondence.indicesAppend 62 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 63 57 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep3 model program context) :=
+  (Correspondence.indicesAppend 63 57 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 60 61 64 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep6BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep4 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_0",             "label_726f756e64_0", "role00000000", "role00000001"] }) 60 61 64 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep6BodyStep5 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_16_label_7269676874_label_726f756e64_1") ("apply_16_label_7269676874_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep5 model program context) :=
+  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_1") ("apply_16_label_7269676874_label_726f756e64_1") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep6 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep6 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep7 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 67 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep7 model program context) :=
+  (Correspondence.indicesAppend 67 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep8 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 68 57 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep8 model program context) :=
+  (Correspondence.indicesAppend 68 57 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep9 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 65 66 69 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep6BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep9 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_1",             "label_726f756e64_1", "role00000000", "role00000001"] }) 65 66 69 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep6BodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("apply_16_label_7269676874_label_726f756e64_2") ("apply_16_label_7269676874_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep10 model program context) :=
+  (Correspondence.receive ("apply_16_label_7269676874_label_726f756e64_2") ("apply_16_label_7269676874_label_726f756e64_2") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep11 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep11 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 72 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep12 model program context) :=
+  (Correspondence.indicesAppend 72 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 73 57 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep13 model program context) :=
+  (Correspondence.indicesAppend 73 57 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep14 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 70 71 74 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep6BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep14 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_726f756e64_2",             "label_726f756e64_2", "role00000000", "role00000001"] }) 70 71 74 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep6BodyStep15 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([61, 61]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep15 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([61, 61]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep16 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([76, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep16 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([76, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep17 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([77, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep17 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([77, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep18 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([59, 78]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep37BodyStep6BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep18 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([59, 78]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep37BodyStep6BodyStep19 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 79 ([]))
+
+theorem bodyStep37BodyStep6BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep19 model program context) :=
+  (Correspondence.guard ("apply_16_label_7269676874_s21") 79 ([]))
+
+def bodyStep37BodyStep6BodyStep20 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep20 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep21 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 80 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep21 model program context) :=
+  (Correspondence.indicesAppend 80 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 81 57 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep22 model program context) :=
+  (Correspondence.indicesAppend 81 57 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 75 82 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep6BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep23 model program context) :=
+  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["query", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_6368616c6c656e6765",             "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 75 82 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep6BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep24 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 85 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep25 model program context) :=
+  (Correspondence.indicesAppend 85 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 86 57 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep6BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep26 model program context) :=
+  (Correspondence.indicesAppend 86 57 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep6BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 84 83 87 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep6BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep27 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "apply",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "label_7269676874" },             { kind := "repeat",               protocol := "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",               site := "s9" }],   event := ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba",             "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"] }) 84 83 87 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep6BodyStep28 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([58, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep28 model program context) :=
+  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([58, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep29 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([83, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep29 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([83, 71]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([66, 90]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep30 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([66, 90]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([83, 91]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[31]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep31 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([83, 91]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([61, 92]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep6BodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body)[32]'(by decide +kernel)) (bodyStep37BodyStep6BodyStep32 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([61, 92]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep6BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
+
+theorem bodyStep37BodyStep6BodySlotInputs_eq : bodyStep37BodyStep6BodySlotInputs =
+    (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 6).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).results)) := by kernel_rfl
+
+def bodyStep37BodyStep6BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]])
+
+theorem bodyStep37BodyStep6BodySlotResults_eq : bodyStep37BodyStep6BodySlotResults =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
+
+def bodyStep37BodyStep6BodySlotSorts : List (List ValueSort) :=
+  bodyStep37BodyStep6BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep37BodyStep6BodySlotInputs
+
+theorem bodyStep37BodyStep6BodySlotSorts_eq : bodyStep37BodyStep6BodySlotSorts =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
+      (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 6).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).results)) := by
+  unfold bodyStep37BodyStep6BodySlotSorts
+  rw [bodyStep37BodyStep6BodySlotInputs_eq, bodyStep37BodyStep6BodySlotResults_eq, List.scanl_map]
+
+def bodyStep37BodyStep6Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.sequence (bodyStep37BodyStep6BodyStep0 model program context) (View.sequence (bodyStep37BodyStep6BodyStep1 model program context) (View.sequence (bodyStep37BodyStep6BodyStep2 model program context) (View.sequence (bodyStep37BodyStep6BodyStep3 model program context) (View.sequence (bodyStep37BodyStep6BodyStep4 model program context) (View.sequence (bodyStep37BodyStep6BodyStep5 model program context) (View.sequence (bodyStep37BodyStep6BodyStep6 model program context) (View.sequence (bodyStep37BodyStep6BodyStep7 model program context) (View.sequence (bodyStep37BodyStep6BodyStep8 model program context) (View.sequence (bodyStep37BodyStep6BodyStep9 model program context) (View.sequence (bodyStep37BodyStep6BodyStep10 model program context) (View.sequence (bodyStep37BodyStep6BodyStep11 model program context) (View.sequence (bodyStep37BodyStep6BodyStep12 model program context) (View.sequence (bodyStep37BodyStep6BodyStep13 model program context) (View.sequence (bodyStep37BodyStep6BodyStep14 model program context) (View.sequence (bodyStep37BodyStep6BodyStep15 model program context) (View.sequence (bodyStep37BodyStep6BodyStep16 model program context) (View.sequence (bodyStep37BodyStep6BodyStep17 model program context) (View.sequence (bodyStep37BodyStep6BodyStep18 model program context) (View.sequence (bodyStep37BodyStep6BodyStep19 model program context) (View.sequence (bodyStep37BodyStep6BodyStep20 model program context) (View.sequence (bodyStep37BodyStep6BodyStep21 model program context) (View.sequence (bodyStep37BodyStep6BodyStep22 model program context) (View.sequence (bodyStep37BodyStep6BodyStep23 model program context) (View.sequence (bodyStep37BodyStep6BodyStep24 model program context) (View.sequence (bodyStep37BodyStep6BodyStep25 model program context) (View.sequence (bodyStep37BodyStep6BodyStep26 model program context) (View.sequence (bodyStep37BodyStep6BodyStep27 model program context) (View.sequence (bodyStep37BodyStep6BodyStep28 model program context) (View.sequence (bodyStep37BodyStep6BodyStep29 model program context) (View.sequence (bodyStep37BodyStep6BodyStep30 model program context) (View.sequence (bodyStep37BodyStep6BodyStep31 model program context) (View.sequence (bodyStep37BodyStep6BodyStep32 model program context) View.empty)))))))))))))))))))))))))))))))))
+
+theorem bodyStep37BodyStep6Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Block (program := program) (context := context)
+      (((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)).body) (bodyStep37BodyStep6Body model program context) :=
+  (Correspondence.sequence (bodyStep37BodyStep6BodyStep0_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep1_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep2_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep3_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep4_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep5_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep6_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep7_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep8_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep9_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep10_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep11_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep12_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep13_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep14_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep15_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep16_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep17_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep18_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep19_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep20_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep21_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep22_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep23_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep24_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep25_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep26_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep27_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep28_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep29_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep30_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep31_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6BodyStep32_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))))
+
+def bodyStep37BodyStep6 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.loop 4 ([89, 93, 88]) 6 ([55, 56, 52]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep6Body model program context))
+
+theorem bodyStep37BodyStep6_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[6]'(by decide +kernel)) (bodyStep37BodyStep6 model program context) :=
+  (Correspondence.loop ("apply_16_label_7269676874_s9") 4 ([89, 93, 88]) 6 ([55, 56, 52]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep6Body_eq model program context))
+
+def bodyStep37BodyStep7 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3") ([57, 58]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep7_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[7]'(by decide +kernel)) (bodyStep37BodyStep7 model program context) :=
+  (Correspondence.helper ("zkl_bcddf8825098d44ae9ce732a7b45754c16637e2a47a4c9f29ef9a21612daeaa3") ([57, 58]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep8 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([60, 61]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep8_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[8]'(by decide +kernel)) (bodyStep37BodyStep8 model program context) :=
+  (Correspondence.helper ("zkl_bd4f0d76e787de675c5732a4a96fc396d45486f32b3dcda5182ccc324969c825") ([60, 61]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep9 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_cfcf40daaab145a916368cf7a01eccd9ba0e536fbbc30a06c4a25e7ec96ecbe7") ([62]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep9_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[9]'(by decide +kernel)) (bodyStep37BodyStep9 model program context) :=
+  (Correspondence.helper ("zkl_cfcf40daaab145a916368cf7a01eccd9ba0e536fbbc30a06c4a25e7ec96ecbe7") ([62]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep10 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("label_6c696e655f636f6e7374616e74_0") ("label_6c696e655f636f6e7374616e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep10_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[10]'(by decide +kernel)) (bodyStep37BodyStep10 model program context) :=
+  (Correspondence.receive ("label_6c696e655f636f6e7374616e74_0") ("label_6c696e655f636f6e7374616e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep11 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep11_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[11]'(by decide +kernel)) (bodyStep37BodyStep11 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep12 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 67 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep12_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[12]'(by decide +kernel)) (bodyStep37BodyStep12 model program context) :=
+  (Correspondence.indicesAppend 67 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep13 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000",             "role00000001"] }) 59 66 68 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep13_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[13]'(by decide +kernel)) (bodyStep37BodyStep13 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000",             "role00000001"] }) 59 66 68 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep14 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep14_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[14]'(by decide +kernel)) (bodyStep37BodyStep14 model program context) :=
+  (Correspondence.helper ("zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") ([]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep15 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([70, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep15_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[15]'(by decide +kernel)) (bodyStep37BodyStep15 model program context) :=
+  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([70, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep16BodyStep0 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.receive ("label_6c696e655f636f656666696369656e74_0") ("label_6c696e655f636f656666696369656e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep16BodyStep0_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[0]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep0 model program context) :=
+  (Correspondence.receive ("label_6c696e655f636f656666696369656e74_0") ("label_6c696e655f636f656666696369656e74_0") ("role00000000") (Zkc.Source.Structured.Ty.field "bls12-381.fr") ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep16BodyStep1 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep16BodyStep1_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[1]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep1 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep16BodyStep2 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 76 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep16BodyStep2_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[2]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep2 model program context) :=
+  (Correspondence.indicesAppend 76 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep16BodyStep3 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 77 72 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep16BodyStep3_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[3]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep3 model program context) :=
+  (Correspondence.indicesAppend 77 72 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep16BodyStep4 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s91" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000",             "role00000001"] }) 74 75 78 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep16BodyStep4_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[4]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep4 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" },             { kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s91" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000",             "role00000001"] }) 74 75 78 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep16BodyStep5 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([73, 75]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep16BodyStep5_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body)[5]'(by decide +kernel)) (bodyStep37BodyStep16BodyStep5 model program context) :=
+  (Correspondence.helper ("zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d") ([73, 75]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep16BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.indices,  Zkc.Construction.ValueSort.indices,  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
+
+theorem bodyStep37BodyStep16BodySlotInputs_eq : bodyStep37BodyStep16BodySlotInputs =
+    (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 16).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).results)) := by kernel_rfl
+
+def bodyStep37BodyStep16BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]])
+
+theorem bodyStep37BodyStep16BodySlotResults_eq : bodyStep37BodyStep16BodySlotResults =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
+
+def bodyStep37BodyStep16BodySlotSorts : List (List ValueSort) :=
+  bodyStep37BodyStep16BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep37BodyStep16BodySlotInputs
+
+theorem bodyStep37BodyStep16BodySlotSorts_eq : bodyStep37BodyStep16BodySlotSorts =
+    (((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
+      (((((((artifact.instructions)[37]'(by decide +kernel)).body).take 16).foldl (fun frame instruction => frame ++ instruction.results) (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results))) ++ ValueSort.data Structured.Ty.index :: ((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).results)) := by
+  unfold bodyStep37BodyStep16BodySlotSorts
+  rw [bodyStep37BodyStep16BodySlotInputs_eq, bodyStep37BodyStep16BodySlotResults_eq, List.scanl_map]
+
+def bodyStep37BodyStep16Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.sequence (bodyStep37BodyStep16BodyStep0 model program context) (View.sequence (bodyStep37BodyStep16BodyStep1 model program context) (View.sequence (bodyStep37BodyStep16BodyStep2 model program context) (View.sequence (bodyStep37BodyStep16BodyStep3 model program context) (View.sequence (bodyStep37BodyStep16BodyStep4 model program context) (View.sequence (bodyStep37BodyStep16BodyStep5 model program context) View.empty))))))
+
+theorem bodyStep37BodyStep16Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Block (program := program) (context := context)
+      (((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)).body) (bodyStep37BodyStep16Body model program context) :=
+  (Correspondence.sequence (bodyStep37BodyStep16BodyStep0_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16BodyStep1_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16BodyStep2_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16BodyStep3_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16BodyStep4_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16BodyStep5_eq model program context) Correspondence.empty))))))
+
+def bodyStep37BodyStep16 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.loop 4 ([80, 79]) 6 ([71, 69]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep16Body model program context))
+
+theorem bodyStep37BodyStep16_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[16]'(by decide +kernel)) (bodyStep37BodyStep16 model program context) :=
+  (Correspondence.loop ("s91") 4 ([80, 79]) 6 ([71, 69]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37BodyStep16Body_eq model program context))
+
+def bodyStep37BodyStep17 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216") ([72]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep17_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[17]'(by decide +kernel)) (bodyStep37BodyStep17 model program context) :=
+  (Correspondence.helper ("zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216") ([72]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep18 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([2, 40, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep18_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[18]'(by decide +kernel)) (bodyStep37BodyStep18 model program context) :=
+  (Correspondence.helper ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([2, 40, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep19 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([75, 44, 64, 65]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep19_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[19]'(by decide +kernel)) (bodyStep37BodyStep19 model program context) :=
+  (Correspondence.helper ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([75, 44, 64, 65]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep20 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([3, 40, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep20_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[20]'(by decide +kernel)) (bodyStep37BodyStep20 model program context) :=
+  (Correspondence.helper ("zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e") ([3, 40, 5]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep21 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([77, 44, 64, 65]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep21_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[21]'(by decide +kernel)) (bodyStep37BodyStep21 model program context) :=
+  (Correspondence.helper ("zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f") ([77, 44, 64, 65]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep22 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([66, 74]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep22_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[22]'(by decide +kernel)) (bodyStep37BodyStep22 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([66, 74]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep23 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 79]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep23_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[23]'(by decide +kernel)) (bodyStep37BodyStep23 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([76, 79]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep24 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([78, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep24_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[24]'(by decide +kernel)) (bodyStep37BodyStep24 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([78, 66]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep25 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([81, 74]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep25_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[25]'(by decide +kernel)) (bodyStep37BodyStep25 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldMultiply "bls12-381.fr") ([81, 74]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep26 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([80, 82]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep26_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[26]'(by decide +kernel)) (bodyStep37BodyStep26 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr") ([80, 82]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep27 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.calculation model (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([63, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep37BodyStep27_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[27]'(by decide +kernel)) (bodyStep37BodyStep27 model program context) :=
+  (Correspondence.calculation (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr") ([63, 83]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+def bodyStep37BodyStep28 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.guard 84 ([]))
+
+theorem bodyStep37BodyStep28_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[28]'(by decide +kernel)) (bodyStep37BodyStep28 model program context) :=
+  (Correspondence.guard ("s120") 84 ([]))
+
+def bodyStep37BodyStep29 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep29_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[29]'(by decide +kernel)) (bodyStep37BodyStep29 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep30 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 85 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep30_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[30]'(by decide +kernel)) (bodyStep37BodyStep30 model program context) :=
+  (Correspondence.indicesAppend 85 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep31 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.challenge context ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f6368616c6c656e6765", "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 73 86 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep31_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[31]'(by decide +kernel)) (bodyStep37BodyStep31 model program context) :=
+  (Correspondence.challenge ("merlin3.bls12-381.fr64be/0") ("bls12-381.fr") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["query", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f6368616c6c656e6765", "input_7", "random.bls12-381.fr/0", "draw", "role00000001"] }) 73 86 ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep32 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep32_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[32]'(by decide +kernel)) (bodyStep37BodyStep32 model program context) :=
+  (Correspondence.indicesEmpty ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep33 (model : Structured.DomainModel) (_program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.indicesAppend 89 40 ([Zkc.Construction.ValueSort.indices]))
+
+theorem bodyStep37BodyStep33_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[33]'(by decide +kernel)) (bodyStep37BodyStep33 model program context) :=
+  (Correspondence.indicesAppend 89 40 ([Zkc.Construction.ValueSort.indices]))
+
+def bodyStep37BodyStep34 (model : Structured.DomainModel) (_program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.observe context ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f64656c6976657279_0", "label_6c696e655f64656c6976657279_0", "role00000001",             "role00000000"] }) 88 87 90 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+theorem bodyStep37BodyStep34_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[34]'(by decide +kernel)) (bodyStep37BodyStep34 model program context) :=
+  (Correspondence.observe ("merlin3.bls12-381.fr64be/0") ({ entry := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",   steps := [{ kind := "repeat",               protocol := "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",               site := "s57" }],   event := ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2",             "label_6c696e655f64656c6976657279_0", "label_6c696e655f64656c6976657279_0", "role00000001",             "role00000000"] }) 88 87 90 ([Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]))
+
+def bodyStep37BodyStep35 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434") ([64, 65, 87]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep35_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[35]'(by decide +kernel)) (bodyStep37BodyStep35 model program context) :=
+  (Correspondence.helper ("zkl_1f2e31017a1a0403a56241b1d83eac39d1ecc40b298cd066516f78ae9c5b3434") ([64, 65, 87]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")]))
+
+def bodyStep37BodyStep36 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7") ([72, 87]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep36_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[36]'(by decide +kernel)) (bodyStep37BodyStep36 model program context) :=
+  (Correspondence.helper ("zkl_21465134b1aa848c616c790eff1907b1a442ba76730b77da2be48acd923d6ff7") ([72, 87]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodyStep37 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17") ([92, 93]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+theorem bodyStep37BodyStep37_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((((artifact.instructions)[37]'(by decide +kernel)).body)[37]'(by decide +kernel)) (bodyStep37BodyStep37 model program context) :=
+  (Correspondence.helper ("zkl_7b9dfa97fa3e158d428459ec12d8a2d5aa171a060ab79f314eeccc53ee772b17") ([92, 93]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]))
+
+def bodyStep37BodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0",  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
+
+theorem bodyStep37BodySlotInputs_eq : bodyStep37BodySlotInputs =
+    (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results)) := by kernel_rfl
+
+def bodyStep37BodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.indices],  [Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]])
+
+theorem bodyStep37BodySlotResults_eq : bodyStep37BodySlotResults =
+    (((artifact.instructions)[37]'(by decide +kernel)).body).map (fun instruction => instruction.results) := by kernel_rfl
+
+def bodyStep37BodySlotSorts : List (List ValueSort) :=
+  bodyStep37BodySlotResults.scanl (fun frame results => frame ++ results) bodyStep37BodySlotInputs
+
+theorem bodyStep37BodySlotSorts_eq : bodyStep37BodySlotSorts =
+    (((artifact.instructions)[37]'(by decide +kernel)).body).scanl (fun frame instruction => frame ++ instruction.results)
+      (((((artifact.instructions).take 37).foldl (fun frame instruction => frame ++ instruction.results) (artifact.inputs)) ++ ValueSort.data Structured.Ty.index :: ((artifact.instructions)[37]'(by decide +kernel)).results)) := by
+  unfold bodyStep37BodySlotSorts
+  rw [bodyStep37BodySlotInputs_eq, bodyStep37BodySlotResults_eq, List.scanl_map]
+
+def bodyStep37Body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.sequence (bodyStep37BodyStep0 model program context) (View.sequence (bodyStep37BodyStep1 model program context) (View.sequence (bodyStep37BodyStep2 model program context) (View.sequence (bodyStep37BodyStep3 model program context) (View.sequence (bodyStep37BodyStep4 model program context) (View.sequence (bodyStep37BodyStep5 model program context) (View.sequence (bodyStep37BodyStep6 model program context) (View.sequence (bodyStep37BodyStep7 model program context) (View.sequence (bodyStep37BodyStep8 model program context) (View.sequence (bodyStep37BodyStep9 model program context) (View.sequence (bodyStep37BodyStep10 model program context) (View.sequence (bodyStep37BodyStep11 model program context) (View.sequence (bodyStep37BodyStep12 model program context) (View.sequence (bodyStep37BodyStep13 model program context) (View.sequence (bodyStep37BodyStep14 model program context) (View.sequence (bodyStep37BodyStep15 model program context) (View.sequence (bodyStep37BodyStep16 model program context) (View.sequence (bodyStep37BodyStep17 model program context) (View.sequence (bodyStep37BodyStep18 model program context) (View.sequence (bodyStep37BodyStep19 model program context) (View.sequence (bodyStep37BodyStep20 model program context) (View.sequence (bodyStep37BodyStep21 model program context) (View.sequence (bodyStep37BodyStep22 model program context) (View.sequence (bodyStep37BodyStep23 model program context) (View.sequence (bodyStep37BodyStep24 model program context) (View.sequence (bodyStep37BodyStep25 model program context) (View.sequence (bodyStep37BodyStep26 model program context) (View.sequence (bodyStep37BodyStep27 model program context) (View.sequence (bodyStep37BodyStep28 model program context) (View.sequence (bodyStep37BodyStep29 model program context) (View.sequence (bodyStep37BodyStep30 model program context) (View.sequence (bodyStep37BodyStep31 model program context) (View.sequence (bodyStep37BodyStep32 model program context) (View.sequence (bodyStep37BodyStep33 model program context) (View.sequence (bodyStep37BodyStep34 model program context) (View.sequence (bodyStep37BodyStep35 model program context) (View.sequence (bodyStep37BodyStep36 model program context) (View.sequence (bodyStep37BodyStep37 model program context) View.empty))))))))))))))))))))))))))))))))))))))
+
+theorem bodyStep37Body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Block (program := program) (context := context)
+      (((artifact.instructions)[37]'(by decide +kernel)).body) (bodyStep37Body model program context) :=
+  (Correspondence.sequence (bodyStep37BodyStep0_eq model program context) (Correspondence.sequence (bodyStep37BodyStep1_eq model program context) (Correspondence.sequence (bodyStep37BodyStep2_eq model program context) (Correspondence.sequence (bodyStep37BodyStep3_eq model program context) (Correspondence.sequence (bodyStep37BodyStep4_eq model program context) (Correspondence.sequence (bodyStep37BodyStep5_eq model program context) (Correspondence.sequence (bodyStep37BodyStep6_eq model program context) (Correspondence.sequence (bodyStep37BodyStep7_eq model program context) (Correspondence.sequence (bodyStep37BodyStep8_eq model program context) (Correspondence.sequence (bodyStep37BodyStep9_eq model program context) (Correspondence.sequence (bodyStep37BodyStep10_eq model program context) (Correspondence.sequence (bodyStep37BodyStep11_eq model program context) (Correspondence.sequence (bodyStep37BodyStep12_eq model program context) (Correspondence.sequence (bodyStep37BodyStep13_eq model program context) (Correspondence.sequence (bodyStep37BodyStep14_eq model program context) (Correspondence.sequence (bodyStep37BodyStep15_eq model program context) (Correspondence.sequence (bodyStep37BodyStep16_eq model program context) (Correspondence.sequence (bodyStep37BodyStep17_eq model program context) (Correspondence.sequence (bodyStep37BodyStep18_eq model program context) (Correspondence.sequence (bodyStep37BodyStep19_eq model program context) (Correspondence.sequence (bodyStep37BodyStep20_eq model program context) (Correspondence.sequence (bodyStep37BodyStep21_eq model program context) (Correspondence.sequence (bodyStep37BodyStep22_eq model program context) (Correspondence.sequence (bodyStep37BodyStep23_eq model program context) (Correspondence.sequence (bodyStep37BodyStep24_eq model program context) (Correspondence.sequence (bodyStep37BodyStep25_eq model program context) (Correspondence.sequence (bodyStep37BodyStep26_eq model program context) (Correspondence.sequence (bodyStep37BodyStep27_eq model program context) (Correspondence.sequence (bodyStep37BodyStep28_eq model program context) (Correspondence.sequence (bodyStep37BodyStep29_eq model program context) (Correspondence.sequence (bodyStep37BodyStep30_eq model program context) (Correspondence.sequence (bodyStep37BodyStep31_eq model program context) (Correspondence.sequence (bodyStep37BodyStep32_eq model program context) (Correspondence.sequence (bodyStep37BodyStep33_eq model program context) (Correspondence.sequence (bodyStep37BodyStep34_eq model program context) (Correspondence.sequence (bodyStep37BodyStep35_eq model program context) (Correspondence.sequence (bodyStep37BodyStep36_eq model program context) (Correspondence.sequence (bodyStep37BodyStep37_eq model program context) Correspondence.empty))))))))))))))))))))))))))))))))))))))
+
+def bodyStep37 (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
+  (View.loop 4 ([94, 95, 91]) 4 ([38, 39, 36]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37Body model program context))
+
+theorem bodyStep37_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[37]'(by decide +kernel)) (bodyStep37 model program context) :=
+  (Correspondence.loop ("s57") 4 ([94, 95, 91]) 4 ([38, 39, 36]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"]) (bodyStep37Body_eq model program context))
+
+def bodyStep38 (model : Structured.DomainModel) (program : Structured.Program) (_context : Context) : View.Block model.toCarriers :=
+  (View.helper model program ("zkl_d74cb9bd9ed782590145b66a573f8104fca0e842c109c7d034296431308fc6b9") ([0, 40, 41]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
+
+theorem bodyStep38_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
+    Correspondence.Step (program := program) (context := context)
+      ((artifact.instructions)[38]'(by decide +kernel)) (bodyStep38 model program context) :=
+  (Correspondence.helper ("zkl_d74cb9bd9ed782590145b66a573f8104fca0e842c109c7d034296431308fc6b9") ([0, 40, 41]) ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]))
 
 def bodySlotInputs : List ValueSort := ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index),  Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"])
 
 theorem bodySlotInputs_eq : bodySlotInputs =
     (artifact.inputs) := by kernel_rfl
 
-def bodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]])
+def bodySlotResults : List (List ValueSort) := ([[Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.index)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)],  [],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.vector "bls12-381.fr"),   Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),   Zkc.Construction.ValueSort.transcript "merlin3.bls12-381.fr64be/0"],  [Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]])
 
 theorem bodySlotResults_eq : bodySlotResults =
     (artifact.instructions).map (fun instruction => instruction.results) := by kernel_rfl
@@ -1104,12 +1424,12 @@ theorem bodySlotSorts_eq : bodySlotSorts =
   rw [bodySlotInputs_eq, bodySlotResults_eq, List.scanl_map]
 
 def body (model : Structured.DomainModel) (program : Structured.Program) (context : Context) : View.Block model.toCarriers :=
-  (View.sequence (bodyStep0 model program context) (View.sequence (bodyStep1 model program context) (View.sequence (bodyStep2 model program context) (View.sequence (bodyStep3 model program context) (View.sequence (bodyStep4 model program context) (View.sequence (bodyStep5 model program context) View.empty))))))
+  (View.sequence (bodyStep0 model program context) (View.sequence (bodyStep1 model program context) (View.sequence (bodyStep2 model program context) (View.sequence (bodyStep3 model program context) (View.sequence (bodyStep4 model program context) (View.sequence (bodyStep5 model program context) (View.sequence (bodyStep6 model program context) (View.sequence (bodyStep7 model program context) (View.sequence (bodyStep8 model program context) (View.sequence (bodyStep9 model program context) (View.sequence (bodyStep10 model program context) (View.sequence (bodyStep11 model program context) (View.sequence (bodyStep12 model program context) (View.sequence (bodyStep13 model program context) (View.sequence (bodyStep14 model program context) (View.sequence (bodyStep15 model program context) (View.sequence (bodyStep16 model program context) (View.sequence (bodyStep17 model program context) (View.sequence (bodyStep18 model program context) (View.sequence (bodyStep19 model program context) (View.sequence (bodyStep20 model program context) (View.sequence (bodyStep21 model program context) (View.sequence (bodyStep22 model program context) (View.sequence (bodyStep23 model program context) (View.sequence (bodyStep24 model program context) (View.sequence (bodyStep25 model program context) (View.sequence (bodyStep26 model program context) (View.sequence (bodyStep27 model program context) (View.sequence (bodyStep28 model program context) (View.sequence (bodyStep29 model program context) (View.sequence (bodyStep30 model program context) (View.sequence (bodyStep31 model program context) (View.sequence (bodyStep32 model program context) (View.sequence (bodyStep33 model program context) (View.sequence (bodyStep34 model program context) (View.sequence (bodyStep35 model program context) (View.sequence (bodyStep36 model program context) (View.sequence (bodyStep37 model program context) (View.sequence (bodyStep38 model program context) View.empty)))))))))))))))))))))))))))))))))))))))
 
 theorem body_eq (model : Structured.DomainModel) (program : Structured.Program) (context : Context) :
     Correspondence.Block (program := program) (context := context)
       (artifact.instructions) (body model program context) :=
-  (Correspondence.sequence (bodyStep0_eq model program context) (Correspondence.sequence (bodyStep1_eq model program context) (Correspondence.sequence (bodyStep2_eq model program context) (Correspondence.sequence (bodyStep3_eq model program context) (Correspondence.sequence (bodyStep4_eq model program context) (Correspondence.sequence (bodyStep5_eq model program context) Correspondence.empty))))))
+  (Correspondence.sequence (bodyStep0_eq model program context) (Correspondence.sequence (bodyStep1_eq model program context) (Correspondence.sequence (bodyStep2_eq model program context) (Correspondence.sequence (bodyStep3_eq model program context) (Correspondence.sequence (bodyStep4_eq model program context) (Correspondence.sequence (bodyStep5_eq model program context) (Correspondence.sequence (bodyStep6_eq model program context) (Correspondence.sequence (bodyStep7_eq model program context) (Correspondence.sequence (bodyStep8_eq model program context) (Correspondence.sequence (bodyStep9_eq model program context) (Correspondence.sequence (bodyStep10_eq model program context) (Correspondence.sequence (bodyStep11_eq model program context) (Correspondence.sequence (bodyStep12_eq model program context) (Correspondence.sequence (bodyStep13_eq model program context) (Correspondence.sequence (bodyStep14_eq model program context) (Correspondence.sequence (bodyStep15_eq model program context) (Correspondence.sequence (bodyStep16_eq model program context) (Correspondence.sequence (bodyStep17_eq model program context) (Correspondence.sequence (bodyStep18_eq model program context) (Correspondence.sequence (bodyStep19_eq model program context) (Correspondence.sequence (bodyStep20_eq model program context) (Correspondence.sequence (bodyStep21_eq model program context) (Correspondence.sequence (bodyStep22_eq model program context) (Correspondence.sequence (bodyStep23_eq model program context) (Correspondence.sequence (bodyStep24_eq model program context) (Correspondence.sequence (bodyStep25_eq model program context) (Correspondence.sequence (bodyStep26_eq model program context) (Correspondence.sequence (bodyStep27_eq model program context) (Correspondence.sequence (bodyStep28_eq model program context) (Correspondence.sequence (bodyStep29_eq model program context) (Correspondence.sequence (bodyStep30_eq model program context) (Correspondence.sequence (bodyStep31_eq model program context) (Correspondence.sequence (bodyStep32_eq model program context) (Correspondence.sequence (bodyStep33_eq model program context) (Correspondence.sequence (bodyStep34_eq model program context) (Correspondence.sequence (bodyStep35_eq model program context) (Correspondence.sequence (bodyStep36_eq model program context) (Correspondence.sequence (bodyStep37_eq model program context) (Correspondence.sequence (bodyStep38_eq model program context) Correspondence.empty)))))))))))))))))))))))))))))))))))))))
 
 def view (model : Structured.DomainModel) (program : Structured.Program) (context : Context) (inputs : Environment model.toCarriers) :
     PIR.Process (effects model.toCarriers) (Result model.toCarriers) :=

@@ -39,8 +39,8 @@ def mutateFunction (bindings : List Binding) (mutation : Mutation) (function : Z
   let .block instructions terminator := function.body
   if function.kind == .protocol then
     { function with body := (.block (instructions.map (mutateRepeat mutation))
-        (if mutation == .returnPoint && terminator == .ret [3, 0, 1, 2, 4, 5]
-          then .ret [3, 0, 1, 2, 3, 5] else terminator)) }
+        (if mutation == .returnPoint && terminator == .ret [5, 2, 3, 4, 0, 1]
+          then .ret [5, 2, 3, 4, 5, 1] else terminator)) }
   else if mutation == .append then
     match instructions with
     | [.instruction (.exec "exec.apply" binding []) [0, 1] results [] site] =>
@@ -86,8 +86,8 @@ def changedOperands (mutation : Mutation) (op : ProtocolOp) (operands : List Nat
 mutual
   def changedRaw (mutation : Mutation) : RawRegion Ty ProtocolOp → RawRegion Ty ProtocolOp
     | .ret operands => .ret
-        (if mutation == .returnPoint && operands == [3, 0, 1, 2, 4, 5]
-          then [3, 0, 1, 2, 3, 5] else operands)
+        (if mutation == .returnPoint && operands == [5, 2, 3, 4, 0, 1]
+          then [5, 2, 3, 4, 5, 1] else operands)
     | .stop reason => .stop reason
     | .letOp op operands results bodies next =>
         .letOp op (changedOperands mutation op operands) results

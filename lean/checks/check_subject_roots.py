@@ -16,7 +16,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import shutil
 from pathlib import Path
 import sys
@@ -28,6 +27,7 @@ from bridges.construction import pair  # noqa: E402
 from bridges.pipeline import evidence, source_claims  # noqa: E402
 from bridges.structured import snapshot  # noqa: E402
 from bridges.structured.generate_component_roots import Generation  # noqa: E402
+from support.lean_headers import HeaderParser  # noqa: E402
 
 
 def export_metadata(rows: list[tuple[str, str, str, str]]) -> str:
@@ -56,21 +56,24 @@ def freeze_dependencies(generation: Generation) -> None:
     pending = ["ZkcSecurity.Generation.Roots.Stages", "ZkcSecurity.Generation.Roots.Subjects",
                "TestsSecurity.GenerateRootControls", "ZkcSecurity.Claims.CanonicalAuthorityPair"]
     seen = set()
-    for module in pending:
-        if module in seen:
-            continue
-        source = generation.module_path(module)
-        if not source.is_file():
-            continue
-        seen.add(module)
-        pending.extend(re.findall(r"^(?:public )?(?:meta )?import ([A-Za-z0-9_.]+)",
-                                  source.read_text(), re.MULTILINE))
-        for suffix in [".olean", ".olean.private", ".olean.server", ".ir"]:
-            cached = generation.output.joinpath(*module.split(".")).with_suffix(suffix)
-            if cached.is_symlink():
-                temporary = cached.with_name(cached.name + ".snapshot")
-                shutil.copyfile(cached, temporary)
-                os.replace(temporary, cached)
+    # Lean owns the grammar, including `public meta import` and `import all`.
+    # Missing one of those dependencies could leave a supposedly frozen closure
+    # pointing at another process's mutable cache.
+    with HeaderParser(lean=generation.lean, root=LEAN) as headers:
+        for module in pending:
+            if module in seen:
+                continue
+            source = generation.module_path(module)
+            if not source.is_file():
+                continue
+            seen.add(module)
+            pending.extend(headers.imports(source.read_text(), source))
+            for suffix in [".olean", ".olean.private", ".olean.server", ".ir"]:
+                cached = generation.output.joinpath(*module.split(".")).with_suffix(suffix)
+                if cached.is_symlink():
+                    temporary = cached.with_name(cached.name + ".snapshot")
+                    shutil.copyfile(cached, temporary)
+                    os.replace(temporary, cached)
 
 
 def source_request_module(subject_module: str, directory: Path) -> tuple[str, str]:
@@ -116,7 +119,6 @@ def main() -> None:
     # Reuse the maintained overlay/compiler driver, with no shared-output writes.
     options.output, options.check = options.records, not options.write
     generation = Generation(options)
-    generation.environment["LEAN_NUM_THREADS"] = "2"
     freeze_dependencies(generation)
     for module in ["ZkcTools.StructuredSource.Root", "ZkcSecurity.Generation.Roots.Catalogue",
                    "ZkcSecurity.Generation.Roots.ExportMetadata"]:

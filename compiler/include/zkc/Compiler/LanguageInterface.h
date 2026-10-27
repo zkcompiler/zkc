@@ -1,6 +1,7 @@
 #ifndef ZKC_COMPILER_LANGUAGEINTERFACE_H
 #define ZKC_COMPILER_LANGUAGEINTERFACE_H
 #include "zkc/Language/Project.h"
+#include "llvm/Support/JSON.h"
 namespace zkc::language {
 struct InterfaceSchema;
 struct InterfaceField {
@@ -56,6 +57,7 @@ struct InterfaceRelationInput {
 };
 struct InterfaceRelation {
   std::string symbol, externalKind, key, revision;
+  llvm::json::Value staticArguments = llvm::json::Array{};
   RelationDefinition::Kind kind = RelationDefinition::Kind::Opaque;
   std::vector<InterfaceRelationInput> inputs;
   std::optional<std::string> formula;

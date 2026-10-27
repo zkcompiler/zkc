@@ -1,6 +1,6 @@
 module sums;
 
-use sumcheck::{Reduce, check};
+use sumcheck::{Reduce, check, pending, Pending};
 use zkc::vector::{Vector};
 use zkc::boolean::{both};
 use zkc::multilinear as mle;
@@ -13,12 +13,14 @@ pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
      left_sum: F @V, right_sum: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V) {
   let left_table @P = mle::table(left, rounds, 1);
+  let left_initial @V = pending(left_sum);
   #[site(left)] let (left_point, left_residual, left_claim) =
-    Reduce<F,Max>(left_table, left_sum, rounds, challenges);
+    Reduce<F,Max>(left_table, left_initial, rounds, challenges);
   let left_ok = check(left, left_claim);
   let right_table @P = mle::table(right, rounds, 1);
+  let right_initial @V = pending(right_sum);
   #[site(right)] let (right_point, right_residual, right_claim) =
-    Reduce<F,Max>(right_table, right_sum, rounds, challenges);
+    Reduce<F,Max>(right_table, right_initial, rounds, challenges);
   let right_ok = check(right, right_claim);
   return both(left_ok, right_ok);
 }
@@ -28,8 +30,9 @@ pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
 pub protocol Reduction<F: Field, Max: nat> roles(P,V)
     (claim: F @V, rounds: index @(P,V), challenges: Random<F> @V,
      variables: index @P, values: Vector<F> @P)
-    -> (evaluation: mle::Evaluation<F> @V, residual: Vector<F> @P, point: Vector<F> @P) {
+    -> (evaluation: Pending<F> @V, residual: Vector<F> @P, point: Vector<F> @P) {
   let input @P = mle::table(values, variables, 1);
-  let (point, residual, evaluation) = Reduce<F,Max>(input, claim, rounds, challenges);
+  let initial @V = pending(claim);
+  let (point, residual, evaluation) = Reduce<F,Max>(input, initial, rounds, challenges);
   return (evaluation=evaluation, residual=mle::values(residual), point=point);
 }

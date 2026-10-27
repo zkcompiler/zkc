@@ -23,7 +23,7 @@ private def unit (definitions : List Definition) : Snapshot :=
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 
 private def repeatInstruction (maximum : Nat := 2) (roles : List String := ["P"])
     (stateScopes : List (List String) := [["P"]])
@@ -94,7 +94,7 @@ private def statement (maximum : Nat) (noInputs : Bool) : Snapshot :=
   { unit [root (repeatInstruction maximum ["P"] [["P"]]
       (.block [statement] (.yield [1])) [.index, .boolean, .boolean] [.boolean] [0, 1, 1])] with
     relations := [⟨"relation", .publicDef, "opaque", "key", "revision", types, [.boolean],
-      if noInputs then [] else ["statement"], none⟩] }
+      if noInputs then [] else ["statement"], none, []⟩] }
 
 private def emptyRoot := protocol "main" [] [] [] [] (.block [] (.ret [])) ["P"]
 
@@ -333,7 +333,8 @@ def run : IO Unit := do
     ("complete original nested repeat", accepted ZkcExamples.Structured.RepeatNestedData.snapshot),
     ("complete original service repeat", accepted ZkcExamples.Structured.RepeatServiceData.snapshot),
     ("complete original service wrapper", accepted ZkcExamples.Structured.RepeatServiceWrapperData.snapshot),
-    ("entire original Reduction", accepted ZkcExamples.Structured.SumcheckReduceData.snapshot),
+    ("standalone Reduction exposes Pending at entry", refuses
+      ZkcExamples.Structured.SumcheckReduceData.snapshot "component-claim-entry"),
     ("entire original Sumcheck", accepted ZkcExamples.Structured.SumcheckSourceData.snapshot),
     ("ordinary retained repeat", accepted (unit [root])),
     ("maximum zero", accepted (unit [root (repeatInstruction 0)])),

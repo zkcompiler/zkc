@@ -28,7 +28,7 @@ def export(source, symbol='main', refusal=None, keep=None):
     if refusal:
         return None
     snapshot = json.loads(text)
-    assert len(snapshot) == 10
+    assert len(snapshot) == 11
     assert snapshot[2] == 'sha256:' + hashlib.sha256(source.encode()).hexdigest()
     assert all(len(row) == 10 for row in snapshot[7] if row[0] == 'function')
     return snapshot
@@ -373,7 +373,7 @@ with case('generated-collision-in-repeat-is-checked-even-at-zero'):
     refuse(header, 'structured-source-site', 'structured-reference-site')
 
 for label, path, entry, maximum in [
-    ('reduction', root / 'examples/projects/sumcheck/composed/main.zkc', 'Reduction', 4),
+    ('reduction', root / 'examples/projects/sumcheck/composed/main.zkc', 'Interactive', 4),
     ('sumcheck', root / 'examples/projects/sumcheck/main.zkc', 'Interactive', 2),
 ]:
     with case('whole-original-' + label + '-capture-and-independent-admission'):
@@ -383,12 +383,44 @@ for label, path, entry, maximum in [
         [(reduction, loop)] = loops
         assert loop[0] == ['protocol_repeat', 6, maximum, [P, V], [[P], [P], [P], [P], [V], [V]]]
         assert len(loop[3][0][0]) == 8 and loop[3][0][0][-1] == ['service', service]
-        assert reduction[9][2] == ['return', [3, 0, 1, 2, 4, 5]]
+        # Reduce now repacks the verifier's two fields through at_prefix after
+        # the repeat. Keep the exact public-point/table/Pending output order.
+        assert reduction[9][2] == ['return', [5, 2, 3, 4, 0, 1]]
+        assert reduction[9][1][-1][0][0] == 'local_call'
+        assert reduction[9][1][-1][2] == [['vector', 'bls12-381.fr'], field]
         # Admission validates every dormant declaration before optional zero
         # execution. Full symbolic Sumcheck equations are a subsequent package.
-        inputs = [None, None, '9', '0', None] if label == 'reduction' else [['7'], '7', '0', None]
-        expected = [None, None, [], '9'] if label == 'reduction' else [True]
-        assert run(source, inputs, V, symbol=symbol) == returned(expected)
+        # The composed project's current Entry completes both public sums.
+        inputs = [['7'], ['11'], '7', '11', '0', '9'] if label == 'reduction' else [['7'], '7', '0', None]
+        assert run(source, inputs, V, symbol=symbol) == returned([True])
+        if label == 'reduction':
+            inputs[3] = '12'
+            assert run(source, inputs, V, symbol=symbol) == returned([False])
+
+
+with case('prefix-restriction-in-repeat-keeps-raw-shape-and-coordinate-order'):
+    vector_type = '!algebra.field_vector<"bls12-381.fr">'
+    body = f'''%r = "protocol.repeat"(%n,%values,%fixed) ({{
+      ^body(%i:ui64,%state:{vector_type},%capture:{vector_type}):
+      %next = "algebra.multilinear_restrict_prefix"(%state,%capture) : ({vector_type},{vector_type})->{vector_type}
+      "protocol.yield"(%next) : ({vector_type})->()
+    }}) {{site="prefix",carried=1:i64,maximum=2:i64,roles=["P"],carried_roles=[["P"]]}} : (ui64,{vector_type},{vector_type})->{vector_type}'''
+    source = module(protocol('main', body, roles=('P',), inputs=(
+        ('n', 'ui64', ('P',)), ('values', vector_type, ('P',)), ('fixed', vector_type, ('P',))),
+        outputs=((vector_type, ('P',)),)))
+    export(source)
+    for rounds, values, fixed, expected in [
+        ('0', ['1', '2', '3', '4'], ['2'], ['1', '2', '3', '4']),
+        ('1', ['1', '2', '3', '4'], ['2'], ['5', '6']),
+        ('2', ['1', '2', '3', '4'], ['2'], ['7']),
+        ('1', ['1', '2', '3', '4'], ['2', '3'], ['8']),
+        ('1', ['1', '2', '3'], ['2'], ['3']),
+        ('1', ['9'], ['2'], []),
+        ('1', [], ['2'], []),
+    ]:
+        assert run(source, [rounds, values, fixed]) == returned([expected])
+    run(source, ['1', ['1', '2', '3', '4'], ['2']], capacity=4,
+        refusal='structured-reference-capacity')
 
 
 

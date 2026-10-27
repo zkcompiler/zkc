@@ -3,6 +3,10 @@
 #include "zkc/Language/Project.h"
 
 namespace zkc::language {
+/// Retained source types and port grouping for component contract admission.
+/// This is declaration context, not a pending-claim marker or a proof.
+llvm::Expected<std::string> inspectComponentDeclarations(const ClosedEntry &,
+                                                         const Limits & = {});
 /// JSON inventory of canonical Entry names and function/proof/deployment kinds,
 /// sorted by name.
 llvm::Expected<std::string> inspectEntries(const CheckedProject &,

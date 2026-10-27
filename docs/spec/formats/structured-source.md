@@ -42,7 +42,7 @@ The current format is an exact tagged array, `zkc.structured-source/0`:
 
 ```text
 [format, "original", source-sha256, entry-name, domains, relations, bindings, definitions, contracts,
- catalogue]
+ catalogue, source-declarations]
 ```
 
 `source-sha256` is `sha256:` followed by 64 lowercase hexadecimal digits, hashing
@@ -50,7 +50,7 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
-All ten slots are required, including empty tables. Each declaration category
+All eleven slots are required, including empty tables. Each declaration category
 preserves its native encounter order. Private computation declarations derived
 from scoped bodies follow the native declarations in reader encounter order.
 There is no cross-category declaration-order field.
@@ -105,6 +105,43 @@ exchanged, returned, passed to Math/Local helpers, or bound as statement data.
 Affine resources, multi-constructor variants, matrices, general arrays, arbitrary kernels and other
 unlisted operations require a separately specified extension.
 
+## Retained source declarations
+
+The last slot is `[records, protocols]`, or `[[], []]` when no reachable source
+protocol port contains a linear record. The frontend retains closed typed source
+terms and field order before flattening:
+
+```text
+record := [closed-record-type, "ordinary" | "affine" | "linear", sealed, [[field-name, closed-type]...]]
+protocol := [native-symbol, input-ports, output-ports]
+port := [source-name, closed-type, [holder...], native-offset, native-count]
+```
+
+The terms use the existing typed origin grammar, including closed static
+arguments. This is declaration context, not a new claim keyword or a routing
+language. It is stored as canonical JSON in the original module's optional
+`source_declarations` string attribute. Frontend correspondence recomputes that
+attribute exactly from the checked closed source. A standalone MLIR export
+cannot establish its frontend provenance. Projection removes this context
+with the other original-only contracts; provenance uses the retained original.
+
+The bounded Lean reader reconstructs Boolean/index/field/group, tuple, bounded
+array, field-vector and recursively declared record layouts, then compares
+exact native types, offsets and role scopes. It checks a single holder for each
+linear source port. A protocol with any retained clauses must associate every
+linear port with one relation, with consistent relation identity for repeated
+uses of the same closed type. The relation comes from actual checked
+subject/residual selectors. A clause-free protocol exposes resource boundaries
+without asserting or inheriting a relation; its linear ownership must still
+reach a consumer or residual on every successful exit. Records with native
+resource markers, packed products, variants and unlisted carriers refuse rather
+than being inferred from their flattened shapes. The selected protocol may have linear inputs or
+residual outputs: selection fixes the library subject under study. It does not
+declare a deployed proof Entry or discharge a residual relation. Concrete claim
+selection must still check its fixed target and root acceptance interface.
+Unknown and duplicate declaration rows, fields or owners refuse. There is one
+current eleven-slot version-zero schema; a ten-slot envelope is not accepted.
+
 ## Declarations
 
 ```text
@@ -122,7 +159,7 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
            | []                                                  # math/local
 
 ["relation", name, visibility, kind, key, revision,
- input-types, output-types, purposes, formula]
+ static-arguments, input-types, output-types, purposes, formula]
 
 ["binding", name, contract, domain-arguments, implementation]
 
@@ -159,7 +196,12 @@ unused protocols. The writer retains native names without reconstructing
 authored names or imposing the selected root's roster on other definitions.
 
 Relations are non-callable metadata, retained even when unused. The declaration's
-`kind`, `key` and `revision` are opaque exact strings. Native verification checks
+`kind`, `key` and `revision` are exact strings. `static-arguments` is a required
+ordered list of the canonical typed terms used in protocol origins, including
+unused static arguments. There is no ten-slot compatibility reader. The list
+has at most 128 arguments, depth 64 and 4096 aggregate term nodes. Domain leaves
+require matching exported and admitted catalogue rows even when no runtime
+input mentions them. Native verification checks
 their validity and consistency, the ordered signature, and each input purpose
 (`parameter`, `statement`, or `witness`). A relation has one Boolean result.
 `formula` is null or the exact symbol of a defined Math helper in this unit.
@@ -168,6 +210,14 @@ input/output signature must equal the declaration's signature. Other kinds use
 null. A Local function cannot satisfy a Math formula link. Names and hashes do
 not infer this association; the original `relation.declare` owns it. Structural
 association supplies no totality, relation adequacy or security proof.
+
+Vendor kinds (outside `zkc.`) have identity `(kind, key, revision,
+static-arguments)`. Equal identities require identical ordered logical types
+and purposes; aliases may change formal names. Structural import retains this
+identity without choosing a predicate. Registered meaning admission separately
+requires the family's fixed typed instantiation to accept these exact arguments
+and signature. Formula and captured kinds require empty static arguments and
+keep their body/asset-owned interpretation.
 
 The `contracts` table has exactly one row `[owner-protocol, clauses]` for every
 exported protocol, including those with no clauses. Missing, repeated, unknown,
@@ -830,3 +880,16 @@ native unsigned 64-bit index ABI the last predicate equals
 `r < 64 && n == (1 << r)`. Its executable recipe enumerates the 64 representable
 powers with safe constant shifts; it does not construct an unbounded power or
 shift by a runtime exponent.
+
+### Total vector prefix restriction
+
+The exact descriptor `["multilinear.restrict_prefix", field-domain]` represents
+`algebra.multilinear_restrict_prefix`. It takes two `["vector", field-domain]`
+operands in `(values, point)` order and returns one vector in that field.
+It has no site, attributes, parameters or regions and occurs only in Math and
+protocol calculations. The field must resolve against the unit's catalogue.
+Missing or extra descriptor slots, unknown domains, mismatched ports, sites,
+regions and Local use refuse; there are no alternative spellings.
+Its [total meaning](../domains/polynomials.md#total-vector-prefix-restriction)
+has no vector-shape premise. This addition keeps format version zero and
+updates the native producer and strict Lean reader together.

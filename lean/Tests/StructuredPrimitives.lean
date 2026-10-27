@@ -15,7 +15,7 @@ private def snapshot (bindings : List Binding) (defs : List Definition := [root]
   (let contractDefinitions : List Definition := defs
    ⟨digest, "main", [], [], bindings, contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 private def binding (contract : String) (arguments : List String := []) : Binding :=
   ⟨"primitive", contract, arguments, ""⟩
 private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : String := "exec")
@@ -131,9 +131,9 @@ private def run : IO Unit := do
     "structured-domain-capability")
   test "root-field" ((binding "vector.sum" ["f"]).resolveRoot fieldOnly matches .ok "f")
   let envelope := [Json.str "zkc.structured-source/0", .str "original", .str digest,
-    .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []]]
-  test "wire-ten-fields" ((Format.snapshot (arr envelope)).isOk)
-  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 9))).isOk)
+    .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []], arr [arr [], arr []]]
+  test "wire-eleven-fields" ((Format.snapshot (arr envelope)).isOk)
+  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 10))).isOk)
   test "wire-no-extra-envelope" (!(Format.snapshot (arr (envelope ++ [arr []]))).isOk)
   test "wire-unused-bad-binding" (!(Format.snapshot (arr (envelope.set 6
     (arr [bindingWire (binding "vector.product" [scalarDomain])])))).isOk)

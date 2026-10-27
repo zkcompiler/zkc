@@ -279,6 +279,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
     use std::collections::BTreeSet;
     let expected = "
         field.from_index field.sub field.neg field.inverse field.constant field.add field.mul field.equal
+        multilinear.restrict_prefix
         vector.transpose vector.equal vector.find_last vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
         vector.bit_reverse vector.bit_reverse_rows
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
@@ -559,4 +560,59 @@ fn history_follows_the_installed_owner_not_the_contract_spelling() {
     assert!(!registry.observes_history("transcript.stateless").unwrap());
     assert!(registry.observes_history("transcript.unknown").is_err());
     assert!(observes_history("transcript.unknown").is_err());
+}
+
+#[test]
+fn multilinear_prefix_restriction_has_exact_vector_ports_and_binding() {
+    for (field, provider) in [
+        ("bls12-381.fr", "arkworks"),
+        ("bn254.fr", "arkworks"),
+        ("ristretto255.scalar", "dalek"),
+        ("koala-bear.ext8-binomial3", "plonky3"),
+        ("gf2-64.pentanomial-4-3-1", "plonky3"),
+    ] {
+        let binding = OperationBinding {
+            contract: "multilinear.restrict_prefix".into(),
+            arguments: vec![field.into()],
+            implementation: format!("{provider}/multilinear.restrict_prefix"),
+            physical_arguments: vec![],
+        };
+        let vector = LogicalType::new(Type::Vector, Identity::parse(field).unwrap()).unwrap();
+        let signature = logical_signature(&binding).unwrap();
+        assert_eq!(signature.inputs, [vector.clone(), vector.clone()]);
+        assert_eq!(signature.outputs, [vector]);
+        assert_eq!(signature.attributes, AttributeRule::None);
+        assert!(binding.signature().is_ok());
+        for arguments in [
+            vec![],
+            vec![field.into(), "0".into()],
+            vec!["bls12-381.g1".into()],
+        ] {
+            assert_eq!(
+                OperationBinding {
+                    arguments,
+                    ..binding.clone()
+                }
+                .signature()
+                .unwrap_err()
+                .code,
+                ErrorCode::Signature
+            );
+        }
+        for implementation in [
+            "missing/multilinear.restrict_prefix",
+            "arkworks/vector.split",
+        ] {
+            assert_eq!(
+                OperationBinding {
+                    implementation: implementation.into(),
+                    ..binding.clone()
+                }
+                .signature()
+                .unwrap_err()
+                .code,
+                ErrorCode::Signature
+            );
+        }
+    }
 }

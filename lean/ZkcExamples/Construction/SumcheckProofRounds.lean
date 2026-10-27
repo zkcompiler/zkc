@@ -41,7 +41,7 @@ theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
   rw [show verifierInputs (F := F) (G := G) values claim rounds handle =
       ZkcExamples.Structured.SumcheckSourceVerifier.sourceRootInputs (some values) (some claim) (some rounds)
         (some handle) from rfl,
-    ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked rounds admitted values (some claim)
+    ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked rounds admitted values claim
     (some handle) table decoded vectorBound]
   congr 2
   rw [PIR.Process.bind_assoc]

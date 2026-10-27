@@ -7,7 +7,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Generation.OriginalSecurityBindings
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcTools.StructuredSource.Presentation
-open ZkcTools.StructuredSource.OriginalRoot
+open ZkcTools.StructuredSource.OriginalRoot ZkcTools.StructuredSource.Methods.SumcheckRoot
 
 def render (fields : List (String × String)) (template : String) : String :=
   fields.foldl (fun text field => text.replace ("%" ++ field.1 ++ "%") field.2) template
@@ -22,20 +22,13 @@ def preamble (output : Output) (suffix : String) (imports : List String) : Strin
     "open ZkcSecurity.Realizations.Sumcheck\nopen ZkcSecurity.Realizations.Sumcheck.OriginalRaw\n" ++
     "open ZkcSecurity.Realizations.Sumcheck.OriginalRoot\n"
 
-def sourceRoot (binding : Binding) (output : Output) : Except String String := do
-  if binding.conjunction.isSome then
-    return "sourceTwoRoots " ++ toString binding.maximum ++ " " ++ String.intercalate " " (binding.calls.map fun call =>
-      "⟨" ++ output.artifactModule ++ ".occurrence" ++ toString call.occurrence ++ ".protocol, handle⟩") ++ " " ++
-      args (binding.calls.map (·.raw) ++ binding.calls.map (·.claim)) ++ " " ++ input binding.count
-  else
-    let call ← one "single-call" binding.calls
-    return "sourceRoot " ++ toString binding.maximum ++ " ⟨" ++ output.artifactModule ++ ".occurrence0.protocol, handle⟩ " ++
-      args [call.raw, call.claim, binding.count]
+def sourceRoot (binding : Binding) (_output : Output) : Except String String :=
+  pure ("sourceComposition (G := G) " ++ toString binding.maximum ++ " (calls " ++
+    args binding.publicPositions ++ " handle) terminalTree")
 
 def presentedRoot (binding : Binding) : String :=
-  (if binding.conjunction.isSome then "twoRoots " else "root ") ++ toString binding.maximum ++ " " ++
-    String.intercalate " " (binding.calls.map fun call => "schedule" ++ toString call.occurrence) ++ " " ++
-    args (binding.calls.map (·.raw) ++ binding.calls.map (·.claim)) ++ " " ++ input binding.count ++ " ⟨[], history⟩"
+  "composition (G := G) " ++ toString binding.maximum ++ " (calls " ++ args binding.publicPositions ++
+    " 0) terminalTree ⟨[], history⟩"
 
 def sourceBindings (program : Program) (binding : Binding) (output : Output) : Except String String := do
   let O := output.originalModule
@@ -62,30 +55,40 @@ def sourceBindings (program : Program) (binding : Binding) (output : Output) : E
     let helperIndex ← uniqueIndex (program.payload.definitions.map (·.helper)) helper
     text := text ++ "theorem check" ++ toString call.occurrence ++ "_helper : " ++ O ++ ".sourceHelper" ++ toString helperIndex ++ ".helper = SumcheckHelperBodies.checkHelper := by kernel_rfl\n\n"
   for call in binding.calls do
-    text := text ++ render (fields ++ [("N", toString call.occurrence), ("CALL", call.call.name), ("CHECK", call.check.name)]) "def schedule%N% := schedule %B%.occurrence%N% context\n theorem routes%N% (handle : Nat) : OriginalSecurity.Routes (routing handle)\n    ⟨%B%.occurrence%N%.protocol, handle⟩ schedule%N% [] :=\n  routes (routing handle) %B%.occurrence%N% handle (%B%.occurrence%N%_routes handle)\n\ntheorem call%N%_raw (scalar : F) (count handle : Nat) :\n    %O%.%CALL%Realized (G := G) (some scalar) (some count) (some handle) =\n      if count ≤ %MAX% then\n        (run (G := G) ⟨%B%.occurrence%N%.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind\n          (fun result => .done (output result))\n      else .halt .refused := by\n  change verifierCall payload %MAX% %B%.occurrence%N%.protocol %O%.reduceDefinition.outputScopes scalar count handle = _\n  rw [call_raw payload %B%.verifier_bodies %MAX% ⟨%B%.occurrence%N%.protocol, handle⟩ (by change 0 ≠ 1; decide)]\n  split\n  · apply congrArg (PIR.Process.bind _)\n    funext result\n    exact congrArg PIR.Process.done (by kernel_rfl)\n  · rfl\n\ntheorem check%N%_raw (raw : List F) (state : State F) :\n    %O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some raw) (output (G := G) state) =\n      terminal raw state.point state.scalar := by\n  change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)\n    (.cons (some raw) (.cons (some state.point) (.cons (some state.scalar) .nil))) = _\n  exact source_terminal payload terminal_bodies 1 raw state.point state.scalar\n\ntheorem checked%N% (raw : List F) (scalar : F) (count handle : Nat) :\n    (%O%.%CALL%Realized (G := G) (some scalar) (some count) (some handle)).bind\n      (%O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some raw)) =\n      sourceRoot %MAX% ⟨%B%.occurrence%N%.protocol, handle⟩ raw scalar count := by\n  rw [call%N%_raw]\n  unfold sourceRoot\n  split\n  · simp only [PIR.Process.bind_assoc, PIR.Process.bind]\n    apply congrArg (PIR.Process.bind _)\n    funext state\n    exact check%N%_raw raw state\n  · rfl\n\n"
+    text := text ++ render (fields ++ [("N", toString call.occurrence), ("PENDING", call.pending.name)])
+      "theorem pending%N%_raw (scalar : F) :\n    %O%.%PENDING% (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload) (some scalar) =\n      .done (.cons (some []) (.cons (some scalar) .nil)) := by\n  change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckPendingBodies.pendingHelper) (.cons (some scalar) .nil) = _\n  exact SumcheckPendingLaws.pending_owned payload %B%.claim_bodies 1 scalar\n\n"
   for call in binding.calls do
-    text := text ++ render (fields ++ [("N", toString call.occurrence), ("CALL", call.call.name), ("CHECK", call.check.name)]) "theorem call%N%_binding (scalar : F) (count handle : Nat) :\n    %O%.%CALL%Realized (G := G) (some scalar) (some count) (some handle) =\n      verifierCall payload %MAX% %B%.occurrence%N%.protocol %O%.reduceDefinition.outputScopes scalar count handle := by rfl\n\ntheorem check%N%_honest (state : OriginalHonest.MathState F 0)\n    (bounded : state.original.length < indexLimit) (pointBound : state.point.length < 64) :\n    %O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some state.original)\n      (maskValues (%B%.occurrence%N%.protocol.roles 1)\n        (%B%.occurrence%N%.protocol.mapScopes %O%.reduceDefinition.outputScopes)\n        (SumcheckVerifierBodies.reduceReturnValues (OriginalHonest.verifierValues (G := G) state))) =\n      .done (.cons (some (decide (state.entries.sum = state.scalar))) .nil) := by\n  change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)\n    (.cons (some state.original) (.cons (some state.point) (.cons (some state.scalar) .nil))) = _\n  exact honest_check payload terminal_bodies state bounded pointBound\n\n"
-  if let some step := binding.conjunction then
+    text := text ++ render (fields ++ [("N", toString call.occurrence), ("CALL", call.call.name), ("CHECK", call.check.name), ("CALLARGS", ← callArguments call "scalar" "count" "handle")]) "def schedule%N% := schedule %B%.occurrence%N% context\n theorem routes%N% (handle : Nat) : OriginalSecurity.Routes (routing handle)\n    ⟨%B%.occurrence%N%.protocol, handle⟩ schedule%N% [] :=\n  routes (routing handle) %B%.occurrence%N% handle (%B%.occurrence%N%_routes handle)\n\ntheorem call%N%_raw (scalar : F) (count handle : Nat) :\n    %O%.%CALL%Realized (G := G) %CALLARGS% =\n      if count ≤ %MAX% then\n        (run (G := G) ⟨%B%.occurrence%N%.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind\n          (fun result => .done (output result))\n      else .halt .refused := by\n  change verifierCall payload %MAX% %B%.occurrence%N%.protocol %O%.reduceDefinition.outputScopes [] scalar count handle = _\n  rw [call_raw payload %B%.verifier_bodies %B%.claim_bodies %MAX% ⟨%B%.occurrence%N%.protocol, handle⟩ (by change 0 ≠ 1; decide)]\n  split\n  · apply congrArg (PIR.Process.bind _)\n    funext result\n    exact congrArg PIR.Process.done (by kernel_rfl)\n  · rfl\n\ntheorem check%N%_raw (raw : List F) (state : State F) :\n    %O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some raw) (output (G := G) state) =\n      terminal raw state.point state.scalar := by\n  change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)\n    (.cons (some raw) (.cons (some state.point) (.cons (some state.scalar) .nil))) = _\n  exact source_terminal payload terminal_bodies 1 raw state.point state.scalar\n\ntheorem checked%N% (raw : List F) (scalar : F) (count handle : Nat) :\n    (%O%.%CALL%Realized (G := G) %CALLARGS%).bind\n      (%O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some raw)) =\n      sourceRoot %MAX% ⟨%B%.occurrence%N%.protocol, handle⟩ raw scalar count := by\n  rw [call%N%_raw]\n  unfold sourceRoot\n  split\n  · simp only [PIR.Process.bind_assoc, PIR.Process.bind]\n    apply congrArg (PIR.Process.bind _)\n    funext state\n    exact check%N%_raw raw state\n  · rfl\n\n"
+  for call in binding.calls do
+    text := text ++ render (fields ++ [("N", toString call.occurrence), ("CALL", call.call.name), ("CHECK", call.check.name), ("CALLARGS", ← callArguments call "scalar" "count" "handle")]) "theorem call%N%_binding (scalar : F) (count handle : Nat) :\n    %O%.%CALL%Realized (G := G) %CALLARGS% =\n      verifierCall payload %MAX% %B%.occurrence%N%.protocol %O%.reduceDefinition.outputScopes [] scalar count handle := by rfl\n\ntheorem check%N%_honest (state : OriginalHonest.MathState F 0)\n    (bounded : state.original.length < indexLimit) (pointBound : state.point.length < 64) :\n    %O%.%CHECK% (OriginalSumcheckLibrary.helpers payload) (some state.original)\n      (maskValues (%B%.occurrence%N%.protocol.roles 1)\n        (%B%.occurrence%N%.protocol.mapScopes %O%.reduceDefinition.outputScopes)\n        (SumcheckVerifierBodies.reduceReturnValues (OriginalHonest.verifierValues (G := G) state))) =\n      .done (.cons (some (decide (state.entries.sum = state.scalar))) .nil) := by\n  change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)\n    (.cons (some state.original) (.cons (some state.point) (.cons (some state.scalar) .nil))) = _\n  exact honest_check payload terminal_bodies state bounded pointBound\n\n"
+  for step in binding.conjunctions do
     let some helper := step.helper | throw "original-security-conjunction"
     let helperIndex ← uniqueIndex (program.payload.definitions.map (·.helper)) helper
-    text := text ++ render (fields ++ [("COMBINE", step.name), ("HELPER", toString helperIndex)]) "theorem combine (left right : Values (Component (assignment F G)) [.boolean]) :\n    %O%.%COMBINE% (OriginalSumcheckLibrary.helpers payload) left right = both left right := by\n  cases left with\n  | cons a left =>\n    cases left\n    cases right with\n    | cons b right =>\n      cases right\n      change invoke (OriginalSumcheckLibrary.helpers payload).components %O%.terminalHelper\n        (.cons a (.cons b .nil)) = _\n      exact %V%.mathHelper%HELPER% a b\n\n"
-  text := text ++ render (fields ++ [("ROOT", ← sourceRoot binding output)]) "theorem source_root %PARAMS% (handle : Nat) :\n    Occurrence.participant (ringModel F G) program 1 %VALUES% =\n      %ROOT% := by\n  rw [%O%.participant_binding]\n"
-  if binding.conjunction.isSome then
-    let [left, right] := binding.calls | throw "original-security-conjunction-calls"
-    text := text ++ "  unfold " ++ O ++ ".realized sourceTwoRoots\n" ++
-      "  rw [← checked0 " ++ args [left.raw, left.claim, binding.count] ++ " handle, ← checked1 " ++
-      args [right.raw, right.claim, binding.count] ++ " handle]\n" ++
-      "  simp only [PIR.Process.bind_assoc, combine]\n\n"
-  else
-    let call ← one "single-call" binding.calls
-    text := text ++ "  exact checked0 " ++ args [call.raw, call.claim, binding.count] ++ " handle\n\n"
-  let contexts := String.intercalate " " (binding.calls.map fun call => "⟨" ++ B ++ ".occurrence" ++ toString call.occurrence ++ ".protocol, handle⟩")
-  let schedules := String.intercalate " " (binding.calls.map fun call => "schedule" ++ toString call.occurrence)
-  let routes := String.intercalate " " (binding.calls.map fun call => "(routes" ++ toString call.occurrence ++ " handle)")
-  let bridge := (if binding.conjunction.isSome then "twoRoots_bridge" else "root_bridge") ++ " (routing handle) " ++
-    contexts ++ " " ++ schedules ++ " " ++ toString binding.maximum ++ " " ++
-    args (binding.calls.map (·.raw) ++ binding.calls.map (·.claim)) ++ " " ++ input binding.count ++ " ⟨[], history⟩ " ++ routes
-  text := text ++ render (fields ++ [("PRESENTED", presentedRoot binding), ("BRIDGE", bridge), ("MODULE", output.moduleName)]) "def presented %PARAMS% (history : Domain.History (uniformCarriers F G)) :=\n  %PRESENTED%\n\ntheorem bridge %PARAMS% (handle : Nat) (history : Domain.History (uniformCarriers F G)) :\n    DomainReduction.Bridge (Nominal.interface (G := G) \"bls12-381.fr\") closedPost history\n      (Original.participant (ringModel F G) program (routing handle) 1 %VALUES% ⟨[], history⟩)\n      (presented %ARGS% history) := by\n  unfold Original.participant\n  rw [source_root]\n  exact %BRIDGE%\n\nend %MODULE%.Sources\n"
+    text := text ++ render (fields ++ [("COMBINE", step.name), ("HELPER", toString helperIndex)]) "theorem combine_%COMBINE% (left right : Values (Component (assignment F G)) [.boolean]) :\n    %O%.%COMBINE% (OriginalSumcheckLibrary.helpers payload) left right = both left right := by\n  cases left with\n  | cons a left =>\n    cases left\n    cases right with\n    | cons b right =>\n      cases right\n      change invoke (OriginalSumcheckLibrary.helpers payload).components %O%.sourceHelper%HELPER%.helper\n        (.cons a (.cons b .nil)) = _\n      exact %V%.mathHelper%HELPER% a b\n\n"
+  text := text ++ "def calls " ++ parameters ++ " (handle : Nat) : List (Call F) :=\n  " ++
+    listText (binding.calls.map fun call => "⟨⟨" ++ input call.raw ++ ", " ++ input call.claim ++ ", " ++
+      input binding.count ++ "⟩, ⟨" ++ B ++ ".occurrence" ++ toString call.occurrence ++
+      ".protocol, handle⟩, schedule" ++ toString call.occurrence ++ "⟩") ++ "\n\n" ++
+    "def terminalTree : Conjunction := " ++ binding.terminal.source ++ "\n\n" ++
+    "omit [Field F] [DecidableEq F] in\nset_option linter.unusedSimpArgs false in\ntheorem terminal_coverage " ++ parameters ++ " (handle : Nat) :\n" ++
+    "    ∀ index < (calls " ++ arguments ++ " handle).length, index ∈ terminalTree.leaves := by\n" ++
+    "  simp only [calls, List.length_cons, List.length_nil, terminalTree, Conjunction.leaves, List.mem_append, List.mem_singleton]\n  omega\n\n"
+  text := text ++ render (fields ++ [("ROOT", ← sourceRoot binding output)]) "set_option linter.unusedSimpArgs false in\ntheorem source_root %PARAMS% (handle : Nat) :\n    Occurrence.participant (ringModel F G) program 1 %VALUES% =\n      %ROOT% := by\n  rw [%O%.participant_binding]\n"
+  text := text ++ "  unfold " ++ O ++ ".realized sourceComposition calls\n  simp only [sourceSequence]\n"
+  text := text ++ "  simp only [" ++ String.intercalate ", " (binding.calls.map fun call =>
+    "pending" ++ toString call.occurrence ++ "_raw") ++ ", PIR.Process.bind]\n"
+  for call in binding.calls do
+    text := text ++ "  rw [← checked" ++ toString call.occurrence ++ " " ++ args [call.raw, call.claim, binding.count] ++ " handle]\n"
+  let combinations := binding.conjunctions.map fun step => "combine_" ++ step.name
+  text := text ++ "  simp only [PIR.Process.bind_assoc, PIR.Process.bind, " ++
+    String.intercalate ", " (combinations ++ ["id_eq", "both", "terminalTree", "Conjunction.evaluate", "Values.get", "PIR.Process.bind_done", "Option.bind_some",
+      "List.getElem?_cons_zero", "List.getElem?_cons_succ", "Option.join", "ZkcExamples.Structured.OriginalSumcheckCalls.singleton_eta"]) ++ "]\n\n"
+  let bridge := "composition_bridge (routing handle) " ++ toString binding.maximum ++ " (calls " ++
+    arguments ++ " handle) terminalTree ⟨[], history⟩ (by\n" ++
+    "    intro call member\n    simp only [calls, List.mem_cons, List.not_mem_nil, or_false] at member\n" ++
+    "    rcases member with " ++ String.intercalate " | " (binding.calls.map fun _ => "rfl") ++ "\n" ++
+    String.join (binding.calls.map fun call => "    · exact routes" ++ toString call.occurrence ++ " handle\n") ++ "  )"
+  text := text ++ render (fields ++ [("PRESENTED", presentedRoot binding), ("BRIDGE", bridge), ("MODULE", output.moduleName)]) "def presented %PARAMS% (history : Domain.History (uniformCarriers F G)) :=\n  %PRESENTED%\n\ntheorem bridge %PARAMS% (handle : Nat) (history : Domain.History (uniformCarriers F G)) :\n    DomainReduction.Bridge (NominalField.interface (G := G) \"bls12-381.fr\") closedPost history\n      (Original.participant (ringModel F G) program (routing handle) 1 %VALUES% ⟨[], history⟩)\n      (presented %ARGS% history) := by\n  unfold Original.participant\n  rw [source_root]\n  exact %BRIDGE%\n\nend %MODULE%.Sources\n"
   return text
 
 end ZkcSecurity.Generation.OriginalSecurityBindings

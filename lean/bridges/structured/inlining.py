@@ -46,7 +46,8 @@ def retained_subject(suite, stem, module, stage, source, symbol):
     return subject
 
 
-def subject_cases(suite, stem, module, proof):
+def regenerate_subject(suite, stem, module, proof):
+    """The owning native generation path, independent of execution/proof checks."""
     source = FIXTURES / f"{stem}.zkc"
     suite.sources.append({"authored": str(source.relative_to(ROOT)), "sha256": digest(source)})
     flags = ["--source-format=zkc", f"--module={module}={source}", f"--subject={fixture_table()[stem]['subject']}"]
@@ -62,6 +63,18 @@ def subject_cases(suite, stem, module, proof):
         "--zkc-prepare-protocol=simplify=false optimize-finite=false", original[0], "-o", prepared])
     candidate_text = prepared.read_text(encoding="utf-8")
     candidate = retained_subject(suite, stem, proof, "Candidate", candidate_text, symbol)
+    mutated = None
+    if proof == "SchnorrResponse":
+        if candidate_text.count("algebra.field_add") != 2:
+            raise AssertionError("expected the original helper and the inlined addition")
+        mutated = retained_subject(suite, stem, proof, "Mutated",
+            candidate_text.replace("algebra.field_add", "algebra.field_subtract", 1), symbol)
+    return original, candidate, mutated
+
+
+def subject_cases(suite, stem, module, proof):
+    original, candidate, mutated = regenerate_subject(suite, stem, module, proof)
+    symbol = original[2][3]
     # Assert the intended transformation in the exported entry, not by searching
     # the whole module: preparation may retain dormant helper definitions.
     before = definition(original[2], symbol)[9][1]
@@ -81,10 +94,6 @@ def subject_cases(suite, stem, module, proof):
     if proof == "SchnorrResponse":
         # Change just the first addition, in the prepared entry. The helper
         # definition stays untouched. Native formation and Lean admission pass.
-        if not (candidate_text.count("algebra.field_add") == 2):
-            raise AssertionError('bridges/structured/inlining.py:81: candidate_text.count("algebra.field_add") == 2')
-        mutated = retained_subject(suite, stem, proof, "Mutated",
-            candidate_text.replace("algebra.field_add", "algebra.field_subtract", 1), symbol)
         suite.compare(mutated, "admitted-arithmetic-mutation", ["2", "3", "5"],
                       returned(str((2 - 3 * 5) % MODULUS)))
     # Refresh imported constructor objects before elaborating the proof source.

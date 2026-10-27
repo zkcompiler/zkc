@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Print literal typed bodies of an admitted structured unit as a Lean module.
 
-The script builds a scratch Lean module that admits the snapshot with the checker
-itself, materializes each checked helper body, protocol body and (for the
-closed profile) the projected root with `region_view%`, and prints them. It then
-rewrites the printed terms as `<|` chains in the style of the authored body
-modules. The output is ordinary source: `structured_views` or
+The script evaluates the independent checker in a scratch Lean module and uses
+Lean-owned syntax printers for its typed helper bodies, protocol bodies and
+(for the closed profile) projected root. It rewrites the printed terms as `<|`
+chains in the style of the authored body modules. The output is ordinary source: `structured_views` or
 `structured_closed_views` must still admit the snapshot from it, so a printing
 or formatting error is rejected by the kernel rather than trusted. Lake replays
 unchanged printer output; --fresh uses direct elaboration without replay.
@@ -36,38 +35,43 @@ from bridges.structured import printer_build  # noqa: E402
 LEAN = ROOT / "lean"
 
 PRINTER = r'''
-import Zkc.Source.RegionView
 import Zkc.Source.Structured.ClosedProfile
 import ZkcTools.StructuredSource.Presentation
 import {data}
 
 set_option maxRecDepth 20000
 set_option maxHeartbeats 4000000
-set_option smartUnfolding false
-set_option pp.deepTerms true
-set_option pp.proofs true
-set_option pp.maxSteps 10000000
-noncomputable section
 
 namespace Printed
 open Zkc.Source Zkc.Source.Structured
+open ZkcTools.StructuredSource.Presentation
 
-def program : Program := (check {data}.snapshot).toOption.get (by decide +kernel)
+abbrev showTys := typesText
 
-abbrev showTys := ZkcTools.StructuredSource.Presentation.typesText
+def showRoles (roles : List String) : String := listText (roles.map quoted)
 
-def showRoles (roles : List String) : String :=
-  "[" ++ ", ".intercalate (roles.map fun role => "\"" ++ role ++ "\"") ++ "]"
-
-#eval IO.println "ZKC_BODY_OUTPUT_BEGIN"
-#eval IO.println s!"HELPERS {{program.payload.definitions.length}}"
-#eval for definition in program.payload.definitions do
-  IO.println s!"HELPER\t{{definition.name}}\t{{match definition.kind with | .math => ".math" | .local => ".local"}}\t{{showTys definition.inputs}}\t{{showTys definition.outputs}}"
-#eval IO.println s!"ENTRY\t{{program.payload.entry.name}}"
-#eval for protocol in program.payload.protocols do
-  IO.println s!"PROTOCOL\t{{protocol.name}}\t{{showRoles protocol.roles}}\t{{showTys protocol.inputs}}\t{{showTys protocol.outputs}}\t{{protocol.inputScopes}}\t{{protocol.outputScopes}}"
-{views}
-#eval IO.println "ZKC_BODY_OUTPUT_END"
+#eval show IO Unit from do
+  let program ← match check {data}.snapshot with
+    | .ok program => pure program
+    | .error code => throw (IO.userError ("source admission: " ++ code))
+  IO.println "ZKC_BODY_OUTPUT_BEGIN"
+  IO.println s!"HELPERS {{program.payload.definitions.length}}"
+  for definition in program.payload.definitions do
+    IO.println s!"HELPER\t{{definition.name}}\t{{match definition.kind with | .math => ".math" | .local => ".local"}}\t{{showTys definition.inputs}}\t{{showTys definition.outputs}}"
+  IO.println s!"ENTRY\t{{program.payload.entry.name}}"
+  for protocol in program.payload.protocols do
+    IO.println s!"PROTOCOL\t{{protocol.name}}\t{{showRoles protocol.roles}}\t{{showTys protocol.inputs}}\t{{showTys protocol.outputs}}\t{{protocol.inputScopes}}\t{{protocol.outputScopes}}"
+  if {views} then
+    for (definition, index) in program.payload.definitions.zipIdx do
+      IO.println s!"def Printed.helper{{index}} : Region dialect {{showTys definition.inputs}} {{showTys definition.outputs}} :=\n{{helperRegionText definition.body}}"
+    for (protocol, index) in program.payload.protocols.zipIdx do
+      IO.println s!"def Printed.protocol{{index}} : Region protocolDialect {{showTys protocol.inputs}} {{showTys protocol.outputs}} :=\n{{regionText protocol.body}}"
+    if {closed} then
+      let closedProgram ← match checkClosed {data}.snapshot with
+        | .ok program => pure program
+        | .error code => throw (IO.userError ("closed admission: " ++ code))
+      IO.println s!"def Printed.root : Region dialect {{showTys closedProgram.payload.entry.inputs}} {{showTys closedProgram.payload.entry.outputs}} :=\n{{helperRegionText closedProgram.payload.entry.body}}"
+  IO.println "ZKC_BODY_OUTPUT_END"
 end Printed
 '''
 
@@ -168,7 +172,9 @@ def shorten(text):
 def chain(items, indent="  "):
     lines = []
     while True:
-        if items and items[0] == "Region.letOp" and len(items) == 5 and isinstance(items[4], tuple):
+        while len(items) == 1 and isinstance(items[0], tuple) and items[0][0] == "(":
+            items = items[0][1]
+        if items and items[0] in ("Region.letOp", ".letOp") and len(items) == 5 and isinstance(items[4], tuple):
             lines.append(indent + shorten(flat(items[:4])) + " <|")
             items = items[4][1]
             continue
@@ -204,8 +210,8 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
     protocols, in the checked program's order."""
     runner = runner or Runner()
     names = names or {}
-    # First pass: inventory only, to know how many bodies to materialize.
-    inventory = PRINTER.format(data=data, views="")
+    # The independent checker owns the order of the typed definitions.
+    inventory = PRINTER.format(data=data, views="false", closed="false")
     (ROOT / "build").mkdir(exist_ok=True)
     scratch = (tempfile.TemporaryDirectory(dir=ROOT / "build") if fresh else
                printer_build.workspace(data))
@@ -220,28 +226,17 @@ def printed_module(data, namespace, closed=False, names=None, runner=None, lake=
         output = evaluate("Inventory", inventory)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
-        views = []
-        for index in range(len(helpers)):
-            views.append(f"def helper{index} := region_view% "
-                         f"(program.payload.definitions[{index}]'(by decide)).body")
-        for index in range(len(protocols)):
-            views.append(f"def protocol{index} := region_view% "
-                         f"(program.payload.protocols[{index}]'(by decide)).body")
-        if closed:
-            views.append(f"def root := region_view% "
-                         f"((checkClosed {data}.snapshot).toOption.get (by decide +kernel)).payload.entry.body")
-        views += [f"#print Printed.{view.split()[1]}" for view in list(views)]
-        output = evaluate("Bodies", PRINTER.format(data=data, views="\n".join(views)))
+        output = evaluate("Bodies", PRINTER.format(data=data, views="true", closed=str(closed).lower()))
     parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
              f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data}`. -/\n"
              f"namespace {namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
     for index, (name, kind, inputs, outputs) in enumerate(helpers):
-        local = names.get(name, f"helper{index}")
+        local = names.get(name, f"helper{index}").strip("«»")
         parts.append(f"abbrev {local}Helper : Helper :=\n  ⟨{json.dumps(name)}, {kind}, {inputs}, {outputs}⟩\n\n"
                      f"def {local}Body : Region dialect {local}Helper.inputs {local}Helper.outputs :=\n"
                      f"{printed(output, f'helper{index}')}\n")
     for index, (name, roles, inputs, outputs, input_scopes, output_scopes) in enumerate(protocols):
-        local = names.get(name, f"protocol{index}")
+        local = names.get(name, f"protocol{index}").strip("«»")
         parts.append(f"def {local}Signature : ProtocolSignature where\n  name := {json.dumps(name)}\n"
                      f"  roles := {roles}\n  inputs := {inputs}\n  outputs := {outputs}\n"
                      f"  inputScopes := {input_scopes}\n  outputScopes := {output_scopes}\n\n"

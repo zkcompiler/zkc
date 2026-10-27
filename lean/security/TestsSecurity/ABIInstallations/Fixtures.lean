@@ -44,12 +44,14 @@ def source (config : Configuration) : Snapshot where
   entry := "main"
   domains := []
   relations :=
-    [⟨"Target", .publicDef, "zkc.language.formula/0", "target", "0", config.arguments,
-      [.boolean], config.selectors.map (fun _ => if config.publicData then "statement" else "witness"),
-      some "targetFormula"⟩] ++
+    [{ name := "Target", visibility := .publicDef, kind := "zkc.language.formula/0",
+       key := "target", revision := "0", inputs := config.arguments, outputs := [.boolean],
+       purposes := config.selectors.map (fun _ => if config.publicData then "statement" else "witness"),
+       formula := some "targetFormula" }] ++
     (if config.constrained then
-      [⟨"One", .publicDef, "zkc.language.formula/0", "one", "0", [.index], [.boolean],
-        ["statement"], some "oneFormula"⟩] else [])
+      [{ name := "One", visibility := .publicDef, kind := "zkc.language.formula/0",
+         key := "one", revision := "0", inputs := [.index], outputs := [.boolean],
+         purposes := ["statement"], formula := some "oneFormula" }] else [])
   bindings := []
   definitions :=
     [.function ⟨"main", .protocol, .publicDef, config.types, [.boolean],

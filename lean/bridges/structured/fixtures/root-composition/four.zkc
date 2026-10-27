@@ -1,0 +1,73 @@
+module example;
+use sumcheck::{Reduce, check, pending, TableShape};
+use zkc::vector::{Vector};
+use zkc::boolean::{both};
+use zkc::multilinear as mle;
+domain Scalar = field("bls12-381.fr");
+
+math fn total<F: Field>(values: Vector<F>) -> F {
+  return zkc::finite_math::fold(zkc::vector::elements(values), 0,
+    fn(current, value) => current + value);
+}
+pub relation FourTotals<F: Field>(parameter a: Vector<F>, parameter b: Vector<F>,
+    parameter c: Vector<F>, parameter d: Vector<F>,
+    statement sa: F, statement sb: F, statement sc: F, statement sd: F) {
+  return sa == total(a) && sb == total(b) && sc == total(c) && sd == total(d);
+}
+pub protocol FourSums<F: Field, Max: nat> roles(P,V)
+    (a: Vector<F> @(P,V), b: Vector<F> @(P,V), c: Vector<F> @(P,V), d: Vector<F> @(P,V),
+     sa: F @V, sb: F @V, sc: F @V, sd: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V)
+    where () spec {
+      input a_shape = TableShape<F,Max>(in.a@V, in.rounds@V);
+      input b_shape = TableShape<F,Max>(in.b@V, in.rounds@V);
+      input c_shape = TableShape<F,Max>(in.c@V, in.rounds@V);
+      input d_shape = TableShape<F,Max>(in.d@V, in.rounds@V);
+      target totals = FourTotals<F>(in.a@V, in.b@V, in.c@V, in.d@V,
+        in.sa, in.sb, in.sc, in.sd) accept out.accepted;
+    }
+{
+  let ta @P = mle::table(a, rounds, 1);
+  let initial_a @V = pending(sa);
+  #[site(first)] let (pa, ra, ca) = Reduce<F,Max>(ta, initial_a, rounds, challenges);
+  let oka = check(a, ca);
+  let tb @P = mle::table(b, rounds, 1);
+  let initial_b @V = pending(sb);
+  #[site(second)] let (pb, rb, cb) = Reduce<F,Max>(tb, initial_b, rounds, challenges);
+  let okb = check(b, cb);
+  let tc @P = mle::table(c, rounds, 1);
+  let initial_c @V = pending(sc);
+  #[site(third)] let (pc, rc, cc) = Reduce<F,Max>(tc, initial_c, rounds, challenges);
+  let okc = check(c, cc);
+  let td @P = mle::table(d, rounds, 1);
+  let initial_d @V = pending(sd);
+  #[site(fourth)] let (pd, rd, cd) = Reduce<F,Max>(td, initial_d, rounds, challenges);
+  let okd = check(d, cd);
+  return both(both(oka, okb), both(okc, okd));
+}
+proof Proof = FourSums<Scalar,4> {
+  prover P;
+  verifier V;
+  public { a, b, c, d, sa, sb, sc, sd, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+
+spec ProofClaims for Proof {
+  ideal_sound: soundness@0(target.totals,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=16/cardinality(Scalar),application=application),
+    accept=out.accepted,stage=compiled_ideal,error=(Q+16)/cardinality(Scalar));
+  charged: soundness@0(target.totals,
+    model=models.fiat_shamir@0(level=levels.ideal,statement=statements.adaptive,
+      oracle=oracles.random@0(construction.provider),queries=Q,budget_symbol=Q,
+      validator_cost=16/cardinality(Scalar),application=application),
+    accept=out.accepted,stage=compiled_ideal,
+    charge=[per_site(sites.first.challenge,1/cardinality(Scalar)),
+      per_site(sites.second.challenge,1/cardinality(Scalar)),
+      per_site(sites.third.challenge,1/cardinality(Scalar)),
+      per_site(sites.fourth.challenge,1/cardinality(Scalar))]);
+}
+verify ProofClaims.ideal_sound=fs.keyed_soundness@0();
+verify ProofClaims.charged=fs.keyed_charged@0();

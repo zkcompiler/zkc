@@ -448,6 +448,28 @@ Expected<std::shared_ptr<const Layout>> Layouts::build(const Type &type,
     result->leaves.push_back(std::move(*encoded));
   } else
     return error("source.layout", "type has no closed native layout");
+  // Plain linear records are source obligations, not native resources. Keep
+  // native custody only when the payload itself contains a native resource.
+  // In particular, a loop may consume a plain claim and yield a successor.
+  if (type.kind == K::Record && decl && decl->resource == Resource::Linear &&
+      result->custody &&
+      llvm::all_of(ArrayRef(result->leaves).drop_front(),
+                   [](const LayoutLeaf &leaf) {
+                     if (!leaf.data())
+                       return false;
+                     auto bound = protocol::parseBoundType(*leaf.data(), false);
+                     if (!bound) {
+                       consumeError(bound.takeError());
+                       return false;
+                     }
+                     auto policy = protocol::nativeTypePolicy(*bound);
+                     return policy && policy->shared && !policy->affine;
+                   })) {
+    result->custody = false;
+    result->leaves.erase(result->leaves.begin());
+    for (auto &field : result->fields)
+      --field.offset;
+  }
   if (result->formal && result->custody)
     return error("source.formal",
                  "formal values cannot have executable custody");

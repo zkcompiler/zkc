@@ -14,6 +14,15 @@ mathematical interpretation and every execution or security law remain separate.
 namespace Zkc.Construction
 open Zkc.Source.Structured
 
+/-- Bind only a retained helper or the exact result of the fixed registry.
+Unsupported or missing entries cannot be synthesized as arbitrary predicates. -/
+elab "bind_retained_meaning" : tactic => do
+  Lean.Elab.Tactic.evalTactic (← `(tactic|
+  first
+    | exact .formula (by bind_contract)
+    | apply RelationMeaning.opaque
+      exact (OpaqueRegistry.resolve _ _).get (by kernel_rfl)))
+
 /-- Bind one uniquely named retained target. Missing or ambiguous clauses,
 unsupported selectors, residual targets and incompatible policies fail in the
 kernel-checked fields of `RetainedTarget`; there is no default target. -/
@@ -36,7 +45,6 @@ elab "bind_target " name:str : tactic => Lean.Elab.Tactic.withMainContext do
                  noResidual := by rfl
                  decision := by decide +kernel
                  application := application
-                 formula := by bind_contract
                  booleanOutput := by rfl
                  publicTypes := by decide +kernel
                  publicArity := by decide +kernel

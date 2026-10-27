@@ -224,9 +224,10 @@ def construction_glue(subject, entry, modules):
                "set_option smartUnfolding false\n")
     out.append("/-! ## The original Proof Entry -/\n")
     if admission == "views":
-        helpers = ", ".join(f"{local} := {modules['bodies']}.{local}" for local in modules["helpers"])
-        protocols = ", ".join(f"{local} := {modules['bodies']}.{local}" for local in modules["protocols"])
-        out.append(f"structured_views {data}.snapshot\n  helpers [{helpers}]\n  protocols [{protocols}]\n\n"
+        helpers = ", ".join(modules["helpers"])
+        protocols = ", ".join(modules["protocols"])
+        out.append(f"open {modules['bodies']} in\n"
+                   f"structured_views {data}.snapshot\n  helpers [{helpers}]\n  protocols [{protocols}]\n\n"
                    f"theorem admitted : Structured.check {data}.snapshot = .ok program := kernel_admission\n")
     elif admission == "external":
         views = subject.get("construction", "views")
@@ -471,11 +472,17 @@ def default_glue_doc(subject, modules):
 
 
 
-def views_module(namespace, data, bodies, helpers, protocols):
+def views_module(namespace, data, bodies, helpers, protocols, *, max_rec_depth=None, max_heartbeats=None):
     """The Views module of an interactive unit admitted from its printed Bodies."""
-    helper_entries = ", ".join(f"{local} := {bodies.rsplit('.', 1)[-1]}.{local}" for local in helpers)
-    protocol_entries = ", ".join(f"{local} := {bodies.rsplit('.', 1)[-1]}.{local}" for local in protocols)
+    helper_entries = ", ".join(helpers)
+    protocol_entries = ", ".join(protocols)
     data_short = data.rsplit(".", 1)[-1]
+    settings = ["set_option smartUnfolding false"]
+    for option, value in (("maxRecDepth", max_rec_depth), ("maxHeartbeats", max_heartbeats)):
+        if value is not None:
+            require(type(value) is int and value > 0, f"{option} must be a positive integer")
+            settings.append(f"set_option {option} {value}")
+    settings = "\n".join(settings)
     return f"""module
 
 public import Zkc.Source.Structured.UnitViews
@@ -489,8 +496,9 @@ emitted by `structured_views` from its literal typed bodies. -/
 namespace {namespace}
 open Zkc.Source Zkc.Source.Structured
 
-set_option smartUnfolding false
+{settings}
 
+open {bodies} in
 structured_views {data_short}.snapshot
   helpers [{helper_entries}]
   protocols [{protocol_entries}]
@@ -504,7 +512,7 @@ end {namespace}
 def body_names(snapshot, entry_name):
     """The printer's local names: the Entry protocol is `entry_name` and a unique
     relation formula is `formula`; other bodies keep the printer's defaults."""
-    formulas = [relation[9] for relation in snapshot[5] if relation[9] is not None]
+    formulas = [relation[10] for relation in snapshot[5] if relation[10] is not None]
     names = {}
     if entry_name:
         names[snapshot[3]] = entry_name

@@ -220,6 +220,7 @@ def main():
     )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
+        ROOT / "lib/Compiler/ComponentContracts.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
         ROOT / "lib/Compiler/LanguageInterface.h",
         ROOT / "lib/Compiler/LanguagePackageReader.h",

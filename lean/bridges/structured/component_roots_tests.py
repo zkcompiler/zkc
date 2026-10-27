@@ -12,6 +12,7 @@ import generate_component_roots as driver
 DESCRIPTOR = '''schema = "zkc.component-roots/0"
 model_module = "Example.Model"
 model = "Example.model"
+registry = "Example.registry"
 sampling = "Example.sampling"
 field_type = "Example.Field"
 group_type = "Example.Group"
@@ -52,6 +53,7 @@ class ComponentRootDescriptors(unittest.TestCase):
             (DESCRIPTOR + 'unexpected = "x"\n', "unknown keys: unexpected"),
             (DESCRIPTOR + 'error_expresion = ".natural 1"\n', "unknown keys: error_expresion"),
             (DESCRIPTOR.replace('group_type = "Example.Group"\n', ""), "missing keys: group_type"),
+            (DESCRIPTOR.replace('registry = "Example.registry"\n', ""), "missing keys: registry"),
             (DESCRIPTOR.replace('target = "knowledge"\n', ""), "missing keys: target"),
         ]
         for descriptor, diagnostic in cases:

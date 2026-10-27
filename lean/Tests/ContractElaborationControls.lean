@@ -21,7 +21,7 @@ private def spare : Function :=
   { predicate false with name := "spare", body := .block [] (.ret [0]) }
 private def relation : Relation :=
   ⟨"Equal", .publicDef, "zkc.language.formula/0", "equality", "0",
-    [.boolean, .boolean], [.boolean], ["statement", "witness"], some "predicate"⟩
+    [.boolean, .boolean], [.boolean], ["statement", "witness"], some "predicate", []⟩
 private def opaqueDeclaration : Relation :=
   { relation with name := "Opaque", kind := "opaque", formula := none }
 private def subject : RelationApplication :=
@@ -34,7 +34,7 @@ private def snapshot (changed reordered : Bool) : Snapshot :=
     if reordered then [.function other, .function spare, .function (predicate changed), .function root]
     else [.function root, .function (predicate changed), .function spare, .function other],
     if reordered then [⟨"other", []⟩, ⟨"main", [secondClause, clause]⟩]
-    else [⟨"main", [clause, secondClause]⟩, ⟨"other", []⟩], blsRows⟩
+    else [⟨"main", [clause, secondClause]⟩, ⟨"other", []⟩], blsRows, {}⟩
 
 private noncomputable def formulaBody (changed : Bool) : Region dialect [.boolean, .boolean] [.boolean] :=
   if changed then

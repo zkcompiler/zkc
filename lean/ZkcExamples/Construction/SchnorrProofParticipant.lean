@@ -12,8 +12,8 @@ namespace ZkcExamples.Construction.SchnorrProofParticipant
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:b07ac7f943334c086d86ee4eafb72049bd6d5d480ab1d6185b18ffe22d17e084"
-  candidate := "sha256:cfc97975bf7515b377fb45cf2e4f92cb2947ed98886edab37d73bcf74fe2132d"
+  source := "sha256:883440afaef9b69c73fe0832c7d8c4d13076b1cc1d3b64f65060fa01f5eac158"
+  candidate := "sha256:2d7e2402797cdba4b611a8f60741f22b8a73a1015b14a7cd76bb069440202f8e"
   policy := ⟨"zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [4], [0, 1], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]

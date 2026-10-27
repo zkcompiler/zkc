@@ -71,7 +71,13 @@ layout, independently of the selected Entry. The logical source interface is
 an independently checked projection of that inventory. Only a selected proof
 target adds the existing entry statement, which must agree with a retained
 target. Opaque and captured relations emit declarations
-only. Predicate helpers have no executable symbol uses. Every selected predicate
+only. Opaque closure emits every canonical typed static argument, in declaration
+order, in `relation.declare.static_arguments` and the interface relation's
+required `static_arguments` list. Independent comparison reconstructs these
+trees from the closed source, including unused arguments; signature equality
+alone cannot establish correspondence. Formula and captured rows carry empty
+lists and retain their exact body or asset identity.
+Predicate helpers have no executable symbol uses. Every selected predicate
 undergoes bounded helper expansion and polynomial observation checks on scratch
 copies before interface admission, including unused observations. Ordered helpers
 become `func.func` definitions with a borrowed `!runtime.scope` argument and one

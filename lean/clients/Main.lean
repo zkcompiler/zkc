@@ -129,18 +129,17 @@ theorem structuredSumcheckMissingCount {F G : Type}
     ZkcExamples.Structured.SumcheckSourceViews.program.participant F G 1
       (ZkcExamples.Structured.SumcheckSourceVerifier.sourceRootInputs raw claim none service) =
         .halt .incomplete := by
-  rw [ZkcExamples.Structured.SumcheckSourceVerifier.verifier_optional]
-  rfl
+  exact ZkcExamples.Structured.SumcheckSourceVerifier.verifier_missing raw claim service
 
-/-- The Reduction root returns its optional claim unchanged at zero rounds,
+/-- The Reduction root returns its present claim unchanged at zero rounds,
 with an empty verifier point and no service requirement. -/
 theorem structuredSumcheckReductionZero {F G : Type}
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
-    (claim : Option F) :
+    (claim : F) :
     ZkcExamples.Structured.SumcheckReduceViews.program.participant F G 1
       (ZkcExamples.Structured.SumcheckReduceVerifier.reduceRootInputs
-        none none claim (some 0) none) =
-          .done (.cons none (.cons none (.cons (some []) (.cons claim .nil)))) := by
+        none none (some claim) (some 0) none) =
+          .done (.cons none (.cons none (.cons (some []) (.cons (some claim) .nil)))) := by
   rw [ZkcExamples.Structured.SumcheckReduceVerifier.verifier_optional]
   rfl
 
@@ -149,13 +148,13 @@ open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured in
 need no service. The root and helper tables remain the complete original ones. -/
 theorem structuredSumcheckMappedZero {F G : Type}
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
-    (raw : Option (List F)) (claim : Option F) :
+    (raw : Option (List F)) (claim : F) :
     invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable F G)
       SumcheckSourceBodies.runSignature
       ⟨some "outer", roleSubstitution [2, 0]⟩ 0
-      (SumcheckSourceVerifier.sourceRootInputs raw claim (some 0) none) =
+      (SumcheckSourceVerifier.sourceRootInputs raw (some claim) (some 0) none) =
         SumcheckVerifierTerminal.actualOwnedCheck SumcheckSourceViews.unit 0
-          raw (some []) claim := by
+          raw (some []) (some claim) := by
   rw [SumcheckSourceVerifier.verifier_permuted_optional,
     SumcheckVerifierPrelude.admittedRounds_zero]
   rfl

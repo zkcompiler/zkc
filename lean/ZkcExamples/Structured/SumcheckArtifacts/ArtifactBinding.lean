@@ -38,7 +38,7 @@ def Occurrence.protocol (occurrence : Occurrence) : ProtocolContext :=
 
 def Occurrence.steps (occurrence : Occurrence) : List Step :=
   [⟨"apply", occurrence.entry, occurrence.application⟩,
-   ⟨"repeat", occurrence.library, "s15"⟩]
+   ⟨"repeat", occurrence.library, SumcheckVerifierBodies.repeatSite⟩]
 
 def Occurrence.message (occurrence : Occurrence) (site : String) (sender receiver : String) : Template :=
   ⟨occurrence.entry, occurrence.steps,
@@ -52,7 +52,7 @@ def Occurrence.delivery (occurrence : Occurrence) : Template :=
   occurrence.message (encodedLabel "delivery" ++ "_0") "role00000001" "role00000000"
 def Occurrence.draw (occurrence : Occurrence) : Template :=
   ⟨occurrence.entry, occurrence.steps,
-    ["query", occurrence.library, encodedLabel "challenge", "input_5",
+    ["query", occurrence.library, encodedLabel "challenge", SumcheckVerifierBodies.serviceInput,
       "random.bls12-381.fr/0", "draw", "role00000001"]⟩
 
 /-- Checked encodings of the labels used by this installed Sumcheck schema.

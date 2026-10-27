@@ -63,7 +63,7 @@ theorem source_step (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.Bo
       Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) context.protocol
         (context.protocol.roles 1) (.cons (some context.handle) .nil)
         (OriginalSumcheckLibrary.round payload context.protocol (context.protocol.roles 1))
-        (embedded state) index Occurrence.iterations "s15" := by
+        (embedded state) index Occurrence.iterations SumcheckVerifierBodies.repeatSite := by
   unfold Repeat.stepOn embedded
   rw [SumcheckVerifierLaws.mask_embedV context.protocol (context.protocol.roles 1) rfl maximum]
   rw [OriginalSumcheckLibrary.round_verifier payload bodies context.protocol
@@ -101,7 +101,7 @@ theorem source_loop (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.Bo
         Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) context.protocol
           (context.protocol.roles 1) (.cons (some context.handle) .nil)
           (OriginalSumcheckLibrary.round payload context.protocol (context.protocol.roles 1))
-          carried index Occurrence.iterations "s15") indices (embedded state) := by
+          carried index Occurrence.iterations SumcheckVerifierBodies.repeatSite) indices (embedded state) := by
   induction indices generalizing state with
   | nil => rfl
   | cons index rest ih =>
@@ -114,17 +114,20 @@ theorem source_loop (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.Bo
 /-- Complete original Reduce equation, including its actual count refusal.
 Shape and vector capacity are not premises: Reduce does not inspect the table. -/
 theorem source_reduce (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.Bodies payload.definitions)
+    (claims : SumcheckPendingLaws.Bodies payload.definitions)
     (maximum : Nat) (context : Realizations.Sumcheck.Original.Context)
     (separate : context.protocol.roles 0 ≠ context.protocol.roles 1)
     (protocols : ProtocolTable (assignment F G) (OriginalSumcheckLibrary.signature (F := F) (G := G)))
-    (count : Nat) (scalar : F) :
+    (count : Nat) (point : List F) (scalar : F) :
     OriginalSumcheckLibrary.reduce payload maximum context.protocol (context.protocol.roles 1)
-      protocols (OriginalSumcheckLibrary.verifierInputs (some scalar) (some count) (some context.handle)) =
+      protocols (OriginalSumcheckLibrary.verifierInputs (some point) (some scalar) (some count) (some context.handle)) =
       if count ≤ maximum then
-        (run (G := G) context (List.range count) ⟨[], scalar⟩).bind (fun result => .done (output result))
+        (run (G := G) context (List.range count) ⟨point, scalar⟩).bind (fun result => .done (output result))
       else .halt .refused := by
   unfold OriginalSumcheckLibrary.verifierInputs
   rw [OriginalSumcheckLibrary.reduce_verifier payload bodies maximum context.protocol separate]
+  rw [SumcheckPendingLaws.identity_owned payload _ claims.openClaim, ite_eq_left rfl]
+  dsimp only [PIR.Process.bind, Values.get]
   have active : ((repeatSpec maximum).roles.map context.protocol.roles).contains
       (context.protocol.roles 1) = true := by
     simp only [List.map_cons, List.map_nil, List.contains_cons,
@@ -134,10 +137,13 @@ theorem source_reduce (payload : UnitPayload) (bodies : SumcheckVerifierHelpers.
   · simp only [bound, ite_true]
     rw [SumcheckVerifierLaws.mask_embedV context.protocol (context.protocol.roles 1) rfl maximum]
     have loop := source_loop (F := F) (G := G) payload bodies context separate maximum
-      (List.range count) ⟨[], scalar⟩
-    change (Finite.fold _ (List.range count) (embedded (G := G) ⟨[], scalar⟩)).bind _ = _
+      (List.range count) ⟨point, scalar⟩
+    change (Finite.fold _ (List.range count) (embedded (G := G) ⟨point, scalar⟩)).bind _ = _
     rw [← loop]
     simp only [output, PIR.Process.bind_assoc, PIR.Process.bind]
+    apply congrArg (PIR.Process.bind _)
+    funext result
+    exact OriginalSumcheckLibrary.return_verifier payload claims context.protocol result.point result.scalar
   · simp only [bound, ite_false, PIR.Process.bind]
 
 end ZkcSecurity.Realizations.Sumcheck.OriginalRaw

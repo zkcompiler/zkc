@@ -67,7 +67,9 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 Only bounded shaped terminal arguments are required by the family theorem. -/
 theorem programHelpers (maximum : Nat) (small : maximum < 64) :
     SumcheckFamily.Source.Helpers (F := F) (G := G) (SumcheckCharges.programShape maximum small) where
-  empty := empty_helper
+  pending := pending_helper
+  openClaim := openClaim_helper
+  atPrefix := atPrefix_helper
   append := append_helper
   check := by
     intro values point claim pointSmall shaped
@@ -85,12 +87,16 @@ theorem programHelpers (maximum : Nat) (small : maximum < 64) :
     rw [Zkc.Protocols.Sumcheck.Multilinear.check, tableEq,
       restrictPrefixValues_complete values point table tableEq, List.sum_singleton]
 
-/-- The retained helper prices generate the exact original 68 + 59r budget. -/
+/-- The retained helper prices generate the exact current 72 + 59r budget. -/
 theorem programPrices (maximum : Nat) (small : maximum < 64) :
     SumcheckFamily.Source.Prices (SumcheckCharges.programShape maximum small)
       (helperCost installed SumcheckProof.validator (F := F) (G := G)) 2 where
-  empty := helperCost_le installed SumcheckProof.validator
-    (show helperBound SumcheckProof.validator SumcheckCharges.names.emptyHelper = some 2 by kernel_rfl) []
+  pending := fun _ => helperCost_le installed SumcheckProof.validator
+    (show helperBound SumcheckProof.validator SumcheckCharges.names.pendingHelper = some 2 by kernel_rfl) _
+  openClaim := fun _ _ => helperCost_le installed SumcheckProof.validator
+    (show helperBound SumcheckProof.validator SumcheckCharges.names.openClaimHelper = some 1 by kernel_rfl) _
+  atPrefix := fun _ _ => helperCost_le installed SumcheckProof.validator
+    (show helperBound SumcheckProof.validator SumcheckCharges.names.atPrefixHelper = some 1 by kernel_rfl) _
   append := fun _ _ => helperCost_le installed SumcheckProof.validator
     (show helperBound SumcheckProof.validator SumcheckCharges.names.appendHelper = some 2 by kernel_rfl) _
   check := fun _ _ _ small shaped => SumcheckHelpers.check_cost small shaped
@@ -119,7 +125,7 @@ theorem observation_passes (oracle : History F G → F) (initial : History F G)
   rw [SumcheckCharges.lowered_eq]
   change DomainVM.Passes Origin.withoutCoordinates initial oracle
     (DomainVM.observation artifact.description.program artifact.description.context
-      (Code.instructions (SumcheckShape.code artifact.description.names artifact.description.maximum)) [8,7]
+      (Code.instructions (SumcheckShape.code artifact.description.names artifact.description.maximum)) [13,10]
       (SumcheckFamily.ProgramShape.inputs artifact.description values values.sum rounds [])) _ _
   rw [SumcheckFamily.code_instructions]
   have realized := realization (F := F) (G := G)

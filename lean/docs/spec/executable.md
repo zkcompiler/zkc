@@ -411,7 +411,7 @@ correspondence premise.
 The family derives round and loop correspondence, the restricted-table
 invariant, successful terminal execution, sufficient resources and exact
 message decoding. With append-helper price bounded by `a`, its sufficient
-charge is `68 + (a + 57) * rounds`; the terminal helper uses the selected
+charge is `72 + (a + 57) * rounds`; the terminal helper uses the selected
 `62 + 20 * point.length` price law. This is a reusable cost method for this
 shape, not a universal backend cost model. Generic family modules do not import
 the retained Entry; `SumcheckCharges` and `SumcheckDomainHonest` discharge its
@@ -436,11 +436,12 @@ are proved for the actual program.
 
 `ZkcExamples.Executable.SumcheckCharges` bounds the charges of a complete run on
 a table of `2 ^ rounds` values. The charge is derived from the reading
-(`SumcheckCharges.charge`): the empty point's call and body, the loop's entry, the sum
-of the rounds' charges and yields, the terminal check's call with what its body
-charges, and the return. The loop is bounded by `DomainVM.FitsK.loop_invariant` with the
+(`SumcheckCharges.charge`): the initial Pending tuple construction and opening,
+the loop's entry, the rounds and their yields, the consuming terminal check and
+its helper body, and the return. The Pending boundary adds four fixed
+instructions relative to the earlier scalar-only root. The loop is bounded by `DomainVM.FitsK.loop_invariant` with the
 invariant that the carried point has one coordinate per completed round. For
-this Entry `charge rounds = 68 + 59 · rounds` (`charge_eq`): per round, 38
+this Entry `charge rounds = 72 + 59 · rounds` (`charge_eq`): per round, 38
 instructions in the loop body, the point extension's body included, its yield,
 and 20 in the terminal check: 14 in its fold and 3 in each of its two shape
 checks' doubling loops. It is `DomainVM.Sufficient` for every proof and

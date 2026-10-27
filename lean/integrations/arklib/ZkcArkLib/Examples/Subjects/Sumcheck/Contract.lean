@@ -53,7 +53,6 @@ def retained : RetainedTarget compiled.imported artifacts.participant.policy art
   noResidual := rfl
   decision := by decide +kernel
   application := SumcheckContractBindings.publicApplication
-  formula := SumcheckContractBindings.publicFormula
   booleanOutput := rfl
   publicTypes := by decide +kernel
   publicArity := by decide +kernel
@@ -84,13 +83,13 @@ theorem arguments_read (raw : List F) (claim : F) (rounds : Nat)
 round count is still unused by the retained formula, including malformed policy
 statements. Stops remain process stops and are never completed false results. -/
 theorem falseStatement_pinned (statement : artifacts.Statement F G) :
-    falseStatement statement ↔ retained.FalseStatement statement := by
+    falseStatement statement ↔ retained.FalseStatement SumcheckContractBindings.publicFormula statement := by
   match statement with
   | .cons raw (.cons claim (.cons rounds .nil)) =>
       change (¬ SumcheckContractBindings.PublicTruth (G := G) raw claim) ↔
-        ¬ ∃ witness, retained.Holds (.cons raw (.cons claim (.cons rounds .nil))) witness
+        ¬ ∃ witness, retained.Holds SumcheckContractBindings.publicFormula (.cons raw (.cons claim (.cons rounds .nil))) witness
       have same (witness : retained.Witness F G) :
-          retained.Holds (.cons raw (.cons claim (.cons rounds .nil))) witness ↔
+          retained.Holds SumcheckContractBindings.publicFormula (.cons raw (.cons claim (.cons rounds .nil))) witness ↔
             SumcheckContractBindings.PublicTruth (G := G) raw claim := by
         unfold RetainedTarget.Holds
         rw [arguments_read]

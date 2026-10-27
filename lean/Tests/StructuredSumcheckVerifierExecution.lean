@@ -32,7 +32,7 @@ def sourceRun (raw : Option (List F)) (claim : Option F) (count service : Option
   ((SumcheckSourceViews.program.participant F F 1 (sourceInputs raw claim count service)).bind
     fun values => .done (values.get .here)).run handler state
 
-def reduceContext : ProtocolContext := ProtocolContext.enter {} "s3" [0, 1]
+def reduceContext : ProtocolContext := ProtocolContext.enter {} "s5" [0, 1]
 def sourceContext : ProtocolContext := ProtocolContext.enter {} "label_726564756365" [0, 1]
 
 def missingPointRun (state : State F) :=
@@ -61,12 +61,16 @@ def run : IO Unit := do
   test "missing count precedes missing claim/service"
     (stopped (reduceRun none none none untouched) .incomplete untouched [])
   test "maximum refused before any callback"
-    (stopped (reduceRun none (some 5) none untouched) .refused untouched [])
-  test "zero requires no service and preserves absent claim"
-    (sameExecution (reduceRun none (some 0) none untouched)
-      ⟨.returned (some [], none), untouched, []⟩)
+    (stopped (reduceRun (some 0) (some 5) none untouched) .refused untouched [])
+  test "zero requires no service and preserves present claim"
+    (sameExecution (reduceRun (some 0) (some 0) none untouched)
+      ⟨.returned (some [], some 0), untouched, []⟩)
+  test "zero missing claim stops before rounds"
+    (stopped (reduceRun none (some 0) none untouched) .incomplete untouched [])
+  test "missing claim precedes excess count"
+    (stopped (reduceRun none (some 5) none untouched) .incomplete untouched [])
   test "Source count three is refused before absent terminal data"
-    (stopped (sourceRun none none (some 3) none untouched) .refused untouched [])
+    (stopped (sourceRun none (some 0) (some 3) none untouched) .refused untouched [])
   test "Source zero still requires its claim"
     (stopped (sourceRun (some [1]) none (some 0) none untouched) .incomplete untouched [])
   for (name, raw, claim, expected) in [("singleton", [1], 1, true),
@@ -78,8 +82,8 @@ def run : IO Unit := do
   let replies : State (ZMod 5) := ⟨[.value 0, .value 1, .value 1, .ack, .value 4], 0⟩
   let received := [Event.receive (lowSite reduceContext) 0 0, .receive (highSite reduceContext) 0 1]
   let afterReceives : State (ZMod 5) := ⟨[.value 1, .ack, .value 4], 2⟩
-  test "missing claim follows both receives"
-    (stopped (reduceRun none (some 1) (some 7) replies) .incomplete afterReceives received)
+  test "missing claim stops at Pending construction before receives"
+    (stopped (reduceRun none (some 1) (some 7) replies) .incomplete replies [])
   test "false boundary wins over missing service"
     (stopped (reduceRun (some 0) (some 1) none replies) .reject afterReceives received)
   test "true boundary then missing service"
@@ -148,10 +152,10 @@ def run : IO Unit := do
     SumcheckReduceBodies.runSignature outer 0 (reduceInputs (some 1) (some 1) (some 7))).bind
       fun values => .done (reduceResult values)).run handler replies
   test "mapped Reduction keeps root self0 and peer2"
-    ((outer.enter "s3" [0, 1]).roles 0 == 2 &&
-      (outer.enter "s3" [0, 1]).roles 1 == 0 &&
+    ((outer.enter "s5" [0, 1]).roles 0 == 2 &&
+      (outer.enter "s5" [0, 1]).roles 1 == 0 &&
       sameExecution mappedReduction ⟨.returned (some [1], some 1), ⟨[.value 4], 4⟩,
-      roundEvents (outer.enter "s3" [0, 1]) 7 0 1 1⟩)
+      roundEvents (outer.enter "s5" [0, 1]) 7 0 1 1⟩)
   let mappedSource := ((invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable (ZMod 5) (ZMod 5))
     SumcheckSourceBodies.runSignature outer 0 (sourceInputs (some [0, 1]) (some 1) (some 1) (some 7))).bind
       fun values => .done (values.get .here)).run handler replies

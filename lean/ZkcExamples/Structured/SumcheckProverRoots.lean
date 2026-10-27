@@ -85,7 +85,7 @@ theorem reduction_context_prover (ctx : ProtocolContext) (self : Nat)
     (claim : Option F) (service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.runSignature ctx self
       (SumcheckReduceVerifier.reduceRootInputs (some raw) (some count) claim (some rounds) service) =
-      (PIR.repeatN rounds (roundHonest (ctx.enter "s3" [0, 1]) raw count) []).bind
+      (PIR.repeatN rounds (roundHonest (ctx.enter "s5" [0, 1]) raw count) []).bind
         (fun point => .done (reductionResults raw point)) := by
   refine (SumcheckReductionNormalForms.prover_invoke (bodies := SumcheckReduceContracts.bodies)
     (ctx := ctx) (self := self) (role := prover) (separate := separate) (raw := raw)
@@ -105,7 +105,7 @@ theorem reduction_prover (raw : List F) (count rounds : Nat) (shape : HasShape r
     (claim : Option F) (service : Option Nat) :
     program.participant F G 0
       (SumcheckReduceVerifier.reduceRootInputs (some raw) (some count) claim (some rounds) service) =
-      (PIR.repeatN rounds (roundHonest (ProtocolContext.enter {} "s3" [0, 1]) raw count) []).bind
+      (PIR.repeatN rounds (roundHonest (ProtocolContext.enter {} "s5" [0, 1]) raw count) []).bind
         (fun point => .done (reductionResults raw point)) :=
   (unit.protocolTable_forgetSites (F := F) (G := G)
     SumcheckReduceBodies.runSignature {} 0

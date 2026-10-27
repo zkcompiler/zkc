@@ -323,6 +323,16 @@ messages, services, static protocol composition, bounded repetition and conditio
 Independent source comparison checks emitted MLIR against checked definitions;
 [source semantics](spec/language/README.md) owns exact limits.
 
+The total Math operation `multilinear.restrict_prefix` is available through
+both `primitive` and `intrinsic` authoring, original structured export and the
+strict Lean reader. Its Kernel recipe and native field-family implementation
+cover arbitrary vector lengths and points, subject to native resource guards.
+The [relation fixture](../compiler/test/fixtures/structured-source/restrict_prefix.zkc)
+exercises the operation without migrating a protocol library. The shared
+[meaning](spec/domains/polynomials.md#total-vector-prefix-restriction) and
+[formal scope](../lean/docs/spec/structured-source.md#shared-mathematical-and-component-meaning)
+keep relation shape premises separate from native execution limits.
+
 An authenticated `zkc.entry/0` package retains the original, source interface,
 compilation choices, selected artifact and the expression assets the artifact
 references. The Host binds named logical inputs and results to the independently
@@ -480,6 +490,17 @@ participant projection erases contracts, formula links and selected-target
 references explicitly. This adds
 no runtime predicate evaluation or proof transport through those transforms.
 
+Generic opaque relations retain canonical ordered typed static arguments in
+closure, native declarations, interface comparison, the strict Rust Entry
+interface reader and structured export,
+including unused parameters. Equal closed identities must agree on signature
+and purposes. Lean's explicit opaque registry fixes a family's typed
+instantiation before evidence and supplies the exact registered meanings to
+uniform and domain-indexed contract consumers. Focused controls cover two field
+domains, distinct natural arguments, aliases and refusal mutations. This is a
+generic boundary; Stage3 GKR and proximity callers still need their family
+entries, integration and protocol-specific theorems.
+
 ## Foundation capability map
 
 | Capability | Support and boundary |
@@ -631,7 +652,7 @@ implement the source's checked helpers: the empty point and the point extension
 by the general helper rule, whose soundness is proved once, and the terminal
 check, whose body iterates and is outside the rule's recipes, by a proof of its
 own. Honest-prover completeness of the executable holds for every round count up
-to the Entry's static maximum, at every budget of at least `68 + 59 · rounds`
+to the Entry's static maximum, at every budget of at least `72 + 59 · rounds`
 instructions, a charge derived from the program's reading, which at two rounds
 is the runtime's acceptance threshold; the proofs are the Sumcheck family's and
 do not depend on the value of the maximum. A current limitation: the compiler
@@ -819,3 +840,20 @@ predicate. Sumcheck and composed TwoSums retain exact verifier-side table shape
 and repeat-bound input clauses. Native syntax, source comparison and executable
 recipe checks are separate from Lean reader admission, ABI-relative clause
 identification, callee binding and body equality proofs.
+
+The bounded [component export](spec/language/claims.md#export-and-comparison-api)
+retains existing linear record declarations and exact source port layouts in
+the current eleven-slot structured schema. Native source-claim export supplies
+per-call logical instantiation proposals and direct, pure, terminal and method
+routes, including acceptance exits and the initial/yielded alternatives of
+repeats. Repeat boundaries retain ordinary carried, captured, count and yielded
+action dependencies, including carried backedges and maximum-zero alternatives.
+The producer explicitly refuses more than 512 deduplicated logical slots
+across a call's subject and residual clauses.
+The independent Lean reader admits the original and recomputes these routes;
+Boolean, guarded-stop and vector fixtures exercise actual repeated calls and
+zero iterations. Unsupported control and effects refuse explicitly. Typed
+assignment, formula, readback and mathematical-law obligations remain for the
+consumer; this adds no independent acceptance of authored mathematics or
+protocol security result. Root generator and protocol-library migration is
+separate integration work.

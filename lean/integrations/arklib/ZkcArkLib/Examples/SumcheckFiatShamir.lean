@@ -166,7 +166,7 @@ theorem importedValidator_excess (count : Nat) (large : 2 < count) (raw : List F
     (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
       (some handle))).bind fun outputs => .done (outputs.get .here)).interpret
     CommonAdapter.project = _
-  rw [SumcheckSourceVerifier.verifier_excess (some raw) (some claim) count (some handle) large]
+  rw [SumcheckSourceVerifier.verifier_excess (some raw) claim count (some handle) large]
   rfl
 
 end Import
@@ -811,7 +811,7 @@ variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- The child context of the composed `example::Reduction` root's application. -/
-abbrev reductionContext : ProtocolContext := ProtocolContext.enter {} "s3" [0, 1]
+abbrev reductionContext : ProtocolContext := ProtocolContext.enter {} "s5" [0, 1]
 
 /-- The returned outputs of the Reduction root: no prover vectors at the
 verifier, the point and the residual claim. -/
@@ -847,7 +847,7 @@ theorem importedReduction_excess (vector : Option (List F)) (dimension : Option 
   change (SumcheckReduceViews.program.participant F G 1
     (SumcheckReduceVerifier.reduceRootInputs vector dimension (some claim) (some count)
       (some handle))).interpret CommonAdapter.project = _
-  rw [SumcheckReduceVerifier.verifier_excess vector dimension (some claim) count large]
+  rw [SumcheckReduceVerifier.verifier_excess vector dimension claim count large]
   rfl
 
 omit [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G]

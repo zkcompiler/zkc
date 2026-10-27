@@ -1,4 +1,5 @@
 #include "zkc/Compiler/StructuredSource.h"
+#include "ComponentContracts.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
@@ -13,6 +14,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Dialect/Protocol/Origins.h"
+#include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
@@ -85,6 +87,17 @@ Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
       auto origin = protocol_ir::readProtocolOrigin(attr.getValue());
       if (!origin)
         return origin.takeError();
+      continue;
+    }
+    // This serialized declaration table has its own bounded, strict decoder
+    // below. Its individual names still obey the ordinary string limit.
+    if (attr.getName() == "source_declarations" &&
+        isa<protocol_ir::ProtocolModuleOp>(op)) {
+      auto text = dyn_cast<StringAttr>(attr.getValue());
+      if (!text || !json::isUTF8(text.getValue()))
+        return error("component-declaration");
+      if (text.getValue().size() > 16 * 1024 * 1024)
+        return error("structured-source-limit");
       continue;
     }
     bool valid = true, bounded = true;
@@ -208,6 +221,30 @@ Expected<json::Array> encodeSorts(TypeRange types, UsedIdentities &used,
 // modulus or null]. Services: ["service", contract, sampled field,
 // [method...]], with "index" exactly where the sampled field has
 // IndexRandomness.
+Error collectStaticDomains(const json::Value &term, UsedIdentities &used) {
+  // The shared origin reader has already checked shape and traversal limits.
+  const auto &tree = *term.getAsArray();
+  auto tag = *tree[0].getAsString();
+  if (tag == "field" || tag == "group" || tag == "domain") {
+    auto identity = *tree[tag == "domain" ? 2 : 1].getAsString();
+    auto sort = tag == "domain"  ? *tree[1].getAsString()
+                : tag == "field" ? StringRef("Field")
+                                 : StringRef("Group");
+    if (installedDomains().identitySort(identity) != sort)
+      return error("structured-source-static-domain");
+    used.domains.insert(identity);
+  }
+  if (tag == "array")
+    return collectStaticDomains(tree[1], used);
+  if (tag == "tuple" || tag == "nominal" || tag == "builtin" ||
+      tag == "formal") {
+    auto index = tag == "tuple" ? 1 : tag == "nominal" ? 3 : 2;
+    for (const auto &argument : *tree[index].getAsArray())
+      if (auto e = collectStaticDomains(argument, used))
+        return e;
+  }
+  return Error::success();
+}
 json::Value catalogueSlot(const UsedIdentities &used) {
   const auto &catalog = installedDomains();
   llvm::StringSet<> closure;
@@ -630,6 +667,15 @@ class Exporter {
       return json::Array{isa<data::EqualOp>(op)  ? "index.equal"
                          : isa<data::LessOp>(op) ? "index.less"
                                                  : "index.power_of_two"};
+    }
+    if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(op)) {
+      if (owner != "protocol" && owner != "math")
+        return error("structured-source-operation");
+      if (auto e = attributes(op, {}))
+        return std::move(e);
+      auto domain = restrict.getResult().getType().getDomain();
+      used.domains.insert(domain);
+      return json::Array{"multilinear.restrict_prefix", domain};
     }
     if (auto dim = dyn_cast<data::DimOp>(op)) {
       if ((owner != "protocol" && owner != "math") || dim.getAxis() != 0 ||
@@ -1067,11 +1113,11 @@ class Exporter {
                            algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
                            func::ReturnOp>(instruction);
         allowed |=
-            isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
-                algebra::GroupAddOp, algebra::GroupScaleOp,
-                algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
-                data::LessOp, data::PowerOfTwoOp, data::DimOp, data::MakeOp,
-                data::GetOp, data::BoundedAtOp, arith::ConstantOp,
+            isa<algebra::MultilinearRestrictPrefixOp, algebra::FieldEqualOp,
+                algebra::GroupIdentityOp, algebra::GroupAddOp,
+                algebra::GroupScaleOp, algebra::GroupEqualOp, data::IndexOp,
+                data::EqualOp, data::LessOp, data::PowerOfTwoOp, data::DimOp,
+                data::MakeOp, data::GetOp, data::BoundedAtOp, arith::ConstantOp,
                 arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp,
                 arith::SelectOp>(instruction);
         if (!allowed || instruction.getNumRegions())
@@ -1344,7 +1390,7 @@ public:
       : unit(unit), selected(selected), symbols(unit) {}
 
   Expected<json::Value> run(StringRef bytes) {
-    if (auto e = attributes(*unit, {"profile"}))
+    if (auto e = attributes(*unit, {"profile", "source_declarations"}))
       return std::move(e);
     auto admitted = readSourceExecutionClosure(unit);
     if (!admitted)
@@ -1373,8 +1419,8 @@ public:
         if (relations.size() == 128)
           return error("structured-source-limit");
         if (auto e = attributes(op, {"sym_name", "sym_visibility", "kind",
-                                     "key", "revision", "signature", "purposes",
-                                     "formula"}))
+                                     "key", "revision", "static_arguments",
+                                     "signature", "purposes", "formula"}))
           return std::move(e);
         auto visible = visibility(op);
         if (!visible)
@@ -1386,10 +1432,18 @@ public:
         auto outputs = sorts(type.getResults());
         if (!outputs)
           return outputs.takeError();
+        auto staticArguments =
+            relation::readStaticArguments(declaration.getStaticArguments());
+        if (!staticArguments)
+          return staticArguments.takeError();
+        for (const auto &argument : *staticArguments->getAsArray())
+          if (auto e = collectStaticDomains(argument, used))
+            return e;
         relations.push_back(json::Array{
             "relation", declaration.getSymName(), *visible,
             declaration.getKind(), declaration.getKey(),
-            declaration.getRevision(), std::move(*inputs), std::move(*outputs),
+            declaration.getRevision(), std::move(*staticArguments),
+            std::move(*inputs), std::move(*outputs),
             names(declaration.getPurposes()),
             declaration.getFormulaAttr()
                 ? json::Value(declaration.getFormulaAttr().getValue())
@@ -1470,6 +1524,24 @@ public:
       if (protocol.getRoles().size() > 1)
         if (auto e = scalarMath(protocol))
           return std::move(e);
+    json::Value declarations = json::Array{json::Array{}, json::Array{}};
+    if (auto attr = unit->getAttr("source_declarations")) {
+      auto text = dyn_cast<StringAttr>(attr);
+      if (!text)
+        return error("component-declaration");
+      auto parsed = zkc::parseNaturalJson(text.getValue(), 16 * 1024 * 1024,
+                                          256, "component-declaration",
+                                          "structured-source-limit");
+      if (!parsed)
+        return parsed.takeError();
+      auto rows = parsed->getAsArray();
+      if (!rows || rows->size() != 2 || !(*rows)[0].getAsArray() ||
+          !(*rows)[1].getAsArray())
+        return error("component-declaration");
+      if (auto e = language::checkComponentDeclarations(*parsed))
+        return std::move(e);
+      declarations = std::move(*parsed);
+    }
     auto digest = SHA256::hash(arrayRefFromStringRef(bytes));
     return json::Array{"zkc.structured-source/0",
                        "original",
@@ -1480,7 +1552,8 @@ public:
                        std::move(bindings),
                        std::move(definitions),
                        std::move(contracts),
-                       catalogueSlot(used)};
+                       catalogueSlot(used),
+                       std::move(declarations)};
   }
 };
 } // namespace

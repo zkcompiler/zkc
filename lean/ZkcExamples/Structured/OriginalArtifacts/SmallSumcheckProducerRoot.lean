@@ -37,7 +37,7 @@ theorem sourceHelper8_identity : ZkcExamples.Structured.Generated.Original.Small
 theorem producer_source (input0 : List F) (input2 : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input2 1) (bounded0 : input0.length < indexLimit) :
     Occurrence.participant (ringModel F G) program 0 ((.cons (some input0) (.cons none (.cons (some input2) (.cons none .nil))))) =
   (OriginalSumcheckLibrary.reduce program.payload 2 ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol 0 []
-    (.cons (some input0) (.cons (some input2) (.cons (some 1) (.cons none (.cons (some input2) (.cons none .nil))))))).bind fun _ =>
+    (.cons (some input0) (.cons (some input2) (.cons (some 1) (.cons none (.cons none (.cons (some input2) (.cons none .nil)))))))).bind fun _ =>
   .done (.cons none .nil) := by
   rw [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.participant_binding]
   simp only [ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.realized, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step0, ZkcExamples.Structured.Generated.OriginalArtifacts.SmallSumcheckProducerSource.step1Realized, ZkcExamples.Structured.OriginalSumcheckProducerCalls.realizeProducerCall]
@@ -46,6 +46,7 @@ theorem producer_source (input0 : List F) (input2 : Nat) (shape0 : PrimitiveLibr
   simp only [PIR.Process.bind, PIR.Process.bind_assoc]
   rfl
 
+set_option linter.unusedSimpArgs false in
 def producer (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input2 1) (bounded0 : input0.length < indexLimit) (history : Domain.History (uniformCarriers F G)) :
     Original.Producer (model := ringModel F G) (program := program) (routing handle) artifact
       (inputs input0 input2 history) ((.cons (some input0) (.cons none (.cons (some input2) (.cons none .nil))))) ⟨[], history⟩

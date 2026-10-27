@@ -67,6 +67,14 @@ class GeneratorError(Exception):
     """The request or the retained unit is outside the supported fragment."""
 
 
+def other_role(roles, role, label):
+    """The optional other position of an unambiguous one- or two-role roster."""
+    if (not isinstance(role, int) or isinstance(role, bool) or not roles or len(roles) > 2
+            or len(set(roles)) != len(roles) or role not in range(len(roles))):
+        raise GeneratorError(f"{label}: expected one or two distinct roles and an in-range role")
+    return 1 - role if len(roles) == 2 else None
+
+
 # ---------------------------------------------------------------------------
 # Types
 
@@ -163,10 +171,13 @@ class Function:
 
 class Unit:
     def __init__(self, data):
-        if data[0] != "zkc.structured-source/0":
-            raise GeneratorError(f"unsupported snapshot format {data[0]}")
+        if not isinstance(data, list) or len(data) != 11 or data[:2] != ["zkc.structured-source/0", "original"]:
+            raise GeneratorError("expected the current eleven-slot original snapshot")
+        if any(not isinstance(row, list) or len(row) != 11 for row in data[5]):
+            raise GeneratorError("expected eleven-slot relation declarations")
         self.entry = data[3]
         self.relations = {row[1]: row for row in data[5]}
+        self.bindings = {row[1]: (row[2], row[3]) for row in data[6]}
         self.functions = {}
         for row in data[7]:
             if row[0] != "function":
@@ -768,7 +779,8 @@ class Evaluator:
         if head == "draw":
             return self.draw(descriptor, args, results, site, rest, terminator, env, proof, indent, step)
         if head == "guard":
-            return self.guard(descriptor, args, site, rest, terminator, env, proof, indent, step)
+            return self.guard(descriptor, args, site, rest, terminator, env, proof, indent, step,
+                              operands[0])
         if head == "protocol_repeat":
             return self.repeat(descriptor, args, results, site, rest, terminator, env, proof, indent, step)
         if head == "protocol_apply":
@@ -1009,7 +1021,7 @@ class Evaluator:
                   name, value_type(wire), [value], how)
         return Call(event, name, value_type(wire), self.run(rest, terminator, [value] + env, proof, indent))
 
-    def guard(self, descriptor, args, site, rest, terminator, env, proof, indent, step):
+    def guard(self, descriptor, args, site, rest, terminator, env, proof, indent, step, operand):
         owner = self.frame.roles.index(descriptor[1])
         op = f"(.guard {owner} {json.dumps(site)})"
         condition = args[0]
@@ -1026,25 +1038,30 @@ class Evaluator:
             step.halt(op, "reject", ("guard", owner, condition, None))
             return Halt("reject")
         decided = re.fullmatch(r"decide \((.*)\)", condition.expr)
-        if not decided or not outer_parenthesized("(" + decided.group(1) + ")"):
-            raise GeneratorError(f"guard {site!r} condition {condition.expr!r} is not a decided proposition; "
-                                 f"name its fact in the request's guards table")
-        prop = decided.group(1)
+        decided = decided if decided and outer_parenthesized("(" + decided.group(1) + ")") else None
+        prop = decided.group(1) if decided else f"{paren(condition.expr)} = true"
         pad = " " * step.pad_width
         holds = self.names.fresh("holds")
         holds_proof, fails_proof = [], []
         Step(self, holds_proof, pad + "  ").done(op, [], ("guard", owner, present(condition.wire, "true"), None))
-        # The proof rewrites the decided proposition to `True` throughout the goal.
-        decided_env = [present(value.wire, value.expr.replace(condition.expr, "true"))
-                       if value.kind == "present" else value for value in env]
+        if decided:
+            # The step proof rewrites a decided proposition throughout the goal.
+            decided_env = [present(value.wire, value.expr.replace(condition.expr, "true"))
+                           if value.kind == "present" else value for value in env]
+        else:
+            # Match the normalizer's operand update; preserve other terms verbatim.
+            decided_env = [present(value.wire, "true") if position == operand else value
+                           for position, value in enumerate(env)]
         then = self.branch(rest, terminator, decided_env, holds_proof, indent + 2)
         Step(self, fails_proof, pad + "  ").halt(op, "reject",
                                                  ("guard", owner, present(condition.wire, "false"), None))
         if self.shared:
             proof.append(f"{pad}by_cases {holds} : {prop}")
-            proof.append(f"{pad}· simp only [eq_true {holds}, decide_true, ↓reduceIte, PIR.Process.bind]")
+            true_fact = f"eq_true {holds}, decide_true" if decided else holds
+            false_fact = f"eq_false {holds}, decide_false" if decided else f"Bool.eq_false_iff.mpr {holds}"
+            proof.append(f"{pad}· simp only [{true_fact}, ↓reduceIte, PIR.Process.bind]")
             proof.extend(holds_proof)
-            proof.append(f"{pad}· simp only [eq_false {holds}, decide_false, ↓reduceIte, PIR.Process.bind]")
+            proof.append(f"{pad}· simp only [{false_fact}, ↓reduceIte, PIR.Process.bind]")
             proof.extend(fails_proof)
         return If(prop, then, Halt("reject"))
 
@@ -1062,6 +1079,10 @@ class Evaluator:
                                  f"applications table")
         callee = frame.unit.function(descriptor[1])
         roles = [frame.roles.index(role) for role in descriptor[2]]
+        other_role(callee.roles, 0, f"application {app.name} callee")
+        other_role(roles, 0, f"application {app.name} mapping")
+        if len(roles) != len(callee.roles):
+            raise GeneratorError(f"application {app.name}: role mapping does not match the callee roster")
         if frame.role not in roles:
             return None
         index = roles.index(frame.role)
@@ -1129,9 +1150,10 @@ class Evaluator:
                  for position, (wire, scope) in enumerate(zip(callee.outputs, callee.output_scopes))]
         if self.shared:
             pad = " " * indent
-            other = [role for role in range(len(roles)) if role != index]
-            if len(other) != 1 or len(frame.roles) != 2 or roles[other[0]] == frame.role:
-                raise GeneratorError(f"application {app.name}: only two-role applications are supported")
+            other = other_role(roles, index, f"application {app.name}")
+            other_role(frame.roles, frame.role, f"application {app.name} caller")
+            if info["uses_separate"] and other is None:
+                raise GeneratorError(f"application {app.name}: a single-role callee cannot require separation")
             arguments = [info["theorem"]]
             arguments += [f"({name} := {app.arguments[name]})" for name in info["parameters"]]
             supplied = app.values.get(index, {})
@@ -1167,9 +1189,11 @@ class Evaluator:
                          f"{scope_literal(callee.input_scopes)}) {before} = _")
             proof.append(f"{pad}  iterate {len(callee.inputs) + 1} unfold maskValues")
             proof.append(f"{pad}  simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,")
-            proof.append(f"{pad}    Participant.restrict, {frame.separate}, Ne.symm {frame.separate}]")
+            input_separation = other is not None and any(other in scope for scope in callee.input_scopes)
+            separation = f", {frame.separate}, Ne.symm {frame.separate}" if input_separation else ""
+            proof.append(f"{pad}    Participant.restrict{separation}]")
             proof.append(f"{pad}· exact {' '.join(arguments)}")
-            hides = any(index not in scope for scope in callee.output_scopes)
+            hides = any(scope and index not in scope for scope in callee.output_scopes)
             proof.append(f"{pad}· exact {app.name}_{frame.role_name}_outputs ctx"
                          f"{' ' + frame.separate if hides else ''}")
             proof.append(f"{pad}intro {binder}")
@@ -1399,6 +1423,20 @@ def operands(indices):
 def typed_op(evaluator, descriptor, results, site, roles):
     """The typed operation a retained instruction elaborates to."""
     head = descriptor[0]
+    if head == "exec":
+        if descriptor[1] != "exec.apply" or descriptor[3]:
+            raise GeneratorError("unsupported parameterized executable helper operation")
+        binding = evaluator.frame.unit.bindings.get(descriptor[2])
+        if binding is None:
+            raise GeneratorError("executable helper has no exact primitive binding")
+        operation, domains = binding
+        primitives = {"index.equal", "index.less", "index.add", "index.mul", "index.sub",
+                      "index.div", "index.mod", "vector.empty", "vector.length", "vector.sum",
+                      "vector.split", "vector.append", "vector.equal", "field.equal"}
+        if operation not in primitives:
+            raise GeneratorError("unsupported executable helper primitive")
+        arguments = "".join(" " + json.dumps(domain) for domain in domains)
+        return f"(.exec (.{camel(operation)}{arguments}))"
     if head in BINARY or head in CONSTANTS:
         return f"(.calculate {calculation_op(descriptor)} rfl)"
     if head == "call":
@@ -2029,6 +2067,19 @@ class Module:
         return [(call.binder, call.binder_type) for call in replied]
 
     # -- typed bodies ------------------------------------------------------
+    def helper_bodies(self, specs):
+        """Print exact local/math helper signatures and checked trees from the export."""
+        for spec in specs:
+            helper = self.unit.function(spec["helper"])
+            if helper.kind not in ("local", "math") or helper.roles:
+                raise GeneratorError("helper body selection must name a local or mathematical definition")
+            name = spec["name"]
+            self.parts.append(
+                f"abbrev {name}Helper : Helper := ⟨{json.dumps(helper.name)}, .{helper.kind}, "
+                f"{ty_list(helper.inputs, True)}, {ty_list(helper.outputs, True)}⟩\n\n"
+                f"def {name}Body : Region dialect {ty_list(helper.inputs, True)} "
+                f"{ty_list(helper.outputs, True)} :=\n{self.chain(helper.body, [], '  ')}\n")
+
     def bodies(self, spec):
         """The typed body of one retained protocol, with its repeat callback named and its
         repeat maximum a parameter, so units that differ only in that maximum share it."""
@@ -2040,38 +2091,66 @@ class Module:
         maximum = spec.get("maximum", "maximum")
         instructions, terminator = protocol.body[1], protocol.body[2]
         repeats = [index for index, row in enumerate(instructions) if row[0][0] == "protocol_repeat"]
-        if len(repeats) != 1 or repeats[0] != len(instructions) - 1:
-            raise GeneratorError("the protocol must end with exactly one repeat followed by its return")
-        repeat = instructions[-1]
+        if len(repeats) != 1:
+            raise GeneratorError("the protocol must contain exactly one top-level repeat")
+        repeat_index = repeats[0]
+        repeat = instructions[repeat_index]
+        postlude = ["block", instructions[repeat_index + 1:], terminator]
         _, state_count, _, repeat_roles, scopes = repeat[0]
         callback_inputs, state, callback = repeat[3][0]
         captures = callback_inputs[1 + state_count:]
-        if terminator[0] != "return" or any(index >= state_count for index in terminator[1]):
+        # Follow only literal return-only helper projections. This derives the
+        # representation tuple, not a law replacing the actual continuation:
+        # that continuation is retained below and still needs exact body laws.
+        coordinates = list(range(state_count))
+        for instruction in postlude[1]:
+            descriptor, args, results, regions, _site = instruction
+            if descriptor[0] != "local_call" or regions:
+                raise GeneratorError("the repeat continuation must use return-only local helpers")
+            helper = self.unit.function(descriptor[1])
+            if helper.body[1] or helper.body[2][0] != "return":
+                raise GeneratorError("a repeat continuation helper must be a literal projection")
+            if len(args) != len(helper.inputs) or results != helper.outputs:
+                raise GeneratorError("repeat continuation helper signature mismatch")
+            if any(index >= len(coordinates) for index in args):
+                raise GeneratorError("the repeat continuation must read its state only")
+            forwarded = [coordinates[args[index]] for index in helper.body[2][1]]
+            coordinates = forwarded + coordinates
+        if terminator[0] != "return" or any(index >= len(coordinates) for index in terminator[1]):
             raise GeneratorError("the return after the repeat must read its state only")
+        return_indices = [coordinates[index] for index in terminator[1]]
         roles = protocol.roles
         out = [f"abbrev {name}Inputs : List Ty :=\n  {ty_list(protocol.inputs, True)}\n",
                f"abbrev {name}Outputs : List Ty :=\n  {ty_list(protocol.outputs, True)}\n",
                "/-- The repeat-carried slots, which precede the unchanged outer SSA environment. -/",
                f"abbrev repeatState : List Ty :=\n  {ty_list(state, True)}\n"]
+        out.append(f"/-- The exact source repeat occurrence. -/\nabbrev repeatSite : String := {json.dumps(repeat[4])}\n")
+        guard_sites = [row[4] for row in callback[1] if row[0][0] == "guard"]
+        for index, site in enumerate(guard_sites):
+            out.append(f"/-- Exact callback guard occurrence {index}. -/\nabbrev {callback_name}GuardSite{index} : String := {json.dumps(site)}\n")
+        service_inputs = [index for index, ty in enumerate(protocol.inputs) if ty[0] == "service"]
+        if len(service_inputs) == 1:
+            out.append(f"/-- The actual service input coordinate, before any local SSA extension. -/\n"
+                       f"abbrev serviceInput : String := {json.dumps('input_' + str(service_inputs[0]))}\n")
         role_indices = "[" + ", ".join(str(roles.index(role)) for role in repeat_roles) + "]"
         scope_indices = "[" + ", ".join("[" + ", ".join(str(roles.index(role)) for role in scope) + "]"
                                         for scope in scopes) + "]"
         out.append(f"abbrev repeatSpec ({maximum} : Nat) : RepeatSpec :=\n"
                    f"  ⟨repeatState, {ty_list(captures, True)}, {role_indices},\n    {scope_indices}, {maximum}⟩\n")
-        returned = values_literal([f"state.get {variable(index)}" for index in terminator[1]])
+        returned = values_literal([f"state.get {variable(index)}" for index in return_indices])
         out.append("/-- The state positions the retained return reads, in output order. -/")
-        out.append(f"abbrev {name}ReturnIndices : List Nat := {list_literal(terminator[1])}\n")
+        out.append(f"abbrev {name}ReturnIndices : List Nat := {list_literal(return_indices)}\n")
         out.append("/-- The retained return permutation of the repeat's state, for any value family. -/")
         out.append(f"def {name}ReturnValues {{Value : Ty → Type}} (state : Values Value repeatState) :\n"
                    f"    Values Value {name}Outputs :=\n  {returned}\n")
         out.append("/-- The retained return of the repeat's state. -/")
         out.append(f"def {name}Return (tail : List Ty) : Region protocolDialect (repeatState ++ tail)\n"
-                   f"    {name}Outputs :=\n  .ret {paren(operands(terminator[1]))}\n")
+                   f"    {name}Outputs :=\n{self.chain(postlude, roles, '  ')}\n")
         out.append("/-- One iteration of the repeat: every retained operation, with its site mark. -/")
         out.append(f"def {callback_name}Body : Region protocolDialect\n"
                    f"    (.index :: (repeatState ++ {ty_list(captures, True)})) repeatState :=\n"
                    f"{self.chain(callback, roles, '  ')}\n")
-        prelude = ["block", instructions[:-1], None]
+        prelude = ["block", instructions[:repeat_index], None]
         repeat_op = f"(.repeat (repeatSpec {maximum}) {json.dumps(repeat[4])})"
         last = (f"  .letOp (.mark {json.dumps(repeat[4])}) .nil .nil <|\n"
                 f"  .letOp {repeat_op} {paren(operands(repeat[1]))} (.cons {callback_name}Body .nil) <|\n"
@@ -2188,7 +2267,11 @@ class Module:
         if kind != "target" or residual is not None or decision is None:
             raise GeneratorError("only target clauses with a decision and no residual are supported")
         relation = self.unit.relations[relation_name]
-        inputs, outputs, kinds, formula = relation[6], relation[7], relation[8], relation[9]
+        inputs, outputs, kinds, formula = relation[7], relation[8], relation[9], relation[10]
+        if formula is None or relation[3] != "zkc.language.formula/0" or relation[6]:
+            raise GeneratorError("the selected contract needs a formula relation without opaque arguments")
+        if any(not row[3].startswith("zkc.") for row in self.unit.relations.values()):
+            raise GeneratorError("a formula-only environment cannot admit opaque relations")
         if outputs != [["bool"]]:
             raise GeneratorError("the relation must return one Boolean")
         arguments = []
@@ -2256,12 +2339,9 @@ class Module:
         gets = {name: "args.get " + paren("(.there " * position + ".here" + ")" * position)
                 for position, (name, _, _, _) in enumerate(arguments)}
         substituted = substitute(decision_prop, gets)
-        out.append("/-- The subject's only relation is this formula. -/")
-        out.append("def environment : RelationEnvironment imported F G where\n  meanings index args := by\n"
-                   "    have same : index = application.relation.index := by\n      apply Fin.ext\n"
-                   "      have bound : index.val < 1 := index.isLt\n      change index.val = 0\n      omega\n"
-                   "    subst index\n"
-                   f"    exact Relation {' '.join(paren(gets[name]) for name, _, _, _ in arguments)}\n")
+        out.append("/-- Every retained relation uses its formula or captured body. -/")
+        out.append("def environment : RelationEnvironment imported F G :=\n"
+                   "  RegisteredRelations.formulaOnly (by decide +kernel)\n")
         out.append("def target : InterpretedApplication owner clause.subject F G environment where\n"
                    "  binding := application\n"
                    f"  interpretation := .formula formulaBinding rfl (fun _ => True)\n"
@@ -2391,7 +2471,9 @@ class Module:
         pad = "  " * len(function.outputs)
         out.append(self.omit_line())
         out.append(f"/-- The returned components kept at role {role}; the others are masked away. -/")
-        hides = any(scope_role not in scope for scope in function.output_scopes)
+        hides = any(scope and scope_role not in scope for scope in function.output_scopes)
+        if hides and other is None:
+            raise GeneratorError(f"{theorem}: output masking needs a distinct other role")
         separate = f" (separate : ctx.roles {other} ≠ ctx.roles {role})" if hides else ""
         out.append(f"theorem {theorem} (ctx : ProtocolContext){separate}\n"
                    f"    ({binder} : Values (Component (assignment F G)) {ty_list(function.outputs, True)}) :\n"
@@ -2453,6 +2535,10 @@ class Module:
             name = entry.get("name") or camel(entry["declaration"])
             callee = self.unit.function(instruction[0][1])
             roles = [protocol.roles.index(role) for role in instruction[0][2]]
+            other_role(callee.roles, 0, f"application {name} callee")
+            other_role(roles, 0, f"application {name} mapping")
+            if len(roles) != len(callee.roles):
+                raise GeneratorError(f"application {name}: role mapping does not match the callee roster")
             context = f"{name}Context"
             out.append(f"/-- The child context of the `{name}` application: its sites are qualified by the\n"
                        f"application site and its roles map to the caller's roles {roles}. -/")
@@ -2472,11 +2558,9 @@ class Module:
             for role_spec in spec.get("roles", []):
                 role = role_spec["role"]
                 if role in roles:
-                    other = [index for index in range(len(protocol.roles)) if index != role]
-                    if len(other) != 1:
-                        raise GeneratorError("protocol applications are supported in two-role bodies")
+                    other = other_role(protocol.roles, role, f"application {name} caller")
                     self.masked_outputs(out, f"{name}_{role_spec['name']}_outputs", callee,
-                                        f"({context} ctx)", role, other[0], roles.index(role))
+                                        f"({context} ctx)", role, other, roles.index(role))
             views = self.unit_terms()["views"]
             declaration = entry["declaration"]
             applications[site] = Application(
@@ -2490,6 +2574,8 @@ class Module:
     def shared(self, spec):
         unit = self.unit
         protocol = unit.function(spec.get("protocol", unit.entry))
+        for role_spec in spec.get("roles", []):
+            other_role(protocol.roles, role_spec["role"], role_spec["name"])
         if spec.get("repeat"):
             instruction = find_repeat(protocol.body, self.repeat_site(spec))
             inputs, outputs, block = instruction[3][0]
@@ -2673,6 +2759,8 @@ class Module:
         theorem_binders = self.binders(capture_binders + free_pairs)
         script = "\n".join(proof)
         uses_separate = re.search(r"(?<![\w.])separate(?![\w'])", script) is not None
+        # A nonzero role needs the declared roster even without an operation on its peer.
+        uses_separate |= role_spec.get("proof") == "normal-form" and role != 0
         result_type = " × ".join(paren(slot_type(slot)) if " " in slot_type(slot) else slot_type(slot)
                                  for slot in slots) or "Unit"
         out.append(f"/-- The {name}'s normal form of one body run: its ordered actions, the values it\n"
@@ -2684,7 +2772,7 @@ class Module:
         ends = f"(fun {'result' if slots else '_'} => .done ({embedded}))"
         others = [other for other in range(len(protocol.roles)) if other != role]
         if len(others) != 1:
-            raise GeneratorError("shared normal forms support two-role protocols")
+            raise GeneratorError("shared callback normal forms support two-role protocols")
         theorem = role_spec.get("theorem", f"{name}_process")
         premises = role_spec.get("premises", "")
         binders = role_spec.get("binders", "")
@@ -3095,6 +3183,8 @@ class Module:
         process_arguments = " ".join(variable for variable, _ in used)
         script = "\n".join(proof)
         uses_separate = re.search(r"(?<![\w.])separate(?![\w'])", script) is not None
+        # A single-role callee does not remove the caller's other declared role.
+        uses_separate |= role_spec.get("proof") == "normal-form" and role != 0
         others = [other for other in range(len(protocol.roles)) if other != role]
         separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
         out.append(f"/-- The {name}'s normal form of the whole body. -/")
@@ -3288,10 +3378,9 @@ class Module:
         """A callee's invocation in this unit at any child context: the input masks, the callee's
         process theorem and the participant's view of the returned tuple."""
         app, index, info, function = callee["app"], callee["index"], callee["info"], callee["function"]
-        others = [other for other in range(len(app.roles)) if other != index]
-        if len(others) != 1:
-            raise GeneratorError(f"application {app.name}: callee summaries are stated for two-role callees")
-        other = others[0]
+        other = other_role(app.roles, index, f"application {app.name}")
+        if info["uses_separate"] and other is None:
+            raise GeneratorError(f"application {app.name}: a single-role callee cannot require separation")
         # Named by the callee's declaration: the summary holds at any child context.
         declaration = camel(app.definition.rsplit(".", 1)[1].removesuffix("Definition"))
         stem = f"{declaration}_{info['name']}"
@@ -3349,6 +3438,7 @@ class Module:
         role_binders = binders_used(role_spec.get("binders", ""), premise_text)
         premises = binders_used(role_spec.get("premises", ""), premise_text) if pinned else ""
         separate = f" (separate : ctx.roles {other} ≠ ctx.roles {index})" if (hides or info["uses_separate"]) else ""
+        input_separation = separate and any(other in scope for scope in function.input_scopes)
         binder_declarations = self.binders(list(declared.items()) + absent_names)
         callee["summary"] = f"{stem}_invoke"
         callee["summary_binders"] = (role_binders, separate != "",
@@ -3364,7 +3454,7 @@ class Module:
                    f"  refine ({view} ctx (ctx.roles {index}) _ ({values_literal(masked)} : {typed}) ?_).trans ?_\n"
                    f"  · iterate {len(function.inputs) + 1} unfold maskValues\n"
                    f"    simp [ProtocolContext.mapScopes, Participant.restrict"
-                   f"{', Ne.symm separate' if separate else ''}]\n"
+                   f"{', Ne.symm separate' if input_separation else ''}]\n"
                    f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({' '.join(theorem_arguments)})).trans ?_\n"
                    f"  apply congrArg (PIR.Process.bind _)\n"
@@ -3420,7 +3510,7 @@ class Module:
                     caller = callee["uses"][scope_names[index]]
                     rewrites.append(f"← (Option.some.inj (p{index} : some {caller} = some {names[index]}) : "
                                     f"{caller} = {names[index]})")
-            other = [o for o in range(len(callee['app'].roles)) if o != callee['index']][0]
+            other = other_role(callee["app"].roles, callee["index"], f"application {callee['app'].name}")
             separate = (f" (distinct {other} (show {other} < {len(callee['app'].roles)} by decide) "
                         f"(show ({other} : Nat) ≠ {callee['index']} by decide))") if separated else ""
             summary_arguments = " ".join(binder_names(role_binders))
@@ -3453,10 +3543,7 @@ class Module:
         role = role_spec["role"]
         name = role_spec["name"]
         terms = self.unit_terms()
-        others = [other for other in range(len(protocol.roles)) if other != role]
-        if len(others) != 1:
-            raise GeneratorError("invocation theorems are supported for two-role protocols")
-        other = others[0]
+        other = other_role(protocol.roles, role, name)
         # Outer inputs: the role's own inputs as its normal form takes them; the others are
         # arbitrary optional values that the input masks remove.
         outer, outer_binders = [], []
@@ -3482,11 +3569,15 @@ class Module:
         signature = self.signature_term(protocol)
         arguments = " ".join(variable for variable, _ in used)
         separate = "(separate := separate) " if uses_separate else ""
+        if uses_separate and other is None:
+            raise GeneratorError(f"{name}: a single-role invocation cannot require separation")
+        separate_binder = f"    (separate : ctx.roles {other} ≠ self)\n" if other is not None else ""
+        input_separation = other is not None and any(other in scope for scope in protocol.input_scopes)
         out.append(f"/-- The {name}'s invocation at any caller context: the input masks, the normal form of\n"
                    f"the body and the output masks, with this unit's protocol table. -/")
         out.append(f"theorem {name}_invoke {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
                    f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
-                   f"    (separate : ctx.roles {other} ≠ self)\n"
+                   f"{separate_binder}"
                    f"    {all_binders}{premises}{' ' if premises else ''}:\n"
                    f"    invokeProtocol ({terms['name']}.plainProtocolTable F G) {signature} ctx self\n"
                    f"      {paren(values_literal(outer))} =\n"
@@ -3494,7 +3585,8 @@ class Module:
                    f"  refine ({spec['declaration']}_view ctx self _ {paren(values_literal(components))} ?_).trans ?_\n"
                    f"  · subst self\n"
                    f"    iterate {len(protocol.inputs) + 1} unfold maskValues\n"
-                   f"    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]\n"
+                   f"    simp [ProtocolContext.mapScopes, Participant.restrict"
+                   f"{', Ne.symm separate' if input_separation else ''}]\n"
                    f"  subst self\n"
                    f"  refine (congrArg (fun process => PIR.Process.bind process _)\n"
                    f"    ({theorem} {' '.join(named)} (ctx := ctx) (self := ctx.roles {role}) (role := rfl)\n"
@@ -3507,6 +3599,7 @@ class Module:
         root_arguments = " ".join("({} : ProtocolContext)" if variable == "ctx" else variable
                                   for variable, _ in used)
         named_root = " ".join(named + [f"({variable} := {variable})" for variable, _ in outer_binders])
+        root_separate = "      (separate := by decide)" if other is not None else ""
         out.append(f"/-- The {name}'s participant of the admitted unit. -/")
         out.append(f"theorem {name}_participant {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
                    f"    {all_binders}{premises}{' ' if premises else ''}:\n"
@@ -3515,7 +3608,7 @@ class Module:
                    f"  ({terms['name']}.protocolTable_forgetSites (F := F) (G := G) {signature} {{}} {role}\n"
                    f"    {paren(values_literal(outer))}).trans\n"
                    f"    ({name}_invoke {named_root} (ctx := {{}}) (self := {role}) (role := rfl)\n"
-                   f"      (separate := by decide))\n")
+                   f"{root_separate})\n")
 
     def projections(self, count):
         """Projections of the components of a right-nested tuple named `result`."""
@@ -3534,6 +3627,7 @@ CALLEES = {}
 
 
 def build(module, request):
+    module.helper_bodies(request.get("helpers", []))
     if "bodies" in request:
         module.bodies(request["bodies"])
     if "root" in request:

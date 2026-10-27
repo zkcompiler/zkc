@@ -4,9 +4,10 @@ public import ZkcExamples.Structured.GkrSourceViews
 public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckHelperLaws
 public import ZkcExamples.Structured.MapSourceExpansions
+public import Zkc.Source.Structured.MapLaws
+public import Zkc.Construction.Structured
 public import Zkc.Source.Structured.CollectLaws
 public import Zkc.Source.Structured.BodyBindings
-public import Zkc.Construction.Structured
 public import Zkc.Polynomial.Multilinear.ListRestriction
 public import Zkc.Polynomial.Multilinear.Line
 
@@ -29,26 +30,42 @@ the sum of a vector, the block of a stacked table at a position
 calls on transcript values.
 -/
 
+set_option backward.isDefEq.respectTransparency false
+
 namespace ZkcExamples.Structured.GkrSourceLaws
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixLaws
 open MapPrefixBodies GkrSourceViews
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 
 
+/-- Read an ordered collection from its actual typed body. The proof at each
+use checks that this is the body's first operation, rather than guessing an
+admission number or a declaration-list position. -/
+abbrev collection? {inputs outputs : List Ty} : Region dialect inputs outputs → Option CollectSpec
+  | .letOp (.collect spec) _ _ _ => some spec
+  | _ => none
+
+/-- The complete current finite fold, with its tuple-valued item ABI. -/
+abbrev fold? {inputs outputs : List Ty} : Region dialect inputs outputs → Option FoldSpec
+  | .letOp (.fold spec) _ _ _ => some spec
+  | _ => none
+
+abbrev firstCollection : CollectSpec :=
+  (collection? GkrSourceBodies.helper8Body).get (by decide +kernel)
+
+abbrev lineCollection : CollectSpec :=
+  (collection? GkrSourceBodies.sourceHelper110Body).get (by decide +kernel)
+
 abbrev collectBindings : MultilinearCollectBodies.Bindings :=
-  ⟨"_finite_admission_1",
-    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain",
-    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body",
-    "_mathematical_admission_2"⟩
+  ⟨GkrSourceBodies.helper8Helper.name, firstCollection.domain.name,
+    firstCollection.body, GkrSourceBodies.interpolateRealizationHelper.name⟩
 
 abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
-  ⟨"_finite_admission_3", "_mathematical_admission_0"⟩
+  ⟨GkrSourceBodies.helper12Helper.name, GkrSourceBodies.helper16Helper.name⟩
 
 abbrev lineBindings : MultilinearCollectBodies.Bindings :=
-  ⟨"_finite_admission_28",
-    "zkl_map_c146dd3d9114244d244e3c5f1750c58c167183b76600905d92674f3b3e023a6f_domain",
-    "zkl_map_c146dd3d9114244d244e3c5f1750c58c167183b76600905d92674f3b3e023a6f_body",
-    "_mathematical_admission_14"⟩
+  ⟨GkrSourceBodies.sourceHelper110Helper.name, lineCollection.domain.name,
+    lineCollection.body, GkrSourceBodies.lineInterpolationRealizationHelper.name⟩
 
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
@@ -73,16 +90,16 @@ structured_associations GkrSourceViews
     helper18 := GkrSourceBodies.helper18,
     selectBlock := GkrSourceBodies.selectBlock,
     helper42 := GkrSourceBodies.helper42,
-    helper43 := GkrSourceBodies.helper43,
+    sourceHelper110 := GkrSourceBodies.sourceHelper110,
     sum := GkrSourceBodies.sum,
     evaluateWiring := GkrSourceBodies.evaluateWiring,
     helper73 := GkrSourceBodies.helper73,
-    helper74 := GkrSourceBodies.helper74,
+    sourceHelper112 := GkrSourceBodies.sourceHelper112,
     helper75 := GkrSourceBodies.helper75,
     helper76 := GkrSourceBodies.helper76,
-    helper77 := GkrSourceBodies.helper77,
+    helper74 := GkrSourceBodies.helper74,
     helper78 := GkrSourceBodies.helper78,
-    helper79 := GkrSourceBodies.helper79,
+    helper43 := GkrSourceBodies.helper43,
     helper80 := GkrSourceBodies.helper80,
     evaluateCoefficients := GkrSourceBodies.evaluateCoefficients,
     linePoint := GkrSourceBodies.linePoint,
@@ -372,6 +389,8 @@ theorem line_callback_equation (low high : List F) (lo hi r : F) :
     invoke (helpers (G := G)) (MultilinearCollectBodies.mapCallbackHelper lineBindings)
       (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) =
       .done (.cons (lo + (hi - lo) * r) .nil) := by
+  change invoke (helpers (G := G)) GkrSourceBodies.lineCallbackHelper
+    (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) = _
   rw [lineCallback_association.invoke unit.linked]
   change (MultilinearCollectBodies.mapCallbackBody lineBindings).denote (meaning F G helpers)
     (Values.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))).get = _
@@ -382,9 +401,9 @@ theorem line_callback_equation (low high : List F) (lo hi r : F) :
 
 theorem map_equation (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper43Helper (.cons start (.cons finish (.cons t .nil))) =
+    invoke (helpers (G := G)) GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
-  rw [helper43_association.invoke unit.linked]
+  rw [sourceHelper110_association.invoke unit.linked]
   change (MultilinearCollectBodies.mapBody lineBindings).denote (meaning F G helpers)
     (Values.cons start (.cons finish (.cons t .nil))).get = _
   exact MultilinearCollectLaws.map_body helpers lineBindings start finish t small sameLength.symm
@@ -393,7 +412,7 @@ theorem map_equation (start finish : List F) (t : F) (sameLength : finish.length
 theorem linePoint_body (table : Meanings F G) (start finish : List F) (t : F) :
     GkrSourceBodies.linePointBody.denote (meaning F G table)
         (Values.cons start (.cons finish (.cons t .nil))).get =
-      (invoke table GkrSourceBodies.helper43Helper (.cons start (.cons finish (.cons t .nil)))).bind
+      (invoke table GkrSourceBodies.sourceHelper110Helper (.cons start (.cons finish (.cons t .nil)))).bind
         fun result => .done (.cons (result.get .here) .nil) := by
   derive_process
 
@@ -410,18 +429,15 @@ theorem linePoint_equation (start finish : List F) (t : F) (sameLength : finish.
 /-- The fold of `evaluate_coefficients` over the coefficient vector, with the
 state `(accumulated, power)` and the point as its capture. -/
 abbrev powerFold : FoldSpec :=
-  ⟨DomainSpec.elements "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain"
-    [.vector "bls12-381.fr"] (.vector "bls12-381.fr") .here,
-    [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"],
-    "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩
+  (fold? GkrSourceBodies.helper43Body).get (by decide +kernel)
 
 theorem helper73_body (table : Meanings F G) (accumulated power coefficient point : F) :
     GkrSourceBodies.helper73Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := rfl
 
-theorem helper74_body (table : Meanings F G) (accumulated power coefficient point : F) :
-    GkrSourceBodies.helper74Body.denote (meaning F G table)
+theorem coefficientStepRealization_body (table : Meanings F G) (accumulated power coefficient point : F) :
+    GkrSourceBodies.sourceHelper112Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
       (invoke table GkrSourceBodies.helper73Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
@@ -431,7 +447,7 @@ theorem helper74_body (table : Meanings F G) (accumulated power coefficient poin
 theorem helper75_body (table : Meanings F G) (accumulated power coefficient point : F) :
     GkrSourceBodies.helper75Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))).get =
-      (invoke table GkrSourceBodies.helper74Helper
+      (invoke table GkrSourceBodies.sourceHelper112Helper
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   derive_process
@@ -450,14 +466,14 @@ theorem helper76_body (table : Meanings F G) :
     GkrSourceBodies.helper76Body.denote (meaning F G table) (Values.nil).get =
       .done (.cons ((0 : Nat) : F) (.cons ((1 : Nat) : F) .nil)) := rfl
 
-theorem helper77_body (table : Meanings F G) :
-    GkrSourceBodies.helper77Body.denote (meaning F G table) (Values.nil).get =
+theorem coefficientStartRealization_body (table : Meanings F G) :
+    GkrSourceBodies.helper74Body.denote (meaning F G table) (Values.nil).get =
       (invoke table GkrSourceBodies.helper76Helper .nil).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   derive_process
 
-theorem helper79_body (table : Meanings F G) (coefficients : List F) (accumulated power point : F) :
-    GkrSourceBodies.helper79Body.denote (meaning F G table)
+theorem coefficientFold_body (table : Meanings F G) (coefficients : List F) (accumulated power point : F) :
+    GkrSourceBodies.helper43Body.denote (meaning F G table)
         (Values.cons coefficients (.cons accumulated (.cons power (.cons point .nil)))).get =
       (Evaluation.denoteFold table powerFold
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
@@ -467,7 +483,7 @@ theorem helper79_body (table : Meanings F G) (coefficients : List F) (accumulate
 theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coefficients : List F) :
     GkrSourceBodies.helper80Body.denote (meaning F G table)
         (Values.cons accumulated (.cons power (.cons point (.cons coefficients .nil)))).get =
-      (invoke table GkrSourceBodies.helper79Helper
+      (invoke table GkrSourceBodies.helper43Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil))))).bind fun result =>
       .done (.cons (result.get .here) (.cons (result.get (.there .here)) .nil)) := by
   derive_process
@@ -475,7 +491,7 @@ theorem helper80_body (table : Meanings F G) (accumulated power point : F) (coef
 theorem evaluateCoefficients_body (table : Meanings F G) (coefficients : List F) (point : F) :
     GkrSourceBodies.evaluateCoefficientsBody.denote (meaning F G table)
         (Values.cons coefficients (.cons point .nil)).get =
-      (invoke table GkrSourceBodies.helper77Helper .nil).bind fun start =>
+      (invoke table GkrSourceBodies.helper74Helper .nil).bind fun start =>
       (invoke table GkrSourceBodies.helper80Helper (.cons (start.get .here)
         (.cons (start.get (.there .here)) (.cons point (.cons coefficients .nil))))).bind fun result =>
       .done (.cons (result.get .here) .nil) := by
@@ -486,7 +502,7 @@ theorem powerStep_equation (accumulated power coefficient point : F) :
         (.cons accumulated (.cons power (.cons coefficient (.cons point .nil)))) =
       .done (.cons (accumulated + coefficient * power) (.cons (power * point) .nil)) := by
   rw [helper75_association.invoke unit.linked, helper75_body,
-    helper74_association.invoke unit.linked, helper74_body,
+    sourceHelper112_association.invoke unit.linked, coefficientStepRealization_body,
     helper73_association.invoke unit.linked, helper73_body]
   rfl
 
@@ -498,9 +514,9 @@ theorem step_equation (accumulated power coefficient : F) (coefficients : List F
   rfl
 
 theorem powerStart_equation :
-    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper77Helper .nil =
+    invoke (helpers (F := F) (G := G)) GkrSourceBodies.helper74Helper .nil =
       .done (.cons 0 (.cons 1 .nil)) := by
-  rw [helper77_association.invoke unit.linked, helper77_body,
+  rw [helper74_association.invoke unit.linked, coefficientStartRealization_body,
     helper76_association.invoke unit.linked, helper76_body]
   simp only [Nat.cast_zero, Nat.cast_one]
   rfl
@@ -537,11 +553,11 @@ theorem powerReference_fold (point : F) (coefficients : List F) (accumulated pow
 set_option backward.isDefEq.respectTransparency false in
 theorem fold_equation (coefficients : List F) (accumulated power point : F)
     (small : coefficients.length < indexLimit) :
-    invoke (helpers (G := G)) GkrSourceBodies.helper79Helper
+    invoke (helpers (G := G)) GkrSourceBodies.helper43Helper
         (.cons coefficients (.cons accumulated (.cons power (.cons point .nil)))) =
       .done (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).1
         (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).2 .nil)) := by
-  rw [helper79_association.invoke unit.linked, helper79_body]
+  rw [helper43_association.invoke unit.linked, coefficientFold_body]
   have folded := Evaluation.denoteFold_reference_map (helpers (F := F) (G := G)) powerFold
     (.cons coefficients .nil) (.cons accumulated (.cons power .nil)) (.cons point .nil) coefficients
     (fun coefficient => .cons coefficient .nil)

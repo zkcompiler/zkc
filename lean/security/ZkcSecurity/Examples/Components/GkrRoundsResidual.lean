@@ -136,7 +136,7 @@ def verifier_residual (service count : Nat) (bounded : count ≤ 4)
     (history : List E) :
     Derivation absorb (boundedEscape charge)
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output)
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
         (some claim) (some count) (some service)) := by
   let root := initial raw reference claim
   have no : (representation (G := G) service).No root := ⟨represented.2.1, wrong⟩
@@ -164,7 +164,7 @@ theorem verifier_doomed (service count : Nat) (bounded : count ≤ 4)
     (history : List E) :
     (reduction absorb
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output) charge).doomed
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
         (some claim) (some count) (some service)) :=
   derived_doomed (verifier_residual service count bounded ctx distinct a m l r raw reference claim
     represented wrong queries sampling history)
@@ -202,7 +202,7 @@ def verifier_uniform_residual [Fintype F] [SampleableType F]
     (history : List E) :
     Derivation absorb (boundedEscape (fun _ _ => 2 / (Fintype.card F : ENNReal)))
       (fun _ output => NoReturn (n := n) service (initial raw reference claim) output)
-      history (protocol0Role1Process (F := F) (G := G) ctx a m l r
+      history (protocol0Role1Process (F := F) (G := G) ctx a m l r (some [])
         (some claim) (some count) (some service)) :=
   verifier_residual service count bounded ctx distinct a m l r raw reference claim represented wrong queries
     (conditional_uniform service queries uniform) history

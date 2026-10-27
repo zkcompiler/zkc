@@ -20,9 +20,11 @@ open ZkcSecurity.Claims.HonestPair
 open ZkcSecurity.Examples.Generated.Components.TwoSumsABI
 abbrev Scalar := ZMod blsModulus
 
+def formula : FormulaBinding imported subject.target.application.relation := by bind_contract
+
 theorem equation (left right : List Scalar) (leftClaim rightClaim : Scalar)
     (leftBound : left.length < indexLimit) (rightBound : right.length < indexLimit) :
-    subject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+    formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       .done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) := by
   change invoke (closedMeaningsOn (ringModel Scalar Scalar) imported.program.payload.definitions)
@@ -35,7 +37,7 @@ theorem equation (left right : List Scalar) (leftClaim rightClaim : Scalar)
       ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported.program :=
     Zkc.Verification.Imported.unique _ _
   rw [same]
-  change invoke (helperMeanings (F := Scalar) (G := Scalar))
+  change invoke (targetMeanings (F := Scalar) (G := Scalar))
     ZkcExamples.Structured.Generated.Mathematics.TwoSums.public_sums.helper
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       (.done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) :

@@ -149,3 +149,4 @@ vector.sum 0
 vector.product 0
 vector.to_point 0
 vector.to_table 0
+multilinear.restrict_prefix 0

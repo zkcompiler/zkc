@@ -64,9 +64,44 @@ def deniedScope : Scope (n := 1) (g₁ := generator) (g₂ := generator) pairing
 example : ScopedHardness pairing deniedScope 0 := fun _ impossible => impossible.elim
 example : ¬ deniedScope.bindingAllowed deniedScope.bindingBudget (openingAdversary client) := by intro impossible; exact impossible
 
+/-- This transparent finite group exposes the exponent in the public SRS. The
+client receives no setup secret, makes no oracle query, and still computes two
+conflicting openings. Query bounds alone are therefore not a hardness model. -/
+def conflictingOpening (srs : Vector G 2 × Vector G 2) : OpeningPair 7 G :=
+  let recovered := Multiplicative.toAdd srs.2[1]
+  ⟨1, 0, 0, 1, 1, Multiplicative.ofAdd (-recovered⁻¹)⟩
+
+def conflictingClient (srs : Vector G 2 × Vector G 2) : ProbComp (OpeningPair 7 G) :=
+  pure (conflictingOpening srs)
+
+theorem conflicting_client_zero_queries (srs : Vector G 2 × Vector G 2) :
+    IsQueryBoundP ((openingAdversary conflictingClient).claim srs) (fun _ => True) 0 :=
+  claim_query_bound 0 conflictingClient (by intro; simp [conflictingClient, isQueryBoundP_pure]) srs
+
+/-- Exhaustive over every setup output of the actual nonzero sampler, not just
+one selected trapdoor. The pairing is nondegenerate and both group generators
+are the same nonidentity generators used by the unconditional reduction. -/
+theorem conflicting_client_accepts : ∀ index : Fin 6,
+    let tau : F := index.val + 1
+    let srs := Groups.PowerSrs.generate (g₁ := generator) (g₂ := generator) 1 tau
+    let opening := conflictingOpening srs
+    opening.leftValue ≠ opening.rightValue ∧
+      KZG.verifyOpening (g₁ := generator) (g₂ := generator) pairing srs.2
+        opening.commitment opening.leftProof opening.point opening.leftValue = true ∧
+      KZG.verifyOpening (g₁ := generator) (g₂ := generator) pairing srs.2
+        opening.commitment opening.rightProof opening.point opening.rightValue = true := by
+  decide +kernel
+
+theorem conflicting_client_success :
+    Pr{let observed ← (openingExperiment (g₁ := generator) (g₂ := generator)
+      pairing conflictingClient)}[observed.Conflict] = 1 := by
+  simp [openingExperiment, Groups.sampleNonzeroZMod, conflictingClient,
+    StateT.run'_eq, Observation.Conflict, conflicting_client_accepts]
+
 #print axioms averageSuccess_eq_bindingExperiment
 #print axioms averageSuccess_le_tSdh
 #print axioms scoped_bound
 #print axioms experiment_openingAdversary
 #print axioms opening_success_le_tSdh
+#print axioms conflicting_client_success
 end TestsArkLib.KzgEvaluationBinding

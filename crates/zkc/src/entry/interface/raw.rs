@@ -217,6 +217,8 @@ pub(in crate::entry) enum Purpose {
 #[serde(deny_unknown_fields)]
 pub(in crate::entry) struct Relation {
     pub symbol: String,
+    #[serde(deserialize_with = "super::origin::arguments")]
+    pub static_arguments: Vec<super::origin::OriginTerm>,
     pub inputs: Vec<RelationInput>,
     pub definition: Definition,
 }

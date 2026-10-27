@@ -52,6 +52,17 @@ Evaluation binding establishes no polynomial knowledge, degree binding,
 function binding, native byte binding, or correspondence to an imported zkc
 KZG participant.
 
+An additional control uses the same nondegenerate finite pairing and actual
+opening experiment to produce two conflicting accepted openings with probability
+one and zero oracle queries. The client recovers the small public setup exponent
+from the SRS. This demonstrates why the query budget cannot supply the missing
+computational restriction; it is not an attack on a large cryptographic group.
+The reduction and concrete opening client remain reusable component theorems.
+They are not registered as a canonical compiled security endpoint. Such an
+endpoint needs an operational adversary class, a cost closure theorem for this
+exact reduction, and a matching construction binding before a hardness premise
+can justify its requested bound.
+
 ## Request-fixed straight-line oracle recovery
 
 `ZkcSecurity.Commitment.FiniteRecovery` fixes an immutable two-cell oracle with
@@ -131,6 +142,14 @@ It assumes access to both immutable cells and establishes only this finite oracl
 relation. It does not
 supply a KZG extractor, an extraction cost calculus, a new canonical claim wire
 schema, or a native/compiler receipt.
+
+The selected recovery profile is deliberately separate from a general
+continuation extractor. Extending it requires fixing the new algorithm, access
+interface and recovered relation in the request, then proving its composition
+law for the actual client. An evidence field containing an arbitrary decoder or
+an existential left inverse is insufficient. The existing ordered two-read
+result remains available without committing other families to that access
+pattern.
 
 ## Private producer and concrete verifier WP
 

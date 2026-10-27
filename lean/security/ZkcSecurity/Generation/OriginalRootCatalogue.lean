@@ -2,8 +2,8 @@ module
 
 public import ZkcSecurity.Generation.Roots.Catalogue
 public meta import ZkcSecurity.Generation.Roots.Catalogue
-public import ZkcTools.StructuredSource.OriginalRoot
-public meta import ZkcTools.StructuredSource.OriginalRoot
+public import ZkcTools.StructuredSource.Methods.SumcheckRoot
+public meta import ZkcTools.StructuredSource.Methods.SumcheckRoot
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 
@@ -13,7 +13,7 @@ public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 The installed Sumcheck method owns the template and typed static selection. Root
 bodies, helper selectors, sites, bounds and continuation layouts are derived. -/
 namespace ZkcSecurity.Generation.OriginalRootCatalogue
-open ZkcTools.StructuredSource.OriginalRoot
+open ZkcTools.StructuredSource.OriginalRoot ZkcTools.StructuredSource.Methods.SumcheckRoot
 
 /-- Method installation is shared by every selected root, including both
 SmallSumcheck and TwoSums. No root name selects a library template. -/

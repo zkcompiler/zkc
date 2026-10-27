@@ -27,7 +27,7 @@ def proofSignature : ProtocolSignature where
 
 def proofBody : Region protocolDialect proofSignature.inputs proofSignature.outputs :=
   .letOp (.mark "") .nil .nil <|
-  .letOp (.statement "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f" [.group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr"] ["role00000001", "role00000001", "role00000000"] 0) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.statement "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f" [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr")] ["role00000001", "role00000001", "role00000000"] 0) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.draw 0 "bls12-381.fr" "s0") (.cons (.there (.there (.there .here))) .nil) .nil <|
   .letOp (.mark "") .nil .nil <|

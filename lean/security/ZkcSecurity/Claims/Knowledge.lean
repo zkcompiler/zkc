@@ -26,7 +26,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 /-- Resolve semantic data only from the admitted subject's registry. The small
 request stores a proof of availability, never a second copy of that data. -/
 def Subject.extractionProfile (subject : Subject F G art endpoint) :
-    Option { profile : ExtractionProfile subject.compiled F G // subject.target = .retained profile.target } := do
+    Option { profile : ExtractionProfile subject.compiled F G // subject.target = .retained profile.target profile.formula } := do
   let entry ← (subject.extractors.lookup responseDifference).toOption
   if entry.identifier = responseDifference ∧ entry.schema = "zkc.extractor.response-difference/0" then
     entry.definition
@@ -44,14 +44,14 @@ abbrev profile : ExtractionProfile subject.compiled F G :=
   (subject.extractionProfile.get request.registered).val
 
 omit [SampleableType F] [Fintype F] in
-theorem selected : subject.target = .retained request.profile.target :=
+theorem selected : subject.target = .retained request.profile.target request.profile.formula :=
   (subject.extractionProfile.get request.registered).property
 
 omit [SampleableType F] [Fintype F] in
 /-- A singleton standard registration fixes the whole interface, not just the
 name of its recovery arithmetic. -/
 theorem profile_eq (profile : ExtractionProfile subject.compiled F G)
-    (selected : subject.target = .retained profile.target)
+    (selected : subject.target = .retained profile.target profile.formula)
     (registered : subject.extractors = profile.registry subject.target selected) : request.profile = profile := by
   have lookup : subject.extractionProfile = some ⟨profile, selected⟩ := by
     unfold Subject.extractionProfile
@@ -95,7 +95,7 @@ def IdealGuarantee {subject : Subject F G art .idealMeaning} (request : Knowledg
     let accepting := request.typedAcceptance statement initial prover
     accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
       Pr{let extracted ← request.profile.extract statement initial prover queries}[
-        request.profile.target.Holds statement (request.profile.embed extracted)]
+        request.profile.target.Holds request.profile.formula statement (request.profile.embed extracted)]
 
 def BytesGuarantee {subject : Subject F G art .executableBytes} (request : KnowledgeRequest subject) : Prop :=
   ∀ codec budget binding (statement : art.Statement F G) (initial : History F G)
@@ -106,7 +106,7 @@ def BytesGuarantee {subject : Subject F G art .executableBytes} (request : Knowl
     accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
       Pr{let extracted ← request.profile.extract statement initial
           (fun published history => subject.lowering.decoded codec published <$> prover published history) queries}[
-        request.profile.target.Holds statement (request.profile.embed extracted)]
+        request.profile.target.Holds request.profile.formula statement (request.profile.embed extracted)]
 
 /-- No existential family, extractor, prover key, or witness map occurs here. -/
 def meaning : Prop :=
@@ -127,7 +127,7 @@ structure SigmaJustification (subject : Subject F G art endpoint)
     Stmt profile.Witness profile.Commit PrvState profile.Witness
   model : ∀ statement, subject.compiled.original statement handle = family.validator statement
   relation : ∀ statement witness,
-    profile.target.Holds statement (profile.embed witness) ↔ family.rel statement (family.key statement) witness = true
+    profile.target.Holds profile.formula statement (profile.embed witness) ↔ family.rel statement (family.key statement) witness = true
   shape : family.shape = profile.shape
   recovery : ∀ statement first left second right,
     (family.sigma statement).extract first left second right =
@@ -138,10 +138,11 @@ variable {subject : Subject F G art endpoint} {profile : ExtractionProfile subje
   (justification : SigmaJustification subject profile)
 
 def evidence : KnowledgeEvidence art endpoint justification.Stmt profile.Witness profile.Commit
-    justification.PrvState profile.Witness (fun statement witness => profile.target.Holds statement (profile.embed witness)) where
+    justification.PrvState profile.Witness (fun statement witness => profile.target.Holds profile.formula statement (profile.embed witness)) where
   compiled := subject.compiled
   connection := subject.connection
   target := profile.target
+  formula := profile.formula
   witness := profile.embed
   relationPinned _ _ := Iff.rfl
   handle := justification.handle

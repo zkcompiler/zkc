@@ -139,6 +139,7 @@ def opText : Op → String
   | .indexConstant n => app ".indexConstant" [toString n] | .indexEqual => ".indexEqual"
   | .indexLess => ".indexLess" | .indexPowerOfTwo => ".indexPowerOfTwo"
   | .vectorLength d => app ".vectorLength" [quoted d]
+  | .multilinearRestrictPrefix d => app ".multilinearRestrictPrefix" [quoted d]
   | .fieldConstant d n => app ".fieldConstant" [quoted d, toString n]
   | .fieldAdd d => app ".fieldAdd" [quoted d] | .fieldSubtract d => app ".fieldSubtract" [quoted d]
   | .fieldMultiply d => app ".fieldMultiply" [quoted d] | .fieldEqual d => app ".fieldEqual" [quoted d]
@@ -182,6 +183,19 @@ def protocolOpText : ProtocolOp → String
 def operandsText {Γ : List Ty} : {types : List Ty} → Operands Γ types → String
   | _, .nil => ".nil"
   | _, .cons x xs => app ".cons" [positionText x.index, operandsText xs]
+
+mutual
+  /-- Syntax of an independently checked helper body; no operation is executed. -/
+  def helperRegionText {Γ out : List Ty} : Region dialect Γ out → String
+    | .ret values => app ".ret" [operandsText values]
+    | .stop reason => app ".stop" [stopText reason]
+    | .bind body next => app ".bind" [helperRegionText body, helperRegionText next]
+    | .letOp op args bodies next => app ".letOp" [opText op, operandsText args,
+        helperRegionsText bodies, helperRegionText next]
+  def helperRegionsText {signatures : List (List Ty × List Ty)} : Regions dialect signatures → String
+    | .nil => ".nil"
+    | .cons body rest => app ".cons" [helperRegionText body, helperRegionsText rest]
+end
 
 mutual
   def regionText {Γ out : List Ty} : Region protocolDialect Γ out → String
