@@ -60,7 +60,18 @@ selection.
 
 ## CPU execution
 
-`cpu::CpuExecution::new(workers)` creates a fallible, clonable worker owner.
+The KoalaBear base/octic Keccak Merkle adapter uses the pinned hasher's SIMD
+lanes for independent leaves and parent nodes. Canonical leaf bytes, node tags,
+roots and paths are unchanged. Optional encoded staging is bounded to 32 KiB
+per task; wide rows or failed reservations use scalar streaming. This is
+provider-private temporary storage, separate from retained table/tree charges
+and the managed `numerical::Call` scope. Plonky3 still owns tree topology and
+its internal temporary allocations.
+
+`cpu::CpuExecution::new(workers)` creates a fallible, clonable worker owner
+with the default `parallel` feature. With default features disabled, the same
+API executes inline on the caller and accepts only a worker count of one.
+The SDK and native backend forward this positive feature explicitly.
 Use `cpu.enter(|| kernel_call())` to supply it while keeping validation and
 partial effects on the caller. Parallel-capable numerical leaves install their
 work on those workers. `cpu.execute` is for an already isolated, `Send` numerical
@@ -69,8 +80,8 @@ does not propagate across asynchronous suspension or application-created Rayon
 tasks. Capture a clone and enter it inside each such task that calls zkc kernels.
 
 The pinned Arkworks curve and PCS `parallel` features stay disabled because
-their MSM implementation creates private pools. Field and FFT parallelism stays
-enabled and uses the supplied pool. Cargo feature unification is additive:
+their MSM implementation creates private pools. Field and FFT parallelism uses the supplied pool when `parallel` is enabled;
+it is disabled in the inline build. Cargo feature unification is additive:
 applications adding other Arkworks dependencies must preserve that restriction.
 Tests check the resolved workspace and normal SDK consumer graphs. The worker
 ceiling covers this pool, not other contexts, caller threads or foreign code.

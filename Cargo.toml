@@ -3,6 +3,7 @@ members = [
   "crates/zkc-runtime",
   "crates/zkc",
   "crates/zkc-cli",
+  "crates/zkc-web",
   "crates/zkc-kernels",
   "crates/zkc-native",
   "crates/zkc-test-support",
@@ -35,8 +36,8 @@ ark-bn254 = "=0.6.0"
 # Keep curves/PCS serial; field and FFT parallel iterators use the installed pool.
 # Do not enable ark-ec/parallel through another dependency (including PCS defaults).
 ark-ec = { version = "=0.6.0", default-features = false, features = ["std"] }
-ark-ff = { version = "=0.6.0", default-features = false, features = ["std", "parallel"] }
-ark-poly = { version = "=0.6.0", default-features = false, features = ["std", "parallel"] }
+ark-ff = { version = "=0.6.0", default-features = false, features = ["std"] }
+ark-poly = { version = "=0.6.0", default-features = false, features = ["std"] }
 ark-poly-commit = { version = "=0.6.0", default-features = false, features = ["std"] }
 ark-serialize = "=0.6.0"
 ark-std = "=0.6.0"

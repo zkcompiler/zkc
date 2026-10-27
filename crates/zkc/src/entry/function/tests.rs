@@ -361,8 +361,16 @@ fn cpu_context_reaches_numerical_backends_and_all_admitted_children() {
     let id = worker(&cpu);
     let first_default = admit(&numeric_document()).unwrap();
     let second_default = admit(&numeric_document()).unwrap();
-    assert_ne!(worker(first_default.cpu()), worker(second_default.cpu()));
-    assert_ne!(worker(first_default.cpu()), id);
+    if cfg!(feature = "parallel") {
+        assert_ne!(worker(first_default.cpu()), worker(second_default.cpu()));
+    } else {
+        assert_eq!(worker(first_default.cpu()), worker(second_default.cpu()));
+    }
+    if cfg!(feature = "parallel") {
+        assert_ne!(worker(first_default.cpu()), id);
+    } else {
+        assert_eq!(worker(first_default.cpu()), id);
+    }
     let numerical = FunctionEntry::admit_with_cpu(
         capture(&numeric_document()),
         Default::default(),

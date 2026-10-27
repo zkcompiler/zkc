@@ -18,7 +18,8 @@ def measurement():
 
 def test_complete_protocol_profiles_and_independent_fri_values(measurement):
     cases = measurement.case_catalog()
-    assert len(cases) == 10 and len({c['name'] for c in cases}) == 10
+    assert len(cases) == 11 and len({c['name'] for c in cases}) == 11
+    assert {'fri-1024', 'fri-4096'} <= {c['name'] for c in cases}
     for size, rounds in [(32, 3), (64, 4)]:
         public, witness = measurement.fri_inputs(size, rounds)
         assert public['round_count'] == str(rounds)

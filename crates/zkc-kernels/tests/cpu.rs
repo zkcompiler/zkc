@@ -24,7 +24,10 @@ fn worker_counts_preserve_vectors_transforms_hashes_and_curve_scratch() {
         })
     };
     let expected = compute(&CpuExecution::serial().unwrap());
-    for workers in [2, 4, 8] {
+    for workers in [1, 2, 4, 8]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         assert_eq!(compute(&CpuExecution::new(workers).unwrap()), expected);
     }
     use zkc_kernels::arkworks::{
@@ -46,7 +49,10 @@ fn worker_counts_preserve_vectors_transforms_hashes_and_curve_scratch() {
         .zip(&scalars)
         .map(|(p, s)| p.scale(*s))
         .collect();
-    for workers in [1, 2, 4] {
+    for workers in [1, 2, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let cpu = CpuExecution::new(workers).unwrap();
         #[cfg(feature = "test-utils")]
         {

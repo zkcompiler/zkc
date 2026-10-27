@@ -22,10 +22,18 @@ without a guarantee that worker threads have joined.
 CPU policy does not change artifact identity, authority, resource budgets or
 failure handling, and worker selection does not use Rayon environment variables.
 
+Disabling the SDK's default `parallel` feature selects caller-thread execution
+and accepts exactly one worker. The [browser adapter](../../crates/zkc-web/README.md)
+uses this build of the same SDK and engine in an ordinary dedicated Worker.
+Its initial interface exposes in-memory proof calls with independently supplied
+package pins and setup authority. Cargo features are additive; build the browser
+crate separately from consumers that enable parallelism.
+
 | Task | Reference |
 |---|---|
 | Compile and invoke a named source Entry | [Entry guide](entries.md) |
 | Integrate proving and verification | [Proof execution](proofs.md) |
+| Run proof calls in a browser Worker | [Browser adapter](../../crates/zkc-web/README.md) |
 | Authorize bounded retries | [Attempts](attempts.md) |
 | Run direct Protocol IR | [Bundle walkthrough](bundles.md) |
 | Understand authority and failure handling | [Runtime design](design.md), [artifact identity](artifact-identity.md) |

@@ -13,6 +13,7 @@ fn cpu_execution_rejects_invalid_counts_and_owns_fresh_defaults() {
     let first = CpuExecution::serial().unwrap();
     let second = CpuExecution::serial().unwrap();
     assert_eq!(first.workers(), 1);
+    #[cfg(feature = "parallel")]
     assert_ne!(
         first.execute(|| std::thread::current().id()),
         second.execute(|| std::thread::current().id())
@@ -21,7 +22,15 @@ fn cpu_execution_rejects_invalid_counts_and_owns_fresh_defaults() {
     let worker = first.execute(|| std::thread::current().id());
     drop(first);
     assert_eq!(clone.execute(|| std::thread::current().id()), worker);
-    let explicit = CpuExecution::new(2).unwrap();
-    assert_eq!(explicit.clone().workers(), 2);
+    #[cfg(feature = "parallel")]
+    assert_eq!(CpuExecution::new(2).unwrap().clone().workers(), 2);
+    #[cfg(not(feature = "parallel"))]
+    {
+        assert!(CpuExecution::new(2).is_err());
+        assert_eq!(
+            second.execute(|| std::thread::current().id()),
+            std::thread::current().id()
+        );
+    }
     assert_eq!(clone.workers(), 1);
 }

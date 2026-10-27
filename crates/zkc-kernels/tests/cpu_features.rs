@@ -1,15 +1,16 @@
-//! Keep the pool-creating ark-ec feature off in resolved graphs, while retaining
-//! polynomial/field parallelism. This checks resolution only, without building.
+//! Audit positive parallel features for default native, inline SDK and browser
+//! consumers. Keep pool-creating curve features off. Resolution only; no build.
 use serde_json::Value;
 use std::{path::Path, process::Command};
 
 #[test]
-fn workspace_and_normal_sdk_keep_curve_msm_serial_and_fft_parallel() {
+fn consumers_select_only_owned_parallel_features() {
     let evidence = zkc_test_support::evidence("cpu-features");
     let root = zkc_test_support::root();
     audit(
         &metadata(&root.join("Cargo.toml"), true, evidence.path()),
         "workspace/all-features",
+        true,
     );
 
     // A separate normal SDK consumer must not inherit workspace all-feature
@@ -26,6 +27,54 @@ fn workspace_and_normal_sdk_keep_curve_msm_serial_and_fft_parallel() {
     audit(
         &metadata(&consumer.path().join("Cargo.toml"), false, consumer.path()),
         "normal SDK consumer",
+        true,
+    );
+    let manifest = consumer.path().join("Cargo.toml");
+    let text = std::fs::read_to_string(&manifest).unwrap().replace(
+        &format!("path = {sdk_path}"),
+        &format!("path = {sdk_path}, default-features = false"),
+    );
+    std::fs::write(&manifest, text).unwrap();
+    audit(
+        &metadata(&manifest, false, consumer.path()),
+        "inline SDK consumer",
+        false,
+    );
+    let web_path = serde_json::to_string(&root.join("crates/zkc-web").to_str().unwrap()).unwrap();
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    let (prefix, _) = text.split_once("[dependencies]").unwrap();
+    std::fs::write(
+        &manifest,
+        format!("{prefix}[dependencies]\nzkc-web = {{ path = {web_path} }}\n"),
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO"));
+    let output = command
+        .args([
+            "metadata",
+            "--offline",
+            "--format-version=1",
+            "--filter-platform",
+            "wasm32-unknown-unknown",
+            "--manifest-path",
+        ])
+        .arg(&manifest)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    std::fs::write(
+        consumer.path().join("browser-metadata.json"),
+        &output.stdout,
+    )
+    .unwrap();
+    audit(
+        &serde_json::from_slice(&output.stdout).unwrap(),
+        "browser consumer",
+        false,
     );
 }
 
@@ -53,14 +102,14 @@ fn metadata(manifest: &Path, workspace: bool, evidence: &Path) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn audit(metadata: &Value, scope: &str) {
+fn audit(metadata: &Value, scope: &str, parallel_enabled: bool) {
     let packages = metadata["packages"].as_array().unwrap();
     let nodes = metadata["resolve"]["nodes"].as_array().unwrap();
     for (name, parallel) in [
         ("ark-ec", false),
         ("ark-poly-commit", false),
-        ("ark-ff", true),
-        ("ark-poly", true),
+        ("ark-ff", parallel_enabled),
+        ("ark-poly", parallel_enabled),
     ] {
         let package = packages
             .iter()
@@ -78,4 +127,20 @@ fn audit(metadata: &Value, scope: &str) {
             "{scope}: {name} lost std"
         );
     }
+    for name in ["p3-dft", "p3-field", "p3-merkle-tree", "p3-maybe-rayon"] {
+        let package = packages
+            .iter()
+            .find(|p| p["name"] == name && p["version"] == "0.8.0")
+            .unwrap();
+        let node = nodes.iter().find(|n| n["id"] == package["id"]).unwrap();
+        let features = node["features"].as_array().unwrap();
+        assert_eq!(
+            features.iter().any(|f| f == "parallel"),
+            parallel_enabled,
+            "{scope}: unexpected {name} features: {features:?}"
+        );
+    }
 }
+
+// Halo2curves carries Rayon unconditionally; its selected MSM is serial. The
+// feature audit checks the independently configurable providers, not crate names.
