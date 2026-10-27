@@ -154,7 +154,8 @@ public:
     });
   }
   llvm::Expected<Values> compare(const Limits &limits = {},
-                                 const Body *body = nullptr) {
+                                 const Body *body = nullptr,
+                                 bool useScoped = true) {
     std::map<std::string, mlir::Operation *> definitions;
     for (auto &op : *module->getBody())
       if (auto name = SymbolTable::getSymbolName(&op))
@@ -169,7 +170,7 @@ public:
     auto result = compareFinite(
         project, body ? *body : *source, *finite, *resultType, values, block,
         position, definitions, used, layouts, "finite", "source_finite", limits,
-        operations, remaining, &control);
+        operations, remaining, useScoped ? &control : nullptr);
     if (!result)
       return result.takeError();
     auto returned = dyn_cast_or_null<exec::ReturnOp>(control.take());
@@ -310,6 +311,25 @@ int main() {
     Body mathematical = *fixture.source;
     mathematical.mode = Body::Mode::Math;
     refuses(fixture.compare({}, &mathematical), "source.correspondence");
+  });
+  cases.run(
+      "ordered producer requires its scoped builder before insertion", [&] {
+        Fixture fixture(context, samples[0]);
+        EmissionBudget budget(1000);
+        OpBuilder builder(&context, &budget);
+        uint64_t remaining = Limits{}.work;
+        refuses(emitFinite(fixture.project, *fixture.source, *fixture.finite,
+                           *fixture.resultType, fixture.values, builder,
+                           builder.getUnknownLoc(), *fixture.module->getBody(),
+                           fixture.layouts, "invalid", "invalid", budget,
+                           remaining),
+                "source.emission");
+        require(budget.count() == 0 && remaining == Limits{}.work,
+                "missing scoped builder performed translation work");
+      });
+  cases.run("ordered comparator requires its scoped cursor", [&] {
+    Fixture fixture(context, samples[0]);
+    refuses(fixture.compare({}, nullptr, false), "source.correspondence");
   });
   return cases.result();
 }

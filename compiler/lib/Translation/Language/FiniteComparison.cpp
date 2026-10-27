@@ -40,7 +40,6 @@ class FiniteCheck {
   const Limits &limits;
   uint64_t &operations, &remaining;
   Error failure = Error::success();
-  bool local;
   exec::ControlCursor *scoped;
   exec::ControlCursor *reading = nullptr;
   Values data, initial, captures;
@@ -278,14 +277,6 @@ class FiniteCheck {
       auto *ret = next(block, cursor, "func.return", result, {}, {});
       if (!ret || ret->getNumRegions() || cursor != block.end())
         return fail("array adapter result or work differs");
-      if (local) {
-        auto *realize =
-            definition(suffix + "_realize", "local.realize",
-                       mlir::ValueRange(input).getTypes(), {sequence}, false,
-                       {"sym_name", "helper", "function_type"});
-        if (!realize || !symbol(*realize, "helper", prefix + suffix))
-          return fail("array adapter realization differs");
-      }
       if (scoped) {
         mlir::Operation *call = nullptr;
         auto result = invoke(*scoped, "exec.compute", input, {sequence},
@@ -296,16 +287,10 @@ class FiniteCheck {
         data.push_back(result->front());
         continue;
       }
-      SmallVector<StringRef> attrs{"callee"};
-      if (local)
-        attrs.push_back("site");
-      auto *call =
-          next(sourceBlock, sourceCursor, local ? "local.apply" : "func.call",
-               input, {sequence}, attrs);
+      auto *call = next(sourceBlock, sourceCursor, "func.call", input,
+                        {sequence}, {"callee"});
       if (!call || call->getNumRegions() ||
-          !symbol(*call, "callee",
-                  prefix + suffix + (local ? "_realize" : "")) ||
-          (local && !text(*call, "site", site.str() + suffix)))
+          !symbol(*call, "callee", prefix + suffix))
         return fail("array adapter occurrence differs");
       data.push_back(call->getResult(0));
     }
@@ -478,48 +463,20 @@ class FiniteCheck {
       }
       return result;
     }
-    if (!local) {
-      Values result;
-      for (unsigned i = 0; i < flat->size(); ++i) {
-        auto *get =
-            next(block, cursor, "data.get", arguments, {(*flat)[i]}, {"index"});
-        auto index = get ? get->getAttrOfType<mlir::IntegerAttr>("index")
-                         : mlir::IntegerAttr();
-        if (!get || get->getNumRegions() || !index ||
-            !index.getType().isInteger(64) || index.getInt() != i) {
-          fail("finite item projection differs");
-          return {};
-        }
-        result.push_back(get->getResult(0));
+    Values result;
+    for (unsigned i = 0; i < flat->size(); ++i) {
+      auto *get =
+          next(block, cursor, "data.get", arguments, {(*flat)[i]}, {"index"});
+      auto index = get ? get->getAttrOfType<mlir::IntegerAttr>("index")
+                       : mlir::IntegerAttr();
+      if (!get || get->getNumRegions() || !index ||
+          !index.getType().isInteger(64) || index.getInt() != i) {
+        fail("finite item projection differs");
+        return {};
       }
-      return result;
+      result.push_back(get->getResult(0));
     }
-    auto *match = next(block, cursor, "local.match", arguments, *flat,
-                       {"site", "alternatives"});
-    auto labels = match ? match->getAttrOfType<mlir::ArrayAttr>("alternatives")
-                        : mlir::ArrayAttr();
-    if (!match || !text(*match, "site", itemSite) ||
-        match->getNumRegions() != 1 ||
-        !llvm::hasSingleElement(match->getRegion(0)) || !labels ||
-        labels.size() != 1 || !mlir::isa<mlir::StringAttr>(labels[0]) ||
-        mlir::cast<mlir::StringAttr>(labels[0]).getValue() !=
-            packed->alternative) {
-      fail("finite item unpack differs");
-      return {};
-    }
-    auto &arm = match->getRegion(0).front();
-    auto position = arm.begin();
-    if (arm.getArgumentTypes() != mlir::TypeRange(*flat)) {
-      fail("finite item payload differs");
-      return {};
-    }
-    auto *yield =
-        next(arm, position, "local.yield", arm.getArguments(), {}, {});
-    if (!yield || yield->getNumRegions() || position != arm.end()) {
-      fail("finite item unpack yield differs");
-      return {};
-    }
-    return Values(match->getResults());
+    return result;
   }
   bool callback(const FiniteCallback &selected, ArrayRef<unsigned> ports,
                 StringRef suffix, mlir::TypeRange stateTypes, bool collect) {
@@ -540,8 +497,8 @@ class FiniteCheck {
       adapterOutputs = {protocol::decodeBoundType(context, packed->carrier)};
     }
     SmallVector<StringRef> attrs{"sym_name", "sym_visibility", "function_type"};
-    if (local || scoped)
-      attrs.push_back(scoped ? "runtime.origin" : "logical_origin");
+    if (scoped)
+      attrs.push_back("runtime.origin");
     if (!helper.dataPreconditions.empty())
       attrs.push_back("data.preconditions");
     Types actualInputs = inputs, actualOutputs = adapterOutputs;
@@ -551,14 +508,12 @@ class FiniteCheck {
                           runtime::ScopeType::get(context));
       actualOutputs = {exec::OutcomeType::get(context, adapterOutputs)};
     }
-    auto *op =
-        definition(suffix, local ? "local.func" : "func.func", actualInputs,
-                   actualOutputs, true, attrs, bool(scoped));
+    auto *op = definition(suffix, "func.func", actualInputs, actualOutputs,
+                          true, attrs, bool(scoped));
     if (!op || !text(*op, "sym_visibility", "private"))
       return fail("finite callback visibility differs");
-    if (local || scoped) {
-      auto origin = op->getAttrOfType<mlir::ArrayAttr>(
-          scoped ? "runtime.origin" : "logical_origin");
+    if (scoped) {
+      auto origin = op->getAttrOfType<mlir::ArrayAttr>("runtime.origin");
       if (!origin || origin.size() != 2 ||
           !mlir::isa<mlir::StringAttr>(origin[0]) ||
           mlir::cast<mlir::StringAttr>(origin[0]).getValue() !=
@@ -611,8 +566,7 @@ class FiniteCheck {
       condition.left = left.getArgNumber();
       condition.right = right.getArgNumber();
     }
-    if ((local && !conditions->empty()) ||
-        !compareDataPreconditions(*op, *conditions))
+    if (!compareDataPreconditions(*op, *conditions))
       return fail("finite adapter data preconditions differ");
     if (control) {
       mlir::Operation *call = nullptr;
@@ -638,40 +592,29 @@ class FiniteCheck {
               fail("finite helper return or extra CFG differs")) &&
              account(control->consumed());
     }
-    SmallVector<StringRef> callAttrs{"callee"};
-    if (local)
-      callAttrs.push_back("site");
-    auto *call = next(block, cursor, local ? "local.apply" : "func.call",
-                      operands, *outputs, callAttrs);
+    auto *call =
+        next(block, cursor, "func.call", operands, *outputs, {"callee"});
     if (!call || call->getNumRegions() ||
-        !symbol(*call, "callee", helper.symbol) ||
-        (local && !text(*call, "site", "body")))
+        !symbol(*call, "callee", helper.symbol))
       return fail("finite callback target differs");
     Values result(call->getResults());
     if (packed && packed->product) {
-      SmallVector<StringRef> packAttrs{"alternative"};
-      if (local)
-        packAttrs.push_back("site");
-      auto *pack =
-          next(block, cursor, local ? "local.variant_inject" : "data.make",
-               result, adapterOutputs, packAttrs);
+      auto *pack = next(block, cursor, "data.make", result, adapterOutputs,
+                        {"alternative"});
       if (!pack || pack->getNumRegions() ||
-          !text(*pack, "alternative", packed->alternative) ||
-          (local && !text(*pack, "site", "result")))
+          !text(*pack, "alternative", packed->alternative))
         return fail("finite collection packing differs");
       result = Values(pack->getResults());
     }
-    auto *ret = next(block, cursor, local ? "local.return" : "func.return",
-                     result, {}, {});
+    auto *ret = next(block, cursor, "func.return", result, {}, {});
     return ret && !ret->getNumRegions() &&
            (cursor == block.end() || fail("extra finite callback work"));
   }
 
 public:
-  FiniteCheck(const ClosedEntry &project, const Body &source,
-              const FiniteComputation &finite, const Type &resultType,
-              ArrayRef<Values> values, mlir::Block &sourceBlock,
-              mlir::Block::iterator &sourceCursor,
+  FiniteCheck(const ClosedEntry &project, const FiniteComputation &finite,
+              const Type &resultType, ArrayRef<Values> values,
+              mlir::Block &sourceBlock, mlir::Block::iterator &sourceCursor,
               const std::map<std::string, mlir::Operation *> &definitions,
               std::set<mlir::Operation *> &used, Layouts &layouts,
               StringRef prefix, StringRef site, const Limits &limits,
@@ -681,8 +624,7 @@ public:
         values(values), sourceBlock(sourceBlock), sourceCursor(sourceCursor),
         definitions(definitions), used(used), layouts(layouts), prefix(prefix),
         site(site), limits(limits), operations(operations),
-        remaining(remaining),
-        local(source.mode == Body::Mode::Local && !scoped), scoped(scoped),
+        remaining(remaining), scoped(scoped),
         context(sourceBlock.getParentOp()->getContext()) {
     (void)!!failure;
   }
@@ -733,32 +675,19 @@ public:
       return std::move(failure);
     }
     auto &actual = *sourceCursor++;
-    mlir::Operation *contract = &actual;
-    if (local) {
-      attrs.append({"sym_name", "function_type"});
-      contract = definition(
-          "", fold ? "local.finite_fold" : "local.finite_collect",
-          mlir::ValueRange(operands).getTypes(), *outputs, false, attrs);
-    }
-    if (!contract || !symbol(*contract, "domain", prefix + "_domain") ||
-        !symbol(*contract, fold ? "step" : "body", prefix + "_body") ||
+    if (!symbol(actual, "domain", prefix + "_domain") ||
+        !symbol(actual, fold ? "step" : "body", prefix + "_body") ||
         (finite.predicate &&
-         !symbol(*contract, "predicate", prefix + "_predicate"))) {
+         !symbol(actual, "predicate", prefix + "_predicate"))) {
       fail("finite selected domain or callback differs");
       return std::move(failure);
     }
-    if (local)
-      attrs = {"callee", "site"};
     if (!count() ||
-        actual.getName().getStringRef() != (local ? "local.apply"
-                                            : fold
-                                                ? "algebra.finite_fold"
-                                                : "algebra.finite_collect") ||
+        actual.getName().getStringRef() !=
+            (fold ? "algebra.finite_fold" : "algebra.finite_collect") ||
         !attributes(actual, attrs) || actual.getNumRegions() ||
         !llvm::equal(actual.getOperands(), operands) ||
-        actual.getResultTypes() != mlir::TypeRange(*outputs) ||
-        (local &&
-         (!symbol(actual, "callee", prefix) || !text(actual, "site", site)))) {
+        actual.getResultTypes() != mlir::TypeRange(*outputs)) {
       fail("finite computation occurrence differs");
       return std::move(failure);
     }
@@ -776,10 +705,10 @@ compareFinite(const ClosedEntry &project, const Body &source,
               StringRef prefix, StringRef site, const Limits &limits,
               uint64_t &operations, uint64_t &remaining,
               exec::ControlCursor *scoped) {
-  if (scoped && source.mode != Body::Mode::Local)
+  if (bool(scoped) != (source.mode == Body::Mode::Local))
     return error("source.correspondence",
-                 "scoped finite comparison requires an ordered body");
-  return FiniteCheck(project, source, finite, resultType, values, block, cursor,
+                 "ordered finite comparison requires its scoped cursor");
+  return FiniteCheck(project, finite, resultType, values, block, cursor,
                      definitions, used, layouts, prefix, site, limits,
                      operations, remaining, scoped)
       .run();

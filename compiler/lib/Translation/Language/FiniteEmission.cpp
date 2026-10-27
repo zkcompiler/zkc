@@ -28,7 +28,6 @@ class FiniteEmitter {
   std::vector<Types> itemTypes;
   std::vector<unsigned> bodyPorts, predicatePorts;
   Values domainOperands, captures, initial;
-  bool local;
   exec::ScopedExecutionBuilder *scoped;
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
@@ -188,27 +187,15 @@ class FiniteEmitter {
       }
       if (!make("func.return", {}, result))
         return {};
-      if (local) {
-        builder.setInsertionPointToEnd(&definitions);
-        if (!make("local.realize", {}, {},
-                  {text("sym_name", name + "_realize"), symbol("helper", name),
-                   builder.getNamedAttr("function_type",
-                                        mlir::TypeAttr::get(signature))}))
-          return {};
-      }
     }
-    SmallVector<mlir::NamedAttribute> attrs{
-        symbol("callee", local ? name + "_realize" : name)};
+    SmallVector<mlir::NamedAttribute> attrs{symbol("callee", name)};
     if (scoped) {
       attrs.push_back(text("site", site.str() + suffix));
       auto result = scoped->invoke("exec.compute", {sequence},
                                    scoped->scoped(input), attrs);
       return result.front();
     }
-    if (local)
-      attrs.push_back(text("site", site.str() + suffix));
-    auto *call =
-        make(local ? "local.apply" : "func.call", {sequence}, input, attrs);
+    auto *call = make("func.call", {sequence}, input, attrs);
     return call ? std::optional<mlir::Value>(call->getResult(0)) : std::nullopt;
   }
   bool domainInputs() {
@@ -355,8 +342,7 @@ class FiniteEmitter {
             domainOperands[node.operands.front().index].getType())) {
       auto packed = take(layouts.packed(node.item));
       if (!packed ||
-          !canInsert(packed->product ? (local ? 2 : packed->flat->leaves.size())
-                                     : 0))
+          !canInsert(packed->product ? packed->flat->leaves.size() : 0))
         return {};
       if (control && packed->product) {
         auto flat = types(node.item);
@@ -387,10 +373,9 @@ class FiniteEmitter {
               return helper;
             });
       }
-      return take(
-          emitUnpack(builder, location, *packed, inputs.front(),
-                     local ? PackingMode::Local : PackingMode::Mathematical,
-                     "item_" + std::to_string(ordinal++)));
+      return take(emitUnpack(builder, location, *packed, inputs.front(),
+                             PackingMode::Mathematical,
+                             "item_" + std::to_string(ordinal++)));
     }
     return Values(inputs);
   }
@@ -430,13 +415,12 @@ class FiniteEmitter {
                                  actualInputs, actualOutputs)))};
     if (scoped)
       attrs.push_back(builder.getNamedAttr("no_inline", builder.getUnitAttr()));
-    if (local || scoped)
+    if (scoped)
       attrs.push_back(builder.getNamedAttr(
-          scoped ? "runtime.origin" : "logical_origin",
+          "runtime.origin",
           builder.getArrayAttr({builder.getStringAttr(prefix + suffix.str()),
                                 builder.getArrayAttr({})})));
-    auto *declaration =
-        make(local ? "local.func" : "func.func", {}, {}, attrs, true);
+    auto *declaration = make("func.func", {}, {}, attrs, true);
     if (!declaration)
       return false;
     auto &block = declaration->getRegion(0).front();
@@ -484,27 +468,19 @@ class FiniteEmitter {
       condition.right = right.getArgNumber();
     }
     if (!conditions->empty()) {
-      if (local) {
-        failure = error("source.data-bound",
-                        "Local finite helper cannot assume bounds");
-        return false;
-      }
       declaration->setAttr(
           "data.preconditions",
           emitDataPreconditions(builder.getContext(), *conditions));
     }
     SmallVector<mlir::NamedAttribute> callAttrs{
         symbol("callee", helper.symbol)};
-    if (local)
-      callAttrs.push_back(text("site", "body"));
     Values result;
     if (control) {
       callAttrs.push_back(text("runtime.site", "body"));
       result = control->invoke("func.call", *outputs, control->scoped(operands),
                                callAttrs);
     } else {
-      auto *call = make(local ? "local.apply" : "func.call", *outputs, operands,
-                        callAttrs);
+      auto *call = make("func.call", *outputs, operands, callAttrs);
       if (!call)
         return false;
       result = Values(call->getResults());
@@ -517,9 +493,8 @@ class FiniteEmitter {
             "exec.variant", adapterOutputs, control->scoped(result),
             {text("alternative", packed->alternative), text("site", "result")});
       else {
-        auto value = take(emitPack(
-            builder, location, *packed, result,
-            local ? PackingMode::Local : PackingMode::Mathematical, "result"));
+        auto value = take(emitPack(builder, location, *packed, result,
+                                   PackingMode::Mathematical, "result"));
         if (!value)
           return false;
         result = {*value};
@@ -529,22 +504,20 @@ class FiniteEmitter {
       control->returned(result);
       return true;
     }
-    return bool(make(local ? "local.return" : "func.return", {}, result));
+    return bool(make("func.return", {}, result));
   }
 
 public:
-  FiniteEmitter(const ClosedEntry &project, const Body &source,
-                const FiniteComputation &finite, const Type &resultType,
-                ArrayRef<Values> values, mlir::OpBuilder &builder,
-                mlir::Location location, mlir::Block &definitions,
-                Layouts &layouts, StringRef prefix, StringRef site,
-                EmissionBudget &budget, uint64_t &remaining,
+  FiniteEmitter(const ClosedEntry &project, const FiniteComputation &finite,
+                const Type &resultType, ArrayRef<Values> values,
+                mlir::OpBuilder &builder, mlir::Location location,
+                mlir::Block &definitions, Layouts &layouts, StringRef prefix,
+                StringRef site, EmissionBudget &budget, uint64_t &remaining,
                 exec::ScopedExecutionBuilder *scoped)
       : project(project), finite(finite), resultType(resultType),
         values(values), builder(builder), location(location),
         definitions(definitions), layouts(layouts), prefix(prefix), site(site),
-        budget(budget), remaining(remaining),
-        local(source.mode == Body::Mode::Local && !scoped), scoped(scoped) {
+        budget(budget), remaining(remaining), scoped(scoped) {
     (void)!!failure;
   }
   Expected<Values> run() {
@@ -586,24 +559,7 @@ public:
         return std::move(failure);
       return result;
     }
-    if (local) {
-      {
-        mlir::OpBuilder::InsertionGuard guard(builder);
-        builder.setInsertionPointToEnd(&definitions);
-        attrs.push_back(text("sym_name", prefix));
-        attrs.push_back(builder.getNamedAttr(
-            "function_type",
-            mlir::TypeAttr::get(builder.getFunctionType(
-                mlir::ValueRange(operands).getTypes(), *outputs))));
-        if (!make(fold ? "local.finite_fold" : "local.finite_collect", {}, {},
-                  attrs))
-          return std::move(failure);
-      }
-      attrs = {symbol("callee", prefix), text("site", site)};
-    }
-    auto *result = make(local  ? "local.apply"
-                        : fold ? "algebra.finite_fold"
-                               : "algebra.finite_collect",
+    auto *result = make(fold ? "algebra.finite_fold" : "algebra.finite_collect",
                         *outputs, operands, attrs);
     if (!result)
       return std::move(failure);
@@ -618,12 +574,12 @@ emitFinite(const ClosedEntry &project, const Body &source,
            mlir::Location location, mlir::Block &definitions, Layouts &layouts,
            StringRef prefix, StringRef site, EmissionBudget &budget,
            uint64_t &remaining, exec::ScopedExecutionBuilder *scoped) {
-  if (scoped && source.mode != Body::Mode::Local)
+  if (bool(scoped) != (source.mode == Body::Mode::Local))
     return error("source.emission",
-                 "scoped finite emission requires an ordered body");
-  return FiniteEmitter(project, source, finite, resultType, values, builder,
-                       location, definitions, layouts, prefix, site, budget,
-                       remaining, scoped)
+                 "ordered finite emission requires its scoped builder");
+  return FiniteEmitter(project, finite, resultType, values, builder, location,
+                       definitions, layouts, prefix, site, budget, remaining,
+                       scoped)
       .run();
 }
 } // namespace zkc::language

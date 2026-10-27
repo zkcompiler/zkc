@@ -14,6 +14,7 @@ class EmissionBudget;
 /// An ordered caller supplies its persistent scoped constructor to emit actual
 /// scoped Func callbacks and an exec.fold/collect occurrence. All insertions
 /// use the caller's budget listener; publication requires a final budget check.
+/// The scoped constructor is required exactly for ordered source bodies.
 llvm::Expected<llvm::SmallVector<mlir::Value>>
 emitFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
            const Type &, llvm::ArrayRef<llvm::SmallVector<mlir::Value>>,
@@ -27,6 +28,7 @@ emitFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
 /// advances it past the finite occurrence and debits the operation/work counts
 /// for its CFG and adapters. The enclosing checker owns ordinary helper bodies,
 /// complete definition inventory and the rest of the caller's CFG.
+/// The scoped cursor is required exactly for ordered source bodies.
 llvm::Expected<llvm::SmallVector<mlir::Value>>
 compareFinite(const ClosedEntry &, const Body &, const FiniteComputation &,
               const Type &, llvm::ArrayRef<llvm::SmallVector<mlir::Value>>,
