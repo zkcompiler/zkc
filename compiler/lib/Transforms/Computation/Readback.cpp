@@ -8,7 +8,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 bool chargeCopy(Operation *body, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity) {
   auto walk = body->walk([&](Operation *op) {
@@ -155,4 +155,4 @@ normalizeUnit(mlir::ModuleOp unit, uint64_t &remaining,
   }
   return scratch;
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

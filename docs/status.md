@@ -232,11 +232,15 @@ actual state, callbacks and custody; a separate CFG comparator checks their
 consumption before executable publication. Finite recipe, provider and conversion choices share one bounded
 search; actual emitted uses identify which eligible occurrences may change.
 Explicit requests remain fixed, and semantic comparison failures are terminal.
-Retained pointwise maps and selected sums now use a private
+Retained row-bearing native maps and selected sums use a private
 [Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
 with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
-readback and execution through the current native handlers. General tensor
-transforms and writable-buffer ownership are outside this profile.
+readback and execution through the current native handlers. The structured
+reader and source comparison are in IR Analysis; proposal and optimization are
+in Transforms. Numerical pass options preserve representation choices through
+copied and textual pipelines. Products use the pointwise tensor stage; their
+aggregate remains native. Row-free fills and explicit vector selection remain
+outside the tensor profile. General tensor transforms and writable-buffer ownership are outside this profile.
 Owned [quotient-ring kernels](spec/domains/quotient-rings.md) support canonical
 negacyclic arithmetic, exact centered norms and natural-order transforms through
 ordered native contracts. Coefficient and evaluation values have distinct kernel
@@ -271,7 +275,7 @@ correspondence.
 `entry fn` exposes typed application control; `proof` configures independent
 proving and verification. Entry functions statically call numerical helpers,
 other Entries, protocol runs and proof operations. Numerical execution retains
-the existing Kernel pipeline and VM.
+the existing computation realization pipeline and VM.
 Concrete protocols also expose a default run Entry under their protocol name,
 using the same generated Host operation and Entry function path. Explicit generic
 selectors such as `Schnorr<G>` close the same path with source-checked static

@@ -187,6 +187,7 @@ add_zkc_component(IR
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
+  lib/Analysis/StructuredComputation.cpp
   lib/Analysis/ComputationUnit.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
@@ -262,18 +263,18 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalTrace.cpp
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
-  lib/Transforms/Kernel/Formation.cpp
-  lib/Transforms/Kernel/Closure.cpp
-  lib/Transforms/Kernel/Readback.cpp
-  lib/Transforms/Kernel/Lowering.cpp
-  lib/Transforms/Kernel/Verification.cpp
-  lib/Transforms/Kernel/ScopedSchedule.cpp
-  lib/Transforms/Kernel/ScopedVerification.cpp
-  lib/Transforms/Kernel/Recipes.cpp
-  lib/Transforms/Kernel/RecipeVerification.cpp
-  lib/Transforms/Kernel/Frontier.cpp
-  lib/Transforms/Kernel/FrontierVerification.cpp
-  lib/Transforms/Kernel/NormalizationVerification.cpp
+  lib/Transforms/Computation/Formation.cpp
+  lib/Transforms/Computation/Closure.cpp
+  lib/Transforms/Computation/Readback.cpp
+  lib/Transforms/Computation/Lowering.cpp
+  lib/Transforms/Computation/Verification.cpp
+  lib/Transforms/Computation/ScopedSchedule.cpp
+  lib/Transforms/Computation/ScopedVerification.cpp
+  lib/Transforms/Computation/Recipes.cpp
+  lib/Transforms/Computation/RecipeVerification.cpp
+  lib/Transforms/Computation/Frontier.cpp
+  lib/Transforms/Computation/FrontierVerification.cpp
+  lib/Transforms/Computation/NormalizationVerification.cpp
   lib/Transforms/HelperNormalization.cpp
   lib/Transforms/HelperNormalizationVerification.cpp
   lib/Transforms/CollectFold.cpp

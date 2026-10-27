@@ -154,6 +154,7 @@ def main():
     for source, owner in {
         "lib/Program/Admission.cpp": "ZkcProgram",
         "lib/Dialect/Algebra/IR/Mathematical.cpp": "ZkcIR",
+        "lib/Analysis/StructuredComputation.cpp": "ZkcIR",
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
         "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
         "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
@@ -161,10 +162,10 @@ def main():
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
         "lib/Dialect/Exec/IR/Computation.cpp": "ZkcIR",
-        "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
-        "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
-        "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
-        "lib/Transforms/Kernel/ScopedSchedule.cpp": "ZkcTransforms",
+        "lib/Transforms/Computation/Formation.cpp": "ZkcTransforms",
+        "lib/Transforms/Computation/Lowering.cpp": "ZkcTransforms",
+        "lib/Transforms/Computation/Verification.cpp": "ZkcTransforms",
+        "lib/Transforms/Computation/ScopedSchedule.cpp": "ZkcTransforms",
         "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
@@ -203,6 +204,7 @@ def main():
         ROOT / "lib/Transforms/CollectFold.h",
         ROOT / "lib/Transforms/FinitePreparation.h",
         ROOT / "lib/Transforms/CheckedCandidate.h",
+        ROOT / "lib/Transforms/MathematicalPassOptions.h",
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
@@ -215,7 +217,7 @@ def main():
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }
     private_headers["ZkcTransforms"].update(
-        ROOT / f"lib/Transforms/Kernel/{name}.h"
+        ROOT / f"lib/Transforms/Computation/{name}.h"
         for name in ("Support", "FrontierVerification", "NormalizationVerification", "Schedule")
     )
     private_headers["ZkcCompiler"] = {
@@ -392,16 +394,17 @@ def main():
     # selection or emission, even through an otherwise permitted header.
     producer_headers = {
         ROOT / "include/zkc/Analysis/Computation.h",
+        ROOT / "include/zkc/Transforms/StructuredComputation.h",
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
             "CollectionRealization", "RealizationEmission",
             "ScopedFinite", "ScopedPreparation")),
     }
-    for reader in ("FiniteVerification", "MathLoweringVerification",
+    for reader in ("../Analysis/StructuredComputation", "FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison",
                    "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
-                   "Kernel/RecipeVerification", "Kernel/ScopedVerification"):
+                   "Computation/RecipeVerification", "Computation/ScopedVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

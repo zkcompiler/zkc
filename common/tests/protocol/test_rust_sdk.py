@@ -210,7 +210,7 @@ fn main() {
     assert!(received.received.marker);
     assert!(matches!(received.received.choice,run::SampleChoice::Data{..}));
     let zkc::entry::Value::Record(values)=received.into() else {panic!()};
-    let output=zkc::entry::files::proof_outputs(&values,Default::default(),Default::default()).unwrap();
+    let output=zkc::entry::outputs::proof_outputs(&values,Default::default(),Default::default()).unwrap();
     assert!(std::str::from_utf8(&output).unwrap().contains(r#""7""#));
     let mut tampered=bytes;tampered.push(b' ');
     assert_eq!(run::admit(&tampered,Default::default(),Default::default()).err().unwrap().code(),"entry-package-identity");

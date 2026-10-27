@@ -495,7 +495,7 @@ int main() {
         run(*original, protocol::createProjectProtocolPass(false));
         run(*original, protocol::createLowerMathPass());
         auto candidate = sf::clone(*original);
-        run(*candidate, kernel::createLowerKernelsPass());
+        run(*candidate, computation::createRealizeComputationsPass());
         require(succeeded(mathematical::verifyNumericalLowering(*original,
                                                                 *candidate)),
                 "mixed finite/numerical context correspondence refused");
@@ -712,7 +712,7 @@ int main() {
           run(*candidate, protocol::createProjectProtocolPass(
                               simplify, {true, true, false}));
           run(*candidate, protocol::createLowerMathPass());
-          run(*candidate, kernel::createLowerKernelsPass());
+          run(*candidate, computation::createRealizeComputationsPass());
           unsigned collections = 0;
           candidate->walk([&](exec::CollectOp) { ++collections; });
           require(collections != 0,
@@ -1052,7 +1052,7 @@ int main() {
       for (auto module : {original.get(), enabled.get()}) {
         run(module, protocol::createProjectProtocolPass(false));
         run(module, protocol::createLowerMathPass());
-        run(module, kernel::createLowerKernelsPass());
+        run(module, computation::createRealizeComputationsPass());
         run(module, protocol::createSelectPhysicalPass(
                         {}, false, false, nullptr, {}, {true, true, false}));
       }

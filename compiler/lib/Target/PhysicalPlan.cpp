@@ -1,5 +1,5 @@
 #include "PhysicalPlan.h"
-#include "../Transforms/Kernel/Support.h"
+#include "../Transforms/Computation/Support.h"
 #include "../Transforms/NumericalSelection.h"
 #include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
@@ -1818,15 +1818,16 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
             options.numericalPolicy, &fixedFiniteBindings, &selection.numerical,
             &preparationOutcome);
         if (!finite)
-          return error("kernel-lowering", "finite preparation refused");
+          return error("computation-realization", "finite preparation refused");
         numericalSource = *finite;
       }
       if (hasNumerical) {
-        prepared = kernel::prepareKernelLowering(
+        prepared = computation::prepareComputationRealization(
             numericalSource, &selection.numerical.remainingCopy,
             &preparationCapacity, &selection.numerical);
         if (!prepared)
-          return error("kernel-lowering", "numerical source preparation");
+          return error("computation-realization",
+                       "numerical source preparation");
         // Checked mathematical normalization does not consult executable
         // binding choices. Apply requests to its owned result before any
         // replacement discovery, rather than cloning the complete source just
@@ -1841,9 +1842,10 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         // Discover the current immutable prepared closure. Invocation
         // identities remain stable when another finite recipe changes the call
         // count.
-        if (failed(kernel::discoverKernelCalls(
+        if (failed(computation::discoverComputations(
                 *prepared, options.numericalPolicy, selection.numerical)))
-          return error("kernel-lowering", "numerical occurrence discovery");
+          return error("computation-realization",
+                       "numerical occurrence discovery");
       }
       return Error::success();
     };
@@ -1877,7 +1879,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       // original numericalSource remains the correspondence authority.
       candidate = std::move(prepared);
       selected = *candidate;
-      if (failed(kernel::materializeKernelCalls(
+      if (failed(computation::materializeComputations(
               selected, options.numericalPolicy, nullptr, selection.numerical,
               &numericalOutcome, speculative))) {
         if (numericalOutcome.outcome ==
@@ -1889,7 +1891,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                                   numericalOutcome.capacity->owner ==
                                       WorkOwner::AlgorithmOriginBytes);
         } else
-          return error("kernel-lowering", numericalOutcome.detail);
+          return error("computation-realization", numericalOutcome.detail);
         refusal = error("finite-analysis-limit");
       }
       auto candidateRoot =
@@ -1943,9 +1945,10 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         plan.releases = std::move(*releases);
     }
     if (!refusal && options.programCapacity) {
-      if (!kernel::chargeCopy(selected, selection.numerical.remainingCopy)) {
+      if (!computation::chargeCopy(selected,
+                                   selection.numerical.remainingCopy)) {
         constructionCapacity = speculative;
-        refusal = error("kernel-lowering");
+        refusal = error("computation-realization");
       } else {
         OwningOpRef<ModuleOp> preflight(cast<ModuleOp>(selected->clone()));
         auto capacity = options.programCapacity(*preflight, plan);

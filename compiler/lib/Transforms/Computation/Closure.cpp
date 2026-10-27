@@ -7,11 +7,11 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
-  return diagnostics::emit(op->emitOpError(), "kernel-closure-correspondence",
-                           detail);
+  return diagnostics::emit(op->emitOpError(),
+                           "computation-closure-correspondence", detail);
 }
 bool charge(Operation *op, uint64_t &remaining) {
   auto walk = op->walk([&](Operation *nested) {
@@ -71,9 +71,9 @@ LogicalResult verifyDependencies(Operation *sourceOwner,
       return refuse(&definition, "unit contains an unrelated dependency");
   return success();
 }
-LogicalResult verifyKernelClosure(Operation *sourceOwner,
-                                  func::FuncOp sourceEntry,
-                                  mlir::ModuleOp candidate) {
+LogicalResult verifyComputationClosure(Operation *sourceOwner,
+                                       func::FuncOp sourceEntry,
+                                       mlir::ModuleOp candidate) {
   auto target = mathematical::getComputationEntry(candidate);
   if (!target || !sourceEntry ||
       sourceEntry.getFunctionType() != target.getFunctionType())
@@ -97,4 +97,4 @@ LogicalResult verifyKernelClosure(Operation *sourceOwner,
                   "entry operands, result coordinates or attributes changed");
   return verifyDependencies(sourceOwner, candidate);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

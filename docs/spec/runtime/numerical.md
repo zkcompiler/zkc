@@ -8,7 +8,7 @@ synchronous native numerical handlers. It uses the existing `exec.apply` and
 
 The compiler owns exact nominal and structural port types, representation
 selection and explicit conversions. Physical validation checks the actual ports
-and retained Kernel/Local correspondence. The VM independently admits the
+and retained computation/scoped-execution correspondence. The VM independently admits the
 physical program and links independently advertised backend signatures.
 
 A representation identity does not specify a foreign memory ABI. A numerical

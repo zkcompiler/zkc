@@ -72,11 +72,14 @@ using NumericalEmitter = llvm::function_ref<mlir::Value(
     const protocol::BindingApplication &, mlir::ValueRange, mlir::Type,
     llvm::ArrayRef<std::string>)>;
 enum class LaneResultMode { Map, Sum, Product };
+/// Row-bearing maps use checked Tensor/Linalg realization; selected sums also
+/// fuse their reduction. Construction charges the supplied shared work budget.
 /// Capacity declines emit nothing. The caller can use the same admitted
 /// formula for a vector alternative, without repeating optional analysis.
 llvm::Expected<LaneRealizationResult>
 emitNumericalLanes(const LaneFormula &, mlir::Type vector, mlir::Value rows,
-                   LaneResultMode, NumericalEmitter);
+                   LaneResultMode, NumericalEmitter,
+                   uint64_t *remaining = nullptr);
 
 /// Realize a field-ring payload using the same scalar/broadcast/packed rules
 /// for maps and finite collections. Structural sharing is checked through

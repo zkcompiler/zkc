@@ -486,46 +486,46 @@ mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRPars
 add_zkc_test(program_logical_realizations Program program-logical-realizations)
 add_zkc_test(program_resource_origins Program program-resource-origins)
 
-add_zkc_test(kernel_transforms Transforms kernel-transforms)
-target_compile_definitions(zkc-kernel_transforms-test PRIVATE
-  ZKC_KERNEL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
-mlir_target_link_libraries(zkc-kernel_transforms-test PRIVATE MLIRParser MLIRPass)
+add_zkc_test(computation_realization Transforms computation-realization)
+target_compile_definitions(zkc-computation_realization-test PRIVATE
+  ZKC_COMPUTATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-computation_realization-test PRIVATE MLIRParser MLIRPass)
 
-# Original-source Kernel ownership coverage uses the maintained source emitter.
-target_link_libraries(zkc-kernel_transforms-test PRIVATE ZkcTranslation)
+# Original-source computation ownership coverage uses the maintained source emitter.
+target_link_libraries(zkc-computation_realization-test PRIVATE ZkcTranslation)
 
 add_zkc_test(cpu_target Compiler cpu-target)
 mlir_target_link_libraries(zkc-cpu_target-test PRIVATE MLIRParser MLIRPass)
 
-add_zkc_test(kernel_physical_plan Transforms kernel-physical-plan)
-target_compile_definitions(zkc-kernel_physical_plan-test PRIVATE
-  ZKC_KERNEL_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
-mlir_target_link_libraries(zkc-kernel_physical_plan-test PRIVATE MLIRParser MLIRPass)
+add_zkc_test(computation_physical_plan Transforms computation-physical-plan)
+target_compile_definitions(zkc-computation_physical_plan-test PRIVATE
+  ZKC_COMPUTATION_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-computation_physical_plan-test PRIVATE MLIRParser MLIRPass)
 
 add_zkc_test(physical_schedule Transforms physical-schedule)
 target_compile_definitions(zkc-physical_schedule-test PRIVATE
   ZKC_SCHEDULE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-physical_schedule-test PRIVATE MLIRParser MLIRPass)
 
-add_zkc_test(kernel_frontier Transforms kernel-frontier)
-target_compile_definitions(zkc-kernel_frontier-test PRIVATE
-  ZKC_FRONTIER_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/kernel")
-mlir_target_link_libraries(zkc-kernel_frontier-test PRIVATE MLIRParser)
+add_zkc_test(computation_frontier Transforms computation-frontier)
+target_compile_definitions(zkc-computation_frontier-test PRIVATE
+  ZKC_FRONTIER_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/computation")
+mlir_target_link_libraries(zkc-computation_frontier-test PRIVATE MLIRParser)
 
-add_zkc_test(kernel_normalization Transforms kernel-normalization)
-target_compile_definitions(zkc-kernel_normalization-test PRIVATE
-  ZKC_NORMALIZATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/kernel_normalization")
-mlir_target_link_libraries(zkc-kernel_normalization-test PRIVATE MLIRParser)
+add_zkc_test(computation_normalization Transforms computation-normalization)
+target_compile_definitions(zkc-computation_normalization-test PRIVATE
+  ZKC_NORMALIZATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/computation_normalization")
+mlir_target_link_libraries(zkc-computation_normalization-test PRIVATE MLIRParser)
 
 add_zkc_test(collect_fold Transforms collect-fold)
 target_compile_definitions(zkc-collect_fold-test PRIVATE
   ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-collect_fold-test PRIVATE MLIRParser MLIRSCFDialect)
 
-add_zkc_test(kernel_schedule Transforms kernel-schedule)
-target_compile_definitions(zkc-kernel_schedule-test PRIVATE
+add_zkc_test(computation_schedule Transforms computation-schedule)
+target_compile_definitions(zkc-computation_schedule-test PRIVATE
   ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
-mlir_target_link_libraries(zkc-kernel_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
+mlir_target_link_libraries(zkc-computation_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
 
 add_zkc_test(host_entry Compiler host-entry)
 mlir_target_link_libraries(zkc-host_entry-test PRIVATE MLIRParser)
@@ -553,3 +553,11 @@ add_zkc_test(scoped_schedule Transforms scoped-schedule)
 target_compile_definitions(zkc-scoped_schedule-test PRIVATE
   ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
 mlir_target_link_libraries(zkc-scoped_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
+
+add_zkc_test(structured_admission IR structured-admission)
+mlir_target_link_libraries(zkc-structured_admission-test PRIVATE MLIRParser)
+add_zkc_test(pass_policy Transforms)
+add_test(NAME pass-policy COMMAND zkc-pass_policy-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite/total-zip.mlir")
+set_tests_properties(pass-policy PROPERTIES LABELS native)
+mlir_target_link_libraries(zkc-pass_policy-test PRIVATE MLIRParser MLIRPass)

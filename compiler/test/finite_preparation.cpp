@@ -1,13 +1,13 @@
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/FinitePreparation.h"
 #include "../lib/Transforms/HelperNormalization.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
@@ -114,7 +114,7 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.discardedRecipeCopy == b.discardedRecipeCopy &&
          a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes;
 }
-finite::Computation computation(ModuleOp source) {
+finite::Computation computationFixture(ModuleOp source) {
   finite::Computation result;
   require(succeeded(finite::describe(&helper(source, "total").front().front(),
                                      result, unit(source))),
@@ -131,7 +131,7 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            ArrayRef<StringRef> totals = {"total"},
                            bool optimize = true,
                            finite::VerificationLimits limits = {}) {
-  auto numerical = kernelRecipeUnit(unit(source));
+  auto numerical = computationRecipeUnit(unit(source));
   auto prototype = helper(source, "total");
   SmallVector<Type> results(totals.size(), prototype.getResultTypes().front());
   OpBuilder builder(source.getContext());
@@ -152,11 +152,11 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
   func::ReturnOp::create(builder, source.getLoc(), values);
   OwningOpRef<mlir::ModuleOp> original(
       cast<mlir::ModuleOp>(numerical->clone()));
-  auto candidate = realizeKernelEntry(*numerical, "selection",
-                                      {optimize, false}, work, limits, trace);
+  auto candidate = realizeComputationEntry(
+      *numerical, "selection", {optimize, false}, work, limits, trace);
   require(bool(candidate), "checked callback lowering failed");
-  kernelRecipeOutput(*candidate);
-  require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+  computationRecipeOutput(*candidate);
+  require(succeeded(computation::verifyRecipeOutput(*candidate)),
           "candidate refused");
   require(same(*numerical, *original), "Kernel recipe source changed");
   for (auto original : unit(source).getBody().front().getOps<func::FuncOp>())
@@ -170,7 +170,8 @@ const SelectionDecision &decision(const RealizationTrace &trace,
   for (const auto &event : trace.events)
     if (auto *selection = std::get_if<SelectionDecision>(&event.payload);
         selection && selection->family == DecisionFamily::Finite &&
-        selection->querySubject.site == kernelRecipeSite("selection", ordinal))
+        selection->querySubject.site ==
+            computationRecipeSite("selection", ordinal))
       return *selection;
   throw std::runtime_error("missing selection at " + std::to_string(ordinal));
 }
@@ -184,7 +185,7 @@ int main() {
   Cases cases;
   cases.run("sizing counts erased calls, slots, root and terminator", [&] {
     auto source = fixture(context);
-    auto c = computation(*source);
+    auto c = computationFixture(*source);
     uint64_t work = 100000;
     OptimizationOutcome outcome;
     auto size =
@@ -207,7 +208,7 @@ int main() {
   });
   cases.run("an exhausted sizing invocation cannot poison later sizing", [&] {
     auto source = fixture(context);
-    auto c = computation(*source);
+    auto c = computationFixture(*source);
     uint64_t work = 10;
     OptimizationOutcome outcome;
     require(!finite::sizeCallbackPreparation(c, unit(*source), work, outcome) &&
@@ -230,7 +231,7 @@ int main() {
             "packed helper refused");
     uint64_t work = 100000;
     OptimizationOutcome outcome;
-    auto size = finite::sizeCallbackPreparation(computation(*source),
+    auto size = finite::sizeCallbackPreparation(computationFixture(*source),
                                                 unit(*source), work, outcome);
     require(size && size->arrayProjections && size->work == 39,
             "nested projection folding was omitted from preparation work");
@@ -241,7 +242,7 @@ int main() {
       uint64_t work = std::numeric_limits<uint64_t>::max();
       const uint64_t initial = work;
       OptimizationOutcome outcome;
-      auto size = finite::sizeCallbackPreparation(computation(*source),
+      auto size = finite::sizeCallbackPreparation(computationFixture(*source),
                                                   unit(*source), work, outcome);
       // Every edge contributes a fresh copy, but only one body is inspected
       // per helper. 13 * 2^depth + 9 includes intermediate calls and overhead.
@@ -281,7 +282,8 @@ int main() {
                   uint64_t remaining = 100000;
                   OptimizationOutcome outcome;
                   auto size = finite::sizeCallbackPreparation(
-                      computation(*source), unit(*source), remaining, outcome);
+                      computationFixture(*source), unit(*source), remaining,
+                      outcome);
                   require(bool(size) == (depth < 63),
                           "memoized helper depth boundary changed");
                   if (!size)
@@ -382,7 +384,7 @@ int main() {
   cases.run(
       "early DAG decline charges discovery without hypothetical copies", [&] {
         auto source = fixture(context, 0, false, 12);
-        auto c = computation(*source);
+        auto c = computationFixture(*source);
         uint64_t sizing =
             finite::callbackStructuralLimit - 1; // Root call discovery.
         OptimizationOutcome outcome;
@@ -510,7 +512,7 @@ int main() {
                   "normalization erased unused nested admission");
           uint64_t structural = 100000;
           OptimizationOutcome outcome;
-          require(!finite::sizeCallbackPreparation(computation(*source),
+          require(!finite::sizeCallbackPreparation(computationFixture(*source),
                                                    unit(*source), structural,
                                                    outcome) &&
                       outcome.reason ==

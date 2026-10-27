@@ -34,7 +34,7 @@
 using namespace mlir;
 using namespace llvm;
 using namespace zkc::mathematical;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 // Reserve the complete numerical symbol context before allocating executable
 // bindings. Retained helper/domain names never become generated identities.
@@ -150,7 +150,7 @@ protocol::BindingApplication algebraBinding(Operation *op) {
   return result;
 }
 // Recipes read immutable mathematical expressions and emit scoped operations.
-// No Local function, conversion cast or intermediate executable recipe is
+// No scoped function, conversion cast or intermediate executable recipe is
 // built.
 class Recipes {
   Operation *sourceRoot;
@@ -928,7 +928,7 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
              OwningOpRef<mlir::ModuleOp> *selectedSchedule) {
   if (reported)
     *reported = {VerificationObservation::Mismatch,
-                 "Kernel construction differs"};
+                 "computation construction differs"};
   auto entry = mathematical::getComputationEntry(source);
   if (!entry)
     return {};
@@ -940,7 +940,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
     limits.sharedContext = &available.numericalContextChecking;
   if (!limits.sharedSiteBytes)
     limits.sharedSiteBytes = &available.numericalCheckSiteBytes;
-  RealizationScope scope(trace, "kernel-recipes", source, policy, &available);
+  RealizationScope scope(trace, "computation-recipes", source, policy,
+                         &available);
   // Each speculative construction is capped by the remaining discard
   // reserve before copying. Its selected debit is settled into the caller's
   // quotas; optional verification failure instead debits that reserve.
@@ -1004,7 +1005,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
       remaining -= copyCeiling - attemptRemaining;
       remainingBytes -= byteCeiling - attemptBytes;
     });
-    RealizationScope attempt(trace, "kernel-recipe-attempt", source, policy);
+    RealizationScope attempt(trace, "computation-recipe-attempt", source,
+                             policy);
     attempt.propose(policy);
     func::FuncOp function;
     std::optional<CapacityCause> constructionCapacity;
@@ -1023,7 +1025,7 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
         *reported = {optionalConstruction && retryable
                          ? VerificationObservation::OptionalCapacity
                          : VerificationObservation::RequiredCapacity,
-                     "Kernel construction capacity", constructionCapacity};
+                     "computation construction capacity", constructionCapacity};
       if (!retryable || !speculative)
         return false;
       auto advanced = selection->advanceInvocation();
@@ -1130,4 +1132,4 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
     return {};
   }
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

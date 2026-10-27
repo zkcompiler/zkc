@@ -1,4 +1,4 @@
-#include "Kernel/Support.h"
+#include "Computation/Support.h"
 #include "MathematicalSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -190,7 +190,7 @@ class LoweringVerifier {
           if (!unit || !generatedKernels.insert(unit).second ||
               sourceSymbols.lookup(SymbolTable::getSymbolName(unit)) ||
               kernelCall.getInputs() != function.getArguments().drop_front() ||
-              failed(kernel::verifyDependencies(before, unit)))
+              failed(computation::verifyDependencies(before, unit)))
             return refuse(call, "missing or changed actual numerical closure");
           for (auto &value : localValues) {
             auto argument = dyn_cast<BlockArgument>(value.second);

@@ -588,7 +588,8 @@ class Realizer {
                               sumConsumer ? sumOccurrence : StringRef());
             loc = previousLocation;
             return value;
-          });
+          },
+          &work.lanes);
       if (!result || sumConsumer ||
           result->status == mathematical::LaneRealizationStatus::Realized)
         return result;

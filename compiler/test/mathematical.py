@@ -23,7 +23,7 @@ def project(source, optimize=True, name=None):
     passes += ["--zkc-project-protocol"]
     if optimize:
         passes += ["--zkc-simplify-participant"]
-    ir = commands.verified(source, None, *passes, "--zkc-lower-math", "--zkc-lower-kernels")
+    ir = commands.verified(source, None, *passes, "--zkc-lower-math", "--zkc-realize-computations")
     physical = commands.verified(ir, None, "--zkc-select-physical")
     carrier = commands.source("protocol-export", physical)
     if name:
@@ -383,7 +383,7 @@ negative.append(("common function outside protocol unit", unwrapped, "parent"))
 
 for label, source, code in negative:
     with case(label):
-        commands.verified(source, code, "--canonicalize", "--cse", "--zkc-project-protocol", "--zkc-lower-math", "--zkc-lower-kernels")
+        commands.verified(source, code, "--canonicalize", "--cse", "--zkc-project-protocol", "--zkc-lower-math", "--zkc-realize-computations")
 
 print(f"Mathematical projection: {counted()} cases; evidence: {OUT}")
 

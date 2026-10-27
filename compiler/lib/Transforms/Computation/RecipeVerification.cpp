@@ -28,7 +28,7 @@
 using namespace mlir;
 using namespace llvm;
 using namespace zkc::mathematical;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 // Read the retained numerical source and actual executable recipes. This
 // reader never invokes conversion, selection or normalization producers.
@@ -734,7 +734,7 @@ public:
   }
 };
 } // namespace
-FailureOr<SmallVector<Value>> verifyKernelRecipes(
+FailureOr<SmallVector<Value>> verifyComputationRecipes(
     func::FuncOp source, Operation *targetRoot, StringRef callSite,
     ValueRange arguments, Operation *&cursor, uint64_t &remaining,
     uint64_t &remainingBytes, MathematicalSelectionPolicy policy,
@@ -875,7 +875,7 @@ static LogicalResult verifyRecipes(mlir::ModuleOp source,
   std::optional<CapacityCause> capacity;
   if (!chargeCopy(candidate, remaining, &capacity)) {
     outcome = {finite::VerificationStatus::RequiredCapacity,
-               "Kernel recipe context checking capacity",
+               "computation recipe context checking capacity",
                CapacityCause{WorkOwner::AlgorithmChecking}};
     return finish(false);
   }
@@ -903,7 +903,7 @@ static LogicalResult verifyRecipes(mlir::ModuleOp source,
       return finish(false);
   }
   auto *cursor = ports.first(&target.front());
-  auto outputs = verifyKernelRecipes(
+  auto outputs = verifyComputationRecipes(
       entry, owner, callSite, target.getArguments().drop_front(), cursor,
       remaining, remainingBytes, policy, limits, outcome, selection);
   return finish(succeeded(outputs) && isa_and_nonnull<exec::ReturnOp>(cursor) &&
@@ -927,4 +927,4 @@ LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
   return verifyRecipes(source, candidate, callSite, policy, limits, outcome,
                        nullptr, true);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

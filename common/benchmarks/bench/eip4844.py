@@ -218,7 +218,7 @@ def prepare_case(args, output, capture, manifest, case):
         'input_identity': {'blobs': [digest(Path(p)) for p in raw['blobs']],
                            'z': raw['z'], 'reference_outputs': expected},
         'boundaries': {j.implementation: j.boundary for j in jobs},
-        'notes': ['Source uses the ordinary authored library, checked Kernel/Native selection and Host defaults.',
+        'notes': ['Source uses the ordinary authored library, checked computation and Native selection and Host defaults.',
                   'Source includes source-level statement/setup validation, input adaptation, provider conversions, execution, publication and teardown.',
                   'Reference loads trusted setup once outside timing; precompute=0. Every output check is outside both execution timers.',
                   'Source admission includes Package::capture, reported separately from admission. JSON decode parses documents and resolves deferred references.',

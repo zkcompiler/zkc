@@ -88,7 +88,7 @@ view uses numerical signatures only; it cannot be encoded as `zkc.program/0`.
 
 ## Realization
 
-`zkc-lower-kernels` transactionally realizes invocations at their existing ordered
+`zkc-realize-computations` transactionally realizes invocations at their existing ordered
 positions and removes the units. Physical planning uses the same proposal and
 independent reader while retaining the original mathematical subject. Its
 checked plan owns the selected scoped candidate and the binding, port and

@@ -1,6 +1,6 @@
 #include "../lib/Target/PhysicalPlan.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/FiniteVerification.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "../lib/Transforms/ScopedFinite.h"
@@ -14,7 +14,7 @@
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <chrono>
@@ -327,7 +327,7 @@ int main(int argc, char **argv) {
         llvm::raw_string_ostream(before) << *source;
         auto original = fold(*source);
         DirectBody candidate(original);
-        require(succeeded(kernel::verifyRecipeOutput(*candidate.module)),
+        require(succeeded(computation::verifyRecipeOutput(*candidate.module)),
                 "separate-root output is malformed");
         require(
             !SymbolTable::lookupSymbolIn(unit(*candidate.module), "step") &&
@@ -349,8 +349,9 @@ int main(int argc, char **argv) {
                                                        unit(*candidate))),
             "aliased range direct body did not correspond");
     auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
-    require(succeeded(kernel::lowerKernels(*candidate)) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+    require(succeeded(computation::realizeComputations(*candidate)) &&
+                succeeded(computation::verifyComputationRealization(
+                    *logical, *candidate)),
             "aliased range recipes did not correspond");
     auto view = take(mathematical::ScopedCandidate::read(unit(*candidate)));
     unsigned branches = 0;
@@ -1086,7 +1087,7 @@ int main(int argc, char **argv) {
       auto proposal = target::proposePhysical(
           *source, target::installedCandidates(), {}, options);
       if (limit == 4) {
-        refuses(std::move(proposal), "kernel-lowering");
+        refuses(std::move(proposal), "computation-realization");
         require(!work.requiredFiniteChecking,
                 "required checking was replenished on refusal");
         return;
@@ -1171,8 +1172,9 @@ int main(int argc, char **argv) {
                                                          unit(*candidate))),
               "independent complete reader refused direct lowering");
       auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
-      require(succeeded(kernel::lowerKernels(*candidate)) &&
-                  succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+      require(succeeded(computation::realizeComputations(*candidate)) &&
+                  succeeded(computation::verifyComputationRealization(
+                      *logical, *candidate)),
               "complete Kernel recipe reader refused direct lowering");
       if (measure) {
         auto time = [](auto action) {
@@ -1186,7 +1188,8 @@ int main(int argc, char **argv) {
         for (unsigned i = 0; i < 34; ++i) {
           double f = time([&] { return verify(*candidate); });
           double c = time([&] {
-            return kernel::verifyKernelLowering(*logical, *candidate);
+            return computation::verifyComputationRealization(*logical,
+                                                             *candidate);
           });
           if (i >= 3) {
             formation.push_back(f);

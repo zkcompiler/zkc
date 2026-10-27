@@ -350,7 +350,7 @@ rejects("prepared protocol bridge grants no other private transform header",
 for source in ("FiniteVerification", "MathLoweringVerification",
                "MathematicalComparison", "HelperNormalizationVerification",
                "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
-               "Kernel/ScopedVerification"):
+               "Computation/ScopedVerification"):
     for header in ("ComputationEquations.h", "ComputationSelection.h",
                    "RealizationEmission.h", "zkc/Analysis/Computation.h",
                    "ScopedFinite.h", "ScopedPreparation.h"):
@@ -367,3 +367,10 @@ rejects("shared callback signatures cannot import producer recipes",
         root / "lib/Transforms/ScopedCallback.h",
         lambda text: '#include "MathematicalRecipes.h"\n' + text,
         "independent reader imports producer machinery")
+
+rejects("structured interpretation belongs to IR", manifest,
+        lambda text: text.replace("lib/Analysis/StructuredComputation.cpp", "lib/Transforms/StructuredComputation.cpp", 1),
+        "compiled by both")
+rejects("structured reader cannot import its producer", root / "lib/Analysis/StructuredComputation.cpp",
+        lambda text: '#include "zkc/Transforms/StructuredComputation.h"\n' + text,
+        "upward include")

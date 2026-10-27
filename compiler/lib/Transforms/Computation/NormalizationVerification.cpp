@@ -18,7 +18,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 bool polynomial(Operation &op) {
   return poly::isPolynomialNormalizationOperation(&op);
@@ -53,8 +53,8 @@ struct NormalizationProvenanceChecker::Implementation {
   LogicalResult refuse(Operation *subject, StringRef detail) {
     return diagnostics::emit(subject->emitOpError(),
                              terms.workExhausted() || depthExhausted
-                                 ? "kernel-normalization-limit"
-                                 : "kernel-normalization-provenance",
+                                 ? "computation-normalization-limit"
+                                 : "computation-normalization-provenance",
                              detail);
   }
   bool interface(func::FuncOp source, Block &candidate) {
@@ -831,4 +831,4 @@ LogicalResult NormalizationProvenanceChecker::checkNormalization(
     SmallVectorImpl<Operation *> *generated) {
   return implementation->checkNormalization(expanded, candidate, generated);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

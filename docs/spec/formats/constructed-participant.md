@@ -53,7 +53,7 @@ as before. Readers must not infer or append a capability for an empty suite,
 and must not drop a plain participant's last real data output.
 
 The independent formal reader maps recursive `!data.sequence` and one-constructor
-`!local.variant` products to the shared structured type. It checks canonical
+`!data.variant` products to the shared structured type. It checks canonical
 variant DAG spelling and retains the exact nominal identity, constructor and
 ordered component types. Recursive service types are not message data. This
 logical admission does not select a native wire codec or prove its realization.

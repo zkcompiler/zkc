@@ -1,4 +1,4 @@
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
@@ -6,13 +6,13 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include <fstream>
@@ -302,16 +302,16 @@ int main() {
     auto numerical = cast<ModuleOp>(entry->getParentOp());
     auto prepared = copy(*candidate);
     RealizationWork positiveWork;
-    require(bool(realizeKernelEntry(numerical, request.getSite(),
-                                    {false, false}, positiveWork)),
+    require(bool(realizeComputationEntry(numerical, request.getSite(),
+                                         {false, false}, positiveWork)),
             "unbounded map realization control refused");
     RealizationTrace mapTrace;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
     RealizationWork work;
     work.helperOperations = 0;
-    auto refused = realizeKernelEntry(numerical, request.getSite(),
-                                      {false, false}, work, {}, &mapTrace);
+    auto refused = realizeComputationEntry(numerical, request.getSite(),
+                                           {false, false}, work, {}, &mapTrace);
     require(
         !refused && same(*candidate, *prepared) &&
             events<RetryDecision>(mapTrace).empty() &&
@@ -343,7 +343,7 @@ int main() {
       }
       require(succeeded(verify(*source)), "total control refused");
       auto numerical =
-          kernelRecipeSource(unit(*source), "total", "calculation");
+          computationRecipeSource(unit(*source), "total", "calculation");
       // Force allocation of a different working name in the nested case.
       if (nested) {
         auto reserved = cast<func::FuncOp>(
@@ -357,32 +357,32 @@ int main() {
           cast<mlir::ModuleOp>(numerical->clone()));
       RealizationTrace trace;
       RealizationWork work, controlWork, orderedWork;
-      auto ordered = realizeKernelEntry(*numerical, "calculation",
-                                        {false, false}, orderedWork);
-      auto observed = realizeKernelEntry(*numerical, "calculation", {}, work,
-                                         {100000, 1}, &trace);
-      auto unobserved = realizeKernelEntry(*numerical, "calculation", {},
-                                           controlWork, {100000, 1});
+      auto ordered = realizeComputationEntry(*numerical, "calculation",
+                                             {false, false}, orderedWork);
+      auto observed = realizeComputationEntry(*numerical, "calculation", {},
+                                              work, {100000, 1}, &trace);
+      auto unobserved = realizeComputationEntry(*numerical, "calculation", {},
+                                                controlWork, {100000, 1});
       require(
           ordered && observed && unobserved && same(*observed, *ordered) &&
               same(*observed, *unobserved) && sameWork(work, controlWork) &&
               same(*source, *original) &&
               OperationEquivalence::isEquivalentTo(
                   *numerical, *before, OperationEquivalence::IgnoreLocations) &&
-              succeeded(kernel::verifyEntryRecipes(*numerical, *observed,
-                                                   "calculation")),
+              succeeded(computation::verifyEntryRecipes(*numerical, *observed,
+                                                        "calculation")),
           "total retry changed IR, checking, or accounting");
-      kernelRecipeOutput(*ordered);
-      kernelRecipeOutput(*observed);
-      kernelRecipeOutput(*unobserved);
+      computationRecipeOutput(*ordered);
+      computationRecipeOutput(*observed);
+      computationRecipeOutput(*unobserved);
       require(work.matching.structural < orderedWork.matching.structural,
               "total retry replenished matching work");
-      checkRetry(trace, "kernel-recipe-attempt");
+      checkRetry(trace, "computation-recipe-attempt");
       auto publications = events<PublicationDecision>(trace);
       require(llvm::count_if(publications,
                              [](const RealizationEvent *event) {
                                return event->parent == 0 &&
-                                      event->service == "kernel-recipes";
+                                      event->service == "computation-recipes";
                              }) == 1 &&
                   trace.activeScopes.empty() &&
                   trace.declarationOrigins.empty() &&
@@ -390,7 +390,7 @@ int main() {
               "Kernel recipe service lost its publication or final balance");
       bool observedEntry = false;
       for (auto *event : events<SelectionDecision>(trace))
-        if (event->subject.site == kernelRecipeSite("calculation", 0)) {
+        if (event->subject.site == computationRecipeSite("calculation", 0)) {
           require(event->subject.declaration == "calculation" &&
                       event->subject.position.empty(),
                   "working entry name escaped into the recipe trace");
@@ -597,8 +597,9 @@ int main() {
     require(events<SelectionDecision>(trace).empty(),
             "logical formation performed numerical selection");
     auto logical = copy(*source);
-    require(succeeded(kernel::lowerKernels(*source, {}, &trace)) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *source)),
+    require(succeeded(computation::realizeComputations(*source, {}, &trace)) &&
+                succeeded(computation::verifyComputationRealization(*logical,
+                                                                    *source)),
             "observed Kernel realization failed");
     bool expression = false;
     for (auto *event : events<SelectionDecision>(trace))
