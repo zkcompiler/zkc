@@ -473,7 +473,10 @@ operation attributes and diagnostic locations, ordered operands, result
 bindings, control bodies, stops, yields and root interfaces. Substitution
 retains each reached source operation's location, including a nested admission
 guard, instead of assigning the enclosing helper's location. Other declarations remain exact. Occurrence
-names use `algorithmSite` on the complete helper invocation path. The checker
+names use `algorithmSite` on the complete helper invocation path, including
+the empty root path. This keeps authored names distinct from generated nested
+paths. Occurrences are relative to the immutable input of this transformation;
+repeating expansion is checked against that new input. The checker
 recovers those paths even when a bounded name uses a digest, and publishes
 optional occurrence records only after the whole comparison succeeds.
 
@@ -483,6 +486,13 @@ has a 1000000 operation/port allowance. Refusal discards the candidate and
 leaves the original and caller-owned occurrence output unchanged. This edge
 does not select a numerical implementation, add native participant completion,
 or admit an unresolved source helper as a native executable.
+
+Numerical lowering may precede finite preparation. Its independent reader checks
+pending collection/fold operands, attributes and closed control bodies exactly,
+and retains their domain and plain mathematical declarations unchanged and in
+order. Each `exec.compute` replacement is still checked against its original
+mathematics; accepting pending finite requests does not admit leftover numerical
+requests as executable recipes. Physical publication requires their completion.
 
 ## Checked finite preparation
 

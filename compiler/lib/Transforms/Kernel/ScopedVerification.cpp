@@ -238,6 +238,10 @@ public:
         outcome(outcome), remaining(work.numericalContextChecking),
         bytes(work.numericalCheckSiteBytes) {}
   LogicalResult run() {
+    bool retainedFinite = false;
+    candidate.walk([&](Operation *op) {
+      retainedFinite |= isa<exec::CollectOp, exec::FoldOp>(op);
+    });
     auto next = candidate.getBody().front().begin();
     SymbolTable sourceSymbols(original);
     auto generated = [&](Operation &op) {
@@ -247,16 +251,18 @@ public:
     };
     for (auto &op : original.getBody().front()) {
       auto function = dyn_cast<func::FuncOp>(op);
-      if (isa<mlir::ModuleOp, data::DomainOp>(op) ||
-          (function && (!protocol::isScopedExecutionFunction(function) ||
-                        function->hasAttr("runtime.region"))))
+      bool mathematical =
+          isa<data::DomainOp>(op) ||
+          (function && !protocol::isScopedExecutionFunction(function));
+      if (isa<mlir::ModuleOp>(op) || (mathematical && !retainedFinite) ||
+          (function && function->hasAttr("runtime.region")))
         continue;
       while (next != candidate.getBody().front().end() && generated(*next))
         ++next;
       if (next == candidate.getBody().front().end())
         return refuse("missing original declaration");
       auto *target = &*next++;
-      if (function) {
+      if (function && !mathematical) {
         if (failed(body(function, dyn_cast<func::FuncOp>(target))))
           return failure();
       } else {
@@ -267,6 +273,8 @@ public:
             !OperationEquivalence::isEquivalentTo(
                 expected, target, OperationEquivalence::IgnoreLocations))
           return refuse("retained declaration or participant order changed");
+        if (function)
+          visitedFunctions.insert(target);
       }
     }
     while (next != candidate.getBody().front().end())
@@ -295,7 +303,11 @@ verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
   if (original->getAttrDictionary() != candidate->getAttrDictionary())
     return failure();
   auto source = protocol::readSourceExecutionClosure(original);
-  auto actual = ScopedCandidate::read(candidate);
+  // Finite requests remain pending until physical selection. This edge
+  // accounts for their actual operands, attributes and unchanged mathematical
+  // declarations while checking each numerical replacement independently.
+  auto actual =
+      ScopedCandidate::read(candidate, ScopedCandidate::Requests::Retained);
   if (!source || !actual) {
     if (!source)
       diagnostics::emit(original.emitOpError(), source.takeError());

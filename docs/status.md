@@ -164,7 +164,11 @@ Program analysis checks exact state-root preservation over actual callbacks.
 Controls distinguish fresh replacements, exchanged slots, stopped paths, primitive
 successors and cached analysis limits. Protocol repeat consumers use that shared
 analysis. The replaced native Local finite implementation and its remaining
-test consumers still require retirement.
+test consumers still require retirement. Scoped vector-reduction controls now exercise
+checked helper substitution, numerical lowering with pending collections, and
+explicit physical selection. They retain large depth, copy and origin workloads;
+old phase-state tokens are replaced by transactional source/candidate and shared
+account checks. This is affected-suite coverage, not validation of the complete base.
 Unresolved requests are refused by
 executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
 
