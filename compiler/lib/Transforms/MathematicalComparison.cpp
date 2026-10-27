@@ -9,7 +9,6 @@
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
@@ -39,15 +38,6 @@ Operation *sourceCallee(Operation *op) {
         return nullptr;
     SymbolTableCollection symbols;
     return call.resolveCallee(symbols);
-  }
-  if (auto call = dyn_cast<kernel::CallOp>(op)) {
-    if (auto policy = call.getPolicyAttr())
-      if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
-          !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
-          !cast<BoolAttr>(policy[0]).getValue())
-        return nullptr;
-    SymbolTableCollection symbols;
-    return kernel::resolve(call, symbols);
   }
   auto reference = op->getAttrOfType<FlatSymbolRefAttr>("callee");
   return reference ? SymbolTable::lookupNearestSymbolFrom(op, reference)
@@ -763,8 +753,7 @@ class Comparison {
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
       // assignments and a shared work/depth bound, including unused calls.
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp, exec::ComputeOp>(
-              op)) {
+      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || helper->getRegion(0).empty())
@@ -1442,8 +1431,7 @@ class ModuleComparison {
       if (!charge() || op.getNumRegions() || results.size() != 1)
         return 0;
       unsigned result = 0;
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp, exec::ComputeOp>(
-              op)) {
+      if (isa<func::CallOp, local::ApplyOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || helper->getRegion(0).empty())

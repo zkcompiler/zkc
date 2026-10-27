@@ -227,7 +227,7 @@ proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
                       mathematical::NumericalSelection *selection,
                       mlir::ModuleOp prepared) {
   source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
-  source.getContext()->getOrLoadDialect<local::LocalDialect>();
+  source.getContext()->getOrLoadDialect<exec::ExecDialect>();
   source.getContext()->getOrLoadDialect<runtime::RuntimeDialect>();
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
     return {};
@@ -311,15 +311,13 @@ struct LowerKernelsPass
       : PassWrapper(other), trace(other.trace),
         fallbackPolicy(other.fallbackPolicy) {}
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<runtime::RuntimeDialect, local::LocalDialect,
-                    algebra::AlgebraDialect, kernel::KernelDialect,
+    registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
                     exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
                     arith::ArithDialect, cf::ControlFlowDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-kernels"; }
   StringRef getDescription() const final {
-    return "Independently check logical Kernel realization into existing Local "
-           "execution";
+    return "Independently check mathematical realization into scoped execution";
   }
   void runOnOperation() final {
     auto policy = fallbackPolicy;

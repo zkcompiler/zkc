@@ -121,12 +121,10 @@ private:
       func::FuncOp callee;
       if (auto call = dyn_cast<exec::ComputeOp>(op))
         callee = call.resolveCallee(symbols);
-      else if (auto call = dyn_cast<kernel::CallOp>(op))
-        callee = kernel::resolve(call, symbols);
       else if (auto call = dyn_cast<func::CallOp>(op))
         callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
             call, call.getCalleeAttr());
-      if (isa<exec::ComputeOp, kernel::CallOp, func::CallOp>(op)) {
+      if (isa<exec::ComputeOp, func::CallOp>(op)) {
         if (auto policy = op->getAttrOfType<ArrayAttr>("policy"))
           if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
               !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||

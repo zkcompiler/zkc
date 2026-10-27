@@ -86,8 +86,6 @@ func::FuncOp resolveInvocation(Operation *call,
                                SymbolTableCollection &symbols) {
   if (auto scoped = dyn_cast_or_null<exec::ComputeOp>(call))
     return scoped.resolveCallee(symbols);
-  if (auto legacy = dyn_cast_or_null<CallOp>(call))
-    return resolve(legacy, symbols);
   return {};
 }
 

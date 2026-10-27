@@ -85,10 +85,7 @@ class RecipeReader {
   bool primitive(Operation *op, StringRef contract, ValueRange inputs,
                  ArrayRef<StringRef> arguments = {},
                  ArrayRef<StringRef> expectedParameters = {}) {
-    if (!op || !ports.contains(op) ||
-        op->getName().getStringRef() !=
-            (ports.isScoped() ? exec::ApplyOp::getOperationName()
-                              : protocol::boundOperationName(contract)) ||
+    if (!op || !ports.contains(op) || !isa<exec::ApplyOp>(op) ||
         ports.outputs(op).size() != 1 || ports.bodies(op) != 0 ||
         ports.inputs(op) != inputs || !charge(1 + inputs.size()))
       return false;
@@ -352,20 +349,14 @@ class RecipeReader {
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);
     auto isBoolean = [&](Operation *op) {
-      return ports.contains(op) &&
-             (ports.isScoped() ? isa<exec::BooleanOp>(op)
-                               : isa<local::BoolConstantOp>(op));
+      return ports.contains(op) && isa<exec::BooleanOp>(op);
     };
     auto isYield = [&](Operation *op) {
-      return ports.contains(op) &&
-             (ports.isScoped() ? isa<exec::CompleteOp>(op)
-                               : isa<local::LocalYieldOp>(op));
+      return ports.contains(op) && isa<exec::CompleteOp>(op);
     };
     if (auto make = dyn_cast<data::MakeOp>(source)) {
       auto *target = cursor;
-      if (!ports.contains(target) ||
-          (ports.isScoped() ? !isa<exec::VariantOp>(target)
-                            : !isa<local::VariantInjectOp>(target)) ||
+      if (!ports.contains(target) || !isa<exec::VariantOp>(target) ||
           ports.inputs(target) != inputs || ports.outputs(target).size() != 1 ||
           target->getAttr("alternative") != make.getAlternativeAttr())
         return {};
@@ -381,9 +372,7 @@ class RecipeReader {
                               ? target->getAttrOfType<ArrayAttr>("alternatives")
                               : ArrayAttr();
       if (!ports.contains(target) || !descriptor || !alternatives ||
-          (ports.isScoped() ? !isa<exec::MatchOp>(target)
-                            : !isa<local::LocalMatchOp>(target)) ||
-          ports.inputs(target) != inputs ||
+          !isa<exec::MatchOp>(target) || ports.inputs(target) != inputs ||
           ports.bodies(target) != descriptor->alternatives.size() ||
           alternatives.size() != descriptor->alternatives.size() ||
           ports.outputs(target).size() != 1)
@@ -446,9 +435,7 @@ class RecipeReader {
     if (isa<arith::SelectOp>(source)) {
       auto *target = cursor;
       auto operands = ports.inputs(target);
-      if (!ports.contains(target) ||
-          (ports.isScoped() ? !isa<exec::TestOp>(target)
-                            : !isa<local::LocalIfOp>(target)) ||
+      if (!ports.contains(target) || !isa<exec::TestOp>(target) ||
           ports.outputs(target).size() != 1 || operands.size() < 2 ||
           operands.size() > 3 || operands[0] != inputs[0] ||
           ports.bodies(target) != 2)
@@ -752,7 +739,8 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
   outcome = {finite::VerificationStatus::Mismatch, "numerical recipes differ"};
   auto unit = source ? dyn_cast_or_null<mlir::ModuleOp>(source->getParentOp())
                      : mlir::ModuleOp();
-  if (!unit || source != mathematical::getComputationEntry(unit) ||
+  if (!limits.candidate || !unit ||
+      source != mathematical::getComputationEntry(unit) ||
       !source.getBody().hasOneBlock() || source.front().empty() ||
       callSite.empty())
     return failure();
