@@ -7,7 +7,7 @@ rustPlatform.buildRustPackage {
   pname = "zkc";
   version = "0.0.0";
   src = source;
-  cargoHash = "sha256-8HldeenAVaK06gcGnR4iqv9m+HASAkdLrck4Ct668po=";
+  cargoHash = "sha256-TlkjBQNhc7cxgzyb5DSZ6gm/Oq9JiyhnGdL2pmQvEGk=";
   cargoBuildFlags = [
     "-p"
     "zkc-cli"
