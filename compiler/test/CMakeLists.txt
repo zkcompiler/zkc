@@ -387,6 +387,8 @@ add_zkc_test(projection_metadata Transforms projection-metadata)
 target_link_libraries(zkc-projection_metadata-test PRIVATE ZkcTranslation)
 mlir_target_link_libraries(zkc-projection_metadata-test PRIVATE MLIRParser)
 add_zkc_test(resource_origin_analysis IR resource-origin-analysis)
+add_zkc_test(resource_origin_sources IR)
+mlir_target_link_libraries(zkc-resource_origin_sources-test PRIVATE MLIRAsmParser)
 target_compile_definitions(zkc-resource_origin_analysis-test PRIVATE
   ZKC_ORIGIN_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resource-origins")
 mlir_target_link_libraries(zkc-resource_origin_analysis-test PRIVATE MLIRParser)
@@ -424,6 +426,7 @@ set(zkc_script_environment
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
+  ZKC_CTEST_RESOURCE_ORIGIN_SOURCES=$<TARGET_FILE:zkc-resource_origin_sources-test>
   PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../common/tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's
