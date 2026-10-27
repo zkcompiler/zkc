@@ -96,8 +96,8 @@ def run (path : System.FilePath) : IO Unit := do
   unless (← failures.get).isEmpty do throw (IO.userError "library admission controls failed")
   IO.println s!"component library admission: {← count.get} checks passed"
 
-end Tests.ComponentLibraryAdmission
-
 def main (args : List String) : IO Unit := do
   let [path] := args | throw (IO.userError "expected library snapshot/claims manifest")
   Tests.ComponentLibraryAdmission.run path
+
+end Tests.ComponentLibraryAdmission

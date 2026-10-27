@@ -147,8 +147,6 @@ private def run (snapshot : Snapshot) (text : String) (fixture : Bool) : IO Nat 
            else status[1]? == some (.arr #[.str "returned", .arr #[.bool value]]))
   return ← count.get
 
-end Tests.ComponentContinuations
-
 def main (args : List String) : IO Unit := do
   let mut remaining := args
   let mut count := 0
@@ -161,3 +159,5 @@ def main (args : List String) : IO Unit := do
     IO.println s!"associated continuation export: {remaining[0]!}"
     remaining := remaining.drop 2
   IO.println s!"component continuations: {count} checks passed"
+
+end Tests.ComponentContinuations

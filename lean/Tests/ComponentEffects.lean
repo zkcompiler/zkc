@@ -96,8 +96,6 @@ private def controls (snapshot : Snapshot) : IO Nat := do
     (.block (List.replicate 100001 (instruction (.booleanConstant true))) (.ret []))) "component-seam-limit")
   return ← count.get
 
-end Tests.ComponentEffects
-
 def main (args : List String) : IO Unit := do
   unless !args.isEmpty do throw (IO.userError "expected snapshot/claims pairs or --refused snapshot code")
   let mut remaining := args
@@ -130,3 +128,5 @@ def main (args : List String) : IO Unit := do
     IO.println s!"actual Local helper inventories passed: {helpers}"
     count := count + (← Tests.ComponentEffects.controls snapshot)
   IO.println s!"component effects: {count} checks passed"
+
+end Tests.ComponentEffects

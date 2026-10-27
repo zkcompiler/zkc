@@ -64,8 +64,8 @@ def run (path : System.FilePath) : IO Unit := do
   unless (← failures.get).isEmpty do throw (IO.userError "component boundary controls failed")
   IO.println s!"component boundaries: {← count.get} checks passed"
 
-end Tests.ComponentBoundaries
-
 def main (args : List String) : IO Unit := do
   let [path] := args | throw (IO.userError "expected native boundary manifest")
   Tests.ComponentBoundaries.run path
+
+end Tests.ComponentBoundaries

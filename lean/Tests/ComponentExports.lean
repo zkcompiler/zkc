@@ -174,8 +174,6 @@ private def runVectors (snapshot : Snapshot) (text : String) : IO Unit := do
         throw (IO.userError "vector fixture execution")
   IO.println "component vector exports: association and 4 actual executions passed"
 
-end Tests.ComponentExports
-
 def main (args : List String) : IO Unit := do
   let [snapshotPath, claimsPath, stopSnapshotPath, stopClaimsPath, vectorSnapshotPath, vectorClaimsPath] := args |
     throw (IO.userError "expected ordinary, stopped and vector snapshot/claims paths")
@@ -188,3 +186,5 @@ def main (args : List String) : IO Unit := do
   let vectorSnapshot ← Tests.ComponentExports.expect (Format.snapshot (← Tests.ComponentExports.expect
     (Format.parse (← IO.FS.readFile vectorSnapshotPath))))
   Tests.ComponentExports.runVectors vectorSnapshot (← IO.FS.readFile vectorClaimsPath)
+
+end Tests.ComponentExports
