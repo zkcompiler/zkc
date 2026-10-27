@@ -14,7 +14,7 @@ using namespace llvm;
 namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
-  return diagnostics::emit(op->emitOpError(), "kernel-formation", detail);
+  return diagnostics::emit(op->emitOpError(), "computation-formation", detail);
 }
 std::string fresh(SymbolTable &symbols, StringRef base) {
   std::string name = base.str();

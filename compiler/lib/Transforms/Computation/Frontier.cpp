@@ -137,13 +137,13 @@ class Frontier {
                 step.wrapper.getNumArguments()))
       return {};
     returned->insertOperands(returned.getNumOperands(), value);
-    SmallVector<Type> kernelTypes(step.entry.getResultTypes());
-    kernelTypes.push_back(value.getType());
+    SmallVector<Type> computationTypes(step.entry.getResultTypes());
+    computationTypes.push_back(value.getType());
     OpBuilder builder(step.wrapper.getContext());
-    step.entry.setFunctionType(
-        builder.getFunctionType(step.entry.getArgumentTypes(), kernelTypes));
+    step.entry.setFunctionType(builder.getFunctionType(
+        step.entry.getArgumentTypes(), computationTypes));
     step.call.getOutcome().setType(
-        exec::OutcomeType::get(builder.getContext(), kernelTypes));
+        exec::OutcomeType::get(builder.getContext(), computationTypes));
     auto payload = step.payload->addArgument(value.getType(), value.getLoc());
     wrapperReturn->insertOperands(wrapperReturn.getNumOperands(), payload);
     SmallVector<Type> types(step.invocation.getResultTypes());
@@ -461,7 +461,7 @@ prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
     // replacing its standard entry. SymbolTable owns collision avoidance;
     // insertion preserves every independently tracked generated operation
     // identity.
-    SymbolTable::setSymbolName(*normalized, "_normalized_kernel");
+    SymbolTable::setSymbolName(*normalized, "_normalized_computation");
     auto fresh = normalized.release();
     auto name = outer.insert(fresh, owner.getBody().front().end());
     call->setAttr("callee",

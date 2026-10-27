@@ -139,6 +139,19 @@ profile admission only; consumption checks correspondence and returns the actual
 scalar interpretation from that same read. No producer or optimizer is linked
 into this semantic owner.
 
+The production lane adapter uses this profile for row-bearing native maps and
+selected sums. Products use its pointwise map stage while retaining the native
+product aggregate. Row-free fills retain a direct scalar payload because this
+profile requires a tensor input to supply an extent; identity maps can borrow an
+existing input after their ordered guards. Explicit vector selection bypasses
+the tensor profile. These are distinct admitted cases, not recovery after a
+failed semantic comparison.
+
+The adapter charges closure construction and structured work to the enclosing
+lane budget before building a candidate. A capacity decline emits nothing and
+may select an already admitted vector/ordered alternative; a failed profile or
+source comparison is terminal. No alternative replenishes optional work.
+
 The executable adapter reads the admitted candidate's scalar body into the
 existing typed native map/reduction handlers. The original-to-executable
 numerical reader still checks the actual final payload and all length guards.

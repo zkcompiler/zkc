@@ -1,4 +1,4 @@
-module raw_kernel;
+module raw_computation;
 domain Fr = field("bls12-381.fr");
 math fn polynomial(a:Fr,b:Fr,x:Fr)->Fr {
   let values = intrinsic<Fr,2>("array.pack",[a,b]);

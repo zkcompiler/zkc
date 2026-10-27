@@ -1818,7 +1818,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
             options.numericalPolicy, &fixedFiniteBindings, &selection.numerical,
             &preparationOutcome);
         if (!finite)
-          return error("kernel-lowering", "finite preparation refused");
+          return error("computation-realization", "finite preparation refused");
         numericalSource = *finite;
       }
       if (hasNumerical) {
@@ -1826,7 +1826,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
             numericalSource, &selection.numerical.remainingCopy,
             &preparationCapacity, &selection.numerical);
         if (!prepared)
-          return error("kernel-lowering", "numerical source preparation");
+          return error("computation-realization",
+                       "numerical source preparation");
         // Checked mathematical normalization does not consult executable
         // binding choices. Apply requests to its owned result before any
         // replacement discovery, rather than cloning the complete source just
@@ -1843,7 +1844,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         // count.
         if (failed(computation::discoverComputations(
                 *prepared, options.numericalPolicy, selection.numerical)))
-          return error("kernel-lowering", "numerical occurrence discovery");
+          return error("computation-realization",
+                       "numerical occurrence discovery");
       }
       return Error::success();
     };
@@ -1889,7 +1891,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                                   numericalOutcome.capacity->owner ==
                                       WorkOwner::AlgorithmOriginBytes);
         } else
-          return error("kernel-lowering", numericalOutcome.detail);
+          return error("computation-realization", numericalOutcome.detail);
         refusal = error("finite-analysis-limit");
       }
       auto candidateRoot =
@@ -1946,7 +1948,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       if (!computation::chargeCopy(selected,
                                    selection.numerical.remainingCopy)) {
         constructionCapacity = speculative;
-        refusal = error("kernel-lowering");
+        refusal = error("computation-realization");
       } else {
         OwningOpRef<ModuleOp> preflight(cast<ModuleOp>(selected->clone()));
         auto capacity = options.programCapacity(*preflight, plan);

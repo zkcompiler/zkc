@@ -281,8 +281,8 @@ std::string finiteSource(bool bulk = true) {
 }
 std::string fixtureText(StringRef path) {
   auto bytes = MemoryBuffer::getFile(
-      (Twine(ZKC_KERNEL_PHYSICAL_FIXTURES) + "/" + path).str());
-  require(bool(bytes), "cannot read Kernel physical planning fixture");
+      (Twine(ZKC_COMPUTATION_PHYSICAL_FIXTURES) + "/" + path).str());
+  require(bool(bytes), "cannot read computation physical planning fixture");
   return (*bytes)->getBuffer().str();
 }
 
@@ -307,7 +307,7 @@ OwningOpRef<ModuleOp> copy(ModuleOp module) {
 OwningOpRef<ModuleOp> executable(StringRef text, MLIRContext &context,
                                  MathematicalSelectionPolicy policy = {}) {
   auto module = parseSourceString<ModuleOp>(text, &context);
-  require(bool(module), "Kernel planning fixture did not parse/admit");
+  require(bool(module), "computation planning fixture did not parse/admit");
   PassManager pipeline(&context);
   pipeline.addPass(createProjectProtocolPass(false, policy));
   pipeline.addPass(createLowerMathPass(policy));
@@ -321,7 +321,7 @@ OwningOpRef<ModuleOp> executable(StringRef text, MLIRContext &context,
   return module;
 }
 
-// Ordered work outside Kernel must survive preparation unchanged. Its size
+// Ordered work outside computation must survive preparation unchanged. Its size
 // makes redundant whole-source snapshots visible under the shared copy bound.
 void addUnchangedContext(ModuleOp module, unsigned count) {
   OpBuilder builder(module.getContext());
@@ -372,7 +372,7 @@ public:
   void check(ModuleOp module) const {
     require(printed(module) == text &&
                 physicalPlanOperations(module) == operations,
-            "physical planning changed or replaced original Kernel input");
+            "physical planning changed or replaced original computation input");
   }
 };
 
@@ -413,7 +413,8 @@ void admitPhysical(ModuleOp module) {
   auto flow = take(ExecutionPorts::read(module));
   for (auto *operation : flow.operations())
     residual |= flow.get(operation).step && mathematical::isTotal(operation);
-  require(!residual, "physical output retained Kernel or source mathematics");
+  require(!residual,
+          "physical output retained computation or source mathematics");
 }
 
 OwningOpRef<ModuleOp>
@@ -559,7 +560,7 @@ int main() {
   Cases cases;
 
   for (StringRef identity : {"bls12-381.fr", "koala-bear.ext8-binomial3"})
-    cases.run("original multi-result Kernel plans for " + identity, [&] {
+    cases.run("original multi-result computation plans for " + identity, [&] {
       auto module = executable(
           replaceText(scalarSource.str(), "bls12-381.fr", identity), context);
       auto call = first<exec::ComputeOp>(*module);
@@ -622,7 +623,8 @@ module @difference attributes {exec.computation} {
         });
 
   cases.run(
-      "fixed native operation survives planning beside Kernel arithmetic", [&] {
+      "fixed native operation survives planning beside computation arithmetic",
+      [&] {
         auto module = executable(pinnedSource(), context);
         SmallVector<StringRef> beforeSites;
         module->walk([&](Operation *op) {
@@ -681,29 +683,30 @@ module @difference attributes {exec.computation} {
                 "materialization or correspondence queried candidates");
       });
 
-  cases.run("Kernel plan conversions reject another same-typed table", [&] {
-    auto module = executable(pinnedSource(), context);
-    auto checked = checkedPlan(*module);
-    size_t conversions = 0;
-    for (const auto &decision : checked.choices().operations)
-      conversions += decision.conversions.size();
-    require(conversions != 0, "pinned representation needs no conversion");
-    auto candidate = materializedCopy(*module, checked);
-    auto crossing = application(*candidate, "arkworks/table.relayout");
-    auto function = crossing->getParentOfType<func::FuncOp>();
-    Value other;
-    for (auto argument : function.getArguments())
-      if (argument.getType() == crossing.getInputs()[0].getType() &&
-          argument != crossing.getInputs()[0]) {
-        other = argument;
-        break;
-      }
-    require(bool(other), "missing distinct same-typed table");
-    crossing.getInputsMutable()[0].set(other);
-    admitPhysical(*candidate);
-    reject(verifyPhysicalMaterialization(*module, *candidate, checked),
-           "binding-materialization-correspondence");
-  });
+  cases.run(
+      "computation plan conversions reject another same-typed table", [&] {
+        auto module = executable(pinnedSource(), context);
+        auto checked = checkedPlan(*module);
+        size_t conversions = 0;
+        for (const auto &decision : checked.choices().operations)
+          conversions += decision.conversions.size();
+        require(conversions != 0, "pinned representation needs no conversion");
+        auto candidate = materializedCopy(*module, checked);
+        auto crossing = application(*candidate, "arkworks/table.relayout");
+        auto function = crossing->getParentOfType<func::FuncOp>();
+        Value other;
+        for (auto argument : function.getArguments())
+          if (argument.getType() == crossing.getInputs()[0].getType() &&
+              argument != crossing.getInputs()[0]) {
+            other = argument;
+            break;
+          }
+        require(bool(other), "missing distinct same-typed table");
+        crossing.getInputsMutable()[0].set(other);
+        admitPhysical(*candidate);
+        reject(verifyPhysicalMaterialization(*module, *candidate, checked),
+               "binding-materialization-correspondence");
+      });
 
   cases.run("inspection clones cannot mutate proposed or checked payloads",
             [&] {
@@ -736,7 +739,7 @@ module @difference attributes {exec.computation} {
                              "operand", "private-helper", "dormant"})
     for (bool afterValidation : {false, true})
       cases.run(
-          Twine("Kernel source ") + mutation +
+          Twine("computation source ") + mutation +
               (afterValidation ? " changes after validation"
                                : " changes before validation"),
           [&] {
@@ -819,7 +822,8 @@ module @difference attributes {exec.computation} {
 
   for (StringRef mutation : {"coverage", "signature", "implementation", "pin"})
     cases.run(
-        "invalid Kernel physical choices do not publish: " + mutation, [&] {
+        "invalid computation physical choices do not publish: " + mutation,
+        [&] {
           auto module = executable(pinnedSource(), context);
           FrozenInput before(*module);
           auto proposal = take(proposePhysical(*module));
@@ -832,7 +836,7 @@ module @difference attributes {exec.computation} {
           } else if (mutation == "signature") {
             bool changed = false;
             // Indices describe the selected executable payload. Never
-            // dereference them in the original Kernel-bearing module.
+            // dereference them in the original computation-bearing module.
             for (auto &decision : proposal.operations)
               if (decision.binding &&
                   proposal.bindings[*decision.binding]
@@ -867,7 +871,8 @@ module @difference attributes {exec.computation} {
         });
 
   cases.run(
-      "failed numerical candidate selection preserves original Kernel", [&] {
+      "failed numerical candidate selection preserves original computation",
+      [&] {
         auto module = executable(scalarSource, context);
         FrozenInput before(*module);
         CountingCatalog catalog("field.sub");
@@ -1006,9 +1011,10 @@ module @difference attributes {exec.computation} {
 
   for (bool requested : {false, true})
     cases.run(
-        requested ? "bounded Kernel preparation applies pins without a source "
-                    "clone"
-                  : "bounded Kernel preparation retains large ordered context",
+        requested
+            ? "bounded computation preparation applies pins without a source "
+              "clone"
+            : "bounded computation preparation retains large ordered context",
         [&] {
           auto module = executable(scalarSource, context);
           addUnchangedContext(*module, 4096);
@@ -1094,7 +1100,7 @@ module @difference attributes {exec.computation} {
     copies = consumed - 1;
     preflights = 0;
     refuses(proposePhysical(*module, installedCandidates(), {}, options),
-            "kernel-lowering");
+            "computation-realization");
     require(preflights == 0 && copies < consumed - 1,
             "one-short capacity invoked preflight or refunded failed work");
     take(validatePhysical(*module, measured));
@@ -1114,7 +1120,7 @@ module @difference attributes {exec.computation} {
         ScopedDiagnosticHandler quiet(&context,
                                       [](Diagnostic &) { return success(); });
         refuses(proposePhysical(*module, catalog, {}, options),
-                "kernel-lowering");
+                "computation-realization");
         require(
             catalog.queryCount() == 0 && work.finiteExpressions == 0 &&
                 work.discardedRecipeCopy == beforeWork.discardedRecipeCopy &&
@@ -1260,8 +1266,8 @@ module @difference attributes {exec.computation} {
 
   for (bool bulk : {false, true})
     cases.run(
-        bulk ? "finite Kernel retains selected bulk reduction"
-             : "finite Kernel retains selected ordered reduction",
+        bulk ? "finite computation retains selected bulk reduction"
+             : "finite computation retains selected ordered reduction",
         [&] {
           auto module = executable(finiteSource(bulk), context, {bulk, false});
           auto checked = checkedPlan(*module);
@@ -1275,7 +1281,8 @@ module @difference attributes {exec.computation} {
         });
 
   cases.run(
-      "one Kernel unit retains distinct bulk and ordered invocations", [&] {
+      "one computation unit retains distinct bulk and ordered invocations",
+      [&] {
         auto module = executable(finiteSource(), context);
         auto bulk = first<exec::ComputeOp>(*module);
         OpBuilder builder(&context);
@@ -1295,9 +1302,8 @@ module @difference attributes {exec.computation} {
         candidate->walk([&](exec::ApplyOp op) {
           sums += implementation(op) == "arkworks/vector.sum";
         });
-        require(
-            loops == 1 && sums == 1,
-            "numerical choice leaked between calls to the same Kernel unit");
+        require(loops == 1 && sums == 1, "numerical choice leaked between "
+                                         "calls to the same computation unit");
       });
 
   cases.run("nested numerical arithmetic remains between ordered guards", [&] {
@@ -1354,12 +1360,13 @@ module @difference attributes {exec.computation} {
            "binding-materialization-correspondence");
   });
 
-  cases.run("shared polynomial Kernel cuts admit physical publication", [&] {
-    auto module =
-        executable(fixtureText("kernel/shared-polynomial.mlir"), context);
-    auto checked = checkedPlan(*module);
-    materializedCopy(*module, checked);
-  });
+  cases.run("shared polynomial computation cuts admit physical publication",
+            [&] {
+              auto module = executable(
+                  fixtureText("computation/shared-polynomial.mlir"), context);
+              auto checked = checkedPlan(*module);
+              materializedCopy(*module, checked);
+            });
 
   cases.run(
       "standalone lowering traces candidate and caller publication separately",
@@ -1370,7 +1377,7 @@ module @difference attributes {exec.computation} {
         require(
             succeeded(computation::realizeComputations(*traced, {}, &trace)) &&
                 succeeded(computation::realizeComputations(*plain)),
-            "standalone Kernel lowering refused");
+            "standalone computation lowering refused");
         require(printed(*traced) == printed(*plain),
                 "tracing changed executable output");
         unsigned returned = 0, published = 0;
@@ -1378,7 +1385,7 @@ module @difference attributes {exec.computation} {
           if (auto *publication =
                   std::get_if<mathematical::PublicationDecision>(
                       &event.payload)) {
-            if (event.service == "propose-kernel-lowering") {
+            if (event.service == "propose-computation-realization") {
               require(publication->boundary ==
                           mathematical::PublicationBoundary::ReturnedCandidate,
                       "proposal claimed caller publication");
@@ -1415,23 +1422,25 @@ module @difference attributes {exec.computation} {
                 "refusal leaked trace scope state");
       });
 
-  cases.run("existing executable input without Kernel still materializes", [&] {
-    auto module = take(executableFixture(pinnedSource(), context));
-    require(succeeded(computation::realizeComputations(*module)),
-            "ordinary executable control lowering failed");
-    bool hasKernel = false;
-    module->walk([&](Operation *op) {
-      hasKernel |=
-          (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
-    });
-    require(!hasKernel, "control fixture still contains Kernel operations");
-    auto checked = checkedPlan(*module);
-    materializedCopy(*module, checked);
-  });
+  cases.run(
+      "existing executable input without computation still materializes", [&] {
+        auto module = take(executableFixture(pinnedSource(), context));
+        require(succeeded(computation::realizeComputations(*module)),
+                "ordinary executable control lowering failed");
+        bool hasComputation = false;
+        module->walk([&](Operation *op) {
+          hasComputation |=
+              (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
+        });
+        require(!hasComputation,
+                "control fixture still contains computation operations");
+        auto checked = checkedPlan(*module);
+        materializedCopy(*module, checked);
+      });
 
   for (uint64_t reserve : {uint64_t(0), uint64_t(1)}) {
     cases.run(
-        "ordered Kernel survives exhausted optional work and reserve " +
+        "ordered computation survives exhausted optional work and reserve " +
             std::to_string(reserve),
         [&] {
           auto module = executable(mappedSource(), context);

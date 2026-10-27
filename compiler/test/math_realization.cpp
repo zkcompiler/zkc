@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
       });
       require(
           failed(computation::formCalculation(wrapper, *module, {}, guard)) &&
-              namesIdentifier(diagnostic, "kernel-formation"),
+              namesIdentifier(diagnostic, "computation-formation"),
           "malformed guard input passed formation");
       require(OperationEquivalence::isEquivalentTo(
                   *module, *before, OperationEquivalence::IgnoreLocations),
@@ -450,10 +450,11 @@ int main(int argc, char **argv) {
       });
       auto result = computation::verifyComputationClosure(owner(*source),
                                                           helper, *candidate);
-      require(failed(result) &&
-                  namesIdentifier(diagnostic, "kernel-closure-correspondence"),
-              "changed original mathematics escaped closure comparison: " +
-                  diagnostic);
+      require(
+          failed(result) &&
+              namesIdentifier(diagnostic, "computation-closure-correspondence"),
+          "changed original mathematics escaped closure comparison: " +
+              diagnostic);
     });
   };
   closureMutation("retained helper result changed", [&](ModuleOp module) {

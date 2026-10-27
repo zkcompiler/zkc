@@ -214,6 +214,57 @@ int main(int argc, char **argv) {
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (bool native : {false, true})
+    cases.run(
+        native ? "native preparation enters the standard tensor profile"
+               : "vector preparation stays outside the tensor profile",
+        [&] {
+          MLIRContext lazy(registry, MLIRContext::Threading::DISABLED);
+          auto source = parse(lazy, mapText);
+          require(!lazy.getLoadedDialect("tensor") &&
+                      !lazy.getLoadedDialect("linalg"),
+                  "source fixture already loaded the implementation dialects");
+          auto candidate =
+              prepareMap(*source, native ? NumericalExpressionMode::PreferNative
+                                         : NumericalExpressionMode::VectorOnly);
+          require(
+              bool(lazy.getLoadedDialect("tensor")) == native &&
+                  bool(lazy.getLoadedDialect("linalg")) == native,
+              "production preparation bypassed its selected implementation");
+          require(bool(operation(*candidate, "numerical.map")) == native &&
+                      succeeded(compareMap(*source, *candidate)),
+                  "selected execution failed independent comparison");
+        });
+  cases.run("structured work capacity declines before native emission", [&] {
+    auto text = replaceText(mapText, "%sq = func.call @square(%a) : (!F)->!F",
+                            "%sq = algebra.field_multiply %a,%a : (!F,!F)->!F");
+    auto source = parse(context, text);
+    auto candidate = prepareMap(*source);
+    auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("formula");
+    auto mapped = SymbolTable(unit(*candidate)).lookup<func::FuncOp>("work");
+    llvm::DenseMap<Value, LaneInput> inputs;
+    for (auto [i, argument] : enumerate(helper.getArguments()))
+      inputs[argument] = {mapped.getArgument(i + 1), i < 3};
+    auto admitted = take(admitLaneFormula(helper.front(), inputs,
+                                          mapped.getArgument(1).getType(),
+                                          nullptr, mathematicalRecipes()));
+    require(bool(admitted.formula), "formula admission failed");
+    uint64_t remaining = 0;
+    unsigned emitted = 0;
+    auto result = take(emitNumericalLanes(
+        *admitted.formula, mapped.getArgument(1).getType(),
+        payload(operation(*candidate, "vector.length")), LaneResultMode::Map,
+        [&](const protocol::BindingApplication &, ValueRange, Type,
+            ArrayRef<std::string>) {
+          ++emitted;
+          return Value();
+        },
+        &remaining));
+    require(result.status == LaneRealizationStatus::Capacity &&
+                result.reason == "mathematical-structured-work" && !emitted &&
+                !remaining,
+            "structured work limit permitted incomplete emission");
+  });
   for (StringRef field :
        {"bls12-381.fr", "bn254.fr", "ristretto255.scalar", "koala-bear",
         "koala-bear.ext4-binomial3", "koala-bear.ext8-binomial3",

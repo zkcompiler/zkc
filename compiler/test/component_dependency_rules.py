@@ -373,4 +373,4 @@ rejects("structured interpretation belongs to IR", manifest,
         "compiled by both")
 rejects("structured reader cannot import its producer", root / "lib/Analysis/StructuredComputation.cpp",
         lambda text: '#include "zkc/Transforms/StructuredComputation.h"\n' + text,
-        "upward header dependency")
+        "upward include")

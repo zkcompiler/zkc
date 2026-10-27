@@ -935,7 +935,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
     limits.sharedContext = &available.numericalContextChecking;
   if (!limits.sharedSiteBytes)
     limits.sharedSiteBytes = &available.numericalCheckSiteBytes;
-  RealizationScope scope(trace, "kernel-recipes", source, policy, &available);
+  RealizationScope scope(trace, "computation-recipes", source, policy,
+                         &available);
   // Each speculative construction is capped by the remaining discard
   // reserve before copying. Its selected debit is settled into the caller's
   // quotas; optional verification failure instead debits that reserve.
@@ -999,7 +1000,8 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
       remaining -= copyCeiling - attemptRemaining;
       remainingBytes -= byteCeiling - attemptBytes;
     });
-    RealizationScope attempt(trace, "kernel-recipe-attempt", source, policy);
+    RealizationScope attempt(trace, "computation-recipe-attempt", source,
+                             policy);
     attempt.propose(policy);
     func::FuncOp function;
     std::optional<CapacityCause> constructionCapacity;

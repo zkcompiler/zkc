@@ -10,8 +10,8 @@ using namespace llvm;
 namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
-  return diagnostics::emit(op->emitOpError(), "kernel-closure-correspondence",
-                           detail);
+  return diagnostics::emit(op->emitOpError(),
+                           "computation-closure-correspondence", detail);
 }
 bool charge(Operation *op, uint64_t &remaining) {
   auto walk = op->walk([&](Operation *nested) {

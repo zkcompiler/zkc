@@ -28,7 +28,8 @@ using namespace llvm;
 namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
-  return diagnostics::emit(op->emitOpError(), "kernel-lowering", detail);
+  return diagnostics::emit(op->emitOpError(), "computation-realization",
+                           detail);
 }
 LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
                           MathematicalSelectionPolicy fallback,
@@ -241,8 +242,8 @@ OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
     (void)refuse(source, "expected the exec profile");
     return {};
   }
-  mathematical::RealizationScope scope(trace, "propose-kernel-lowering", source,
-                                       policy);
+  mathematical::RealizationScope scope(trace, "propose-computation-realization",
+                                       source, policy);
   scope.propose(policy);
   mathematical::NumericalSelection standalone;
   if (!selection)

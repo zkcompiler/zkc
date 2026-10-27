@@ -69,7 +69,7 @@ module {
 }
 )mlir",
                                                   &context);
-  require(bool(result), "Boolean/variant Kernel source did not verify");
+  require(bool(result), "Boolean/variant computation source did not verify");
   return result;
 }
 } // namespace

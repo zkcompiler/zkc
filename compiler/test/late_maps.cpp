@@ -968,7 +968,7 @@ int main() {
         callbacks = 0;
         refuses(target::proposePhysical(
                     *original, target::installedCandidates(), {}, options),
-                "kernel-lowering");
+                "computation-realization");
         require(callbacks == 0, "preflight ran before its clone was charged");
       });
   cases.run(
@@ -1116,7 +1116,7 @@ int main() {
             auto proposal =
                 target::proposePhysical(*original, catalog, {}, options);
             if (oneShort) {
-              refuses(std::move(proposal), "kernel-lowering");
+              refuses(std::move(proposal), "computation-realization");
             } else {
               auto plan = take(std::move(proposal));
               auto exact = take(plan.cloneSelectedSubject(*original));

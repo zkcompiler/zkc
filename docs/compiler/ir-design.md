@@ -57,7 +57,10 @@ actual candidate independently. The reader admits every operation, including
 unused work, and returns a transient scalar interpretation. Source correspondence
 compares that interpretation, retaining input coordinates, nominal fields and
 ordered expression operands. Transforms cannot supply producer annotations as
-proof of admission. Mutation requires a new read.
+proof of admission. Mutation requires a new read. Production lane realization consumes this profile
+for row-bearing native maps and selected sums; product maps share it, while
+row-free fills retain a separate scalar profile. Ordered length guards and the
+final original-to-payload comparison remain at the execution boundary.
 
 Standard [`linalg.generic`](https://mlir.llvm.org/docs/Dialects/Linalg/) exposes
 iteration and indexing to upstream transformations. Extending the admitted
@@ -80,7 +83,9 @@ Use ODS for operation/type/property definitions, symbol interfaces for symbol
 uses, and external interfaces when adding analysis behavior to standard
 operations. Add an interface for a real shared consumer, with semantic
 preconditions; a trait name cannot manufacture totality or erasability.
-Mandatory admission and actual-body interpretation belong to IR. Producers,
+Mandatory profile admission and reusable actual-body interpretation belong to
+IR. Transformation-specific comparisons may stay beside a transformation with
+separate implementation and checked dependencies on its semantic readers. Producers,
 heuristics and upstream rewrites belong to Transforms. Translation owns source
 emission and artifact export. Compiler composes these components; none of their
 lower layers calls the driver or backend to decide formation.

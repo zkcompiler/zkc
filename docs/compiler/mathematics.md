@@ -98,7 +98,7 @@ selected Local realization, using the existing normalization and recipe readers.
 The checked plan connects numerical correspondence and physical choices before
 publication removes the units.
 The shared mathematical vocabulary is owned outside the Protocol dialect, so
-Protocol and Kernel admission apply the same laws under explicit symbol owners.
+Protocol and computation admission apply the same laws under explicit symbol owners.
 
 The [shared fact contracts](../spec/domains/mathematical-facts.md) keep extent
 equality and index bounds separate from exact value identity. Contracts owns the
@@ -233,7 +233,7 @@ target availability selects between checked realizations. This does not authoriz
 partial, effectful or accumulator-dependent terms as pointwise formulas.
 
 Finite correspondence distinguishes a mismatch from exhausted comparison work.
-An optional candidate that exceeds comparison capacity is discarded. Kernel
+An optional candidate that exceeds comparison capacity is discarded. Computation
 selection advances the reader-identified occurrence while preserving unrelated
 choices. Standalone Local finite realization retains its conservative ordered
 retry. Both paths preserve cumulative recognition and checking work, and charge

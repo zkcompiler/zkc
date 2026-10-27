@@ -25,7 +25,7 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
       !hasSingleElement(*candidate.getBody()))
     return diagnostics::emit(candidate.emitError(),
                              maps ? "numerical-lowering-correspondence"
-                                  : "kernel-lowering-correspondence",
+                                  : "computation-realization-correspondence",
                              "module shape changed");
   auto before =
       dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());

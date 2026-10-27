@@ -491,7 +491,7 @@ target_compile_definitions(zkc-computation_realization-test PRIVATE
   ZKC_COMPUTATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-computation_realization-test PRIVATE MLIRParser MLIRPass)
 
-# Original-source Kernel ownership coverage uses the maintained source emitter.
+# Original-source computation ownership coverage uses the maintained source emitter.
 target_link_libraries(zkc-computation_realization-test PRIVATE ZkcTranslation)
 
 add_zkc_test(cpu_target Compiler cpu-target)
@@ -499,7 +499,7 @@ mlir_target_link_libraries(zkc-cpu_target-test PRIVATE MLIRParser MLIRPass)
 
 add_zkc_test(computation_physical_plan Transforms computation-physical-plan)
 target_compile_definitions(zkc-computation_physical_plan-test PRIVATE
-  ZKC_KERNEL_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+  ZKC_COMPUTATION_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-computation_physical_plan-test PRIVATE MLIRParser MLIRPass)
 
 add_zkc_test(physical_schedule Transforms physical-schedule)

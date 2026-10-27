@@ -377,12 +377,12 @@ int main() {
       computationRecipeOutput(*unobserved);
       require(work.matching.structural < orderedWork.matching.structural,
               "total retry replenished matching work");
-      checkRetry(trace, "kernel-recipe-attempt");
+      checkRetry(trace, "computation-recipe-attempt");
       auto publications = events<PublicationDecision>(trace);
       require(llvm::count_if(publications,
                              [](const RealizationEvent *event) {
                                return event->parent == 0 &&
-                                      event->service == "kernel-recipes";
+                                      event->service == "computation-recipes";
                              }) == 1 &&
                   trace.activeScopes.empty() &&
                   trace.declarationOrigins.empty() &&

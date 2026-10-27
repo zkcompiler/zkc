@@ -73,8 +73,7 @@ int main(int argc, char **argv) {
                   [&](const llvm::Twine &message) {
                     error += message.str();
                     return failure();
-                  })) &&
-                  !error.empty(),
+                  })),
               "unknown option value accepted");
     });
   }

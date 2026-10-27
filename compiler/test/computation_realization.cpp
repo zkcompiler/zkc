@@ -493,7 +493,7 @@ module {
     op.setOperand(0, op.getOperand(1));
     op.setOperand(1, first);
     require(succeeded(verify(*candidate)), "mutation malformed");
-    expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
+    expectRefusal(*candidate, "computation-closure-correspondence", [&] {
       return computation::verifyComputationClosure(owner(*source), helper,
                                                    *candidate);
     });
@@ -602,7 +602,7 @@ module {
         auto entry = numericalEntry(*logical);
         require(
             entry.front().front().getName().getStringRef().contains("finite"),
-            "finite mathematics lowered before explicit Kernel edge");
+            "finite mathematics lowered before explicit computation edge");
         auto lowered = copy(*logical);
         // The stored per-call policy survives the fallback argument here.
         require(succeeded(computation::realizeComputations(*lowered,
@@ -772,7 +772,7 @@ module {
                         FlatSymbolRefAttr::get(&context, "other_items"));
         });
         require(succeeded(verify(*candidate)), "nominal mutation malformed");
-        expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
+        expectRefusal(*candidate, "computation-closure-correspondence", [&] {
           return computation::verifyComputationClosure(owner(*source), helper,
                                                        *candidate);
         });
@@ -784,7 +784,7 @@ module {
     auto step = SymbolTable(*candidate).lookup<func::FuncOp>("step");
     step.front().back().setOperand(0, step.getArgument(0));
     require(succeeded(verify(*candidate)), "callback mutation malformed");
-    expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
+    expectRefusal(*candidate, "computation-closure-correspondence", [&] {
       return computation::verifyComputationClosure(owner(*source), helper,
                                                    *candidate);
     });
@@ -950,7 +950,7 @@ module {
       "raw helper and mixed polynomial results survive preparation and "
       "projection",
       [&] {
-        auto source = fixture(context, "kernel/mixed-helper.mlir");
+        auto source = fixture(context, "computation/mixed-helper.mlir");
         auto prepared = closedFixture(*source);
         auto unit = numericalUnit(*prepared);
         auto mixed = SymbolTable(unit).lookup<func::FuncOp>("mixed");
@@ -988,7 +988,7 @@ module {
         [&] {
           MathematicalSelectionPolicy policy;
           policy.calculationBatching = batching;
-          auto source = fixture(context, "kernel/shared-polynomial.mlir");
+          auto source = fixture(context, "computation/shared-polynomial.mlir");
           auto participant = copy(*source);
           run(*participant, protocol::createProjectProtocolPass(false));
           auto logical = copy(*participant);
@@ -1058,7 +1058,7 @@ module {
           });
         });
   cases.run("the independent outliner reader binds the selected schedule", [&] {
-    auto source = fixture(context, "kernel/shared-polynomial.mlir");
+    auto source = fixture(context, "computation/shared-polynomial.mlir");
     Operation *second = nullptr, *guard = nullptr;
     source->walk([&](Operation *op) {
       if (op->getName().getStringRef() == "poly.evaluate")
@@ -1088,7 +1088,7 @@ module {
   });
   cases.run(
       "mixed helper concrete work is not replayed across action cuts", [&] {
-        auto source = fixture(context, "kernel/mixed-helper-cuts.mlir");
+        auto source = fixture(context, "computation/mixed-helper-cuts.mlir");
         auto logical = formExecutable(*source);
         unsigned differences = 0;
         uint64_t remaining = 1000000;
@@ -1140,7 +1140,7 @@ module {
         "admitted generated forwarding ports with " + wiring +
             " numerical inputs",
         [&] {
-          auto source = fixture(context, "kernel/shared-polynomial.mlir");
+          auto source = fixture(context, "computation/shared-polynomial.mlir");
           auto logical = formExecutable(*source);
           SmallVector<protocol_ir::LocalCallOp> invocations;
           logical->walk([&](protocol_ir::ParticipantOp participant) {
@@ -1176,7 +1176,7 @@ module {
           forwarded.push_back(sc::payload(call).front());
           invocations[0] = appendReturns(first, invocations[0], forwarded);
           // This original wrapper port imports an earlier forwarding
-          // alias without passing it to the Kernel at all. Kernel and
+          // alias without passing it to the computation at all. computation and
           // wrapper argument coordinates must therefore stay separate.
           auto alias = invocations[0].getResult(firstResults);
           auto inputPosition = second.getNumArguments();
@@ -1253,38 +1253,37 @@ module {
           });
         });
   for (unsigned flags : {1u, 2u, 3u})
-    cases.run("computation policy survives concrete port growth " +
-                  Twine(flags),
-              [&] {
-                auto source = fixture(context, "kernel/shared-polynomial.mlir");
-                auto logical = formExecutable(*source);
-                Builder builder(&context);
-                auto policy = builder.getBoolArrayAttr(
-                    {bool(flags & 1), bool(flags & 2), false});
-                logical->walk([&](exec::ComputeOp call) {
-                  call->setAttr("policy", policy);
-                });
-                require(succeeded(verify(*logical)),
-                        "retained policy source refused");
-                auto normalized =
-                    computation::prepareComputationRealization(*logical);
-                require(bool(normalized) && succeeded(verify(*normalized)),
-                        "policy prevented port growth");
-                unsigned count = 0;
-                normalized->walk([&](exec::ComputeOp call) {
-                  ++count;
-                  require(call.getPolicyAttr() == policy,
-                          "port growth changed retained policy");
-                });
-                require(count == 2, "policy fixture lost its computation cuts");
-                auto lowered = copy(*logical);
-                require(succeeded(computation::realizeComputations(*lowered)) &&
-                            succeeded(computation::verifyComputationRealization(
-                                *logical, *lowered)),
-                        "retained policy lost checked realization");
-              });
+    cases.run(
+        "computation policy survives concrete port growth " + Twine(flags),
+        [&] {
+          auto source = fixture(context, "computation/shared-polynomial.mlir");
+          auto logical = formExecutable(*source);
+          Builder builder(&context);
+          auto policy = builder.getBoolArrayAttr(
+              {bool(flags & 1), bool(flags & 2), false});
+          logical->walk(
+              [&](exec::ComputeOp call) { call->setAttr("policy", policy); });
+          require(succeeded(verify(*logical)),
+                  "retained policy source refused");
+          auto normalized =
+              computation::prepareComputationRealization(*logical);
+          require(bool(normalized) && succeeded(verify(*normalized)),
+                  "policy prevented port growth");
+          unsigned count = 0;
+          normalized->walk([&](exec::ComputeOp call) {
+            ++count;
+            require(call.getPolicyAttr() == policy,
+                    "port growth changed retained policy");
+          });
+          require(count == 2, "policy fixture lost its computation cuts");
+          auto lowered = copy(*logical);
+          require(succeeded(computation::realizeComputations(*lowered)) &&
+                      succeeded(computation::verifyComputationRealization(
+                          *logical, *lowered)),
+                  "retained policy lost checked realization");
+        });
   cases.run("descriptor operands cannot change across reconstructed cuts", [&] {
-    auto source = fixture(context, "kernel/shared-polynomial.mlir");
+    auto source = fixture(context, "computation/shared-polynomial.mlir");
     auto participant = copy(*source);
     run(*participant, protocol::createProjectProtocolPass(false));
     auto logical = copy(*participant);
@@ -1336,14 +1335,16 @@ module {
             "bounded digest naming collided or exceeded admitted length");
   });
   cases.run(
-      "original .zkc polynomial helper stays raw until Kernel lowering", [&] {
-        auto bytes = llvm::MemoryBuffer::getFile(
-            (Twine(ZKC_COMPUTATION_FIXTURES) + "/kernel/raw-polynomial.zkc")
-                .str());
+      "original .zkc polynomial helper stays raw until computation lowering",
+      [&] {
+        auto bytes =
+            llvm::MemoryBuffer::getFile((Twine(ZKC_COMPUTATION_FIXTURES) +
+                                         "/computation/raw-polynomial.zkc")
+                                            .str());
         require(bool(bytes), "missing source fixture");
-        auto captured =
-            take(language::capture({{"raw_kernel", (*bytes)->getBuffer().str(),
-                                     "raw-polynomial.zkc"}}));
+        auto captured = take(
+            language::capture({{"raw_computation", (*bytes)->getBuffer().str(),
+                                "raw-polynomial.zkc"}}));
         auto project = take(language::analyze(captured).checkedProject());
         auto closed = take(zkc::test::closeProtocolDeployment(
             project, "raw_computation::Demo"));
@@ -1361,7 +1362,7 @@ module {
         auto logical = formExecutable(*prepared);
         auto lowered = copy(*logical);
         require(succeeded(computation::realizeComputations(*lowered)),
-                "original-source raw Kernel failed");
+                "original-source raw computation failed");
         require(succeeded(computation::verifyComputationRealization(*logical,
                                                                     *lowered)),
                 "original-source recipe edge differed");
@@ -1395,7 +1396,7 @@ module {
     auto helper = SymbolTable(*prepared).lookup<func::FuncOp>("step");
     helper->setAttr("data.preconditions", ArrayAttr::get(&context, {}));
     require(succeeded(verify(*prepared)), "premise mutation malformed");
-    expectRefusal(*prepared, "kernel-closure-correspondence", [&] {
+    expectRefusal(*prepared, "computation-closure-correspondence", [&] {
       return computation::verifyComputationClosure(owner(*source), original,
                                                    *prepared);
     });
@@ -1417,7 +1418,7 @@ module {
   });
   cases.run(
       "concrete work cannot move from before to after a source guard", [&] {
-        auto source = fixture(context, "kernel/shared-polynomial.mlir");
+        auto source = fixture(context, "computation/shared-polynomial.mlir");
         auto logical = formExecutable(*source);
         func::FuncOp wrapper;
         logical->walk([&](exec::TestOp op) {

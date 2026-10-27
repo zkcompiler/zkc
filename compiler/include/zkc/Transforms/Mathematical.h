@@ -68,10 +68,10 @@ mlir::LogicalResult verifyNumericalLowering(
 // frozen and verify both subjects before calling. Preparation and projection
 // use virtual substitutions and role-indexed value terms; participant rewrites
 // use explicit Boolean/polynomial laws. Participant -> Exec separately checks
-// demand placement and Kernel formation. Kernel realization has its own
-// correspondence check. Exec -> Physical checks participant data flow
-// and projection metadata only; it does not validate local materialization.
-// Use protocol::lowerPhysical or SelectPhysical for the complete checked edge;
+// demand placement and computation formation. Computation realization has its
+// own correspondence check. Exec -> Physical checks participant data flow and
+// projection metadata only; it does not validate local materialization. Use
+// protocol::lowerPhysical or SelectPhysical for the complete checked edge;
 // their internal materialization check also covers local bodies and bindings.
 // Storage has its own check. These checks assume the
 // declared operation meanings and sufficient realization capacity, not equality

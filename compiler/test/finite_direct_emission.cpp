@@ -1087,7 +1087,7 @@ int main(int argc, char **argv) {
       auto proposal = target::proposePhysical(
           *source, target::installedCandidates(), {}, options);
       if (limit == 4) {
-        refuses(std::move(proposal), "kernel-lowering");
+        refuses(std::move(proposal), "computation-realization");
         require(!work.requiredFiniteChecking,
                 "required checking was replenished on refusal");
         return;
