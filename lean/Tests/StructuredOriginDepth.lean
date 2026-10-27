@@ -26,9 +26,10 @@ private def body : Json := arr [.str "block", empty, arr [.str "return", empty]]
 private def function (source : Json) : Json := arr [.str "function", .str "main", .str "protocol",
   .str "public", empty, empty, arr [.str "protocol", arr [.str "P"], empty, empty],
   empty, source, body]
+-- The final slot retains the current source record and protocol declarations.
 private def envelope (definitions : List Json) : Json := arr [.str "zkc.structured-source/0",
   .str "original", .str ("sha256:" ++ String.ofList (List.replicate 64 '0')), .str "main",
-  empty, empty, empty, arr definitions, arr [arr [.str "main", empty]], arr [empty, empty]]
+  empty, empty, empty, arr definitions, arr [arr [.str "main", empty]], arr [empty, empty], arr [empty, empty]]
 private def wire (origin : ProtocolOrigin) : Json := envelope [function origin.toJson]
 private def withTerm (term : OriginTerm) : ProtocolOrigin := ⟨"test::Depth", [("T", term)]⟩
 private def replace (json : Json) (index : Nat) (value : Json) : Json :=
@@ -112,7 +113,7 @@ private def run : IO Unit := do
     test s!"no malformed-envelope admission: {name}" (!(decode malformed.compress).isOk)
   -- Every other ordinary top-level and function slot still counts the full
   -- containing envelope depth. The definitions table is checked row by row.
-  for index in [0, 1, 2, 3, 4, 5, 6, 8, 9] do
+  for index in [0, 1, 2, 3, 4, 5, 6, 8, 9, 10] do
     test s!"ordinary envelope slot {index}" (refusedWith "depth-limit"
       (Format.parse (replace json index (brackets 64)).compress))
   for index in [0, 1, 2, 3, 4, 5, 6, 7, 9] do
@@ -130,7 +131,7 @@ private def run : IO Unit := do
     replace (replace row 8 empty) 9 (brackets 62)]).compress).isOk)
   -- parse checks resource bounds, not all schema fields. Other malformed
   -- fields still fail snapshot decoding, even with a strictly valid deep origin.
-  for index in [2, 3, 4, 5, 6, 8, 9] do
+  for index in [2, 3, 4, 5, 6, 8, 9, 10] do
     test s!"shallow malformed envelope field {index} cannot admit"
       (!(snapshotText (replace json index .null)).isOk)
   for index in [1, 3, 4, 5, 6, 7, 9] do

@@ -1,4 +1,6 @@
 module
+-- Load stored private equality proofs for the strict dependency traversal.
+import all Zkc.Source.Structured.RelationChecking
 import all Tests.NativeByteConsumers
 import all Zkc.Algebra.RingExpression.Basic
 import all Zkc.Construction.ArtifactBinding

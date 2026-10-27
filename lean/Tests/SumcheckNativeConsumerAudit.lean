@@ -1,4 +1,6 @@
 module
+-- Load stored private equality proofs for the strict dependency traversal.
+import all Zkc.Source.Structured.RelationChecking
 import all Zkc.Source.Structured.FiniteDomains
 import all Zkc.Source.Structured.CollectionReferenceLaws
 import all Zkc.Source.Structured.CollectEvaluation
@@ -218,6 +220,7 @@ import all Zkc.Source.Structured.PreparationAdmission
 import all Zkc.Source.Structured.PrimitiveEvaluation
 import all Zkc.Source.Structured.PrimitiveLaws
 import all Zkc.Source.Structured.Primitives
+import all Zkc.Source.Structured.PlainHelpers
 import all Zkc.Source.Structured.ProtocolAdmission
 import all Zkc.Source.Structured.ProtocolContext
 import all Zkc.Source.Structured.ProtocolLinking
@@ -287,6 +290,8 @@ import all ZkcExamples.Structured.SumcheckHelperBodies
 import all ZkcExamples.Structured.SumcheckHelperBridge
 import all ZkcExamples.Structured.SumcheckHelperExpansions
 import all ZkcExamples.Structured.SumcheckHelperLaws
+import all ZkcExamples.Structured.SumcheckPendingLaws
+import all ZkcExamples.Structured.SumcheckPreludeNormalForms
 import all ZkcExamples.Structured.SumcheckRelationContract
 import all ZkcExamples.Structured.SumcheckRoundLaws
 import all ZkcExamples.Structured.SumcheckRoundNormalForms
