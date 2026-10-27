@@ -85,7 +85,7 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     } else {
         assert_eq!(id, original_worker);
     }
-    let admission = RunHost::admission_backend(HostLimits::default(), cpu.clone()).unwrap();
+    let admission = RunHost::admission_backend(&HostLimits::default(), cpu.clone()).unwrap();
     assert_eq!(worker(admission.cpu()), id);
     let configured = RunHost::admit_with_cpu(
         &raw,
@@ -97,6 +97,7 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     .unwrap();
     assert_eq!(worker(configured.clone().cpu()), id);
     assert_eq!(worker(original.clone().with_cpu(cpu.clone()).cpu()), id);
+    #[allow(clippy::drop_non_drop)] // Serial builds have no owned pool to release.
     drop(cpu);
     let ledger = zkc_runtime::vm::ExecutionLedger::new(
         configured.limits.capacity.values,
@@ -106,11 +107,7 @@ fn cpu_context_is_shared_by_all_participants_and_survives_host_clones() {
     child_limits.capacity.values.live_bytes /= 4;
     let configured = configured
         .clone()
-        .with_invocation_limits(
-            child_limits,
-            zkc_native::ring::DEFAULT_WORK_LIMIT,
-            16_777_216,
-        )
+        .with_invocation_limits(child_limits, zkc_cpu::ring::DEFAULT_WORK_LIMIT, 16_777_216)
         .with_shared_ledger(ledger);
     let prepared = configured
         .prepare(&serde_json::to_vec(&request).unwrap())
@@ -272,8 +269,9 @@ fn transcript_roots_and_extra_authority_are_refused() {
 }
 
 #[test]
+#[cfg(feature = "files")]
 fn key_files_are_authenticated_and_captured_before_execution() {
-    let policy = zkc_native::Policy::default();
+    let policy = zkc_cpu::Policy::default();
     let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
         &mut ark_std::rand::thread_rng(),
@@ -581,7 +579,7 @@ fn external_work_is_bounded_and_reported_by_the_installed_host() {
     let raw = json!({"format":"zkc.run/0", "candidate":candidate.to_string(), "entry":"main", "roles":["Alice"],
         "steps":[{"role":0,"instruction":0,"anchor":null},{"role":0,"instruction":1,"anchor":null}]}).to_string();
     let input = json!(["zkc.bundle-inputs/0", "session", [["Alice", [], []]], []]).to_string();
-    for ceiling in [0, NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT] {
+    for ceiling in [0, CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT] {
         let host = host(
             raw.as_bytes(),
             HostLimits {
@@ -653,8 +651,8 @@ fn native_construction_failure_keeps_load_usage_and_retires_all_roles() {
     let mut plan = host.prepare(input.to_string().as_bytes()).unwrap();
     // A private test mutates the prepared backend's domain. No test policy or
     // failure hook is exposed by the public installed host.
-    plan.roles[1].backend = NativeBackend::new(
-        zkc_native::Policy::default(),
+    plan.roles[1].backend = CpuBackend::new(
+        zkc_cpu::Policy::default(),
         EntryPolicy::new(
             Domain::new("Bob", "wrong-session", "main", Some("root")),
             None,
@@ -702,14 +700,15 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
         .into(),
     };
     let material = [("setup".into(), bytes.clone())].into();
-    let mut imports = crate::host::setups::VerifierKeys::new(bounds);
-    let registry = crate::entry::files::output_setups_with(
+    let mut imports = crate::host::setups::VerifierKeys::new(bounds, Default::default());
+    let registry = crate::entry::outputs::output_setups_with(
         &material,
         &crate::entry::SetupAuthority {
             keys: authority.keys.clone(),
         },
         limits.capacity,
         &mut imports,
+        &Default::default(),
     )
     .unwrap();
     assert!(registry.get(keys.verifier_key().metadata()).is_some());
@@ -730,7 +729,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
     let admitted = RunHost::admit(
         &raw,
         &Sha256::digest(&raw).into(),
-        limits,
+        limits.clone(),
         authority.clone(),
     )
     .unwrap();
@@ -743,7 +742,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
         assert!(Arc::ptr_eq(key, &shared));
     }
     drop(plan);
-    let mut tight = limits;
+    let mut tight = limits.clone();
     tight.capacity.values.total_bytes = 0;
     let limited =
         RunHost::admit(&raw, &Sha256::digest(&raw).into(), tight, authority.clone()).unwrap();
@@ -766,7 +765,7 @@ fn result_and_input_preparation_share_keys_but_recheck_authority_and_loading_quo
 #[test]
 fn ring_work_limit_cannot_raise_the_host_ceiling() {
     let (raw, _) = fixture("bool");
-    let limit = zkc_native::ring::DEFAULT_WORK_LIMIT;
+    let limit = zkc_cpu::ring::DEFAULT_WORK_LIMIT;
     for allowed in [0, limit] {
         assert!(
             host(&raw, HostLimits::default())

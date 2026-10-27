@@ -2,8 +2,8 @@
 //! Usage: resident_representations PROGRAM.json MODE
 mod halo2curves_fixture;
 use serde_json::{Value as Json, json};
-use zkc_native::{
-    Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Sequence, Value, native_contracts,
+use zkc_cpu::{
+    CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Sequence, Value, cpu_contracts,
 };
 use zkc_runtime::{
     interpreter::Runner,
@@ -16,11 +16,7 @@ const SEQUENCE: &str = "sequence<field:bls12-381.fr>@logical.sequence/0[blst/fr]
 const NESTED: &str =
     "sequence<sequence<field:bls12-381.fr>>@logical.sequence/0[logical.sequence/0[blst/fr]]";
 
-fn aggregate_runner(
-    program: &Program,
-    inputs: Vec<Value>,
-    policy: Policy,
-) -> Runner<NativeBackend> {
+fn aggregate_runner(program: &Program, inputs: Vec<Value>, policy: Policy) -> Runner<CpuBackend> {
     let native = backend(policy);
     program.check_installation(&native).unwrap();
     Runner::new(program, "main", "P", SESSION, native, inputs)
@@ -29,13 +25,13 @@ fn aggregate_runner(
 }
 
 fn canonical_sequence(element: &str, values: Vec<Value>) -> Value {
-    let ty = native_contracts()
+    let ty = cpu_contracts()
         .physical_type(&format!("sequence<{element}>@logical.sequence/0"))
         .unwrap();
     Value::Sequence(Sequence::new(ty, values, &Policy::default()).unwrap())
 }
 
-fn assert_canonical(native: &NativeBackend, value: &Value, expected: &Value, spelling: &str) {
+fn assert_canonical(native: &CpuBackend, value: &Value, expected: &Value, spelling: &str) {
     assert_eq!(value.physical_type().spelling(), spelling);
     let bytes = native.encode_native_value(value).unwrap();
     assert_eq!(bytes, native.encode_native_value(expected).unwrap());
@@ -50,7 +46,7 @@ fn assert_canonical(native: &NativeBackend, value: &Value, expected: &Value, spe
     assert_eq!(native.encode_native_value(&canonical).unwrap(), bytes);
 }
 
-fn aggregate_returned(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
+fn aggregate_returned(runner: &mut Runner<CpuBackend>) -> Vec<Value> {
     let Action::Returned(values) = finish(runner) else {
         panic!("expected aggregate result")
     };
@@ -242,8 +238,8 @@ fn run_dense(program: &Program) -> (usize, usize) {
     (returned, stopped)
 }
 
-fn backend(policy: Policy) -> NativeBackend {
-    NativeBackend::new(
+fn backend(policy: Policy) -> CpuBackend {
+    CpuBackend::new(
         policy,
         EntryPolicy::new(Domain::new("P", SESSION, "main", None), None),
         Default::default(),
@@ -253,7 +249,7 @@ fn backend(policy: Policy) -> NativeBackend {
 
 fn selected(value: Value, spelling: &str) -> Value {
     let encoder = backend(Policy::default());
-    let physical = native_contracts().physical_type(spelling).unwrap();
+    let physical = cpu_contracts().physical_type(spelling).unwrap();
     let bytes = encoder.encode_native_value(&value).unwrap();
     encoder.decode_native_value(&physical, &bytes).unwrap()
 }
@@ -265,7 +261,7 @@ fn runner(
     bounds: (u64, u64),
     allowed: bool,
     policy: Policy,
-) -> Runner<NativeBackend> {
+) -> Runner<CpuBackend> {
     let native = backend(policy);
     program.check_installation(&native).unwrap();
     let mut point = Value::Curve(G1::generator().scale(Scalar::from(7)));
@@ -294,7 +290,7 @@ fn runner(
     .unwrap()
 }
 
-fn finish(runner: &mut Runner<NativeBackend>) -> Action<Value> {
+fn finish(runner: &mut Runner<CpuBackend>) -> Action<Value> {
     let Action::Local(local) = runner.poll() else {
         panic!("expected the compiler-produced Work call")
     };
@@ -304,7 +300,7 @@ fn finish(runner: &mut Runner<NativeBackend>) -> Action<Value> {
     outcome
 }
 
-fn returned(runner: &mut Runner<NativeBackend>, mode: &str, branch: bool, trips: u64) {
+fn returned(runner: &mut Runner<CpuBackend>, mode: &str, branch: bool, trips: u64) {
     let Action::Returned(values) = finish(runner) else {
         panic!("expected resident output: {mode}, branch={branch}, trips={trips}")
     };
@@ -339,7 +335,7 @@ fn returned(runner: &mut Runner<NativeBackend>, mode: &str, branch: bool, trips:
     );
 }
 
-fn stopped(runner: &mut Runner<NativeBackend>, code: &str, site: Option<&str>) {
+fn stopped(runner: &mut Runner<CpuBackend>, code: &str, site: Option<&str>) {
     let usage = stopped_at(runner, code, site);
     if site.is_none() {
         // Direct operation failures currently name the enclosing local call.
@@ -352,7 +348,7 @@ fn stopped(runner: &mut Runner<NativeBackend>, code: &str, site: Option<&str>) {
     }
 }
 
-fn stopped_at(runner: &mut Runner<NativeBackend>, code: &str, site: Option<&str>) -> Usage {
+fn stopped_at(runner: &mut Runner<CpuBackend>, code: &str, site: Option<&str>) -> Usage {
     let Action::Stopped(stop) = finish(runner) else {
         panic!("expected {code} at {site:?}")
     };
@@ -410,7 +406,7 @@ fn conversion_site<'a>(ops: &[&'a Json], consumer: &str, operand: usize) -> &'a 
 fn run_flat(bytes: &[u8], mode: &str) {
     // The Native context supplies installed resident identities. Neither the
     // artifact nor this driver grants variable-time execution permission.
-    let program = Program::decode(bytes, native_contracts()).unwrap();
+    let program = Program::decode(bytes, cpu_contracts()).unwrap();
     let artifact: Json = serde_json::from_slice(bytes).unwrap();
     let callee = &artifact[3][0][6][0][2];
     let work = artifact[2]
@@ -485,7 +481,7 @@ fn main() {
         return;
     }
     // Read the compiler's artifact without editing it or rebuilding its Program.
-    let program = Program::decode(&bytes, native_contracts()).unwrap();
+    let program = Program::decode(&bytes, cpu_contracts()).unwrap();
     let artifact: Json = serde_json::from_slice(&bytes).unwrap();
     let callee = &artifact[3][0][6][0][2];
     let work = artifact[2]

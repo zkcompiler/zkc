@@ -90,16 +90,46 @@ impl Backend for Arithmetic {
     }
 }
 impl WireBackend for Arithmetic {
-    fn supports_wire(&self, _: &PhysicalType) -> bool {
-        false
+    fn supports_wire(&self, ty: &PhysicalType) -> bool {
+        *ty == self.ty
     }
-    fn encode_wire(&self, _: &Number) -> Result<Vec<u8>, WireError> {
-        Err(WireError::Limit)
+    fn fixed_wire_size(&self, ty: &PhysicalType) -> Option<usize> {
+        self.supports_wire(ty).then_some(4)
     }
-    fn decode_wire(&self, _: &PhysicalType, _: &[u8]) -> Result<Number, WireError> {
-        Err(WireError::Limit)
+    fn encoding_bound(&self, value: &Number) -> Result<usize, WireError> {
+        self.validate_value(value).map_err(WireError::Backend)?;
+        Ok(4)
+    }
+    fn decoding_bound(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<usize, WireError> {
+        if !self.supports_wire(ty) {
+            return Err(WireError::Limit);
+        }
+        if bytes.len() != 4 {
+            return Err(WireError::Invalid(DecodeReason::Length));
+        }
+        Ok(64)
+    }
+    fn encode_wire(&self, value: &Number) -> Result<Vec<u8>, WireError> {
+        self.encoding_bound(value)?;
+        Ok(value.value.to_le_bytes().to_vec())
+    }
+    fn decode_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<Number, WireError> {
+        self.decoding_bound(ty, bytes)?;
+        let value = u32::from_le_bytes(
+            bytes
+                .try_into()
+                .map_err(|_| WireError::Invalid(DecodeReason::Length))?,
+        );
+        if value >= 2_130_706_433 {
+            return Err(WireError::Invalid(DecodeReason::Scalar));
+        }
+        Ok(Number {
+            value,
+            ty: ty.clone(),
+        })
     }
 }
+
 fn installed() -> (Contracts, Arithmetic) {
     let mut builder = ContractsBuilder::empty();
     let ty = builder
@@ -348,4 +378,52 @@ fn nested_source_constructor_authority_is_required() {
     assert!(BoundInterface::read(&changed).is_ok());
     assert!(matches!(BackendRun::admit(changed, &contracts, &backend,
         joint::BundleLimits::default()), Err(error) if error == "entry-input-constructor"));
+}
+
+#[test]
+fn independent_codec_backend_reaches_the_same_common_driver_after_bounded_decoding() {
+    let (contracts, backend) = installed();
+    let entry = BackendRun::admit(
+        package(&backend.ty, true),
+        &contracts,
+        &backend,
+        joint::BundleLimits::default(),
+    )
+    .unwrap();
+    let ty = backend.ty.clone();
+    assert!(backend.supports_wire(&ty));
+    let values = [20u32, 22]
+        .map(|value| backend.decode_wire(&ty, &value.to_le_bytes()).unwrap())
+        .to_vec();
+    assert_eq!(
+        backend.decode_wire(&ty, &[0]).err().unwrap(),
+        WireError::Invalid(DecodeReason::Length)
+    );
+    assert_eq!(
+        backend
+            .decode_wire(&ty, &u32::MAX.to_le_bytes())
+            .err()
+            .unwrap(),
+        WireError::Invalid(DecodeReason::Scalar)
+    );
+    let report = entry
+        .execute(
+            "encoded",
+            vec![joint::RoleInput {
+                role: "role00000000".into(),
+                backend,
+                values,
+            }],
+            joint::RunLimits::default(),
+            &mut joint::NoHooks,
+        )
+        .unwrap();
+    assert_eq!(report.outcome, joint::Outcome::Completed);
+    assert_eq!(
+        report.backends[0]
+            .1
+            .encode_wire(&report.roles[0].outputs[0])
+            .unwrap(),
+        42u32.to_le_bytes()
+    );
 }

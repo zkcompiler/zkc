@@ -1,8 +1,8 @@
 //! Only validated immutable key material crosses invocation boundaries.
 use super::inputs::Result;
 use std::sync::Arc;
+use zkc_cpu::Value;
 use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
-use zkc_native::Value;
 use zkc_runtime::vm::Value as RuntimeValue;
 
 /// Validated immutable prover material, reusable across independent invocations.
@@ -29,6 +29,22 @@ impl ProverMaterial {
         verifier: &VerifierKey,
         capacity: super::capacity::Capacity,
     ) -> Result<Self> {
+        Self::from_bytes_with_installation(
+            bytes,
+            fingerprint,
+            verifier,
+            capacity,
+            &Default::default(),
+        )
+    }
+    /// Import under explicit CPU support without granting setup authority.
+    pub fn from_bytes_with_installation(
+        bytes: &[u8],
+        fingerprint: [u8; 32],
+        verifier: &VerifierKey,
+        capacity: super::capacity::Capacity,
+        installation: &zkc_cpu::CpuInstallation,
+    ) -> Result<Self> {
         capacity.validate()?;
         capacity.check_wire(bytes.len())?;
         let estimate = Value::key_retained_bytes(zkc_runtime::vm::Type::ProverKey, verifier)
@@ -36,22 +52,42 @@ impl ProverMaterial {
         if estimate > capacity.value_bytes {
             return Err("native-material-value-limit".into());
         }
-        let key = ProverKey::from_bytes(
+        if !installation.supports_setup() {
+            return Err("cpu-installation-setup".into());
+        }
+        let key = zkc_cpu::material::import_prover(
             bytes,
             fingerprint,
             verifier,
-            &capacity.backend().ark_bounds(),
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(Self { key: Arc::new(key) })
+            capacity.backend().ark_bounds(),
+        )?;
+        Ok(Self { key })
     }
     /// Freeze one bounded regular file, then use the same authenticated import.
     /// Later requests retain the key independently of this file or its path.
+    #[cfg(feature = "files")]
     pub fn from_file(
         path: impl AsRef<std::path::Path>,
         fingerprint: [u8; 32],
         verifier: &VerifierKey,
         capacity: super::capacity::Capacity,
+    ) -> Result<Self> {
+        Self::from_file_with_installation(
+            path,
+            fingerprint,
+            verifier,
+            capacity,
+            &Default::default(),
+        )
+    }
+    /// Import under explicit CPU support without granting setup authority.
+    #[cfg(feature = "files")]
+    pub fn from_file_with_installation(
+        path: impl AsRef<std::path::Path>,
+        fingerprint: [u8; 32],
+        verifier: &VerifierKey,
+        capacity: super::capacity::Capacity,
+        installation: &zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         capacity.validate()?;
         let bytes = super::inputs::read_regular(path, capacity.wire_bytes).map_err(|e| {
@@ -61,7 +97,7 @@ impl ProverMaterial {
                 e
             }
         })?;
-        Self::from_bytes(&bytes, fingerprint, verifier, capacity)
+        Self::from_bytes_with_installation(&bytes, fingerprint, verifier, capacity, installation)
     }
     pub fn fingerprint(&self) -> [u8; 32] {
         self.key.material_fingerprint()
@@ -75,8 +111,11 @@ impl ProverMaterial {
         &self,
         ty: &zkc_runtime::vm::PhysicalType,
         selected: &VerifierKey,
-        backend: &zkc_native::NativeBackend,
+        backend: &zkc_cpu::CpuBackend,
     ) -> Result<Value> {
+        if !backend.installation().supports_setup() {
+            return Err("cpu-installation-setup".into());
+        }
         let value = self.value();
         if value.physical_type() != *ty {
             return Err("native-input-type".into());
@@ -147,25 +186,28 @@ mod tests {
         let mut trailing = bytes.clone();
         trailing.push(0);
         assert!(ProverMaterial::from_bytes(&trailing, pin, vk, capacity).is_err());
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("material.pk");
-        std::fs::write(&path, &bytes).unwrap();
-        let from_file = ProverMaterial::from_file(&path, pin, vk, capacity).unwrap();
-        small = capacity;
-        small.wire_bytes = bytes.len() - 1;
-        assert_eq!(
-            ProverMaterial::from_file(&path, pin, vk, small).unwrap_err(),
-            "native-capacity-wire"
-        );
-        assert_eq!(from_file.fingerprint(), pin);
-        std::fs::remove_file(&path).unwrap();
-        assert_eq!(
-            from_file.value().retained_bytes(),
-            material.value().retained_bytes()
-        );
-        assert_eq!(
-            ProverMaterial::from_file(&path, pin, vk, capacity).unwrap_err(),
-            "artifact-io"
-        );
+        #[cfg(feature = "files")]
+        {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("material.pk");
+            std::fs::write(&path, &bytes).unwrap();
+            let from_file = ProverMaterial::from_file(&path, pin, vk, capacity).unwrap();
+            small = capacity;
+            small.wire_bytes = bytes.len() - 1;
+            assert_eq!(
+                ProverMaterial::from_file(&path, pin, vk, small).unwrap_err(),
+                "native-capacity-wire"
+            );
+            assert_eq!(from_file.fingerprint(), pin);
+            std::fs::remove_file(&path).unwrap();
+            assert_eq!(
+                from_file.value().retained_bytes(),
+                material.value().retained_bytes()
+            );
+            assert_eq!(
+                ProverMaterial::from_file(&path, pin, vk, capacity).unwrap_err(),
+                "artifact-io"
+            );
+        }
     }
 }

@@ -3,12 +3,12 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc::proof::NativeDeployment;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value, Variant};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Sequence, Value, Variant};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "relations", "main", None), None),
         Default::default(),

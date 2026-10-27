@@ -6,8 +6,8 @@ use p3_field_043::{PrimeCharacteristicRing, PrimeField32};
 use serde_json::Value as Json;
 use sha2::Digest;
 use zkc::proof::NativeDeployment;
+use zkc_cpu::{Policy, Sequence, Value};
 use zkc_kernels::interop::{monero, openvm};
-use zkc_native::{Policy, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
 fn packed(state: &openvm::Duplex) -> Value {
     let s = state.snapshot();

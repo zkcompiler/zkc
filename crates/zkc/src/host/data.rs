@@ -1,7 +1,7 @@
 //! Explicitly retained immutable data. Reuse grants no invocation authority.
 use super::{capacity::Capacity, inputs::Result};
 use std::sync::Arc;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, SetupRegistry, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, SetupRegistry, Value};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 /// Decoded immutable data and its canonical bytes, owned by the application.
@@ -42,7 +42,17 @@ impl PreparedData {
         capacity: Capacity,
         cpu: crate::execution::CpuExecution,
     ) -> Result<Self> {
-        let backend = codec(capacity, cpu.clone())?;
+        Self::from_wire_with_installation(ty, wire, capacity, cpu, Default::default())
+    }
+    /// Prepare immutable data under explicit frozen CPU support.
+    pub fn from_wire_with_installation(
+        ty: PhysicalType,
+        wire: Vec<u8>,
+        capacity: Capacity,
+        cpu: crate::execution::CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self> {
+        let backend = codec(capacity, cpu.clone(), installation)?;
         capacity.check_wire(wire.len())?;
         let mut admission = super::admission::Admission::new(capacity.loading())?;
         let id = admission.native_wire(&backend, ty.clone(), wire.as_slice(), None)?;
@@ -68,7 +78,16 @@ impl PreparedData {
         capacity: Capacity,
         cpu: crate::execution::CpuExecution,
     ) -> Result<Self> {
-        let backend = codec(capacity, cpu.clone())?;
+        Self::from_value_with_installation(value, capacity, cpu, Default::default())
+    }
+    /// Prepare immutable data under explicit frozen CPU support.
+    pub fn from_value_with_installation(
+        value: Value,
+        capacity: Capacity,
+        cpu: crate::execution::CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self> {
+        let backend = codec(capacity, cpu.clone(), installation)?;
         let mut admission = super::admission::Admission::new(capacity.loading())?;
         let ty = value.physical_type();
         let input = super::request::InputValue::from(value);
@@ -121,14 +140,19 @@ impl PreparedData {
         &self.0.value
     }
 }
-fn codec(capacity: Capacity, cpu: crate::execution::CpuExecution) -> Result<NativeBackend> {
+fn codec(
+    capacity: Capacity,
+    cpu: crate::execution::CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+) -> Result<CpuBackend> {
     capacity.validate()?;
     let policy = capacity.backend();
-    NativeBackend::new_with_cpu(
+    CpuBackend::new_with_installation(
         policy,
         EntryPolicy::new(Domain::new("input", "preparation", "data", None), None),
         SetupRegistry::new(Vec::new(), &policy).map_err(|e| e.to_string())?,
         cpu,
+        installation,
     )
     .map_err(|e| e.to_string())
 }
@@ -145,8 +169,8 @@ mod tests {
             Value::Bool(false),
             Value::Index(17),
             Value::Bytes(vec![0, 1, 255].into()),
-            Value::Vector(vec![zkc_native::Scalar::from(7); 16].into()),
-            Value::table(&[zkc_native::Scalar::from(7); 16], &capacity.backend()).unwrap(),
+            Value::Vector(vec![zkc_cpu::Scalar::from(7); 16].into()),
+            Value::table(&[zkc_cpu::Scalar::from(7); 16], &capacity.backend()).unwrap(),
         ] {
             let ty = value.physical_type();
             let material = PreparedData::from_value(value, capacity).unwrap();
@@ -170,8 +194,12 @@ mod tests {
                 "native-capacity-wire"
             );
         }
-        let mut backend =
-            codec(capacity, crate::execution::CpuExecution::serial().unwrap()).unwrap();
+        let mut backend = codec(
+            capacity,
+            crate::execution::CpuExecution::serial().unwrap(),
+            Default::default(),
+        )
+        .unwrap();
         let value = Value::Bool(true);
         let ty = value.physical_type();
         let wire = backend.encode_native_value(&value).unwrap();
@@ -186,8 +214,7 @@ mod tests {
             "native-data-bytes-limit"
         );
         // An in-process value with no native wire profile cannot be prepared.
-        let point =
-            Value::point(vec![zkc_native::Scalar::from(7); 4], &capacity.backend()).unwrap();
+        let point = Value::point(vec![zkc_cpu::Scalar::from(7); 4], &capacity.backend()).unwrap();
         assert_eq!(
             PreparedData::from_value(point, capacity).unwrap_err(),
             "native-input-private"

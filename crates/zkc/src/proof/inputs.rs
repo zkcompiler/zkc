@@ -86,7 +86,7 @@ impl ProofInputs {
                 }
                 let spec = array(&row[1], 2)?;
                 let kind = text(&spec[0])?;
-                if kind != input_kind(ty)? {
+                if kind != input_kind(ty, &host.installation)? {
                     return Err("native-proof-role-input-kind".into());
                 }
                 Ok(match kind {
@@ -135,7 +135,7 @@ impl ProofInputs {
 }
 
 pub(super) struct Prepared {
-    pub backend: NativeBackend,
+    pub backend: CpuBackend,
     pub loaded: Vec<Value>,
     pub planned: Vec<Operand>,
     pub root: Vec<u8>,
@@ -182,15 +182,25 @@ pub(super) fn prepare(
     // enter through an immutable data constructor.
     for (input, (_, ty)) in request.inputs.iter().zip(&role.inputs) {
         if host.retained_inputs
-            && !zkc_native::has_native_wire(ty)
+            && !host.installation.supports_wire(ty)
             && ty.is_duplicable()
             && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
         {
-            crate::host::admission::check_retained_data(ty, input, host.capacity)?;
+            crate::host::admission::check_retained_data(
+                ty,
+                input,
+                host.capacity,
+                &host.installation,
+            )?;
             continue;
         }
-        match (input_kind(ty)?, input) {
-            ("wire", input) => crate::host::admission::check_native_data(ty, input, host.capacity)?,
+        match (input_kind(ty, &host.installation)?, input) {
+            ("wire", input) => crate::host::admission::check_native_data(
+                ty,
+                input,
+                host.capacity,
+                &host.installation,
+            )?,
             ("rng" | "nonce", InputValue::Resource { budget }) => check_budget(*budget)?,
             ("verifier_key", InputValue::VerifierKey) => {}
             (
@@ -204,6 +214,7 @@ pub(super) fn prepare(
     }
     let policy = host.capacity.backend();
     let mut admission = Admission::new(host.capacity.loading())?
+        .with_material(imports.material())
         .with_shared_ledger(host.shared_ledger.clone())
         .with_retained_inputs(host.retained_inputs);
     for ((input, port), ty) in request
@@ -219,7 +230,12 @@ pub(super) fn prepare(
             host.capacity.check_wire(bytes.len())?;
             admission.work(bytes.len())?;
         } else {
-            crate::host::admission::check_native_data(ty, input, host.capacity)?;
+            crate::host::admission::check_native_data(
+                ty,
+                input,
+                host.capacity,
+                &host.installation,
+            )?;
         }
     }
     let _root_tree = zkc_runtime::host::wire::reserve_allocation(
@@ -261,6 +277,9 @@ pub(super) fn prepare(
             .keys
             .get(&port.original)
             .ok_or("native-proof-key-authority")?;
+        if !host.installation.supports_setup() {
+            return Err("cpu-installation-setup".into());
+        }
         let key = imports.import(bytes, pin)?;
         let id = admission.add(Input::ready(Value::VerifierKey(key.clone())))?;
         public_ids.insert(port.original, id);
@@ -269,7 +288,7 @@ pub(super) fn prepare(
             .or_insert_with(|| key.clone());
         keys.insert(port.original, key);
     }
-    let registry = zkc_native::SetupRegistry::new(
+    let registry = zkc_cpu::SetupRegistry::new(
         material.values().map(|k| k.as_ref().clone()).collect(),
         &policy,
     )
@@ -292,7 +311,7 @@ pub(super) fn prepare(
         if let Some(key) = key {
             constraints.insert(
                 name.clone(),
-                zkc_native::PortConstraint {
+                zkc_cpu::PortConstraint {
                     arity: None,
                     setup: Some(key.metadata()),
                 },
@@ -306,6 +325,7 @@ pub(super) fn prepare(
         registry,
         constraints,
         host.cpu.clone(),
+        host.installation.clone(),
     )?
     .with_ring_assets(host.ring_assets.clone())
     .map_err(|e| e.to_string())?
@@ -386,11 +406,11 @@ pub(super) fn prepare(
                         true
                     }
                     (
-                        Some(InputValue::WireFile {
+                        Some(InputValue::WireSource {
                             file: a,
                             sha256: a_pin,
                         }),
-                        InputValue::WireFile {
+                        InputValue::WireSource {
                             file: b,
                             sha256: b_pin,
                         },
@@ -450,7 +470,7 @@ pub(super) fn prepare(
         if input.wire_bytes().is_none() {
             encoding_retained.extend(zkc_runtime::host::wire::reserve_allocation(
                 host.shared_ledger.as_ref(),
-                zkc_native::native_encoding_bound(&loaded[public_ids[&port.original]]),
+                zkc_cpu::native_encoding_bound(&loaded[public_ids[&port.original]]),
             )?);
         }
         let bytes = canonical(&backend, &loaded[public_ids[&port.original]], input)?;
@@ -477,7 +497,7 @@ pub(super) fn prepare(
         let _live = if input.wire_bytes().is_none() {
             zkc_runtime::host::wire::reserve_allocation(
                 host.shared_ledger.as_ref(),
-                zkc_native::native_encoding_bound(&loaded[id]),
+                zkc_cpu::native_encoding_bound(&loaded[id]),
             )?
         } else {
             None
@@ -548,7 +568,7 @@ pub(super) fn prepare(
 }
 
 fn canonical<'a>(
-    backend: &NativeBackend,
+    backend: &CpuBackend,
     value: &Value,
     input: &'a InputValue,
 ) -> Result<std::borrow::Cow<'a, [u8]>> {

@@ -18,7 +18,8 @@ mlir::LogicalResult lowerPhysical(
     bool linearContractions = false, LinearContractionStats *stats = nullptr,
     bool releaseStorage = false,
     llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
-    MathematicalSelectionPolicy numericalPolicy = {});
+    MathematicalSelectionPolicy numericalPolicy = {},
+    const target::CpuTarget &cpuTarget = {});
 /// Check that a physical candidate only inserts admitted storage releases,
 /// preserving the positions and operands of existing releases.
 /// Preserves computation under sufficient capacity, not equal heap high water

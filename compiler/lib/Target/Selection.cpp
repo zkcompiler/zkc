@@ -4,7 +4,8 @@
 namespace zkc::target {
 llvm::Expected<ImplementationChoice>
 selectImplementation(protocol::BindingApplication application,
-                     std::optional<llvm::StringRef> requested) {
+                     std::optional<llvm::StringRef> requested,
+                     const CpuTarget &cpuTarget) {
   const bool fixed =
       requested.has_value() || !application.implementation.empty();
   if (requested) {
@@ -30,10 +31,14 @@ selectImplementation(protocol::BindingApplication application,
     auto logical = protocol::resolveBinding(application, false);
     if (!logical)
       return logical.takeError();
+    if (auto e = cpuTarget.checkImplementation(application))
+      return e;
   } else {
     auto installed = protocol::resolveBinding(application, true);
     if (!installed)
       return installed.takeError();
+    if (auto e = cpuTarget.checkBinding(application, *installed))
+      return e;
   }
   return ImplementationChoice{std::move(application), fixed};
 }

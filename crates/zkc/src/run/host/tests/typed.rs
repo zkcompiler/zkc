@@ -58,14 +58,14 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
     );
     let (raw, _) = fixture(&logical);
     let host = host(&raw, HostLimits::default());
-    let source: zkc_native::Buffer<zkc_native::Scalar> = [0u64, 1, 7, 19]
+    let source: zkc_cpu::Buffer<zkc_cpu::Scalar> = [0u64, 1, 7, 19]
         .into_iter()
-        .map(zkc_native::Scalar::from)
+        .map(zkc_cpu::Scalar::from)
         .collect::<Vec<_>>()
         .into();
     let ty = zkc_runtime::vm::LogicalType::parse(&logical).unwrap();
     let value = Value::Variant(
-        zkc_native::Variant::new(
+        zkc_cpu::Variant::new(
             zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
             0,
             vec![Value::Vector(source.clone()), Value::Vector(source.clone())],
@@ -121,15 +121,12 @@ fn prepared_plans_and_nested_outputs_outlive_all_wire_request_owners() {
             };
             assert_eq!(a.as_ref(), source.as_ref());
             assert_eq!(b.as_ref(), source.as_ref());
-            assert_eq!(zkc_native::Buffer::ptr_eq(a, b), constructor != "wire");
-            assert_eq!(
-                zkc_native::Buffer::ptr_eq(a, &source),
-                constructor != "wire"
-            );
+            assert_eq!(zkc_cpu::Buffer::ptr_eq(a, b), constructor != "wire");
+            assert_eq!(zkc_cpu::Buffer::ptr_eq(a, &source), constructor != "wire");
             role_backings.push(a.clone());
         }
         assert_eq!(
-            zkc_native::Buffer::ptr_eq(&role_backings[0], &role_backings[1]),
+            zkc_cpu::Buffer::ptr_eq(&role_backings[0], &role_backings[1]),
             constructor != "wire"
         );
     }
@@ -175,9 +172,9 @@ fn prepared_data_reuses_decode_but_preserves_invocation_charges() {
 fn prepared_collections_respect_the_current_policy() {
     use crate::execution::PreparedData;
     for value in [
-        Value::Vector(vec![zkc_native::Scalar::from(7); 16].into()),
-        Value::RistrettoGroups(vec![zkc_native::RistrettoPoint::default(); 16].into()),
-        Value::table(&[zkc_native::Scalar::from(7); 16], &Default::default()).unwrap(),
+        Value::Vector(vec![zkc_cpu::Scalar::from(7); 16].into()),
+        Value::RistrettoGroups(vec![zkc_cpu::RistrettoPoint::default(); 16].into()),
+        Value::table(&[zkc_cpu::Scalar::from(7); 16], &Default::default()).unwrap(),
     ] {
         let (raw, _) = fixture(&value.physical_type().logical().spelling());
         let native = request(|| InputValue::from(value.clone()));
@@ -252,8 +249,8 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     let mut rng = request(|| InputValue::Resource { budget: 1_000_001 });
     assert_eq!(refusal(&rng_host, &rng), "bundle-resource-budget");
     let domain = Domain::new("Alice", "session", "main", Some("root"));
-    let mut foreign = NativeBackend::new(
-        zkc_native::Policy::default(),
+    let mut foreign = CpuBackend::new(
+        zkc_cpu::Policy::default(),
         EntryPolicy::new(domain.clone(), None),
         Default::default(),
     )
@@ -278,7 +275,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
 
 #[test]
 fn nested_native_and_wire_data_obey_the_same_selected_setup() {
-    let policy = zkc_native::Policy::default();
+    let policy = zkc_cpu::Policy::default();
     let first = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
         &mut ark_std::rand::thread_rng(),
@@ -312,11 +309,11 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     )
     .unwrap();
     let table = zkc_kernels::arkworks::bls12_381::Table::from_logical(
-        &[zkc_native::Scalar::from(1), zkc_native::Scalar::from(2)],
+        &[zkc_cpu::Scalar::from(1), zkc_cpu::Scalar::from(2)],
         &policy.ark_bounds(),
     )
     .unwrap();
-    let backend = NativeBackend::new(
+    let backend = CpuBackend::new(
         policy,
         EntryPolicy::new(Domain::new("Alice", "session", "main", Some("root")), None),
         SetupRegistry::new(
@@ -337,7 +334,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
     for (key, allowed) in [(&first, true), (&other, false)] {
         let committed = key.prover_key().commit(&table).unwrap();
         let value = Value::Sequence(
-            zkc_native::Sequence::new(
+            zkc_cpu::Sequence::new(
                 zkc_runtime::vm::PhysicalType::default_for(
                     zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
                 )
@@ -439,7 +436,7 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
                 if native {
                     let good = first.prover_key().commit(&table).unwrap();
                     let good = Value::Sequence(
-                        zkc_native::Sequence::new(
+                        zkc_cpu::Sequence::new(
                             zkc_runtime::vm::PhysicalType::default_for(
                                 zkc_runtime::vm::LogicalType::sequence(logical.clone()).unwrap(),
                             )
@@ -462,10 +459,10 @@ fn nested_native_and_wire_data_obey_the_same_selected_setup() {
 
 #[test]
 fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
-    let policy = zkc_native::Policy::default();
-    let leaf = Value::vector(&[zkc_native::Scalar::from(1); 3], &policy).unwrap();
+    let policy = zkc_cpu::Policy::default();
+    let leaf = Value::vector(&[zkc_cpu::Scalar::from(1); 3], &policy).unwrap();
     let value = Value::Sequence(
-        zkc_native::Sequence::new(
+        zkc_cpu::Sequence::new(
             zkc_runtime::vm::PhysicalType::default_for(
                 zkc_runtime::vm::LogicalType::sequence(leaf.physical_type().logical().clone())
                     .unwrap(),
@@ -477,7 +474,7 @@ fn native_aggregates_keep_whole_value_collection_limits_without_encoding() {
         .unwrap(),
     );
     let (raw, _) = fixture(&value.physical_type().logical().spelling());
-    let encoder = NativeBackend::new(
+    let encoder = CpuBackend::new(
         policy,
         EntryPolicy::new(Domain::new("Alice", "session", "main", Some("root")), None),
         Default::default(),
@@ -502,7 +499,13 @@ fn request_structure_and_all_setup_lengths_precede_material_import() {
     };
     let mut limits = HostLimits::default();
     limits.capacity.wire_bytes = 4;
-    let host = RunHost::admit(&raw, &Sha256::digest(&raw).into(), limits, authority).unwrap();
+    let host = RunHost::admit(
+        &raw,
+        &Sha256::digest(&raw).into(),
+        limits.clone(),
+        authority,
+    )
+    .unwrap();
     let mut inputs = request(|| Value::Bool(false).into());
     inputs.setups.insert("first".into(), vec![0]);
     assert_eq!(refusal(&host, &inputs), "bundle-setup-material");
@@ -545,8 +548,9 @@ fn typed_wire_work_is_reserved_before_scanning() {
 }
 
 #[test]
+#[cfg(feature = "files")]
 fn typed_key_imports_use_explicit_authorized_constructors() {
-    let policy = zkc_native::Policy::default();
+    let policy = zkc_cpu::Policy::default();
     let keys = zkc_kernels::arkworks::bls12_381::Keys::setup_with_rng(
         1,
         &mut ark_std::rand::thread_rng(),
@@ -690,7 +694,7 @@ fn compound_shape_and_aggregate_limits_refuse_before_payload_decoding() {
     let mut limits = HostLimits::default();
     limits.capacity.elements = 4;
     let host = self::host(&raw, limits);
-    let vector = || InputValue::from(Value::Vector(vec![zkc_native::Scalar::from(1); 3].into()));
+    let vector = || InputValue::from(Value::Vector(vec![zkc_cpu::Scalar::from(1); 3].into()));
     let mut wire = b"ZKCV\x00\x42\x03\0\0\0".to_vec();
     // Valid shape, deliberately invalid field encodings. Whole-value count
     // refusal must occur before expensive canonical element decoding.
@@ -758,17 +762,14 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
         &bounds,
     )
     .unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("material.pk");
-    std::fs::write(&path, keys.prover_key().to_bytes(&bounds).unwrap()).unwrap();
-    let material = ProverMaterial::from_file(
-        &path,
+    let bytes = keys.prover_key().to_bytes(&bounds).unwrap();
+    let material = ProverMaterial::from_bytes(
+        &bytes,
         keys.prover_key().material_fingerprint(),
         keys.verifier_key(),
         capacity,
     )
     .unwrap();
-    std::fs::remove_file(&path).unwrap();
     let authority = SetupAuthority {
         keys: BTreeMap::from([("setup".into(), keys.verifier_key().metadata().key_id())]),
         inputs: BTreeMap::from([
@@ -808,6 +809,20 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
             assert_eq!(call.join().unwrap(), first.diagnostics());
         }
     });
+    let source = crate::execution::InputSource::from_bytes(bytes.clone().into());
+    let mut raw_inputs = request(|| InputValue::ProverKeyInput {
+        file: source.clone(),
+        fingerprint: material.fingerprint(),
+    });
+    raw_inputs.setups = inputs.setups.clone();
+    let raw = host.prepare_typed(&raw_inputs).unwrap().execute();
+    assert_eq!(raw.diagnostics(), first.diagnostics());
+    assert_eq!(crate::host::admission::IMPORT_COUNT.get(), 1);
+    raw_inputs.roles[0].inputs[0] = InputValue::ProverKeyInput {
+        file: crate::execution::InputSource::from_bytes(vec![0].into()),
+        fingerprint: material.fingerprint(),
+    };
+    assert!(host.prepare_typed(&raw_inputs).is_err());
     let mut limits = HostLimits::default();
     limits.capacity.values.live_bytes = 2 * material.value().retained_bytes()
         + Value::VerifierKey(Arc::new(keys.verifier_key().clone())).retained_bytes()
@@ -826,8 +841,8 @@ fn reusable_material_retains_setup_checks_and_per_invocation_charges() {
         capacity,
     )
     .unwrap();
-    inputs.roles[0].inputs[0] = InputValue::ProverKeyFile {
-        path: path.to_str().unwrap().into(),
+    inputs.roles[0].inputs[0] = InputValue::ProverKeyInput {
+        file: crate::execution::InputSource::from_bytes(bytes.into()),
         fingerprint: material.fingerprint(),
     };
     inputs.roles[1].inputs[0] = InputValue::ProverKey(wrong);

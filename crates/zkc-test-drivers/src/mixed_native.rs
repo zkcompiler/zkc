@@ -1,14 +1,14 @@
 //! Executes compiler-generated mixed math/local participants with real custody.
 use std::path::Path;
-use zkc_native::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{Capability, CpuBackend, Domain, EntryPolicy, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::{Action, StopKind};
 fn domain(role: &str) -> Domain {
     Domain::new(role, "mixed_test", "main", None)
 }
-fn backend() -> NativeBackend {
-    NativeBackend::new(
+fn backend() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(domain("P"), None),
         Default::default(),
@@ -21,7 +21,7 @@ fn token(value: &Value) -> &Capability {
         _ => panic!("expected RNG"),
     }
 }
-fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
+fn next(runner: &mut Runner<CpuBackend>) -> Action<Value> {
     for _ in 0..16 {
         match runner.poll() {
             Action::Local(local) => {
@@ -48,7 +48,7 @@ fn main() {
                 .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
                 .unwrap();
             let before = native.observe(token(&rng)).unwrap();
-            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
                 .and_then(|program| {
                     program.check_installation(&native)?;
                     Ok(program)
@@ -113,7 +113,7 @@ fn main() {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)
@@ -145,7 +145,7 @@ fn main() {
         let wrong = native
             .issue_rng_for(Identity::Bls12381Fr, domain("V"), 7)
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)
@@ -173,7 +173,7 @@ fn main() {
 fn field(value: u64) -> Value {
     Value::Field(Scalar::from(value))
 }
-fn finish_local(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
+fn finish_local(runner: &mut Runner<CpuBackend>) -> Vec<Value> {
     let Action::Returned(values) = next(runner) else {
         panic!("normal return expected")
     };
@@ -181,7 +181,7 @@ fn finish_local(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
     values
 }
 fn custody_boundaries(directory: &str) {
-    use zkc_native::G1;
+    use zkc_cpu::G1;
     use zkc_runtime::vm::{Packet, Value as RuntimeValue};
     // The host deliberately supplies a reply different from the earlier send.
     // This also ensures the calculation uses the actual received component.
@@ -231,7 +231,7 @@ fn custody_boundaries(directory: &str) {
                 }
                 _ => vec![field(9), Value::Bool(go)],
             };
-            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+            let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
                 .and_then(|program| {
                     program.check_installation(&native)?;
                     Ok(program)
@@ -352,7 +352,7 @@ fn custody_boundaries(directory: &str) {
 
 fn mixed_service(directory: &str) {
     use std::collections::BTreeMap;
-    use zkc_native::services::ServiceRegistry;
+    use zkc_cpu::services::ServiceRegistry;
     let bytes = std::fs::read(Path::new(directory).join("mixed-service.json")).unwrap();
     for go in [true, false] {
         let registry = ServiceRegistry::new(Policy::default());
@@ -363,7 +363,7 @@ fn mixed_service(directory: &str) {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
             .and_then(|program| {
                 program.check_installation(&native)?;
                 Ok(program)

@@ -7,7 +7,7 @@ use super::{
 use crate::execution::Capacity;
 use crate::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
 use std::collections::BTreeMap;
-use zkc_native::NativeBackend;
+use zkc_cpu::CpuBackend;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -27,8 +27,9 @@ pub enum BindingScope {
     /// Binding is entirely defined by the authored protocol; there is no Host header.
     Authored,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ProofOptions {
+    pub installation: zkc_cpu::CpuInstallation,
     pub capacity: Capacity,
     pub external_work: u64,
     pub binding: BindingPolicy,
@@ -37,9 +38,17 @@ impl Default for ProofOptions {
     fn default() -> Self {
         Self {
             capacity: Capacity::default(),
-            external_work: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             binding: BindingPolicy::default(),
+            installation: Default::default(),
         }
+    }
+}
+impl ProofOptions {
+    /// Select the frozen CPU support view before proof admission.
+    pub fn with_installation(mut self, installation: zkc_cpu::CpuInstallation) -> Self {
+        self.installation = installation;
+        self
     }
 }
 /// Explicit retry authorization. Count defaults to one; all cumulative work
@@ -88,6 +97,7 @@ pub struct ProofEntry {
     completion: Option<usize>,
     setup_authority: SetupAuthority,
     roles: (usize, usize),
+    material: std::sync::Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>>,
 }
 /// The outer call result distinguishes preparation refusal. This report must
 /// still be checked for execution success, including rejection and cleanup.
@@ -136,6 +146,9 @@ impl ProofEntry {
     pub fn with_cpu(mut self, cpu: crate::execution::CpuExecution) -> Self {
         self.native = self.native.with_cpu(cpu);
         self
+    }
+    pub fn installation(&self) -> &zkc_cpu::CpuInstallation {
+        self.native.installation()
     }
     pub fn cpu(&self) -> &crate::execution::CpuExecution {
         self.native.cpu()
@@ -264,16 +277,21 @@ impl ProofEntry {
                 authority,
                 op == ProofOperation::Prove,
                 cpu,
+                options.installation.clone(),
             ),
             Some(op) => NativeDeployment::admit_artifact_operation(
                 &package.authenticated_artifact(),
                 authority,
                 Some(op == ProofOperation::Prove),
                 cpu,
+                options.installation.clone(),
             ),
-            None => {
-                NativeDeployment::admit_artifact(&package.authenticated_artifact(), authority, cpu)
-            }
+            None => NativeDeployment::admit_artifact(
+                &package.authenticated_artifact(),
+                authority,
+                cpu,
+                options.installation.clone(),
+            ),
         }
         .and_then(|n| n.with_capacity(options.capacity))
         .and_then(|n| n.with_external_work_limit(options.external_work))
@@ -305,7 +323,19 @@ impl ProofEntry {
         let native = native
             .with_ring_assets(assets.registry().clone())
             .with_relation_assets(assets.relation_registry().clone());
+        let material = std::sync::Arc::new(std::sync::Mutex::new(
+            zkc_cpu::material::VerifierMaterials::new(
+                native.capacity().backend().ark_bounds(),
+                native.installation().clone(),
+                native
+                    .capacity()
+                    .values
+                    .live_bytes
+                    .min(native.capacity().values.total_bytes),
+            ),
+        ));
         Ok(Self {
+            material,
             completion,
             setup_authority,
             roles,
@@ -315,6 +345,41 @@ impl ProofEntry {
             native,
             scope,
         })
+    }
+    /// Invalidate a material slot when an adapter replaces its stored raw bytes,
+    /// even if the replacement is malformed or rejected before the next call.
+    pub fn invalidate_setup(&self, slot: &str) -> Result<()> {
+        let pin = self
+            .setup_authority
+            .keys
+            .get(slot)
+            .ok_or("entry-setup-material")?;
+        self.material
+            .lock()
+            .map_err(|_| "native-setup-material")?
+            .invalidate(pin);
+        Ok(())
+    }
+    /// Invalidate persistent prover imports before an adapter replaces a named
+    /// input, including replacements rejected before document decoding. Sources
+    /// do not yet identify a setup pin, so all prover imports are cleared while
+    /// verifier imports and already checked calls retain their own custody.
+    pub fn invalidate_prover_inputs(&self) -> Result<()> {
+        self.material
+            .lock()
+            .map_err(|_| "native-setup-material")?
+            .invalidate_provers();
+        Ok(())
+    }
+    pub(super) fn observe_setups(&self, setups: &BTreeMap<String, Vec<u8>>) {
+        if let Ok(mut material) = self.material.lock() {
+            for (slot, pin) in &self.setup_authority.keys {
+                material.observe_replacement(pin, setups.get(slot).map(Vec::as_slice));
+            }
+        }
+    }
+    pub fn capacity(&self) -> Capacity {
+        self.native.capacity()
     }
     pub fn package(&self) -> &Package {
         &self.package
@@ -365,8 +430,11 @@ impl ProofEntry {
         proof: Option<&[u8]>,
         attempts: Option<AttemptOptions>,
     ) -> EntryResult<ProofReport> {
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(self.native.capacity().backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.native.capacity().backend().ark_bounds(),
+            self.installation().clone(),
+        )
+        .with_material(self.material.clone());
         self.execute_with(request, proof, attempts, &mut imports)
     }
     pub(crate) fn execute_with(
@@ -376,6 +444,7 @@ impl ProofEntry {
         attempts: Option<AttemptOptions>,
         imports: &mut crate::host::setups::VerifierKeys,
     ) -> EntryResult<ProofReport> {
+        self.observe_setups(&request.setups);
         let producer = proof.is_none();
         let attempts = self.attempt_policy(producer, attempts, self.native.capacity())?;
         let inputs = self
@@ -511,6 +580,7 @@ impl ProofEntry {
             self.native.public_types(),
             request.private.inputs,
             capacity,
+            self.installation(),
         )?;
         Ok(ProofInputs {
             public,
@@ -568,24 +638,24 @@ impl ProofEntry {
     }
 }
 
-/// One file call retains setup imports from output preflight through execution.
+/// One call retains setup imports from output preflight through execution.
 /// Candidate proof bytes are supplied only after this preflight succeeds.
-pub struct ProofFileCall<'a> {
+pub struct ProofCall<'a> {
     host: &'a ProofEntry,
     operation: ProofOperation,
     request: ProofRequest,
     attempts: Option<AttemptOptions>,
     imports: crate::host::setups::VerifierKeys,
-    output_setups: zkc_native::SetupRegistry,
+    output_setups: zkc_cpu::SetupRegistry,
     encode_results: bool,
 }
 impl ProofEntry {
-    /// Check requested file result codecs before input loading or execution.
+    /// Check requested result codecs before input loading or execution.
     pub fn check_result_encoding(&self, operation: ProofOperation) -> Result<()> {
         if self
             .output_types(operation)
             .iter()
-            .all(zkc_native::has_native_wire)
+            .all(|ty| self.installation().supports_wire(ty))
         {
             Ok(())
         } else {
@@ -596,13 +666,14 @@ impl ProofEntry {
     /// reading candidate proof bytes.
     /// Request validation and execution preparation take place in `execute`.
     /// This does not issue resources or execute a proof.
-    pub fn preflight_file_call(
+    pub fn preflight_call(
         &self,
         operation: ProofOperation,
         request: ProofRequest,
         attempts: Option<AttemptOptions>,
         encode_results: bool,
-    ) -> EntryResult<ProofFileCall<'_>> {
+    ) -> EntryResult<ProofCall<'_>> {
+        self.observe_setups(&request.setups);
         if operation == ProofOperation::Verify && attempts.is_some() {
             return Err(E::new(P::Request, "entry-attempt-operation"));
         }
@@ -611,24 +682,29 @@ impl ProofEntry {
                 .map_err(|e| E::new(P::Request, e))?;
         }
         let capacity = self.native.capacity();
-        let mut imports = crate::host::setups::VerifierKeys::new(capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        )
+        .with_material(self.material.clone());
         let output_setups = if encode_results {
             // Reconstruct logical setup pins from the checked deployment, rather
             // than accepting result-encoding authority from candidate data.
             self.cpu()
                 .enter(|| {
-                    crate::entry::files::output_setups_with(
+                    crate::entry::outputs::output_setups_with(
                         &request.setups,
                         &self.setup_authority,
                         capacity,
                         &mut imports,
+                        self.installation(),
                     )
                 })
                 .map_err(|e| E::new(P::Preparation, e))?
         } else {
             Default::default()
         };
-        Ok(ProofFileCall {
+        Ok(ProofCall {
             host: self,
             operation,
             request,
@@ -639,57 +715,496 @@ impl ProofEntry {
         })
     }
 }
-impl ProofFileCall<'_> {
-    pub fn execute(mut self, proof: Option<&[u8]>) -> EntryResult<ProofFileResult> {
+impl ProofCall<'_> {
+    /// Validate the assembled inputs without executing or issuing resources.
+    pub fn check_inputs(self) -> EntryResult<()> {
+        self.host
+            .check_inputs(self.request, self.operation, self.attempts)
+    }
+    pub fn execute(mut self, proof: Option<&[u8]>) -> EntryResult<ProofResult> {
         if (self.operation == ProofOperation::Verify) != proof.is_some() {
             return Err(E::new(P::Request, "entry-proof-operation"));
         }
         let report =
             self.host
                 .execute_with(self.request, proof, self.attempts, &mut self.imports)?;
-        Ok(ProofFileResult {
+        Ok(ProofResult {
+            installation: self.host.installation().clone(),
             report,
             cpu: self.host.cpu().clone(),
             capacity: self.host.native.capacity(),
             output_setups: self.output_setups,
             encode_results: self.encode_results,
             _imports: self.imports,
+            encoding: std::sync::OnceLock::new(),
         })
     }
 }
 /// Execution observations survive later result encoding failures.
-pub struct ProofFileResult {
+pub struct ProofResult {
+    installation: zkc_cpu::CpuInstallation,
     pub report: ProofReport,
     cpu: crate::execution::CpuExecution,
     capacity: Capacity,
-    output_setups: zkc_native::SetupRegistry,
+    output_setups: zkc_cpu::SetupRegistry,
     encode_results: bool,
     // Keep charged canonical snapshots and imported keys alive with results.
     _imports: crate::host::setups::VerifierKeys,
+    encoding: std::sync::OnceLock<Result<OutputAllowance>>,
 }
-impl ProofFileResult {
-    pub fn encode_results(&self) -> Result<Option<Vec<u8>>> {
+struct OutputAllowance {
+    ledger: zkc_runtime::vm::ExecutionLedger,
+    _live: zkc_runtime::vm::LiveReservation,
+}
+/// Encoded output borrows the pending result, retaining both its original
+/// reservations and the new buffer's allowance through publication/handoff.
+#[must_use = "retain the encoded envelope through publication or transport copy"]
+pub struct EncodedResults<'a> {
+    buffer: super::outputs::EncodedBuffer,
+    _result: &'a ProofResult,
+}
+/// A stored transport result owns its pending report as well as its encoded
+/// buffer. Getter copies can outlive the original caller's result handle.
+#[must_use = "retain the encoded owner through publication or transport copy"]
+pub struct OwnedEncodedResults {
+    buffer: super::outputs::EncodedBuffer,
+    _result: std::sync::Arc<ProofResult>,
+}
+impl EncodedResults<'_> {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer.bytes
+    }
+}
+impl AsRef<[u8]> for EncodedResults<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+impl std::ops::Deref for EncodedResults<'_> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+impl OwnedEncodedResults {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer.bytes
+    }
+}
+impl AsRef<[u8]> for OwnedEncodedResults {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+impl std::ops::Deref for OwnedEncodedResults {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+impl ProofResult {
+    pub fn encode_results(&self) -> Result<Option<EncodedResults<'_>>> {
+        Ok(self.encode_results_buffer()?.map(|buffer| EncodedResults {
+            buffer,
+            _result: self,
+        }))
+    }
+    /// Retain original invocation custody when an adapter stores encoded bytes
+    /// beyond this method, including deferred Wasm getters and publication.
+    pub fn encode_results_owned(
+        self: &std::sync::Arc<Self>,
+    ) -> Result<Option<OwnedEncodedResults>> {
+        Ok(self
+            .encode_results_buffer()?
+            .map(|buffer| OwnedEncodedResults {
+                buffer,
+                _result: self.clone(),
+            }))
+    }
+    fn encode_results_buffer(&self) -> Result<Option<super::outputs::EncodedBuffer>> {
         if !self.encode_results {
             return Ok(None);
         }
-        crate::entry::files::proof_outputs_with_cpu(
-            self.report
-                .outputs
-                .as_ref()
-                .ok_or("entry-proof-incomplete")?,
+        let values = self
+            .report
+            .outputs
+            .as_ref()
+            .ok_or("entry-proof-incomplete")?;
+        let allowance = self
+            .encoding
+            .get_or_init(|| {
+                let ledger =
+                    zkc_runtime::vm::ExecutionLedger::new(self.capacity.values, self.capacity.work);
+                // Replay already produced payloads into the publication allowance.
+                // Original report/import guards remain in place; this accounts for
+                // coexistence with one or several encoded buffers, without issuing
+                // or reusing an invocation reservation from the material cache.
+                let material = self._imports.retained_bytes();
+                let proof = self.report.native.outcome.as_ref().map_or(0, Vec::len);
+                let live = self
+                    .report
+                    .native
+                    .usage
+                    .live_value_bytes
+                    .checked_add(material)
+                    .and_then(|n| n.checked_add(proof))
+                    .ok_or("entry-output-limit")?;
+                let fresh = self
+                    .report
+                    .native
+                    .usage
+                    .total_value_bytes
+                    .checked_add(material)
+                    .and_then(|n| n.checked_add(proof))
+                    .ok_or("entry-output-limit")?;
+                ledger
+                    .charge(
+                        zkc_runtime::vm::WorkBudget {
+                            instructions: 0,
+                            iterations: 0,
+                            logical_bytes: self.report.native.usage.logical_bytes,
+                        },
+                        fresh,
+                    )
+                    .map_err(|_| "entry-output-limit")?;
+                let held = ledger
+                    .reserve_live(live)
+                    .map_err(|_| "entry-output-limit")?;
+                Ok(OutputAllowance {
+                    ledger,
+                    _live: held,
+                })
+            })
+            .as_ref()
+            .map_err(Clone::clone)?;
+        let buffer = crate::entry::outputs::proof_outputs_reserved(
+            values,
             self.capacity,
             self.output_setups.clone(),
             self.cpu.clone(),
-        )
-        .map(Some)
+            self.installation.clone(),
+            Some(allowance.ledger.clone()),
+        )?;
+        Ok(Some(buffer))
     }
 }
+
 impl ProofOptions {
     pub fn with_external_work(mut self, work: u64) -> Result<Self> {
-        if work > NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+        if work > CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
             return Err("native-proof-external-work-limit".into());
         }
         self.external_work = work;
         Ok(self)
+    }
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    #[test]
+    fn encoded_envelopes_hold_result_and_buffer_allowances_until_handoff() {
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame=serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        let package = Package::capture(
+            frame.as_bytes(),
+            &Sha256::digest(frame.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        let host = ProofEntry::admit(
+            package,
+            ProofOptions {
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap();
+        let result = std::sync::Arc::new(
+            host.preflight_memory_call(
+                ProofOperation::Prove,
+                Some(r#"{"公開":true}"#.as_bytes()),
+                Some(r#"{"秘密":false}"#.as_bytes()),
+                &Default::default(),
+                Default::default(),
+                None,
+                true,
+            )
+            .unwrap()
+            .execute(None)
+            .unwrap(),
+        );
+        let first = result.encode_results().unwrap().unwrap();
+        let allowance = result.encoding.get().unwrap().as_ref().unwrap();
+        let ledger = allowance.ledger.clone();
+        let one = ledger.snapshot();
+        assert!(one.live_reserved_bytes > 0);
+        let second = result.encode_results().unwrap().unwrap();
+        let two = ledger.snapshot();
+        assert_eq!(first.as_bytes(), second.as_bytes());
+        assert!(two.live_reserved_bytes > one.live_reserved_bytes);
+        drop(second);
+        assert_eq!(
+            ledger.snapshot().live_reserved_bytes,
+            one.live_reserved_bytes
+        );
+        let publication =
+            |bytes: &[u8]| serde_json::from_slice::<serde_json::Value>(bytes).unwrap();
+        assert_eq!(publication(first.as_bytes())["values"]["結果"], false);
+        drop(first);
+        assert!(ledger.snapshot().live_reserved_bytes > 0);
+        let stored = result.encode_results_owned().unwrap().unwrap();
+        let weak = std::sync::Arc::downgrade(&result);
+        drop(result);
+        assert!(weak.upgrade().is_some());
+        assert_eq!(publication(stored.as_bytes())["values"]["結果"], false);
+        assert!(ledger.snapshot().live_reserved_bytes > 0);
+        let fresh = ledger.snapshot().total_value_bytes;
+        drop(stored);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(ledger.snapshot().live_reserved_bytes, 0);
+        assert_eq!(ledger.snapshot().total_value_bytes, fresh);
+    }
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+    use crate::entry::memory::ProofCallOptions;
+    use sha2::{Digest, Sha256};
+    use std::sync::Arc;
+    use zkc_kernels::arkworks::bls12_381::Keys;
+
+    fn host(capacity: Capacity) -> ProofEntry {
+        let (interface, artifact) = crate::entry::interface::tests::unicode::proof_fixture();
+        let frame = serde_json::json!({"format":"zkc.entry/0","original":"original",
+            "interface":interface.to_string(),"artifact":artifact,"assets":[],
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,
+                "fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true}}).to_string();
+        let package = Package::capture(
+            frame.as_bytes(),
+            &Sha256::digest(frame.as_bytes()).into(),
+            Package::MAX_BYTES,
+        )
+        .unwrap();
+        ProofEntry::admit(
+            package,
+            ProofOptions {
+                capacity,
+                binding: BindingPolicy::AllowAuthored,
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap()
+    }
+    fn keys(host: &ProofEntry) -> Keys {
+        Keys::setup_with_rng(
+            1,
+            &mut ark_std::rand::thread_rng(),
+            &host.capacity().backend().ark_bounds(),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn admitted_material_retention_uses_the_smaller_live_and_total_ceiling() {
+        for (live, total) in [(0, 65536), (65536, 0), (65536, 65536)] {
+            let mut capacity = Capacity::default();
+            capacity.values.live_bytes = live;
+            capacity.values.total_bytes = total;
+            let host = host(capacity);
+            let keys = keys(&host);
+            let bounds = capacity.backend().ark_bounds();
+            let bytes = keys.verifier_key().to_bytes(&bounds).unwrap();
+            let pin = keys.verifier_key().metadata().key_id();
+            let mut material = host.material.lock().unwrap();
+            let first = material.import(&bytes, pin, bounds).unwrap();
+            let second = material.import(&bytes, pin, bounds).unwrap();
+            assert_eq!(Arc::ptr_eq(&first, &second), live.min(total) > 0);
+        }
+    }
+    #[test]
+    fn named_input_invalidation_preserves_vk_and_checked_calls_after_early_failures() {
+        let host = host(Default::default());
+        let keys = keys(&host);
+        let bounds = host.capacity().backend().ark_bounds();
+        let vk = keys.verifier_key().to_bytes(&bounds).unwrap();
+        let pk = keys.prover_key().to_bytes(&bounds).unwrap();
+        let pin = keys.verifier_key().metadata().key_id();
+        let fingerprint = keys.prover_key().material_fingerprint();
+        let mut call = host
+            .preflight_memory_call(
+                ProofOperation::Prove,
+                Some(r#"{"公開":true}"#.as_bytes()),
+                Some(r#"{"秘密":false}"#.as_bytes()),
+                &Default::default(),
+                ProofCallOptions::default(),
+                None,
+                false,
+            )
+            .unwrap();
+        let checked_vk = call.imports.import(&vk, pin).unwrap();
+        // Seed numerical imports separately from the Boolean protocol, so this
+        // test isolates replacement and document-failure ordering.
+        let old = host
+            .material
+            .lock()
+            .unwrap()
+            .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+            .unwrap();
+        host.invalidate_prover_inputs().unwrap();
+        // The adapter hook precedes even an invalid named binding or malformed
+        // public document; the SDK need not resolve that name to a setup pin.
+        let error = host
+            .preflight_memory_call(
+                ProofOperation::Prove,
+                Some(b"malformed public"),
+                Some(b"malformed witness"),
+                &[(
+                    "unknown replacement".into(),
+                    Arc::new(b"malformed key".to_vec()),
+                )]
+                .into(),
+                ProofCallOptions::default(),
+                None,
+                false,
+            )
+            .err()
+            .unwrap();
+        assert_eq!(error.code(), "entry-request-format");
+        assert_eq!(error.path(), Some("public"));
+        let mut material = host.material.lock().unwrap();
+        let fresh = material
+            .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+            .unwrap();
+        assert!(!Arc::ptr_eq(&old, &fresh));
+        assert!(Arc::ptr_eq(
+            &checked_vk,
+            &material.import(&vk, pin, bounds).unwrap()
+        ));
+        drop(material);
+        assert_eq!(old.material_fingerprint(), fingerprint);
+        assert!(Arc::ptr_eq(
+            &checked_vk,
+            &call.imports.import(&vk, pin).unwrap()
+        ));
+        assert!(call.execute(None).unwrap().report.is_success());
+    }
+    #[test]
+    fn memory_setup_replacement_is_observed_before_malformed_public() {
+        let mut host = host(Default::default());
+        let keys = keys(&host);
+        let bounds = host.capacity().backend().ark_bounds();
+        let vk = keys.verifier_key().to_bytes(&bounds).unwrap();
+        let pk = keys.prover_key().to_bytes(&bounds).unwrap();
+        let pin = keys.verifier_key().metadata().key_id();
+        let fingerprint = keys.prover_key().material_fingerprint();
+        // Install only the observer slot: numerical imports are independent of
+        // the Boolean protocol used to exercise transport failure ordering.
+        host.setup_authority.keys.insert("setup".into(), pin);
+        for replacement in [Some(b"malformed setup".to_vec()), None] {
+            let old_vk = host
+                .material
+                .lock()
+                .unwrap()
+                .import(&vk, pin, bounds)
+                .unwrap();
+            let old_pk = host
+                .material
+                .lock()
+                .unwrap()
+                .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+                .unwrap();
+            let options = ProofCallOptions {
+                setups: replacement
+                    .map(|bytes| [("setup".into(), bytes)].into())
+                    .unwrap_or_default(),
+                ..Default::default()
+            };
+            let error = host
+                .preflight_memory_call(
+                    ProofOperation::Prove,
+                    Some(b"malformed public"),
+                    None,
+                    &Default::default(),
+                    options,
+                    None,
+                    false,
+                )
+                .err()
+                .unwrap();
+            assert_eq!(error.code(), "entry-request-format");
+            assert_eq!(error.path(), Some("public"));
+            let mut material = host.material.lock().unwrap();
+            assert!(!Arc::ptr_eq(
+                &old_vk,
+                &material.import(&vk, pin, bounds).unwrap()
+            ));
+            assert!(!Arc::ptr_eq(
+                &old_pk,
+                &material
+                    .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+                    .unwrap()
+            ));
+        }
+    }
+    #[cfg(feature = "files")]
+    #[test]
+    fn file_setup_replacement_is_observed_before_missing_public_file() {
+        let mut host = host(Default::default());
+        let keys = keys(&host);
+        let bounds = host.capacity().backend().ark_bounds();
+        let vk = keys.verifier_key().to_bytes(&bounds).unwrap();
+        let pk = keys.prover_key().to_bytes(&bounds).unwrap();
+        let pin = keys.verifier_key().metadata().key_id();
+        let fingerprint = keys.prover_key().material_fingerprint();
+        host.setup_authority.keys.insert("setup".into(), pin);
+        let old_vk = host
+            .material
+            .lock()
+            .unwrap()
+            .import(&vk, pin, bounds)
+            .unwrap();
+        let old_pk = host
+            .material
+            .lock()
+            .unwrap()
+            .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let paths = [("public".into(), directory.path().join("missing.json"))].into();
+        let error = crate::entry::files::Documents::new(host.capacity())
+            .unwrap()
+            .preflight_call(
+                &host,
+                ProofOperation::Prove,
+                &paths,
+                ProofCallOptions {
+                    setups: [("setup".into(), b"malformed setup".to_vec())].into(),
+                    ..Default::default()
+                },
+                None,
+                false,
+            )
+            .err()
+            .unwrap();
+        assert_eq!(error.code(), "entry-input-document");
+        assert_eq!(error.path(), Some("public"));
+        let mut material = host.material.lock().unwrap();
+        assert!(!Arc::ptr_eq(
+            &old_vk,
+            &material.import(&vk, pin, bounds).unwrap()
+        ));
+        assert!(!Arc::ptr_eq(
+            &old_pk,
+            &material
+                .import_prover(&pk, fingerprint, keys.verifier_key(), bounds)
+                .unwrap()
+        ));
     }
 }

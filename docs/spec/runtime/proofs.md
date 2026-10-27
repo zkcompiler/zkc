@@ -14,7 +14,7 @@ decoding measurement refuses closed before allocating or accepting a receive.
 Invalid bytes complete the receive with Decode; capacity and trusted adapter
 failures remain Host failures and cannot establish acceptance or rejection.
 
-Native implements these contracts in `zkc-native`. `zkc` retains native
+Native implements these contracts in `zkc-cpu`. `zkc` retains native
 deployment admission, independent setup/public-input/binding authority, transport
 and acceptance selection, immutable prepared computation identity, attempts and
 publication. Drivers infer none of that authority from proof or candidate

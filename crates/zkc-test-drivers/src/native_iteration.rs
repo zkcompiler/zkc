@@ -2,14 +2,14 @@
 //! This is an executable integration client: expectations come from each source
 //! protocol and its arithmetic, independently of the generated dispatch plan.
 use std::collections::BTreeMap;
-use zkc_native::services::{ServiceObservation, ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::services::{ServiceObservation, ServiceReference, ServiceRegistry};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Value};
 
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::Value as RuntimeValue;
 
-fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str, session: &str, entry: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, session, entry, None), None),
         Default::default(),
@@ -22,7 +22,7 @@ fn bundle(fixtures: &Fixtures, name: &str) -> Bundle {
     Bundle::admit(
         &bytes,
         &backend("Alice", "admission", "main"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap_or_else(|error| panic!("bundle {name}: {error}"))
@@ -61,7 +61,7 @@ impl Audit {
         }
     }
 }
-impl Hooks<NativeBackend> for Audit {
+impl Hooks<CpuBackend> for Audit {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -83,7 +83,7 @@ impl Hooks<NativeBackend> for Audit {
     fn observe(
         &mut self,
         role: &str,
-        _: &NativeBackend,
+        _: &CpuBackend,
         phase: Phase,
     ) -> Result<Option<String>, String> {
         let observations: Vec<_> = self
@@ -107,7 +107,7 @@ fn run_case(
     session: &str,
     mut values: Inputs,
     audit: &mut Audit,
-) -> Report<NativeBackend> {
+) -> Report<CpuBackend> {
     let inputs = bundle
         .roles()
         .iter()
@@ -137,7 +137,7 @@ fn run_case(
     assert!(audit.after.values().flatten().all(|o| !o.leased));
     report
 }
-fn role<'a>(report: &'a Report<NativeBackend>, name: &str) -> &'a RoleReport<Value> {
+fn role<'a>(report: &'a Report<CpuBackend>, name: &str) -> &'a RoleReport<Value> {
     report.roles.iter().find(|r| r.role == name).unwrap()
 }
 fn draws(observation: &ServiceObservation, count: u64, budget: u64, poisoned: bool, leased: bool) {
@@ -351,7 +351,7 @@ fn sumcheck(directory: &Fixtures) {
                     )
                     .unwrap();
                     let arr = Value::FieldArray(
-                        zkc_native::FieldArray::new(
+                        zkc_cpu::FieldArray::new(
                             zkc_runtime::vm::PhysicalType::default_for(ty).unwrap(),
                             coefficients
                                 .into_iter()

@@ -33,6 +33,18 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Execution foundation
 
+`zkc-cpu` composes the five compiled providers through an immutable
+`CpuInstallation`. Reduced installations restrict operation, layout, codec,
+setup and service support; the compiler's `--cpu-target` applies matching
+restrictions without changing physical identities. See the
+[CPU guide](../crates/zkc-cpu/README.md#provider-composition).
+
+The [browser engine](../crates/zkc-web/README.md) runs the common SDK and VM
+through a bounded promise-based Worker client. Files and project integration
+are optional SDK features. Portable and SIMD modules share provider support;
+browser numerical execution is inline. Numerical threading, whole-heap memory
+accounting and compiled provider pruning are not provided.
+
 Logical variants use Data-owned types; runtime capabilities and exact physical
 representation wrappers use Runtime-owned types. Their independent binding
 adapters preserve current native descriptors and installation checks. Runtime
@@ -526,14 +538,14 @@ Setup input associations and authorized incoming PCS values follow the
 [setup contract](spec/formats/messages.md#application-authorized-setups).
 The protocol retains an explicit verifier-key-consuming terminal check.
 
-Registered services cover four RNG distributions/providers. Each offers field
-`draw`; the KoalaBear octic service also offers [UniformIndex](spec/runtime/services.md#uniformindex-realization)
+Registered services cover six RNG distributions/providers. Each offers field
+`draw`; the KoalaBear octic, BabyBear quartic and Goldilocks quadratic services also offer [UniformIndex](spec/runtime/services.md#uniformindex-realization)
 sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
 as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
-under its Merlin and hash-chain suites. Explicit query handlers support other positive static
+under their installed transcript suites. Explicit query handlers support other positive static
 u64 bounds; `zkc::sampling` supplies bounded rejection over ordinary word
 providers. The installed interactive and native transcript samplers retain
-their power-of-two restriction. Runtime query bounds and other service fields
+their power-of-two restriction. Runtime query bounds and other service families
 remain unsupported. Tests check
 prover/verifier agreement and an independent replay of the framing; they make no
 uniformity or Fiat–Shamir security claim. Arbitrary user-defined

@@ -79,7 +79,7 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
     let role = &interface.roles()[interface.proof().unwrap().verifier];
     for len in [1, 1024 * 1024] {
         let data = PreparedData::from_value(
-            zkc_native::Value::Bytes(vec![0x93; len].into()),
+            zkc_cpu::Value::Bytes(vec![0x93; len].into()),
             Capacity::default(),
         )
         .unwrap();
@@ -98,6 +98,7 @@ fn public_wire_duplication_preserves_the_original_payload_allocation() {
             &public_types(&interface),
             NamedValues::new(),
             Capacity::default(),
+            &Default::default(),
         )
         .unwrap();
         assert_eq!(inputs.len(), 2);
@@ -149,6 +150,7 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public_types(&interface),
             NamedValues::new(),
             capacity,
+            &Default::default(),
         );
         if succeeds {
             let inputs = result.unwrap();
@@ -178,7 +180,8 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &public,
             &public_types(&interface),
             NamedValues::new(),
-            capacity
+            capacity,
+            &Default::default(),
         )
         .unwrap_err(),
         "native-capacity-wire"
@@ -194,7 +197,8 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &malformed,
             &public_types(&interface),
             NamedValues::new(),
-            capacity
+            capacity,
+            &Default::default(),
         )
         .unwrap_err(),
         "native-input-alternative"
@@ -217,7 +221,8 @@ fn nested_public_wire_occurrences_keep_exact_byte_sum_limits_and_preflight_order
             &malformed,
             &public_types(&interface),
             NamedValues::new(),
-            capacity
+            capacity,
+            &Default::default(),
         )
         .unwrap_err(),
         "native-input-payload"

@@ -94,6 +94,7 @@ pub(super) struct RoleInterface {
     pub(super) acceptance: Option<usize>,
 }
 impl RoleInterface {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn read(
         admitted: &Program,
         policy: &DeploymentPolicy<'_>,
@@ -102,6 +103,7 @@ impl RoleInterface {
         construction: Option<&ConstructionPlan>,
         operation: Option<bool>,
         retained_inputs: bool,
+        installation: &zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
@@ -140,12 +142,12 @@ impl RoleInterface {
             for ty in &input_types {
                 if retained_inputs
                     && ty.is_duplicable()
-                    && !zkc_native::has_native_wire(ty)
+                    && !installation.supports_wire(ty)
                     && !matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
                 {
                     continue;
                 }
-                input_kind(ty)?;
+                input_kind(ty, installation)?;
             }
             let outputs = ports(&row[3], &role.outputs[..role.outputs.len() - outputs])?;
             // This host returns proof bytes and retires its issued roots. It
@@ -300,6 +302,12 @@ impl RoleInterface {
                 None => PhysicalType::default_for(public_port.logical.clone())
                     .map_err(|e| e.to_string())?,
             });
+        }
+        if public_types
+            .iter()
+            .any(|ty| !installation.supports_type(ty))
+        {
+            return Err("native-proof-public-map".into());
         }
         Ok(Self {
             maps,

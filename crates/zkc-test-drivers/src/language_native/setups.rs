@@ -10,8 +10,8 @@ use zkc::{
     execution::{Capacity, InputValue, ProverMaterial},
     run::HostLimits,
 };
+use zkc_cpu::{Policy, Scalar, Value as Native};
 use zkc_kernels::arkworks::bls12_381::{Keys, Table};
-use zkc_native::{Policy, Scalar, Value as Native};
 fn package(directory: &Path, entry: &str) -> Package {
     let bytes = std::fs::read(directory.join(format!("pcs-setup-{entry}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()
@@ -182,8 +182,8 @@ pub(super) fn run(directory: &Path) {
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
-    let prover = ProofEntry::admit(publication.clone(), options, pins()).unwrap();
-    let verifier = ProofEntry::admit(publication, options, pins()).unwrap();
+    let prover = ProofEntry::admit(publication.clone(), options.clone(), pins()).unwrap();
+    let verifier = ProofEntry::admit(publication, options.clone(), pins()).unwrap();
     let request = |producing| ProofRequest {
         public: [("point".into(), point()), ("claim".into(), claim(0))].into(),
         private: {

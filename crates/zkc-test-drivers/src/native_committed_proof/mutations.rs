@@ -105,11 +105,12 @@ pub fn check(
             .unwrap()
             .push(json!(["9", logical]));
         let bytes = serde_json::to_vec(&candidate).unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
-            .and_then(|program| {
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).and_then(
+            |program| {
                 program.check_installation(&codec)?;
                 Ok(program)
-            });
+            },
+        );
         admitted.expect("unused private input must pass ordinary typed admission");
         changed[4] = json!(String::from_utf8(bytes.clone()).unwrap());
         changed[5] = json!(digest(&bytes));
@@ -339,7 +340,7 @@ pub fn check(
         state.original().logical_values().unwrap(),
         vec![Scalar::from(1), Scalar::from(2)]
     );
-    assert!(!zkc_native::has_native_wire(
+    assert!(!zkc_cpu::has_native_wire(
         &Value::OpeningState(Arc::new(state)).physical_type()
     ));
 }

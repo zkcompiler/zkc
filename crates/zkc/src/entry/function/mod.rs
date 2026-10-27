@@ -47,7 +47,7 @@ pub struct FunctionSignature {
 }
 crate::entry::decode::objects!(FunctionParameter, FunctionSignature);
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct FunctionOptions {
     pub limits: HostLimits,
     pub binding: super::BindingPolicy,
@@ -64,6 +64,13 @@ impl Default for FunctionOptions {
             journal_events: 256,
             service_draws: 64 * crate::entry::DEFAULT_DRAW_BUDGET,
         }
+    }
+}
+impl FunctionOptions {
+    /// Use the same installation for calculations, children and data codecs.
+    pub fn with_installation(mut self, installation: zkc_cpu::CpuInstallation) -> Self {
+        self.limits = self.limits.with_installation(installation);
+        self
     }
 }
 #[derive(Debug, Default)]
@@ -182,6 +189,14 @@ impl FunctionEntry {
             .collect();
         self.host.cpu = cpu;
         self
+    }
+    pub fn installation(&self) -> &zkc_cpu::CpuInstallation {
+        &self.host.options.limits.installation
+    }
+    pub fn check_result_encoding(&self) -> Result<()> {
+        self.host
+            .interface
+            .check_result_encoding_with_installation(self.installation())
     }
     pub fn cpu(&self) -> &CpuExecution {
         &self.host.cpu

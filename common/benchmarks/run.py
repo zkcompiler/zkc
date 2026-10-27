@@ -67,8 +67,39 @@ def main(argv=None):
     run_parser.add_argument('--exclusive', action='store_true',
                             help='acquire the shared measurement lock; fail with exit 75 if busy')
     run_parser.add_argument('--label', default='current')
+    browser_parser = commands.add_parser('browser', help='measure prepared ordinary ProofClient cases', allow_abbrev=False)
+    browser_parser.add_argument('--web', type=Path, required=True, help='client/Worker and pkg[/pkg-simd] deployment')
+    browser_parser.add_argument('--cases', type=Path, required=True, help='zkc.browser-cases/0 prepared fixture document')
+    browser_parser.add_argument('--node', type=executable, required=True)
+    browser_parser.add_argument('--playwright', type=Path, required=True, help='explicit Playwright 1.64.1 index.mjs')
+    browser_parser.add_argument('--native-example', type=executable, help='matching zkc-web memory example for bidirectional cross-verification')
+    browser_parser.add_argument('--variant', action='append', choices=('portable', 'simd'))
+    browser_parser.add_argument('--transport', choices=('borrowed', 'consume'), default='borrowed')
+    browser_parser.add_argument('--revision', required=True, help='source revision supplied by the build owner')
+    browser_parser.add_argument('--output', type=Path, required=True)
+    browser_parser.add_argument('--processes', type=positive_integer, default=2)
+    browser_parser.add_argument('--samples', type=positive_integer, default=5)
+    browser_parser.add_argument('--warmups', type=nonnegative, default=1)
+    browser_parser.add_argument('--timeout', type=positive_integer, default=300)
+    browser_parser.add_argument('--exclusive', action='store_true')
+    browser_parser.add_argument('--label', default='current')
+    fixture_parser = commands.add_parser('browser-fixtures', help='generate captured browser source controls', allow_abbrev=False)
+    fixture_parser.add_argument('--source', type=Path, default=ROOT)
+    fixture_parser.add_argument('--compiler', type=executable)
+    fixture_parser.add_argument('--source-only', action='store_true')
+    fixture_parser.add_argument('--setup-material', type=Path, help='prepared development key material for the existing two-slot PCS fixture')
+    fixture_parser.add_argument('--output', type=Path, required=True)
+    fixture_parser.add_argument('--case', action='append')
+    fixture_parser.add_argument('--timeout', type=positive_integer, default=300)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'browser-fixtures':
+            require(args.source_only or args.compiler, 'browser fixture compilation requires --compiler')
+            from bench.browser_fixtures import prepare as prepare_browser_fixtures
+            return prepare_browser_fixtures(args)
+        if args.command == 'browser':
+            from bench.browser import run as run_browser
+            return run_browser(args)
         if args.command == 'list':
             for name, suite, size in catalog(): print(f'{name}\t{suite.name}\t{json.dumps(size, sort_keys=True)}')
             return 0

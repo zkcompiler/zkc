@@ -23,7 +23,7 @@ shared compiler or runtime model.
 [`Cargo.toml`](Cargo.toml) pins `p3-air`, `p3-field`, `p3-koala-bear` and
 `p3-matrix` to exactly 0.8.0, the crates.io release of upstream commit
 `a21e3ed42905040ad49c519e402f018381c12d0c`. This is the family the native
-KoalaBear provider in `crates/zkc-native` pins, so both name the same field
+KoalaBear provider in `crates/zkc-cpu` pins, so both name the same field
 types. `p3-commit` 0.8.0 is a test dependency for the upstream two-adic selector
 law. The lockfile was seeded from the root lockfile; packages the two graphs
 share resolve to the same versions. Later Plonky3 releases have different AIR
@@ -46,7 +46,7 @@ RUSTFLAGS="-C target-cpu=native" ZKC_PLONKY3_PACKING_WIDTH=8 \
   cargo test --locked -p zkc-plonky3-air-driver --features native
 ```
 
-The `native` feature adds `zkc-runtime`, `zkc-native` and `zkc-kernels` through relative
+The `native` feature adds `zkc-runtime`, `zkc-cpu` and `zkc-kernels` through relative
 path dependencies and compares exported arenas with the native ring admission
 and KoalaBear/Ext8 provider. Portable builds pack one lane; the third command
 checks the packed provider at the AVX2 width. `ZKC_PLONKY3_PACKING_WIDTH`

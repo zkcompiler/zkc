@@ -37,6 +37,9 @@ impl RunEntry {
         self.native = self.native.with_cpu(cpu);
         self
     }
+    pub fn installation(&self) -> &zkc_cpu::CpuInstallation {
+        self.native.installation()
+    }
     pub fn cpu(&self) -> &crate::execution::CpuExecution {
         self.native.cpu()
     }
@@ -166,6 +169,7 @@ impl RunEntry {
     pub fn prepare(&self, request: RunRequest) -> EntryResult<PreparedRun<'_>> {
         let mut imports = crate::host::setups::VerifierKeys::new(
             self.native.limits().capacity.backend().ark_bounds(),
+            self.native.installation().clone(),
         );
         self.prepare_with(request, &mut imports)
     }
@@ -279,10 +283,7 @@ impl PreparedRun<'_> {
         report
     }
 }
-fn collect(
-    interface: &Interface,
-    execution: &Report<zkc_native::NativeBackend>,
-) -> Result<RoleValues> {
+fn collect(interface: &Interface, execution: &Report<zkc_cpu::CpuBackend>) -> Result<RoleValues> {
     let mut outputs = BTreeMap::new();
     for role in interface.roles() {
         let returned = execution

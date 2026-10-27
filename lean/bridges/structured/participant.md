@@ -1,7 +1,7 @@
 # Native participant comparison
 
 `participant.py` compares original structured participant replay with actual
-compiler-produced endpoints executed by Rust `Runner`, `NativeBackend`,
+compiler-produced endpoints executed by Rust `Runner`, `CpuBackend`,
 `ServiceRegistry`, and native wire codecs. The maintained initial subjects are
 `example::Interactive` from the Schnorr library and the existing
 `open-services.mlir` fixture. This is bounded executable evidence, not Rust

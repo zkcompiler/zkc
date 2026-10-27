@@ -3,8 +3,8 @@
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, fs};
-use zkc_native::services::{ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, NativeWireError, Policy, Value};
+use zkc_cpu::services::{ServiceReference, ServiceRegistry};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, NativeWireError, Policy, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, BackendError, BoundSignature, CallContext, Cut, Frame, FrameExit, Invocation,
@@ -79,16 +79,16 @@ struct Request {
 /// Delegation preserves all native operations and service custody. The single
 /// injection point deliberately damages a reply AFTER the real provider call.
 struct ObservedBackend {
-    native: NativeBackend,
+    native: CpuBackend,
     draws: Vec<Value>,
     malformed_site: Option<String>,
     faults_applied: usize,
 }
 impl Backend for ObservedBackend {
     type Value = Value;
-    type Operation = zkc_native::NativeOperation;
-    type Call = zkc_native::NativeCall;
-    type Checkpoint = zkc_native::ComputationCheckpoint;
+    type Operation = zkc_cpu::CpuOperation;
+    type Call = zkc_cpu::CpuCall;
+    type Checkpoint = zkc_cpu::ComputationCheckpoint;
 
     fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
         self.native.computation_checkpoint()
@@ -248,12 +248,7 @@ fn same_action(a: &Action<Value>, b: &Action<Value>) -> bool {
         _ => false,
     }
 }
-fn related(
-    native: &NativeBackend,
-    v: &Value,
-    expected: &Json,
-    wires: &mut Vec<Json>,
-) -> Result<Json> {
+fn related(native: &CpuBackend, v: &Value, expected: &Json, wires: &mut Vec<Json>) -> Result<Json> {
     let ty = logical(&v.physical_type())?;
     let mapped = value(&ty, expected)?;
     let actual = native.encode_native_value(v).map_err(harness)?;
@@ -523,13 +518,13 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         "source input count",
     )?;
     let b = &req.binding;
-    let native = NativeBackend::new(
+    let native = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(&b.role, &req.session, &b.entry, None), None),
         Default::default(),
     )
     .map_err(harness)?;
-    let admitted = Program::decode(bytes, zkc_native::native_contracts()).map_err(harness)?;
+    let admitted = Program::decode(bytes, zkc_cpu::cpu_contracts()).map_err(harness)?;
     admitted.check_installation(&native).map_err(harness)?;
     require(admitted.bytes() == bytes, "admitted byte custody")?;
     let endpoint = admitted
@@ -990,7 +985,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
     )?;
     // Reacquisition exercises poison/lease state, without resetting any root.
     let retry_session = format!("{}-reuse", req.session);
-    let retry_backend = NativeBackend::new(
+    let retry_backend = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(&b.role, &retry_session, &b.entry, None), None),
         Default::default(),

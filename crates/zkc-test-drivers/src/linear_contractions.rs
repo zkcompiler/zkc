@@ -1,7 +1,7 @@
 //! Execute compiler-exported shared contractions with the unmodified native Runner.
 //! Usage: linear_contractions PROGRAM.json field|group [direct|if|for]
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, RistrettoScalar, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, StopKind};
 
@@ -31,14 +31,14 @@ fn vector(values: &[u64], group: bool) -> Value {
     }
 }
 
-fn runner(bytes: &[u8], group: bool, allowed: bool, short_right: bool) -> Runner<NativeBackend> {
-    let native = NativeBackend::new(
+fn runner(bytes: &[u8], group: bool, allowed: bool, short_right: bool) -> Runner<CpuBackend> {
+    let native = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", SESSION, "main", None), None),
         Default::default(),
     )
     .unwrap();
-    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_cpu::cpu_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -74,7 +74,7 @@ fn runner(bytes: &[u8], group: bool, allowed: bool, short_right: bool) -> Runner
     .unwrap()
 }
 
-fn finish(runner: &mut Runner<NativeBackend>) -> Action<Value> {
+fn finish(runner: &mut Runner<CpuBackend>) -> Action<Value> {
     let Action::Local(local) = runner.poll() else {
         panic!("expected the single Work call")
     };

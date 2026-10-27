@@ -1,6 +1,6 @@
 //! Execute compiler-generated Boolean recipes with the installed native backend.
 use std::path::Path;
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::Action;
 
@@ -14,14 +14,14 @@ fn main() {
         for a in [false, true] {
             for b in [false, true] {
                 for c in [false, true] {
-                    let backend = NativeBackend::new(
+                    let backend = CpuBackend::new(
                         Policy::default(),
                         EntryPolicy::new(Domain::new("P", "boolean_test", "main", None), None),
                         Default::default(),
                     )
                     .unwrap();
                     let admitted =
-                        zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+                        zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
                             .and_then(|program| {
                                 program.check_installation(&backend)?;
                                 Ok(program)
@@ -85,13 +85,13 @@ fn main() {
         ("folded", vec![Value::Bool(false)], true),
     ] {
         let bytes = std::fs::read(Path::new(&directory).join(format!("{name}.json"))).unwrap();
-        let backend = NativeBackend::new(
+        let backend = CpuBackend::new(
             Policy::default(),
             EntryPolicy::new(Domain::new("P", "boolean_test", "main", None), None),
             Default::default(),
         )
         .unwrap();
-        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_native::native_contracts())
+        let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts())
             .and_then(|program| {
                 program.check_installation(&backend)?;
                 Ok(program)

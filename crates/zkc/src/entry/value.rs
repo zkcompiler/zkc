@@ -3,7 +3,7 @@
 use super::interface::raw::{Field, Kind, Permission, Schema};
 use crate::execution::InputValue;
 use std::collections::BTreeMap;
-use zkc_native::Value as NativeValue;
+use zkc_cpu::Value as NativeValue;
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -88,7 +88,7 @@ pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) 
                 value,
                 InputValue::Native(_)
                     | InputValue::Wire(_)
-                    | InputValue::WireFile { .. }
+                    | InputValue::WireSource { .. }
                     | InputValue::Prepared(_)
             ) {
                 return Err("entry-input-kind".into());

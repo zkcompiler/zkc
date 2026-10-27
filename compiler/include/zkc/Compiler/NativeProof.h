@@ -3,6 +3,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Contracts/ProofFormat.h"
+#include "zkc/Target/CpuTarget.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/JSON.h"
 #include <optional>
@@ -91,6 +92,7 @@ struct NativeProofOptions {
   /// Absent preserves the existing complete declarative deployment API.
   std::optional<NativeProofOperation> operation = std::nullopt;
   CompilationObservation *observations = nullptr;
+  target::CpuTarget cpuTarget = {};
 };
 struct CompiledNativeProof {
   Compilation compilation;

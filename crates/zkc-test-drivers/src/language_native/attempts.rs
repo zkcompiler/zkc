@@ -8,7 +8,7 @@ use zkc::{
     },
     run::HostLimits,
 };
-use zkc_native::Value as Native;
+use zkc_cpu::Value as Native;
 fn package(directory: &Path, entry: &str, suite: usize) -> Package {
     let bytes = std::fs::read(directory.join(format!("attempt-{entry}-{suite}.zkpkg"))).unwrap();
     Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES).unwrap()
@@ -36,8 +36,10 @@ pub(super) fn run(directory: &Path) {
             ..Default::default()
         };
         let publication = package(directory, name, suite);
-        let prover = ProofEntry::admit(publication.clone(), options, Default::default()).unwrap();
-        let verifier = ProofEntry::admit(publication.clone(), options, Default::default()).unwrap();
+        let prover =
+            ProofEntry::admit(publication.clone(), options.clone(), Default::default()).unwrap();
+        let verifier =
+            ProofEntry::admit(publication.clone(), options.clone(), Default::default()).unwrap();
         let retry = AttemptOptions {
             count: 3,
             ..Default::default()
@@ -80,7 +82,7 @@ pub(super) fn run(directory: &Path) {
         );
         assert!(exhausted.native.cleanup_errors.is_empty());
         let per_attempt = exhausted.native.attempts[0].usage.instructions;
-        let mut cumulative_options = options;
+        let mut cumulative_options = options.clone();
         cumulative_options.capacity.work.instructions = 2 * per_attempt + per_attempt / 2;
         let cumulative =
             ProofEntry::admit(publication.clone(), cumulative_options, Default::default()).unwrap();
@@ -200,8 +202,12 @@ pub(super) fn run(directory: &Path) {
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
-    let once =
-        ProofEntry::admit(package(directory, "Once", 0), options, Default::default()).unwrap();
+    let once = ProofEntry::admit(
+        package(directory, "Once", 0),
+        options.clone(),
+        Default::default(),
+    )
+    .unwrap();
     assert_eq!(
         once.prove_attempts(request(true, true), Default::default())
             .err()

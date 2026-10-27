@@ -3,7 +3,9 @@
 //! Existing artifact-* and native-proof-* diagnostics are shared external error
 //! codes. Their prefixes do not determine this module's dependency direction.
 pub(crate) mod io;
+#[cfg(feature = "project")]
 pub(crate) mod process;
+#[cfg(feature = "files")]
 pub(crate) mod publication;
 
 pub(crate) mod admission;
@@ -18,4 +20,4 @@ pub(crate) mod setups;
 pub(crate) mod document;
 
 pub(crate) mod diagnostics;
-pub(crate) mod input_file;
+pub(crate) mod input_source;

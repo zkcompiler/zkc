@@ -1,0 +1,2226 @@
+use crate::{Capability, Result, exhausted, refused};
+use std::sync::Arc;
+use zkc_kernels::arkworks::bls12_381::{
+    Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
+};
+use zkc_runtime::vm::{
+    Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
+};
+
+/// Explicit per-value, numerical-call, transport and service-store ceilings.
+/// PCS temporary allocation is bounded indirectly by rank, not reserved here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Policy {
+    /// Maximum number of multilinear variables (table length is 2^arity).
+    pub max_arity: usize,
+    /// Per-object numerical element ceiling, also used by nested data planners.
+    /// Individual kernels can enforce smaller hard ceilings.
+    pub max_table_elements: usize,
+    /// Bytes in one wire value or bounded input frame, not cumulative traffic.
+    pub max_wire_bytes: usize,
+    /// Conservative per-value/allocation payload bytes; no global RSS reservation.
+    pub max_value_bytes: usize,
+    /// Accumulated conservative loop/field-operation units in one numerical call.
+    pub max_numerical_work: u64,
+    /// Live managed scratch, staging payload and final storage in one numerical call.
+    /// Requested storage only; excludes unmanaged provider allocations and allocator RSS.
+    pub max_numerical_bytes: usize,
+    /// PCS setup work measured as arity * 2^arity, not allocated bytes.
+    pub max_setup_cells: usize,
+    /// Simultaneously occupied authoritative resource slots in each store.
+    /// Cloned handles consume no extra slot; retiring a root releases its slot.
+    pub max_capabilities: usize,
+    /// Per-object group element ceiling, additionally capped by individual kernels.
+    pub max_groups: usize,
+}
+impl Default for Policy {
+    fn default() -> Self {
+        Self {
+            max_arity: 16,
+            max_table_elements: 1 << 16,
+            max_wire_bytes: 16 << 20,
+            max_value_bytes: 64 << 20,
+            max_numerical_work: 1 << 26,
+            max_numerical_bytes: 256 << 20,
+            max_setup_cells: 16 << 16,
+            max_capabilities: 4096,
+            max_groups: 4096,
+        }
+    }
+}
+impl Policy {
+    pub(crate) fn bytes(&self, n: usize) -> Result<()> {
+        self.wire(n)?;
+        self.output(size(n, 1)?, usize::MAX)
+    }
+    pub(crate) fn vector(&self, n: usize) -> Result<()> {
+        self.vector_width(n, 32)
+    }
+    pub(crate) fn vector_width(&self, n: usize, width: usize) -> Result<()> {
+        if n > self.max_table_elements.min(1 << 20) {
+            return Err(exhausted("element-limit"));
+        }
+        self.output(size(n, width)?, usize::MAX)
+    }
+    pub(crate) fn dalek_groups(&self, n: usize) -> Result<()> {
+        if n > self.max_groups.min(32_768) {
+            return Err(exhausted("group-limit"));
+        }
+        self.output(
+            size(n, std::mem::size_of::<crate::RistrettoPoint>())?,
+            usize::MAX,
+        )
+    }
+    pub(crate) fn typed_groups<T>(&self, n: usize) -> Result<()> {
+        if n > self.max_groups.min(32_768) {
+            return Err(exhausted("group-limit"));
+        }
+        self.output(size(n, std::mem::size_of::<T>())?, usize::MAX)
+    }
+    pub(crate) fn groups(&self, n: usize) -> Result<()> {
+        if n > self.max_groups.min(32_768) {
+            return Err(exhausted("group-limit"));
+        }
+        self.output(size(n, 128)?, usize::MAX)
+    }
+    pub fn ark_bounds(&self) -> Bounds {
+        Bounds::new(
+            self.max_arity,
+            self.max_table_elements,
+            self.max_wire_bytes,
+            self.max_setup_cells,
+        )
+    }
+    pub(crate) fn arity(&self, n: usize) -> Result<()> {
+        if n > self.max_arity {
+            return Err(exhausted("arity-limit"));
+        }
+        Ok(())
+    }
+    pub(crate) fn table_len(&self, n: usize) -> Result<usize> {
+        self.arity(n)?;
+        let len = u32::try_from(n)
+            .ok()
+            .and_then(|s| 1usize.checked_shl(s))
+            .ok_or_else(|| exhausted("size-overflow"))?;
+        if len > self.max_table_elements {
+            return Err(exhausted("element-limit"));
+        }
+        self.output(size(len, 32)?, usize::MAX)?;
+        Ok(len)
+    }
+    pub(crate) fn output(&self, bytes: usize, available: usize) -> Result<()> {
+        if bytes > self.max_value_bytes || bytes > available || bytes > isize::MAX as usize {
+            return Err(exhausted("output-bytes"));
+        }
+        Ok(())
+    }
+    pub(crate) fn wire(&self, bytes: usize) -> Result<()> {
+        if bytes > self.max_wire_bytes || bytes > isize::MAX as usize {
+            return Err(exhausted("wire-bytes"));
+        }
+        Ok(())
+    }
+}
+pub(crate) fn size(n: usize, width: usize) -> Result<usize> {
+    n.checked_mul(width)
+        .and_then(|s| s.checked_add(256))
+        .ok_or_else(|| exhausted("size-overflow"))
+}
+/// Complete managed coordinate capacity and concrete prepared-object payload.
+/// Account for the actual universal slot and prepared object in addition to
+/// the common allowance for Arc counters and wrappers;
+/// allocator bookkeeping is outside the numerical managed-storage contract.
+pub(crate) fn quotient_matrix_bytes(capacity: usize) -> Result<usize> {
+    size(capacity, std::mem::size_of::<u64>())?
+        .checked_add(std::mem::size_of::<
+            zkc_kernels::polynomial::quotient::rns::PreparedMatrix,
+        >())
+        .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Value>()))
+        .ok_or_else(|| exhausted("size-overflow"))
+}
+
+// Keep the public typed sum and test coverage inventory in one declaration.
+macro_rules! value_inventory {
+    ($( $(#[$meta:meta])* $variant:ident ( $($payload:ty),+ $(,)? ), )*) => {
+        /// Trusted variants; clones retain immutable backing. Public proof/commitment
+        /// variants never carry private opening custody. No token deserializer exists.
+        #[derive(Clone, Debug)]
+        pub enum Value { $( $(#[$meta])* $variant($($payload),+), )* }
+        #[cfg(test)]
+        impl Value {
+            pub(crate) const PAYLOAD_NAMES: &'static [&'static str] = &[$(stringify!($variant)),*];
+            pub(crate) fn payload_name(&self) -> &'static str {
+                match self { $(Self::$variant(..) => stringify!($variant)),* }
+            }
+        }
+    };
+}
+value_inventory! {
+    Sequence(crate::Sequence),
+
+    FieldArray(crate::FieldArray),
+    FixedVector(crate::FixedVector),
+    Variant(crate::variant::Variant),
+    /// Zero payload; nominal identity and live ownership stay in authenticated metadata.
+    ResourceUnit(crate::resource::LogicalUnit),
+    BlstField(zkc_kernels::blst::bls12_381::Scalar),
+    BlstVector(Arc<zkc_kernels::blst::bls12_381::ScalarVector>),
+    BlstG1(zkc_kernels::blst::bls12_381::G1),
+    BlstG1Vector(Arc<zkc_kernels::blst::bls12_381::G1Vector>),
+    /// Shared projective G2 keeps cloning inert and the universal slot bounded.
+    BlstG2(Arc<zkc_kernels::blst::bls12_381::G2>),
+    BlstG2Vector(Arc<zkc_kernels::blst::bls12_381::G2Vector>),
+    HaloField(zkc_kernels::halo2curves::bn254::Scalar),
+    HaloVector(Arc<zkc_kernels::halo2curves::bn254::ScalarVector>),
+    HaloG1(zkc_kernels::halo2curves::bn254::G1),
+    HaloG1Vector(Arc<zkc_kernels::halo2curves::bn254::G1Vector>),
+    /// Shared affine G2 keeps cloning inert and the universal slot bounded.
+    HaloG2(Arc<zkc_kernels::halo2curves::bn254::G2>),
+    HaloG2Vector(Arc<zkc_kernels::halo2curves::bn254::G2Vector>),
+    Bn254Field(crate::Bn254Scalar),
+    Bn254Vector(crate::Buffer<crate::Bn254Scalar>),
+    Bn254Polynomial(crate::Buffer<crate::Bn254Scalar>),
+    Bn254Round([crate::Bn254Scalar; 3]),
+    Bn254Matrix(crate::matrix::SparseCoo<crate::Bn254Scalar>),
+    Bn254G1(crate::Bn254G1),
+    Bn254G1Vector(crate::Buffer<crate::Bn254G1>),
+    Bn254G2(crate::Bn254G2),
+    Bn254Gt(crate::Bn254Gt),
+    Bn254G2Vector(crate::Buffer<crate::Bn254G2>),
+    Bls12381G2(crate::Bls12381G2),
+    Bls12381G2Vector(crate::Buffer<crate::Bls12381G2>),
+    /// Boxed: twelve base-field coefficients would exceed the inline value bound.
+    Bls12381Gt(Arc<crate::Bls12381Gt>),
+
+    OracleRoot(crate::oracle::Domain, zkc_kernels::plonky3::oracle::Digest),
+    OraclePath(crate::oracle::Domain, Arc<[zkc_kernels::plonky3::oracle::Digest]>),
+    OracleState(crate::oracle::State),
+    OracleRoots(crate::oracle::Domain, Arc<[zkc_kernels::plonky3::oracle::Digest]>),
+    OracleStates(crate::oracle::Domain, Arc<[crate::oracle::State]>),
+    /// Digest-generic Merkle carriers: each digest is its scheme's fixed-width
+    /// canonical byte encoding.
+    MerkleDigest(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleProof(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTree(crate::merkle::State),
+    MerkleDigests(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTrees(crate::merkle::Scheme, Arc<[crate::merkle::State]>),
+    Index(u64),
+    Indices(crate::Buffer<u64>),
+    Bytes(Arc<[u8]>),
+    Shake128State(Arc<crate::hash::Shake128State>),
+    /// Exact prepared quotient matrix; immutable local storage with no wire constructor.
+    QuotientMatrix(Arc<zkc_kernels::polynomial::quotient::rns::PreparedMatrix>),
+    Matrix(crate::matrix::SparseCoo<Scalar>),
+    RistrettoMatrix(crate::matrix::SparseCoo<crate::RistrettoScalar>),
+    KoalaBearMatrix(crate::matrix::SparseCoo<crate::KoalaBear>),
+    KoalaBearExt8Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt8>),
+    KoalaBearExt8Field(crate::KoalaBearExt8),
+    KoalaBearExt8Vector(crate::Buffer<crate::KoalaBearExt8>),
+    KoalaBearExt8Polynomial(crate::Buffer<crate::KoalaBearExt8>),
+    KoalaBearExt8Round([crate::KoalaBearExt8; 3]),
+    KoalaBearExt4Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt4>),
+    BabyBearMatrix(crate::matrix::SparseCoo<crate::BabyBear>),
+    BabyBearExt4Matrix(crate::matrix::SparseCoo<crate::BabyBearExt4>),
+    GoldilocksMatrix(crate::matrix::SparseCoo<crate::Goldilocks>),
+    GoldilocksExt2Matrix(crate::matrix::SparseCoo<crate::GoldilocksExt2>),
+    KoalaBearExt4Field(crate::KoalaBearExt4),
+    BabyBearField(crate::BabyBear),
+    BabyBearExt4Field(crate::BabyBearExt4),
+    GoldilocksField(crate::Goldilocks),
+    GoldilocksExt2Field(crate::GoldilocksExt2),
+    KoalaBearExt4Vector(crate::Buffer<crate::KoalaBearExt4>),
+    BabyBearVector(crate::Buffer<crate::BabyBear>),
+    BabyBearExt4Vector(crate::Buffer<crate::BabyBearExt4>),
+    GoldilocksVector(crate::Buffer<crate::Goldilocks>),
+    GoldilocksExt2Vector(crate::Buffer<crate::GoldilocksExt2>),
+    KoalaBearExt4Polynomial(crate::Buffer<crate::KoalaBearExt4>),
+    BabyBearPolynomial(crate::Buffer<crate::BabyBear>),
+    BabyBearExt4Polynomial(crate::Buffer<crate::BabyBearExt4>),
+    GoldilocksPolynomial(crate::Buffer<crate::Goldilocks>),
+    GoldilocksExt2Polynomial(crate::Buffer<crate::GoldilocksExt2>),
+    KoalaBearExt4Round([crate::KoalaBearExt4; 3]),
+    BabyBearRound([crate::BabyBear; 3]),
+    BabyBearExt4Round([crate::BabyBearExt4; 3]),
+    GoldilocksRound([crate::Goldilocks; 3]),
+    GoldilocksExt2Round([crate::GoldilocksExt2; 3]),
+    Binary64Matrix(crate::matrix::SparseCoo<crate::Binary64>),
+    Binary64Field(crate::Binary64),
+    Binary64Vector(crate::Buffer<crate::Binary64>),
+    Binary64Polynomial(crate::Buffer<crate::Binary64>),
+    Binary64Round([crate::Binary64; 3]),
+    Binary64Ext3Matrix(crate::matrix::SparseCoo<crate::Binary64Ext3>),
+    Binary64Ext3Field(crate::Binary64Ext3),
+    Binary64Ext3Vector(crate::Buffer<crate::Binary64Ext3>),
+    Binary64Ext3Polynomial(crate::Buffer<crate::Binary64Ext3>),
+    Binary64Ext3Round([crate::Binary64Ext3; 3]),
+    KoalaBearField(crate::KoalaBear),
+    KoalaBearVector(crate::Buffer<crate::KoalaBear>),
+    KoalaBearPolynomial(crate::Buffer<crate::KoalaBear>),
+    KoalaBearRound([crate::KoalaBear; 3]),
+    Vector(crate::Buffer<Scalar>),
+    Polynomial(crate::Buffer<Scalar>),
+    RistrettoField(crate::RistrettoScalar),
+    RistrettoVector(crate::Buffer<crate::RistrettoScalar>),
+    RistrettoPolynomial(crate::Buffer<crate::RistrettoScalar>),
+    RistrettoRound([crate::RistrettoScalar; 3]),
+    EdwardsGroup(crate::EdwardsPrime),
+    EdwardsGroups(crate::Buffer<crate::EdwardsPrime>),
+    RistrettoGroup(crate::RistrettoPoint),
+    RistrettoGroups(crate::Buffer<crate::RistrettoPoint>),
+    FrDiagonal(Arc<crate::diagonal::Diagonal<Scalar, Scalar>>),
+    RistrettoDiagonal(
+        Arc<crate::diagonal::Diagonal<crate::RistrettoScalar, crate::RistrettoPoint>>,
+    ),
+    Field(Scalar),
+    Table(Arc<Table>),
+    TableMsb(Arc<zkc_kernels::arkworks::bls12_381::MsbTable>),
+    Point(crate::Buffer<Scalar>),
+    Round([Scalar; 3]),
+    Bool(bool),
+    Rng(Capability),
+    Commitment(Arc<Commitment>),
+    /// Private immutable original, key and commitment issued by the Ark helper.
+    /// Borrowable across calls and repeat queries; never reconstructible from wire.
+    OpeningState(Arc<CommittedTable>),
+    Proof(Arc<OpeningProof>),
+    ProverKey(Arc<ProverKey>),
+    VerifierKey(Arc<VerifierKey>),
+    Nonce(Capability),
+    Transcript(Capability),
+    Curve(zkc_kernels::arkworks::bls12_381::G1),
+    Groups(crate::Buffer<zkc_kernels::arkworks::bls12_381::G1>),
+}
+
+impl Value {
+    /// Conservative retained charge for an RNG, nonce or transcript handle.
+    /// Host planners use this before issuing a capability.
+    pub const fn capability_retained_bytes() -> usize {
+        512
+    }
+
+    /// Borrow active leaves in declaration order, stopping at the first error.
+    /// No handle is cloned or cached; consumers authenticate live authority.
+    pub(crate) fn visit_active_leaves<E>(
+        &self,
+        visit: &mut impl FnMut(&Self) -> std::result::Result<(), E>,
+    ) -> std::result::Result<(), E> {
+        match self {
+            Self::Sequence(value) => value.iter().try_for_each(|v| v.visit_active_leaves(visit)),
+            Self::Variant(value) => value
+                .payload()
+                .iter()
+                .try_for_each(|v| v.visit_active_leaves(visit)),
+            _ => visit(self),
+        }
+    }
+
+    pub fn ty(&self) -> Type {
+        self.type_identity().0
+    }
+    fn resident_type(&self) -> Option<&'static PhysicalType> {
+        let (kind, identity) = match self {
+            Self::BlstField(_) => (Type::Field, Identity::Bls12381Fr),
+            Self::HaloField(_) => (Type::Field, Identity::Bn254Fr),
+            Self::BlstVector(_) => (Type::Vector, Identity::Bls12381Fr),
+            Self::HaloVector(_) => (Type::Vector, Identity::Bn254Fr),
+            Self::BlstG1(_) => (Type::Group, Identity::Bls12381G1),
+            Self::HaloG1(_) => (Type::Group, Identity::Bn254G1),
+            Self::BlstG1Vector(_) => (Type::Groups, Identity::Bls12381G1),
+            Self::HaloG1Vector(_) => (Type::Groups, Identity::Bn254G1),
+            Self::BlstG2(_) => (Type::Group, Identity::Bls12381G2),
+            Self::HaloG2(_) => (Type::Group, Identity::Bn254G2),
+            Self::BlstG2Vector(_) => (Type::Groups, Identity::Bls12381G2),
+            Self::HaloG2Vector(_) => (Type::Groups, Identity::Bn254G2),
+            _ => return None,
+        };
+        Some(crate::contracts::physical(kind, identity).expect("installed resident representation"))
+    }
+    // Each payload supplies kind, nominal identity and representation together.
+    // New variants must explicitly classify all three properties.
+    #[inline]
+    fn type_identity(&self) -> (Type, Identity, Representation) {
+        match self {
+            Self::Sequence(_) => (Type::Sequence, Identity::None, Representation::Sequence),
+            Self::FieldArray(_) => (Type::FieldArray, Identity::None, Representation::FieldArray),
+            Self::FixedVector(_) => (
+                Type::FixedVector,
+                Identity::None,
+                Representation::FixedVector,
+            ),
+            Self::Variant(_) => (Type::Variant, Identity::None, Representation::Variant),
+            Self::ResourceUnit(_) => (
+                Type::ResourceUnit,
+                Identity::None,
+                Representation::ResourceUnit,
+            ),
+            Self::HaloField(_)
+            | Self::BlstField(_)
+            | Self::HaloVector(_)
+            | Self::BlstVector(_)
+            | Self::HaloG1(_)
+            | Self::BlstG1(_)
+            | Self::HaloG1Vector(_)
+            | Self::BlstG1Vector(_)
+            | Self::HaloG2(_)
+            | Self::BlstG2(_)
+            | Self::HaloG2Vector(_)
+            | Self::BlstG2Vector(_) => {
+                let ty = self.resident_type().expect("resident leaf");
+                (ty.kind(), ty.logical().identity(), ty.representation())
+            }
+            Self::Bn254Field(_) => (Type::Field, Identity::Bn254Fr, Representation::Bn254Fr),
+            Self::Bn254Vector(_) => (
+                Type::Vector,
+                Identity::Bn254Fr,
+                Representation::Bn254FrVector,
+            ),
+            Self::Bn254Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Bn254Fr,
+                Representation::Bn254Polynomial,
+            ),
+            Self::Bn254Round(_) => (Type::Round, Identity::Bn254Fr, Representation::Bn254Round),
+            Self::Bn254Matrix(_) => (
+                Type::Matrix,
+                Identity::Bn254Fr,
+                Representation::Bn254SparseCoo,
+            ),
+            Self::Bn254G1(_) => (Type::Group, Identity::Bn254G1, Representation::Bn254G1),
+            Self::Bn254G1Vector(_) => (
+                Type::Groups,
+                Identity::Bn254G1,
+                Representation::Bn254G1Vector,
+            ),
+            Self::Bn254Gt(_) => (Type::Group, Identity::Bn254Gt, Representation::Bn254Gt),
+            Self::Bn254G2(_) => (Type::Group, Identity::Bn254G2, Representation::Bn254G2),
+            Self::Bn254G2Vector(_) => (
+                Type::Groups,
+                Identity::Bn254G2,
+                Representation::Bn254G2Vector,
+            ),
+            Self::Bls12381G2(_) => (
+                Type::Group,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2,
+            ),
+            Self::Bls12381G2Vector(_) => (
+                Type::Groups,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2Vector,
+            ),
+            Self::Bls12381Gt(_) => (
+                Type::Group,
+                Identity::Bls12381Gt,
+                Representation::Bls12381Gt,
+            ),
+            Self::OracleRoot(d, _) => (Type::Commitment, d.identity(), Representation::MerkleRoot),
+            Self::OraclePath(d, _) => (Type::Proof, d.identity(), Representation::MerklePath),
+            Self::OracleState(s) => (
+                Type::OpeningState,
+                s.domain().identity(),
+                Representation::MerkleState,
+            ),
+            Self::OracleRoots(d, _) => {
+                (Type::Commitments, d.identity(), Representation::MerkleRoots)
+            }
+            Self::OracleStates(d, _) => (
+                Type::OpeningStates,
+                d.identity(),
+                Representation::MerkleStates,
+            ),
+            Self::MerkleDigest(s, _) => {
+                (Type::Commitment, s.identity(), Representation::MerkleDigest)
+            }
+            Self::MerkleProof(s, _) => (Type::Proof, s.identity(), Representation::MerkleProof),
+            Self::MerkleTree(t) => (
+                Type::OpeningState,
+                t.scheme().identity(),
+                Representation::MerkleTree,
+            ),
+            Self::MerkleDigests(s, _) => (
+                Type::Commitments,
+                s.identity(),
+                Representation::MerkleDigests,
+            ),
+            Self::MerkleTrees(s, _) => (
+                Type::OpeningStates,
+                s.identity(),
+                Representation::MerkleTrees,
+            ),
+            Self::KoalaBearExt8Matrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8SparseCoo,
+            ),
+            Self::KoalaBearExt8Round(_) => (
+                Type::Round,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Round,
+            ),
+            Self::KoalaBearExt8Polynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Polynomial,
+            ),
+            Self::KoalaBearExt8Vector(_) => (
+                Type::Vector,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8Vector,
+            ),
+            Self::KoalaBearExt8Field(_) => (
+                Type::Field,
+                Identity::KoalaBearExt8,
+                Representation::KoalaBearExt8,
+            ),
+            Self::KoalaBearExt4Matrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4SparseCoo,
+            ),
+            Self::BabyBearMatrix(_) => (
+                Type::Matrix,
+                Identity::BabyBear,
+                Representation::BabyBearSparseCoo,
+            ),
+            Self::BabyBearExt4Matrix(_) => (
+                Type::Matrix,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4SparseCoo,
+            ),
+            Self::GoldilocksMatrix(_) => (
+                Type::Matrix,
+                Identity::Goldilocks,
+                Representation::GoldilocksSparseCoo,
+            ),
+            Self::GoldilocksExt2Matrix(_) => (
+                Type::Matrix,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2SparseCoo,
+            ),
+            Self::KoalaBearExt4Round(_) => (
+                Type::Round,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Round,
+            ),
+            Self::BabyBearRound(_) => (
+                Type::Round,
+                Identity::BabyBear,
+                Representation::BabyBearRound,
+            ),
+            Self::BabyBearExt4Round(_) => (
+                Type::Round,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Round,
+            ),
+            Self::GoldilocksRound(_) => (
+                Type::Round,
+                Identity::Goldilocks,
+                Representation::GoldilocksRound,
+            ),
+            Self::GoldilocksExt2Round(_) => (
+                Type::Round,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Round,
+            ),
+            Self::KoalaBearExt4Polynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Polynomial,
+            ),
+            Self::BabyBearPolynomial(_) => (
+                Type::Polynomial,
+                Identity::BabyBear,
+                Representation::BabyBearPolynomial,
+            ),
+            Self::BabyBearExt4Polynomial(_) => (
+                Type::Polynomial,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Polynomial,
+            ),
+            Self::GoldilocksPolynomial(_) => (
+                Type::Polynomial,
+                Identity::Goldilocks,
+                Representation::GoldilocksPolynomial,
+            ),
+            Self::GoldilocksExt2Polynomial(_) => (
+                Type::Polynomial,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Polynomial,
+            ),
+            Self::KoalaBearExt4Vector(_) => (
+                Type::Vector,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Vector,
+            ),
+            Self::BabyBearVector(_) => (
+                Type::Vector,
+                Identity::BabyBear,
+                Representation::BabyBearVector,
+            ),
+            Self::BabyBearExt4Vector(_) => (
+                Type::Vector,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4Vector,
+            ),
+            Self::GoldilocksVector(_) => (
+                Type::Vector,
+                Identity::Goldilocks,
+                Representation::GoldilocksVector,
+            ),
+            Self::GoldilocksExt2Vector(_) => (
+                Type::Vector,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2Vector,
+            ),
+            Self::KoalaBearExt4Field(_) => (
+                Type::Field,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4,
+            ),
+            Self::BabyBearField(_) => (Type::Field, Identity::BabyBear, Representation::BabyBear),
+            Self::BabyBearExt4Field(_) => (
+                Type::Field,
+                Identity::BabyBearExt4,
+                Representation::BabyBearExt4,
+            ),
+            Self::GoldilocksField(_) => (
+                Type::Field,
+                Identity::Goldilocks,
+                Representation::Goldilocks,
+            ),
+            Self::GoldilocksExt2Field(_) => (
+                Type::Field,
+                Identity::GoldilocksExt2,
+                Representation::GoldilocksExt2,
+            ),
+            Self::Binary64Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64,
+                Representation::Binary64SparseCoo,
+            ),
+            Self::Binary64Round(_) => (
+                Type::Round,
+                Identity::Binary64,
+                Representation::Binary64Round,
+            ),
+            Self::Binary64Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64,
+                Representation::Binary64Polynomial,
+            ),
+            Self::Binary64Vector(_) => (
+                Type::Vector,
+                Identity::Binary64,
+                Representation::Binary64Vector,
+            ),
+            Self::Binary64Field(_) => (Type::Field, Identity::Binary64, Representation::Binary64),
+            Self::Binary64Ext3Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3SparseCoo,
+            ),
+            Self::Binary64Ext3Round(_) => (
+                Type::Round,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Round,
+            ),
+            Self::Binary64Ext3Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Polynomial,
+            ),
+            Self::Binary64Ext3Vector(_) => (
+                Type::Vector,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Vector,
+            ),
+            Self::Binary64Ext3Field(_) => (
+                Type::Field,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3,
+            ),
+            Self::Matrix(_) => (
+                Type::Matrix,
+                Identity::Bls12381Fr,
+                Representation::FrSparseCoo,
+            ),
+            Self::RistrettoMatrix(_) => (
+                Type::Matrix,
+                Identity::Ristretto255Scalar,
+                Representation::DalekSparseCoo,
+            ),
+            Self::KoalaBearMatrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBear,
+                Representation::KoalaBearSparseCoo,
+            ),
+            Self::KoalaBearField(_) => {
+                (Type::Field, Identity::KoalaBear, Representation::KoalaBear)
+            }
+            Self::KoalaBearVector(_) => (
+                Type::Vector,
+                Identity::KoalaBear,
+                Representation::KoalaBearVector,
+            ),
+            Self::KoalaBearPolynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBear,
+                Representation::KoalaBearPolynomial,
+            ),
+            Self::KoalaBearRound(_) => (
+                Type::Round,
+                Identity::KoalaBear,
+                Representation::KoalaBearRound,
+            ),
+            Self::Vector(_) => (Type::Vector, Identity::Bls12381Fr, Representation::FrVector),
+            Self::RistrettoVector(_) => (
+                Type::Vector,
+                Identity::Ristretto255Scalar,
+                Representation::DalekVector,
+            ),
+            Self::FrDiagonal(_) => (
+                Type::Vector,
+                Identity::Bls12381Fr,
+                Representation::FrDiagonal,
+            ),
+            Self::Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Bls12381Fr,
+                Representation::Polynomial,
+            ),
+            Self::RistrettoPolynomial(_) => (
+                Type::Polynomial,
+                Identity::Ristretto255Scalar,
+                Representation::DalekPolynomial,
+            ),
+            Self::RistrettoField(_) => (
+                Type::Field,
+                Identity::Ristretto255Scalar,
+                Representation::DalekScalar,
+            ),
+            Self::RistrettoRound(_) => (
+                Type::Round,
+                Identity::Ristretto255Scalar,
+                Representation::DalekRound,
+            ),
+            Self::EdwardsGroup(_) => (
+                Type::Group,
+                Identity::Edwards25519Prime,
+                Representation::EdwardsPrime,
+            ),
+            Self::EdwardsGroups(_) => (
+                Type::Groups,
+                Identity::Edwards25519Prime,
+                Representation::EdwardsPrimeVector,
+            ),
+            Self::RistrettoGroup(_) => (
+                Type::Group,
+                Identity::Ristretto255Group,
+                Representation::Ristretto,
+            ),
+            Self::RistrettoGroups(_) => (
+                Type::Groups,
+                Identity::Ristretto255Group,
+                Representation::RistrettoVector,
+            ),
+            Self::RistrettoDiagonal(_) => (
+                Type::Groups,
+                Identity::Ristretto255Group,
+                Representation::RistrettoDiagonal,
+            ),
+            Self::Field(_) => (Type::Field, Identity::Bls12381Fr, Representation::Fr),
+            Self::Table(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableLsb),
+            Self::TableMsb(_) => (Type::Table, Identity::Bls12381Fr, Representation::TableMsb),
+            Self::Point(_) => (Type::Point, Identity::Bls12381Fr, Representation::Point),
+            Self::Round(_) => (Type::Round, Identity::Bls12381Fr, Representation::Round),
+            Self::Bool(_) => (Type::Bool, Identity::None, Representation::Bool),
+            Self::Index(_) => (Type::Index, Identity::None, Representation::Index),
+            Self::Indices(_) => (Type::Indices, Identity::None, Representation::Indices),
+            Self::Bytes(_) => (Type::Bytes, Identity::None, Representation::Bytes),
+            Self::QuotientMatrix(_) => (
+                Type::QuotientMatrix,
+                Identity::None,
+                Representation::QuotientMatrix,
+            ),
+            Self::Shake128State(_) => (
+                Type::Shake128State,
+                Identity::None,
+                Representation::Shake128State,
+            ),
+            Self::Rng(t) => (Type::Rng, t.identity(), Representation::Resource),
+            Self::Commitment(_) => (
+                Type::Commitment,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::OpeningState(_) => (
+                Type::OpeningState,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::Proof(_) => (
+                Type::Proof,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::ProverKey(_) => (
+                Type::ProverKey,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::VerifierKey(_) => (
+                Type::VerifierKey,
+                Identity::MultilinearKzgBls12381,
+                Representation::Pcs,
+            ),
+            Self::Nonce(t) => (Type::Nonce, t.identity(), Representation::Resource),
+            Self::Transcript(t) => (Type::Transcript, t.identity(), Representation::Resource),
+            Self::Curve(_) => (Type::Group, Identity::Bls12381G1, Representation::G1),
+            Self::Groups(_) => (Type::Groups, Identity::Bls12381G1, Representation::Groups),
+        }
+    }
+    /// Pre-import conservative charge for a key selected by an already validated
+    /// application VK. Uses exactly the runtime's per-operand key accounting;
+    /// immutable sharing never reduces this charge. This does not authenticate PKs.
+    pub fn key_retained_bytes(ty: Type, verifier: &VerifierKey) -> Result<usize> {
+        match ty {
+            Type::ProverKey => prover_key_bytes(verifier.metadata().arity()),
+            Type::VerifierKey => payload_bytes(ty, verifier.metadata().arity()),
+            _ => Err(refused("key-type")),
+        }
+    }
+
+    /// Upper bound for a successfully decoded canonical public wire value.
+    /// No parsing or allocation occurs. Wire length includes the ZKCV envelope.
+    /// This is not validation: callers must still decode and check the actual
+    /// retained charge (notably storage capacity for tables). Invalid/truncated
+    /// bytes need not describe any value. Private values have no wire estimate.
+    pub fn wire_retained_bytes_bound(ty: Type, wire_len: usize, policy: &Policy) -> Result<usize> {
+        policy.wire(wire_len)?;
+        if !ty.is_serializable() {
+            return Err(refused("nonserializable"));
+        }
+        if ty == Type::Matrix {
+            // Kind-only conservative estimate uses the widest supported entry backing.
+            let bytes = size(wire_len / 12, 40)?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        // Canonical framing overhead is smaller than one payload element for
+        // each variable-width variant. Division therefore bounds element count.
+        let elements = match ty {
+            Type::Table | Type::Point | Type::Vector | Type::Polynomial => wire_len / 32,
+            Type::Indices => wire_len / 8,
+            Type::Bytes => wire_len,
+            Type::Groups => wire_len / 48,
+            Type::Proof => wire_len / 96,
+            Type::Shake128State | Type::QuotientMatrix => return Err(refused("nonserializable")),
+            Type::Sequence
+            | Type::FieldArray
+            | Type::FixedVector
+            | Type::Variant
+            | Type::ResourceUnit
+            | Type::Field
+            | Type::Matrix
+            | Type::Round
+            | Type::Group
+            | Type::Bool
+            | Type::Index
+            | Type::Rng
+            | Type::Commitment
+            | Type::OpeningState
+            | Type::ProverKey
+            | Type::VerifierKey
+            | Type::Nonce
+            | Type::Transcript
+            | Type::Commitments
+            | Type::OpeningStates => 0,
+        };
+        let bytes = payload_bytes(ty, elements)?;
+        policy.output(bytes, usize::MAX)?;
+        Ok(bytes)
+    }
+
+    /// Domain-aware bound for explicit-binding ingress; views have no codec.
+    pub fn typed_wire_retained_bytes_bound(
+        ty: PhysicalType,
+        wire_len: usize,
+        policy: &Policy,
+    ) -> Result<usize> {
+        if !ty.is_serializable() && !crate::operations::resident::is_resident(&ty) {
+            return Err(refused("nonserializable"));
+        }
+        if crate::operations::resident::is_resident(&ty) {
+            policy.wire(wire_len)?;
+            let (wire, memory) = if crate::operations::halo2curves::is_resident(&ty) {
+                use zkc_kernels::halo2curves::bn254 as kernel;
+                match (ty.kind(), ty.logical().identity()) {
+                    (Type::Vector, Identity::Bn254Fr) => {
+                        (32, std::mem::size_of::<kernel::ScalarElement>())
+                    }
+                    (Type::Groups, Identity::Bn254G1) => {
+                        (32, std::mem::size_of::<kernel::G1Element>())
+                    }
+                    (Type::Groups, Identity::Bn254G2) => {
+                        (64, std::mem::size_of::<kernel::G2Element>())
+                    }
+                    _ => {
+                        policy.output(512, usize::MAX)?;
+                        return Ok(512);
+                    }
+                }
+            } else {
+                match ty.kind() {
+                    Type::Vector => (32, 32),
+                    Type::Groups if ty.logical().identity() == Identity::Bls12381G1 => {
+                        (48, std::mem::size_of::<zkc_kernels::blst::bls12_381::G1>())
+                    }
+                    Type::Groups => (96, std::mem::size_of::<zkc_kernels::blst::bls12_381::G2>()),
+                    _ => {
+                        policy.output(512, usize::MAX)?;
+                        return Ok(512);
+                    }
+                }
+            };
+            let bytes = size(wire_len / wire, memory)?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        if ty.kind() == Type::Group && ty.logical().identity() == Identity::Bls12381Gt {
+            // Twelve 48-byte coefficients exceed the 512-byte fixed leaf charge.
+            policy.wire(wire_len)?;
+            policy.output(1024, usize::MAX)?;
+            return Ok(1024);
+        }
+        if ty.kind() == Type::Groups
+            && matches!(
+                ty.logical().identity(),
+                Identity::Bn254G1 | Identity::Bn254G2 | Identity::Bls12381G2
+            )
+        {
+            policy.wire(wire_len)?;
+            let (wire, memory) = match ty.logical().identity() {
+                Identity::Bn254G1 => (32, std::mem::size_of::<crate::Bn254G1>()),
+                Identity::Bn254G2 => (64, std::mem::size_of::<crate::Bn254G2>()),
+                _ => (96, std::mem::size_of::<crate::Bls12381G2>()),
+            };
+            let bytes = size(wire_len / wire, memory)?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        if ty.logical().identity().is_row_commitment() {
+            policy.wire(wire_len)?;
+            let bytes = 512usize
+                .checked_add(wire_len)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        if crate::fields::contains(ty.logical().identity()) {
+            policy.wire(wire_len)?;
+            let width = crate::fields::element_width(ty.logical().identity())?;
+            let bytes = match ty.kind() {
+                Type::Matrix => {
+                    // COO entries may contain alignment padding in memory.
+                    let entry = crate::fields::matrix_entry_width(ty.logical().identity())?;
+                    size(wire_len / (width + 8), entry)?
+                }
+                Type::Vector | Type::Polynomial => size(wire_len / width, width)?,
+                _ => 512,
+            };
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        if ty.kind() == Type::Matrix {
+            policy.wire(wire_len)?;
+            let width = 40;
+            let bytes = size(wire_len / width, width)?;
+            policy.output(bytes, usize::MAX)?;
+            return Ok(bytes);
+        }
+        if matches!(
+            ty.logical().identity(),
+            Identity::Ristretto255Group | Identity::Edwards25519Prime
+        ) && ty.kind() == Type::Groups
+        {
+            policy.wire(wire_len)?;
+            let bytes = size(wire_len / 32, std::mem::size_of::<crate::RistrettoPoint>())?;
+            policy.output(bytes, usize::MAX)?;
+            Ok(bytes)
+        } else {
+            Self::wire_retained_bytes_bound(ty.kind(), wire_len, policy)
+        }
+    }
+    /// No capability is carried, directly or by any active nested value.
+    pub(crate) fn is_resource_free(&self) -> bool {
+        match self {
+            Self::Sequence(v) => v.is_resource_free(),
+            Self::Variant(v) => v.is_resource_free(),
+            other => other.capability().is_none(),
+        }
+    }
+    /// The one immutable allocation holding this leaf's whole retained charge.
+    /// Inline scalars and capabilities have none; composites report parts.
+    fn leaf_backing(&self) -> Option<Backing> {
+        let bytes = self.retained_bytes();
+        Some(match self {
+            Self::OraclePath(_, p) | Self::OracleRoots(_, p) => Backing::of(p, bytes),
+            Self::OracleState(s) => s.backing().ok()?,
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                Backing::of(d, bytes)
+            }
+            Self::MerkleTree(t) => t.backing().ok()?,
+            Self::Bn254Matrix(m) => m.backing().ok()?,
+            Self::Matrix(m) => m.backing().ok()?,
+            Self::RistrettoMatrix(m) => m.backing().ok()?,
+            // Keep dispatch exhaustive; registration owns collection backings.
+            Self::KoalaBearVector(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::GoldilocksExt2Polynomial(..) => crate::fields::collection_backing(self, bytes)?,
+            Self::Binary64Matrix(m) => m.backing().ok()?,
+            Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
+            Self::BlstVector(v) => Backing::of(v, bytes),
+            Self::HaloVector(v) => Backing::of(v, bytes),
+            Self::BlstG1Vector(v) => Backing::of(v, bytes),
+            Self::HaloG1Vector(v) => Backing::of(v, bytes),
+            Self::BlstG2Vector(v) => Backing::of(v, bytes),
+            Self::HaloG2Vector(v) => Backing::of(v, bytes),
+            Self::BlstG2(v) => Backing::of(v, bytes),
+            Self::HaloG2(v) => Backing::of(v, bytes),
+            Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => v.backing(bytes),
+            Self::Bn254G1Vector(v) => v.backing(bytes),
+            Self::Bn254G2Vector(v) => v.backing(bytes),
+            Self::Bls12381G2Vector(v) => v.backing(bytes),
+            Self::Bls12381Gt(v) => Backing::of(v, bytes),
+            Self::Indices(v) => v.backing(bytes),
+            Self::Bytes(v) => Backing::of(v, bytes),
+            Self::Shake128State(v) => Backing::of(v, bytes),
+            Self::QuotientMatrix(v) => Backing::of(v, bytes),
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => v.backing(bytes),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => v.backing(bytes),
+            Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => v.backing(bytes),
+            Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => v.backing(bytes),
+            Self::RistrettoGroups(v) => v.backing(bytes),
+            Self::EdwardsGroups(v) => v.backing(bytes),
+            Self::Groups(v) => v.backing(bytes),
+            Self::Table(t) => Backing::of(t, bytes),
+            Self::TableMsb(t) => Backing::of(t, bytes),
+            Self::OpeningState(s) => Backing::of(s, bytes),
+            Self::Proof(p) => Backing::of(p, bytes),
+            Self::ProverKey(k) => Backing::of(k, bytes),
+            Self::VerifierKey(k) => Backing::of(k, bytes),
+            Self::Commitment(c) => Backing::of(c, bytes),
+            Self::Sequence(_)
+            | Self::Variant(_)
+            | Self::FieldArray(_)
+            | Self::FixedVector(_)
+            | Self::FrDiagonal(_)
+            | Self::RistrettoDiagonal(_)
+            | Self::OracleStates(..)
+            | Self::MerkleTrees(..)
+            | Self::ResourceUnit(_)
+            | Self::HaloField(_)
+            | Self::BlstField(_)
+            | Self::HaloG1(_)
+            | Self::BlstG1(_)
+            | Self::Bn254Field(_)
+            | Self::Bn254Round(_)
+            | Self::Bn254G1(_)
+            | Self::Bn254Gt(_)
+            | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
+            | Self::OracleRoot(..)
+            | Self::Index(_)
+            | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearExt4Field(_)
+            | Self::BabyBearField(_)
+            | Self::BabyBearExt4Field(_)
+            | Self::GoldilocksField(_)
+            | Self::GoldilocksExt2Field(_)
+            | Self::KoalaBearExt4Round(_)
+            | Self::BabyBearRound(_)
+            | Self::BabyBearExt4Round(_)
+            | Self::GoldilocksRound(_)
+            | Self::GoldilocksExt2Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Ext3Field(_)
+            | Self::Binary64Ext3Round(_)
+            | Self::KoalaBearField(_)
+            | Self::KoalaBearRound(_)
+            | Self::RistrettoField(_)
+            | Self::RistrettoRound(_)
+            | Self::EdwardsGroup(_)
+            | Self::RistrettoGroup(_)
+            | Self::Field(_)
+            | Self::Round(_)
+            | Self::Bool(_)
+            | Self::Rng(_)
+            | Self::Nonce(_)
+            | Self::Transcript(_)
+            | Self::Curve(_) => return None,
+        })
+    }
+    pub(crate) fn capability(&self) -> Option<&Capability> {
+        match self {
+            Self::ResourceUnit(t) => Some(t.capability()),
+            Self::Rng(t) | Self::Nonce(t) | Self::Transcript(t) => Some(t),
+            // Variants carry resources through active leaves, not a wrapper token.
+            Self::Variant(_) | Self::Sequence(_) => None,
+            Self::FieldArray(..)
+            | Self::FixedVector(..)
+            | Self::HaloField(..)
+            | Self::BlstField(..)
+            | Self::HaloVector(..)
+            | Self::BlstVector(..)
+            | Self::HaloG1(..)
+            | Self::BlstG1(..)
+            | Self::HaloG1Vector(..)
+            | Self::BlstG1Vector(..)
+            | Self::HaloG2(..)
+            | Self::BlstG2(..)
+            | Self::HaloG2Vector(..)
+            | Self::BlstG2Vector(..)
+            | Self::Bn254Field(..)
+            | Self::Bn254Vector(..)
+            | Self::Bn254Polynomial(..)
+            | Self::Bn254Round(..)
+            | Self::Bn254Matrix(..)
+            | Self::Bn254G1(..)
+            | Self::Bn254G1Vector(..)
+            | Self::Bn254Gt(..)
+            | Self::Bn254G2(..)
+            | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
+            | Self::OracleRoot(..)
+            | Self::OraclePath(..)
+            | Self::OracleState(..)
+            | Self::OracleRoots(..)
+            | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
+            | Self::Index(..)
+            | Self::Indices(..)
+            | Self::Bytes(..)
+            | Self::QuotientMatrix(..)
+            | Self::Shake128State(..)
+            | Self::Matrix(..)
+            | Self::RistrettoMatrix(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Field(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::BabyBearField(..)
+            | Self::BabyBearExt4Field(..)
+            | Self::GoldilocksField(..)
+            | Self::GoldilocksExt2Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
+            | Self::BabyBearRound(..)
+            | Self::BabyBearExt4Round(..)
+            | Self::GoldilocksRound(..)
+            | Self::GoldilocksExt2Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
+            | Self::KoalaBearField(..)
+            | Self::KoalaBearVector(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearRound(..)
+            | Self::Vector(..)
+            | Self::Polynomial(..)
+            | Self::RistrettoField(..)
+            | Self::RistrettoVector(..)
+            | Self::RistrettoPolynomial(..)
+            | Self::RistrettoRound(..)
+            | Self::EdwardsGroup(..)
+            | Self::EdwardsGroups(..)
+            | Self::RistrettoGroup(..)
+            | Self::RistrettoGroups(..)
+            | Self::FrDiagonal(..)
+            | Self::RistrettoDiagonal(..)
+            | Self::Field(..)
+            | Self::Table(..)
+            | Self::TableMsb(..)
+            | Self::Point(..)
+            | Self::Round(..)
+            | Self::Bool(..)
+            | Self::Commitment(..)
+            | Self::OpeningState(..)
+            | Self::Proof(..)
+            | Self::ProverKey(..)
+            | Self::VerifierKey(..)
+            | Self::Curve(..)
+            | Self::Groups(..) => None,
+        }
+    }
+    /// Bounded host constructor for real G1 public vectors.
+    pub fn groups(
+        values: &[zkc_kernels::arkworks::bls12_381::G1],
+        policy: &Policy,
+    ) -> Result<Self> {
+        policy.groups(values.len())?;
+        let mut points = Vec::new();
+        points
+            .try_reserve_exact(values.len())
+            .map_err(|_| exhausted("allocation"))?;
+        points.extend_from_slice(values);
+        Ok(Self::Groups(points.into()))
+    }
+    pub fn table(values: &[Scalar], policy: &Policy) -> Result<Self> {
+        if !values.len().is_power_of_two() {
+            return Err(refused("invalid-table-length"));
+        }
+        policy.table_len(values.len().trailing_zeros() as usize)?;
+        Ok(Self::Table(Arc::new(
+            Table::from_logical(values, &policy.ark_bounds()).map_err(crate::ark)?,
+        )))
+    }
+    pub fn point(values: Vec<Scalar>, policy: &Policy) -> Result<Self> {
+        policy.arity(values.len())?;
+        policy.output(size(values.capacity(), 32)?, usize::MAX)?;
+        Ok(Self::Point(values.into()))
+    }
+}
+impl RuntimeValue for Value {
+    fn preparation_output(&self) -> bool {
+        fn eligible_type(ty: &PhysicalType) -> bool {
+            if !ty.is_duplicable() || !ty.is_discardable() {
+                return false;
+            }
+            match ty.kind() {
+                Type::Sequence | Type::Variant => {
+                    let representation = if ty.kind() == Type::Sequence {
+                        Representation::Sequence
+                    } else {
+                        Representation::Variant
+                    };
+                    ty.representation() == representation
+                        && ty
+                            .children()
+                            .is_some_and(|children| children.iter().all(eligible_type))
+                }
+                Type::FieldArray => crate::field_array::supports_type(ty),
+                Type::FixedVector => crate::fixed_vector::supports_type(ty),
+                Type::Bool
+                | Type::Index
+                | Type::Field
+                | Type::Group
+                | Type::Vector
+                | Type::Groups
+                | Type::Indices
+                | Type::Bytes
+                | Type::Table
+                | Type::Point
+                | Type::Polynomial
+                | Type::Round
+                | Type::Matrix
+                | Type::Commitment
+                | Type::Proof => {
+                    PhysicalType::default_for(ty.logical().clone())
+                        .is_ok_and(|expected| expected == *ty)
+                        || crate::operations::resident::is_resident(ty)
+                }
+                _ => false,
+            }
+        }
+        let ty = self.physical_type();
+        eligible_type(&ty)
+            && self.is_resource_free()
+            && match self {
+                Self::Sequence(v) => v.iter().all(RuntimeValue::preparation_output),
+                Self::Variant(v) => v.payload().iter().all(RuntimeValue::preparation_output),
+                _ => true,
+            }
+    }
+    fn preparation_parameter(&self) -> Option<Vec<u8>> {
+        match self {
+            Self::Bool(value) => Some(vec![u8::from(*value)]),
+            Self::Index(value) => Some(value.to_le_bytes().to_vec()),
+            Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
+            Self::BlstField(value) => Some(value.to_bytes_le().to_vec()),
+            Self::HaloField(value) => Some(value.to_bytes_le().to_vec()),
+            Self::Field(value) => zkc_kernels::arkworks::bls12_381::encode_scalar(value)
+                .ok()
+                .map(|v| v.to_vec()),
+            Self::Bn254Field(value) => zkc_kernels::arkworks::bn254::encode_scalar(value)
+                .ok()
+                .map(|v| v.to_vec()),
+            Self::KoalaBearField(value) => {
+                Some(zkc_kernels::plonky3::encode_scalar(*value).to_vec())
+            }
+            Self::KoalaBearExt8Field(value) => {
+                Some(zkc_kernels::plonky3::encode_extension(*value).to_vec())
+            }
+            Self::KoalaBearExt4Field(value) => {
+                Some(zkc_kernels::plonky3::encode_quartic(*value).to_vec())
+            }
+            Self::BabyBearField(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::BabyBearExt4Field(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::GoldilocksField(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::GoldilocksExt2Field(value) => Some(crate::fields::scalar_bytes(value)),
+            Self::Binary64Field(value) => {
+                Some(zkc_kernels::plonky3::binary::encode(*value).to_vec())
+            }
+            Self::Binary64Ext3Field(value) => {
+                Some(zkc_kernels::plonky3::binary::encode_ext3(*value).to_vec())
+            }
+            _ => None,
+        }
+    }
+
+    fn pack_variant(ty: PhysicalType, alternative: usize, payload: Vec<Self>) -> Result<Self> {
+        Ok(Self::Variant(crate::variant::Variant::new(
+            ty,
+            alternative,
+            payload,
+        )?))
+    }
+    fn variant_allocation_bound<'a>(
+        ty: &PhysicalType,
+        mut payload: impl ExactSizeIterator<Item = &'a Self>,
+    ) -> usize
+    where
+        Self: 'a,
+    {
+        let length = payload.len();
+        payload
+            .try_fold(0usize, |n, v| n.checked_add(v.retained_bytes()))
+            .and_then(|bytes| crate::variant::Variant::storage_bytes(ty, length, bytes))
+            .and_then(|bytes| {
+                length
+                    .checked_mul(512)
+                    .and_then(|overlap| bytes.checked_add(overlap))
+            })
+            .unwrap_or(usize::MAX)
+    }
+    fn unpack_variant(&self) -> Result<(PhysicalType, usize, Vec<Self>)> {
+        match self {
+            Self::Variant(v) => {
+                v.validate()?;
+                Ok((
+                    v.physical_type().clone(),
+                    v.alternative(),
+                    v.payload().to_vec(),
+                ))
+            }
+            _ => Err(refused("variant-type")),
+        }
+    }
+
+    fn control_bool(&self) -> Result<bool> {
+        match self {
+            Self::Bool(v) => Ok(*v),
+            _ => Err(refused("local-control-bool")),
+        }
+    }
+    fn control_index(&self) -> Result<u64> {
+        match self {
+            Self::Index(v) => Ok(*v),
+            _ => Err(refused("local-control-index")),
+        }
+    }
+    fn from_control_bool(value: bool) -> Result<Self> {
+        Ok(Self::Bool(value))
+    }
+    fn from_control_index(index: u64) -> Result<Self> {
+        Ok(Self::Index(index))
+    }
+
+    fn has_type(&self, expected: &PhysicalType) -> bool {
+        match self {
+            Self::Sequence(v) => v.physical_type() == expected,
+            Self::FieldArray(v) => v.physical_type() == expected,
+            Self::FixedVector(v) => v.physical_type() == expected,
+            Self::Variant(v) => v.physical_type() == expected,
+            Self::HaloField(..)
+            | Self::BlstField(..)
+            | Self::HaloVector(..)
+            | Self::BlstVector(..)
+            | Self::HaloG1(..)
+            | Self::BlstG1(..)
+            | Self::HaloG1Vector(..)
+            | Self::BlstG1Vector(..)
+            | Self::HaloG2(..)
+            | Self::BlstG2(..)
+            | Self::HaloG2Vector(..)
+            | Self::BlstG2Vector(..)
+            | Self::Bn254Field(..)
+            | Self::Bn254Vector(..)
+            | Self::Bn254Polynomial(..)
+            | Self::Bn254Round(..)
+            | Self::Bn254Matrix(..)
+            | Self::Bn254G1(..)
+            | Self::Bn254G1Vector(..)
+            | Self::Bn254G2(..)
+            | Self::Bn254Gt(..)
+            | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
+            | Self::OracleRoot(..)
+            | Self::OraclePath(..)
+            | Self::OracleState(..)
+            | Self::OracleRoots(..)
+            | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
+            | Self::Index(..)
+            | Self::Indices(..)
+            | Self::Bytes(..)
+            | Self::QuotientMatrix(..)
+            | Self::Shake128State(..)
+            | Self::Matrix(..)
+            | Self::RistrettoMatrix(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Field(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::BabyBearField(..)
+            | Self::BabyBearExt4Field(..)
+            | Self::GoldilocksField(..)
+            | Self::GoldilocksExt2Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
+            | Self::BabyBearRound(..)
+            | Self::BabyBearExt4Round(..)
+            | Self::GoldilocksRound(..)
+            | Self::GoldilocksExt2Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
+            | Self::KoalaBearField(..)
+            | Self::KoalaBearVector(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearRound(..)
+            | Self::Vector(..)
+            | Self::Polynomial(..)
+            | Self::RistrettoField(..)
+            | Self::RistrettoVector(..)
+            | Self::RistrettoPolynomial(..)
+            | Self::RistrettoRound(..)
+            | Self::EdwardsGroup(..)
+            | Self::EdwardsGroups(..)
+            | Self::RistrettoGroup(..)
+            | Self::RistrettoGroups(..)
+            | Self::FrDiagonal(..)
+            | Self::RistrettoDiagonal(..)
+            | Self::Field(..)
+            | Self::Table(..)
+            | Self::TableMsb(..)
+            | Self::Point(..)
+            | Self::Round(..)
+            | Self::Bool(..)
+            | Self::Commitment(..)
+            | Self::OpeningState(..)
+            | Self::Proof(..)
+            | Self::ProverKey(..)
+            | Self::VerifierKey(..)
+            | Self::Curve(..)
+            | Self::Groups(..) => {
+                let (kind, identity, representation) = self.type_identity();
+                expected.is_leaf(kind, identity, representation)
+            }
+            _ => self.physical_type() == *expected,
+        }
+    }
+    fn physical_type(&self) -> PhysicalType {
+        if let Self::Sequence(value) = self {
+            return value.physical_type().clone();
+        }
+        // Structural families already retain their checked physical descriptor;
+        // do not traverse every inactive variant payload on each invocation.
+        if let Self::FieldArray(value) = self {
+            return value.physical_type().clone();
+        }
+        if let Self::FixedVector(value) = self {
+            return value.physical_type().clone();
+        }
+        if let Self::Variant(value) = self {
+            return value.physical_type().clone();
+        }
+        // Public enum wrappers can be mismatched by a host. Classification must
+        // remain total before validation; the private issued token owns its type.
+        // Core::validate still checks the wrapper kind against the resource store.
+        if let Some(token) = self.capability() {
+            let logical = if let Some(domain) = token.resource_domain() {
+                LogicalType::resource_unit(domain)
+            } else {
+                LogicalType::new(token.kind(), token.identity()).expect("issued capability type")
+            };
+            return PhysicalType::default_for(logical).expect("issued capability representation");
+        }
+        if let Some(ty) = self.resident_type() {
+            return ty.clone();
+        }
+        let (kind, identity, representation) = self.type_identity();
+        let logical = LogicalType::new(kind, identity).expect("intrinsic payload type");
+        PhysicalType::new(logical, representation).expect("intrinsic represented leaf value")
+    }
+
+    fn validate_serializable(&self) -> Result<()> {
+        let ty = self.physical_type();
+        if !ty.is_serializable() && !crate::operations::resident::is_resident(&ty) {
+            return Err(refused("nonserializable"));
+        }
+        Ok(())
+    }
+    fn retained_bytes(&self) -> usize {
+        // Conservative retained Rust payload, counting shared backing in full.
+        match self {
+            Self::Rng(_) | Self::Nonce(_) | Self::Transcript(_) => {
+                Ok(Self::capability_retained_bytes())
+            }
+            Self::Sequence(v) => Ok(v.retained_bytes()),
+            Self::FieldArray(v) => v.retained_bytes(),
+            Self::FixedVector(v) => v.retained_bytes(),
+            Self::Variant(v) => Ok(v.retained_bytes()),
+            Self::ResourceUnit(_) => Ok(512),
+            Self::OracleRoot(..) => Ok(512),
+            Self::OraclePath(_, p) | Self::OracleRoots(_, p) => size(p.len(), 32),
+            Self::OracleState(s) => s.retained_bytes(),
+            Self::OracleStates(_, states) => crate::oracle::states_bytes(states),
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                size(d.len(), 1)
+            }
+            Self::MerkleTree(t) => t.retained_bytes(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_bytes(trees),
+            Self::BlstVector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloVector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::BlstG1Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloG1Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::BlstG2Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::HaloG2Vector(v) => v
+                .storage_bytes()
+                .checked_add(256)
+                .ok_or_else(|| exhausted("size-overflow")),
+            Self::Bn254Matrix(m) => m.retained_bytes(),
+            Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => size(v.storage_capacity(), 32),
+            Self::Bn254G1Vector(v) => {
+                size(v.storage_capacity(), std::mem::size_of::<crate::Bn254G1>())
+            }
+            Self::Bn254G2Vector(v) => {
+                size(v.storage_capacity(), std::mem::size_of::<crate::Bn254G2>())
+            }
+            Self::Bls12381G2Vector(v) => size(
+                v.storage_capacity(),
+                std::mem::size_of::<crate::Bls12381G2>(),
+            ),
+            // Twelve 48-byte base-field coefficients exceed the 512-byte leaf charge.
+            Self::Bls12381Gt(_) => Ok(1024),
+            Self::Indices(v) => size(v.storage_capacity(), 8),
+            Self::Bytes(v) => size(v.len(), 1),
+            Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
+            Self::QuotientMatrix(v) => quotient_matrix_bytes(v.storage_capacity()),
+            Self::Matrix(m) => m.retained_bytes(),
+            Self::RistrettoMatrix(m) => m.retained_bytes(),
+            Self::KoalaBearVector(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::BabyBearVector(..)
+            | Self::BabyBearMatrix(..)
+            | Self::BabyBearPolynomial(..)
+            | Self::BabyBearExt4Vector(..)
+            | Self::BabyBearExt4Matrix(..)
+            | Self::BabyBearExt4Polynomial(..)
+            | Self::GoldilocksVector(..)
+            | Self::GoldilocksMatrix(..)
+            | Self::GoldilocksPolynomial(..)
+            | Self::GoldilocksExt2Vector(..)
+            | Self::GoldilocksExt2Matrix(..)
+            | Self::GoldilocksExt2Polynomial(..) => crate::fields::collection_retained_bytes(self)
+                .expect("registered residue collection"),
+            Self::Binary64Matrix(m) => m.retained_bytes(),
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => size(v.storage_capacity(), 8),
+            Self::Binary64Ext3Matrix(m) => m.retained_bytes(),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => {
+                size(v.storage_capacity(), 24)
+            }
+            Self::Vector(v) | Self::Polynomial(v) => size(v.storage_capacity(), 32),
+            Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => {
+                size(v.storage_capacity(), 32)
+            }
+            Self::RistrettoGroups(v) => size(
+                v.storage_capacity(),
+                std::mem::size_of::<crate::RistrettoPoint>(),
+            ),
+            Self::EdwardsGroups(v) => size(
+                v.storage_capacity(),
+                std::mem::size_of::<crate::EdwardsPrime>(),
+            ),
+            Self::FrDiagonal(d) => d.retained_bytes(),
+            Self::RistrettoDiagonal(d) => d.retained_bytes(),
+            Self::Table(t) => payload_bytes(Type::Table, t.storage_capacity()),
+            Self::TableMsb(t) => payload_bytes(Type::Table, t.storage_capacity()),
+            Self::OpeningState(s) => {
+                opening_state_bytes(s.original(), s.commitment().metadata().arity())
+            }
+            Self::Point(p) => payload_bytes(Type::Point, p.storage_capacity()),
+            Self::Groups(p) => payload_bytes(Type::Groups, p.storage_capacity()),
+            Self::Proof(p) => payload_bytes(Type::Proof, p.metadata().arity()),
+            Self::ProverKey(k) => prover_key_bytes(k.metadata().arity()),
+            Self::VerifierKey(k) => payload_bytes(Type::VerifierKey, k.metadata().arity()),
+            Self::HaloField(_)
+            | Self::BlstField(_)
+            | Self::HaloG1(_)
+            | Self::BlstG1(_)
+            | Self::HaloG2(_)
+            | Self::BlstG2(_)
+            | Self::Bn254Field(_)
+            | Self::Bn254Round(_)
+            | Self::Bn254G1(_)
+            | Self::Bn254Gt(_)
+            | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
+            | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearExt4Round(_)
+            | Self::BabyBearRound(_)
+            | Self::BabyBearExt4Round(_)
+            | Self::GoldilocksRound(_)
+            | Self::GoldilocksExt2Round(_)
+            | Self::KoalaBearExt4Field(_)
+            | Self::BabyBearField(_)
+            | Self::BabyBearExt4Field(_)
+            | Self::GoldilocksField(_)
+            | Self::GoldilocksExt2Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Ext3Round(_)
+            | Self::Binary64Ext3Field(_)
+            | Self::KoalaBearField(_)
+            | Self::KoalaBearRound(_)
+            | Self::RistrettoField(_)
+            | Self::RistrettoRound(_)
+            | Self::EdwardsGroup(_)
+            | Self::RistrettoGroup(_)
+            | Self::Field(_)
+            | Self::Round(_)
+            | Self::Bool(_)
+            | Self::Index(_)
+            | Self::Commitment(_)
+            | Self::Curve(_) => Ok(512),
+        }
+        .unwrap_or(usize::MAX)
+    }
+    fn retained_parts(&self, shared: &mut dyn FnMut(Backing) -> bool) -> usize {
+        // A value whose conservative charge cannot be computed stays unshared;
+        // its maximal charge refuses retention.
+        if self.retained_bytes() == usize::MAX {
+            return usize::MAX;
+        }
+        let parts = match self {
+            Self::Sequence(v) => Ok(v.retained_parts(shared)),
+            Self::Variant(v) => Ok(v.retained_parts(shared)),
+            Self::FieldArray(v) => v.backing().map(|backing| {
+                shared(backing);
+                v.owned_bytes()
+            }),
+            Self::FixedVector(v) => v.backing().map(|backing| {
+                shared(backing);
+                v.owned_bytes()
+            }),
+            Self::FrDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
+            Self::RistrettoDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
+            Self::OracleStates(_, states) => crate::oracle::states_parts(states, shared),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_parts(trees, shared),
+            leaf => Ok(match leaf.leaf_backing() {
+                Some(backing) => {
+                    shared(backing);
+                    0
+                }
+                None => leaf.retained_bytes(),
+            }),
+        };
+        parts.unwrap_or(usize::MAX)
+    }
+    fn validation_backing(&self) -> Option<Backing> {
+        // Validation of these values depends only on immutable contents, the
+        // backend's fixed policy and setup registry, and the physical type.
+        match self {
+            Self::Sequence(v) => v.validation_backing(),
+            Self::Variant(v) => v.validation_backing(),
+            Self::FieldArray(v) => v.backing().ok(),
+            Self::FixedVector(v) => v.backing().ok(),
+            Self::FrDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
+            Self::RistrettoDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
+            Self::OracleStates(_, states) => crate::oracle::states_list(states).ok(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_list(trees).ok(),
+            leaf => leaf.leaf_backing(),
+        }
+    }
+}
+
+// Central payload charge shared by runtime accounting and pre-import bounds.
+fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
+    match ty {
+        Type::Table | Type::Point | Type::Vector | Type::Polynomial => size(elements, 32),
+        Type::Indices => size(elements, 8),
+        Type::Bytes => size(elements, 1),
+        Type::Shake128State => Ok(crate::hash::Shake128State::RETAINED_BYTES),
+        Type::QuotientMatrix => Err(refused("nonserializable")),
+        Type::Groups | Type::VerifierKey => size(elements, 128),
+        Type::Proof => size(elements, 192),
+        Type::Sequence
+        | Type::FieldArray
+        | Type::FixedVector
+        | Type::Variant
+        | Type::ResourceUnit
+        | Type::Field
+        | Type::Matrix
+        | Type::Round
+        | Type::Group
+        | Type::Bool
+        | Type::Index
+        | Type::Rng
+        | Type::Commitment
+        | Type::OpeningState
+        | Type::ProverKey
+        | Type::Nonce
+        | Type::Transcript
+        | Type::Commitments
+        | Type::OpeningStates => Ok(512),
+    }
+}
+
+// For the pinned BLS12-381 helper, both basis families have 2^(n+1)-2
+// affine points each. 640*2^n + 256 bounds their backing, vector headers,
+// generators and key wrapper. Count shared key backing in full for every value.
+fn prover_key_bytes(arity: usize) -> Result<usize> {
+    u32::try_from(arity)
+        .ok()
+        .and_then(|n| 1usize.checked_shl(n))
+        .ok_or_else(|| exhausted("size-overflow"))
+        .and_then(|n| size(n, 640))
+}
+
+pub(crate) fn opening_state_bytes(original: &Table, arity: usize) -> Result<usize> {
+    size(original.storage_capacity(), 32)?
+        .checked_add(prover_key_bytes(arity)?)
+        // Commitment, state wrapper and Arc headers. Also charged independently
+        // for the public commitment returned by commit; double counting is safe.
+        .and_then(|n| n.checked_add(512))
+        .ok_or_else(|| exhausted("size-overflow"))
+}
+
+#[cfg(test)]
+mod admission_size_tests {
+    use super::*;
+    use crate::{CpuBackend, Domain, EntryPolicy};
+    use zkc_kernels::arkworks::bls12_381::Keys;
+    use zkc_runtime::vm::Backend;
+
+    #[test]
+    fn key_estimates_equal_imported_runtime_charges_at_small_ranks() {
+        let policy = Policy::default();
+        for rank in 1..=3 {
+            let keys =
+                Keys::setup_with_rng(rank, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+                    .unwrap();
+            let vk_bytes = keys.verifier_key().to_bytes(&policy.ark_bounds()).unwrap();
+            let vk = VerifierKey::from_bytes(
+                &vk_bytes,
+                keys.verifier_key().metadata().key_id(),
+                &policy.ark_bounds(),
+            )
+            .unwrap();
+            let pk_bytes = keys.prover_key().to_bytes(&policy.ark_bounds()).unwrap();
+            let pk = ProverKey::from_bytes(
+                &pk_bytes,
+                keys.prover_key().material_fingerprint(),
+                &vk,
+                &policy.ark_bounds(),
+            )
+            .unwrap();
+            assert_eq!(
+                Value::key_retained_bytes(Type::ProverKey, &vk).unwrap(),
+                Value::ProverKey(Arc::new(pk)).retained_bytes()
+            );
+            assert_eq!(
+                Value::key_retained_bytes(Type::VerifierKey, &vk).unwrap(),
+                Value::VerifierKey(Arc::new(vk)).retained_bytes()
+            );
+        }
+        assert!(prover_key_bytes(usize::MAX).is_err());
+    }
+
+    #[test]
+    fn adopted_capacity_is_charged_and_checked_at_construction() {
+        let mut values = Vec::with_capacity(31);
+        values.push(Scalar::from(7));
+        let capacity = values.capacity();
+        let buffer: crate::Buffer<_> = values.into();
+        let vector = Value::Vector(buffer.clone());
+        let polynomial = Value::Polynomial(buffer.clone());
+        let expected = size(capacity, 32).unwrap();
+        assert_eq!(vector.retained_bytes(), expected);
+        assert_eq!(polynomial.retained_bytes(), expected);
+        assert_eq!(vector.leaf_backing(), polynomial.leaf_backing());
+        assert_eq!(vector.leaf_backing().unwrap().bytes(), expected);
+        let mut policy = Policy::default();
+        for len in [0, 1] {
+            let mut spare = Vec::with_capacity(capacity);
+            spare.resize(len, Scalar::from(7));
+            policy.max_value_bytes = expected - 1;
+            assert_eq!(
+                Value::point(spare, &policy).unwrap_err().code,
+                "exhausted:output-bytes"
+            );
+            let mut spare = Vec::with_capacity(capacity);
+            spare.resize(len, Scalar::from(7));
+            let pointer = spare.as_ptr();
+            policy.max_value_bytes = expected;
+            let point = Value::point(spare, &policy).unwrap();
+            assert_eq!(point.retained_bytes(), expected);
+            let Value::Point(elements) = point else {
+                unreachable!()
+            };
+            assert_eq!(elements.as_ptr(), pointer);
+        }
+        let native = CpuBackend::new(
+            policy,
+            EntryPolicy::new(Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        assert!(native.validate_value(&vector).is_ok());
+        policy.max_value_bytes = expected - 1;
+        let native = CpuBackend::new(
+            policy,
+            EntryPolicy::new(Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            native.validate_value(&vector).unwrap_err().code,
+            "exhausted:output-bytes"
+        );
+    }
+
+    #[test]
+    fn wire_bounds_cover_actual_decoded_values() {
+        let policy = Policy::default();
+        let keys = Keys::setup_with_rng(2, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
+            .unwrap();
+        let backend = CpuBackend::new(
+            policy,
+            EntryPolicy::new(Domain::new("P", "s", "main", None), Some(2)),
+            crate::SetupRegistry::new(vec![keys.verifier_key().clone()], &crate::Policy::default())
+                .unwrap(),
+        )
+        .unwrap();
+        let mut values = vec![
+            Value::Field(Scalar::from(1)),
+            Value::Bool(true),
+            Value::Curve(crate::G1::generator()),
+            Value::Round([Scalar::from(1); 3]),
+        ];
+        for rank in 0..=3 {
+            values.push(Value::table(&vec![Scalar::from(1); 1 << rank], &policy).unwrap());
+            values.push(Value::point(vec![Scalar::from(1); rank], &policy).unwrap());
+            values.push(Value::groups(&vec![crate::G1::generator(); rank], &policy).unwrap());
+        }
+        let t = Value::table(&[Scalar::from(1); 4], &policy).unwrap();
+        let Value::Table(t) = t else { unreachable!() };
+        let committed = keys.prover_key().commit(&t).unwrap();
+        let (_, proof) = committed.open(&[Scalar::from(2); 2]).unwrap();
+        values.push(Value::Commitment(Arc::new(committed.commitment().clone())));
+        values.push(Value::Proof(Arc::new(proof)));
+        for value in values {
+            if !crate::has_native_wire(&value.physical_type()) {
+                assert!(backend.encode_native_value(&value).is_err());
+                continue;
+            }
+            let bytes = backend.encode_native_value(&value).unwrap();
+            let decoded = backend
+                .decode_native_value(&value.physical_type(), &bytes)
+                .unwrap();
+            assert_eq!(
+                Value::wire_retained_bytes_bound(value.ty(), bytes.len(), &policy).unwrap(),
+                decoded.retained_bytes(),
+                "{:?}",
+                value.ty()
+            );
+        }
+        assert!(Value::wire_retained_bytes_bound(Type::ProverKey, 0, &policy).is_err());
+        assert!(Value::wire_retained_bytes_bound(Type::Table, usize::MAX, &policy).is_err());
+    }
+}
+
+#[cfg(test)]
+mod custody_traversal_tests {
+    use super::*;
+    use serde_json::json;
+    use zkc_runtime::vm::Backend;
+
+    fn pack(name: &str, values: Vec<Value>) -> Value {
+        let types: Vec<_> = values
+            .iter()
+            .map(|v| v.physical_type().logical().spelling())
+            .collect();
+        let logical = LogicalType::parse(&zkc_test_support::variants::logical(
+            name,
+            json!([["inactive", []], ["active", types]]),
+        ))
+        .unwrap();
+        Value::pack_variant(
+            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            1,
+            values,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn active_borrowed_traversal_preserves_order_short_circuit_and_live_authority() {
+        let mut native = crate::CpuBackend::new(
+            Policy::default(),
+            crate::EntryPolicy::new(crate::Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let rng = native
+            .issue_rng_for(
+                Identity::Bls12381Fr,
+                crate::Domain::new("P", "s", "main", None),
+                1,
+            )
+            .unwrap();
+        let token = rng.capability().unwrap().clone();
+        let sequence = Value::Sequence(
+            crate::Sequence::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(LogicalType::parse("index").unwrap())
+                        .unwrap(),
+                )
+                .unwrap(),
+                vec![Value::Index(1), Value::Index(2)],
+                &Policy::default(),
+            )
+            .unwrap(),
+        );
+        let value = pack(
+            "Outer",
+            vec![pack("Inner", vec![sequence, rng]), Value::Index(3)],
+        );
+        let mut visited = Vec::new();
+        let error = value
+            .visit_active_leaves(&mut |leaf| {
+                if let Value::Index(index) = leaf {
+                    visited.push(*index);
+                    if *index == 2 {
+                        return Err("stop");
+                    }
+                } else {
+                    panic!("visited past the first refusal");
+                }
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error, "stop");
+        assert_eq!(visited, [1, 2]);
+        let mut visited = Vec::new();
+        value
+            .visit_active_leaves(&mut |leaf| {
+                native.validate_value(leaf)?;
+                visited.push(leaf.ty());
+                Ok::<_, zkc_runtime::vm::BackendError>(())
+            })
+            .unwrap();
+        assert_eq!(visited, [Type::Index, Type::Index, Type::Rng, Type::Index]);
+        native.retire(&token).unwrap();
+        let error = value
+            .visit_active_leaves(&mut |leaf| native.validate_value(leaf))
+            .unwrap_err();
+        assert_eq!(error.code, "refused:capability-unissued");
+    }
+}
+
+#[cfg(test)]
+mod retained_parts_tests {
+    use super::*;
+    use serde_json::json;
+    use std::collections::HashSet;
+
+    /// Owned bytes and distinct allocations, as one first retention reports them.
+    fn parts(value: &Value) -> (usize, Vec<Backing>) {
+        let mut seen = HashSet::new();
+        let mut shared = vec![];
+        let owned = value.retained_parts(&mut |backing| {
+            let new = seen.insert(backing);
+            if new {
+                shared.push(backing);
+            }
+            new
+        });
+        (owned, shared)
+    }
+    fn charged(value: &Value) -> usize {
+        let (owned, shared) = parts(value);
+        owned + shared.iter().map(Backing::bytes).sum::<usize>()
+    }
+    fn pack(name: &str, values: Vec<Value>) -> Value {
+        let types: Vec<_> = values
+            .iter()
+            .map(|v| v.physical_type().logical().spelling())
+            .collect();
+        let logical = LogicalType::parse(&zkc_test_support::variants::logical(
+            name,
+            json!([["inactive", []], ["active", types]]),
+        ))
+        .unwrap();
+        Value::pack_variant(
+            zkc_runtime::vm::PhysicalType::default_for(logical.clone()).unwrap(),
+            1,
+            values,
+        )
+        .unwrap()
+    }
+    fn sequence(values: Vec<Value>) -> Value {
+        let element = values[0].physical_type().logical().clone();
+        Value::Sequence(
+            crate::Sequence::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::sequence(element).unwrap(),
+                )
+                .unwrap(),
+                values,
+                &Policy::default(),
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn parts_partition_the_full_charge_and_identify_allocations_not_contents() {
+        let mut storage = Vec::with_capacity(31);
+        storage.resize(16, crate::KoalaBearExt8::from(crate::KoalaBear::new(2)));
+        let ext: crate::Buffer<crate::KoalaBearExt8> = storage.into();
+        let vector = Value::KoalaBearExt8Vector(ext.clone());
+        let equal = Value::KoalaBearExt8Vector(ext.to_vec().into());
+        // Equal contents in a separate allocation are a different backing.
+        assert_ne!(parts(&vector).1, parts(&equal).1);
+        assert_eq!(parts(&vector).1, parts(&vector.clone()).1);
+        let mut storage = Vec::with_capacity(31);
+        storage.resize(8, Scalar::from(3));
+        let scalars: crate::Buffer<Scalar> = storage.into();
+        let other: crate::Buffer<Scalar> = vec![Scalar::from(3); 8].into();
+        let diagonal = Value::FrDiagonal(Arc::new(
+            crate::diagonal::Diagonal::new(scalars.clone(), other.clone()).unwrap(),
+        ));
+        let array = Value::FieldArray(
+            crate::FieldArray::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    LogicalType::field_array(Identity::Bls12381Fr, 8).unwrap(),
+                )
+                .unwrap(),
+                scalars.clone(),
+            )
+            .unwrap(),
+        );
+        let mut storage = Vec::with_capacity(31);
+        storage.resize(8, crate::KoalaBear::new(3));
+        let elements: crate::Buffer<_> = storage.into();
+        let fixed = Value::FixedVector(
+            crate::FixedVector::new(
+                zkc_runtime::vm::PhysicalType::default_for(
+                    LogicalType::fixed_vector(LogicalType::parse("field:koala-bear").unwrap(), 8)
+                        .unwrap(),
+                )
+                .unwrap(),
+                elements.clone(),
+            )
+            .unwrap(),
+        );
+        let fixed_vector = Value::KoalaBearVector(elements);
+        let shape = zkc_kernels::plonky3::oracle::Shape::new(2, 8, 1 << 20).unwrap();
+        let (_, tree) = zkc_kernels::plonky3::oracle::commit(ext.to_vec(), shape, 1 << 26).unwrap();
+        let state = crate::oracle::State::Extension(Arc::new(tree));
+        let states = Value::OracleStates(
+            crate::oracle::Domain::Extension,
+            vec![state.clone(), state.clone()].into(),
+        );
+        let snapshot = Value::Shake128State(Arc::new(Default::default()));
+        let repeated_snapshot = sequence(vec![snapshot.clone(), snapshot.clone()]);
+        assert_eq!(parts(&snapshot).1, parts(&snapshot.clone()).1);
+        assert!(charged(&repeated_snapshot) < repeated_snapshot.retained_bytes());
+        let distinct = [
+            Value::Bytes([1, 2, 3].into()),
+            snapshot,
+            vector.clone(),
+            Value::Vector(scalars.clone()),
+            diagonal.clone(),
+            array.clone(),
+            fixed.clone(),
+            Value::OracleState(state.clone()),
+            Value::Index(4),
+            sequence(vec![Value::Index(1), Value::Index(2)]),
+            sequence(vec![vector.clone(), equal.clone()]),
+            pack("Pair", vec![vector.clone(), Value::Index(1)]),
+        ];
+        for value in &distinct {
+            assert_eq!(charged(value), value.retained_bytes(), "{:?}", value.ty());
+        }
+        // A view retains both parents in full; an array shares its vector's elements.
+        let vector_backing = parts(&Value::Vector(scalars.clone())).1[0];
+        assert!(parts(&diagonal).1.contains(&vector_backing));
+        assert!(
+            parts(&diagonal)
+                .1
+                .contains(&parts(&Value::Vector(other)).1[0])
+        );
+        assert_eq!(parts(&array).1, [vector_backing]);
+        assert_eq!(parts(&fixed).1, parts(&fixed_vector).1);
+        let aliases = pack("SharedFixed", vec![fixed.clone(), fixed_vector.clone()]);
+        assert_eq!(
+            charged(&aliases) + fixed_vector.retained_bytes(),
+            aliases.retained_bytes()
+        );
+        // Repeated allocations inside one value are charged once.
+        let state_backing = parts(&Value::OracleState(state)).1[0];
+        assert_eq!(parts(&states).1[1..], [state_backing]);
+        assert!(charged(&states) < states.retained_bytes());
+        let repeated = sequence(vec![vector.clone(), vector.clone()]);
+        assert_eq!(
+            charged(&repeated) + vector.retained_bytes(),
+            repeated.retained_bytes()
+        );
+        // Nested parts are reported only when the enclosing allocation is new.
+        let mut reported = 0;
+        repeated.retained_parts(&mut |_| {
+            reported += 1;
+            false
+        });
+        assert_eq!(reported, 1);
+    }
+
+    #[test]
+    fn validation_reuse_is_offered_only_without_capabilities() {
+        let mut native = crate::CpuBackend::new(
+            Policy::default(),
+            crate::EntryPolicy::new(crate::Domain::new("P", "s", "main", None), None),
+            Default::default(),
+        )
+        .unwrap();
+        let rng = native
+            .issue_rng_for(
+                Identity::Bls12381Fr,
+                crate::Domain::new("P", "s", "main", None),
+                1,
+            )
+            .unwrap();
+        assert_eq!(rng.validation_backing(), None);
+        let plain = pack("Plain", vec![Value::Index(1), Value::Bool(true)]);
+        let resourced = pack("Resourced", vec![Value::Index(1), rng]);
+        assert!(plain.validation_backing().is_some());
+        assert_eq!(resourced.validation_backing(), None);
+        assert!(
+            sequence(vec![plain.clone(), plain])
+                .validation_backing()
+                .is_some()
+        );
+        // Sequences cannot hold capabilities at all.
+        let element = resourced.physical_type().logical().clone();
+        assert!(LogicalType::sequence(element).is_err());
+        assert_eq!(Value::Index(1).validation_backing(), None);
+        let vector = Value::KoalaBearVector(vec![crate::KoalaBear::new(1); 4].into());
+        assert_eq!(vector.validation_backing(), Some(parts(&vector).1[0]));
+    }
+}

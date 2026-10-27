@@ -6,14 +6,14 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc::proof::NativeDeployment;
-use zkc_native::{
-    Bn254G1, Bn254G2, Bn254Scalar, Domain, EntryPolicy, KoalaBear, KoalaBearExt8, NativeBackend,
+use zkc_cpu::{
+    Bn254G1, Bn254G2, Bn254Scalar, CpuBackend, Domain, EntryPolicy, KoalaBear, KoalaBearExt8,
     Policy, RistrettoScalar, Value,
 };
 use zkc_test_support::hex;
 
-fn codec() -> NativeBackend {
-    NativeBackend::new(
+fn codec() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "domains", "main", None), None),
         Default::default(),

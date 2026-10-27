@@ -4,8 +4,8 @@ use super::{clean, codec, inputs, messages, policy, replace, unhex, words};
 use serde_json::{Value as Json, json};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::NativeDeployment;
+use zkc_cpu::{CpuBackend, Scalar, Value};
 use zkc_kernels::interop::openvm;
-use zkc_native::{NativeBackend, Scalar, Value};
 use zkc_test_support::hex;
 pub(super) fn prefix_controls(
     directory: &Path,
@@ -144,7 +144,7 @@ pub(super) fn controls(
 ) {
     let producer = &inputs(envelope, values, true);
     let validator = &inputs(envelope, values, false);
-    for limit in [NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT + 1, u64::MAX] {
+    for limit in [CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT + 1, u64::MAX] {
         assert_eq!(
             deployment
                 .clone()
@@ -155,7 +155,7 @@ pub(super) fn controls(
     }
     deployment
         .clone()
-        .with_external_work_limit(NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT)
+        .with_external_work_limit(CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT)
         .unwrap();
     let limited = deployment.clone().with_external_work_limit(0).unwrap();
     for (input, proof) in [(producer, None), (validator, Some(proof))] {

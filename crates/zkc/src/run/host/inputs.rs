@@ -71,14 +71,14 @@ impl SetupAuthority {
 fn needs_key(ty: &PhysicalType) -> bool {
     ty.kind() == Type::VerifierKey || needs_input_setup(ty.logical())
 }
-pub(super) fn kind(ty: &PhysicalType) -> &'static str {
+pub(super) fn kind(ty: &PhysicalType, installation: &zkc_cpu::CpuInstallation) -> &'static str {
     match ty.kind() {
         Type::Rng => "rng",
         Type::Nonce => "nonce",
         Type::ProverKey => "prover_key_file",
         Type::VerifierKey => "verifier_key",
         Type::Transcript => "unsupported-transcript",
-        _ if zkc_native::has_native_wire(ty) => "wire",
+        _ if installation.supports_wire(ty) => "wire",
         _ => "unsupported",
     }
 }
@@ -170,7 +170,7 @@ pub(super) fn decode(host: &RunHost, bytes: &[u8]) -> Result<RunInputs> {
                 return Err("bundle-input-port".into());
             }
             let spec = array(&row[2], 2)?;
-            let expected = kind(ty);
+            let expected = kind(ty, &host.limits.installation);
             if expected == "unsupported-transcript" {
                 return Err("bundle-transcript-input-unsupported".into());
             }
@@ -238,23 +238,33 @@ fn check_declaration(
     value: &InputValue,
 ) -> Result<()> {
     if host.retained_inputs
-        && !zkc_native::has_native_wire(ty)
+        && !host.limits.installation.supports_wire(ty)
         && ty.is_duplicable()
         && !matches!(ty.kind(), Type::VerifierKey | Type::ProverKey)
     {
-        return crate::host::admission::check_retained_data(ty, value, host.limits.capacity);
+        return crate::host::admission::check_retained_data(
+            ty,
+            value,
+            host.limits.capacity,
+            &host.limits.installation,
+        );
     }
-    match (kind(ty), value) {
+    match (kind(ty, &host.limits.installation), value) {
         ("unsupported-transcript", _) => Err("bundle-transcript-input-unsupported".into()),
         ("rng" | "nonce", InputValue::Resource { budget }) => checked_budget(*budget).map(|_| ()),
         (
             "wire",
             value @ (InputValue::Wire(_)
             | InputValue::Prepared(_)
-            | InputValue::WireFile { .. }
+            | InputValue::WireSource { .. }
             | InputValue::Native(_)
             | InputValue::Variant { .. }),
-        ) => crate::host::admission::check_native_data(ty, value, host.limits.capacity),
+        ) => crate::host::admission::check_native_data(
+            ty,
+            value,
+            host.limits.capacity,
+            &host.limits.installation,
+        ),
         ("rng" | "nonce" | "verifier_key" | "prover_key_file", InputValue::Native(_)) => {
             Err("native-input-private".into())
         }
@@ -318,6 +328,7 @@ pub(super) fn prepare<'a>(
     }
     let policy = host.limits.capacity.backend();
     let mut admission = Admission::new(host.limits.capacity.loading())?
+        .with_material(imports.material())
         .with_shared_ledger(host.shared_ledger.clone())
         .with_retained_inputs(host.retained_inputs);
     // Charge setup scans before importing even receive-only material.
@@ -330,6 +341,9 @@ pub(super) fn prepare<'a>(
     let mut material = BTreeMap::new();
     for (name, bytes) in &request.setups {
         let pin = &host.authority.keys[name];
+        if !host.limits.installation.supports_setup() {
+            return Err("cpu-installation-setup".into());
+        }
         let key = imports.import(bytes, *pin)?;
         material.entry(bytes).or_insert_with(|| key.clone());
         keys.insert(name.to_owned(), key);
@@ -362,7 +376,7 @@ pub(super) fn prepare<'a>(
                 );
             }
         }
-        let backend = NativeBackend::new_with_cpu(
+        let backend = CpuBackend::new_with_installation(
             policy,
             EntryPolicy::new(
                 Domain::new(
@@ -376,6 +390,7 @@ pub(super) fn prepare<'a>(
             .with_ports(ports),
             setups.clone(),
             host.cpu.clone(),
+            host.limits.installation.clone(),
         )
         .map_err(|e| e.to_string())?
         .with_ring_assets(host.ring_assets.clone())
@@ -404,7 +419,7 @@ pub(super) fn prepare<'a>(
                 InputValue::Variant { .. }
                 | InputValue::Prepared(_)
                 | InputValue::Wire(_)
-                | InputValue::WireFile { .. }
+                | InputValue::WireSource { .. }
                 | InputValue::Native(_) => {
                     admission.native_data(&backend, ty.clone(), value, selected.cloned())?
                 }

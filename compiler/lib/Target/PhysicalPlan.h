@@ -97,6 +97,7 @@ struct PhysicalPlanOptions {
   MathematicalSelectionPolicy numericalPolicy = {};
   llvm::SmallVector<FunctionPortSelection> functionPorts = {};
   llvm::SmallVector<ValueLayoutSelection> valueLayouts = {};
+  CpuTarget cpuTarget = {};
 };
 class PhysicalPlan {
   // Own the original identity/content snapshot and, for numerical input, the

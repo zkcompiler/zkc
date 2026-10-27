@@ -20,7 +20,8 @@ LogicalResult lowerPhysical(
     ModuleOp module, ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats, bool releaseStorage,
     ArrayRef<target::FunctionPortSelection> functionPorts,
-    MathematicalSelectionPolicy numericalPolicy) {
+    MathematicalSelectionPolicy numericalPolicy,
+    const target::CpuTarget &cpuTarget) {
   if (stats)
     *stats = {};
   module.getContext()->getOrLoadDialect<zkc::exec::ExecDialect>();
@@ -39,7 +40,8 @@ LogicalResult lowerPhysical(
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   return lowerBoundPhysical(module, selections, linearContractions, stats,
-                            releaseStorage, functionPorts, numericalPolicy);
+                            releaseStorage, functionPorts, numericalPolicy,
+                            cpuTarget);
 }
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
@@ -47,9 +49,10 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   PhysicalPass(protocol::Assignments selected, bool linear, bool release,
                LinearContractionStats *output,
                ArrayRef<target::FunctionPortSelection> functionPorts,
-               MathematicalSelectionPolicy numericalPolicy)
+               MathematicalSelectionPolicy numericalPolicy,
+               const target::CpuTarget &cpuTarget)
       : selections(std::move(selected)), output(output),
-        functionPorts(functionPorts) {
+        functionPorts(functionPorts), cpuTarget(cpuTarget) {
     linearContractions = linear;
     releaseStorage = release;
     optimizeFinite = numericalPolicy.finiteBulk;
@@ -59,10 +62,11 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   }
   PhysicalPass(const PhysicalPass &other)
       : PassWrapper(other), selections(other.selections), output(other.output),
-        functionPorts(other.functionPorts) {}
+        functionPorts(other.functionPorts), cpuTarget(other.cpuTarget) {}
   protocol::Assignments selections;
   LinearContractionStats *output;
   SmallVector<target::FunctionPortSelection> functionPorts;
+  target::CpuTarget cpuTarget;
   Option<bool> linearContractions{
       *this, "linear-contractions",
       llvm::cl::desc("Select local all-uses depth-one diagonal contractions"),
@@ -103,7 +107,8 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
     if (failed(lowerPhysical(getOperation(), selections, linearContractions,
                              &stats, releaseStorage, functionPorts,
                              {optimizeFinite, fuseVectorReductions,
-                              fuseCollectFold, calculationBatching}))) {
+                              fuseCollectFold, calculationBatching},
+                             cpuTarget))) {
       signalPassFailure();
       return;
     }
@@ -122,9 +127,10 @@ createSelectPhysicalPass(protocol::Assignments selections,
                          bool linearContractions, bool releaseStorage,
                          LinearContractionStats *statistics,
                          ArrayRef<target::FunctionPortSelection> functionPorts,
-                         MathematicalSelectionPolicy numericalPolicy) {
+                         MathematicalSelectionPolicy numericalPolicy,
+                         const target::CpuTarget &cpuTarget) {
   return std::make_unique<PhysicalPass>(
       std::move(selections), linearContractions, releaseStorage, statistics,
-      functionPorts, numericalPolicy);
+      functionPorts, numericalPolicy, cpuTarget);
 }
 } // namespace zkc::protocol

@@ -143,7 +143,7 @@ impl AttemptPolicy {
         }
         for (_, ty) in role.inputs.iter().take(map.data.len()) {
             if !matches!(
-                input_kind(ty)?,
+                input_kind(ty, &deployment.installation)?,
                 "wire" | "verifier_key" | "prover_key_file" | "rng"
             ) {
                 return Err("native-attempt-input-kind".into());
@@ -200,7 +200,7 @@ impl AttemptPolicy {
 }
 struct State {
     // Taken only while Runner owns custody; restored on every outcome.
-    backend: Option<NativeBackend>,
+    backend: Option<CpuBackend>,
     inputs: Vec<Value>,
     usage: Usage,
     records: Vec<AttemptRecord>,
@@ -229,7 +229,7 @@ struct Session<'a> {
     plan: &'a Plan,
 }
 struct Executed {
-    backend: NativeBackend,
+    backend: CpuBackend,
     record: AttemptRecord,
     result: Result<(bool, driver::Produced<Value>)>,
     cleanup: Vec<String>,
@@ -240,7 +240,7 @@ impl Session<'_> {
     /// Returning backend custody is part of the result type on every path.
     fn run(
         &self,
-        mut backend: NativeBackend,
+        mut backend: CpuBackend,
         inputs: &mut [Value],
         used: Usage,
         proof_bytes: usize,
@@ -462,7 +462,7 @@ impl Session<'_> {
 #[allow(clippy::too_many_arguments)]
 pub(super) fn execute(
     deployment: &NativeDeployment,
-    backend: NativeBackend,
+    backend: CpuBackend,
     inputs: Vec<Value>,
     root: &[u8],
     binding: &[u8; 32],
@@ -472,7 +472,7 @@ pub(super) fn execute(
     services: &[ServiceReference],
     plan: &Plan,
     report: &mut NativeProofReport,
-) -> NativeBackend {
+) -> CpuBackend {
     let session = Session {
         deployment,
         root,

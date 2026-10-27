@@ -494,6 +494,9 @@ mlir_target_link_libraries(zkc-kernel_transforms-test PRIVATE MLIRParser MLIRPas
 # Original-source Kernel ownership coverage uses the maintained source emitter.
 target_link_libraries(zkc-kernel_transforms-test PRIVATE ZkcTranslation)
 
+add_zkc_test(cpu_target Compiler cpu-target)
+mlir_target_link_libraries(zkc-cpu_target-test PRIVATE MLIRParser MLIRPass)
+
 add_zkc_test(kernel_physical_plan Transforms kernel-physical-plan)
 target_compile_definitions(zkc-kernel_physical_plan-test PRIVATE
   ZKC_KERNEL_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

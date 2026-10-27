@@ -133,3 +133,65 @@ pub fn encode_source_symbol(qualified_name: &str, max_bytes: u64) -> Option<Stri
 
 #[cfg(test)]
 mod tests;
+
+/// Argument syntax is compiler-owned. Consumers only normalize lexical trivia
+/// for request equality; they never resolve types, defaults or requirements.
+pub(crate) fn compact(name: &str) -> Option<String> {
+    if name.len() > 4096 {
+        return None;
+    }
+    let mut text = String::new();
+    let mut chars = name.chars().peekable();
+    let mut quoted = false;
+    let mut separated = false;
+    while let Some(c) = chars.next() {
+        if !quoted && c == '/' && chars.peek() == Some(&'/') {
+            for c in chars.by_ref() {
+                if c == '\n' {
+                    break;
+                }
+            }
+            separated = true;
+        } else if !quoted && c.is_ascii_whitespace() {
+            separated = true;
+        } else {
+            // Trivia cannot turn two source tokens into one identifier/number.
+            if separated
+                && text
+                    .chars()
+                    .last()
+                    .is_some_and(|p| p.is_alphanumeric() || p == '_')
+                && (c.is_alphanumeric() || c == '_')
+            {
+                return None;
+            }
+            if c.is_control() || c == '\\' {
+                return None;
+            }
+            if c == '"' {
+                quoted = !quoted;
+            }
+            text.push(c);
+            separated = false;
+        }
+    }
+    (!quoted).then_some(text)
+}
+
+pub(crate) fn parts(name: &str) -> (&str, &str) {
+    name.find('<')
+        .map_or((name, ""), |i| (&name[..i], &name[i..]))
+}
+
+pub(crate) fn canonical_name(name: &str) -> bool {
+    let (path, arguments) = parts(name);
+    path.rsplit_once("::")
+        .is_some_and(|(module, _)| module.len() <= 2048)
+        && path.split("::").all(identifier)
+        && (arguments.is_empty() || (arguments.len() > 2 && arguments.ends_with('>')))
+        && compact(name).is_some_and(|value| value == name)
+}
+
+fn identifier(name: &str) -> bool {
+    name.len() <= 128 && crate::source_names::is_source_identifier(name)
+}

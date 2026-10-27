@@ -45,7 +45,8 @@ std::unique_ptr<mlir::Pass> createSelectPhysicalPass(
     protocol::Assignments selections = {}, bool linearContractions = false,
     bool releaseStorage = false, LinearContractionStats *statistics = nullptr,
     llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
-    MathematicalSelectionPolicy numericalPolicy = {});
+    MathematicalSelectionPolicy numericalPolicy = {},
+    const target::CpuTarget &cpuTarget = {});
 } // namespace protocol
 namespace kernel {
 /// Realize logical numerical units into scoped Func/CF execution before

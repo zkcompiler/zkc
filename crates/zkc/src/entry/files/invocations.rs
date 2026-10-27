@@ -1,5 +1,6 @@
 //! Exact static child bindings, kept separate from source argument data.
 use super::{self as files, *};
+use crate::entry::outputs::FunctionResultEncoder;
 use crate::entry::{InvocationBinding, InvocationContext, ProofContext, RunContext};
 use crate::entry::{RoleInputs, SetupAuthority};
 use crate::files::Outputs;
@@ -49,33 +50,15 @@ enum Binding {
     },
 }
 pub struct Invocations {
+    installation: zkc_cpu::CpuInstallation,
     authority: BTreeMap<String, SetupAuthority>,
     context: InvocationContext,
-    output_setups: zkc_native::SetupRegistry,
+    output_setups: zkc_cpu::SetupRegistry,
     operations: BTreeMap<String, &'static str>,
     paths: Vec<PathBuf>,
     inputs: BTreeMap<String, BTreeMap<String, Json>>,
     document: Option<PathBuf>,
     capacity: crate::execution::Capacity,
-}
-/// Result encoding retains the imported setup material and its original limits.
-/// It grants no execution authority.
-pub struct FunctionResultEncoder {
-    setups: zkc_native::SetupRegistry,
-    capacity: crate::execution::Capacity,
-}
-impl FunctionResultEncoder {
-    pub fn encode(&self, value: &crate::entry::Value) -> Result<Vec<u8>> {
-        files::function_output(value, self.capacity, self.setups.clone())
-    }
-    /// Share the execution owner's context through result serialization.
-    pub fn encode_with_cpu(
-        &self,
-        value: &crate::entry::Value,
-        cpu: crate::execution::CpuExecution,
-    ) -> Result<Vec<u8>> {
-        files::function_output_with_cpu(value, self.capacity, self.setups.clone(), cpu)
-    }
 }
 /// Input refusal with the checked document and logical input location, if known.
 #[derive(Debug)]
@@ -126,6 +109,7 @@ impl Invocations {
             self.authority,
             self.context,
             FunctionResultEncoder {
+                installation: self.installation,
                 setups: self.output_setups,
                 capacity: self.capacity,
             },
@@ -284,7 +268,17 @@ impl Invocations {
         capacity: crate::execution::Capacity,
         output_setups: bool,
     ) -> Result<Self> {
+        Self::load_with_installation(path, capacity, output_setups, Default::default())
+    }
+    /// Load declared contexts and retain selected support for result encoding.
+    pub fn load_with_installation(
+        path: Option<&Path>,
+        capacity: crate::execution::Capacity,
+        output_setups: bool,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self> {
         let mut result = Self {
+            installation,
             authority: BTreeMap::new(),
             context: InvocationContext::default(),
             output_setups: Default::default(),
@@ -398,7 +392,7 @@ impl Invocations {
                     )
                 }
             };
-            let authority = files::authority(
+            let authority = SetupAuthority::from_bytes(
                 &serde_json::to_vec(&authority).map_err(|_| "entry-invocation-format")?,
             )?;
             let mut material = BTreeMap::new();
@@ -418,7 +412,12 @@ impl Invocations {
             }
             // Check material against this deployment's independent authority before
             // combining serialization keys. Never resolve a pin by a bare slot name.
-            files::output_setups(&material, &authority, capacity)?;
+            crate::entry::outputs::output_setups_with_installation(
+                &material,
+                &authority,
+                capacity,
+                &result.installation,
+            )?;
             if output_setups {
                 for (slot, bytes) in &material {
                     let key = format!("{}:{id}{slot}", id.len());
@@ -434,7 +433,12 @@ impl Invocations {
             result.authority.insert(id.clone(), authority);
             result.context.deployments.insert(id, context);
         }
-        result.output_setups = files::output_setups(&all_material, &all_authority, capacity)?;
+        result.output_setups = crate::entry::outputs::output_setups_with_installation(
+            &all_material,
+            &all_authority,
+            capacity,
+            &result.installation,
+        )?;
         Ok(result)
     }
     pub fn protect(&self, outputs: &mut Outputs) -> Result<()> {
@@ -538,7 +542,7 @@ mod tests {
     }
     #[test]
     fn consumed_invocations_retain_the_result_encoding_capacity() {
-        let value = crate::entry::Value::from(zkc_native::Value::Bool(true));
+        let value = crate::entry::Value::from(zkc_cpu::Value::Bool(true));
         let (_, context, encoder) = Invocations::load(None, Default::default(), false)
             .unwrap()
             .into_parts();
@@ -605,12 +609,12 @@ mod tests {
             )
             .unwrap();
             let table = zkc_kernels::arkworks::bls12_381::Table::from_logical_vec(
-                vec![zkc_native::Scalar::from(1); 1 << arity],
+                vec![zkc_cpu::Scalar::from(1); 1 << arity],
                 &bounds,
             )
             .unwrap();
             let committed = keys.prover_key().commit(&table).unwrap();
-            commitments.push(crate::entry::Value::from(zkc_native::Value::Commitment(
+            commitments.push(crate::entry::Value::from(zkc_cpu::Value::Commitment(
                 std::sync::Arc::new(committed.commitment().clone()),
             )));
             let key = keys.verifier_key();

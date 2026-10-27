@@ -1,11 +1,11 @@
 //! Joint completion and partial-peer outcomes over compiler-produced schedules.
 use serde_json::Value as Json;
 use std::path::Path;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::PathElement;
-fn backend(role: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "test", "main", None), None),
         Default::default(),
@@ -13,7 +13,7 @@ fn backend(role: &str) -> NativeBackend {
     .unwrap()
 }
 struct CancelImmediately;
-impl Hooks<NativeBackend> for CancelImmediately {
+impl Hooks<CpuBackend> for CancelImmediately {
     fn cancel_before(&mut self, _: usize, _: &Step, _: &[PathElement]) -> Option<String> {
         Some("inspect completion".into())
     }
@@ -30,7 +30,7 @@ fn main() {
         let bundle = Bundle::admit(
             &bytes,
             &backend("P"),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
         .unwrap();
@@ -116,7 +116,7 @@ fn main() {
     let bundle = Bundle::admit(
         &bytes,
         &backend("P"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap();
