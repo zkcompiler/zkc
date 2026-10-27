@@ -1,4 +1,4 @@
-#include "Kernel/Support.h"
+#include "Computation/Support.h"
 #include "NumericalSelection.h"
 #include "RealizationSubject.h"
 #include "RealizationTrace.h"
@@ -621,7 +621,7 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
     std::optional<CapacityCause> *capacity) {
   llvm::TimeTraceScope timing("zkc.numerical-substitution");
   if (!hasSingleElement(*source.getBody()) ||
-      !kernel::chargeCopy(source, selection.remainingCopy, capacity))
+      !computation::chargeCopy(source, selection.remainingCopy, capacity))
     return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
@@ -719,7 +719,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
     capacity.reset();
     mathematical::VerificationDecision outcome;
     auto propose = [&]() -> OwningOpRef<ModuleOp> {
-      if (!kernel::chargeCopy(source, copy, &capacity))
+      if (!computation::chargeCopy(source, copy, &capacity))
         return {};
       OwningOpRef<ModuleOp> candidate(ModuleOp::create(source.getLoc()));
       candidate->getOperation()->setAttrs(source->getAttrs());

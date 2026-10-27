@@ -1,11 +1,14 @@
 #include "../CheckedCandidate.h"
+#include "../MathematicalPassOptions.h"
 #include "../RealizationSubject.h"
 #include "../RealizationTrace.h"
 #include "../ScopedSubstitution.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
@@ -22,7 +25,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "kernel-lowering", detail);
@@ -186,9 +189,10 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
   return success();
 }
 } // namespace
-LogicalResult discoverKernelCalls(mlir::ModuleOp module,
-                                  MathematicalSelectionPolicy fallback,
-                                  mathematical::NumericalSelection &selection) {
+LogicalResult
+discoverComputations(mlir::ModuleOp module,
+                     MathematicalSelectionPolicy fallback,
+                     mathematical::NumericalSelection &selection) {
   SmallVector<exec::ComputeOp> calls;
   module.walk([&](exec::ComputeOp call) { calls.push_back(call); });
   SymbolTableCollection symbols;
@@ -213,7 +217,7 @@ LogicalResult discoverKernelCalls(mlir::ModuleOp module,
   }
   return success();
 }
-LogicalResult materializeKernelCalls(
+LogicalResult materializeComputations(
     mlir::ModuleOp candidate, MathematicalSelectionPolicy policy,
     mathematical::RealizationTrace *trace,
     mathematical::NumericalSelection &selection,
@@ -222,11 +226,10 @@ LogicalResult materializeKernelCalls(
       cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()), policy,
       trace, selection, outcome, optionalConstruction);
 }
-OwningOpRef<mlir::ModuleOp>
-proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
-                      mathematical::RealizationTrace *trace,
-                      mathematical::NumericalSelection *selection,
-                      mlir::ModuleOp prepared) {
+OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
+    mlir::ModuleOp source, MathematicalSelectionPolicy policy,
+    mathematical::RealizationTrace *trace,
+    mathematical::NumericalSelection *selection, mlir::ModuleOp prepared) {
   source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
   source.getContext()->getOrLoadDialect<exec::ExecDialect>();
   source.getContext()->getOrLoadDialect<runtime::RuntimeDialect>();
@@ -247,7 +250,8 @@ proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
   selection->origins.clear();
   OwningOpRef<mlir::ModuleOp> normalized;
   if (!prepared) {
-    normalized = prepareKernelLowering(source, &selection->remainingCopy);
+    normalized =
+        prepareComputationRealization(source, &selection->remainingCopy);
     if (normalized)
       prepared = *normalized;
   }
@@ -263,76 +267,66 @@ proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
     (void)refuse(source, "checked normalization or concrete frontier refused");
     return {};
   }
-  if (failed(discoverKernelCalls(*candidate, policy, *selection)))
+  if (failed(discoverComputations(*candidate, policy, *selection)))
     return {};
-  if (failed(materializeKernelCalls(*candidate, policy, trace, *selection)) ||
+  if (failed(materializeComputations(*candidate, policy, trace, *selection)) ||
       failed(verify(*candidate)))
     return {};
   scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
   retained = true;
   return candidate;
 }
-LogicalResult lowerKernels(mlir::ModuleOp source,
-                           MathematicalSelectionPolicy policy,
-                           mathematical::RealizationTrace *trace) {
-  mathematical::RealizationScope scope(trace, "lower-kernels", source, policy);
+LogicalResult realizeComputations(mlir::ModuleOp source,
+                                  MathematicalSelectionPolicy policy,
+                                  mathematical::RealizationTrace *trace) {
+  mathematical::RealizationScope scope(trace, "realize-computations", source,
+                                       policy);
   scope.propose(policy);
-  auto proposal = proposeKernelLowering(source, policy, trace);
+  auto proposal = proposeComputationRealization(source, policy, trace);
   if (!proposal)
     return failure();
   mathematical::CheckedCandidate candidate(source, std::move(proposal));
   if (failed(
           candidate.publish([&](mlir::ModuleOp before, mlir::ModuleOp after) {
-            return verifyKernelLowering(before, after, policy);
+            return verifyComputationRealization(before, after, policy);
           })))
     return failure();
   scope.publish(mathematical::PublicationBoundary::PublishedToCaller);
   return success();
 }
 namespace {
-struct LowerKernelsPass
-    : PassWrapper<LowerKernelsPass, OperationPass<mlir::ModuleOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerKernelsPass)
-  Option<bool> finiteBulk{*this, "optimize-finite", llvm::cl::init(true)};
-  Option<bool> vectorReductionFusion{*this, "fuse-vector-reductions",
-                                     llvm::cl::init(false)};
-  Option<bool> collectFoldFusion{*this, "fuse-collect-fold",
-                                 llvm::cl::init(false)};
+struct RealizeComputationsPass
+    : PassWrapper<RealizeComputationsPass, OperationPass<mlir::ModuleOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RealizeComputationsPass)
+  MathematicalPassOptions selection{*this};
   mathematical::RealizationTrace *trace = nullptr;
-  MathematicalSelectionPolicy fallbackPolicy;
-  LowerKernelsPass() = default;
-  LowerKernelsPass(MathematicalSelectionPolicy policy,
-                   mathematical::RealizationTrace *trace)
-      : trace(trace), fallbackPolicy(policy) {
-    finiteBulk = policy.finiteBulk;
-    vectorReductionFusion = policy.vectorReductionFusion;
-    collectFoldFusion = policy.collectFoldFusion;
-  }
-  LowerKernelsPass(const LowerKernelsPass &other)
-      : PassWrapper(other), trace(other.trace),
-        fallbackPolicy(other.fallbackPolicy) {}
+  RealizeComputationsPass() = default;
+  RealizeComputationsPass(MathematicalSelectionPolicy policy,
+                          mathematical::RealizationTrace *trace)
+      : selection(*this, policy), trace(trace) {}
+  RealizeComputationsPass(const RealizeComputationsPass &other)
+      : PassWrapper(other), selection(*this, other.selection.get()),
+        trace(other.trace) {}
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
                     exec::ExecDialect, func::FuncDialect, scf::SCFDialect,
-                    arith::ArithDialect, cf::ControlFlowDialect>();
+                    arith::ArithDialect, cf::ControlFlowDialect,
+                    tensor::TensorDialect, linalg::LinalgDialect>();
   }
-  StringRef getArgument() const final { return "zkc-lower-kernels"; }
+  StringRef getArgument() const final { return "zkc-realize-computations"; }
   StringRef getDescription() const final {
     return "Independently check mathematical realization into scoped execution";
   }
   void runOnOperation() final {
-    auto policy = fallbackPolicy;
-    policy.finiteBulk = finiteBulk;
-    policy.vectorReductionFusion = vectorReductionFusion;
-    policy.collectFoldFusion = collectFoldFusion;
-    if (failed(kernel::lowerKernels(getOperation(), policy, trace)))
+    auto policy = selection.get();
+    if (failed(computation::realizeComputations(getOperation(), policy, trace)))
       signalPassFailure();
   }
 };
 } // namespace
 std::unique_ptr<mlir::Pass>
-createLowerKernelsPass(MathematicalSelectionPolicy policy,
-                       mathematical::RealizationTrace *trace) {
-  return std::make_unique<LowerKernelsPass>(policy, trace);
+createRealizeComputationsPass(MathematicalSelectionPolicy policy,
+                              mathematical::RealizationTrace *trace) {
+  return std::make_unique<RealizeComputationsPass>(policy, trace);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

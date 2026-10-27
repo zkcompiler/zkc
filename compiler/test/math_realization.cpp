@@ -1,11 +1,11 @@
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -46,12 +46,12 @@ void logical(ModuleOp module) {
 }
 void materialize(ModuleOp module) {
   logical(module);
-  require(succeeded(kernel::lowerKernels(module)),
+  require(succeeded(computation::realizeComputations(module)),
           "numerical realization failed");
 }
 OwningOpRef<ModuleOp> close(func::FuncOp helper) {
   uint64_t remaining = 1000000;
-  auto result = kernel::closeComputation(helper, remaining);
+  auto result = computation::closeComputation(helper, remaining);
   require(bool(result), "mathematical closure refused");
   return result;
 }
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
       SymbolTable symbols(*module);
       auto wrapper = symbols.lookup<func::FuncOp>("work");
       auto other = symbols.lookup<func::FuncOp>("other");
-      kernel::CalculationGuard guard{
+      computation::CalculationGuard guard{
           mutation == "foreign condition"       ? other.getArgument(0)
           : mutation == "non-Boolean condition" ? wrapper.getArgument(1)
                                                 : wrapper.getArgument(0),
@@ -95,9 +95,10 @@ int main(int argc, char **argv) {
         message.print(out);
         return success();
       });
-      require(failed(kernel::formCalculation(wrapper, *module, {}, guard)) &&
-                  namesIdentifier(diagnostic, "kernel-formation"),
-              "malformed guard input passed formation");
+      require(
+          failed(computation::formCalculation(wrapper, *module, {}, guard)) &&
+              namesIdentifier(diagnostic, "kernel-formation"),
+          "malformed guard input passed formation");
       require(OperationEquivalence::isEquivalentTo(
                   *module, *before, OperationEquivalence::IgnoreLocations),
               "refused formation changed the wrapper");
@@ -107,7 +108,7 @@ int main(int argc, char **argv) {
   auto frozen = copy(*source);
   logical(*frozen);
   auto executable = copy(*frozen);
-  require(succeeded(kernel::lowerKernels(*executable)),
+  require(succeeded(computation::realizeComputations(*executable)),
           "fixture lowering failed");
   cases.run("polynomial mathematics stays exact until realization", [&] {
     auto request = cast<exec::ComputeOp>(function(*frozen).front().front());
@@ -119,8 +120,8 @@ int main(int argc, char **argv) {
     numerical->walk(
         [&](poly::MultiplyPolynomialOp) { retainedPolynomial = true; });
     require(retainedPolynomial, "preparation erased the raw polynomial DAG");
-    require(succeeded(kernel::verifyKernelClosure(helper->getParentOp(), helper,
-                                                  *numerical)),
+    require(succeeded(computation::verifyComputationClosure(
+                helper->getParentOp(), helper, *numerical)),
             "closure changed original mathematics");
     bool polynomial = false;
     executable->walk([&](Operation *op) {
@@ -134,7 +135,8 @@ int main(int argc, char **argv) {
       for (auto value : scopedComputation::payload(call))
         require(!value.use_empty(),
                 "unused total recipe became executable work");
-    require(succeeded(kernel::verifyKernelLowering(*frozen, *executable)),
+    require(succeeded(computation::verifyComputationRealization(*frozen,
+                                                                *executable)),
             "actual computation recipe comparison failed");
   });
   for (bool simplify : {false, true})
@@ -197,7 +199,7 @@ int main(int argc, char **argv) {
     auto before = copy(*module);
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(kernel::lowerKernels(*module)) &&
+    require(failed(computation::realizeComputations(*module)) &&
                 OperationEquivalence::isEquivalentTo(
                     *module, *before, OperationEquivalence::IgnoreLocations),
             "non-protocol realization was accepted or modified");
@@ -243,7 +245,7 @@ int main(int argc, char **argv) {
   });
   cases.run("independent helper recipe comparison", [&] {
     auto numerical =
-        kernelRecipeSource(owner(*source), "polynomial", "realized");
+        computationRecipeSource(owner(*source), "polynomial", "realized");
     auto entry = mathematical::getComputationEntry(*numerical);
     auto &block = entry.front();
     while (!block.empty())
@@ -254,30 +256,30 @@ int main(int argc, char **argv) {
         block.getArgument(0), block.getArgument(1));
     func::ReturnOp::create(builder, entry.getLoc(), product.getResult());
     mathematical::RealizationWork work;
-    auto candidate = realizeKernelEntry(*numerical, "product", {}, work);
+    auto candidate = realizeComputationEntry(*numerical, "product", {}, work);
     require(bool(candidate), "direct recipe lowering failed");
-    kernelRecipeOutput(*candidate);
-    require(succeeded(
-                kernel::verifyEntryRecipes(*numerical, *candidate, "product")),
+    computationRecipeOutput(*candidate);
+    require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                      "product")),
             "valid recipe comparison failed");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(kernel::verifyEntryRecipes(*numerical, *candidate,
-                                              "different_call")),
+    require(failed(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                   "different_call")),
             "different call site escaped comparison");
     auto wrongSite = copy(*candidate);
     scopedFinite::application(function(*wrongSite, "realized"), "field.mul")
         .setSite("different_product");
-    require(
-        failed(kernel::verifyEntryRecipes(*numerical, *wrongSite, "product")),
-        "changed site escaped comparison");
+    require(failed(computation::verifyEntryRecipes(*numerical, *wrongSite,
+                                                   "product")),
+            "changed site escaped comparison");
     auto call = scopedFinite::application(function(*candidate, "realized"),
                                           "field.mul");
     call->setOperand(2, call.getInputs()[0]);
     require(succeeded(verify(*candidate)), "operand mutation lost formation");
-    require(
-        failed(kernel::verifyEntryRecipes(*numerical, *candidate, "product")),
-        "changed operand escaped independent recipe verification");
+    require(failed(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                   "product")),
+            "changed operand escaped independent recipe verification");
   });
   cases.run("static dimension discards unused field-array construction", [&] {
     auto module = withHelper(R"(
@@ -310,7 +312,7 @@ int main(int argc, char **argv) {
   });
   cases.run("array recipe rejects shortened vector construction", [&] {
     auto numerical =
-        kernelRecipeSource(owner(*source), "polynomial", "realized");
+        computationRecipeSource(owner(*source), "polynomial", "realized");
     auto entry = mathematical::getComputationEntry(*numerical);
     auto &block = entry.front();
     while (!block.empty())
@@ -330,11 +332,11 @@ int main(int argc, char **argv) {
     func::ReturnOp::create(builder, entry.getLoc(), at.getResult());
     // Keep the construction intact so these mutations exercise the reader.
     mathematical::RealizationWork work;
-    auto candidate = realizeKernelEntry(*numerical, "array", {}, work);
+    auto candidate = realizeComputationEntry(*numerical, "array", {}, work);
     require(bool(candidate), "array recipe failed");
-    require(
-        succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
-        "valid array recipe comparison failed");
+    require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                      "array")),
+            "valid array recipe comparison failed");
     for (bool changeBinding : {false, true}) {
       auto mutated = copy(*candidate);
       auto access = scopedFinite::application(function(*mutated, "realized"),
@@ -348,7 +350,8 @@ int main(int argc, char **argv) {
         access.setParametersAttr(builder.getStrArrayAttr({"0"}));
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
-      require(failed(kernel::verifyEntryRecipes(*numerical, *mutated, "array")),
+      require(failed(computation::verifyEntryRecipes(*numerical, *mutated,
+                                                     "array")),
               "changed array contract instance accepted");
     }
     auto append = scopedFinite::applications(function(*candidate, "realized"),
@@ -356,11 +359,12 @@ int main(int argc, char **argv) {
     require(!append.empty(), "array recipe did not append");
     auto last = append.back();
     scopedComputation::omit(last, last.getInputs()[0]);
-    require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+    require(succeeded(computation::verifyRecipeOutput(*candidate)),
             "short array mutation not formed");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
+    require(failed(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                   "array")),
             "short vector accepted by recipe comparison");
   });
   auto large = [&](unsigned repetitions) {
@@ -444,8 +448,8 @@ int main(int argc, char **argv) {
         diagnostic += d.str();
         return success();
       });
-      auto result =
-          kernel::verifyKernelClosure(owner(*source), helper, *candidate);
+      auto result = computation::verifyComputationClosure(owner(*source),
+                                                          helper, *candidate);
       require(failed(result) &&
                   namesIdentifier(diagnostic, "kernel-closure-correspondence"),
               "changed original mathematics escaped closure comparison: " +
@@ -476,7 +480,8 @@ int main(int argc, char **argv) {
         diagnostic += d.str();
         return success();
       });
-      auto result = kernel::verifyKernelLowering(*frozen, *candidate);
+      auto result =
+          computation::verifyComputationRealization(*frozen, *candidate);
       require(
           failed(result) &&
               namesIdentifier(diagnostic, "numerical-lowering-correspondence"),

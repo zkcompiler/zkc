@@ -1,12 +1,12 @@
-#ifndef ZKC_TRANSFORMS_KERNEL_NORMALIZATIONVERIFICATION_H
-#define ZKC_TRANSFORMS_KERNEL_NORMALIZATIONVERIFICATION_H
+#ifndef ZKC_TRANSFORMS_COMPUTATION_NORMALIZATIONVERIFICATION_H
+#define ZKC_TRANSFORMS_COMPUTATION_NORMALIZATIONVERIFICATION_H
 
 #include "zkc/Dialect/Operations.h"
 #include "llvm/ADT/SmallVector.h"
 #include <cstddef>
 #include <memory>
 
-namespace zkc::kernel {
+namespace zkc::computation {
 // Independent, bounded readers of actual temporary MLIR. Source closures must
 // already be admitted and remain immutable. Locations may change; attributes,
 // concrete occurrences, SSA identities, result coordinates and cuts may not.
@@ -39,5 +39,5 @@ public:
       mlir::func::FuncOp expanded, mlir::Block &candidate,
       llvm::SmallVectorImpl<mlir::Operation *> *generated = nullptr);
 };
-} // namespace zkc::kernel
+} // namespace zkc::computation
 #endif

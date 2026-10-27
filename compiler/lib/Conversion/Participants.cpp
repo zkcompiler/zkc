@@ -1,3 +1,4 @@
+#include "../Transforms/MathematicalPassOptions.h"
 #include "Bindings.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
@@ -7,7 +8,7 @@
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -46,6 +47,7 @@ LogicalResult lowerPhysical(
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PhysicalPass)
+  MathematicalPassOptions selection{*this};
   PhysicalPass(protocol::Assignments selected, bool linear, bool release,
                LinearContractionStats *output,
                ArrayRef<target::FunctionPortSelection> functionPorts,
@@ -55,13 +57,11 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
         functionPorts(functionPorts), cpuTarget(cpuTarget) {
     linearContractions = linear;
     releaseStorage = release;
-    optimizeFinite = numericalPolicy.finiteBulk;
-    fuseVectorReductions = numericalPolicy.vectorReductionFusion;
-    fuseCollectFold = numericalPolicy.collectFoldFusion;
-    calculationBatching = numericalPolicy.calculationBatching;
+    selection.set(numericalPolicy);
   }
   PhysicalPass(const PhysicalPass &other)
-      : PassWrapper(other), selections(other.selections), output(other.output),
+      : PassWrapper(other), selection(*this, other.selection.get()),
+        selections(other.selections), output(other.output),
         functionPorts(other.functionPorts), cpuTarget(other.cpuTarget) {}
   protocol::Assignments selections;
   LinearContractionStats *output;
@@ -75,18 +75,6 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       *this, "release-storage",
       llvm::cl::desc("Release discardable local storage after last use"),
       llvm::cl::init(false)};
-  Option<bool> optimizeFinite{
-      *this, "optimize-finite", llvm::cl::init(true),
-      llvm::cl::desc("Select checked bulk finite realizations")};
-  Option<bool> fuseVectorReductions{
-      *this, "fuse-vector-reductions", llvm::cl::init(false),
-      llvm::cl::desc("Fuse admitted vector maps and reductions")};
-  Option<bool> fuseCollectFold{
-      *this, "fuse-collect-fold", llvm::cl::init(false),
-      llvm::cl::desc("Compose total collect and ordered fold traversals")};
-  Option<bool> calculationBatching{
-      *this, "calculation-batching", llvm::cl::init(true),
-      llvm::cl::desc("Realize the selected calculation schedule")};
   Statistic eligible{this, "linear-contraction-eligible",
                      "Semantic all-uses contraction pairs"};
   Statistic selected{this, "linear-contraction-selected",
@@ -100,15 +88,14 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<zkc::exec::ExecDialect, zkc::runtime::RuntimeDialect>();
-    kernel::createLowerKernelsPass()->getDependentDialects(registry);
+    computation::createRealizeComputationsPass()->getDependentDialects(
+        registry);
   }
   void runOnOperation() final {
     LinearContractionStats stats;
     if (failed(lowerPhysical(getOperation(), selections, linearContractions,
                              &stats, releaseStorage, functionPorts,
-                             {optimizeFinite, fuseVectorReductions,
-                              fuseCollectFold, calculationBatching},
-                             cpuTarget))) {
+                             selection.get(), cpuTarget))) {
       signalPassFailure();
       return;
     }

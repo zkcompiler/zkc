@@ -34,7 +34,7 @@
 using namespace mlir;
 using namespace llvm;
 using namespace zkc::mathematical;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 // Reserve the complete numerical symbol context before allocating executable
 // bindings. Retained helper/domain names never become generated identities.
@@ -145,7 +145,7 @@ protocol::BindingApplication algebraBinding(Operation *op) {
   return result;
 }
 // Recipes read immutable mathematical expressions and emit scoped operations.
-// No Local function, conversion cast or intermediate executable recipe is
+// No scoped function, conversion cast or intermediate executable recipe is
 // built.
 class Recipes {
   Operation *sourceRoot;
@@ -923,7 +923,7 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
              OwningOpRef<mlir::ModuleOp> *selectedSchedule) {
   if (reported)
     *reported = {VerificationObservation::Mismatch,
-                 "Kernel construction differs"};
+                 "computation construction differs"};
   auto entry = mathematical::getComputationEntry(source);
   if (!entry)
     return {};
@@ -1018,7 +1018,7 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
         *reported = {optionalConstruction && retryable
                          ? VerificationObservation::OptionalCapacity
                          : VerificationObservation::RequiredCapacity,
-                     "Kernel construction capacity", constructionCapacity};
+                     "computation construction capacity", constructionCapacity};
       if (!retryable || !speculative)
         return false;
       auto advanced = selection->advanceInvocation();
@@ -1125,4 +1125,4 @@ realizeEntry(mlir::ModuleOp source, StringRef callSite,
     return {};
   }
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

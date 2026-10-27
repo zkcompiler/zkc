@@ -4,7 +4,7 @@
 #include "mlir/Pass/PassRegistry.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 
@@ -57,9 +57,9 @@ int main() {
   mlir::OwningOpRef<mlir::ModuleOp> logical(
       mlir::cast<mlir::ModuleOp>(module->clone()));
   lowering.clear();
-  lowering.addPass(zkc::kernel::createLowerKernelsPass());
+  lowering.addPass(zkc::computation::createRealizeComputationsPass());
   if (failed(lowering.run(*module)) ||
-      failed(zkc::kernel::verifyKernelLowering(*logical, *module)))
+      failed(zkc::computation::verifyComputationRealization(*logical, *module)))
     return 1;
   mlir::OwningOpRef<mlir::ModuleOp> realized(
       mlir::cast<mlir::ModuleOp>(module->clone()));
@@ -90,7 +90,7 @@ int main() {
           zkc::mathematical::verifyProjectionPreserved(*module, *changed)))
     return 5;
   return mlir::PassInfo::lookup("zkc-lower-math") ||
-                 mlir::PassInfo::lookup("zkc-lower-kernels")
+                 mlir::PassInfo::lookup("zkc-realize-computations")
              ? 6
              : 0;
 }

@@ -724,7 +724,7 @@ module { "protocol.module"() ({
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(false));
           manager.addPass(protocol::createLowerMathPass());
-          manager.addPass(kernel::createLowerKernelsPass());
+          manager.addPass(computation::createRealizeComputationsPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*original)),
                   "affine repeat failed physical selection");
@@ -804,7 +804,7 @@ func.func private @affine(%x:!F,%y:!F)->!F {
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(simplify));
           manager.addPass(protocol::createLowerMathPass());
-          manager.addPass(kernel::createLowerKernelsPass());
+          manager.addPass(computation::createRealizeComputationsPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*module)),
                   "two collections failed physical selection");

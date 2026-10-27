@@ -13,10 +13,10 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
-  return diagnostics::emit(op->emitOpError(), "kernel-frontier", detail);
+  return diagnostics::emit(op->emitOpError(), "computation-frontier", detail);
 }
 struct Step {
   func::FuncOp wrapper;
@@ -26,7 +26,7 @@ struct Step {
   Block *payload;
   func::FuncOp entry;
   unsigned originalArguments = 0, originalResults = 0;
-  unsigned originalKernelArguments = 0, originalKernelResults = 0;
+  unsigned originalComputationArguments = 0, originalComputationResults = 0;
 };
 // Every key describes an actual typed instruction over already available SSA
 // values. Only polynomial-created instructions enter the table. Concrete source
@@ -119,7 +119,7 @@ class Frontier {
     for (auto [index, output] : enumerate(wrapperReturn.getValues())) {
       if (!charge())
         return {};
-      // A forwarding return names a wrapper input, not a Kernel result
+      // A forwarding return names a wrapper input, not a computation result
       // coordinate. Reuse it only for the corresponding exact entry argument.
       auto argument = dyn_cast<BlockArgument>(value);
       bool forwarded = wrapperInput(step, output) && argument &&
@@ -369,7 +369,7 @@ public:
       unused.reset();
       outputs.clear();
       for (auto [index, result] : enumerate(step.payload->getArguments())) {
-        if (index >= step.originalKernelResults && result.use_empty())
+        if (index >= step.originalComputationResults && result.use_empty())
           unused.set(index);
         else
           outputs.push_back(result.getType());
@@ -385,7 +385,7 @@ public:
       // Numerical inputs and wrapper ports have independent coordinates. A
       // wrapper argument can be omitted, repeated or forwarded only by return.
       for (unsigned index = step.entry.getNumArguments();
-           index-- > step.originalKernelArguments;)
+           index-- > step.originalComputationArguments;)
         if (step.entry.getArgument(index).use_empty()) {
           if (failed(step.entry.eraseArgument(index)))
             return refuse(step.entry, "cannot trim appended numerical input");
@@ -409,9 +409,9 @@ public:
 // provenance, unchanged ordered context and actual port rewrites before any
 // recipe is selected. Public verification reads actual candidate instructions.
 OwningOpRef<mlir::ModuleOp>
-prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
-                      std::optional<CapacityCause> *capacity,
-                      mathematical::NumericalSelection *selection) {
+prepareComputationRealization(mlir::ModuleOp source, uint64_t *shared,
+                              std::optional<CapacityCause> *capacity,
+                              mathematical::NumericalSelection *selection) {
   llvm::TimeTraceScope timing("zkc.numerical-normalization");
   uint64_t standalone = 4000000;
   auto &remaining = shared ? *shared : standalone;
@@ -431,7 +431,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
       cast<protocol_ir::ProtocolModuleOp>(proposal->getBody()->front());
   llvm::DenseSet<Operation *> shareable;
   SymbolTableCollection symbols;
-  SmallVector<KernelNormalizationRewrite> rewrites;
+  SmallVector<ComputationNormalizationRewrite> rewrites;
   SmallVector<Operation *> calls;
   source.walk([&](Operation *op) {
     if (isa<exec::ComputeOp>(op))
@@ -457,9 +457,10 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     auto normalized = normalizeUnit(unit, remaining, generated, capacity);
     if (!normalized)
       return {};
-    // Adopt the checked Kernel subject without copying its body or replacing
-    // its standard entry. SymbolTable owns collision avoidance; insertion
-    // preserves every independently tracked generated operation identity.
+    // Adopt the checked computation subject without copying its body or
+    // replacing its standard entry. SymbolTable owns collision avoidance;
+    // insertion preserves every independently tracked generated operation
+    // identity.
     SymbolTable::setSymbolName(*normalized, "_normalized_kernel");
     auto fresh = normalized.release();
     auto name = outer.insert(fresh, owner.getBody().front().end());
@@ -469,8 +470,8 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     shareable.insert(generated.begin(), generated.end());
     rewrites.push_back({sourceCall, call, fresh});
   }
-  if (failed(verifyKernelNormalizationContext(source, *proposal, rewrites,
-                                              remaining)))
+  if (failed(verifyComputationNormalizationContext(source, *proposal, rewrites,
+                                                   remaining)))
     return {};
   // Only checked polynomial-generated operations can change a frontier. With
   // none, the checked normalized subject is already final: there is no port
@@ -564,10 +565,10 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     if (failed(Frontier(steps, shareable, remaining).run()))
       return {};
   }
-  if (failed(verifyKernelFrontier(*normalizedBefore, *proposal, origins,
-                                  remaining)))
+  if (failed(verifyComputationFrontier(*normalizedBefore, *proposal, origins,
+                                       remaining)))
     return {};
   inherit();
   return proposal;
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

@@ -11,7 +11,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "kernel-formation", detail);
@@ -77,7 +77,7 @@ OwningOpRef<mlir::ModuleOp> closeComputation(func::FuncOp source,
     if (declaration == source.getOperation())
       cast<func::FuncOp>(copy).setPublic();
   }
-  if (failed(verifyKernelClosure(source->getParentOp(), source, *unit)) ||
+  if (failed(verifyComputationClosure(source->getParentOp(), source, *unit)) ||
       failed(mathematical::verifyComputationUnit(*unit)))
     return {};
   return unit;
@@ -236,4 +236,4 @@ selectionPolicy(Operation *call, MathematicalSelectionPolicy fallback) {
   return fallback;
 }
 
-} // namespace zkc::kernel
+} // namespace zkc::computation

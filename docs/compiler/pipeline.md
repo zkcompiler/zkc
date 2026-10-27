@@ -1,8 +1,8 @@
 # Compilation pipeline
 
 Protocol source and direct Protocol IR share the mathematical compilation
-pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`scf`
-and typed `entry` operations, published as `zkc.host/0`. Its numerical helpers
+pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`cf`
+and typed Data/Exec boundaries, published as `zkc.host/0`. Its numerical helpers
 reuse numerical realization and physical export; its protocol and proof calls invoke
 the existing participant pipelines. The [architecture map](../architecture.md)
 shows both paths. The [protocol contract](../spec/ir/protocols.md) owns exact
@@ -65,7 +65,7 @@ ordered actions and dynamic occurrence coordinates.
 ## Realization and publication
 
 Demand lowering forms [Computation units](../spec/ir/computation.md) at consuming actions.
-Physical planning retains the original units and a proposed Local realization.
+Physical planning retains the original units and a proposed scoped realization.
 Independent numerical and physical checks connect that realization to the original
 subject and the selected implementations and conversions. Publication applies the
 retained choices once, including checked storage-release positions, while
@@ -96,6 +96,16 @@ The [architecture map](../architecture.md#implementation-owners) locates these
 components. Mutable IR must be reverified after changes; affected analyses and
 source-relative comparisons must be recomputed. A copied origin identifies an
 occurrence without proving its operands or effects.
+
+## Pass policy and ownership
+
+[IR ownership](ir-design.md) explains the standard/custom boundary and future
+semantic layers. The `zkc-realize-computations` pass consumes closed computation
+units before physical publication. Numerical passes share typed options for
+finite realization, fusion, demand scheduling and numerical representation;
+`numerical-expressions=vector-only` remains selected through pass cloning and
+textual pipelines. Temporary Tensor/Linalg candidates are explicit dependent
+dialects. Their actual-body reader belongs to IR, independently of Transforms.
 
 ## Analysis boundary
 

@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
 
     passes.addPass(protocol::createLowerMathPass());
 
-    passes.addPass(kernel::createLowerKernelsPass());
+    passes.addPass(computation::createRealizeComputationsPass());
     passes.addPass(protocol::createSelectPhysicalPass());
     require(succeeded(passes.run(*built->module)), "shared physical lowering");
     auto exported = protocol::exportModule(*built->module);

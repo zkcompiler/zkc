@@ -1,7 +1,7 @@
 #ifndef ZKC_TEST_SUPPORT_NUMERICAL_LOOPS_H
 #define ZKC_TEST_SUPPORT_NUMERICAL_LOOPS_H
 
-#include "KernelRecipes.h"
+#include "ComputationRecipes.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -52,7 +52,8 @@ inline mlir::OwningOpRef<mlir::ModuleOp>
 source(mlir::MLIRContext &context, llvm::StringRef helper,
        llvm::StringRef field = "bls12-381.fr", bool sequence = false) {
   auto original = fixture(context, field, sequence);
-  return kernelRecipeSource(&original->getBody()->front(), helper, "evaluate");
+  return computationRecipeSource(&original->getBody()->front(), helper,
+                                 "evaluate");
 }
 inline mlir::func::FuncOp helper(mlir::ModuleOp unit, llvm::StringRef name) {
   auto result = mlir::SymbolTable(unit).lookup<mlir::func::FuncOp>(name);
@@ -71,7 +72,7 @@ inline runtime::BindingOp primitiveBinding(mlir::Operation *user) {
   return result;
 }
 inline mlir::func::FuncOp entry(mlir::ModuleOp output) {
-  auto result = mlir::SymbolTable(kernelRecipeOutput(output))
+  auto result = mlir::SymbolTable(computationRecipeOutput(output))
                     .lookup<mlir::func::FuncOp>("evaluate");
   require(bool(result), "missing executable numerical entry");
   return result;
@@ -87,8 +88,8 @@ inline llvm::SmallVector<mlir::Operation *> operations(mlir::Operation *root,
 }
 inline protocol::SourceExecutionStep loopStep(mlir::ModuleOp module,
                                               exec::RangeOp loop) {
-  auto closure =
-      take(protocol::readSourceExecutionClosure(kernelRecipeOutput(module)));
+  auto closure = take(
+      protocol::readSourceExecutionClosure(computationRecipeOutput(module)));
   auto function = loop->getParentOfType<mlir::func::FuncOp>();
   for (const auto &step : closure.bodies.at(function.getSymName().str()))
     if (step.operation == loop.getOperation())
@@ -96,8 +97,8 @@ inline protocol::SourceExecutionStep loopStep(mlir::ModuleOp module,
   throw std::runtime_error("missing scoped loop occurrence");
 }
 inline llvm::SmallVector<exec::RangeOp> stateLoops(mlir::ModuleOp output) {
-  auto closure =
-      take(protocol::readSourceExecutionClosure(kernelRecipeOutput(output)));
+  auto closure = take(
+      protocol::readSourceExecutionClosure(computationRecipeOutput(output)));
   llvm::SmallVector<exec::RangeOp> result;
   output.walk([&](exec::RangeOp loop) {
     auto function = loop->getParentOfType<mlir::func::FuncOp>();
@@ -112,8 +113,8 @@ realize(mlir::ModuleOp unit, MathematicalSelectionPolicy policy = fused,
         finite::VerificationLimits limits = {},
         mathematical::RealizationWork *available = nullptr) {
   mathematical::RealizationWork work;
-  auto result = realizeKernelEntry(unit, "collect_fold", policy,
-                                   available ? *available : work, limits);
+  auto result = realizeComputationEntry(unit, "collect_fold", policy,
+                                        available ? *available : work, limits);
   require(bool(result), "numerical realization failed");
   return result;
 }
@@ -121,7 +122,7 @@ inline void accepts(mlir::ModuleOp unit, mlir::ModuleOp output,
                     MathematicalSelectionPolicy policy = fused,
                     finite::VerificationLimits limits = {}) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
-  require(mlir::succeeded(kernel::verifyEntryRecipes(
+  require(mlir::succeeded(computation::verifyEntryRecipes(
               unit, output, "collect_fold", policy, limits, &outcome)) &&
               outcome.status == finite::VerificationStatus::Verified,
           "original source does not match actual numerical output");
@@ -129,8 +130,8 @@ inline void accepts(mlir::ModuleOp unit, mlir::ModuleOp output,
 inline void mismatch(mlir::ModuleOp unit, mlir::ModuleOp output,
                      MathematicalSelectionPolicy policy = fused) {
   finite::VerificationResult outcome{finite::VerificationStatus::Verified, {}};
-  require(mlir::failed(kernel::verifyEntryRecipes(unit, output, "collect_fold",
-                                                  policy, {}, &outcome)) &&
+  require(mlir::failed(computation::verifyEntryRecipes(
+              unit, output, "collect_fold", policy, {}, &outcome)) &&
               outcome.status == finite::VerificationStatus::Mismatch,
           "source/candidate difference was accepted or classified as capacity");
 }

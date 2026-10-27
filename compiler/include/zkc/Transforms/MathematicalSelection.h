@@ -6,8 +6,8 @@ namespace zkc {
 /// other policy flag, replacement check and explicit implementation
 /// restriction.
 enum class NumericalExpressionMode { PreferNative, VectorOnly };
-/// Algorithm family choices shared by Local preparation and total Math demand
-/// lowering. Independent of generic simplification and physical storage
+/// Algorithm family choices shared by scoped preparation and total mathematical
+/// demand lowering. Independent of generic simplification and physical storage
 /// release. Optional selections preserve logical results and ordered shape
 /// refusals under the declared primitive contracts and sufficient capacity, not
 /// exhaustion.

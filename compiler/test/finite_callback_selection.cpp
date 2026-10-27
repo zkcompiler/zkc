@@ -1,4 +1,4 @@
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationEmission.h"
 #include "../lib/Transforms/ScopedCandidate.h"
@@ -6,7 +6,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -192,7 +192,7 @@ Operation *fold(ModuleOp source) {
               .front();
 }
 func::FuncOp selected(ModuleOp candidate) {
-  auto function = SymbolTable(kernelRecipeOutput(candidate))
+  auto function = SymbolTable(computationRecipeOutput(candidate))
                       .lookup<func::FuncOp>("selected");
   require(bool(function), "missing selected recipe entry");
   return function;
@@ -206,7 +206,7 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            bool optimize = true,
                            RealizationTrace *trace = nullptr,
                            finite::VerificationLimits limits = {}) {
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   OwningOpRef<mlir::ModuleOp> original(
       cast<mlir::ModuleOp>(numerical->clone()));
   // The entry contains the original standard-function fold. Optional callback
@@ -214,11 +214,11 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
   MathematicalSelectionPolicy policy{optimize, false};
   // These cases mutate the vector alternative's concrete instructions.
   policy.numericalExpressions = NumericalExpressionMode::VectorOnly;
-  auto candidate =
-      realizeKernelEntry(*numerical, "selection", policy, work, limits, trace);
+  auto candidate = realizeComputationEntry(*numerical, "selection", policy,
+                                           work, limits, trace);
   require(bool(candidate), "checked callback lowering failed");
-  kernelRecipeOutput(*candidate);
-  require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+  computationRecipeOutput(*candidate);
+  require(succeeded(computation::verifyRecipeOutput(*candidate)),
           "candidate refused");
   require(same(*numerical, *original), "Kernel recipe source changed");
   for (auto helper : unit(source).getBody().front().getOps<func::FuncOp>())
@@ -251,7 +251,7 @@ Value argument(ModuleOp candidate, unsigned index) {
   return selected(candidate).getArgument(index + 1);
 }
 bool compare(ModuleOp source, ModuleOp candidate) {
-  auto view = ScopedCandidate::read(kernelRecipeOutput(candidate));
+  auto view = ScopedCandidate::read(computationRecipeOutput(candidate));
   if (!view) {
     llvm::consumeError(view.takeError());
     return false;
@@ -273,10 +273,10 @@ bool compare(ModuleOp source, ModuleOp candidate) {
   if (failed(result) || !isa_and_nonnull<exec::ReturnOp>(cursor) ||
       ports.next(cursor) || ValueRange(*result) != ports.inputs(cursor))
     return false;
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
-  return succeeded(kernel::verifyEntryRecipes(*numerical, candidate,
-                                              "selection", {}, {}, &outcome));
+  return succeeded(computation::verifyEntryRecipes(
+      *numerical, candidate, "selection", {}, {}, &outcome));
 }
 } // namespace
 
@@ -383,7 +383,8 @@ int main() {
               }
           }
         });
-        require(changed && succeeded(kernel::verifyRecipeOutput(*malformed)) &&
+        require(changed &&
+                    succeeded(computation::verifyRecipeOutput(*malformed)) &&
                     !compare(*source, *malformed),
                 "wrong seed survived independent pointwise comparison");
         malformed = copy(*candidate);
@@ -407,12 +408,12 @@ int main() {
           });
           require(fill != nullptr, "uniform term did not use a broadcast");
           auto view =
-              take(ScopedCandidate::read(kernelRecipeOutput(*malformed)));
+              take(ScopedCandidate::read(computationRecipeOutput(*malformed)));
           auto *length = view->producer(input(fill, 1));
           require(length && contract(length) == "vector.length",
                   "broadcast lacks its admitted extent query");
           OpBuilder builder(length);
-          RealizationEmitter emitter(kernelRecipeOutput(*malformed),
+          RealizationEmitter emitter(computationRecipeOutput(*malformed),
                                      "wrong_cardinality_");
           auto binding = emitter.binding(builder, length->getLoc(),
                                          {"index.constant", {}, ""});
@@ -420,7 +421,7 @@ int main() {
           apply.setBindingAttr(binding);
           apply.getInputsMutable().clear();
           apply.setParametersAttr(builder.getStrArrayAttr({"1"}));
-          require(succeeded(kernel::verifyRecipeOutput(*malformed)) &&
+          require(succeeded(computation::verifyRecipeOutput(*malformed)) &&
                       !compare(*source, *malformed),
                   "broadcast lost its admitted cardinality");
         }
@@ -448,7 +449,7 @@ int main() {
         changed = true;
       }
     });
-    require(changed && succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+    require(changed && succeeded(computation::verifyRecipeOutput(*candidate)) &&
                 !compare(*source, *candidate),
             "equal extents equated different container elements");
   });
@@ -569,11 +570,11 @@ module { "protocol.module"() ({
               observed = true;
               require(event.subject.declaration == "selected" &&
                           event.subject.site ==
-                              kernelRecipeSite("selection", 0) &&
+                              computationRecipeSite("selection", 0) &&
                           event.subject.position.empty() &&
                           decision->querySubject.declaration == "selected" &&
                           decision->querySubject.site ==
-                              kernelRecipeSite("selection", 0) &&
+                              computationRecipeSite("selection", 0) &&
                           decision->querySubject.position.empty(),
                       "normalized query reported a synthetic source position");
             }
@@ -690,7 +691,7 @@ module { "protocol.module"() ({
             setInput(dot, 0, argument(*candidate, repeated ? 0 : 2));
             setInput(dot, 1, argument(*candidate, repeated ? 0 : 2));
             require(
-                succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+                succeeded(computation::verifyRecipeOutput(*candidate)) &&
                     !compare(*source, *candidate),
                 "reader equated distinct containers or lost repeated actuals");
           });
@@ -737,7 +738,7 @@ module { "protocol.module"() ({
           require(dot, "missing alias contraction");
           setInput(dot, 0, argument(*candidate, aliased ? 2 : 0));
           setInput(dot, 1, argument(*candidate, aliased ? 2 : 0));
-          require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+          require(succeeded(computation::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "alias mapping accepted a changed container");
         });
@@ -802,7 +803,7 @@ module { "protocol.module"() ({
           require(dot && length,
                   "matrix contraction or domain admission missing");
           setInput(dot, 2, output(length));
-          require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+          require(succeeded(computation::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "reader accepted a different fixed selector");
         });
@@ -897,7 +898,7 @@ module { "protocol.module"() ({
     require(result && cast<exec::ApplyOp>(result).getInputs().size() == 2,
             "missing seed combiner");
     setInput(result, 0, input(result, 1));
-    require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+    require(succeeded(computation::verifyRecipeOutput(*candidate)) &&
                 !compare(*source, *candidate),
             "wrong seed escaped original callback comparison");
   });

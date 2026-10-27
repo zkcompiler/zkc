@@ -1,6 +1,6 @@
+#include "../lib/Transforms/Computation/Schedule.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/FiniteVerification.h"
-#include "../lib/Transforms/Kernel/Schedule.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalComparison.h"
 #include "../lib/Transforms/NumericalSelection.h"
 #include "../lib/Transforms/ScopedCandidate.h"
@@ -260,7 +260,7 @@ int main() {
           work.optionalFiniteChecking = 0;
           uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
           OwningOpRef<ModuleOp> schedule;
-          auto ordered = kernel::realizeEntry(
+          auto ordered = computation::realizeEntry(
               unit, "nested", {false, false}, work, copies, bytes, {}, nullptr,
               nullptr, nullptr, false, &schedule);
           require(bool(ordered), "outer reader starved its nested callbacks");
@@ -274,13 +274,12 @@ int main() {
               finite::VerificationStatus::Mismatch, {}};
           auto check = [&](uint64_t localCap, uint64_t &shared) {
             finite::VerificationLimits limits{localCap, 0, &shared};
-            return scheduled
-                       ? kernel::verifyEntrySchedule(unit, *candidate, "nested",
-                                                     {false, false}, limits,
-                                                     &outcome)
-                       : kernel::verifyEntryRecipes(unit, *candidate, "nested",
-                                                    {false, false}, limits,
-                                                    &outcome);
+            return scheduled ? computation::verifyEntrySchedule(
+                                   unit, *candidate, "nested", {false, false},
+                                   limits, &outcome)
+                             : computation::verifyEntryRecipes(
+                                   unit, *candidate, "nested", {false, false},
+                                   limits, &outcome);
           };
           uint64_t shared = 1000;
           require(succeeded(check(100000, shared)) &&
@@ -343,8 +342,8 @@ int main() {
     work.requiredFiniteChecking = 1000;
     work.optionalFiniteChecking = 0;
     uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
-    auto measured = kernel::realizeEntry(unit, "nested", {false, false}, work,
-                                         copies, bytes);
+    auto measured = computation::realizeEntry(unit, "nested", {false, false},
+                                              work, copies, bytes);
     require(bool(measured), "nested construction measurement refused");
     const uint64_t cost = 1000 - work.requiredFiniteChecking;
     require(cost > 1 && cost < 1000,
@@ -354,8 +353,8 @@ int main() {
     work.optionalFiniteChecking = 0;
     copies = 1000000;
     bytes = 16 * 1024 * 1024;
-    auto exact = kernel::realizeEntry(unit, "nested", {false, false}, work,
-                                      copies, bytes);
+    auto exact = computation::realizeEntry(unit, "nested", {false, false}, work,
+                                           copies, bytes);
     require(bool(exact) && work.requiredFiniteChecking == 0 &&
                 same(*measured, *exact),
             "exact nested construction allowance changed or refused output");
@@ -366,8 +365,8 @@ int main() {
     bytes = 16 * 1024 * 1024;
     mathematical::VerificationDecision outcome;
     auto refused =
-        kernel::realizeEntry(unit, "nested", {false, false}, work, copies,
-                             bytes, {}, nullptr, nullptr, &outcome);
+        computation::realizeEntry(unit, "nested", {false, false}, work, copies,
+                                  bytes, {}, nullptr, nullptr, &outcome);
     require(!refused && work.requiredFiniteChecking == 0 &&
                 outcome.outcome ==
                     mathematical::VerificationObservation::RequiredCapacity &&
@@ -383,7 +382,7 @@ int main() {
     auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
     mathematical::NumericalSelection session;
     auto initial = session.work;
-    auto candidate = kernel::realizeEntry(
+    auto candidate = computation::realizeEntry(
         unit, "reductions", {}, session.work, session.remainingCopy,
         session.remainingSiteBytes, {100000, 1}, nullptr, &session);
     require(bool(candidate),
@@ -391,8 +390,8 @@ int main() {
     auto [loops, nestedLoops] = loopCounts(*candidate, "evaluate");
     require(
         loops == 2 && nestedLoops == 0 && same(*source, *before) &&
-            succeeded(
-                kernel::verifyEntryRecipes(unit, *candidate, "reductions")),
+            succeeded(computation::verifyEntryRecipes(unit, *candidate,
+                                                      "reductions")),
         "targeted retries changed source or lost independent correspondence");
     require(session.work.discardedRecipeCopy < initial.discardedRecipeCopy &&
                 session.work.matching.structural <
@@ -409,16 +408,16 @@ int main() {
         auto unit = *source->getBody()->getOps<mlir::ModuleOp>().begin();
         mathematical::RealizationWork work;
         uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
-        auto measured = kernel::realizeEntry(unit, "boundary", {false, false},
-                                             work, copies, bytes);
+        auto measured = computation::realizeEntry(
+            unit, "boundary", {false, false}, work, copies, bytes);
         require(bool(measured), "ordered copy measurement refused");
         uint64_t cost = 1000000 - copies;
         require(cost > 1, "ordered construction did not charge copies");
         work = {};
         copies = cost;
         bytes = 16 * 1024 * 1024;
-        require(bool(kernel::realizeEntry(unit, "boundary", {false, false},
-                                          work, copies, bytes)) &&
+        require(bool(computation::realizeEntry(unit, "boundary", {false, false},
+                                               work, copies, bytes)) &&
                     copies == 0,
                 "exact ordered copy allowance refused");
         work = {};
@@ -427,8 +426,8 @@ int main() {
         ScopedDiagnosticHandler quiet(&context,
                                       [](Diagnostic &) { return success(); });
         require(
-            !kernel::realizeEntry(unit, "boundary", {false, false}, work,
-                                  copies, bytes) &&
+            !computation::realizeEntry(unit, "boundary", {false, false}, work,
+                                       copies, bytes) &&
                 same(*source, *before),
             "one-short required copy capacity published a partial candidate");
       });

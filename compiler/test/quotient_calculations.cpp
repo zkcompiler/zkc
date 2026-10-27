@@ -2,7 +2,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -93,16 +93,17 @@ int main() {
     })mlir",
                                             &context);
   require(bool(source), "quotient source admission failed");
-  auto unit = zkc::test::kernelRecipeSource(*source, "calculate", "entry");
+  auto unit = zkc::test::computationRecipeSource(*source, "calculate", "entry");
   auto snapshot =
       OwningOpRef<mlir::ModuleOp>(cast<mlir::ModuleOp>(unit->clone()));
   mathematical::RealizationWork work;
-  auto candidate = zkc::test::realizeKernelEntry(*unit, "quotient", {}, work);
+  auto candidate =
+      zkc::test::realizeComputationEntry(*unit, "quotient", {}, work);
   cases.run("managed coefficient realization and immutable source", [&] {
     require(bool(candidate), "quotient recipe failed");
-    require(
-        succeeded(kernel::verifyEntryRecipes(*unit, *candidate, "quotient")),
-        "independent quotient recipe reader failed");
+    require(succeeded(
+                computation::verifyEntryRecipes(*unit, *candidate, "quotient")),
+            "independent quotient recipe reader failed");
     require(OperationEquivalence::isEquivalentTo(
                 *unit, *snapshot, OperationEquivalence::IgnoreLocations),
             "source mutated during realization");
@@ -138,7 +139,7 @@ int main() {
       } else if (mutation == "site") {
         product->setAttr("site", builder.getStringAttr("unrelated"));
       } else {
-        auto owner = zkc::test::kernelRecipeOutput(*changed);
+        auto owner = zkc::test::computationRecipeOutput(*changed);
         auto binding = SymbolTable(owner).lookup<runtime::BindingOp>(
             product->getAttrOfType<FlatSymbolRefAttr>("binding").getValue());
         if (mutation == "contract") {
@@ -151,8 +152,9 @@ int main() {
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
       require(succeeded(verify(*changed)), "quotient mutation lost formation");
-      require(failed(kernel::verifyEntryRecipes(*unit, *changed, "quotient")),
-              "altered recipe accepted");
+      require(
+          failed(computation::verifyEntryRecipes(*unit, *changed, "quotient")),
+          "altered recipe accepted");
     });
   cases.run(
       "upstream select does not widen the admitted mathematical profile", [&] {
@@ -171,7 +173,7 @@ int main() {
                                                    &context);
         require(bool(choices), "formal selection did not form");
         auto selected =
-            zkc::test::kernelRecipeSource(*choices, "choose", "entry");
+            zkc::test::computationRecipeSource(*choices, "choose", "entry");
         ScopedDiagnosticHandler quiet(&context,
                                       [](Diagnostic &) { return success(); });
         require(

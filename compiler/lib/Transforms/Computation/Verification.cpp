@@ -8,7 +8,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult
 checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
@@ -49,17 +49,17 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
           binding.setImplementation(implementation);
     source = *pinned;
   }
-  bool hasKernels = false;
+  bool hasComputations = false;
   source.walk([&](Operation *op) {
-    hasKernels |=
+    hasComputations |=
         (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
   });
-  if (hasKernels) {
+  if (hasComputations) {
     // Reconstruct and check mathematical normalization/frontier only. No
     // executable emitter, selected menu or producer receipt enters this edge.
     std::optional<CapacityCause> capacity;
-    normalized =
-        prepareKernelLowering(source, &work.numericalCheckCopy, &capacity);
+    normalized = prepareComputationRealization(source, &work.numericalCheckCopy,
+                                               &capacity);
     if (!normalized) {
       if (capacity)
         outcome = {mathematical::VerificationObservation::RequiredCapacity,
@@ -73,14 +73,14 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
                                       outcome);
 }
 } // namespace
-LogicalResult verifyKernelLowering(mlir::ModuleOp original,
-                                   mlir::ModuleOp candidate,
-                                   MathematicalSelectionPolicy policy) {
+LogicalResult verifyComputationRealization(mlir::ModuleOp original,
+                                           mlir::ModuleOp candidate,
+                                           MathematicalSelectionPolicy policy) {
   mathematical::RealizationWork work;
   mathematical::VerificationDecision outcome;
   return checkLowering(original, candidate, policy, {}, work, outcome, false);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation
 
 namespace zkc::mathematical {
 LogicalResult verifyNumericalLowering(
@@ -91,8 +91,8 @@ LogicalResult verifyNumericalLowering(
   RealizationWork standalone;
   VerificationDecision outcome;
   auto result =
-      kernel::checkLowering(original, candidate, policy, selections,
-                            shared ? *shared : standalone, outcome, true);
+      computation::checkLowering(original, candidate, policy, selections,
+                                 shared ? *shared : standalone, outcome, true);
   if (reported)
     *reported = outcome;
   return result;

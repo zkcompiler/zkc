@@ -1,6 +1,6 @@
+#include "../lib/Transforms/Computation/NormalizationVerification.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/HelperNormalization.h"
-#include "../lib/Transforms/Kernel/NormalizationVerification.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -61,9 +61,9 @@ SmallVector<Operation *> operations(func::FuncOp function) {
     result.push_back(&op);
   return result;
 }
-void provenanceRefusal(MLIRContext &context,
-                       llvm::function_ref<LogicalResult()> action,
-                       StringRef code = "kernel-normalization-provenance") {
+void provenanceRefusal(
+    MLIRContext &context, llvm::function_ref<LogicalResult()> action,
+    StringRef code = "computation-normalization-provenance") {
   std::string diagnostic;
   ScopedDiagnosticHandler handler(&context, [&](Diagnostic &value) {
     diagnostic += value.str();
@@ -100,7 +100,7 @@ int main() {
             "computation source is malformed");
     uint64_t remaining = 1000000;
     llvm::DenseSet<Operation *> generated;
-    auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+    auto candidate = computation::normalizeUnit(*source, remaining, generated);
     require(bool(candidate) && succeeded(verify(*candidate)) &&
                 succeeded(mathematical::verifyComputationUnit(*candidate)),
             "owned Kernel normalization refused");
@@ -144,7 +144,8 @@ int main() {
                 "computation source is malformed");
         uint64_t remaining = 1000000;
         llvm::DenseSet<Operation *> generated;
-        auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+        auto candidate =
+            computation::normalizeUnit(*source, remaining, generated);
         require(bool(candidate) && succeeded(verify(*candidate)) &&
                     succeeded(mathematical::verifyComputationUnit(*candidate)),
                 "finite Kernel normalization refused");
@@ -176,7 +177,7 @@ int main() {
     auto source = makeKernelUnit(*module, "mixed_raw", {"mixed_leaf"});
     uint64_t remaining = 1000000;
     llvm::DenseSet<Operation *> generated;
-    auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+    auto candidate = computation::normalizeUnit(*source, remaining, generated);
     require(bool(candidate), "reference normalization refused");
     uint64_t spent = 1000000 - remaining;
     require(spent > 1, "normalization did not charge copying");
@@ -185,7 +186,7 @@ int main() {
     for (uint64_t allowance : {uint64_t(0), spent - 1}) {
       llvm::DenseSet<Operation *> evidence{source->getOperation()};
       remaining = allowance;
-      auto refused = kernel::normalizeUnit(*source, remaining, evidence);
+      auto refused = computation::normalizeUnit(*source, remaining, evidence);
       require(!refused, "exhausted normalization was accepted");
       require(evidence.size() == 1 && evidence.contains(source->getOperation()),
               "refused normalization published destroyed identities");
@@ -199,7 +200,7 @@ int main() {
   cases.run("handwritten helper substitution includes every invocation", [&] {
     auto module = fixture(context, "provenance");
     auto expanded = function(*module, "expanded");
-    kernel::NormalizationProvenanceChecker checker(unit(*module));
+    computation::NormalizationProvenanceChecker checker(unit(*module));
     require(succeeded(checker.checkExpansion(function(*module, "raw"),
                                              expanded.front())),
             "exact positional helper substitution refused");
@@ -212,7 +213,7 @@ int main() {
         auto module = fixture(context, "provenance");
         auto expanded = function(*module, "mixed_expanded");
         auto candidate = normalize(expanded);
-        kernel::NormalizationProvenanceChecker checker(unit(*module));
+        computation::NormalizationProvenanceChecker checker(unit(*module));
         require(succeeded(checker.checkExpansion(function(*module, "mixed_raw"),
                                                  expanded.front())),
                 "mixed positional helper expansion refused");
@@ -291,7 +292,7 @@ int main() {
               require(succeeded(values.check(source, candidate->front())),
                       "negative control does not expose the value-only gap");
             }
-            kernel::NormalizationProvenanceChecker checker(unit(*module));
+            computation::NormalizationProvenanceChecker checker(unit(*module));
             SmallVector<Operation *> generated{source.getOperation()};
             provenanceRefusal(context, [&] {
               return expansion
@@ -309,7 +310,7 @@ int main() {
         auto module = fixture(context, "provenance");
         auto source = function(*module, "polynomial");
         auto candidate = function(*module, "normalized");
-        kernel::NormalizationProvenanceChecker checker(unit(*module));
+        computation::NormalizationProvenanceChecker checker(unit(*module));
         SmallVector<Operation *> generated;
         require(succeeded(checker.checkNormalization(source, candidate.front(),
                                                      &generated)),
@@ -329,7 +330,7 @@ int main() {
       auto module = fixture(context, "provenance");
       auto source = function(*module, name);
       auto candidate = normalize(source);
-      kernel::NormalizationProvenanceChecker checker(unit(*module));
+      computation::NormalizationProvenanceChecker checker(unit(*module));
       require(succeeded(checker.checkNormalization(source, candidate->front())),
               "supported normalizer trace refused");
     });
@@ -347,7 +348,7 @@ int main() {
     mathematical::HelperNormalizationChecker values(unit(*module));
     require(succeeded(values.check(source, candidate->front())),
             "duplicate reconstruction does not expose the value-only gap");
-    kernel::NormalizationProvenanceChecker checker(unit(*module));
+    computation::NormalizationProvenanceChecker checker(unit(*module));
     provenanceRefusal(context, [&] {
       return checker.checkNormalization(source, candidate->front());
     });
@@ -374,7 +375,7 @@ int main() {
       else
         candidate->front().back().setOperand(0, ops[3]->getResult(0));
       require(succeeded(verify(*candidate)), "polynomial control is malformed");
-      kernel::NormalizationProvenanceChecker checker(unit(*module));
+      computation::NormalizationProvenanceChecker checker(unit(*module));
       provenanceRefusal(context, [&] {
         return checker.checkNormalization(source, candidate->front());
       });
@@ -391,7 +392,7 @@ int main() {
     mathematical::HelperNormalizationChecker values(unit(*module));
     require(succeeded(values.check(source, candidate->front())),
             "folded arrays lost their mathematical meaning");
-    kernel::NormalizationProvenanceChecker checker(unit(*module));
+    computation::NormalizationProvenanceChecker checker(unit(*module));
     provenanceRefusal(context, [&] {
       return checker.checkNormalization(source, candidate->front());
     });
@@ -405,7 +406,7 @@ int main() {
       auto module = fixture(context, "callback");
       auto source = function(*module, "step");
       auto candidate = normalize(source);
-      kernel::NormalizationProvenanceChecker checker(unit(*module));
+      computation::NormalizationProvenanceChecker checker(unit(*module));
       require(succeeded(checker.checkExpansion(source, source.front())),
               "callback exact identity refused");
       auto ops = operations(*candidate);
@@ -447,7 +448,7 @@ int main() {
         auto module = fixture(context, "callback");
         auto source = function(*module, "fold");
         auto candidate = copy(source);
-        kernel::NormalizationProvenanceChecker checker(unit(*module));
+        computation::NormalizationProvenanceChecker checker(unit(*module));
         require(
             succeeded(checker.checkNormalization(source, candidate->front())),
             "unchanged concrete finite operation refused");
@@ -466,20 +467,20 @@ int main() {
     auto candidate = function(*module, "expanded");
     std::string before, after;
     llvm::raw_string_ostream(before) << *module;
-    kernel::NormalizationProvenanceChecker checker(unit(*module), 200);
+    computation::NormalizationProvenanceChecker checker(unit(*module), 200);
     require(succeeded(checker.checkExpansion(source, candidate.front())),
             "first bounded expansion refused");
     provenanceRefusal(
         context,
         [&] { return checker.checkExpansion(source, candidate.front()); },
-        "kernel-normalization-limit");
+        "computation-normalization-limit");
     provenanceRefusal(
         context,
         [&] { return checker.checkExpansion(source, candidate.front()); },
-        "kernel-normalization-limit");
+        "computation-normalization-limit");
     llvm::raw_string_ostream(after) << *module;
     require(before == after, "checker mutated its subjects");
-    kernel::NormalizationProvenanceChecker independent(unit(*module));
+    computation::NormalizationProvenanceChecker independent(unit(*module));
     require(succeeded(independent.checkExpansion(source, candidate.front())),
             "exhaustion corrupted an independent reader");
   });
@@ -488,7 +489,7 @@ int main() {
     auto source = function(*module, "leaf");
     auto candidate = copy(source);
     candidate->front().front().erase();
-    kernel::NormalizationProvenanceChecker checker(unit(*module));
+    computation::NormalizationProvenanceChecker checker(unit(*module));
     require(succeeded(checker.checkSimplification(source, candidate->front())),
             "dead total arithmetic refused");
   });
@@ -508,7 +509,7 @@ int main() {
         OpBuilder builder(ops[0]);
         builder.clone(*ops[0]);
       }
-      kernel::NormalizationProvenanceChecker checker(unit(*module));
+      computation::NormalizationProvenanceChecker checker(unit(*module));
       provenanceRefusal(context, [&] {
         return checker.checkSimplification(source, candidate->front());
       });

@@ -1,7 +1,7 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
@@ -13,7 +13,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
 #include "zkc/Transforms/Protocol.h"
@@ -311,7 +311,8 @@ OwningOpRef<ModuleOp> executable(StringRef text, MLIRContext &context,
   PassManager pipeline(&context);
   pipeline.addPass(createProjectProtocolPass(false, policy));
   pipeline.addPass(createLowerMathPass(policy));
-  require(succeeded(pipeline.run(*module)), "Kernel fixture lowering failed");
+  require(succeeded(pipeline.run(*module)),
+          "computation fixture lowering failed");
   require(owner(*module).getProfile() == protocol_ir::Profile::Exec &&
               succeeded(verify(*module)),
           "fixture is not admitted Exec IR");
@@ -747,7 +748,7 @@ module @difference attributes {exec.computation} {
                   cast<mlir::ModuleOp>(builder.clone(*unit.getOperation()));
               SymbolTable::setSymbolName(alternative, "alternative");
               require(succeeded(verify(*module)),
-                      "alternate Kernel fixture did not admit");
+                      "alternate computation fixture did not admit");
             }
             if (mutation == "private-helper") {
               auto entry = mathematical::getComputationEntry(
@@ -896,26 +897,27 @@ module @difference attributes {exec.computation} {
         before.check(*module);
       });
 
-  cases.run("withheld vector reduction selects another checked executable",
-            [&] {
-              auto module = executable(finiteSource(), context);
-              CountingCatalog catalog("vector.sum");
-              FrozenInput before(*module);
-              auto checked = checkedPlan(*module, catalog);
-              for (const auto &binding : checked.choices().bindings)
-                require(binding.binding.application.contract != "vector.sum",
-                        "withheld vector reduction survived selection");
-              auto local = take(checked.cloneSelectedSubject(*module));
-              require(succeeded(kernel::verifyKernelLowering(*module, *local)),
-                      "fallback lost original-source correspondence");
-              auto selected = materializedCopy(*module, checked, catalog);
-              before.check(*module);
-              auto own = checkedPlan(*module, catalog);
-              auto queries = catalog.queryCount();
-              accept(materializePhysical(*module, own));
-              require(catalog.queryCount() == queries,
-                      "materialization searched the numerical menu again");
-            });
+  cases.run(
+      "withheld vector reduction selects another checked executable", [&] {
+        auto module = executable(finiteSource(), context);
+        CountingCatalog catalog("vector.sum");
+        FrozenInput before(*module);
+        auto checked = checkedPlan(*module, catalog);
+        for (const auto &binding : checked.choices().bindings)
+          require(binding.binding.application.contract != "vector.sum",
+                  "withheld vector reduction survived selection");
+        auto local = take(checked.cloneSelectedSubject(*module));
+        require(succeeded(
+                    computation::verifyComputationRealization(*module, *local)),
+                "fallback lost original-source correspondence");
+        auto selected = materializedCopy(*module, checked, catalog);
+        before.check(*module);
+        auto own = checkedPlan(*module, catalog);
+        auto queries = catalog.queryCount();
+        accept(materializePhysical(*module, own));
+        require(catalog.queryCount() == queries,
+                "materialization searched the numerical menu again");
+      });
 
   cases.run(
       "unavailable native and vector reductions retain ordered execution", [&] {
@@ -1230,11 +1232,13 @@ module @difference attributes {exec.computation} {
           }
           ScopedDiagnosticHandler quiet(&context,
                                         [](Diagnostic &) { return success(); });
-          require(failed(kernel::verifyKernelLowering(*module, *selected)),
+          require(failed(computation::verifyComputationRealization(*module,
+                                                                   *selected)),
                   "independent original-source reader accepted altered "
                   "numerical facts");
           auto intact = take(checked.cloneSelectedSubject(*module));
-          require(succeeded(kernel::verifyKernelLowering(*module, *intact)),
+          require(succeeded(computation::verifyComputationRealization(*module,
+                                                                      *intact)),
                   "inspection mutation changed the private retained payload");
         });
 
@@ -1363,9 +1367,10 @@ module @difference attributes {exec.computation} {
         auto traced = executable(scalarSource, context);
         auto plain = copy(*traced);
         mathematical::RealizationTrace trace;
-        require(succeeded(kernel::lowerKernels(*traced, {}, &trace)) &&
-                    succeeded(kernel::lowerKernels(*plain)),
-                "standalone Kernel lowering refused");
+        require(
+            succeeded(computation::realizeComputations(*traced, {}, &trace)) &&
+                succeeded(computation::realizeComputations(*plain)),
+            "standalone Kernel lowering refused");
         require(printed(*traced) == printed(*plain),
                 "tracing changed executable output");
         unsigned returned = 0, published = 0;
@@ -1379,7 +1384,7 @@ module @difference attributes {exec.computation} {
                       "proposal claimed caller publication");
               ++returned;
             }
-            if (event.service == "lower-kernels") {
+            if (event.service == "realize-computations") {
               require(publication->boundary ==
                           mathematical::PublicationBoundary::PublishedToCaller,
                       "standalone lowering lost caller publication");
@@ -1393,7 +1398,7 @@ module @difference attributes {exec.computation} {
         OwningOpRef<ModuleOp> empty(
             ModuleOp::create(UnknownLoc::get(&context)));
         FrozenInput before(*empty);
-        require(failed(kernel::lowerKernels(*empty, {}, &trace)),
+        require(failed(computation::realizeComputations(*empty, {}, &trace)),
                 "missing executable owner was accepted");
         before.check(*empty);
         bool refused = false;
@@ -1412,7 +1417,7 @@ module @difference attributes {exec.computation} {
 
   cases.run("existing executable input without Kernel still materializes", [&] {
     auto module = take(executableFixture(pinnedSource(), context));
-    require(succeeded(kernel::lowerKernels(*module)),
+    require(succeeded(computation::realizeComputations(*module)),
             "ordinary executable control lowering failed");
     bool hasKernel = false;
     module->walk([&](Operation *op) {

@@ -1,5 +1,5 @@
 #include "HelperNormalization.h"
-#include "Kernel/Support.h"
+#include "Computation/Support.h"
 #include "MathematicalSupport.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -40,7 +40,7 @@ CheckedHelperNormalizations::CheckedHelperNormalizations(Operation *root)
 LogicalResult CheckedHelperNormalizations::readback(uint64_t *remaining) {
   auto &budget = remaining ? *remaining : work;
   for (auto function : root->getRegion(0).front().getOps<func::FuncOp>()) {
-    auto snapshot = kernel::exactReadback(function, root, budget);
+    auto snapshot = computation::exactReadback(function, root, budget);
     if (!snapshot ||
         failed(provenance.checkExpansion(function, snapshot->front())))
       return diagnostics::emit(
@@ -82,7 +82,7 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
           failed(provenance.checkNormalization(*expanded, proposal->front(),
                                                &generated)))
         return failure();
-      if (!kernel::chargeCopy(*proposal, work))
+      if (!computation::chargeCopy(*proposal, work))
         return failure();
       OwningOpRef<func::FuncOp> unsimplified(
           cast<func::FuncOp>((*proposal)->clone()));

@@ -8,7 +8,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFixture.h"
 #include "zkc/Analysis/ComputationUnit.h"
@@ -427,12 +427,12 @@ OwningOpRef<ModuleOp> realizeTotal(ModuleOp source, StringRef site = "total",
   finite::VerificationLimits limits;
   limits.sharedContext = &checking;
   auto result =
-      kernel::realizeEntry(source, site, {}, work, copies, bytes, limits);
+      computation::realizeEntry(source, site, {}, work, copies, bytes, limits);
   require(bool(result), "total scoped realization refused");
   return result;
 }
 OwningOpRef<ModuleOp> totalOccurrenceSource(Operation *source) {
-  auto unit = kernelRecipeUnit(SymbolTable::getNearestSymbolTable(source));
+  auto unit = computationRecipeUnit(SymbolTable::getNearestSymbolTable(source));
   OpBuilder builder(unit->getBody(), unit->getBody()->end());
   auto entry =
       func::FuncOp::create(builder, source->getLoc(), "candidate",
@@ -966,8 +966,8 @@ int main() {
     auto module =
         parseSourceString<ModuleOp>(largeOrderedFold(false, true), &context);
     require(bool(module), "large total source refused");
-    auto numerical =
-        kernelRecipeSource(&module->getBody()->front(), "work", "candidate");
+    auto numerical = computationRecipeSource(&module->getBody()->front(),
+                                             "work", "candidate");
     auto actual = realizeTotal(*numerical, "total", 8 * 1024 * 1024);
     unsigned scalar = 0;
     actual->walk([&](exec::ApplyOp) { ++scalar; });
@@ -975,8 +975,8 @@ int main() {
     finite::VerificationLimits limits;
     uint64_t checking = 8 * 1024 * 1024;
     limits.sharedContext = &checking;
-    require(succeeded(kernel::verifyEntryRecipes(*numerical, *actual, "total",
-                                                 {}, limits)),
+    require(succeeded(computation::verifyEntryRecipes(*numerical, *actual,
+                                                      "total", {}, limits)),
             "large scoped callback lost original mathematical correspondence");
   });
   cases.run("total identity collect leaves an arbitrary scoped suffix", [&] {
@@ -1013,7 +1013,7 @@ int main() {
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
     uint64_t work = 1000000, bytes = 16 * 1024 * 1024;
-    auto result = kernel::verifyKernelRecipes(
+    auto result = computation::verifyComputationRecipes(
         mathematical::getComputationEntry(*numerical), owner,
         "identity_collect", target.getArguments().drop_front(), cursor, work,
         bytes, {}, limits, outcome);
@@ -1046,8 +1046,8 @@ int main() {
                                             helper.getArgument(3),
                                             0) == helperEquality,
                   "fixture did not distinguish helper from operation evidence");
-          auto numerical = kernelRecipeSource(&module->getBody()->front(),
-                                              "outer", "candidate");
+          auto numerical = computationRecipeSource(&module->getBody()->front(),
+                                                   "outer", "candidate");
           auto actual = realizeTotal(*numerical, "extent_fold");
           bool dot = false, loop = false;
           actual->walk([&](Operation *op) {
@@ -1061,8 +1061,8 @@ int main() {
           });
           require(dot == helperEquality && loop != helperEquality,
                   "producer used extent evidence unavailable to its reader");
-          require(succeeded(kernel::verifyEntryRecipes(*numerical, *actual,
-                                                       "extent_fold")),
+          require(succeeded(computation::verifyEntryRecipes(*numerical, *actual,
+                                                            "extent_fold")),
                   "extent-aware scoped recipes lost source correspondence");
           if (!helperEquality) {
             // Rebuild an independently authored dot over the actual ordered

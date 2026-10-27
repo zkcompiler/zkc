@@ -12,11 +12,16 @@ Read the [contribution guide](../../.github/CONTRIBUTING.md),
 | Reusable protocol or helper | Ordinary `.zkc` library and Entry |
 | Authoring syntax, static checking or source Assets | Language and source-to-IR Translation |
 | Mathematical type/operation | Domain contract, IR formation and interpretation |
-| Transparent ordered algorithm | Local body and its effect/resource contract |
+| Transparent ordered algorithm | Scoped standard function and its effect/resource contract |
 | Optimization or realization | Transforms with an actual-candidate preservation check |
 | Physical implementation or conversion | Contracts, Target and backend binding |
 | Relation frontend | Relation adapter with exact field/layout and source-adequacy scope |
 | Invocation, authority or publication | Entry/proof/joint Host interface |
+
+For each operation or record, name its semantic owner, actual producer and
+consumer, invalidation condition and lowering point. Reuse standard operations
+when their semantics match; use a mixed profile when zkc must retain additional
+meaning. The [IR design](../compiler/ir-design.md) records these boundaries.
 
 A whole-protocol callback would erase the computations the compiler is intended
 to inspect. Compose ordinary operations and installed primitives instead.

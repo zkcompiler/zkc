@@ -12,7 +12,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/Threading.h"
@@ -70,14 +70,15 @@ int main() {
   auto logical = copy(*source);
   run(*logical, protocol::createLowerMathPass());
   auto bound = copy(*logical);
-  run(*bound, kernel::createLowerKernelsPass());
+  run(*bound, computation::createRealizeComputationsPass());
   Cases cases;
   cases.run("all Boolean recipes, shared demand, received guard", [&] {
     require(succeeded(mathematical::verifyMathLowering(
                 cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front()),
                 cast<protocol_ir::ProtocolModuleOp>(
                     logical->getBody()->front()))) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *bound)),
+                succeeded(computation::verifyComputationRealization(*logical,
+                                                                    *bound)),
             "valid lowering refused");
   });
   cases.run("equivalent pure split is a different lowering policy", [&] {
@@ -205,7 +206,8 @@ int main() {
                 std::string::npos;
         return success();
       });
-      require(failed(kernel::verifyKernelLowering(*logical, *candidate)) &&
+      require(failed(computation::verifyComputationRealization(*logical,
+                                                               *candidate)) &&
                   code,
               "lowering mutation escaped data-flow comparison");
     });
@@ -461,7 +463,7 @@ int main() {
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());
     auto logicalCandidate = copy(*candidate);
-    run(*candidate, kernel::createLowerKernelsPass());
+    run(*candidate, computation::createRealizeComputationsPass());
     runtime::BindingOp generated;
     candidate->walk([&](runtime::BindingOp binding) {
       if (binding.getContract() == "bool.and" &&
@@ -477,9 +479,9 @@ int main() {
     });
     generated.erase();
     require(succeeded(verify(*candidate)), "binding reuse lost formation");
-    require(
-        succeeded(kernel::verifyKernelLowering(*logicalCandidate, *candidate)),
-        "equivalent authored binding was refused");
+    require(succeeded(computation::verifyComputationRealization(
+                *logicalCandidate, *candidate)),
+            "equivalent authored binding was refused");
   });
   cases.run("interfaces remain immutable across lowering", [&] {
     protocol_ir::ProjectionOp a, b;

@@ -133,6 +133,12 @@ operations/attributes, nonmatching maps, extra work outside the admitted packet,
 and changed formulas refuse with `structured-computation`. The reader does not
 rerun the producer, fusion or CSE, and approval does not survive candidate mutation.
 
+`Analysis/StructuredComputation.h` owns complete packet interpretation and
+source comparison in the IR component. Reading without a source establishes
+profile admission only; consumption checks correspondence and returns the actual
+scalar interpretation from that same read. No producer or optimizer is linked
+into this semantic owner.
+
 The executable adapter reads the admitted candidate's scalar body into the
 existing typed native map/reduction handlers. The original-to-executable
 numerical reader still checks the actual final payload and all length guards.

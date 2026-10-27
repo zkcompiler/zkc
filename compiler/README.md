@@ -2,10 +2,10 @@
 
 The compiler checks `.zkc` modules, Assets, protocols and application Entries.
 Protocol compilation uses mathematical Protocol IR, participant projection,
-Kernel realization and physical `zkc.program/0` export. Entry functions use
+computation realization and physical `zkc.program/0` export. Entry functions use
 standard MLIR `func`/`scf` control and typed `entry` operations, published as
 `zkc.host/0` inside an authenticated Entry package. Their numerical helpers reuse
-the existing Local/Math, Kernel and physical pipeline without a source protocol
+the existing mathematical, scoped execution and physical pipeline without a source protocol
 or participant wrapper. Static calls embed operation-specific native proof and
 joint deployments. The [architecture guide](../docs/architecture.md) defines the
 compiler and runtime owners.

@@ -1,9 +1,12 @@
 #include "zkc/Dialect/IR.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Analysis/StructuredComputation.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Interfaces/Collection.h"
 int main() {
+  if (zkc::mathematical::readStructuredComputation({}))
+    return 6;
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
   if (registry.getDialectAllocator("table") ||

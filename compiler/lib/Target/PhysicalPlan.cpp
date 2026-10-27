@@ -1,5 +1,5 @@
 #include "PhysicalPlan.h"
-#include "../Transforms/Kernel/Support.h"
+#include "../Transforms/Computation/Support.h"
 #include "../Transforms/NumericalSelection.h"
 #include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
@@ -1822,7 +1822,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         numericalSource = *finite;
       }
       if (hasNumerical) {
-        prepared = kernel::prepareKernelLowering(
+        prepared = computation::prepareComputationRealization(
             numericalSource, &selection.numerical.remainingCopy,
             &preparationCapacity, &selection.numerical);
         if (!prepared)
@@ -1841,7 +1841,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         // Discover the current immutable prepared closure. Invocation
         // identities remain stable when another finite recipe changes the call
         // count.
-        if (failed(kernel::discoverKernelCalls(
+        if (failed(computation::discoverComputations(
                 *prepared, options.numericalPolicy, selection.numerical)))
           return error("kernel-lowering", "numerical occurrence discovery");
       }
@@ -1877,7 +1877,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       // original numericalSource remains the correspondence authority.
       candidate = std::move(prepared);
       selected = *candidate;
-      if (failed(kernel::materializeKernelCalls(
+      if (failed(computation::materializeComputations(
               selected, options.numericalPolicy, nullptr, selection.numerical,
               &numericalOutcome, speculative))) {
         if (numericalOutcome.outcome ==
@@ -1943,7 +1943,8 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
         plan.releases = std::move(*releases);
     }
     if (!refusal && options.programCapacity) {
-      if (!kernel::chargeCopy(selected, selection.numerical.remainingCopy)) {
+      if (!computation::chargeCopy(selected,
+                                   selection.numerical.remainingCopy)) {
         constructionCapacity = speculative;
         refusal = error("kernel-lowering");
       } else {

@@ -1,7 +1,7 @@
 #ifndef ZKC_TRANSFORMS_HELPERNORMALIZATION_H
 #define ZKC_TRANSFORMS_HELPERNORMALIZATION_H
 
-#include "Kernel/NormalizationVerification.h"
+#include "Computation/NormalizationVerification.h"
 #include "zkc/Analysis/ComputationWork.h"
 #include "zkc/Dialect/Operations.h"
 #include "llvm/ADT/DenseMap.h"
@@ -41,7 +41,7 @@ public:
 class CheckedHelperNormalizations {
   mlir::Operation *root;
   HelperNormalizationChecker checker;
-  kernel::NormalizationProvenanceChecker provenance;
+  computation::NormalizationProvenanceChecker provenance;
   mlir::SymbolTableCollection symbols;
   unsigned operations = 100000, snapshotOperations = 100000;
   uint64_t snapshotIndices = 1000000;

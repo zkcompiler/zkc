@@ -262,10 +262,12 @@ int main() {
         withSource<arith::ArithDialect, exec::ExecDialect,
                    runtime::RuntimeDialect, func::FuncDialect>(
             logical, [&](ModuleOp candidate, MLIRContext &) {
-              auto pass = physical ? protocol::createSelectPhysicalPass()
-                                   : kernel::createLowerKernelsPass();
+              auto pass = physical
+                              ? protocol::createSelectPhysicalPass()
+                              : computation::createRealizeComputationsPass();
               runChecked(candidate, std::move(pass),
-                         {"exec", "runtime", "func", "cf", "arith"});
+                         {"exec", "runtime", "func", "cf", "arith", "tensor",
+                          "linalg"});
               require(boundCount(candidate, "bool.and", physical) == 1 &&
                           !computationCount(candidate) &&
                           !count(candidate, "exec.compute") &&
@@ -290,7 +292,7 @@ int main() {
                       count(module, "data.sequence_append") &&
                       !count(module, "exec.apply"),
                   "sequence recipes ran during formation");
-          runChecked(module, kernel::createLowerKernelsPass(),
+          runChecked(module, computation::createRealizeComputationsPass(),
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(boundCount(module, "sequence.empty") &&
                       boundCount(module, "sequence.append") &&
@@ -329,7 +331,7 @@ int main() {
                       count(module, "data.domain") &&
                       !count(module, "exec.range"),
                   "finite raw closure was not retained");
-          runChecked(module, kernel::createLowerKernelsPass(),
+          runChecked(module, computation::createRealizeComputationsPass(),
                      {"exec", "runtime", "func", "cf", "arith", "data"});
           require(count(module, "exec.range") && count(module, "cf.cond_br") &&
                       boundCount(module, "field_array.from_vector") &&

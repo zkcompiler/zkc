@@ -6,7 +6,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -183,19 +183,19 @@ module { "protocol.module"() ({
 OwningOpRef<ModuleOp> emitFold(ModuleOp source,
                                MathematicalSelectionPolicy policy = {},
                                RealizationWork *available = nullptr) {
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   RealizationWork standalone;
-  auto result = realizeKernelEntry(*numerical, "numerical", policy,
-                                   available ? *available : standalone);
+  auto result = realizeComputationEntry(*numerical, "numerical", policy,
+                                        available ? *available : standalone);
   require(bool(result), "numerical fold realization failed");
-  require(succeeded(kernel::verifyRecipeOutput(*result)),
+  require(succeeded(computation::verifyRecipeOutput(*result)),
           "invalid native output");
   return result;
 }
 bool compareFold(ModuleOp source, ModuleOp candidate) {
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   return succeeded(
-      kernel::verifyEntryRecipes(*numerical, candidate, "numerical"));
+      computation::verifyEntryRecipes(*numerical, candidate, "numerical"));
 }
 bool hasLoop(ModuleOp module) {
   bool result = false;
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
                   "contract",
                   StringAttr::get(&context, product ? "numerical.sum"
                                                     : "numerical.product"));
-              require(succeeded(kernel::verifyRecipeOutput(*wrong)) &&
+              require(succeeded(computation::verifyRecipeOutput(*wrong)) &&
                           !compareFold(*source, *wrong),
                       "wrong aggregate mode survived independent comparison");
             });
@@ -372,7 +372,7 @@ int main(int argc, char **argv) {
                   outputs[0] = nodes.size() - 1;
                 }
               });
-            require(succeeded(kernel::verifyRecipeOutput(*wrong)),
+            require(succeeded(computation::verifyRecipeOutput(*wrong)),
                     "semantic mutation failed ordinary admission");
             ScopedDiagnosticHandler quiet(
                 &context, [](Diagnostic &) { return success(); });
@@ -789,7 +789,7 @@ module { "protocol.module"() ({
             auto *changed = operation(*wrong, "numerical.sum");
             auto entry = cast<func::FuncOp>(changed->getParentOp());
             changed->setOperand(3, entry.getArgument(5));
-            require(succeeded(kernel::verifyRecipeOutput(*wrong)),
+            require(succeeded(computation::verifyRecipeOutput(*wrong)),
                     "unused vector substitution failed ordinary admission");
             ScopedDiagnosticHandler quiet(
                 &context, [](Diagnostic &) { return success(); });

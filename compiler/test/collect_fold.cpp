@@ -183,8 +183,8 @@ int main() {
     accepts(*unit, *candidate);
     auto checks = sf::applications(*candidate, "control.require");
     require(!checks.empty(), "unused nested zip lost its strict shape check");
-    auto closure = take(
-        protocol::readSourceExecutionClosure(kernelRecipeOutput(*candidate)));
+    auto closure = take(protocol::readSourceExecutionClosure(
+        computationRecipeOutput(*candidate)));
     for (auto check : checks) {
       auto parent = check->getParentOfType<func::FuncOp>();
       bool nested = false;
@@ -281,7 +281,7 @@ int main() {
                              builder.getStrArrayAttr({"bn254.fr"}));
         }
         if (mutation != "nominal domain")
-          require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+          require(succeeded(computation::verifyRecipeOutput(*candidate)),
                   "semantic mutation must remain an admitted scoped fragment");
         mismatch(*unit, *candidate);
         accepts(*unit, *original);
@@ -428,8 +428,8 @@ int main() {
         finite::VerificationResult outcome{finite::VerificationStatus::Verified,
                                            {}};
         require(
-            failed(kernel::verifyEntryRecipes(*unit, *bulk, "collect_fold",
-                                              policy, {100000, 1}, &outcome)) &&
+            failed(computation::verifyEntryRecipes(
+                *unit, *bulk, "collect_fold", policy, {100000, 1}, &outcome)) &&
                 outcome.status == finite::VerificationStatus::OptionalCapacity,
             "optional comparison capacity became required refusal or mismatch");
         auto retried = realize(*unit, policy, {100000, 1}, &retryWork);
@@ -451,9 +451,9 @@ int main() {
                 finite::VerificationResult outcome{
                     finite::VerificationStatus::Verified, {}};
                 require(
-                    failed(kernel::verifyEntryRecipes(*unit, *candidate,
-                                                      "collect_fold", policy,
-                                                      {0, 100000}, &outcome)) &&
+                    failed(computation::verifyEntryRecipes(
+                        *unit, *candidate, "collect_fold", policy, {0, 100000},
+                        &outcome)) &&
                         outcome.status ==
                             finite::VerificationStatus::RequiredCapacity,
                     "required capacity became optional fallback or mismatch");

@@ -1,4 +1,4 @@
-#include "../lib/Transforms/Kernel/Schedule.h"
+#include "../lib/Transforms/Computation/Schedule.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "support/NumericalLoops.h"
 #include "zkc/Dialect/Exec/Builders.h"
@@ -88,9 +88,9 @@ OwningOpRef<mlir::ModuleOp> scheduled(MLIRContext &context) {
   return expected(context, false, false, true);
 }
 void acceptSchedule(mlir::ModuleOp schedule, mlir::ModuleOp actual) {
-  require(succeeded(kernel::verifyRecipeOutput(actual)),
+  require(succeeded(computation::verifyRecipeOutput(actual)),
           "scoped recipe admission refused");
-  require(succeeded(kernel::verifyScheduleLowering(schedule, actual)),
+  require(succeeded(computation::verifyScheduleLowering(schedule, actual)),
           "actual scoped schedule differs");
 }
 } // namespace
@@ -140,7 +140,7 @@ int main() {
     auto before = clone(*schedule), nativeBefore = clone(*native);
     acceptSchedule(*schedule, *native);
     uint64_t remaining = 1000000;
-    auto result = kernel::consumeSchedule(*schedule, remaining);
+    auto result = computation::consumeSchedule(*schedule, remaining);
     require(bool(result), "scoped schedule consumption failed");
     acceptSchedule(*schedule, *result);
     require(same(*schedule, *before) && same(*native, *nativeBefore),
@@ -192,36 +192,37 @@ int main() {
         SymbolTable(root).lookup<runtime::BindingOp>("add")->setAttr(
             "arguments", OpBuilder(&context).getStrArrayAttr({"bn254.fr"}));
       if (mutation == "dormant body" || mutation == "nominal domain")
-        require(failed(kernel::verifyRecipeOutput(*candidate)),
+        require(failed(computation::verifyRecipeOutput(*candidate)),
                 "invalid declaration must fail admission");
       else
-        require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+        require(succeeded(computation::verifyRecipeOutput(*candidate)),
                 "semantic mutation should remain admitted");
-      require(failed(kernel::verifyScheduleLowering(*schedule, *candidate)),
-              "changed semantics accepted");
+      require(
+          failed(computation::verifyScheduleLowering(*schedule, *candidate)),
+          "changed semantics accepted");
     });
   cases.run("consumer capacity preserves immutable source", [&] {
     auto schedule = scheduled(context), before = clone(*schedule);
     uint64_t remaining = 0;
-    require(!kernel::consumeSchedule(*schedule, remaining) && !remaining &&
+    require(!computation::consumeSchedule(*schedule, remaining) && !remaining &&
                 same(*schedule, *before),
             "capacity published or changed input");
   });
   cases.run("reader exact capacity boundary", [&] {
     auto schedule = scheduled(context), native = expected(context);
     uint64_t remaining = 100000;
-    require(succeeded(
-                kernel::verifyScheduleLowering(*schedule, *native, &remaining)),
+    require(succeeded(computation::verifyScheduleLowering(*schedule, *native,
+                                                          &remaining)),
             "positive reader control failed");
     uint64_t exact = 100000 - remaining, shortWork = exact - 1;
-    require(
-        succeeded(kernel::verifyScheduleLowering(*schedule, *native, &exact)) &&
-            !exact,
-        "exact allowance failed");
+    require(succeeded(computation::verifyScheduleLowering(*schedule, *native,
+                                                          &exact)) &&
+                !exact,
+            "exact allowance failed");
     finite::VerificationResult outcome{finite::VerificationStatus::Verified,
                                        {}};
-    require(failed(kernel::verifyScheduleLowering(*schedule, *native,
-                                                  &shortWork, &outcome)) &&
+    require(failed(computation::verifyScheduleLowering(*schedule, *native,
+                                                       &shortWork, &outcome)) &&
                 outcome.status == finite::VerificationStatus::RequiredCapacity,
             "short allowance misclassified");
   });
@@ -234,7 +235,7 @@ int main() {
                   mathematical::RealizationWork work;
                   uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
                   OwningOpRef<mlir::ModuleOp> schedule;
-                  auto actual = kernel::realizeEntry(
+                  auto actual = computation::realizeEntry(
                       *unit, "collect_fold", policy, work, remaining, bytes, {},
                       nullptr, nullptr, nullptr, false, &schedule);
                   require(
