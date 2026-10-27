@@ -54,6 +54,7 @@ int zkc::runCompiler(int argc, char **argv,
            "    Its --declarations option reports completed public "
            "contracts.\n"
            "    --api reports public exports, types and source references.\n"
+           "    --source-ast exports written syntax before elaboration.\n"
            "    --subject selects a closed protocol/proof, excluding Host "
            "functions.\n"
            "    --source-claims exports requests for an explicit subject or "

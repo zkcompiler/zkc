@@ -43,6 +43,13 @@ llvm::Expected<std::string> inspectSourceClaims(const ClosedEntry &,
 /// noncanonical numbers and changed attachments, requests or Entry are refused.
 llvm::Error checkSourceClaims(const ClosedEntry &, llvm::StringRef,
                               const Limits & = {});
+/// Written syntax with structural node addresses, before inference or lowering.
+/// Includes captured and installation modules and binds both identities. This
+/// is an input to source correspondence, not a certificate or an admitted IR.
+/// Traversal uses the requested work/depth limits; serialization is bounded by
+/// limits.apiInspectionBytes and returns no partial document on refusal.
+llvm::Expected<std::string> inspectWrittenSource(const CheckedProject &,
+                                                 const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

@@ -225,7 +225,8 @@ public:
           import.alias = StringRef(import.module).rsplit("::").second.str();
           if (import.alias->empty())
             import.alias = import.module;
-          if (take("as") && !name(*import.alias))
+          import.explicitAlias = take("as");
+          if (import.explicitAlias && !name(*import.alias))
             break;
         }
         if (!expect(";"))
@@ -589,13 +590,15 @@ private:
                                 (absolute ? 2 : 0) ||
            fail("source.limit", "qualified name byte limit exceeded");
   }
-  bool permission(Permissions &p) {
+  bool permission(Permissions &p, std::vector<std::string> &written) {
+    auto name = text().str();
     if (take("Copy"))
       p.copy = p.drop = true;
     else if (take("Drop"))
       p.drop = true;
     else
       return fail("source.permission", "expected Copy or Drop");
+    written.push_back(std::move(name));
     return true;
   }
   bool typeTreeBound(SyntaxType &type) {
@@ -735,7 +738,7 @@ private:
       if (!name(p.name) || !expect(":") || !type(p.constraint, 1, 3))
         return false;
       while (take("+"))
-        if (!permission(p.permissions))
+        if (!permission(p.permissions, p.writtenPermissions))
           return false;
       p.span.end = previousEnd;
       parameters.push_back(std::move(p));
@@ -1363,6 +1366,7 @@ private:
             return fail("source.effect",
                         "callback allowances contain only fixed effects");
           bool local = signature.mode == ScopedSignature::Mode::Local;
+          signature.explicitAllowance = allowance.effects.has_value();
           signature.allowance =
               allowance.effects.value_or(Effects{local, local});
           if (take("where")) {
@@ -1446,7 +1450,8 @@ private:
       if (!expect("]"))
         return {};
     }
-    d.isPublic = take("pub") || member;
+    d.explicitPublic = take("pub");
+    d.isPublic = d.explicitPublic || member;
     bool domainFunction = take("domain");
     if (domainFunction && !at("fn")) {
       d.kind = Declaration::Kind::Domain;
@@ -1764,12 +1769,12 @@ private:
           advance();
           if (take("+"))
             do {
-              if (!permission(*d.permissions))
+              if (!permission(*d.permissions, d.writtenPermissions))
                 return {};
             } while (take("+"));
         } else
           do {
-            if (!permission(*d.permissions))
+            if (!permission(*d.permissions, d.writtenPermissions))
               return {};
           } while (take("+"));
       }
@@ -2101,6 +2106,7 @@ private:
         auto nextDomain = expression(decl, depth + 1);
         if (!nextDomain || (multiple && !expect(")")))
           return {};
+        value.reductionBinders.emplace_back(*nextPattern, *nextDomain);
         if (!domain) {
           domain = *nextDomain;
           binding = std::move(*nextPattern);
@@ -2146,6 +2152,10 @@ private:
         if (!predicate)
           return {};
         value.children.push_back(*predicate);
+        value.reductionPredicate =
+            decl.bodies[decl.expressions[*predicate].regions.front()]
+                .results.front()
+                .second;
       }
       if (!expect(","))
         return {};
@@ -2153,6 +2163,9 @@ private:
       if (!body)
         return {};
       value.children.push_back(*body);
+      value.reductionBody = decl.bodies[decl.expressions[*body].regions.front()]
+                                .results.front()
+                                .second;
     } else if (at("reduce")) {
       fail("source.reduction",
            "use an ordinary scoped call or a finite binder; materialized "
@@ -2481,6 +2494,7 @@ private:
               x = expression(decl, depth + 1);
             else {
               Expression shorthand;
+              shorthand.shorthand = true;
               shorthand.kind = Expression::Kind::Name;
               shorthand.text = label;
               shorthand.span = fieldSpan;
@@ -2698,7 +2712,9 @@ private:
             if (!name(label))
               return {};
             std::optional<Pattern> child;
-            if (take(":"))
+            bool explicitChild = take(":");
+            result.shorthand.push_back(!explicitChild);
+            if (explicitChild)
               child = pattern(depth + 1);
             else {
               child.emplace();
@@ -2823,6 +2839,7 @@ private:
                 value = expression(decl, depth);
               else {
                 Expression shorthand;
+                shorthand.shorthand = true;
                 shorthand.kind = Expression::Kind::Name;
                 shorthand.text = n;
                 shorthand.span = itemSpan;
