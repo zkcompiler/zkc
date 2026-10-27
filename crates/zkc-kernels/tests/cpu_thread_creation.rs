@@ -11,33 +11,41 @@ mod cpu_workloads;
 
 const WORKERS: &str = "ZKC_CPU_CONFINEMENT_WORKERS";
 const CALLERS: &str = "ZKC_CPU_CONFINEMENT_CALLERS";
-const EXTRA_POOL: &str = "ZKC_CPU_CONFINEMENT_EXTRA_POOL";
+const EXTRA_THREAD: &str = "ZKC_CPU_CONFINEMENT_EXTRA_THREAD";
 
 #[test]
 #[ignore = "requires strace and ptrace permission; run this focused gate explicitly"]
 fn provider_workloads_create_only_owned_workers() {
     let evidence = zkc_test_support::evidence("cpu-thread-creation");
-    for (workers, callers) in [(1, 1), (1, 2), (4, 1), (4, 2)] {
+    for (workers, callers) in [(1, 1), (1, 2), (4, 1), (4, 2)]
+        .into_iter()
+        .filter(|&(n, _)| cfg!(feature = "parallel") || n == 1)
+    {
         let tasks = trace_child(evidence.path(), workers, callers, false);
         // One libtest runner thread, the owner's workers, and known callers.
-        let budget = 1 + workers + callers;
+        let budget =
+            1 + if cfg!(feature = "parallel") {
+                workers
+            } else {
+                0
+            } + callers;
         assert_eq!(
             tasks, budget,
             "unowned tasks: workers={workers}, callers={callers}"
         );
     }
-    // Sensitivity control: one deliberately short-lived Rayon pool must exceed
+    // Sensitivity control: one deliberately short-lived thread must exceed
     // the exact same budget even if it exits before the child returns.
     let tasks = trace_child(evidence.path(), 1, 2, true);
     assert_eq!(
         tasks,
-        1 + 1 + 2 + 1,
+        1 + usize::from(cfg!(feature = "parallel")) + 2 + 1,
         "the tracer missed the extra private worker"
     );
 }
 
-fn trace_child(directory: &Path, workers: usize, callers: usize, extra_pool: bool) -> usize {
-    let name = format!("workers-{workers}-callers-{callers}-extra-{extra_pool}");
+fn trace_child(directory: &Path, workers: usize, callers: usize, extra_thread: bool) -> usize {
+    let name = format!("workers-{workers}-callers-{callers}-extra-{extra_thread}");
     let directory = directory.join(name);
     std::fs::create_dir_all(&directory).unwrap();
     zkc_test_support::task_trace::test(
@@ -46,7 +54,7 @@ fn trace_child(directory: &Path, workers: usize, callers: usize, extra_pool: boo
         &[
             (WORKERS, workers.to_string()),
             (CALLERS, callers.to_string()),
-            (EXTRA_POOL, if extra_pool { "1" } else { "0" }.into()),
+            (EXTRA_THREAD, if extra_thread { "1" } else { "0" }.into()),
             ("RAYON_NUM_THREADS", "7".into()),
         ],
     )
@@ -80,12 +88,7 @@ fn provider_workload_child() {
             });
         }
     });
-    if std::env::var(EXTRA_POOL).unwrap() == "1" {
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
-            .build()
-            .unwrap();
-        pool.broadcast(|_| ());
-        drop(pool);
+    if std::env::var(EXTRA_THREAD).unwrap() == "1" {
+        std::thread::spawn(|| ()).join().unwrap();
     }
 }

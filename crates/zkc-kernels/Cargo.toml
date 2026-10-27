@@ -7,10 +7,12 @@ publish = false
 description = "VM-independent typed mathematical kernels for zkc"
 
 [features]
+default = ["parallel"]
+parallel = ["dep:rayon", "ark-ff/parallel", "ark-poly/parallel", "p3-dft/parallel", "p3-field/parallel", "p3-merkle-tree/parallel"]
 test-utils = []
 
 [dependencies]
-rayon.workspace = true
+rayon = { workspace = true, optional = true }
 ark-bn254.workspace = true
 ark-bls12-381.workspace = true
 ark-ec.workspace = true
@@ -31,11 +33,11 @@ p3-goldilocks.workspace = true
 p3-binary-field.workspace = true
 p3-field.workspace = true
 p3-koala-bear.workspace = true
-p3-dft = { workspace = true, features = ["parallel"] }
+p3-dft.workspace = true
 p3-commit.workspace = true
 p3-matrix.workspace = true
 p3-monty-31.workspace = true
-p3-merkle-tree = { workspace = true, features = ["parallel"] }
+p3-merkle-tree.workspace = true
 p3-keccak.workspace = true
 p3-symmetric.workspace = true
 p3-baby-bear-043.workspace = true

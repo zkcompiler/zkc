@@ -267,3 +267,13 @@ The [generated consumer](../../common/tests/protocol/test_rust_sdk.py) and
 [staged SDK consumer](../../common/tests/check_rust_sdk.py) build independent
 normal-feature applications and execute outside the checkout without compiler
 or CLI on `PATH`. See [test selection](../../common/tests/README.md#selecting-checks).
+
+## Portable execution
+
+The SDK's default `parallel` feature forwards bounded CPU execution to the
+native backend and kernels. A dependency with `default-features = false`
+executes numerical phases inline and accepts only `CpuExecution::new(1)`.
+Cargo features are additive; all consumers in that build must preserve the
+nonparallel selection. The [browser adapter](../zkc-web/README.md) supplies a
+small in-memory proof API and browser entropy without changing package bytes
+or importing filesystem capabilities.

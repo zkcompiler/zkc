@@ -8,9 +8,12 @@ mod cpu_workloads;
 #[test]
 fn shared_provider_leaves_do_not_initialize_the_ambient_pool() {
     let serial = check_shared_provider_leaves(&CpuExecution::new(1).unwrap());
-    let parallel = check_shared_provider_leaves(&CpuExecution::new(4).unwrap());
+    let parallel = check_shared_provider_leaves(
+        &CpuExecution::new(if cfg!(feature = "parallel") { 4 } else { 1 }).unwrap(),
+    );
     assert_eq!(serial, parallel, "worker count changed PCS artifact bytes");
     // This detects ambient registry use only; it cannot detect private pools.
+    #[cfg(feature = "parallel")]
     rayon::ThreadPoolBuilder::new()
         .num_threads(1)
         .build_global()

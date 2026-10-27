@@ -490,10 +490,12 @@ mod tests {
 
     #[test]
     fn batched_trees_match_scalar_roots_paths_and_resource_refusals() {
-        crate::cpu::CpuExecution::new(2).unwrap().execute(|| {
-            scalar_tree_agreement::<KoalaBear>();
-            scalar_tree_agreement::<Octic>();
-        });
+        crate::cpu::CpuExecution::new(if cfg!(feature = "parallel") { 2 } else { 1 })
+            .unwrap()
+            .execute(|| {
+                scalar_tree_agreement::<KoalaBear>();
+                scalar_tree_agreement::<Octic>();
+            });
     }
 
     #[test]

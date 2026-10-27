@@ -109,7 +109,10 @@ fn asymmetric_fold_preserves_each_physical_order_and_input_aliases() {
 
 #[test]
 fn fold_limits_leave_no_published_result_or_changed_alias() {
-    for workers in [1, 4] {
+    for workers in [1, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let cpu = zkc_native::CpuExecution::new(workers).unwrap();
         let retained = 4 * size_of::<Scalar>() + 256;
         let managed = 4 * size_of::<Scalar>() + retained;

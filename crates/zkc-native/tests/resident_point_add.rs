@@ -221,7 +221,10 @@ fn check_addition(case: &Case, cpu: &CpuExecution, left: &Value, right: &Value, 
 
 #[test]
 fn resident_addition_covers_groups_identities_aliases_and_worker_boundaries() {
-    for workers in [1, 4] {
+    for workers in [1, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let cpu = CpuExecution::new(workers).unwrap();
         for len in [0, 1, 31, 32, 33, 63, 64, 65, 255, 256, 257, 513] {
             for case in cases(len) {
@@ -242,7 +245,10 @@ fn resident_addition_covers_groups_identities_aliases_and_worker_boundaries() {
 
 #[test]
 fn resident_addition_refusals_preserve_order_inputs_and_complete_publication() {
-    for workers in [1, 4] {
+    for workers in [1, 4]
+        .into_iter()
+        .filter(|&n| cfg!(feature = "parallel") || n == 1)
+    {
         let cpu = CpuExecution::new(workers).unwrap();
         for len in [0, 1, 65, 257] {
             for case in cases(len) {
