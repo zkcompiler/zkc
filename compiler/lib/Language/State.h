@@ -12,6 +12,7 @@ struct CaptureStorage {
   std::string identity, format;
 };
 struct SyntaxDeclaration;
+struct WrittenSources;
 struct ScopedSource;
 struct ScopedCallSource;
 struct ScopedInvocationSource;
@@ -37,6 +38,8 @@ struct CheckedStorage {
   std::string installation;
   uint64_t work = 0, declarationCount = 0, operationCount = 0;
   uint64_t notationDescriptors = 0, notationHoles = 0;
+  /// Written headers and parsed bodies, frozen before resolution/elaboration.
+  std::shared_ptr<const WrittenSources> writtenSources;
   NotationRecords notations;
   APIRecords api;
   std::shared_ptr<const NameEnvironment> names;

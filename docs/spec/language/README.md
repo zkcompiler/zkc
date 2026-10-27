@@ -12,6 +12,7 @@ These native contracts define `.zkc` source and its checked translation. The
 | [Entry declarations](entries.md) | Closed jobs, participants, construction, selected results and setup associations |
 | [Source claims](claims.md) | Versioned wire requests, Entry/target/site resolution and optional Lean handoff |
 | [Operation bindings](bindings.md) | Native nominal types, operation applications and physical selection |
+| [Written source AST](source-ast.md) | Syntax retention, structural addresses and the source-correspondence input |
 | [Translation](translation.md) | MLIR emission, independent source comparison and the immutable checked original |
 
 The retained [interface and package](../formats/entry.md) are serialized

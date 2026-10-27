@@ -30,6 +30,7 @@ int runLanguageCompiler(int argc, char **argv) {
   bool declarations = false;
   bool api = false;
   bool sourceClaims = false;
+  bool sourceAst = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -234,6 +235,12 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--source-ast") {
+      if (sourceAst || command != "language-check")
+        return refuse(
+            error("source.options",
+                  "--source-ast is a check option and may appear once"));
+      sourceAst = true;
     } else if (arg == "--source-claims") {
       if (sourceClaims || command != "language-check")
         return refuse(
@@ -339,6 +346,12 @@ int runLanguageCompiler(int argc, char **argv) {
     if (!claims)
       return refuse(claims.takeError());
     checked["source_claim_inventory"] = cantFail(json::parse(*claims));
+  }
+  if (sourceAst) {
+    auto report = inspectWrittenSource(*project, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["source_ast"] = cantFail(json::parse(*report));
   }
   if (declarations) {
     auto report = inspectDeclarations(*project, limits);
