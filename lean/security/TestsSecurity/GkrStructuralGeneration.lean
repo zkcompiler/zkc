@@ -48,20 +48,30 @@ example : Rebound.OriginalRounds.validatorInitial .left ≠ OriginalRounds.valid
 example : LayoutVariant.validator ≠ CanonicalPair.Validator.participant := LayoutVariant.validator_changed
 example : LayoutVariant.producer ≠ CanonicalPair.Producer.participant := LayoutVariant.producer_changed
 
-/-- A descriptor from the canonical layout cannot certify the changed callback. -/
-example {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] :
-    True := by
-  have _checked := Rebound.OriginalRounds.validator_body (F := F) (G := G) .left
-  fail_if_success
-    have wrong :
-        (Rebound.OriginalRounds.validatorOffset .left,
-          Rebound.OriginalRounds.validatorInitial .left,
-          Rebound.OriginalRounds.validatorYielded .left) =
-        (OriginalRounds.validatorOffset .left,
-          OriginalRounds.validatorInitial .left,
-          OriginalRounds.validatorYielded .left) := by
-      kernel_rfl
+-- Exercise the actual generated callback's capture premise without reducing
+-- either complete callback function. The surrounding mathematical arguments are
+-- identical in the positive and negative applications.
+section CallbackCapture
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+variable (handle layer index : Nat) (captured : Domain.Environment (uniformCarriers F G))
+variable (layerRead : captured[41]? = some (.data (.index layer)))
+variable (point : List F) (claim : F) (history : Domain.History (uniformCarriers F G))
+variable (routes : GkrOriginalRounds.Routes .validator .left handle layer index)
+
+example (size : captured.length = Rebound.OriginalRounds.validatorOffset .left) : True := by
+  have _certificate := Rebound.OriginalRounds.validator .left handle layer index captured size
+    layerRead point claim history routes
   trivial
+
+-- A canonical-layout capture law cannot install the changed callback. Check
+-- the diagnostic, so an unrelated elaboration error or timeout cannot pass.
+/-- error: Application type mismatch -/
+#guard_msgs (substring := true) in
+example (size : captured.length = OriginalRounds.validatorOffset .left) : True := by
+  have _certificate := Rebound.OriginalRounds.validator .left handle layer index captured size
+    layerRead point claim history routes
+  trivial
+end CallbackCapture
 
 -- These declarations expose the same full Simulation and runM contracts as the
 -- canonical pair, including live input ABI, returns, arbitrary replies/stops,

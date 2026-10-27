@@ -284,9 +284,9 @@
     },
     {
       "path": "lean/security/TestsSecurity/GkrStructuralGeneration.lean",
-      "sha256": "f0fe9c9a3da30d9eb5ef10e51fe6c0955d3b33e91f0472642a9e0c2fcc5c6218",
-      "bytes": 3950,
-      "lines": 77
+      "sha256": "0f44c345c589d2f9acb3093b1e714223c01f6d3ced7a68ac179447285dcd370a",
+      "bytes": 4670,
+      "lines": 87
     },
     {
       "path": "lean/security/TestsSecurity/ConstructionBindingsCertificates.lean",

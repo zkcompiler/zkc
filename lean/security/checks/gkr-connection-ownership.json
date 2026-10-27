@@ -1115,9 +1115,9 @@
     },
     {
       "path": "lean/Zkc/Source/Structured/FiniteDomains.lean",
-      "sha256": "9307f50667a3406fe2a49cb1fc3e3327895bc8a9800b31f98b047bbac18f5e94",
-      "bytes": 5734,
-      "lines": 108
+      "sha256": "378ec19502af06e28098b773d7de0cd3adb60600aa757a90e7ed489aaad989bc",
+      "bytes": 6126,
+      "lines": 117
     },
     {
       "path": "lean/Zkc/Source/Structured/Format.lean",
