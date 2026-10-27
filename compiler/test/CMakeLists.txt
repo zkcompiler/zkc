@@ -188,12 +188,12 @@ target_compile_definitions(zkc-vector_reductions-test PRIVATE
 mlir_target_link_libraries(zkc-vector_reductions-test PRIVATE MLIRParser)
 add_zkc_test(numerical_expressions Transforms)
 add_test(NAME numerical-expressions COMMAND zkc-numerical_expressions-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/structured-source/map-declarations.mlir")
 set_tests_properties(numerical-expressions PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-numerical_expressions-test PRIVATE MLIRParser)
 add_zkc_test(map_realization Transforms)
 add_test(NAME map-realization COMMAND zkc-map_realization-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/structured-source/map-declarations.mlir")
 set_tests_properties(map-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-map_realization-test PRIVATE MLIRParser)
 add_zkc_test(late_maps Transforms late-maps)

@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include <fstream>
@@ -91,26 +92,35 @@ int main() {
   });
   cases.run("required map work is cumulative and refusal is atomic", [&] {
     std::ifstream input(std::string(ZKC_MATH_FIXTURES) +
-                        "/map-realization.mlir");
+                        "/../structured-source/map-declarations.mlir");
     require(bool(input), "missing map fixture");
     std::ostringstream text;
     text << input.rdbuf();
-    auto source = parseSourceString<ModuleOp>(text.str(), &context);
+    auto source = parseSourceString<ModuleOp>(
+        replaceText(text.str(), "bls12-381.fr", "koala-bear"), &context);
     require(bool(source), "map fixture refused");
     mathematical::RealizationWork work;
-    unsigned initial = work.helperOperations;
-    OwningOpRef<ModuleOp> first(cast<ModuleOp>((*source)->clone()));
-    require(succeeded(mathematical::expandMapRealizations(*first, &work)),
+    auto initial = work.requiredFiniteChecking;
+    uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> capacity;
+    auto unchanged = sf::clone(*source);
+    auto first =
+        protocol::prepareScopedFinite(*source, work, copy, bytes, capacity);
+    require(bool(first) && same(*source, *unchanged),
             "first map realization failed");
-    unsigned cost = initial - work.helperOperations;
-    require(cost > 0, "map helper copy was not charged");
-    work.helperOperations = cost - 1;
-    auto remaining = work.helperOperations;
-    OwningOpRef<ModuleOp> second(cast<ModuleOp>((*source)->clone()));
+    auto cost = initial - work.requiredFiniteChecking;
+    require(cost > 0, "required collection checking was not charged");
+    work.requiredFiniteChecking = cost - 1;
+    auto remaining = work.requiredFiniteChecking;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(mathematical::expandMapRealizations(*second, &work)) &&
-                same(*source, *second) && work.helperOperations <= remaining,
+    mathematical::VerificationDecision outcome;
+    auto second = protocol::prepareScopedFinite(
+        *source, work, copy, bytes, capacity, {}, nullptr, nullptr, &outcome);
+    require(!second && same(*source, *unchanged) &&
+                outcome.outcome ==
+                    mathematical::VerificationObservation::RequiredCapacity &&
+                outcome.capacity && work.requiredFiniteChecking <= remaining,
             "map work reset its allowance or published a refused candidate");
   });
   cases.run("stage observation preserves the checked program", [&] {

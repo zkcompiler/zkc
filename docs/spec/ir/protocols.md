@@ -189,68 +189,69 @@ with other realized total calculations.
 
 ### Checked pointwise maps
 
-The protocol profile also declares a checked [pointwise map](../domains/vectors.md#pointwise-maps)
-of a total helper:
+A pointwise map uses the general [scoped collection request](execution.md#ordered-finite-requests).
+A private `data.domain` reads the marked vector arguments and combines their
+elements with strict zip. Its private scoped callback takes the current items
+and the complete original captures, then invokes the scalar mathematics through
+`exec.compute`. The outer request has the form:
 
 ```mlir
-!F = !algebra.field<"F">
-!V = !algebra.field_vector<"F">
-algebra.map_realize @rows = @scalar_helper [true, false] : (!V, !F) -> !V
+%attempt = "exec.collect"(%scope, %rows, %scalar)
+  {domain=@items, body=@row, site="map"}
+  : (!runtime.scope, !V, !F) -> !exec.outcome<(!V)>
 ```
 
-Algebra owns the declaration and its validation. The helper is private, defined
-and has the exact signature `(F, ..., F) -> F` for one installed field `F`.
-`rowwise[i]` marks a vector input; other inputs are scalar captures. At least one
-input is rowwise and the result is a vector of `F`. `local.apply` invokes the
-declaration through the preparation-callable interface. The interface grants no
-purity or execution authority.
+The surrounding function dispatches the outcome before using its vector payload.
+There is no separate map-declaration or row-mask owner in this source path.
+The [source `map` syntax](../language/definitions.md#checked-pointwise-maps)
+requires one installed field across the scalar helper's input and result ports,
+at least one marked vector and exact argument binding. General collection IR
+admits other typed domains and callbacks; the source syntax's field restriction
+is not a restriction on that IR.
 
-Formation admits every operation in the complete scalar helper closure, including
-unused work. Supported formulas contain field constants, addition, subtraction,
-multiplication and calls with exact field ports. Invalid signatures, helpers and
-formulas report `algebra-map-signature`, `algebra-map-helper` and
-`algebra-map-formula`. Expansion consumes shared helper operation/slot budgets;
-the expanded formula also obeys [Ring limits](limits.md).
+Formation reads the complete actual domain and callback signatures. Every
+retained `exec.compute` request admits its mathematical helper closure, including
+unused operations, under the shared mathematical analysis bounds. Typed
+mathematics outside the field-ring fragment is permitted. Ring extraction is an
+optional bulk optimization, and its depth or expression capacity does not
+invalidate an otherwise admitted callback.
 
-Preparation expands ordinary Local helpers while retaining map calls, declarations
-and their exact scalar helper closure. Projection preserves this subject. Internal
-logical Exec admission accepts only this closed map form of `local.apply`;
-physical admission and executable publication refuse residual maps and helpers,
-including unused definitions. The standalone checked map-realization API remains
-available for callers that explicitly request early realization.
+Preparation retains an immutable source subject until its candidate passes
+independent checking. Complete domain admission precedes every callback or bulk
+payload. For the strict-zip map domain, all vector lengths are measured in input
+order, followed by equality checks against the first length and ordered
+`control.require` calls. Unused columns retain their checks. A shape mismatch is
+`rejected:require`; an unused map result still checks shapes. Argument evaluation
+and surrounding ordered operations retain their original positions.
 
-Late realization first measures the initial rowwise input, then checks every
-later rowwise input in declaration order with `vector.length`, `index.equal` and
-`control.require`. Unused inputs retain these checks. A mismatch is
-`rejected:require`; an unused result still checks shapes. Scalar arguments and
-other surrounding ordered operations retain their original evaluation positions.
+Selection can use:
 
-The admitted formula has two executable realizations:
+- A [native expression call](../runtime/numerical.md#pointwise-expressions),
+  borrowing exact typed columns and scalar captures and constructing one output.
+- A vector realization using installed `field.*`, `vector.add/sub/mul/scale` and
+  `vector.fill` operations. Scalar subexpressions are evaluated once and
+  admitted equal subexpressions may share storage.
+- Required ordered collection, invoking the actual scoped callback for each row,
+  when optional recognition, construction or comparison cannot select a bulk form.
 
-- A [native expression call](../runtime/numerical.md#pointwise-expressions) borrows exact
-  typed columns and scalar captures and constructs one private output.
-- A vector realization uses installed `field.*`, `vector.add/sub/mul/scale` and
-  `vector.fill` operations. It evaluates scalar subexpressions once and shares
-  admitted equal subexpressions. Intermediate vectors follow ordinary Local
-  storage and optional checked release rules.
+An admitted identity formula can return its original column after the complete
+guard prefix. Empty aligned inputs succeed. Formula extraction admits all
+reached mathematics before omitting unused total arithmetic; it cannot remove or
+move an ordered guard. Optional work is shared across occurrences and retries.
+Its exhaustion cannot spend or reset the separate required construction and
+checking reserves. Required capacity refuses publication without changing the
+source. Retained and generated callbacks both count toward actual candidate
+admission; source admission alone does not promise that every candidate fits.
 
-An identity map can return its original column after the complete guard prefix.
-Empty aligned inputs succeed. Formula extraction admits the entire source before
-removing unused total arithmetic; it never removes or moves an ordered guard.
-
-The independent reader interprets the original scalar closure and the actual
-candidate. It checks nominal fields, literals, scalar/row positions, expression
-bodies, broadcasts, guards, sites, aliases, result uses and surrounding code.
-It does not consume the producer's classifications or emission plan. The relation
-covers equal values and ordered shape refusals under sufficient resources;
-allocation charges and exact resource exhaustion may differ between realizations.
-
-Local expansion uses `canonical-expanded-locals/0`. Sites encode ordered
-call-site/callee paths; encodings longer than 128 bytes use `lc_h_` plus SHA-256,
-with full paths retained in provenance. Expansion and its checker separately
-charge a cumulative 16 MiB origin-byte allowance. Retained calls keep those
-identities through late lowering. Partial operations remain in Local control;
-a preceding guard does not grant a totality law.
+The independent reader interprets the original domain and callback against the
+actual scoped candidate. It checks nominal fields, literals, scalar/row positions,
+expression bodies, broadcasts, guards, sites, result uses, retained declarations
+and surrounding code. Producer classifications or emission plans supply no
+checking evidence. The relation covers equal values and ordered shape refusals
+under sufficient resources; allocation charges and exact exhaustion may differ.
+Occurrence names follow the input-relative scoped helper convention
+in [execution IR](execution.md). Executable publication refuses unresolved
+collection and computation requests, including dormant ones.
 
 ### Optional vector reduction fusion
 

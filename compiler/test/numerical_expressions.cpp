@@ -1,13 +1,15 @@
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalComparison.h"
 #include "../lib/Transforms/MathematicalRecipes.h"
-#include "../lib/Transforms/RealizationEmission.h"
+#include "../lib/Transforms/ScopedCandidate.h"
 #include "../lib/Transforms/ScopedPreparation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -22,6 +24,8 @@ using namespace llvm;
 using namespace zkc;
 using namespace zkc::mathematical;
 using namespace zkc::test;
+namespace sf = zkc::test::scopedFinite;
+namespace sc = zkc::test::scopedComputation;
 namespace {
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
@@ -35,13 +39,24 @@ std::string replaceText(std::string text, StringRef from, StringRef to) {
   text.replace(at, from.size(), to.str());
   return text;
 }
-std::string fieldText(std::string text, StringRef field) {
+std::string fieldText(std::string text, StringRef field,
+                      StringRef original = "koala-bear") {
   size_t at = 0;
-  while ((at = text.find("koala-bear", at)) != std::string::npos) {
-    text.replace(at, 10, field.str());
+  while ((at = text.find(original.str(), at)) != std::string::npos) {
+    text.replace(at, original.size(), field.str());
     at += field.size();
   }
   return text;
+}
+OwningOpRef<ModuleOp> prepareMap(
+    ModuleOp source,
+    NumericalExpressionMode mode = NumericalExpressionMode::PreferNative) {
+  MathematicalSelectionPolicy policy;
+  policy.numericalExpressions = mode;
+  return sf::prepare(source, policy);
+}
+LogicalResult compareMap(ModuleOp source, ModuleOp candidate) {
+  return sf::compare(source, candidate);
 }
 Operation *operation(ModuleOp module, StringRef contract) {
   Operation *result = nullptr;
@@ -192,7 +207,8 @@ int main(int argc, char **argv) {
   require(argc == 2, "expected map fixture path");
   auto bytes = MemoryBuffer::getFile(argv[1]);
   require(bool(bytes), "cannot read map fixture");
-  const std::string mapText = (*bytes)->getBuffer().str();
+  const std::string mapText =
+      fieldText((*bytes)->getBuffer().str(), "koala-bear", "bls12-381.fr");
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
@@ -205,12 +221,10 @@ int main(int argc, char **argv) {
         "gf2-64.pentanomial-4-3-1.ext3-trinomial1"}) {
     cases.run("actual numerical map " + field, [&] {
       auto source = parse(context, fieldText(mapText, field));
-      auto candidate = copy(*source);
-      require(succeeded(expandMapRealizations(*candidate)),
-              "native map failed");
+      auto candidate = prepareMap(*source);
       auto *call = operation(*candidate, "numerical.map");
       require(
-          call && call->getNumOperands() == 5 &&
+          call && cast<exec::ApplyOp>(call).getInputs().size() == 5 &&
               cast<StringAttr>(binding(call).getArguments()[1]).getValue() ==
                   "1110",
           "map did not retain every input slot");
@@ -218,15 +232,12 @@ int main(int argc, char **argv) {
       require(!operation(*candidate, "vector.mul") &&
                   !operation(*candidate, "vector.fill"),
               "native map allocated a vector arithmetic intermediate");
-      require(succeeded(verifyMapRealizationsPreserved(*source, *candidate)),
+      require(succeeded(compareMap(*source, *candidate)),
               "actual map expression failed independent comparison");
-      auto vector = copy(*source);
-      require(succeeded(
-                  expandMapRealizations(*vector, nullptr, nullptr,
-                                        NumericalExpressionMode::VectorOnly)) &&
-                  !operation(*vector, "numerical.map") &&
+      auto vector = prepareMap(*source, NumericalExpressionMode::VectorOnly);
+      require(!operation(*vector, "numerical.map") &&
                   operation(*vector, "vector.mul") &&
-                  succeeded(verifyMapRealizationsPreserved(*source, *vector)),
+                  succeeded(compareMap(*source, *vector)),
               "explicit vector alternative was lost");
     });
     for (bool product : {false, true})
@@ -370,28 +381,29 @@ int main(int argc, char **argv) {
           });
   cases.run("native comparison exact allowance and mismatch distinction", [&] {
     auto source = parse(context, mapText);
-    auto candidate = copy(*source);
-    require(succeeded(expandMapRealizations(*candidate)) &&
-                succeeded(verifyMapRealizationsPreserved(*source, *candidate)),
+    auto candidate = prepareMap(*source);
+    require(succeeded(compareMap(*source, *candidate)),
             "native comparison control failed");
-    auto map =
-        SymbolTable(unit(*source)).lookup<algebra::MapRealizeOp>("mapped");
     auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("formula");
     auto *call = operation(*candidate, "numerical.map");
-    auto function = cast<local::FuncOp>(call->getParentOp());
+    auto function = call->getParentOfType<func::FuncOp>();
+    auto *end = sc::returned(function).getOperation();
     SymbolTable symbols(unit(*candidate));
     auto check = [&](uint64_t &remaining, ComparisonCapacity &capacity,
                      std::optional<CapacityCause> &debit, bool accepted) {
+      auto view = take(ScopedCandidate::read(
+          unit(*candidate), ScopedCandidate::Requests::Retained));
       Operation *cursor = call;
       llvm::DenseSet<Operation *> bindings;
       auto result = compareLaneFormula(
-          helper.front(), map.getRowwise(), function.getArguments(),
-          call->getOperand(0), cursor, symbols, bindings, remaining,
-          &function.getBody().front().back(), &capacity, &debit);
+          helper.front(), {true, true, true, false},
+          function.getArguments().drop_front(),
+          cast<exec::ApplyOp>(call).getInputs()[0], cursor, symbols, bindings,
+          remaining, end, &capacity, &debit,
+          sc::returned(function).getOperand(0), view.get());
       require(succeeded(result) == accepted,
               "unexpected direct native comparison outcome");
-      require(accepted ? cursor == &function.getBody().front().back()
-                       : cursor == call && bindings.empty(),
+      require(accepted ? cursor == end : cursor == call && bindings.empty(),
               "failed comparison published cursor or bindings");
     };
     uint64_t remaining = 1000000;
@@ -428,8 +440,7 @@ int main(int argc, char **argv) {
   });
   cases.run("native readback follows actual helper argument substitution", [&] {
     auto source = parse(context, mapText);
-    auto candidate = copy(*source);
-    require(succeeded(expandMapRealizations(*candidate)), "native map failed");
+    auto candidate = prepareMap(*source);
     auto *call = operation(*candidate, "numerical.map");
     mutateBody(call, [](json::Array &root) {
       bool changed = false;
@@ -446,7 +457,7 @@ int main(int argc, char **argv) {
             "helper substitution mutation failed ordinary admission");
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(verifyMapRealizationsPreserved(*source, *candidate)),
+    require(failed(compareMap(*source, *candidate)),
             "wrong square helper argument survived native readback");
   });
   for (StringRef mutation :
@@ -454,9 +465,7 @@ int main(int argc, char **argv) {
         "canonical", "size", "guard", "pin"})
     cases.run("independent map mutation " + mutation, [&] {
       auto source = parse(context, mapText);
-      auto candidate = copy(*source);
-      require(succeeded(expandMapRealizations(*candidate)),
-              "native map failed");
+      auto candidate = prepareMap(*source);
       auto *call = operation(*candidate, "numerical.map");
       if (mutation == "body")
         mutateBody(call, [](json::Array &root) {
@@ -478,9 +487,9 @@ int main(int argc, char **argv) {
           root[3].getAsArray()->push_back(0);
         });
       else if (mutation == "wiring") {
-        auto left = call->getOperand(1);
-        call->setOperand(1, call->getOperand(2));
-        call->setOperand(2, left);
+        auto left = call->getOperand(2);
+        call->setOperand(2, call->getOperand(3));
+        call->setOperand(3, left);
       } else if (mutation == "unused-wiring") {
         auto declaration = binding(call);
         declaration->setAttr(
@@ -498,18 +507,40 @@ int main(int argc, char **argv) {
       else if (mutation == "guard") {
         auto *guard = operation(*candidate, "control.require");
         require(guard != nullptr, "missing unused-input shape guard");
-        guard->erase();
+        sc::omit(guard);
       } else {
-        OpBuilder builder(call);
-        RealizationEmitter emitter(unit(*candidate), "wrong_extent_");
-        auto *wrong = emitter.emit(builder, call->getLoc(), "wrong_extent",
-                                   {"index.constant", {}, ""}, {},
-                                   call->getOperand(0).getType(), {"1"});
-        call->setOperand(0, wrong->getResult(0));
+        auto helper = call->getParentOfType<func::FuncOp>();
+        auto stop = cast<exec::DispatchOp>(call->getNextNode()).getStopped();
+        auto rows = cast<exec::ApplyOp>(call).getInputs()[0];
+        OpBuilder builder(&context);
+        builder.setInsertionPointToStart(&unit(*candidate).getBody().front());
+        runtime::BindingOp::create(
+            builder, call->getLoc(), "wrong_extent", "index.constant",
+            builder.getStrArrayAttr({}), "", ArrayAttr{});
+        IRRewriter rewriter(&context);
+        auto *before = call->getBlock();
+        auto *tail = rewriter.splitBlock(before, call->getIterator());
+        builder.setInsertionPointToEnd(before);
+        exec::ScopedExecutionBuilder control(builder, helper);
+        auto wrong = control.invoke(
+            "exec.apply", rows.getType(), control.scoped({}),
+            {builder.getNamedAttr(
+                 "binding", FlatSymbolRefAttr::get(&context, "wrong_extent")),
+             builder.getNamedAttr("parameters", builder.getStrArrayAttr({"1"})),
+             builder.getNamedAttr("site",
+                                  builder.getStringAttr("wrong_extent"))},
+            stop);
+        rewriter.mergeBlocks(tail, builder.getInsertionBlock());
+        call->setOperand(1, wrong[0]);
       }
       ScopedDiagnosticHandler quiet(&context,
                                     [](Diagnostic &) { return success(); });
-      require(failed(verifyMapRealizationsPreserved(*source, *candidate)),
+      bool semantic = mutation == "body" || mutation == "wiring" ||
+                      mutation == "rows" || mutation == "guard" ||
+                      mutation == "pin";
+      require(succeeded(verify(*candidate)) == semantic,
+              "mutation no longer exercises its intended admission boundary");
+      require(failed(compareMap(*source, *candidate)),
               "mutated native expression passed the independent reader");
     });
   cases.run(
@@ -528,22 +559,21 @@ int main(int argc, char **argv) {
         text = replaceText(text, "%sq = func.call @square(%a) : (!F)->!F",
                            "%sq = algebra.field_multiply %a,%a : (!F,!F)->!F");
         auto source = parse(context, text);
-        auto candidate = copy(*source);
+        auto candidate = prepareMap(*source);
         require(
-            succeeded(expandMapRealizations(*candidate)) &&
-                !operation(*candidate, "numerical.map") &&
+            !operation(*candidate, "numerical.map") &&
                 operation(*candidate, "vector.add") &&
-                succeeded(verifyMapRealizationsPreserved(*source, *candidate)),
+                succeeded(compareMap(*source, *candidate)),
             "oversized optional native body lost the checked vector fallback");
         auto helper =
             SymbolTable(unit(*source)).lookup<func::FuncOp>("formula");
         auto mapped =
-            SymbolTable(unit(*candidate)).lookup<local::FuncOp>("mapped");
+            SymbolTable(unit(*candidate)).lookup<func::FuncOp>("work");
         llvm::DenseMap<Value, LaneInput> inputs;
         for (auto [i, argument] : enumerate(helper.getArguments()))
-          inputs[argument] = {mapped.getArgument(i), i < 3};
+          inputs[argument] = {mapped.getArgument(i + 1), i < 3};
         auto admitted = take(admitLaneFormula(helper.front(), inputs,
-                                              mapped.getArgument(0).getType(),
+                                              mapped.getArgument(1).getType(),
                                               nullptr, mathematicalRecipes()));
         require(
             bool(admitted.formula) &&
@@ -552,8 +582,8 @@ int main(int argc, char **argv) {
             "body-capacity control did not exceed the numerical byte limit");
         unsigned emitted = 0;
         auto result = take(emitNumericalLanes(
-            *admitted.formula, mapped.getArgument(0).getType(),
-            operation(*candidate, "vector.length")->getResult(0),
+            *admitted.formula, mapped.getArgument(1).getType(),
+            payload(operation(*candidate, "vector.length")),
             LaneResultMode::Map,
             [&](const protocol::BindingApplication &, ValueRange, Type,
                 ArrayRef<std::string>) {
