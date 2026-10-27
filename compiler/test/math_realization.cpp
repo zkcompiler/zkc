@@ -297,7 +297,7 @@ module @restriction attributes {exec.computation} {
         auto candidate = realizeKernelEntry(*numerical, "restrict", {}, work);
         require(bool(candidate), "prefix restriction recipe failed");
         kernelRecipeOutput(*candidate);
-        require(succeeded(kernel::verifyEntryRecipes(*numerical, *candidate,
+        require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
                                                      "restrict")),
                 "prefix restriction recipe did not pass independent checking");
         auto wrong = copy(*candidate);
@@ -314,7 +314,7 @@ module @restriction attributes {exec.computation} {
         ScopedDiagnosticHandler handler(&context,
                                         [](Diagnostic &) { return success(); });
         require(
-            failed(kernel::verifyEntryRecipes(*numerical, *wrong, "restrict")),
+            failed(computation::verifyEntryRecipes(*numerical, *wrong, "restrict")),
             "reordered prefix restriction operands escaped checking");
       });
   cases.run("static dimension discards unused field-array construction", [&] {
