@@ -5,6 +5,7 @@ public import ZkcExamples.Construction.ComposedSumcheckDomainConnection
 public import Zkc.Construction.ScalarVerifier
 
 @[expose] public section
+noncomputable section
 
 /-! Selected canonical execution of the actual looped artifact. Admission
 metadata and the complete all-reply source binding are separate dependencies.
@@ -49,7 +50,7 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
       | transcript => rfl
       | indices => rfl
   simp only [accepts, context_same]
-  convert ComposedSumcheckDomainConnection.domain_to_source challenge left right leftSum rightSum rounds handle initial proof using 1 <;>
+  convert ComposedSumcheckDomainConnection.domain_to_source challenge left right leftSum rightSum rounds handle initial proof using 1;
     simp only [verifier, process, ComposedSumcheckDomainConnection.sourceVerifier,
       PIR.Process.interpret_bind, PIR.Process.interpret]
   all_goals rfl

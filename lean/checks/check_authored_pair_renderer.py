@@ -13,7 +13,7 @@ from bridges.common import lean_render  # noqa: E402
 def fixture():
     digest = "sha256:" + "0" * 64
     policy = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "suite",
-              ["1"], ["0"], [], "zkc.framed/0", ""]
+              ["1"], ["0"], [["query", "delivery"]], "zkc.framed/0", ""]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
              ["i1", "!runtime.capability<\"transcript:suite\">"],
              ["!runtime.capability<\"transcript:suite\">"], [], [1], []]
@@ -30,7 +30,7 @@ class PairReader(unittest.TestCase):
                          '!runtime.capability<"rng:suite">',
                          '!runtime.capability<"transcript:suite"> trailing']:
             with self.subTest(spelling=spelling), self.assertRaisesRegex(
-                    ValueError, "unsupported exported type"):
+                    ValueError, "unsupported constructed data type"):
                 pair.participant.sort(spelling)
 
     def test_exact_envelope(self):

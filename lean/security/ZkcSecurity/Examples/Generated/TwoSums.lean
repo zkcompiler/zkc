@@ -25,7 +25,7 @@ def selected : Zkc.Construction.AuthoredPair.Selection original :=
 def subject : ZkcSecurity.Claims.HonestPair.Subject
     (ZkcSecurity.Domains.PrimeField.blsScalarModel) original imported selected := by
   bind_authored_subject "public_sums"
-    exports "sha256:b7c445ced5507c57ef64313edb9e3a4e9871246ae79cd06e70f6fbf45cba856d", "sha256:2746cb64f9b490c75c9050a5e0059c6535325f49b007428c2b0d92fe6f1c18ef", "sha256:8a3ad598b0ef67b7f790a34afde2c4a8d5d7ceb148dc99535fe7b32e4f3c22d9"
+    exports "sha256:b7c445ced5507c57ef64313edb9e3a4e9871246ae79cd06e70f6fbf45cba856d", "sha256:3e4b4f4d763644eda2f73ffc28d8a5de618ed92c34da200600361fb0a6771f08", "sha256:f181cadf666f9ba9782eff86556cbec714ce7d89e91088ab6912af0a38d8cbc5"
 
 abbrev validatorArtifacts := subject.validatorArtifacts
 abbrev validatorCompiled := subject.validatorCompiled

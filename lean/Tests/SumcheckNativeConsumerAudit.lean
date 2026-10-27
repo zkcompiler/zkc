@@ -1,4 +1,12 @@
 module
+import all Zkc.Source.Structured.FiniteDomains
+import all Zkc.Source.Structured.CollectionReferenceLaws
+import all Zkc.Source.Structured.CollectEvaluation
+import all Zkc.Source.Structured.CollectLaws
+import all ZkcExamples.Structured.MultilinearCollectBodies
+import all ZkcExamples.Structured.MultilinearCollectLaws
+import all ZkcExamples.Structured.MultilinearPrefixBodies
+import all ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 import all Tests.SumcheckNativeConsumer
 import all Zkc.Algebra.RingExpression.Basic

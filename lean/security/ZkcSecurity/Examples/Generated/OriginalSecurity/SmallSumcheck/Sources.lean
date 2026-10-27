@@ -23,13 +23,14 @@ abbrev program := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program
 abbrev payload := program.payload
 abbrev routing := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.routing
 abbrev context := ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context
-theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions := by bind_structured_bodies
+theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions :=
+  ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.helper_bodies.terminal
 
 theorem source_root_association : ZkcExamples.Structured.Generated.Original.SmallSumcheck.root.signature = ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program.payload.entry.signature := by kernel_rfl
 
 theorem nominal_order : [ZkcExamples.Structured.Generated.Original.SmallSumcheck.callContext0] = [ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol] := by kernel_rfl
 
-theorem check0_helper : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper27.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
+theorem check0_helper : ZkcExamples.Structured.Generated.Original.SmallSumcheck.sourceHelper29.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
 def schedule0 := schedule ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0 context
  theorem routes0 (handle : Nat) : OriginalSecurity.Routes (routing handle)

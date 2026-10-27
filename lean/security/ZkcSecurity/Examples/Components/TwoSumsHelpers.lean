@@ -5,7 +5,6 @@ public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
 public import Zkc.Source.Structured.BodyBindings
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcExamples.Structured.OriginalSumcheckTerminal
 
 @[expose] public section

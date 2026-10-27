@@ -1,7 +1,6 @@
 module
 
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 @[expose] public section
 
@@ -12,7 +11,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
-open ZkcSecurity.Families.Sumcheck.TableComponent
+open ZkcExamples.Structured.SumcheckArtifacts
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -51,7 +50,7 @@ theorem terminal_all (program : Structured.Program) (bodies : ZkcExamples.Struct
       else .stopped .exhausted := by
   by_cases bounded : raw.length < indexLimit
   · rw [ite_eq_left bounded]
-    exact DomainHelpers.check program bodies.terminal
+    exact ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check program bodies.terminal
       raw point claim bounded (pointSmall.trans (by decide +kernel))
   · rw [ite_eq_right bounded]
     apply call_exhausted program checkHelper (checkInputs raw point claim) _ rfl

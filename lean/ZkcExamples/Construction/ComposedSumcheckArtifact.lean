@@ -6,9 +6,10 @@ public import Zkc.Construction.Uniform.DomainHandler
 public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.Construction.ComposedSumcheckProofData
 public import ZkcExamples.Construction.ComposedSumcheckProofParticipant
-public import ZkcExamples.Construction.ComposedSumcheckProofBodies
+public import ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs
 
 @[expose] public section
+noncomputable section
 
 /-! Admission metadata for the retained composed Sumcheck export. The finite
 checks fix source/artifact identity and selection. Execution correspondence is
@@ -20,11 +21,14 @@ set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
-structured_views ZkcExamples.Construction.ComposedSumcheckProofData.snapshot
-  helpers [helper0 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper0, helper1 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper1, helper2 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper2, helper3 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper3, helper4 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper4, helper5 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper5, helper6 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper6, helper7 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper7, helper8 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper8, helper9 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper9, helper10 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper10, helper11 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper11, helper12 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper12, helper13 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper13, helper14 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper14, helper15 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper15, helper16 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper16, helper17 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper17, helper18 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper18, helper19 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper19, helper20 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper20, helper21 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper21, helper22 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper22, helper23 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper23, helper24 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper24, helper25 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper25, helper26 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper26, helper27 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper27, helper28 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper28, helper29 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper29, helper30 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper30, helper31 := ZkcExamples.Construction.ComposedSumcheckProofBodies.helper31]
-  protocols [protocol0 := ZkcExamples.Construction.ComposedSumcheckProofBodies.protocol0, proof := ZkcExamples.Construction.ComposedSumcheckProofBodies.proof]
+/-- Reuse the complete admitted source, including its scoped collection helpers.
+The literal snapshot identity is checked; no helper-body transport is assumed. -/
+abbrev imported := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.imported
+abbrev program := imported.program
 
-theorem admitted : Structured.check ZkcExamples.Construction.ComposedSumcheckProofData.snapshot = .ok program := kernel_admission
+theorem admitted : Structured.check ZkcExamples.Construction.ComposedSumcheckProofData.snapshot = .ok program := by
+  change Structured.check ZkcExamples.Structured.Generated.Bindings.TwoSumsData.snapshot = .ok program
+  exact ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.kernel_admission
 
 abbrev snapshot := ZkcExamples.Construction.ComposedSumcheckProofData.snapshot
 abbrev participant := ZkcExamples.Construction.ComposedSumcheckProofParticipant.participant
@@ -70,9 +74,11 @@ theorem compiled_rules : checkExport ZkcExamples.Construction.ComposedSumcheckPr
   unfold checkCompiled at accepted
   split at accepted
   · rename_i context' exported found
+    change exportContext ComposedSumcheckProofData.snapshot participant = some context' at found
     rw [context_admitted] at found
     cases found
     obtain ⟨context'', found', checked⟩ := checkExport_sound exported
+    change exportContext ComposedSumcheckProofData.snapshot participant = some context'' at found'
     rw [context_admitted] at found'
     cases found'
     exact ⟨exported, checked, accepted⟩

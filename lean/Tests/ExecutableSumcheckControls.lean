@@ -80,7 +80,7 @@ theorem roundCheckTrivial_refused :
 def countRetargeted : Validator :=
   withLoop actual fun
     | .loop site _ maximum induction carried captures body outputs =>
-        .loop site "v401" maximum induction carried captures body outputs
+        .loop site "v32" maximum induction carried captures body outputs
     | action => action
 
 theorem countRetargeted_refused :
@@ -92,7 +92,7 @@ theorem countRetargeted_refused :
 round's observation. -/
 def helperObserves : Validator :=
   withFunction actual "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" fun function =>
-    { function with body := match actual.function? "_transcript_1" with
+    { function with body := match actual.function? "_transcript_0" with
         | some observation => observation.body
         | none => [] }
 
@@ -106,8 +106,8 @@ because what a helper body computes is the preparation proof's obligation. -/
 def checkConstantChanged : Validator :=
   withFunction actual "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc" fun function =>
     { function with body := function.body.map fun
-        | .operation "lc_7_lc_2_s2" binding [.text "1"] inputs outputs =>
-            .operation "lc_7_lc_2_s2" binding [.text "2"] inputs outputs
+        | .operation "lc_2_s2" binding [.text "1"] inputs outputs =>
+            .operation "lc_2_s2" binding [.text "2"] inputs outputs
         | step => step }
 
 theorem checkConstantChanged_accepted :
@@ -138,7 +138,7 @@ theorem check_outside_table : helperRefusal actual checkName = some (.recipe "lo
 /-- The changed constant of the terminal check, which the lowering rule accepts,
 is refused at its step: the installed constant is not the structured one. -/
 theorem checkConstantChanged_refused :
-    helperRefusal checkConstantChanged checkName = some (.step "lc_7_lc_2_s2") := by
+    helperRefusal checkConstantChanged checkName = some (.step "lc_2_s2") := by
   decide +kernel
 
 /-- The point extension applies the empty vector's binding: the installed
@@ -149,16 +149,16 @@ def appendWrongOperation : Validator :=
         | .operation site _ parameters inputs outputs => .operation site "zkl_binding_7" parameters inputs outputs
         | step => step }
 
-theorem appendWrongOperation_refused : helperRefusal appendWrongOperation appendName = some (.step "s0") := by
+theorem appendWrongOperation_refused : helperRefusal appendWrongOperation appendName = some (.step "lc_2_s0") := by
   decide +kernel
 
 /-- The point extension binds its result to the name of its first formal: a
 rebound name could change what the formal denotes. -/
 def appendRebound : Validator :=
   withFunction actual appendName fun function =>
-    { function with body := [.operation "s0" "zkl_binding_11" [] ["v105", "v106"] ["v105"], .ret ["v105"]] }
+    { function with body := [.operation "lc_2_s0" "zkl_binding_11" [] ["v110", "v111"] ["v110"], .ret ["v110"]] }
 
-theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
+theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "lc_2_s0") := by
   decide +kernel
 
 /-! ## Semantic controls on a concrete instance -/
@@ -221,7 +221,7 @@ for that budget: the stop site is the instruction's, the local call the
 check's. -/
 theorem exhausted_in_check :
     observed (runAt 100 honest) =
-      (some (some "lc_h_12c01db8f313ed943761ac0825838046ef00d84dcfc058d37638790cc3129f63",
+      (some (some "lc_h_83c0ff67e4a5d43ca5b2dcc732569f0b16ace54d3d66745dfb2bf6af88c7bfac",
         some ("s7", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc")), 100, 8, 4) := by
   decide +kernel
 
