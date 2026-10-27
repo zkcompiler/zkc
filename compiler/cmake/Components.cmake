@@ -392,7 +392,7 @@ mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
-mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)
+mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser MLIRAsmParser)
 mlir_target_link_libraries(ZkcDriver PUBLIC MLIRParser)
 set(zkc_components ZkcSupport ZkcContracts ZkcLanguage ZkcRelation ZkcProgram ZkcIR ZkcTranslation ZkcTransforms ZkcCompiler ZkcDriver)
 
