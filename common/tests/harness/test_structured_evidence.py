@@ -76,6 +76,7 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
         "lean/Zkc.lean": "import Zkc.Dependency\n",
         "lean/Zkc/Dependency.lean": "def value := 1\n",
         "lean/ZkcTools/StructuredSource.lean": "import ZkcTools.StructuredSource.OpenEvaluation\n",
+        "lean/checks/StructuredSource.lean": "import ZkcTools.StructuredSource\n",
         "lean/ZkcTools/CommonSource.lean": "-- other executable root\n",
         "lean/ZkcTools/ImportHeaders.lean": "-- import auditing executable\n",
         "lean/checks/DeclarationRecords.lean": "-- declaration capture executable\n",
@@ -423,6 +424,7 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
     assert "Git-free" in record["scope"]
     assert manifest["deletedTrackedPaths"] == []
     assert {
+        "lean/checks/StructuredSource.lean",
         "lean/ZkcTools/StructuredSource.lean", "lean/ZkcTools/StructuredSource/OpenEvaluation.lean",
         "lean/ZkcTools/StructuredSource/Bounds.lean", "lean/ZkcTools/JsonSupport.lean",
         "lean/FutureOwner/Dependency.lean", "scripts/reporting.py", "common/tests/support/project.py",
@@ -528,7 +530,7 @@ def test_repeat_inventory_refusals_are_terminal(
     if failure == "namespace":
         shutil.rmtree(repeat_tree / "lean/FutureOwner")
     elif failure == "executable":
-        (repeat_tree / "lean/ZkcTools/StructuredSource.lean").unlink()
+        (repeat_tree / "lean/checks/StructuredSource.lean").unlink()
     elif failure == "directory-link":
         (owner / "External").symlink_to(tmp_path, target_is_directory=True)
     elif failure == "file-link":
