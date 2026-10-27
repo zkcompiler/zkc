@@ -250,6 +250,7 @@ add_zkc_component(Translation
   lib/Translation/R1CSSumcheck.cpp
 )
 add_zkc_component(Transforms
+  lib/Transforms/PassStatistics.cpp
   lib/Conversion/Bindings.cpp
   lib/Conversion/PhysicalVerification.cpp
   lib/Conversion/Storage.cpp
@@ -374,6 +375,16 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRInferTypeOpInterface MLIRFunctionInterfaces MLIRCallInterfaces
   MLIRFuncDialect MLIRArithDialect MLIRSCFDialect MLIRControlFlowDialect
   MLIRLinalgDialect MLIRTensorDialect)
+# Pass::Statistic is constructed out of line by MLIR, but its base layout
+# depends on NDEBUG. Isolate that ABI while retaining project assertions in
+# every other translation unit, including the passes and their observers.
+if(LLVM_ENABLE_ASSERTIONS)
+  set_property(SOURCE lib/Transforms/PassStatistics.cpp APPEND PROPERTY
+    COMPILE_OPTIONS -UNDEBUG)
+else()
+  set_property(SOURCE lib/Transforms/PassStatistics.cpp APPEND PROPERTY
+    COMPILE_OPTIONS -DNDEBUG)
+endif()
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
   MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect MLIRLinalgTransforms)
