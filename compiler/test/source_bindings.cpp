@@ -36,7 +36,7 @@ const json::Object &resolve(const Nodes &nodes, const json::Value &address) {
   return *found->second;
 }
 json::Value inspected(const CheckedProject &project) {
-  auto bytes = take(inspectLexicalBindings(project));
+  auto bytes = take(inspectSourceBindings(project));
   require(bytes.find("not-a-source-identity.zkc") == std::string::npos,
           "diagnostic filename escaped");
   return take(json::parse(bytes));
@@ -45,10 +45,10 @@ json::Array ownReferences(const CheckedProject &project, StringRef owner) {
   auto ast = take(json::parse(take(inspectWrittenSource(project))));
   auto byAddress = nodes(ast);
   auto report = inspected(project);
-  require(report.getAsObject()->getString("format") == "zkc.lexical-bindings/0",
+  require(report.getAsObject()->getString("format") == "zkc.source-bindings/0",
           "wrong proposal format");
   json::Array result;
-  for (const auto &item : *report.getAsObject()->getArray("references")) {
+  for (const auto &item : *report.getAsObject()->getArray("locals")) {
     const auto &reference = *item.getAsObject();
     for (const auto &use : *reference.getArray("uses")) {
       const auto &node = resolve(byAddress, use);
@@ -67,7 +67,8 @@ json::Array ownReferences(const CheckedProject &project, StringRef owner) {
         owner)
       result.push_back(item);
   }
-  for (const auto &item : *report.getAsObject()->getArray("unassociated")) {
+  for (const auto &item :
+       *report.getAsObject()->getArray("unassociated_locals")) {
     const auto &reference = *item.getAsObject();
     for (const auto &use : *reference.getArray("uses"))
       require(use.getAsObject()->getString("owner") != owner,
@@ -188,27 +189,119 @@ int main() {
                  .checkedProject());
     ownReferences(project, ""); // Check every proposed address and node kind.
     auto report = inspected(project);
-    require(report.getAsObject()->getArray("references")->size() > 100,
+    require(report.getAsObject()->getArray("locals")->size() > 100,
             "full capture did not exercise its local bindings");
-    for (const auto &item : *report.getAsObject()->getArray("unassociated"))
+    for (const auto &item :
+         *report.getAsObject()->getArray("unassociated_locals"))
       require(item.getAsObject()->getArray("uses")->empty(),
               "authored use has no binder in a complete capture");
   });
+  cases.run(
+      "declaration lookup retains facade, private and abstract routes", [] {
+        auto project = take(
+            analyze(take(capture(
+                        {{"lower",
+                          R"(module lower;
+          module Hidden {pub math fn combine(x:bool,y:bool)->bool{return x&&y;}}
+          pub use lower::Hidden::{combine};
+          pub interface Contract {math fn value()->bool;}
+        )",
+                          {}},
+                         {"facade",
+                          R"(module facade;pub use lower::{combine,Contract};)",
+                          {}},
+                         {"client",
+                          R"(module client;
+          use facade as api;
+          math fn private_helper(x:bool,y:bool)->bool{return api::combine(x,y);}
+          math fn apply<C:api::Contract>()->bool{return C::value();}
+        )",
+                          {}}})))
+                .checkedProject());
+        auto ast = take(json::parse(take(inspectWrittenSource(project))));
+        auto byAddress = nodes(ast);
+        auto report = inspected(project);
+        bool direct = false, abstract = false, installation = false;
+        for (const auto &item :
+             *report.getAsObject()->getArray("declarations")) {
+          const auto &reference = *item.getAsObject();
+          for (const auto &candidate : *reference.getArray("candidates")) {
+            const auto &node = resolve(byAddress, candidate);
+            require(*node.get("span") == *reference.get("source"),
+                    "declaration candidate used a nearest span");
+          }
+          if (reference.getString("written") == "api::combine") {
+            direct = true;
+            require(reference.getString("owner") == "client::private_helper" &&
+                        reference.getObject("provider")->getString("name") ==
+                            "facade" &&
+                        reference.getObject("target")->getString("name") ==
+                            "lower::Hidden::combine" &&
+                        !reference.getArray("candidates")->empty(),
+                    "private call lost its written route or canonical target");
+          }
+          if (reference.getString("written") == "C::value") {
+            abstract = true;
+            require(reference.getObject("provider")->getString("name") ==
+                            "facade" &&
+                        reference.getObject("target")->getString("name") ==
+                            "lower::Contract::value" &&
+                        reference.getString("abstract_module").has_value(),
+                    "abstract lookup lost the parameter provider");
+          }
+          auto module = *reference.getObject("source")->getString("module");
+          for (const auto &source : project.sources())
+            if (source.module == module &&
+                source.origin == SourceOrigin::Installation)
+              installation = true;
+        }
+        require(direct && abstract && installation,
+                "declaration export filtered private or installation sources");
+      });
+  cases.run("declaration candidates contain every exact-span node", [] {
+    auto project = check(R"(
+      type Flag=bool;
+      fn id(x:Flag)->Flag{return x;}
+      fn f(x:Flag)->Flag{return id(x);}
+    )");
+    auto report = inspected(project);
+    auto ast = take(json::parse(take(inspectWrittenSource(project))));
+    auto byAddress = nodes(ast);
+    bool matched = false;
+    for (const auto &item : *report.getAsObject()->getArray("declarations")) {
+      const auto &reference = *item.getAsObject();
+      if (reference.getString("owner") == "written::f" &&
+          reference.getString("written") == "id") {
+        matched = true;
+        std::set<std::string> expected, actual;
+        for (const auto &[address, node] : byAddress)
+          if (*node->get("span") == *reference.get("source"))
+            expected.insert(address);
+        for (const auto &candidate : *reference.getArray("candidates")) {
+          const auto &address = *candidate.getAsObject();
+          actual.insert(key(*address.getString("owner"), *address.get("path")));
+        }
+        require(!expected.empty() && actual == expected,
+                "exact-span candidates were dropped or guessed");
+      }
+    }
+    require(matched, "call lookup absent");
+  });
   cases.run("inspection is immutable and bounded before publication", [] {
     auto project = check("fn f(x:bool)->bool{return x;}");
-    auto bytes = take(inspectLexicalBindings(project));
+    auto bytes = take(inspectSourceBindings(project));
     take(inspectWrittenSource(project));
     take(inspectPublicAPI(project));
-    require(take(inspectLexicalBindings(project)) == bytes,
+    require(take(inspectSourceBindings(project)) == bytes,
             "inspection changed retained resolution");
     auto limits = Limits{};
     limits.apiInspectionBytes = bytes.size() - 1;
-    refuses(inspectLexicalBindings(project, limits), "source.limit");
+    refuses(inspectSourceBindings(project, limits), "source.limit");
     limits.apiInspectionBytes = bytes.size();
-    require(take(inspectLexicalBindings(project, limits)) == bytes,
+    require(take(inspectSourceBindings(project, limits)) == bytes,
             "exact byte bound refused");
     limits.work = project.checkedWork() - 1;
-    refuses(inspectLexicalBindings(project, limits), "source.limit");
+    refuses(inspectSourceBindings(project, limits), "source.limit");
   });
   return cases.result();
 }
