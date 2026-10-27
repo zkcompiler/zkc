@@ -166,7 +166,7 @@ for block in mapped.split('"protocol.participant"')[1:]:
         assert (
             "protocol.send" not in block
             and "protocol.receive" not in block
-            and "local.guard" not in block
+            and "protocol.guard" not in block
         )
 commands.verified(
     asymmetric.replace('output_roles=[["X"]]', 'output_roles=[["Y"]]'),
@@ -243,9 +243,9 @@ for fragment in swapped.split('"protocol.participant"')[1:]:
 for body, role_name in participants:
     if role_name == "A":
         assert '"protocol.service_query"' in body and '"protocol.send"' in body
-        assert 'peer = "B"' in body and "local.guard" not in body
+        assert 'peer = "B"' in body and "protocol.guard" not in body
     else:
-        assert '"protocol.receive"' in body and "local.guard" in body
+        assert '"protocol.receive"' in body and "protocol.guard" in body
         assert 'peer = "A"' in body and '"protocol.service_query"' not in body
 assert {role_name for _, role_name in participants} == {"A", "B"}
 # Same entry service reference through two applications means one evolving root.

@@ -420,7 +420,7 @@ native mathematical verifier admits Boolean, scalar-field and group selection in
 profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
-the original `protocol.guard`; projected `local.guard` is outside this source
+the original `protocol.guard`; projected participant guards are outside this source
 stage. Conditional entry completion and construction-start
 selection remain outside this profile, including dormant definitions.
 

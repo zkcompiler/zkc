@@ -62,7 +62,10 @@ Source preparation now has one service with polynomial recipe, protocol
 application and participant mathematics stages. The old Local preparation API,
 Local numerical-wrapper formation and standalone Local expansion pass are
 removed. Executable numerical recipe production still needs its Local
-intermediate removed.
+intermediate removed. Participant guards now stay in Protocol through
+projection, retaining their owner. Demand formation passes their condition
+separately from the total mathematical wrapper and emits scoped rejection;
+`local.guard` is removed.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
 The logical source-scoped API additionally retains ordinary helper calls,

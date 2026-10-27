@@ -5,6 +5,16 @@
 #include "zkc/Transforms/Kernel.h"
 
 namespace zkc::kernel {
+// Private demand-formation input. The condition belongs to the total wrapper;
+// rejection remains an ordered Protocol action until scoped formation.
+struct CalculationGuard {
+  mlir::Value condition;
+  mlir::StringAttr site;
+};
+mlir::LogicalResult
+formCalculation(mlir::func::FuncOp wrapper, mlir::Operation *sourceOwner,
+                MathematicalSelectionPolicy policy,
+                std::optional<CalculationGuard> guard = std::nullopt);
 // Charge operations and SSA slots before copying a transient closure/body.
 bool chargeCopy(mlir::Operation *, uint64_t &remaining,
                 std::optional<CapacityCause> *capacity = nullptr);

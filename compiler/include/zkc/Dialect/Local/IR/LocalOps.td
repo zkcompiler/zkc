@@ -82,13 +82,6 @@ def LocalConditionOp
 }
 
 
-// An endpoint guard remains an ordered occurrence until execution binding.
-// The containing closed profile owns placement; Local does not depend on it.
-def Local_GuardOp : Op<LocalDialect, "guard", [MemoryEffects<[MemRead, MemWrite]>]> {
-  let arguments = (ins I1:$condition, StrAttr:$site);
-  let assemblyFormat = "$condition attr-dict";
-}
-
 // Executing a literal charges a step and allocates a runtime value.
 // It is intentionally neither pure nor speculatable.
 def Local_BoolConstantOp : Op<LocalDialect, "bool_constant"> {

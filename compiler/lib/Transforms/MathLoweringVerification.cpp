@@ -34,8 +34,8 @@ class LoweringVerifier {
     remaining -= amount;
     return true;
   }
-  bool guard(local::GuardOp source, const protocol::SourceExecutionStep &step,
-             Value condition) {
+  bool guard(protocol_ir::GuardOp source,
+             const protocol::SourceExecutionStep &step, Value condition) {
     if (!isa<exec::TestOp>(step.operation) || !step.outputs.empty() ||
         ValueRange(step.inputs) != ValueRange{condition} ||
         step.regions.size() != 2)
@@ -136,7 +136,7 @@ class LoweringVerifier {
       llvm::sort(needed, [&](Operation *a, Operation *b) {
         return order[a] < order[b];
       });
-      auto sourceGuard = dyn_cast<local::GuardOp>(action);
+      auto sourceGuard = dyn_cast<protocol_ir::GuardOp>(action);
       if (!needed.empty() || sourceGuard) {
         auto call = dyn_cast_or_null<protocol_ir::LocalCallOp>(cursor);
         auto function = call ? dyn_cast_or_null<func::FuncOp>(

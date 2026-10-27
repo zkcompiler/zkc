@@ -53,10 +53,22 @@ class PairReader(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "policy mismatch"):
             pair.decode(data)
 
+    def test_guard_has_one_protocol_owner(self):
+        boolean = ("boolean", None)
+        attrs = {"site": ("string", "stop"), "owner": ("string", "P")}
+        self.assertEqual(pair.participant.operation(
+            "protocol.guard", attrs, [], [boolean], []), '.guard "stop"')
+        with self.assertRaisesRegex(ValueError, "guard owner"):
+            pair.participant.operation("protocol.guard", {
+                **attrs, "owner": ("string", "")}, [], [boolean], [])
+        self.assertIn("unsupported", pair.participant.operation(
+            "local.guard", {"site": ("string", "stop")}, [], [boolean], []))
+
     def test_fixed_selection_pins_body_not_labels(self):
         expected = fixture()
         data = deepcopy(expected)
-        data[1][7] = [["local.guard", [["site", ["string", "stop"]]], [], [0], [], []]]
+        data[1][7] = [["protocol.guard", [["owner", ["string", "P"]],
+                                             ["site", ["string", "stop"]]], [], [0], [], []]]
         pair.decode(data)  # Structurally readable; admission must pin the body.
         with self.assertRaisesRegex(ValueError, "fixed selection"):
             pair.decode(data, expected=expected)

@@ -454,7 +454,8 @@ candidate against its frozen input, so deleting the record cannot turn a
 projected result into an unrelated supplied program. Generated calculation
 origins distinguish generated calculation sites from retained source action occurrences.
 Retained interfaces are immutable through lowering and physical selection. A
-guard's retained target remains `local.guard`, describing the original projection.
+guard's retained target remains `protocol.guard`, describing the original projection.
+Projection retains its `owner`, which must match the selected participant role.
 The checked profile derives whether its current implementation must be that guard
 or a generated `protocol.local_call`; lowering does not rewrite source facts. Only the
 separate generated-calculation list is added during lowering.
@@ -485,7 +486,7 @@ closed admission. Executable local bodies are outside that optimization scope.
 
 `zkc-project-protocol` produces `participant`. It clones demanded total
 expressions into each role, preserves all advertised ports, and creates
-`protocol.send`, `protocol.receive`, service queries, authored `protocol.local_call`, and `local.guard`
+`protocol.send`, `protocol.receive`, service queries, authored `protocol.local_call`, and `protocol.guard`
 occurrences. It creates no new executable calculation functions or bindings.
 Receive results are actual environment replies. The sender's exchange result
 aliases its sent component; that fact grants no equality at the receiver.

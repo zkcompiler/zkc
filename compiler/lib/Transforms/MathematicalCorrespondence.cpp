@@ -349,8 +349,9 @@ class Correspondence {
       } else if (auto guard = dyn_cast<protocol_ir::GuardOp>(op)) {
         if (guard.getOwnerAttr() != role)
           continue;
-        auto check = dyn_cast_if_present<local::GuardOp>(cursor);
-        if (!check || check.getSite() != guard.getSite() ||
+        auto check = dyn_cast_if_present<protocol_ir::GuardOp>(cursor);
+        if (!check || check.getOwnerAttr() != role ||
+            check.getSite() != guard.getSite() ||
             !terms.compare(left, guard.getCondition(), right,
                            check.getCondition()))
           return fail("projected guard operand differs");

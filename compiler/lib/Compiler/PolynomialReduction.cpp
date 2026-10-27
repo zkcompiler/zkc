@@ -442,8 +442,8 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
       prover = cast<StringAttr>(role).getValue().str();
   SmallVector<Operation *> actions;
   for (auto &op : verifier->participant.getBody().front())
-    if (isa<pir::AwaitOp, pir::EmitOp, pir::ParticipantQueryOp, local::GuardOp>(
-            op))
+    if (isa<pir::AwaitOp, pir::EmitOp, pir::ParticipantQueryOp,
+            protocol_ir::GuardOp>(op))
       actions.push_back(&op);
     else if (!isa<pir::FinishOp>(op) && !mathematical::isTotal(&op))
       return refuse("extra verifier action");
@@ -453,7 +453,7 @@ Expected<json::Value> check(pir::ProtocolModuleOp original,
   std::set<std::string> sites;
   for (unsigned k = 0; k < type.getArity(); ++k) {
     auto receive = dyn_cast<pir::AwaitOp>(actions[4 * k]);
-    auto guard = dyn_cast<local::GuardOp>(actions[4 * k + 1]);
+    auto guard = dyn_cast<protocol_ir::GuardOp>(actions[4 * k + 1]);
     auto query = dyn_cast<pir::ParticipantQueryOp>(actions[4 * k + 2]);
     auto send = dyn_cast<pir::EmitOp>(actions[4 * k + 3]);
     auto payload = algebra::FieldArrayType::get(

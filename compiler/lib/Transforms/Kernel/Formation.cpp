@@ -92,35 +92,34 @@ func::FuncOp resolveInvocation(Operation *call,
 }
 
 LogicalResult formCalculation(func::FuncOp wrapper, Operation *sourceOwner,
-                              MathematicalSelectionPolicy policy) {
+                              MathematicalSelectionPolicy policy,
+                              std::optional<CalculationGuard> guard) {
   if (!wrapper.getBody().hasOneBlock())
     return refuse(wrapper, "expected one mathematical wrapper block");
   auto &body = wrapper.front();
   auto returned = dyn_cast<func::ReturnOp>(body.back());
   if (!returned)
     return refuse(wrapper, "expected a returning mathematical wrapper");
+  if (guard &&
+      (!guard->condition || guard->condition.getParentBlock() != &body ||
+       !guard->condition.getType().isSignlessInteger(1) || !guard->site ||
+       guard->site.getValue().empty()))
+    return refuse(wrapper, "guard requires a wrapper condition and occurrence");
   SmallVector<Operation *> operations;
-  local::GuardOp guard;
   for (auto &op : body.without_terminator()) {
-    if (auto check = dyn_cast<local::GuardOp>(op)) {
-      if (guard)
-        return refuse(wrapper, "at most one trailing guard is admitted");
-      guard = check;
-    } else {
-      if (guard || (!mathematical::isTotal(&op) && !isa<func::CallOp>(op)))
-        return refuse(wrapper, "entry must contain original total mathematics");
-      operations.push_back(&op);
-    }
+    if (!mathematical::isTotal(&op) && !isa<func::CallOp>(op))
+      return refuse(wrapper, "entry must contain original total mathematics");
+    operations.push_back(&op);
   }
   SymbolTable outer(wrapper->getParentOp()), sourceSymbols(sourceOwner);
   OpBuilder builder(wrapper);
   auto outputs = SmallVector<Value>(returned.getOperands());
   unsigned condition = outputs.size();
   if (guard) {
-    condition = std::distance(outputs.begin(),
-                              llvm::find(outputs, guard.getCondition()));
+    condition =
+        std::distance(outputs.begin(), llvm::find(outputs, guard->condition));
     if (condition == outputs.size())
-      outputs.push_back(guard.getCondition());
+      outputs.push_back(guard->condition);
   }
   SmallVector<Type> types(ValueRange(outputs).getTypes());
   SymbolRefAttr callee;
@@ -213,7 +212,7 @@ LogicalResult formCalculation(func::FuncOp wrapper, Operation *sourceOwner,
       builder.setInsertionPointToEnd(&region.front());
       exec::ScopedExecutionBuilder branch(builder, region);
       if (index)
-        branch.reject("reject", guard.getSite());
+        branch.reject("reject", guard->site.getValue());
       else
         branch.complete({});
       return region;

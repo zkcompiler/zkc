@@ -202,7 +202,7 @@ class Projector {
               isa<protocol_ir::FinishIfOp>(op)
                   ? protocol_ir::FinishIfOp::getOperationName()
               : isa<zkc::protocol_ir::GuardOp>(op)
-                  ? zkc::local::GuardOp::getOperationName()
+                  ? zkc::protocol_ir::GuardOp::getOperationName()
                   : zkc::protocol_ir::ParticipantQueryOp::getOperationName();
         }
         if (!operation.empty())
@@ -497,9 +497,9 @@ class Projector {
       } else if (auto guard = dyn_cast<zkc::protocol_ir::GuardOp>(op)) {
         if (guard.getOwnerAttr() != roleName)
           continue;
-        zkc::local::GuardOp::create(builder, op.getLoc(),
-                                    mapping.lookup(guard.getCondition()),
-                                    guard.getSite());
+        zkc::protocol_ir::GuardOp::create(builder, op.getLoc(),
+                                          mapping.lookup(guard.getCondition()),
+                                          guard.getSite(), guard.getOwner());
       } else if (isa<zkc::protocol_ir::MathematicalReturnOp,
                      zkc::protocol_ir::ProtocolYieldOp>(op)) {
         SmallVector<Value> returned;
@@ -1049,10 +1049,9 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
            "their callers";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    // Preparation can form numerical units and realize partial Local work even
-    // when the source has no Algebra operations or types.
-    registry.insert<runtime::RuntimeDialect, local::LocalDialect,
-                    kernel::KernelDialect, exec::ExecDialect,
+    // Polynomial recipes can introduce scoped execution even when the input
+    // has no executable operations. Numerical selection belongs to lowering.
+    registry.insert<runtime::RuntimeDialect, exec::ExecDialect,
                     algebra::AlgebraDialect, func::FuncDialect,
                     cf::ControlFlowDialect, arith::ArithDialect>();
   }
@@ -1146,7 +1145,6 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<runtime::RuntimeDialect, zkc::protocol_ir::ProtocolDialect,
-                    zkc::local::LocalDialect, zkc::kernel::KernelDialect,
                     exec::ExecDialect, zkc::algebra::AlgebraDialect,
                     func::FuncDialect, cf::ControlFlowDialect,
                     arith::ArithDialect>();

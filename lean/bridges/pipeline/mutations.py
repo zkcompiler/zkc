@@ -218,11 +218,11 @@ def challenge_names_delivery(exported):
       construction_accepts=True)
 def drop_guard(exported):
     def change(value, site):
-        bodies = [body for body in regions(value[7]) if any(item[0] == "local.guard" for item in body)]
+        bodies = [body for body in regions(value[7]) if any(item[0] == "protocol.guard" for item in body)]
         if site >= len(bodies):
             return False
         body = bodies[site]
-        body.remove(next(item for item in body if item[0] == "local.guard"))
+        body.remove(next(item for item in body if item[0] == "protocol.guard"))
         return True
     return mutated(exported, change)
 

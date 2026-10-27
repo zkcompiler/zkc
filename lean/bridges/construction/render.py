@@ -201,7 +201,8 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         kind, callee = attrs["callee"]
         require(kind == "symbol" and isinstance(callee, str), "call callee")
         return f".call {text(callee)}"
-    if name == "local.guard" and set(attrs) == {"site"} and binding == []:
+    if name == "protocol.guard" and set(attrs) == {"site", "owner"} and binding == []:
+        require(bool(string_attribute(attrs, "owner")), "guard owner")
         require(operand_kinds == [("boolean", None)] and not result_kinds, "guard shape")
         return f".guard {text(string_attribute(attrs, 'site'))}"
     return f".unsupported {text(name)}"

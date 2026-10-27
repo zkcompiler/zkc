@@ -416,7 +416,7 @@ struct MetadataVerifier {
                      ? operation.getValue() != "protocol.service_query"
                  : kind.getValue() == "protocol.finish_if"
                      ? operation.getValue() != "protocol.finish_if"
-                     : operation.getValue() != "local.guard"))
+                     : operation.getValue() != "protocol.guard"))
               return refuse(record, "invalid original construction target");
           }
         }
@@ -791,7 +791,7 @@ struct MetadataVerifier {
                 ? operation.getValue() == "protocol.service_query"
             : kind.getValue() == "protocol.finish_if"
                 ? operation.getValue() == "protocol.finish_if"
-                : operation.getValue() == "local.guard";
+                : operation.getValue() == "protocol.guard";
         if (!allowed)
           return refuse(record, "action target has wrong execution kind");
         // Targets retain their source projection kind. The checked profile
@@ -1113,6 +1113,9 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           if (policy->affine && !consumed.insert(input).second)
             return refuse(&op, "affine participant value reused");
         }
+        if (auto guard = dyn_cast<protocol_ir::GuardOp>(op))
+          if (guard.getOwnerAttr() != participant.getRoleAttr())
+            return refuse(guard, "guard requires its owning participant");
         if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
           if (start.getRoles().size() != 2 ||
               start.getRoles()[0] == start.getRoles()[1] ||

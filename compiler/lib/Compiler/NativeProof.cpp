@@ -1901,7 +1901,7 @@ public:
             name.starts_with("crypto.") || name.starts_with("data.") ||
             name == "protocol.receive" || name == "protocol.send" ||
             name == "protocol.service_query" || name == "local.bool_constant" ||
-            name == "local.guard"))
+            name == "protocol.guard"))
         return error("constructed-participant-operation", name);
       if (auto e = emit(op, op.getOperands(), op.getResultTypes(), out,
                         json::Array{}))

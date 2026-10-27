@@ -1,6 +1,7 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -64,6 +65,42 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  for (StringRef mutation :
+       {"foreign condition", "non-Boolean condition", "empty occurrence"})
+    cases.run("formation refuses " + mutation, [&] {
+      auto module = parseSourceString<ModuleOp>(R"mlir(module {
+        func.func @work(%condition:i1, %index:ui64) -> i1 {
+          func.return %condition : i1
+        }
+        func.func @other(%condition:i1) -> i1 {
+          func.return %condition : i1
+        }
+      })mlir",
+                                                &context);
+      require(bool(module), "guard formation fixture refused");
+      auto before = copy(*module);
+      SymbolTable symbols(*module);
+      auto wrapper = symbols.lookup<func::FuncOp>("work");
+      auto other = symbols.lookup<func::FuncOp>("other");
+      kernel::CalculationGuard guard{
+          mutation == "foreign condition"       ? other.getArgument(0)
+          : mutation == "non-Boolean condition" ? wrapper.getArgument(1)
+                                                : wrapper.getArgument(0),
+          StringAttr::get(&context,
+                          mutation == "empty occurrence" ? "" : "check")};
+      std::string diagnostic;
+      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &message) {
+        llvm::raw_string_ostream out(diagnostic);
+        message.print(out);
+        return success();
+      });
+      require(failed(kernel::formCalculation(wrapper, *module, {}, guard)) &&
+                  namesIdentifier(diagnostic, "kernel-formation"),
+              "malformed guard input passed formation");
+      require(OperationEquivalence::isEquivalentTo(
+                  *module, *before, OperationEquivalence::IgnoreLocations),
+              "refused formation changed the wrapper");
+    });
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "realization fixture refused");
   auto frozen = copy(*source);

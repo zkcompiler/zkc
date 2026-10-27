@@ -93,7 +93,7 @@ def FinishIfOp : Op<ProtocolDialect, "finish_if",
 }
 
 def GuardOp : Op<ProtocolDialect, "guard",
-    [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+    [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
   let arguments = (ins I1:$condition, StrAttr:$site, StrAttr:$owner);
   let assemblyFormat = "$condition attr-dict";
 }

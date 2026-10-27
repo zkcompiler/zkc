@@ -476,6 +476,10 @@ int main() {
   require(
       succeeded(mathematical::verifyProjectionPreserved(*common, *projected)),
       "projection lost original interface");
+  auto wrongOwner = copy(*projected);
+  wrongOwner->walk([&](protocol_ir::GuardOp op) { op.setOwner("outsider"); });
+  require(failed(mathematical::verifyProjectionPreserved(*common, *wrongOwner)),
+          "guard owner mutation passed projection correspondence");
   auto root = unit(*projected);
   auto relation = *root.getBody().front().getOps<relation::DeclareOp>().begin();
   rename(root, relation, "renamed_predicate");
@@ -550,11 +554,14 @@ int main() {
     if (op.getRole() != "V")
       return;
     OpBuilder builder(&op.getBody().front().back());
-    auto guard = *op.getBody().front().getOps<local::GuardOp>().begin();
-    local::GuardOp::create(builder, op.getLoc(), guard.getCondition(),
-                           "unrecorded");
+    auto guard = *op.getBody().front().getOps<protocol_ir::GuardOp>().begin();
+    protocol_ir::GuardOp::create(builder, op.getLoc(), guard.getCondition(),
+                                 "unrecorded", op.getRole());
   });
   require(failed(verify(*malformed)), "unrecorded participant action admitted");
+  malformed = copy(*projected);
+  malformed->walk([&](protocol_ir::GuardOp op) { op.setOwner("outsider"); });
+  require(failed(verify(*malformed)), "guard for another participant admitted");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::ProtocolEntryOp op) {
     op->setAttr("trusted", UnitAttr::get(&context));
