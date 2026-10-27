@@ -1,6 +1,7 @@
 #include "Checker.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/BoundedStream.h"
@@ -165,6 +166,100 @@ json::Object sourceNode(const CheckedProject &project, Span span) {
                       {"end", span.end}};
 }
 } // namespace
+
+Expected<std::string> inspectComponentDeclarations(const ClosedEntry &entry,
+                                                   const Limits &limits) {
+  if (auto e = checkLimits(limits))
+    return std::move(e);
+  detail::Work work{limits};
+  Layouts layouts(entry, limits);
+  json::Array records, protocols;
+  bool linear = false;
+  std::set<std::string> seen;
+  std::function<Error(const Layout &, unsigned)> retain =
+      [&](const Layout &layout, unsigned depth) -> Error {
+    if (depth > limits.typeDepth)
+      return detail::failure("source.limit", "component declaration depth");
+    if (auto e = work.charge(layout.fields.size() + 1))
+      return e;
+    auto key = typeIdentity(layout.type);
+    if (!seen.insert(key).second)
+      return Error::success();
+    for (const auto &field : layout.fields)
+      if (auto e = retain(*field.layout, depth + 1))
+        return e;
+    if (layout.type.kind != Type::Kind::Record)
+      return Error::success();
+    const Declaration *declaration = nullptr;
+    for (const auto &candidate : entry.declarations())
+      if (candidate.qualifiedName == layout.type.domain &&
+          candidate.kind == Declaration::Kind::Record) {
+        declaration = &candidate;
+        break;
+      }
+    if (!declaration)
+      return detail::failure("component-declaration", "missing source record");
+    linear |= declaration->resource == Resource::Linear;
+    auto term = encodeStaticTerm(layout.type);
+    if (!term)
+      return term.takeError();
+    json::Array fields;
+    for (const auto &field : layout.fields) {
+      auto type = encodeStaticTerm(field.layout->type);
+      if (!type)
+        return type.takeError();
+      fields.push_back(json::Array{field.name, std::move(*type)});
+    }
+    records.push_back(json::Array{std::move(*term),
+                                  !declaration->resource ? "ordinary"
+                                  : *declaration->resource == Resource::Linear
+                                      ? "linear"
+                                      : "affine",
+                                  declaration->sealed, std::move(fields)});
+    return Error::success();
+  };
+  for (const auto &declaration : entry.declarations()) {
+    if (declaration.kind != Declaration::Kind::Protocol || !declaration.body ||
+        !declaration.parameters.empty())
+      continue;
+    json::Array sides;
+    for (bool output : {false, true}) {
+      json::Array ports;
+      unsigned offset = 0;
+      for (const auto &port :
+           output ? declaration.outputs : declaration.inputs) {
+        auto layout = layouts.get(port.type);
+        if (!layout)
+          return layout.takeError();
+        if (auto e = retain(**layout, 0))
+          return std::move(e);
+        auto term = encodeStaticTerm(port.type);
+        if (!term)
+          return term.takeError();
+        json::Array roles;
+        for (auto role : port.roles)
+          roles.push_back(nativeRoleName(role));
+        ports.push_back(json::Array{port.name, std::move(*term),
+                                    std::move(roles), offset,
+                                    (*layout)->leaves.size()});
+        offset += (*layout)->leaves.size();
+      }
+      sides.push_back(std::move(ports));
+    }
+    protocols.push_back(json::Array{declaration.symbol, std::move(sides[0]),
+                                    std::move(sides[1])});
+  }
+  std::string bytes;
+  BoundedStream out(bytes, limits.interfaceBytes);
+  if (!linear) {
+    records.clear();
+    protocols.clear();
+  }
+  out << json::Value(json::Array{std::move(records), std::move(protocols)});
+  if (out.overflow())
+    return detail::failure("source.limit", "component declaration bytes");
+  return bytes;
+}
 
 bool detail::Checker::sourceClaimDomains(const Declaration &scope, E &value) {
   if (!types.charge(1, value.span))
@@ -729,7 +824,9 @@ Expected<std::string> inspectSourceClaims(const ClosedEntry &entry,
   out << json::Value(json::Object{{"format", "zkc.source-claims/0"},
                                   {"registry_resolution", "deferred-to-lean"},
                                   {"entry", entry.entry().qualifiedName},
-                                  {"claims", std::move(claims)}});
+                                  {"claims", std::move(claims)},
+                                  {"proposals", json::Array{}},
+                                  {"seams", json::Array{}}});
   if (out.overflow())
     return detail::failure("source.limit",
                            "source claim export byte limit exceeded");

@@ -63,14 +63,14 @@ def rejected (queries : Nat) (statement : Statement)
 
 theorem inputCosts (queries : Nat) (left right : List Scalar) (leftClaim rightClaim : Scalar)
     (count : Nat) (initial : Domain.History carriers) :
-    Typed.ChargedCostBound (ZkcSecurity.Families.Sumcheck.TableComponent.Nominal.interface (G := Group) "bls12-381.fr")
+    Typed.ChargedCostBound (NominalField.interface (G := Group) "bls12-381.fr")
       (schedule.charge queries) (presentedInputs left right leftClaim rightClaim count initial) initial 16 := by
   simpa only [OriginalSecurity.TwoSums.Installation.presentedInputs,
-      OriginalSecurity.TwoSums.Sources.presented, show ((4 + 4) • (2 : ENNReal)) = 16 by norm_num] using
-    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.twoRoots_cost 2
+      OriginalSecurity.TwoSums.Sources.presented, OriginalSecurity.TwoSums.Sources.calls, List.length_cons, List.length_nil, show ((2 * 4) • (2 : ENNReal)) = 16 by norm_num] using
+    ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_cost 2
     (fun history origin => by simpa only [maximum] using schedule.charge_le_maximum queries history (.challenge origin))
-    4 OriginalSecurity.TwoSums.Sources.schedule0 OriginalSecurity.TwoSums.Sources.schedule1
-    left right leftClaim rightClaim count ⟨[], initial⟩ initial
+    4 (OriginalSecurity.TwoSums.Sources.calls left right leftClaim rightClaim count 0)
+    OriginalSecurity.TwoSums.Sources.terminalTree ⟨[], initial⟩ initial
 
 theorem costs (queries : Nat) (statement : Statement) (initial : Domain.History carriers) :
     Typed.ChargedCostBound installation.absorb (schedule.charge queries)
@@ -80,7 +80,7 @@ theorem costs (queries : Nat) (statement : Statement) (initial : Domain.History 
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport TwoSums.validatorSubject schedule queries (validatorCost queries) :=
-  installation.losslessChargedExport (ZkcSecurity.Families.Sumcheck.TableComponent.Nominal.lossless "bls12-381.fr")
+  installation.losslessChargedExport (NominalField.lossless "bls12-381.fr")
     schedule queries (validatorCost queries) (rejected queries) (costs queries)
 
 def capabilities := OriginalSecurity.TwoSums.Soundness.capabilities

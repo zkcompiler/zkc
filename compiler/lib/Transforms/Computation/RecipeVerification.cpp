@@ -519,6 +519,9 @@ class RecipeReader {
       return take("field_array.from_vector", ValueRange{vector},
                   {field, length});
     }
+    if (auto restrict = dyn_cast<algebra::MultilinearRestrictPrefixOp>(source))
+      return take("multilinear.restrict_prefix", inputs,
+                  {restrict.getResult().getType().getDomain()});
     if (auto identity = dyn_cast<algebra::GroupIdentityOp>(source))
       return take("curve.identity", {},
                   {identity.getResult().getType().getDomain()});

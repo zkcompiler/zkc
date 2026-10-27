@@ -19,6 +19,14 @@ def Returns (P : Interaction I) (post : A → P.Phase → Prop) :
   | .halt _, _ => True
   | .call o k, phase => ∀ a, Returns P post (k a) (P.advance phase o a)
 
+/-- Every returned path satisfies True; this makes no termination claim. -/
+theorem returns_true (P : Interaction I) (process : Process I A) (phase : P.Phase) :
+    Returns P (fun _ _ => True) process phase := by
+  induction process generalizing phase with
+  | done => trivial
+  | halt => trivial
+  | call _ _ ih => exact fun reply => ih reply _
+
 theorem returns_mono (P : Interaction I) (p : Process I A)
     (post out : A → P.Phase → Prop) (phase : P.Phase)
     (exits : Returns P post p phase)

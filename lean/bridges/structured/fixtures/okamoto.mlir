@@ -36,7 +36,7 @@
       %3 = "algebra.group_equal"(%arg2, %2) : (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> i1
       "func.return"(%3) : (i1) -> ()
     }) : () -> ()
-    "relation.declare"() <{formula = @zkf_01154fec8af291aca8be519c449a67c049aa4dcb065a920025604d72b145cb5c, key = "zkl_953e9730b1a3459b686ab1fc4c9b32625aee39f5957b8c87bb62e2a814b74b8b", kind = "zkc.language.formula/0", purposes = ["parameter", "parameter", "statement", "witness", "witness"], revision = "df5dd2e7e263c52a9cf241755236669ffbef101adf20da7012c766d10fbcfc92", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> i1, sym_name = "zkl_953e9730b1a3459b686ab1fc4c9b32625aee39f5957b8c87bb62e2a814b74b8b"}> : () -> ()
+    "relation.declare"() <{formula = @zkf_01154fec8af291aca8be519c449a67c049aa4dcb065a920025604d72b145cb5c, key = "zkl_953e9730b1a3459b686ab1fc4c9b32625aee39f5957b8c87bb62e2a814b74b8b", kind = "zkc.language.formula/0", purposes = ["parameter", "parameter", "statement", "witness", "witness"], revision = "df5dd2e7e263c52a9cf241755236669ffbef101adf20da7012c766d10fbcfc92", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> i1, static_arguments = [], sym_name = "zkl_953e9730b1a3459b686ab1fc4c9b32625aee39f5957b8c87bb62e2a814b74b8b"}> : () -> ()
   }) : () -> ()
 }) : () -> ()
 

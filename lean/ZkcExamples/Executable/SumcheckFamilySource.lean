@@ -10,7 +10,7 @@ public meta import Zkc.Construction.ArtifactBindingTactic
 
 /-! Local admission and a shared mathematical proof for arbitrary realizations
 of the canonical Sumcheck shape. No whole-program success or correspondence is
-an admission field. The only semantic equations concern the three helpers and
+an admission field. The only semantic equations concern the five helpers and
 the four occurrences in one round. -/
 set_option autoImplicit false
 set_option maxRecDepth 50000
@@ -71,8 +71,17 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 is needed only on the bounded, correctly shaped tables reached by honesty;
 outside those arguments the helper remains completely unconstrained here. -/
 structure Helpers (shape : Shape) : Prop where
-  empty : Domain.callHelper (ringModel F G) shape.program shape.names.emptyHelper
-    [.data (.vector shape.names.scalar)] [] = .returned [.data (.vector shape.names.scalar [])]
+  pending : ∀ (claim : F), Domain.callHelper (ringModel F G) shape.program shape.names.pendingHelper
+    [.data (.vector shape.names.scalar), .data (.field shape.names.scalar)] [.data (.field shape.names.scalar claim)] =
+      .returned [.data (.vector shape.names.scalar []), .data (.field shape.names.scalar claim)]
+  openClaim : ∀ (point : List F) (claim : F), Domain.callHelper (ringModel F G) shape.program shape.names.openClaimHelper
+    [.data (.vector shape.names.scalar), .data (.field shape.names.scalar)]
+    [.data (.vector shape.names.scalar point), .data (.field shape.names.scalar claim)] =
+      .returned [.data (.vector shape.names.scalar point), .data (.field shape.names.scalar claim)]
+  atPrefix : ∀ (point : List F) (claim : F), Domain.callHelper (ringModel F G) shape.program shape.names.atPrefixHelper
+    [.data (.vector shape.names.scalar), .data (.field shape.names.scalar)]
+    [.data (.vector shape.names.scalar point), .data (.field shape.names.scalar claim)] =
+      .returned [.data (.vector shape.names.scalar point), .data (.field shape.names.scalar claim)]
   append : ∀ (point : List F) (answer : F),
     Domain.callHelper (ringModel F G) shape.program shape.names.appendHelper [.data (.vector shape.names.scalar)]
       [.data (.vector shape.names.scalar point), .data (.field shape.names.scalar answer)] =
@@ -118,10 +127,10 @@ def roundProcess (shape : Shape) (index : Nat) (point : List F) (scalar : F)
 /-- Generated local correspondence: every branch and every typed reply of the
 actual canonical round, proved using only occurrence and append-helper laws. -/
 theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (helpers : Helpers (F := F) (G := G) shape)
-    (a b c d e : Domain.Value (uniformCarriers F G)) (index : Nat) (point : List F) (scalar : F)
+    (a b c d e f g h : Domain.Value (uniformCarriers F G)) (index : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) :
     (((Domain.evaluate (ringModel F G) shape.program shape.context (roundBody shape.names)
-      ([a,b,c,d,e] ++ .data (.index index) :: ProgramShape.carried shape point scalar history)).bind
+      ([a,b,c,d,e,f,g,h] ++ .data (.index index) :: ProgramShape.carried shape point scalar history)).bind
       (yieldValues yielded (carriedSorts shape.names))).interpret Original.forgetCheckpoints) =
       roundProcess shape index point scalar history := by
   have lowResolved := occurrences.first index
@@ -139,6 +148,7 @@ theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (help
       PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService, Bool.not_false, Bool.not_true]
   congr 1
   funext low
+  simp only [PIR.Process.bind]
   congr 1
   funext ignoredLow
   congr 1
@@ -151,7 +161,7 @@ theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (help
       deliveryResolved, deliveryRequest, Domain.Calculations.fieldConstant (F := F) (G := G),
       Domain.Calculations.fieldSubtract (F := F) (G := G), Domain.Calculations.fieldMultiply (F := F) (G := G),
       Domain.Calculations.fieldAdd (F := F) (G := G)]
-    unfolding [PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService,
+    unfolding [Domain.evaluate, Domain.step, PIR.Process.interpret, Original.forgetCheckpoints, Structured.Ty.isService,
       Bool.not_false, Bool.not_true, List.append_assoc, Nat.cast_one, yieldValues, carriedSorts, drawOrigin]
   all_goals rfl
 
@@ -159,10 +169,10 @@ theorem round_projection (shape : Shape) (occurrences : Occurrences shape) (help
 /-- All-reply loop correspondence is derived from the generated local round
 proof, using the shared Domain iteration seam. No loop equation is admitted. -/
 theorem loop_projection (shape : Shape) (occurrences : Occurrences shape) (helpers : Helpers (F := F) (G := G) shape)
-    (a b c d e : Domain.Value (uniformCarriers F G)) (indices : List Nat)
+    (a b c d e f g h : Domain.Value (uniformCarriers F G)) (indices : List Nat)
     (point : List F) (scalar : F) (history : Domain.History (uniformCarriers F G)) :
     (Domain.iterate (Domain.evaluate (ringModel F G) shape.program shape.context (roundBody shape.names))
-      [a,b,c,d,e] yielded (carriedSorts shape.names) indices (ProgramShape.carried shape point scalar history)).interpret
+      [a,b,c,d,e,f,g,h] yielded (carriedSorts shape.names) indices (ProgramShape.carried shape point scalar history)).interpret
         Original.forgetCheckpoints =
       (Finite.fold (fun state index => roundState shape index state.point state.scalar state.history)
         indices (⟨point, scalar, history⟩ : RoundState F G)).bind fun state =>
@@ -171,7 +181,7 @@ theorem loop_projection (shape : Shape) (occurrences : Occurrences shape) (helpe
   | nil => rfl
   | cons index rest ih =>
       rw [iterate_bind, PIR.Process.interpret_bind]
-      rw [round_projection shape occurrences helpers a b c d e index point scalar history]
+      rw [round_projection shape occurrences helpers a b c d e f g h index point scalar history]
       simp only [roundProcess, Finite.fold, PIR.Process.bind_assoc, PIR.Process.bind]
       congr 1
       funext state
@@ -343,19 +353,20 @@ theorem observation_passes (shape : Shape) (occurrences : Occurrences shape) (he
     (oracle : History F G → F) (initial : History F G) (values : List F) (rounds : Nat)
     (admitted : rounds ≤ shape.maximum) (shaped : values.length = 2 ^ rounds) :
     DomainVM.Passes Origin.withoutCoordinates initial oracle
-      (DomainVM.observation shape.program shape.context (instructions shape.names shape.maximum) [8,7]
+      (DomainVM.observation shape.program shape.context (instructions shape.names shape.maximum) [13,10]
         (ProgramShape.inputs shape values values.sum rounds []))
       ((SumcheckMessages.honestRounds (transcript shape) oracle initial values rounds).map (.field shape.names.scalar))
       (Success shape) := by
   unfold DomainVM.observation DomainVM.outcome
-  normalize_artifact_operations [helpers.empty, shape.suite, admitted]
-    unfolding [instructions, emptyCall, ProgramShape.inputs, Domain.evaluate, Domain.step,
+  normalize_artifact_operations [helpers.pending, helpers.openClaim, helpers.atPrefix, shape.suite, admitted]
+    unfolding [instructions, pendingCall, openClaimCall, atPrefixCall, ProgramShape.inputs, Domain.evaluate, Domain.step,
       carriedSorts, PIR.Process.interpret, Original.forgetCheckpoints]
   rw [PIR.Process.interpret_bind]
   have loopEq := loop_projection shape occurrences helpers
     (.data (.vector shape.names.scalar values)) (.data (.field shape.names.scalar values.sum))
     (.data (.index rounds)) (.transcript shape.names.suite []) (.data (.vector shape.names.scalar []))
-    (List.range rounds) [] values.sum []
+    (.data (.field shape.names.scalar values.sum)) (.data (.vector shape.names.scalar []))
+    (.data (.field shape.names.scalar values.sum)) (List.range rounds) [] values.sum []
   simp only [ProgramShape.carried, carriedSorts] at loopEq
   rw [loopEq]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
@@ -370,8 +381,8 @@ theorem observation_passes (shape : Shape) (occurrences : Occurrences shape) (he
     have correct : decide ((restrictPrefixValues values state.point).sum = state.scalar) = true := by
       simp only [scalar, decide_true]
     rw [correct] at checked
-    normalize_artifact_operations [checked]
-      unfolding [ProgramShape.carried, carriedSorts, checkCall, Domain.step, DomainVM.readback,
+    normalize_artifact_operations [helpers.atPrefix, checked]
+      unfolding [ProgramShape.carried, carriedSorts, atPrefixCall, checkCall, Domain.evaluate, Domain.step, DomainVM.readback,
         PIR.Process.interpret, Original.forgetCheckpoints, DomainVM.Passes]
     refine ⟨?_, state.history, rfl, suffix, mapped⟩
     simp only [proofEq, SumcheckMessages.honestRounds, List.length_nil, List.map_nil]

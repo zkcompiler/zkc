@@ -6,6 +6,7 @@ public import ZkcExamples.Construction.SumcheckArtifact
 public import ZkcExamples.Structured.Generated.Constructed.SmallSumcheckValidator
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
 public import ZkcExamples.Structured.SumcheckSourceContracts
+public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 @[expose] public section
 
@@ -26,7 +27,7 @@ theorem artifact_identity : ZkcExamples.Structured.Generated.Constructed.SmallSu
 theorem source_identity :
     Generated.Bindings.SmallSumcheckInputs.imported.program = SumcheckProof.program := by kernel_rfl
 
-abbrev roundInstruction : Construction.Instruction := SumcheckProof.participant.instructions[1]'(by decide +kernel)
+abbrev roundInstruction : Construction.Instruction := SumcheckProof.participant.instructions[2]'(by decide +kernel)
 abbrev roundBody : List Construction.Instruction := roundInstruction.body
 abbrev lowTemplate : Template :=
   match (roundBody[3]'(by decide +kernel)).operation with
@@ -144,13 +145,32 @@ theorem helper_present {helper : Helper} {body : Region dialect helper.inputs he
   obtain ⟨definition, member, signature, _⟩ := association
   exact List.mem_map.mpr ⟨definition, member, signature⟩
 
-theorem empty_helper :
-    Domain.callHelper (ringModel F G) SumcheckProof.program SumcheckHelperBodies.emptyHelper.name
-      [.data (.vector "bls12-381.fr")] [] = .returned [.data (.vector "bls12-381.fr" [])] := by
-  have result := helper_outcome (F := F) (G := G) _
-    (helper_present SumcheckSourceContracts.bodies.empty) .nil [] rfl
-  rw [helper_table, SumcheckUnitContracts.empty_equation SumcheckSourceViews.unit.linked SumcheckSourceContracts.bodies] at result
-  exact result
+theorem claim_bodies : SumcheckPendingLaws.Bodies SumcheckProof.program.payload.definitions :=
+  ⟨SumcheckSourceAssociations.pending_association, SumcheckSourceAssociations.openClaim_association,
+    SumcheckSourceAssociations.atPrefix_association⟩
+
+theorem pending_helper (scalar : F) :
+    Domain.callHelper (ringModel F G) SumcheckProof.program SumcheckPendingBodies.pendingHelper.name
+      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.field "bls12-381.fr" scalar)] =
+      .returned [.data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" scalar)] :=
+  SumcheckArtifacts.DomainHelpers.pending (F := F) (G := G) SumcheckProof.program claim_bodies scalar
+
+theorem openClaim_helper (point : List F) (scalar : F) :
+    Domain.callHelper (ringModel F G) SumcheckProof.program SumcheckPendingBodies.openClaimHelper.name
+      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
+      .returned [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] :=
+  SumcheckArtifacts.DomainHelpers.claim_identity (F := F) (G := G) SumcheckProof.program
+    SumcheckPendingBodies.openClaimHelper.name claim_bodies.openClaim point scalar
+
+theorem atPrefix_helper (point : List F) (scalar : F) :
+    Domain.callHelper (ringModel F G) SumcheckProof.program SumcheckPendingBodies.atPrefixHelper.name
+      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
+      .returned [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] :=
+  SumcheckArtifacts.DomainHelpers.claim_identity (F := F) (G := G) SumcheckProof.program
+    SumcheckPendingBodies.atPrefixHelper.name claim_bodies.atPrefix point scalar
 
 theorem append_helper (point : List F) (answer : F) :
     Domain.callHelper (ringModel F G) SumcheckProof.program SumcheckHelperBodies.appendHelper.name

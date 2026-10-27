@@ -15,7 +15,7 @@ from harness import load
 @pytest.fixture
 def gkr():
     api = load("normal_form_names", "lean/bridges/structured/normal_forms.py")
-    path = api.ROOT / "lean/bridges/structured/normal-forms/gkr-source.toml"
+    path = api.ROOT / "lean/bridges/structured/normal-forms/gkr-root.toml"
     request = tomllib.loads(path.read_text())
     rounds = tomllib.loads(path.with_name("gkr-rounds.toml").read_text())["bodies"]["protocol"]
     return api, path, request, SimpleNamespace(name=rounds)

@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import Zkc.Source.Structured.BodyBindings
 public import ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs
@@ -15,7 +16,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Examples.Components.SmallSumcheck
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured
-open ZkcExamples.Structured.SumcheckArtifacts
+open ZkcSecurity.Families.Sumcheck.TableComponent
 
 theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies Generated.Bindings.SmallSumcheckInputs.imported.program :=
   ⟨OriginalSumcheckInstances.Small.producer_bodies, OriginalSumcheckInstances.Small.terminal_bodies⟩

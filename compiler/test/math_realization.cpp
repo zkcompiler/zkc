@@ -281,6 +281,43 @@ int main(int argc, char **argv) {
                                                    "product")),
             "changed operand escaped independent recipe verification");
   });
+  cases.run(
+      "prefix restriction has an independently checked ordered recipe", [&] {
+        auto numerical = parseSourceString<ModuleOp>(R"(
+!V = !algebra.field_vector<"bls12-381.fr">
+module @restriction attributes {exec.computation} {
+  func.func @realized(%values:!V,%point:!V)->!V {
+    %r = "algebra.multilinear_restrict_prefix"(%values,%point):(!V,!V)->!V
+    func.return %r:!V
+  }
+})",
+                                                     &context);
+        require(bool(numerical), "prefix restriction recipe source refused");
+        mathematical::RealizationWork work;
+        auto candidate =
+            realizeComputationEntry(*numerical, "restrict", {}, work);
+        require(bool(candidate), "prefix restriction recipe failed");
+        computationRecipeOutput(*candidate);
+        require(succeeded(computation::verifyEntryRecipes(
+                    *numerical, *candidate, "restrict")),
+                "prefix restriction recipe did not pass independent checking");
+        auto wrong = copy(*candidate);
+        auto operation = scopedFinite::application(
+            function(*wrong, "realized"), "multilinear.restrict_prefix");
+        require(operation && operation.getInputs().size() == 2,
+                "prefix restriction did not preserve both vector ports");
+        Value first = operation.getInputs()[0],
+              second = operation.getInputs()[1];
+        operation->setOperand(1, second);
+        operation->setOperand(2, first);
+        require(succeeded(verify(*wrong)),
+                "ordered operand mutation lost scoped formation");
+        ScopedDiagnosticHandler handler(&context,
+                                        [](Diagnostic &) { return success(); });
+        require(failed(computation::verifyEntryRecipes(*numerical, *wrong,
+                                                       "restrict")),
+                "reordered prefix restriction operands escaped checking");
+      });
   cases.run("static dimension discards unused field-array construction", [&] {
     auto module = withHelper(R"(
  func.func private @dimension(%a:!F,%b:!F)->ui64 {

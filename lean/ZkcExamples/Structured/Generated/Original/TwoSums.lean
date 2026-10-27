@@ -89,6 +89,14 @@ abbrev sourceHelper32 : CheckedDefinition := payload.definitions.get ⟨32, by d
 theorem sourceHelper32_body : sourceHelper32.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper32Body := by kernel_rfl
 abbrev sourceHelper33 : CheckedDefinition := payload.definitions.get ⟨33, by decide +kernel⟩
 theorem sourceHelper33_body : sourceHelper33.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper33Body := by kernel_rfl
+abbrev sourceHelper34 : CheckedDefinition := payload.definitions.get ⟨34, by decide +kernel⟩
+theorem sourceHelper34_body : sourceHelper34.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper34Body := by kernel_rfl
+abbrev sourceHelper35 : CheckedDefinition := payload.definitions.get ⟨35, by decide +kernel⟩
+theorem sourceHelper35_body : sourceHelper35.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper35Body := by kernel_rfl
+abbrev sourceHelper36 : CheckedDefinition := payload.definitions.get ⟨36, by decide +kernel⟩
+theorem sourceHelper36_body : sourceHelper36.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper36Body := by kernel_rfl
+abbrev sourceHelper37 : CheckedDefinition := payload.definitions.get ⟨37, by decide +kernel⟩
+theorem sourceHelper37_body : sourceHelper37.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper37Body := by kernel_rfl
 abbrev sourceProtocol0 : CheckedProtocol := payload.protocols.get ⟨0, by decide +kernel⟩
 theorem sourceProtocol0_member : sourceProtocol0 ∈ payload.protocols := List.get_mem _ _
 def maximum0 : Nat := 4
@@ -100,7 +108,7 @@ abbrev sourceProtocol1 : CheckedProtocol := payload.protocols.get ⟨1, by decid
 theorem sourceProtocol1_member : sourceProtocol1 ∈ payload.protocols := List.get_mem _ _
 abbrev root := sourceProtocol1
 def sourceBody : Region protocolDialect root.inputs root.outputs :=
-  (.letOp (.mark "") .nil .nil (.letOp (.calculate (.indexConstant 1) rfl) .nil .nil (.letOp (.mark "s1") .nil .nil (.letOp (.localCall (⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index]⟩ : Helper) rfl 0 "s1") (.cons (.there .here) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil))) .nil (.letOp (.mark "label_6c656674") .nil .nil (.letOp (.protocolApply (⟨"zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1]]⟩ : ProtocolSignature) [0, 1] "label_6c656674") (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) .nil)))))) .nil (.letOp (.mark "s7") .nil .nil (.letOp (.localCall (⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩ : Helper) rfl 1 "s7") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.indexConstant 1) rfl) .nil .nil (.letOp (.mark "s10") .nil .nil (.letOp (.localCall (⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index]⟩ : Helper) rfl 0 "s10") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))) (.cons .here .nil))) .nil (.letOp (.mark "label_7269676874") .nil .nil (.letOp (.protocolApply (⟨"zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1]]⟩ : ProtocolSignature) [0, 1] "label_7269676874") (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) .nil)))))) .nil (.letOp (.mark "s16") .nil .nil (.letOp (.localCall (⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩ : Helper) rfl 1 "s16") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.invoke (⟨"s3h7a6b637h626f6f6c65616e4h626f7468", .math, [.boolean, .boolean], [.boolean]⟩ : Helper)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))))))))))))))))
+  (.letOp (.mark "") .nil .nil (.letOp (.calculate (.indexConstant 1) rfl) .nil .nil (.letOp (.mark "s1") .nil .nil (.letOp (.localCall (⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index]⟩ : Helper) rfl 0 "s1") (.cons (.there .here) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil))) .nil (.letOp (.mark "s3") .nil .nil (.letOp (.localCall (⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl 1 "s3") (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil) .nil (.letOp (.mark "label_6c656674") .nil .nil (.letOp (.protocolApply (⟨"zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1]]⟩ : ProtocolSignature) [0, 1] "label_6c656674") (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))) .nil))))))) .nil (.letOp (.mark "s9") .nil .nil (.letOp (.localCall (⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩ : Helper) rfl 1 "s9") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.indexConstant 1) rfl) .nil .nil (.letOp (.mark "s12") .nil .nil (.letOp (.localCall (⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr"), .index, .index]⟩ : Helper) rfl 0 "s12") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))) (.cons .here .nil))) .nil (.letOp (.mark "s14") .nil .nil (.letOp (.localCall (⟨"zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0", .local, [(.field "bls12-381.fr")], [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]⟩ : Helper) rfl 1 "s14") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))) .nil) .nil (.letOp (.mark "label_7269676874") .nil .nil (.letOp (.protocolApply (⟨"zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d", ["role00000000", "role00000001"], [(.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr"), .index, (.service "random.bls12-381.fr/0")], [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [[0], [0], [0], [1], [1], [0, 1], [1]], [[0], [0], [0], [0], [1], [1]]⟩ : ProtocolSignature) [0, 1] "label_7269676874") (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))))))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))))) .nil))))))) .nil (.letOp (.mark "s20") .nil .nil (.letOp (.localCall (⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), (.field "bls12-381.fr")], [.boolean]⟩ : Helper) rfl 1 "s20") (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))))))))))))))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil (.letOp (.mark "") .nil .nil (.letOp (.calculate (.invoke (⟨"s3h7a6b637h626f6f6c65616e4h626f7468", .math, [.boolean, .boolean], [.boolean]⟩ : Helper)) rfl) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))))))) (.cons .here .nil)) .nil (.ret (.cons .here .nil))))))))))))))))))))))))
 theorem root_body : root.body = sourceBody := by kernel_rfl
 theorem source_body : sourceBody = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.protocol1Body := by kernel_rfl
 
@@ -130,59 +138,66 @@ theorem root_lookup (args : Values (Component (assignment F G)) root.inputs) :
   rw [invokeProtocol_cons_same]
   rfl
 
-abbrev step0 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input2 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
-  (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_6c656674" [0, 1]) 1 (.cons (none) (.cons (none) (.cons (none) (.cons (input2) (.cons (input4) (.cons (input5) .nil)))))))
-abbrev step0Realized (input2 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
-  (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_6c656674" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons (input2) (.cons (input4) (.cons (input5) .nil)))))))
+abbrev step0 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input2 : (Option F)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper9.helper) (.cons (input2) .nil))
 
-abbrev step1 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input0 : (Option (List F))) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (Participant.owned 1 1 (invoke tables.closed sourceHelper33.helper) (.cons (input0) (.cons ((out0).get (.there (.there (.there (.there .here))))) (.cons ((out0).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+abbrev step1 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input4 : (Option Nat)) (input5 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_6c656674" [0, 1]) 1 (.cons (none) (.cons (none) (.cons (none) (.cons ((out0).get .here) (.cons ((out0).get (.there .here)) (.cons (input4) (.cons (input5) .nil))))))))
+abbrev step1Realized (input4 : (Option Nat)) (input5 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_6c656674" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons ((out0).get .here) (.cons ((out0).get (.there .here)) (.cons (input4) (.cons (input5) .nil))))))))
 
-abbrev step2 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
-  (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_7269676874" [0, 1]) 1 (.cons (none) (.cons (none) (.cons (none) (.cons (input3) (.cons (input4) (.cons (input5) .nil)))))))
-abbrev step2Realized (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
-  (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_7269676874" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons (input3) (.cons (input4) (.cons (input5) .nil)))))))
+abbrev step2 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input0 : (Option (List F))) (out1 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper37.helper) (.cons (input0) (.cons ((out1).get (.there (.there (.there (.there .here))))) (.cons ((out1).get (.there (.there (.there (.there (.there .here)))))) .nil))))
 
-abbrev step3 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input1 : (Option (List F))) (out2 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (Participant.owned 1 1 (invoke tables.closed sourceHelper33.helper) (.cons (input1) (.cons ((out2).get (.there (.there (.there (.there .here))))) (.cons ((out2).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+abbrev step3 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input3 : (Option F)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper9.helper) (.cons (input3) .nil))
 
-abbrev step4 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (out1 : (Values (Component (assignment F G)) [.boolean])) (out3 : (Values (Component (assignment F G)) [.boolean])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (invoke tables.components sourceHelper21.helper (.cons ((out1).get .here) (.cons ((out3).get .here) .nil)))
-def callContext0 : ProtocolContext := (ProtocolContext.enter {} "label_6c656674" [0, 1])
-theorem callContext0_roles : (callContext0).roles 0 ≠ (callContext0).roles 1 := by decide
+abbrev step4 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input4 : (Option Nat)) (input5 : (Option Nat)) (out3 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_7269676874" [0, 1]) 1 (.cons (none) (.cons (none) (.cons (none) (.cons ((out3).get .here) (.cons ((out3).get (.there .here)) (.cons (input4) (.cons (input5) .nil))))))))
+abbrev step4Realized (input4 : (Option Nat)) (input5 : (Option Nat)) (out3 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
+  (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_7269676874" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons ((out3).get .here) (.cons ((out3).get (.there .here)) (.cons (input4) (.cons (input5) .nil))))))))
 
-def callContext2 : ProtocolContext := (ProtocolContext.enter {} "label_7269676874" [0, 1])
-theorem callContext2_roles : (callContext2).roles 0 ≠ (callContext2).roles 1 := by decide
+abbrev step5 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input1 : (Option (List F))) (out4 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper37.helper) (.cons (input1) (.cons ((out4).get (.there (.there (.there (.there .here))))) (.cons ((out4).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+
+abbrev step6 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (out2 : (Values (Component (assignment F G)) [.boolean])) (out5 : (Values (Component (assignment F G)) [.boolean])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
+  (invoke tables.components sourceHelper25.helper (.cons ((out2).get .here) (.cons ((out5).get .here) .nil)))
+def callContext1 : ProtocolContext := (ProtocolContext.enter {} "label_6c656674" [0, 1])
+theorem callContext1_roles : (callContext1).roles 0 ≠ (callContext1).roles 1 := by decide
+
+def callContext4 : ProtocolContext := (ProtocolContext.enter {} "label_7269676874" [0, 1])
+theorem callContext4_roles : (callContext4).roles 0 ≠ (callContext4).roles 1 := by decide
 
 abbrev firstContext : ProtocolContext := (ProtocolContext.enter {} "label_6c656674" [0, 1])
 abbrev lastContext : ProtocolContext := (ProtocolContext.enter {} "label_7269676874" [0, 1])
 abbrev reduceDefinition := sourceProtocol0
 abbrev maximum := maximum0
 abbrev protocolPrefix := protocolPrefix1 (F := F) (G := G)
-abbrev checkContinuation := step1 (F := F) (G := G)
-abbrev terminalHelper : Helper := sourceHelper21.helper
-abbrev terminalCalculation := step4 (F := F) (G := G)
-theorem step0_binding (input2 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
-    step0 (protocolPrefix (F := F) (G := G)) input2 input4 input5 = step0Realized (G := G) input2 input4 input5 := by
-  unfold step0 protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn
+abbrev checkContinuation := step2 (F := F) (G := G)
+abbrev step6Helper : Helper := sourceHelper25.helper
+abbrev terminalHelper : Helper := step6Helper
+abbrev terminalCalculation := step6 (F := F) (G := G)
+theorem step1_binding (input4 : (Option Nat)) (input5 : (Option Nat)) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) :
+    step1 (protocolPrefix (F := F) (G := G)) input4 input5 out0 = step1Realized (G := G) input4 input5 out0 := by
+  unfold step1 protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn
   rw [invokeProtocol_cons_same]
   unfold CheckedProtocol.denoteWithOn
   rw [sourceProtocol0_body]
   rfl
 
-theorem step2_binding (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
-    step2 (protocolPrefix (F := F) (G := G)) input3 input4 input5 = step2Realized (G := G) input3 input4 input5 := by
-  unfold step2 protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn
+theorem step4_binding (input4 : (Option Nat)) (input5 : (Option Nat)) (out3 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.field "bls12-381.fr")])) :
+    step4 (protocolPrefix (F := F) (G := G)) input4 input5 out3 = step4Realized (G := G) input4 input5 out3 := by
+  unfold step4 protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn
   rw [invokeProtocol_cons_same]
   unfold CheckedProtocol.denoteWithOn
   rw [sourceProtocol0_body]
   rfl
 
-theorem library_call_binding (site : String) (claim : Option F) (count service : Option Nat) :
+theorem library_call_binding (site : String) (point : Option (List F)) (claim : Option F) (count service : Option Nat) :
     invokeProtocol (protocolPrefix (F := F) (G := G)) reduceDefinition.signature (({} : ProtocolContext).enter site [0, 1]) 1
-      (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil)))))) =
+      (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))) =
       realizeCall payload maximum (({} : ProtocolContext).enter site [0, 1]) reduceDefinition.outputScopes
-      (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil)))))) := by
+      (.cons none (.cons none (.cons none (.cons point (.cons claim (.cons count (.cons service .nil))))))) := by
   unfold protocolPrefix protocolPrefix1 protocolPrefix0 extendProtocolTableOn
   rw [invokeProtocol_cons_same]
   unfold CheckedProtocol.denoteWithOn
@@ -192,12 +207,14 @@ theorem library_call_binding (site : String) (claim : Option F) (count service :
 
 def process (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) root.outputs) :=
-  (step0 protocols input2 input4 input5).bind fun out0 =>
-  (step1 tables input0 out0).bind fun out1 =>
-  (step2 protocols input3 input4 input5).bind fun out2 =>
-  (step3 tables input1 out2).bind fun out3 =>
-  (step4 tables out1 out3).bind fun out4 =>
-  .done (.cons ((out4).get .here) .nil)
+  (step0 tables input2).bind fun out0 =>
+  (step1 protocols input4 input5 out0).bind fun out1 =>
+  (step2 tables input0 out1).bind fun out2 =>
+  (step3 tables input3).bind fun out3 =>
+  (step4 protocols input4 input5 out3).bind fun out4 =>
+  (step5 tables input1 out4).bind fun out5 =>
+  (step6 tables out2 out5).bind fun out6 =>
+  .done (.cons ((out6).get .here) .nil)
 
 theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G)))
     (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
@@ -207,28 +224,36 @@ theorem body_binding (tables : Evaluation.ComponentTables F G (signature (F := F
 
 abbrev realized (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :=
   let tables := helpers (F := F) (G := G) payload
-  (step0Realized (G := G) input2 input4 input5).bind fun out0 =>
-  (step1 tables input0 out0).bind fun out1 =>
-  (step2Realized (G := G) input3 input4 input5).bind fun out2 =>
-  (step3 tables input1 out2).bind fun out3 =>
-  (step4 tables out1 out3)
+  (step0 tables input2).bind fun out0 =>
+  (step1Realized (G := G) input4 input5 out0).bind fun out1 =>
+  (step2 tables input0 out1).bind fun out2 =>
+  (step3 tables input3).bind fun out3 =>
+  (step4Realized (G := G) input4 input5 out3).bind fun out4 =>
+  (step5 tables input1 out4).bind fun out5 =>
+  (step6 tables out2 out5)
 
 theorem realization_binding (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
     process (helpers (F := F) (G := G) payload) protocolPrefix input0 input1 input2 input3 input4 input5 = realized (G := G) input0 input1 input2 input3 input4 input5 := by
   simp only [process, realized, singleton_eta, PIR.Process.bind_done]
   apply congrArg₂ PIR.Process.bind
-  · exact (step0_binding (G := G) input2 input4 input5)
+  · rfl
   · funext out0
     apply congrArg₂ PIR.Process.bind
-    · rfl
+    · exact (step1_binding (G := G) input4 input5 out0)
     · funext out1
       apply congrArg₂ PIR.Process.bind
-      · exact (step2_binding (G := G) input3 input4 input5)
+      · rfl
       · funext out2
         apply congrArg₂ PIR.Process.bind
         · rfl
         · funext out3
-          rfl
+          apply congrArg₂ PIR.Process.bind
+          · exact (step4_binding (G := G) input4 input5 out3)
+          · funext out4
+            apply congrArg₂ PIR.Process.bind
+            · rfl
+            · funext out5
+              rfl
 
 theorem participant_binding (input0 : (Option (List F))) (input1 : (Option (List F))) (input2 : (Option F)) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
     Occurrence.participant (ringModel F G) imported.program 1 ((.cons input0 (.cons input1 (.cons input2 (.cons input3 (.cons input4 (.cons input5 .nil))))))) = realized (G := G) input0 input1 input2 input3 input4 input5 := by

@@ -51,7 +51,7 @@ structure Subject (F G : Type) [Field F] [DecidableEq F] [AddCommGroup G] [Modul
   sitesNativeUnique : (sites.map Site.native).Nodup
   lowering : LoweringRequirement art compiled F G endpoint
   /-- Registered extraction semantics are fixed before proof-method selection. -/
-  extractors : Registry { profile : ExtractionProfile compiled F G // target = .retained profile.target } := ⟨[]⟩
+  extractors : Registry { profile : ExtractionProfile compiled F G // target = .retained profile.target profile.formula } := ⟨[]⟩
 
 namespace Subject
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -59,7 +59,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 
 def targetReference : Wire.TargetRef :=
   match subject.target with
-  | .retained target => .retained target.owner.contract.owner target.clauseIndex.val
+  | .retained target _ => .retained target.owner.contract.owner target.clauseIndex.val
       (target.owner.clause target.clauseIndex).name
   | .importedLanguage declaration => .importedLanguage art.original.entry
       ⟨⟨declaration.identifier, subject.importedVersion⟩, []⟩

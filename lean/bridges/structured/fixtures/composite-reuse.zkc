@@ -1,0 +1,27 @@
+module composite;
+domain Fr = field("bls12-381.fr");
+
+protocol Shift roles(P,V)
+    (ignored: Fr @P, value: Fr @P, delta: Fr @P, enabled: bool @P)
+    -> (value: Fr @P) {
+  require @P enabled;
+  return (value = value + delta);
+}
+
+protocol Outer roles(P,V)
+    (ignored: Fr @V, value: Fr @V, first: Fr @V, second: Fr @V, enabled: bool @V)
+    -> (value: Fr @V) {
+  #[site(first)] let shifted = Shift roles(V,P)(ignored, value, first, enabled);
+  #[site(second)] let result = Shift roles(V,P)(ignored, shifted, second, enabled);
+  return (value = result);
+}
+
+protocol Third roles(P,V)
+    (ignored: Fr @V, value: Fr @V, first: Fr @V, second: Fr @V, third: Fr @V,
+     enabled: bool @V) -> (value: Fr @V) {
+  #[site(composite)] let shifted = Outer roles(P,V)(ignored, value, first, second, enabled);
+  #[site(last)] let result = Shift roles(V,P)(ignored, shifted, third, enabled);
+  return (value = result);
+}
+
+entry fn Demo(inputs: Third::Inputs) { return Third::run(inputs); }

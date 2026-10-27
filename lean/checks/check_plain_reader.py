@@ -46,6 +46,7 @@ def main():
     refused("nested service", lambda: render.sort('!data.sequence<!data.variant<"' + service + '">>'))
     sum_type = variant.descriptor("example.Sum", [("left", []), ("right", [])])
     refused("multiple constructors", lambda: render.sort('!data.variant<"' + sum_type + '">'))
+    refused("retired variant namespace", lambda: render.sort('!local.variant<"' + descriptor + '">'))
     refused("trailing type suffix", lambda: render.sort(spelling + "garbage"))
     refused("unsupported capability", lambda: render.sort('!data.sequence<!runtime.capability<"private">>'))
     plain = ["zkc.native-proof-policy/0", "entry", "P", "V", "0", "", [], ["0"], [], "zkc.framed/0", ""]
@@ -59,7 +60,7 @@ def main():
     fake = [render.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, plain, "V",
             ['!runtime.capability<"transcript:invented">'], ["i1"], [], [], []]
     refused("plain transcript ABI", lambda: render.render_declaration(fake, "ForgedPlain"))
-    print("plain construction reader: 3 positive, 8 refusal controls passed")
+    print("plain construction reader: 3 positive, 9 refusal controls passed")
 
 
 if __name__ == "__main__":

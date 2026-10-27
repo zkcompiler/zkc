@@ -4,8 +4,8 @@ fixture = "lean/bridges/structured/fixtures/sumcheck-reduce.json"
 output = "lean/ZkcExamples/Structured/SumcheckVerifierBodies.lean"
 namespace = "ZkcExamples.Structured.SumcheckVerifierBodies"
 summary = "The typed `Reduce` body shared by the retained Sumcheck units"
-imports = ["Zkc.Source.Structured.ProtocolOperations", "ZkcExamples.Structured.SumcheckHelperBodies"]
-helper_modules = ["lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
+imports = ["Zkc.Source.Structured.ProtocolOperations", "ZkcExamples.Structured.SumcheckHelperBodies", "ZkcExamples.Structured.SumcheckPendingBodies"]
+helper_modules = ["lean/ZkcExamples/Structured/SumcheckPendingBodies.lean", "lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
                   "lean/ZkcExamples/Structured/MapFirstBodies.lean"]
 
 [bodies]

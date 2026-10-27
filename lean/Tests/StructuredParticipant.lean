@@ -197,7 +197,7 @@ private def projectionSnapshot : Snapshot :=
       .block [.instruction (.guard "P") [0] [] [] "checked_guard"] (.ret [])⟩]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 
 private def projectionSignature : ProtocolSignature :=
   ⟨"main", ["P"], [.boolean], [], [[0]], []⟩

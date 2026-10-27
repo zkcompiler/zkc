@@ -128,6 +128,6 @@ theorem RegionsDerivation.sound {meaning : RegionMeaning dialect I}
       funext values state
       exact (head values state).sound
 termination_by sizeOf bodies
-decreasing_by all_goals subst_vars; all_goals simp_all; all_goals omega
+decreasing_by all_goals subst_vars; all_goals simp_all
 
 end Zkc.Construction.Original

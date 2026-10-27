@@ -46,7 +46,7 @@ def finish (count : Nat) (raw : RawState F)
 algorithm. The multilayer caller's remaining continuation is outside it. -/
 def verifier (count : Nat) (ctx : ProtocolContext) (service : Nat)
     (raw : RawState F) (claim : F) : PIR.Process (participantInterface F G) Bool :=
-  (protocol0Role1Process ctx none none none none (some claim) (some count) (some service)).bind
+  (protocol0Role1Process ctx none none none none (some []) (some claim) (some count) (some service)).bind
     (finish count raw)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in

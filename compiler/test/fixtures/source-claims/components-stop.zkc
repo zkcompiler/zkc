@@ -1,0 +1,37 @@
+module claims;
+
+#[linear] struct Pending { pub value:bool }
+relation Truth(parameter reference:bool, statement value:bool) { return reference == value; }
+
+fn pending(value:bool)->Pending { return Pending{value:value}; }
+
+fn check(claim:Pending)->bool {
+  let payload=unpack(claim);
+  require payload.0; return true;
+}
+
+protocol Reduce roles(V)(reference:bool@V,claim:Pending@V)->(claim:Pending@V,ok:bool@V)
+  spec {
+    continuation step=Truth(in.reference,in.claim.value)
+      residual Truth(in.reference,out.claim.value) accept out.ok;
+  }
+{
+  return(claim=claim,ok=true);
+}
+
+protocol Run roles(V)(value:bool@V,n:index@V)->(accepted:bool@V)
+  spec { target result=Truth(in.value,in.value) accept out.accepted; }
+{
+  let initial@V=pending(value);
+  #[site(first)] let (next,firstOk)=Reduce roles(V)(value,initial);
+  #[site(second)] let (last,secondOk)=Reduce roles(V)(value,next);
+  let mut state=last;
+  for _ in 0..n roles(V) max 2 {
+    #[site(iteration)] let (successor,ok)=Reduce roles(V)(value,state);
+    require @V ok;
+    state=successor;
+  }
+  let finished@V=check(state);
+  return(accepted=firstOk && secondOk && finished);
+}
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

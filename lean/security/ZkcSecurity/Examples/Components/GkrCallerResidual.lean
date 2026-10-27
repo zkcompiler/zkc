@@ -47,7 +47,7 @@ def left_residual (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     Derivation absorb (boundedEscape charge)
       (fun _ output => GkrRoundsResidual.NoReturn (n := 1) service
         (GkrRoundsBinding.initial (raw rho) (reference rho) (wrongClaim rho)) output)
-      history (protocol0Role1Process (leftContext ctx) none none none none
+      history (protocol0Role1Process (leftContext ctx) none none none none (some [])
         (some (wrongClaim rho)) (some 1) (some service)) :=
   GkrRoundsResidual.verifier_residual service 1 (by decide) (leftContext ctx)
     (left_distinct ctx distinct) none none none none (raw rho) (reference rho)
@@ -62,8 +62,8 @@ def layer_conditional (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2
     (consumer : ContinuationContract (absorb := absorb) (charge := charge) ctx service Final)
     (history : List E) :
     Derivation absorb (boundedEscape charge) Final history
-      ((protocol1Role1Loop ctx (frame wrongOutputs rho (wrongClaim rho) service)).bind
-        (protocol1Role1After ctx (frame wrongOutputs rho (wrongClaim rho) service))) :=
+      ((protocol2Role1Loop ctx (frame wrongOutputs rho (wrongClaim rho) service)).bind
+        (protocol2Role1After ctx (frame wrongOutputs rho (wrongClaim rho) service))) :=
   ((left_residual ctx distinct rho service queries sampling history).bind
     (continuation ctx wrongOutputs rho (wrongClaim rho) service)
     (consumer rho)).transport (first_left_call ctx distinct wrongOutputs rho (wrongClaim rho) service)
@@ -91,7 +91,7 @@ def first_left_conditional (ctx : ProtocolContext) (distinct : RosterDistinct ct
     (consumer : ContinuationContract (absorb := absorb) (charge := charge) ctx service Final)
     (history : List E) :
     Derivation absorb (boundedEscape charge) Final history
-      (protocol1Role1Process (F := F) (G := G) ctx (some inputs) (some wrongOutputs)
+      (protocol2Role1Process (F := F) (G := G) ctx (some inputs) (some wrongOutputs)
         (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service)) := by
   apply Derivation.transport (caller_equation ctx distinct 121 31 service)
   refine .query output.queried (fun _ => False) ?_ ?_
@@ -114,7 +114,7 @@ def first_left_invocation_conditional
       (fun reached result => Final reached (callerMask ctx result)))
     (history : List E) :
     Derivation absorb (boundedEscape charge) Final history
-      (invokeProtocol (payload.plainProtocolTable F G) definition1.signature ctx (ctx.roles 1)
+      (invokeProtocol (payload.plainProtocolTable F G) definition2.signature ctx (ctx.roles 1)
         (callerInput wrongOutputs service)) :=
   ((first_left_conditional ctx distinct service _ output queries sampling consumer history).bind
     (fun result => .done (callerMask ctx result))
@@ -132,7 +132,7 @@ theorem first_left_invocation_doomed
       (fun reached result => Final reached (callerMask ctx result)))
     (history : List E) :
     (reduction absorb Final charge).doomed history
-      (invokeProtocol (payload.plainProtocolTable F G) definition1.signature ctx (ctx.roles 1)
+      (invokeProtocol (payload.plainProtocolTable F G) definition2.signature ctx (ctx.roles 1)
         (callerInput wrongOutputs service)) :=
   derived_doomed
     (first_left_invocation_conditional ctx distinct service Final output queries sampling consumer history)

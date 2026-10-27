@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.SampledAbortPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:05855e7869890c3ee385d1b9e161253355a6cbc2faf534b2fdd5b5eec24c4ddd"
-  candidate := "sha256:e342e3e1b2b1ad6639bcbea37fcd8bc7340258c3f55babf30538ca56fc585739"
+  source := "sha256:6737cab668c409b88da52bee9373e0a6e6009832ba1f4210657e7c4b27c790cd"
+  candidate := "sha256:c4334565a9aa2851b7b573271e26b4b2c3d583150f10115114f18f0a5132ba9d"
   policy := ⟨"s7h6578616d706c6512h53616d706c656441626f7274", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [3], [0], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.field "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -37,8 +37,8 @@ namespace ZkcExamples.Construction.Generated.SampledAbortPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:05855e7869890c3ee385d1b9e161253355a6cbc2faf534b2fdd5b5eec24c4ddd"
-  candidate := "sha256:e342e3e1b2b1ad6639bcbea37fcd8bc7340258c3f55babf30538ca56fc585739"
+  source := "sha256:6737cab668c409b88da52bee9373e0a6e6009832ba1f4210657e7c4b27c790cd"
+  candidate := "sha256:c4334565a9aa2851b7b573271e26b4b2c3d583150f10115114f18f0a5132ba9d"
   policy := ⟨"s7h6578616d706c6512h53616d706c656441626f7274", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [3], [0], [("label_6368616c6c656e6765", "label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]

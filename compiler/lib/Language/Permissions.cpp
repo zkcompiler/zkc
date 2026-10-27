@@ -429,10 +429,14 @@ std::optional<Type> Semantics::projectedType(const Declaration &decl, Type type,
 }
 std::optional<unsigned> Semantics::fieldIndex(const Declaration &decl,
                                               const Type &type, StringRef name,
-                                              Span span) {
+                                              Span span,
+                                              bool specificationRead) {
   auto *nominal = typeDeclaration(type);
   if (type.kind == Type::Kind::Associated ||
-      type.kind == Type::Kind::Parameter || (nominal && nominal->sealed)) {
+      type.kind == Type::Kind::Parameter ||
+      (nominal && nominal->sealed &&
+       !(specificationRead && type.kind == Type::Kind::Record &&
+         constructorAllowed(decl, type)))) {
     fail("source.private",
          "restricted values require their module's unpack or consume operation",
          span);

@@ -4,6 +4,7 @@ public import Zkc.Construction.DomainBinding
 public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.OriginalSumcheckChecks
+public import ZkcExamples.Structured.SumcheckPendingLaws
 
 @[expose] public section
 
@@ -47,6 +48,29 @@ theorem call_return (program : Structured.Program) (helper : Helper)
     encodedArguments encodedResults argumentsEncoding resultsEncoding
   rw [Domain.Binding.helperTable_ringModel]
   exact law
+
+theorem pending (program : Structured.Program)
+    (claims : SumcheckPendingLaws.Bodies program.payload.definitions) (scalar : F) :
+    Domain.callHelper (ringModel F G) program SumcheckPendingBodies.pendingHelper.name
+      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.field "bls12-381.fr" scalar)] =
+      .returned [.data (.vector "bls12-381.fr" []), .data (.field "bls12-381.fr" scalar)] := by
+  apply call_return program SumcheckPendingBodies.pendingHelper (.cons scalar .nil)
+    (.cons [] (.cons scalar .nil)) _ _ _ rfl rfl
+  rw [claims.pending.invoke program.payload.linked]
+  rfl
+
+theorem claim_identity (program : Structured.Program) (name : String)
+    (body : BodyIn program.payload.definitions (SumcheckPendingLaws.identityHelper name)
+      SumcheckPendingLaws.identityBody) (point : List F) (scalar : F) :
+    Domain.callHelper (ringModel F G) program name
+      [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr")]
+      [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] =
+      .returned [.data (.vector "bls12-381.fr" point), .data (.field "bls12-381.fr" scalar)] := by
+  apply call_return program (SumcheckPendingLaws.identityHelper name)
+    (.cons point (.cons scalar .nil)) (.cons point (.cons scalar .nil)) _ _ _ rfl rfl
+  rw [body.invoke program.payload.linked]
+  rfl
 
 variable (program : Structured.Program)
   (bodies : SumcheckUnitContracts.Bodies program.payload.definitions)

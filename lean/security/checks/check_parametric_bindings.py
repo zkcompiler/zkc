@@ -64,15 +64,16 @@ def main() -> None:
 
     for name in ("Mixed", "MixedInstallation", "Gates", "GatesInstallation", "GatesRoot"):
         compile_module(name)
-    for name in ("WrongModel", "WrongHelper", "WrongDomain"):
+    for name in ("WrongModel", "WrongHelper", "WrongDomain", "WrongRole"):
         compile_module(name, refuses=True)
 
     # Keep every generated certificate while changing the captured operational
     # prefix. The actual source lookup must refuse the altered equation.
     original = (generated / "ParametricClients/GatesRoot.lean").read_text()
     wrong = original.replace("ParametricClients.GatesRoot", "ParametricClients.WrongCapture")
-    assert "protocols.take 1" in wrong
-    wrong = wrong.replace("protocols.take 1", "protocols.take 0", 1)
+    if "protocols.take 2" not in wrong:
+        raise ValueError("the GKR root must capture its two preceding declarations")
+    wrong = wrong.replace("protocols.take 2", "protocols.take 0", 1)
     # Check the exact immutable-prefix evidence first. Comparing entire failed
     # open processes would unfold large unrelated continuations in the control.
     wrong = wrong.split("theorem source_capture", 1)[0] + "end\nend ParametricClients.WrongCapture\n"
@@ -144,7 +145,7 @@ end ParametricClients.Calls{count}
                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                 for path in sorted(generated.rglob("*.lean"))]
     (records / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"PASS fresh parametric bindings and four refusal controls: {records}")
+    print(f"PASS fresh parametric bindings and five refusal controls: {records}")
 
 
 if __name__ == "__main__":

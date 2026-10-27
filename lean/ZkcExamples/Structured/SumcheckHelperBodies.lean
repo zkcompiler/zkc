@@ -14,7 +14,7 @@ open ZkcExamples.Structured
 open PrimitiveLibrary MapPrefixBodies
 
 abbrev sumsHelper : Helper := ⟨"zkl_532a609cf36a935835501ca51308940142121e647ca360843a880bf231f04aa6", .local, [vector, .index, .index], [scalar, scalar]⟩
-abbrev checkTableHelper : Helper := ⟨"zkl_3b67bb5451d0deeed7ab9379c12e7c154a5c16946b7db9b65bc0d4be6b613f1d", .local, [vector, vector, scalar], [.boolean]⟩
+abbrev checkTableHelper : Helper := ⟨"zkl_967e003dd39c9e1730d1e9e543081e08e351228ff07f85fb14e1e88dbded8a99", .local, [vector, vector, scalar], [.boolean]⟩
 abbrev checkHelper : Helper := ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [vector, vector, scalar], [.boolean]⟩
 
 abbrev emptyHelper : Helper := ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", .local, [], [vector]⟩
@@ -40,40 +40,40 @@ def sumsBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.field "
   .ret (.cons (.there .here) (.cons .here .nil))
 
 def checkTableBody (bindings : MultilinearPrefixBodies.Bindings := MapPrefixBodies.bindings) : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
+  .letOp (.mark "s0") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
+  .letOp (.mark "s1") .nil .nil <|
   .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s3") .nil .nil <|
+  .letOp (.mark "s2") .nil .nil <|
   .letOp (.invoke tableHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
+  .letOp (.mark "s4") .nil .nil <|
   .letOp (.invoke prefixHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
-  .letOp (.mark "s8") .nil .nil <|
+  .letOp (.mark "s6") .nil .nil <|
   .letOp (.invoke (MultilinearPrefixBodies.valuesRealizationHelper bindings.values)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.mark "s9") .nil .nil <|
+  .letOp (.mark "s7") .nil .nil <|
   .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons .here .nil) .nil <|
-  .letOp (.mark "s11") .nil .nil <|
+  .letOp (.mark "s8") .nil .nil <|
   .letOp (.exec (.fieldEqual "bls12-381.fr")) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) .nil)) .nil <|
   .ret (.cons .here .nil)
 
 def checkTrueBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s7") .nil .nil <|
+  .letOp (.mark "s12") .nil .nil <|
   .letOp (.invoke checkTableHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
 def checkFalseBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s9") .nil .nil <|
+  .letOp (.mark "s14") .nil .nil <|
   .letOp (.booleanConstant false) .nil .nil <|
   .ret (.cons .here .nil)
 
 def checkBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
-  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
   .letOp (.mark "s3") .nil .nil <|
+  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
+  .letOp (.mark "s4") .nil .nil <|
+  .letOp (.exec (.indexConstant 1)) .nil .nil <|
+  .letOp (.mark "s5") .nil .nil <|
   .letOp (.invoke shapeHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
+  .letOp (.mark "s9") .nil .nil <|
   .letOp (.branch [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons checkTrueBody (.cons checkFalseBody .nil)) <|
   .ret (.cons .here .nil)
 

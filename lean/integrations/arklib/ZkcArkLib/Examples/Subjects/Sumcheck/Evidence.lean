@@ -183,7 +183,7 @@ theorem importedValidator_malformed (count : Nat) (admitted : count ≤ maximum)
     CommonAdapter.project = _
   rw [SumcheckSourceVerifier.verifier_optional]
   have bounded : count ≤ SumcheckSourceNormalForms.reduceMaximum := admitted
-  simp only [SumcheckVerifierPrelude.admittedRounds, bounded, ↓reduceIte]
+  simp only [SumcheckVerifierPrelude.admittedRounds, SumcheckVerifierPrelude.pendingRounds, bounded, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count ([], claim)]
   have collapse : ∀ process : PIR.Process (participantInterface F G) (List F × F),
       (((process.bind fun result => PIR.Process.done (some result.1, some result.2)).bind fun pc =>
@@ -399,7 +399,7 @@ noncomputable def soundness (endpoint : Semantics) (form : Form) (binding : Bind
     SoundnessEvidence (F := F) (G := G) artifacts endpoint form Contract.falseStatement (Regime.exact F) where
   compiled := compiled
   connection := sourceConnection
-  target := .retained Contract.retained
+  target := .retained Contract.retained ZkcExamples.Structured.SumcheckContractBindings.publicFormula
   claimPinned := Contract.falseStatement_pinned
   handle := 0
   relation := relation

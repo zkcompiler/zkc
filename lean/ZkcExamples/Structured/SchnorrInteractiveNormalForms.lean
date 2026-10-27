@@ -168,16 +168,9 @@ theorem relation_iff (base key : G) (witness : F) :
   all_goals change (decide (key = witness • base)) = true ↔ key = witness • base
   all_goals simp
 
-/-- The subject's only relation is this formula. -/
-def environment : RelationEnvironment imported F G where
-  meanings index args := by
-    have same : index = application.relation.index := by
-      apply Fin.ext
-      have bound : index.val < 1 := index.isLt
-      change index.val = 0
-      omega
-    subst index
-    exact Relation (args.get .here) (args.get (.there .here)) (args.get (.there (.there .here)))
+/-- Every retained relation uses its formula or captured body. -/
+def environment : RelationEnvironment imported F G :=
+  RegisteredRelations.formulaOnly (by decide +kernel)
 
 def target : InterpretedApplication owner clause.subject F G environment where
   binding := application

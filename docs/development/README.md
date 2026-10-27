@@ -62,8 +62,13 @@ just test-install
 just test-install "" shared
 ```
 
-The development profile adds debug information and assertions. Sanitizers cover
-project C++ code; the pinned LLVM/MLIR release libraries are not instrumented.
+The development profile adds debug information and assertions. Pass statistics
+use the linked LLVM/MLIR library's configuration: a small out-of-line adapter
+keeps its assertion-dependent statistic layout separate from project assertions.
+An observation reports `statistics_enabled: false` when that library disables
+statistics; project assertions remain enabled in the passes and observer.
+Sanitizers cover project C++ code; the pinned LLVM/MLIR release libraries are not
+instrumented.
 The mixed build disables manual allocator poisoning to avoid incompatible LLVM
 arena annotations. This does not validate upstream allocator internals.
 LeakSanitizer also requires an environment that permits thread inspection.

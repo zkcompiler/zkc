@@ -107,6 +107,26 @@ def prover_inputs(public):
     return {name: value for name, value in public.items() if name != 'outputs'}
 
 
+@pytest.mark.parametrize('gates', [[], [[('add', 0, 0, 0)]]])
+def test_gkr_accepts_empty_points(toolchain, journal, directory, gates):
+    public = statement([7], 0, 0, gates)
+    package, pin = build(toolchain, journal, directory, 'Interactive')
+    assert run(toolchain, journal, directory, package, pin,
+               prover_inputs(public), public, 'empty-points') is True
+
+
+@pytest.mark.parametrize('field', ['add', 'mul'])
+def test_gkr_checks_wiring_shape_without_layers(toolchain, journal, directory, field):
+    public = statement([7], 0, 0, [])
+    package, pin = build(toolchain, journal, directory, 'Proof')
+    malformed = {**public, field: []}
+    proof = prove(toolchain, journal, directory, package, pin, malformed)
+    refused = verify(toolchain, journal, package, pin, malformed, proof,
+                     name='malformed-wiring', refuses='artifact-stopped')
+    assert refused['execution']['stop']['role'] == 'role00000001'
+    assert refused['execution']['stop']['kind'] == 'Explicit("reject")'
+
+
 def test_reference_circuits():
     assert layer_values([3, 5], 1, TWO_LAYERS_GATES) == [[120, 30], [8, 15], [3, 5]]
     assert layer_values([2, 7, 1, 8], 2, PADDED_GATES)[1:3] == [[72, 58, 0, 8], [9, 8, 49, 0]]

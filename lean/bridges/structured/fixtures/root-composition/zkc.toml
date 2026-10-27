@@ -1,0 +1,11 @@
+format = "zkc.project/0"
+[modules]
+example = "four.zkc"
+[dependencies]
+algebra = { workspace = "core.algebra" }
+collections = { workspace = "core.collections" }
+polynomial = { workspace = "core.polynomial" }
+sumcheck = { workspace = "protocols.polynomial.sumcheck" }
+traversal = { workspace = "core.traversal" }
+[workspace]
+path = "../../../../../zkc.workspace.toml"

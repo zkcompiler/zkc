@@ -145,7 +145,7 @@ theorem source_complete (raw : List F) (count : Nat) (shape : HasShape raw count
       ⟨.returned (.cons (some true) .nil), ⟨.done (.cons none .nil), tape.drop count⟩, []⟩ := by
   obtain ⟨table, decoded⟩ := decode_of_shape raw count shape
   have rawLength : raw.length = 2 ^ count := by simpa only [Nat.mul_one] using shape.length
-  rw [SumcheckSourceVerifier.verifier_checked count admitted raw (some raw.sum) (some handle)
+  rw [SumcheckSourceVerifier.verifier_checked count admitted raw raw.sum (some handle)
       table decoded bound,
     SumcheckProverRoots.source_prover raw count shape bound admitted (some raw.sum) (some handle)]
   change ((PIR.repeatN count (SumcheckVerifierLaws.roundPlain SumcheckSourceVerifier.childContext
@@ -164,8 +164,10 @@ theorem source_complete (raw : List F) (count : Nat) (shape : HasShape raw count
 /-! ### Complete Reduction root -/
 
 /-- The Reduction root's child application context. -/
-abbrev reductionChild : ProtocolContext := ProtocolContext.enter {} "s3" [0, 1]
+abbrev reductionChild : ProtocolContext := ProtocolContext.enter {} "s5" [0, 1]
 
+-- Unfold the admitted entry's type index when matching its generated signature.
+set_option backward.isDefEq.respectTransparency false in
 /-- Honest-prover completeness of the complete imported Reduction pair. Both
 participants run the actual root with the same inputs and the true initial
 claim. The verifier returns the tape prefix it used as its point and the true
@@ -193,18 +195,18 @@ theorem reduction_complete (raw : List F) (count rounds : Nat) (shape : HasShape
         ([], (restrictPrefixValues raw []).sum)).bind
         (fun pc => .done (SumcheckReduceVerifier.reduceRootResults (some pc.1, some pc.2))) := by
     rw [SumcheckReduceVerifier.verifier_optional]
-    simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
-    change (PIR.repeatN rounds (SumcheckVerifierLaws.roundPlain reductionChild
-      (some handle)) (some ([] : List F), some (restrictPrefixValues raw ([] : List F)).sum)).bind _ = _
-    rw [SumcheckVerifierLaws.repeat_present reductionChild handle rounds
-      ([], (restrictPrefixValues raw []).sum), PIR.Process.bind_assoc]
+    simp only [SumcheckVerifierPrelude.admittedRounds, SumcheckVerifierPrelude.pendingRounds,
+      admitted, ↓reduceIte, restrictPrefixValues_nil, reductionChild]
+    rw [SumcheckVerifierLaws.repeat_present (ProtocolContext.enter {} "s5" [0, 1]) handle rounds
+      ([], raw.sum), PIR.Process.bind_assoc]
     rfl
   rw [verifier, SumcheckProverRoots.reduction_prover raw count rounds shape bound admitted enough
       (some raw.sum) (some handle)]
-  refine (coupled_rounds reductionChild handle raw count rawLength rounds [] tape
-    (by simpa using enough) supply _ _).trans ?_
-  simp only [List.nil_append]
-  rfl
+  have coupled := coupled_rounds (G := G) reductionChild handle raw count rawLength rounds [] tape
+    (by simpa using enough) supply
+    (fun pc => .done (SumcheckReduceVerifier.reduceRootResults (G := G) (some pc.1, some pc.2)))
+    (fun point => .done (SumcheckProverRoots.reductionResults (G := G) raw point))
+  simpa only [reductionChild, List.nil_append, PIR.Process.run] using coupled
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The honest run's verifier outputs satisfy the residual request that the

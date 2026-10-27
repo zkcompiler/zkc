@@ -14,12 +14,12 @@ private def inputClause : ContractClause :=
 private def original : Snapshot :=
   ⟨digest, "main", [],
     [⟨"Truth", .publicDef, "zkc.language.formula/0", "truth", "0", [.boolean], [.boolean],
-      ["statement"], some "identity"⟩], [],
+      ["statement"], some "identity", []⟩], [],
     [.function ⟨"identity", .math, .privateDef, [.boolean], [.boolean], none, [], none,
       .block [] (.ret [0])⟩,
      .function ⟨"main", .protocol, .publicDef, [.boolean, .service scalarServiceContract], [.boolean],
       some ⟨["P", "V"], [["P", "V"], ["V"]], [["V"]]⟩, [], some (.protocol ⟨"main", []⟩), .block [] (.ret [0])⟩],
-    [⟨"main", [inputClause, target]⟩], blsRows⟩
+    [⟨"main", [inputClause, target]⟩], blsRows, {}⟩
 private def importChecked (snapshot : Snapshot)
     (accepted : (Structured.check snapshot).isOk = true) : Imported snapshot := by
   cases found : Structured.check snapshot with

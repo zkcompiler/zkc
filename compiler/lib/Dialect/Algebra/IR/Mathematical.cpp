@@ -42,6 +42,16 @@ LogicalResult verifyGroup(Operation *op, bool equality, bool scalarAction) {
 }
 } // namespace
 
+LogicalResult zkc::algebra::MultilinearRestrictPrefixOp::verify() {
+  auto vector = cast<zkc::algebra::FieldVectorType>(getLhs().getType());
+  if (protocol::installedDomains().identitySort(vector.getDomain()) !=
+          "Field" ||
+      getRhs().getType() != vector || getResult().getType() != vector)
+    return refuse(*this,
+                  "expected two vectors and result in one admitted field");
+  return success();
+}
+
 LogicalResult zkc::algebra::FieldAddOp::verify() {
   return verifyField(*this, false);
 }
@@ -73,6 +83,15 @@ LogicalResult zkc::algebra::GroupEqualOp::verify() {
 } // namespace zkc
 
 namespace zkc::algebra {
+std::optional<MathematicalIdentity>
+MultilinearRestrictPrefixOp::getMathematicalIdentity() {
+  return MathematicalIdentity::MultilinearRestrictPrefix;
+}
+llvm::SmallVector<unsigned>
+MultilinearRestrictPrefixOp::getOperandDependencies(unsigned result) {
+  return result == 0 ? llvm::SmallVector<unsigned>{0, 1}
+                     : llvm::SmallVector<unsigned>{};
+}
 std::optional<MathematicalIdentity> GroupIdentityOp::getMathematicalIdentity() {
   return MathematicalIdentity::GroupIdentity;
 }

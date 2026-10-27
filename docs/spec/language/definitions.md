@@ -872,6 +872,16 @@ runtime type definitions. Associated domains
 such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
 domain does not introduce a nominal runtime wrapper.
 
+A linear record whose complete payload is shared native data has no synthetic
+native resource root. Source move checking, sealing and successful-path use
+obligations still apply. This permits a loop to consume one such value and yield
+a successor; payloads containing native resources retain custody and exact-root
+checks. In a specification, field selectors may observe a sealed record only
+inside the module tree authorized to unpack it. These reads consume nothing
+and do not grant executable projection or constructor access. The current
+surface uses existing relation applications and typed field selectors; it does
+not add specification functions over non-Copy values.
+
 Private fields, sealed declarations and opaque associated types do not grant
 external constructor authority. Concrete associated types derive usage from their
 representation; abstract types expose only their declared promises. `Field` and
@@ -1234,6 +1244,13 @@ earlier snapshot. The independent domain witness checks a supplied closed shape
 against the checked factory recipe and caller operand mapping, without trusting
 its cached identity. This is a checked-recipe witness, not a source-elaboration
 correctness theorem.
+
+The total Math intrinsic `intrinsic<F>("multilinear.restrict_prefix", values,
+point)` takes two `Vector<F>` values and returns `Vector<F>`. A declaration
+`math fn restrict_prefix<F:Field>(values:Vector<F>,point:Vector<F>)->Vector<F>
+= primitive("multilinear.restrict_prefix");` selects the same meaning.
+No static dimension or shape proof is required. Relations add their own
+[table-shape premises](../domains/polynomials.md#total-vector-prefix-restriction).
 
 ## Finite computations
 

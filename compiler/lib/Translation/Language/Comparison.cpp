@@ -19,6 +19,7 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
@@ -1509,10 +1510,22 @@ public:
                    "expected one unadorned protocol module");
     auto native = mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(
         module.getBody()->front());
-    if (!native || !attributes(*native, {"profile"}) ||
+    if (!native ||
+        !(native->hasAttr("source_declarations")
+              ? attributes(*native, {"profile", "source_declarations"})
+              : attributes(*native, {"profile"})) ||
         native.getProfile() != protocol_ir::Profile::Protocol ||
         !llvm::hasSingleElement(native.getBody()))
       return error("source.correspondence", "unexpected original module");
+    auto retained = inspectComponentDeclarations(project, limits);
+    if (!retained)
+      return retained.takeError();
+    auto declarations =
+        native->getAttrOfType<mlir::StringAttr>("source_declarations");
+    if ((*retained == "[[],[]]" && declarations) ||
+        (*retained != "[[],[]]" &&
+         (!declarations || declarations.getValue() != *retained)))
+      return error("source.correspondence", "source declarations differ");
     SmallVector<mlir::Operation *> functions;
     std::map<std::string, protocol_ir::ConstructionOp> constructions;
     std::map<std::string, relation::DeclareOp> relations;
@@ -1722,7 +1735,8 @@ public:
       auto declaration = found->second;
       relations.erase(found);
       SmallVector<StringRef> attributesExpected{
-          "sym_name", "kind", "key", "revision", "signature", "purposes"};
+          "sym_name",         "kind",      "key",     "revision",
+          "static_arguments", "signature", "purposes"};
       if (decl.relation->kind == RelationDefinition::Kind::Formula)
         attributesExpected.push_back("formula");
       if (!attributes(*declaration, attributesExpected) ||
@@ -1795,6 +1809,20 @@ public:
         revision = "0";
         break;
       }
+      json::Array staticArguments;
+      if (definition.kind == RelationDefinition::Kind::Opaque)
+        for (const auto &argument : decl.staticArguments) {
+          auto encoded = take(encodeStaticTerm(argument));
+          if (!encoded)
+            return takeFailure();
+          staticArguments.push_back(std::move(*encoded));
+        }
+      if (declaration.getStaticArguments() !=
+          protocol_ir::protocolOriginAttr(
+              declaration.getContext(),
+              json::Value(std::move(staticArguments))))
+        return error("source.correspondence",
+                     "relation static arguments differ");
       if (!string(*declaration, "kind", kind) ||
           !string(*declaration, "key", key) ||
           !string(*declaration, "revision", revision))

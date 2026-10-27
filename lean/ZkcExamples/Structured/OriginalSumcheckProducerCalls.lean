@@ -19,7 +19,7 @@ abbrev realizeProducerCall (payload : UnitPayload) (maximum : Nat) (context : Pr
     (outputs : List (List Nat))
     (inputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceInputs) :=
   (OriginalSumcheckLibrary.reduce payload maximum context (context.roles 0) []
-    (maskValues (context.roles 0) (context.mapScopes [[0], [0], [0], [1], [0, 1], [1]]) inputs)).bind
+    (maskValues (context.roles 0) (context.mapScopes [[0], [0], [0], [1], [1], [0, 1], [1]]) inputs)).bind
     (fun result => .done (maskValues (context.roles 0) (context.mapScopes outputs) result))
 
 theorem table_lift (payload : UnitPayload)

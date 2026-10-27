@@ -9,11 +9,59 @@
 using namespace llvm;
 namespace zkc::language::detail {
 
+bool Checker::pendingClaimRelations() {
+  struct Meaning {
+    DeclarationId relation;
+    std::vector<Type> arguments;
+    Span span;
+  };
+  std::map<std::string, Meaning> meanings;
+  for (const auto &owner : output.declarations) {
+    for (const auto &clause : owner.specifications) {
+      for (const auto *application :
+           {&clause.subject, clause.residual ? &*clause.residual : nullptr}) {
+        if (!application)
+          continue;
+        for (const auto &selector : application->operands) {
+          if (!types.charge(1, selector.span))
+            return false;
+          const auto &port =
+              (selector.output ? owner.outputs : owner.inputs)[selector.port];
+          if (port.type.kind != Type::Kind::Record)
+            continue;
+          auto record =
+              llvm::find_if(output.declarations, [&](const auto &candidate) {
+                return candidate.qualifiedName == port.type.domain &&
+                       candidate.kind == Declaration::Kind::Record;
+              });
+          if (record == output.declarations.end() ||
+              record->resource != Resource::Linear)
+            continue;
+          if (port.roles.size() != 1)
+            return types.fail("component-claim-role",
+                              "pending claims require one holder", port.span);
+          auto [previous, added] = meanings.emplace(
+              typeIdentity(port.type),
+              Meaning{application->relation, application->arguments,
+                      application->span});
+          if (!added &&
+              (previous->second.relation.index != application->relation.index ||
+               previous->second.arguments != application->arguments))
+            return types.fail("component-claim-relation",
+                              "one pending claim type has different relations",
+                              application->span, {previous->second.span});
+        }
+      }
+    }
+  }
+  return true;
+}
+
 bool Checker::relationIdentities() {
   using Identity = std::tuple<std::string, std::string, std::string>;
   std::map<Identity, const Declaration *> identities;
   for (const auto &decl : output.declarations) {
-    if (!decl.relation ||
+    if (!decl.parameters.empty() || !decl.relation ||
         decl.relation->kind != RelationDefinition::Kind::Opaque)
       continue;
     const auto &definition = *decl.relation;
@@ -60,10 +108,6 @@ bool Checker::relation(Declaration &decl) {
   if (definition.kind == K::Formula)
     return true;
   if (definition.kind == K::Opaque) {
-    if (!decl.parameters.empty())
-      return types.fail("source.relation",
-                        "opaque identities require a fixed logical signature",
-                        decl.span);
     if (definition.externalKind.empty() || definition.key.empty() ||
         definition.revision.empty() ||
         StringRef(definition.externalKind).starts_with("zkc."))
@@ -173,7 +217,7 @@ Checker::selector(const Declaration &decl, const SyntaxSelector &source) {
   if (!current)
     return {};
   for (const auto &name : source.path) {
-    auto index = types.fieldIndex(decl, *current, name, source.span);
+    auto index = types.fieldIndex(decl, *current, name, source.span, true);
     if (!index)
       return {};
     current =

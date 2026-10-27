@@ -100,6 +100,7 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "index.equal"] => return .indexEqual
   | [.str "index.less"] => return .indexLess
   | [.str "index.power_of_two"] => return .indexPowerOfTwo
+  | [.str "multilinear.restrict_prefix", d] => return .multilinearRestrictPrefix (← field d)
   | [.str "vector.length", d] => return .vectorLength (← field d)
   | [.str "field.constant", d, n] =>
       let text ← string n
@@ -262,9 +263,12 @@ def protocolContract (json : Json) : Except String ProtocolContract := do
 
 def relation (json : Json) : Except String Relation := do
   match ← array json with
-  | [.str "relation", name, visible, kind, key, revision, inputs, outputs, purposes, formula] =>
+  | [.str "relation", name, visible, kind, key, revision, staticArguments, inputs, outputs, purposes, formula] => do
+      let arguments ← (← OriginFormat.array staticArguments Limits.originBindings).mapM (OriginFormat.term Limits.nesting)
+      unless originTermsWithin Limits.originTerms arguments do throw "structured-relation-static-arguments"
       return ⟨← string name, ← visibility visible, ← string kind, ← string key,
-        ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose, ← optional (fun value => string value) formula⟩
+        ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose, ← optional (fun value => string value) formula,
+        arguments⟩
   | _ => throw "structured-relation"
 
 def binding (json : Json) : Except String Binding := do
@@ -333,15 +337,36 @@ def digestValid (source : String) : Bool :=
   source.length == 71 && source.toList.take 7 == "sha256:".toList &&
     (source.toList.drop 7).all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
 
+def sourceRecord (json : Json) : Except String SourceRecord := do
+  let [type, .str resource, .bool sealed, fields] ← array json | throw "component-declaration"
+  unless ["ordinary", "affine", "linear"].contains resource do throw "component-declaration"
+  let fields ← (← array fields).mapM fun field => do
+    let [name, type] ← array field | throw "component-declaration"
+    return (← string name, ← OriginFormat.term Limits.nesting type)
+  return ⟨← OriginFormat.term Limits.nesting type, resource, sealed, fields⟩
+
+def sourcePort (json : Json) : Except String SourcePort := do
+  let [name, type, roles, offset, count] ← array json | throw "component-declaration"
+  return ⟨← string name, ← OriginFormat.term Limits.nesting type,
+    ← strings roles 16, ← natural offset, ← natural count 512⟩
+
+def sourceDeclarations (json : Json) : Except String SourceDeclarations := do
+  let [records, protocols] ← array json | throw "component-declaration"
+  let protocols ← (← array protocols Limits.tableEntries).mapM fun protocol => do
+    let [name, inputs, outputs] ← array protocol | throw "component-declaration"
+    return SourceProtocol.mk (← string name) (← (← array inputs).mapM sourcePort)
+      (← (← array outputs).mapM sourcePort)
+  return ⟨← (← array records Limits.tableEntries).mapM sourceRecord, protocols⟩
+
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
-  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts, rows] =>
+  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts, rows, declarations] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
     return ⟨source, ← string entry, ← (← array domains Limits.tableEntries).mapM domain,
       ← (← array relations Limits.tableEntries).mapM relation, ← (← array bindings Limits.tableEntries).mapM binding,
       ← (← array definitions Limits.tableEntries).mapM definition,
-      ← (← array contracts Limits.tableEntries).mapM protocolContract, ← catalogue rows⟩
+      ← (← array contracts Limits.tableEntries).mapM protocolContract, ← catalogue rows, ← sourceDeclarations declarations⟩
   | _ => throw "structured-envelope"
 
 /-- Count arrays, including empty child lists, with the root at depth one. -/
@@ -372,7 +397,7 @@ def checkSourceDepth (json : Json) : Except String Unit := do
   match json with
   | .arr slots =>
     match slots.toList with
-    | [.str "zkc.structured-source/0", .str "original", _, _, _, _, _, .arr definitions, _, _] =>
+    | [.str "zkc.structured-source/0", .str "original", _, _, _, _, _, .arr definitions, _, _, _] =>
       checkLexicalDepth Limits.nesting (.arr (slots.set! 7 .null))
       definitions.toList.forM checkDefinitionDepth
     | _ => checkLexicalDepth Limits.nesting json

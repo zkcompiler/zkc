@@ -1,4 +1,6 @@
 module
+-- Load stored private equality proofs for the strict dependency traversal.
+import all Zkc.Source.Structured.RelationChecking
 import all Zkc.Source.Structured.FiniteDomains
 import all Zkc.Source.Structured.CollectionReferenceLaws
 import all Zkc.Source.Structured.CollectEvaluation

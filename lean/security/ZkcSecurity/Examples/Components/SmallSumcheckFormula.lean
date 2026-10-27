@@ -4,7 +4,7 @@ public import ZkcSecurity.Examples.Generated.SmallSumcheck
 public import ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 public import ZkcSecurity.Claims.Completeness
 public meta import ZkcSecurity.Tools.TargetEvaluation
-public import ZkcExamples.Structured.SumcheckContractBindings
+public import ZkcSecurity.Examples.Components.SmallSumcheckTarget
 
 @[expose] public section
 
@@ -21,18 +21,21 @@ open ZkcSecurity.Claims.HonestPair
 open ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 abbrev Scalar := ZMod blsModulus
 
+def formula : FormulaBinding imported subject.target.application.relation := by bind_contract
+
 theorem equation (raw : List Scalar) (claim : Scalar) (bounded : raw.length < indexLimit) :
-    subject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+    formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
       (.cons raw (.cons claim .nil)) = .done (.cons (decide (claim = raw.sum)) .nil) := by
   change invoke (closedMeaningsOn (ringModel Scalar Scalar) imported.program.payload.definitions)
-    ZkcExamples.Structured.SumcheckRelationContract.sumHelper (.cons raw (.cons claim .nil)) =
+    ZkcExamples.Structured.Generated.Mathematics.SmallSumcheck.public_sum.helper
+      (.cons raw (.cons claim .nil)) =
       (.done (.cons (decide (claim = raw.sum)) .nil) : Closed (Values (assignment Scalar Scalar) [.boolean]))
   rw [← closedMeanings_eq_closedMeaningsOn]
-  have same : imported.program = ZkcExamples.Structured.SumcheckSourceViews.imported.program :=
+  have same : imported.program =
+      ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.imported.program :=
     Zkc.Verification.Imported.unique _ _
   rw [same]
-  exact ZkcExamples.Structured.SumcheckContractBindings.public_formula_equation
-    (G := Scalar) raw claim bounded
+  exact ZkcSecurity.Examples.Components.SmallSumcheck.target_equation (G := Scalar) raw claim bounded
 
 
 theorem nonvacuous : Nonvacuous subject := by

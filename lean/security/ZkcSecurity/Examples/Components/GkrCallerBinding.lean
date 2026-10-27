@@ -29,13 +29,50 @@ theorem mask_cons {Value : Ty → Type} {ty : Ty} {types : List Ty}
       .cons (Participant.restrict ((scopes.headD []).contains self) head)
         (maskValues self scopes.tail tail) := rfl
 
-/-- Semantic fixture values enter through the generated frame constructor. -/
-def frame (outputs : List F) (rho claim : F) (service : Nat) :
-    protocol1Role1Frame (F := F) (G := G) :=
-  protocol1Role1MakeFrame (.cons (some claim) .nil)
-    (.cons (some [rho]) (.cons none .nil)) (.cons (some []) .nil)
+/-- The admitted input guards and every frame slot remain in the generated
+constructor. The optional output-loop result and helper results are explicit. -/
+def outputFrame (outputs : List F) (service : Nat)
+    (point : Values (Component (assignment F G)) outputSpec.state)
+    (claim : Values (Component (assignment F G)) [.field "bls12-381.fr"])
+    (layerClaim : Values (Component (assignment F G))
+      [.vector "bls12-381.fr", .field "bls12-381.fr"]) :
+    protocol2Role1Frame (F := F) (G := G) :=
+  protocol2Role1MakeFrame layerClaim claim point (.cons (some []) .nil)
+    false (.cons (some false) .nil) (.cons (some 2) .nil)
+    true (.cons (some true) .nil) (.cons (some 4) .nil)
+    (.cons (some 3) .nil) (.cons (some 2) .nil)
+    true (.cons (some true) .nil) (.cons (some 4) .nil)
+    (.cons (some 3) .nil) (.cons (some 2) .nil)
+    true (.cons (some true) .nil) true (.cons (some true) .nil)
+    false (.cons (some false) .nil) false (.cons (some false) .nil)
     (some inputs) (some outputs) (some stackedAdd) (some stackedMul)
     (some 2) (some 1) (some 1) (some service)
+
+/-- Semantic fixture values enter through the complete generated frame. -/
+def frame (outputs : List F) (rho claim : F) (service : Nat) :
+    protocol2Role1Frame (F := F) (G := G) :=
+  outputFrame outputs service (.cons (some [rho]) (.cons none .nil))
+    (.cons (some claim) .nil) (.cons (some [rho]) (.cons (some claim) .nil))
+
+/-- The complete generated frame after opening the layer claim and constructing
+its Pending input; both original inputs and produced components are retained. -/
+def leftFrame (rho claim : F) (service : Nat) :
+    protocol2Role1Callback1SetupFrame (F := F) (G := G) :=
+  protocol2Role1Callback1MakeSetupFrame
+    (.cons (some []) (.cons (some claim) .nil))
+    (.cons (some [rho]) (.cons (some claim) .nil))
+    (some 0) none (some [rho]) (some claim) (some inputs)
+    (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service)
+
+theorem left_setup (ctx : ProtocolContext) (rho claim : F) (service : Nat) :
+    protocol2Role1Callback1Setup (F := F) (G := G) ctx (some 0) none (some [rho]) (some claim)
+      (some inputs) (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) =
+      .done (leftFrame rho claim service) := by
+  unfold protocol2Role1Callback1Setup
+  rw [GkrRoundsBindingHelpers.owned_layer_open]
+  simp only [PIR.Process.bind, Values.get]
+  rw [GkrRoundsBindingHelpers.owned_pending]
+  rfl
 
 abbrev leftContext := firstLeftContext
 
@@ -48,7 +85,7 @@ theorem left_distinct (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2
 
 abbrev leftReturn := Values (Component (assignment F G)) GkrRoundsBinding.spec.state
 abbrev layerReturn := Values (Component (assignment F G)) layerSpec.state
-abbrev finalReturn := Values (Component (assignment F G)) definition1.outputs
+abbrev finalReturn := Values (Component (assignment F G)) definition2.outputs
 
 def leftMask (ctx : ProtocolContext) (result : leftReturn (F := F) (G := G)) :=
   maskValues ((leftContext ctx).roles 1)
@@ -59,50 +96,49 @@ layer and root suffix. It consumes the complete callee result and frame. -/
 def continuation (ctx : ProtocolContext) (outputs : List F) (rho claim : F) (service : Nat)
     (result : leftReturn (F := F) (G := G)) :
     PIR.Process (participantInterface F G) (finalReturn (F := F) (G := G)) :=
-  (firstLeftContinuation ctx (some 0) (some [rho]) none (some claim)
-    (some inputs) (some stackedAdd) (some stackedMul) (some 2) (some 1)
-    (some 1) (some service) (leftMask ctx result)).bind fun layer =>
-      (protocol1Role1Resume ctx (frame outputs rho claim service) 1 layer).bind
-        (protocol1Role1After ctx (frame outputs rho claim service))
+  (firstLeftContinuation ctx (leftFrame rho claim service) (leftMask ctx result)).bind fun layer =>
+      (protocol2Role1Resume ctx (frame outputs rho claim service) 1 layer).bind
+        (protocol2Role1After ctx (frame outputs rho claim service))
 
 theorem first_callback (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (outputs : List F) (rho claim : F) (service : Nat) :
-    protocol1Role1First (F := F) (G := G) ctx (frame outputs rho claim service) =
-      firstLeft ctx (some 0) (some [rho]) none (some claim) (some inputs)
+    protocol2Role1First (F := F) (G := G) ctx (frame outputs rho claim service) =
+      firstLeft ctx (some 0) none (some [rho]) (some claim) (some inputs)
         (some stackedAdd) (some stackedMul) (some 2) (some 1) (some 1) (some service) := by
   let input : Values (Component (assignment F G))
       (.index :: (layerSpec.state ++ layerSpec.captures)) :=
-    .cons (some 0) (.cons (some [rho]) (.cons none (.cons (some claim)
+    .cons (some 0) (.cons none (.cons (some [rho]) (.cons (some claim)
       (.cons (some inputs) (.cons (some stackedAdd) (.cons (some stackedMul)
         (.cons (some 2) (.cons (some 1) (.cons (some 1) (.cons (some service) .nil))))))))))
-  have inputEq : protocol1Role1FirstInput ctx (frame (G := G) outputs rho claim service) = input := by
-    simp [layerSpec, protocol1Role1FirstInput, frame, protocol1Role1MakeFrame, input,
+  have inputEq : protocol2Role1FirstInput ctx (frame (G := G) outputs rho claim service) = input := by
+    simp [layerSpec, protocol2Role1FirstInput, frame, outputFrame, protocol2Role1MakeFrame, input,
       mask_cons, maskValues, ProtocolContext.mapScopes, Participant.restrict,
       TypedABI.get_cons_here, TypedABI.get_cons_there, Values.append]
   change ((Runs.uniform (helpers payload) (payload.plainProtocolTable F G) ctx
-    (ctx.roles 1)).callback layerSpec protocol1Role1Callback1Body)
-    (protocol1Role1FirstInput ctx (frame outputs rho claim service)) = _
+    (ctx.roles 1)).callback layerSpec protocol2Role1Callback1Body)
+    (protocol2Role1FirstInput ctx (frame outputs rho claim service)) = _
   rw [inputEq]
-  exact congrFun (protocol1Role1Callback1_function ctx distinct) input
+  exact congrFun (protocol2Role1Callback1_function ctx distinct) input
 
 /-- Direct source call equation. No mathematical representation or assumed
 source equation occurs among its hypotheses. -/
 theorem first_left_call (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     (outputs : List F) (rho claim : F) (service : Nat) :
-    (protocol1Role1Loop (F := F) (G := G) ctx (frame outputs rho claim service)).bind
-      (protocol1Role1After ctx (frame outputs rho claim service)) =
-    (protocol0Role1Process (leftContext ctx) none none none none
+    (protocol2Role1Loop (F := F) (G := G) ctx (frame outputs rho claim service)).bind
+      (protocol2Role1After ctx (frame outputs rho claim service)) =
+    (protocol0Role1Process (leftContext ctx) none none none none (some [])
       (some claim) (some 1) (some service)).bind (continuation ctx outputs rho claim service) := by
-  rw [protocol1Role1_first ctx _ 1 rfl (by simp) (by decide), first_callback ctx distinct]
+  rw [protocol2Role1_first ctx _ 1 rfl (by simp) (by decide), first_callback ctx distinct]
   unfold firstLeft
-  rw [protocol1Role1Callback1_call]
-  change (((invokeProtocol _ definition0.signature (leftContext ctx)
-    ((leftContext ctx).roles 1) _).bind _).bind _).bind _ = _
+  rw [protocol2Role1Callback1_setup_split, left_setup]
+  simp only [PIR.Process.bind, PIR.Process.bind_assoc]
+  change (invokeProtocol _ definition0.signature (leftContext ctx)
+    ((leftContext ctx).roles 1) _).bind _ = _
   rw [protocol0Role1_invocation _ (left_distinct ctx distinct)]
   unfold protocol0Role1View
   have separate := (left_distinct ctx distinct) 0 (by decide) (by decide)
-  have inputScopes : definition0.inputScopes = [[0], [0], [0], [0], [1], [0, 1], [1]] := by kernel_rfl
-  simp only [inputScopes, protocol1Role1Callback1CallInput, mask_cons, maskValues, ProtocolContext.mapScopes,
+  have inputScopes : definition0.inputScopes = [[0], [0], [0], [0], [1], [1], [0, 1], [1]] := by kernel_rfl
+  simp only [inputScopes, protocol2Role1Callback1SetupInput, leftFrame, protocol2Role1Callback1MakeSetupFrame, mask_cons, maskValues, ProtocolContext.mapScopes,
     List.map_cons, List.map_nil, List.tail_cons, List.headD_cons, List.contains_cons, List.contains_nil, beq_self_eq_true,
     Bool.or_false, Bool.or_true, Participant.restrict, ite_true, TypedABI.get_cons_here, TypedABI.get_cons_there, PIR.Process.bind_assoc,
     PIR.Process.bind, ite_self]

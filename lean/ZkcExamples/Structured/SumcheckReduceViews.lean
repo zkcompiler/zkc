@@ -17,12 +17,10 @@ open Zkc.Source Zkc.Source.Structured SumcheckReduceBodies
 set_option smartUnfolding false
 
 structured_views SumcheckReduceData.snapshot
-  helpers [less, rows, shape, table, values,
-    sumAdd := (SumcheckRelationContract.addHelper, SumcheckRelationContract.addBody),
-    sumStep := (SumcheckRelationContract.foldSpec.stepHelper, SumcheckRelationContract.stepBody),
-    sumTotal := SumcheckRelationContract.total, tableSumFormula := SumcheckRelationContract.tableSum,
-    width, «variables», empty, halves, sums, interpolate, append,
-    interpolateRealization, mapCallback, map, first]
+  helpers [less, rows, shape, table, pending, width, values, «variables»,
+    tableShapeFormula, sumAdd, sumStep, sumTotal, pendingFormula, empty, openClaim,
+    halves, sums, interpolate, append, atPrefix, interpolateRealization,
+    mapCallback, map, first]
   protocols [reduce, run]
 
 end ZkcExamples.Structured.SumcheckReduceViews

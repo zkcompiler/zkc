@@ -65,7 +65,7 @@ def validatorInstructions (context : Zkc.Construction.Context) (occurrence : Occ
    ⟨.observe (context.suite) occurrence.high, [(offset + 7), (offset + 8), (offset + 10)], ([Zkc.Construction.ValueSort.transcript context.suite]), []⟩,
    ⟨.calculate (Zkc.Construction.Calculation.fieldAdd "bls12-381.fr"), ([(offset + 4), (offset + 8)]), ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr")]), []⟩,
    ⟨.calculate (Zkc.Construction.Calculation.fieldEqual "bls12-381.fr"), ([(offset + 2), (offset + 12)]), ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.boolean)]), []⟩,
-   ⟨.guard (qualifyProtocolSite occurrence.protocol.applicationPrefix "s24"), [(offset + 13)], ([]), []⟩,
+   ⟨.guard (qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.roundGuardSite0), [(offset + 13)], ([]), []⟩,
    ⟨.indicesEmpty, [], ([Zkc.Construction.ValueSort.indices]), []⟩,
    ⟨.indicesAppend, [(offset + 14), (offset + 0)], ([Zkc.Construction.ValueSort.indices]), []⟩,
    ⟨.challenge (context.suite) ("bls12-381.fr") occurrence.draw, [(offset + 11), (offset + 15)], ([Zkc.Construction.ValueSort.data (Zkc.Source.Structured.Ty.field "bls12-381.fr"),  Zkc.Construction.ValueSort.transcript context.suite]), []⟩,
@@ -90,17 +90,17 @@ def validatorRound (program : Structured.Program)
     (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = offset)
     (index handle : Nat) (point : List F) (scalar : F) (history : Domain.History (uniformCarriers F G))
     (routes : Routes routing occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       handle (occurrence.origins context index)) :
     Original.Simulation
       (VerifierReturns (F := F) (G := G) context (verifierOutputs context offset)
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩])
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩])
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold routing
         (OriginalSumcheckLibrary.round program.payload occurrence.protocol (occurrence.protocol.roles 1)
           (.cons (some index) ((SumcheckVerifierLaws.embedV (some point, some scalar)).append
             (.cons (some handle) .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       (validatorBody (ringModel F G) program context occurrence offset
         (captured ++ [.data (.index index), .data (.vector "bls12-381.fr" point),
           .data (.field "bls12-381.fr" scalar), .transcript context.suite history])) := by
@@ -109,8 +109,7 @@ def validatorRound (program : Structured.Program)
     (occurrence.origins routing.context index) point scalar _ routes]
   simp only [validatorBody, Domain.View.sequence]
   derive_artifact_binding
-    normalizing (
-      try simp (disch := omega) only [List.append_assoc, List.getElem?_append_right, size, Nat.add_sub_cancel_left]
+    normalizing (saturate_artifact (
       try normalize_artifact_operations
         [ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.append program helpers,
           origins.low, origins.high, origins.draw, origins.delivery]
@@ -119,7 +118,7 @@ def validatorRound (program : Structured.Program)
           Context.message, Origin.message, Context.query, Origin.query, Request.draw]
       try simp (disch := omega) only [PIR.Process.bind, List.append_assoc, List.cons_append, List.nil_append,
         List.getElem?_append_right, size,
-        Nat.add_sub_cancel_left, List.getElem?_cons_zero, List.getElem?_cons_succ])
+        Nat.add_sub_cancel_left, List.getElem?_cons_zero, List.getElem?_cons_succ]))
     solving (first
       | solve | simp [Zkc.Construction.ArtifactBinding.Captures, List.append_assoc]
       | (unfold VerifierReturns

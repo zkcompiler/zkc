@@ -43,15 +43,16 @@ elab "unfold_component_bodies " "[" bodies:ident,* "]" : tactic => withMainConte
     names := names ++ found
   let lemmas ← (names.push ``Domain.View.sequence).mapM fun name =>
     `(Parser.Tactic.simpLemma| $(mkIdent name):term)
-  evalTactic (← `(tactic| simp only [$lemmas,*]))
+  evalTactic (← `(tactic| simp (config := { failIfUnchanged := false }) only [$lemmas,*]))
 
 /-- Normalize public View equations while retaining helper and loop slots.
 Their source certificates are applied before any closed helper evaluation. -/
-macro "normalize_component_operations " "[" laws:term,* "]"
+macro "normalize_component_operations " "[" laws:Parser.Tactic.simpLemma,* "]"
     " unfolding " "[" definitions:term,* "]" : tactic => do
-  let lemmas ← (definitions.getElems ++ laws.getElems).mapM fun term =>
+  let definitions ← definitions.getElems.mapM fun term =>
     `(Parser.Tactic.simpLemma| $term:term)
-  `(tactic| simp only [$lemmas,*,
+  let lemmas := definitions ++ laws.getElems
+  `(tactic| simp (config := { failIfUnchanged := false }) only [↓Original.stopAtCall, $lemmas,*,
     Domain.View.participant, Domain.View.sequence, Domain.View.calculation,
     Domain.View.guard, Domain.View.append, Domain.View.empty,
     Domain.View.receive, Domain.View.send, Domain.View.indicesEmpty,

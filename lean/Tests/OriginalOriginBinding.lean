@@ -1,7 +1,7 @@
 module
 
-public import ZkcTools.StructuredSource.OriginalRoot
-public meta import ZkcTools.StructuredSource.OriginalRoot
+public import ZkcTools.StructuredSource.Methods.SumcheckRoot
+public meta import ZkcTools.StructuredSource.Methods.SumcheckRoot
 public import Tests.StructuredOriginFixture
 public meta import Tests.StructuredOriginFixture
 public import Zkc.Source.Structured.Occurrence
@@ -89,7 +89,7 @@ def refusal {α : Type} (label expected : String) (result : Except String α) : 
   | .ok _ => throw (IO.userError (label ++ ": accepted"))
 
 def run : IO Unit := do
-  let selected := fun origin => (LibraryAssociation.select [OriginalRoot.sumcheckLibrary] origin).map (·.maximum)
+  let selected := fun origin => (LibraryAssociation.select [Methods.SumcheckRoot.sumcheckLibrary] origin).map (·.maximum)
   expect "named typed static arguments" (selected (sumcheckOrigin "2") == .ok 2)
   expect "changed Max changes selection" (selected (sumcheckOrigin "7") == .ok 7)
   refusal "noncanonical Max" "library-origin-malformed" (selected (sumcheckOrigin "02"))
@@ -110,7 +110,7 @@ def run : IO Unit := do
   refusal "missing installed template" "library-template-missing"
     (LibraryAssociation.select installed (sumcheckOrigin))
   refusal "ambiguous installed template" "library-template-ambiguous"
-    (LibraryAssociation.select [OriginalRoot.sumcheckLibrary, OriginalRoot.sumcheckLibrary] (sumcheckOrigin))
+    (LibraryAssociation.select [Methods.SumcheckRoot.sumcheckLibrary, Methods.SumcheckRoot.sumcheckLibrary] (sumcheckOrigin))
   refusal "malformed template path" "library-origin-malformed"
     (selected ⟨"sumcheck:::Reduce", []⟩)
   let nominal := fun kind => LibraryAssociation.select [nominalInstallation]
@@ -233,22 +233,33 @@ def runGeneratorControls : IO Unit := do
     let program ← match check (generatorSnapshot maximum symbol) with
       | .ok program => pure program
       | .error reason => throw (IO.userError ("generator fixture: " ++ reason))
-    let generated ← match OriginalRoot.source program
+    let associations ← match LibraryAssociation.bottomUp program.snapshot
+        [Methods.SumcheckRoot.sumcheckLibrary] (program.payload.protocols.take 1) with
+      | .ok associations => pure associations
+      | .error reason => throw (IO.userError ("generator association: " ++ reason))
+    let [association] := associations | throw (IO.userError "generator association count")
+    expect "Max comes from typed origin metadata"
+      (toString association.selected.maximum == maximum)
+    match Methods.SumcheckRoot.source program
         { moduleName := "TestGenerated", sourceModule := "TestSource" } with
+    | .ok _ => throw (IO.userError "installed method accepted an uninstalled local law")
+    | .error reason =>
+      expect "uninstalled local law refuses" (reason == "original-root-local-law-uninstalled")
+    let generated ← match OriginalRoot.templateSource program {
+        moduleName := "TestGenerated", sourceModule := "TestSource"
+        programExpression := "TestSource.program", definitionIndex := 1, role := 1
+        signature := ⟨[], false, true, program.payload.definitions.map (·.helper), Bindings.keys program⟩ } with
       | .ok generated => pure generated
-      | .error reason => throw (IO.userError ("generator selection: " ++ reason))
+      | .error reason => throw (IO.userError ("generic template: " ++ reason))
     let contains := fun fragment => (generated.splitOn fragment).length > 1
-    expect "Max comes from the origin without any candidate repeat"
-      (contains ("def maximum0 : Nat := " ++ maximum))
-    expect "complete body equation remains mandatory"
-      (contains "sourceProtocol0.body = reduceBody maximum0 := by kernel_rfl")
-    expect "exact raw origin equation retained" (contains "theorem sourceProtocol0_origin")
+    expect "complete normalized body equation remains mandatory"
+      (contains "normalized := by kernel_rfl")
     expect "labelled call occurrence retained" (contains "label_63616c6c")
     expect "second occurrence of the same template retained" (contains "label_7365636f6e64")
-    expect "distinct call contexts retained" (contains "def callContext0" && contains "def callContext1")
-    expect "actual callee rebind retained" (contains symbol)
-    expect "Region derivation remains mandatory" (contains "derive_process")
-  IO.println "PASS original-root origin selection and unchanged kernel body/process obligations"
+    expect "actual callee signature retained" (contains symbol)
+    expect "immutable capture and source equation remain mandatory"
+      (contains "theorem capture_exact" && contains "theorem source_capture")
+  IO.println "PASS typed library selection, uninstalled-law refusal and generic source templates"
 
 #eval runBodyControls
 #eval runGeneratorControls

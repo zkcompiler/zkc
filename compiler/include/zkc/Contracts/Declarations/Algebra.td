@@ -430,3 +430,12 @@ def OpVectorFindLastF : ZKC_Root<"F", FieldDomain>;
 def OpVectorFindLast : ZKC_Operation<"vector.find_last", [OpVectorFindLastF],
     [ZKC_Apply<TypeVector, [OpVectorFindLastF]>, ZKC_Apply<TypeField, [OpVectorFindLastF]>],
     [ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityCommRing, [OpVectorFindLastF]>]>;
+
+// Total MSB-first list restriction; table shape belongs to the relation.
+def OpMultilinearRestrictPrefixF : ZKC_Root<"F", FieldDomain>;
+def OpMultilinearRestrictPrefix : ZKC_Operation<"multilinear.restrict_prefix",
+    [OpMultilinearRestrictPrefixF],
+    [ZKC_Apply<TypeVector, [OpMultilinearRestrictPrefixF]>,
+     ZKC_Apply<TypeVector, [OpMultilinearRestrictPrefixF]>],
+    [ZKC_Apply<TypeVector, [OpMultilinearRestrictPrefixF]>],
+    [ZKC_Holds<CapabilityField, [OpMultilinearRestrictPrefixF]>]>;

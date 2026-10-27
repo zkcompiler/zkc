@@ -25,14 +25,17 @@ int main() {
       unsigned(I::FieldAdd) == 0 && unsigned(I::FieldConstant) == 20 &&
       unsigned(I::PolynomialFixTable) == 35 &&
       unsigned(I::VectorLength) == 36 && unsigned(I::IndexPowerOfTwo) == 37 &&
-      unsigned(I::QuotientMultiply) == 42);
-  require(zkc::mathematicalIntrinsics().size() == 38 &&
+      unsigned(I::QuotientMultiply) == 42 &&
+      unsigned(I::MultilinearRestrictPrefix) == 43);
+  require(zkc::mathematicalIntrinsics().size() == 39 &&
               zkc::mathematicalIntrinsics()[0].name == "container.at" &&
               zkc::mathematicalIntrinsics()[30].name == "poly.fix_table" &&
               zkc::mathematicalIntrinsics()[31].name == "vector.length" &&
               zkc::mathematicalIntrinsics()[32].name == "index.power_of_two" &&
               zkc::mathematicalIntrinsics()[37].name ==
                   "quotient.value.multiply" &&
+              zkc::mathematicalIntrinsics()[38].name ==
+                  "multilinear.restrict_prefix" &&
               zkc::mathematicalIdentityName(I::PolynomialMultiply) ==
                   "PolynomialMultiply",
           "mathematical source catalog identities changed");
@@ -53,6 +56,7 @@ int main() {
   require(!mathematicalMeaning(I::IndexConstant) &&
               !mathematicalMeaning(I::BooleanAnd) &&
               !mathematicalMeaning(I::PolynomialMultiply) &&
+              !mathematicalMeaning(I::MultilinearRestrictPrefix) &&
               !mathematicalMeaning(static_cast<I>(100000)) &&
               !computationContract("index.add") &&
               !computationContract("unknown.field.add"),

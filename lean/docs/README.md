@@ -9,6 +9,8 @@ that all native behavior already has a Lean model.
 - [Typed model transition](semantic-model-transition.md): canonical execution, retained claims and explicit model-change boundaries.
 - [Checked components](spec/components.md): shared process bindings, reference mathematics,
   honest execution, adversarial reductions and canonical receipts.
+- [Component authoring](development/component-authoring.md): author-owned mathematics,
+  representation and connection laws, generated bindings and root proof obligations.
 - [PIR semantics](spec/semantics.md): typed mathematics, participants, effects,
   observations, termination and exact refinement.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,
@@ -23,6 +25,8 @@ that all native behavior already has a Lean model.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.
+- [Embedded-table Sumcheck](spec/sumcheck-embedding.md): explicit base-to-extension
+  maps, nominal challenges and the mixed KoalaBear/octic client.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
   ArkLib adapters with complete and residual bounds and honest completeness.
 - [Fiat–Shamir construction](spec/fiat-shamir.md): the transform of a validator,

@@ -12,8 +12,8 @@ public import Zkc.Protocols.Sumcheck.Multilinear.Reduction
 @[expose] public section
 
 /-! Checked declarations for the maintained public-table target and reduction.
-The residual is an explicit external request, not an authored continuation:
-the available prefix helpers are ordered Local operations.
+The Reduce declaration authors a mathematical Pending continuation. Its
+probabilistic discharge remains an explicit external experiment request.
 One original mathematical table is fixed before interaction and is reused by
 the source sum formula and by the request's returned-point predicate. -/
 namespace ZkcExamples.Structured.SumcheckContractBindings
@@ -40,17 +40,14 @@ def residualRootValue : BoundarySelector reductionRoot.protocol.signature scalar
 /-- The retained wrapper calls Reduce after constructing its P-owned Table.
 The occurrence proof traverses the actual body, with its exact ordered operands. -/
 def reductionCall : CheckedApplication reductionOwner
-    [vector, .index, .index, .index, vector, .index, scalar, .index,
+    [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
       .service "random.bls12-381.fr/0"] where
   caller := reductionRoot
   roles := [0, 1]
-  site := "s3"
-  operands := .cons .here (.cons (.there .here) (.cons (.there (.there .here))
-    (.cons (.there (.there (.there (.there (.there (.there .here))))))
-      (.cons (.there (.there (.there (.there (.there (.there (.there .here)))))))
-        (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))))
+  site := "s5"
+  operands := (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))) .nil)))))))
   occurrence := by
-    iterate 5 apply ApplicationOccurrence.next
+    iterate 7 apply ApplicationOccurrence.next
     exact ApplicationOccurrence.here _
   substitution := by unfold ValidSubstitution; decide +kernel
 
@@ -60,14 +57,17 @@ def publicClause : ContractClause := publicOwner.clause (publicOwner.namedClause
 def reductionClause : ContractClause := reductionOwner.clause (reductionOwner.namedClause "initial_sum")
 
 theorem public_inventory : publicOwner.contract.clauses = [inputShapeClause, publicClause] := rfl
-theorem reduction_inventory : reductionOwner.contract.clauses = [reductionClause] := rfl
+theorem reduction_inventory : reductionOwner.contract.clauses =
+    [reductionOwner.clause (reductionOwner.namedClause "shape"), reductionClause] := rfl
 theorem input_shape_kind : inputShapeClause.kind = .input := rfl
 theorem input_shape_has_no_decision : inputShapeClause.decision = none := rfl
 theorem input_shape_has_no_residual : inputShapeClause.residual = none := rfl
 theorem public_kind : publicClause.kind = .target := rfl
-theorem reduction_kind : reductionClause.kind = .input := rfl
+theorem reduction_kind : reductionClause.kind = .continuation := rfl
 theorem reduction_has_no_decision : reductionClause.decision = none := rfl
-theorem reduction_has_no_source_residual : reductionClause.residual = none := rfl
+/-- The current source explicitly carries the Pending relation to its outputs. -/
+theorem reduction_has_source_residual : ∃ residual, reductionClause.residual = some residual :=
+  ⟨_, rfl⟩
 
 def inputShapeApplication : ApplicationBinding publicOwner inputShapeClause.subject := by bind_contract
 
@@ -90,8 +90,10 @@ def reductionDimension : BoundarySelector reductionOwner.protocol.signature .ind
   reductionApplication.selectors.get (.there .here)
 def reductionWidth : BoundarySelector reductionOwner.protocol.signature .index :=
   reductionApplication.selectors.get (.there (.there .here))
-def reductionClaim : BoundarySelector reductionOwner.protocol.signature scalar :=
+def reductionInitialPoint : BoundarySelector reductionOwner.protocol.signature vector :=
   reductionApplication.selectors.get (.there (.there (.there .here)))
+def reductionClaim : BoundarySelector reductionOwner.protocol.signature scalar :=
+  reductionApplication.selectors.get (.there (.there (.there (.there .here))))
 def reductionPoint : BoundarySelector reductionOwner.protocol.signature vector :=
   ⟨.output (.there (.there (.there (.there .here)))), ⟨1, by decide⟩, by decide⟩
 def reductionValue : BoundarySelector reductionOwner.protocol.signature scalar :=
@@ -145,12 +147,14 @@ theorem reduction_application_read (raw : List F) (dimension : Nat) (claim : F)
     (context : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G)
       reductionOwner.protocol.inputs reductionOwner.protocol.outputs)
-    (present : reductionClaim.read context boundary = some claim) :
+    (present : reductionClaim.read context boundary = some claim)
+    (empty : reductionInitialPoint.read context boundary = some []) :
     reductionApplication.read context boundary (fixedReduction (invocation := invocation) raw dimension) =
-      some (.cons raw (.cons dimension (.cons 1 (.cons claim .nil)))) := by
+      some (.cons raw (.cons dimension (.cons 1 (.cons [] (.cons claim .nil))))) := by
   change RoleFamily.sequence (Value := assignment F G) (Values.cons (ty := vector) (some raw) (.cons (ty := Ty.index) (some dimension)
-    (.cons (ty := Ty.index) (some 1) (.cons (ty := scalar) (reductionClaim.read context boundary) .nil)))) = _
-  rw [present]
+    (.cons (ty := Ty.index) (some 1) (.cons (ty := vector) (reductionInitialPoint.read context boundary)
+      (.cons (ty := scalar) (reductionClaim.read context boundary) .nil))))) = _
+  rw [present, empty]
   rfl
 
 /-- Unlike the residual experiment parameter, the complete public target must
@@ -191,7 +195,7 @@ def PublicTruth (raw : List F) (claim : F) : Prop :=
 
 def ReductionTruth (raw : List F) (dimension : Nat) (claim : F) : Prop :=
   reductionFormula.invokeRelation (F := F) (G := G)
-    (.cons raw (.cons dimension (.cons 1 (.cons claim .nil)))) = .done (.cons true .nil)
+    (.cons raw (.cons dimension (.cons 1 (.cons [] (.cons claim .nil))))) = .done (.cons true .nil)
 
 set_option backward.isDefEq.respectTransparency false in
 theorem public_formula_equation (raw : List F) (claim : F) (bounded : raw.length < indexLimit) :
@@ -215,14 +219,14 @@ theorem public_formula_equation (raw : List F) (claim : F) (bounded : raw.length
   exact derived.sound_identity
 
 set_option maxRecDepth 20000 in
-theorem reduction_formula_equation (raw : List F) (dimension width : Nat) (claim : F)
-    (bounded : raw.length < indexLimit) :
+theorem reduction_formula_equation (raw : List F) (dimension width : Nat)
+    (point : List F) (claim : F) (bounded : (restrictPrefixValues raw point).length < indexLimit) :
     reductionFormula.invokeRelation (F := F) (G := G)
-      (.cons raw (.cons dimension (.cons width (.cons claim .nil)))) =
-      .done (.cons (decide (claim = raw.sum)) .nil) := by
-  exact tableSum_equation (F := F) (G := G) SumcheckReduceViews.unit.linked reductionBodies
-    (by exact_body SumcheckReduceViews.tableSumFormulaDefinition)
-    (by exact_body SumcheckReduceViews.valuesDefinition) raw dimension width claim bounded
+      (.cons raw (.cons dimension (.cons width (.cons point (.cons claim .nil))))) =
+      .done (.cons (decide (claim = (restrictPrefixValues raw point).sum)) .nil) := by
+  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked reductionBodies
+    (by exact_body SumcheckReduceViews.pendingFormulaDefinition)
+    (by exact_body SumcheckReduceViews.valuesDefinition) raw dimension width point claim bounded
 
 variable {sourceEnvironment : RelationEnvironment SumcheckSourceViews.imported F G}
 variable {reductionEnvironment : RelationEnvironment SumcheckReduceViews.imported F G}
@@ -244,8 +248,59 @@ def inputShape : InterpretedApplication publicOwner inputShapeClause.subject F G
 def reductionInput : InterpretedApplication reductionOwner reductionClause.subject F G reductionEnvironment where
   binding := reductionApplication
   interpretation := .formula reductionFormula rfl
-    (fun args => (args.get .here).length < indexLimit)
-    (fun args => args.get (.there (.there (.there .here))) = (args.get .here).sum) inferInstance
+    (fun args => (restrictPrefixValues (args.get .here)
+      (args.get (.there (.there (.there .here))))).length < indexLimit)
+    (fun args => args.get (.there (.there (.there (.there .here)))) =
+      (restrictPrefixValues (args.get .here) (args.get (.there (.there (.there .here))))).sum) inferInstance
+
+/-- Every current declaration is interpreted, including shape and residual. -/
+def reductionShapeClause : ContractClause := reductionOwner.clause (reductionOwner.namedClause "shape")
+def reductionShapeApplication : ApplicationBinding reductionOwner reductionShapeClause.subject := by bind_contract
+def reductionShapeFormula : FormulaBinding SumcheckReduceViews.imported reductionShapeApplication.relation := by bind_contract
+
+def reductionShape : InterpretedApplication reductionOwner reductionShapeClause.subject F G reductionEnvironment where
+  binding := reductionShapeApplication
+  interpretation := .formula reductionShapeFormula rfl (fun _ => True)
+    (fun args => args.get (.there (.there .here)) = 1 ∧
+      (args.get .here).length = 2 ^ (args.get (.there .here))) inferInstance
+
+def reductionResidual : RelationApplication := reductionClause.residual.get (by decide)
+def reductionResidualApplication : ApplicationBinding reductionOwner reductionResidual := by bind_contract
+def reductionResidualFormula : FormulaBinding SumcheckReduceViews.imported reductionResidualApplication.relation := by bind_contract
+
+def reductionOutput : InterpretedApplication reductionOwner reductionResidual F G reductionEnvironment where
+  binding := reductionResidualApplication
+  interpretation := .formula reductionResidualFormula rfl
+    (fun args => (restrictPrefixValues (args.get .here)
+      (args.get (.there (.there (.there .here))))).length < indexLimit)
+    (fun args => args.get (.there (.there (.there (.there .here)))) =
+      (restrictPrefixValues (args.get .here) (args.get (.there (.there (.there .here))))).sum) inferInstance
+
+theorem reduction_shape_formula_law :
+    (reductionShape (F := F) (G := G) (reductionEnvironment := reductionEnvironment)).interpretation.FormulaLaw := by
+  intro args _
+  cases args with | cons raw rest => ?_
+  cases rest with | cons dimension rest => ?_
+  cases rest with | cons width rest => ?_
+  cases rest
+  exact tableShape_equation (F := F) (G := G) SumcheckReduceViews.unit.linked
+    (by exact_body SumcheckReduceViews.tableShapeFormulaDefinition)
+    (by exact_body SumcheckReduceViews.widthDefinition)
+    (by exact_body SumcheckReduceViews.valuesDefinition)
+    (by exact_body SumcheckReduceViews.variablesDefinition) raw dimension width
+
+theorem reduction_residual_formula_law :
+    (reductionOutput (F := F) (G := G) (reductionEnvironment := reductionEnvironment)).interpretation.FormulaLaw := by
+  intro args bounded
+  cases args with | cons raw rest => ?_
+  cases rest with | cons dimension rest => ?_
+  cases rest with | cons width rest => ?_
+  cases rest with | cons point rest => ?_
+  cases rest with | cons claim rest => ?_
+  cases rest
+  exact pending_equation (F := F) (G := G) SumcheckReduceViews.unit.linked reductionBodies
+    (by exact_body SumcheckReduceViews.pendingFormulaDefinition)
+    (by exact_body SumcheckReduceViews.valuesDefinition) raw dimension width point claim bounded
 
 theorem public_formula_law : (publicTarget (F := F) (G := G) (sourceEnvironment := sourceEnvironment)).interpretation.FormulaLaw := by
   intro args bounded
@@ -267,9 +322,10 @@ theorem reduction_formula_law : (reductionInput (F := F) (G := G) (reductionEnvi
   cases args with | cons raw rest => ?_
   cases rest with | cons dimension rest => ?_
   cases rest with | cons width rest => ?_
+  cases rest with | cons point rest => ?_
   cases rest with | cons claim rest => ?_
   cases rest
-  exact reduction_formula_equation raw dimension width claim bounded
+  exact reduction_formula_equation raw dimension width point claim bounded
 
 set_option backward.isDefEq.respectTransparency false in
 theorem public_target_holds_iff (raw : List F) (claim : F) (context : ProtocolContext)
@@ -285,12 +341,13 @@ theorem public_target_holds_iff (raw : List F) (claim : F) (context : ProtocolCo
 set_option backward.isDefEq.respectTransparency false in
 theorem reduction_input_holds_iff (raw : List F) (dimension : Nat) (claim : F) (context : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G) reductionOwner.protocol.inputs reductionOwner.protocol.outputs)
-    (present : reductionClaim.read context boundary = some claim) :
+    (present : reductionClaim.read context boundary = some claim)
+    (empty : reductionInitialPoint.read context boundary = some []) :
     (reductionInput (reductionEnvironment := reductionEnvironment)).Holds context boundary (fixedReduction (invocation := invocation) raw dimension) ↔
       ReductionTruth (G := G) raw dimension claim := by
   change (∃ args, reductionApplication.read context boundary (fixedReduction (invocation := invocation) raw dimension) = some args ∧
     reductionFormula.invokeRelation args = .done (.cons true .nil)) ↔ _
-  rw [reduction_application_read raw dimension claim context boundary present]
+  rw [reduction_application_read raw dimension claim context boundary present empty]
   simp only [Option.some.injEq, exists_eq_left']
   rfl
 
@@ -309,7 +366,7 @@ theorem reduction_truth_iff (raw : List F) (dimension : Nat) (claim : F)
     (bounded : raw.length < indexLimit) :
     ReductionTruth (G := G) raw dimension claim ↔ claim = raw.sum := by
   unfold ReductionTruth
-  rw [reduction_formula_equation raw dimension 1 claim bounded]
+  rw [reduction_formula_equation raw dimension 1 [] claim bounded, restrictPrefixValues_nil]
   constructor
   · intro equality
     have output := congrArg (fun values => values.get .here) (PIR.Process.done.inj equality)
@@ -338,12 +395,12 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 fixed table remains a logical parameter and is not inferred from P's operand. -/
 theorem reduction_claim_at_call
     (environment : Nat → Environment (Component (assignment F G))
-      [vector, .index, .index, .index, vector, .index, scalar, .index,
+      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"])
     (returned : Nat → Values (Component (assignment F G)) reductionOwner.protocol.outputs) :
-    reductionClaim.read (ProtocolContext.enter {} "s3" [0, 1])
+    reductionClaim.read (ProtocolContext.enter {} "s5" [0, 1])
       (reductionCall.boundary {} environment returned) =
-      environment 1 (.there (.there (.there (.there (.there (.there .here)))))) := by
+      environment 1 (.there .here) := by
   exact reductionCall.input_substitution {} environment returned reductionClaim _ rfl
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -352,10 +409,10 @@ The result uses the callee's actual V tuple at the entered role, with no new
 table and no equality between P and V components. -/
 theorem residual_at_call (remaining count : Nat) (table : Table F (remaining + count))
     (environment : Nat → Environment (Component (assignment F G))
-      [vector, .index, .index, .index, vector, .index, scalar, .index,
+      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"])
     (returned : Nat → Values (Component (assignment F G)) reductionOwner.protocol.outputs) :
-    ResidualAt remaining count table (ProtocolContext.enter {} "s3" [0, 1])
+    ResidualAt remaining count table (ProtocolContext.enter {} "s5" [0, 1])
       (reductionCall.boundary {} environment returned) ↔
       ∃ point claim, (returned 1).get (.there (.there (.there (.there .here)))) = some point ∧
         (returned 1).get (.there (.there (.there (.there (.there .here))))) = some claim ∧

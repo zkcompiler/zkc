@@ -1056,7 +1056,7 @@ width.
   that validator is the plain verifier
   (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`): the generated
   normal form of the admitted root at the verifier
-  (`ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant`), each
+  (`ZkcExamples.Structured.GkrRootNormalForms.verifier_participant`), each
   loop read as the fold of its callback's generated normal form, the layer
   Sumcheck applications as their generated normal forms, and every helper call
   read with the admitted unit's own helper equations
@@ -1083,6 +1083,58 @@ tables of the width, the stacked tables have `2 ^ selector` blocks of
 to that layer's wiring, and the width and the number of layers are at most the
 Entry's maxima, four each. Acceptance ignores unread proof messages; no
 adaptive statement choice and no executable meaning of this Entry is covered.
+
+## Canonical nominal GKR pair
+
+`ZkcSecurity.Realizations.Gkr.Generated.Subject` fixes the actual authored pair,
+the retained `circuit_outputs` target, the validator's acceptance output and
+typed public binding. `Canonical.holds_all` identifies the target with independent
+circuit evaluation for every typed public statement. Circuit admission is a
+separate predicate: a shape-valid false output remains admissible, while malformed
+wiring makes the target false and is rejected by the actual validator.
+
+`OriginalCertificates.producer` and `.validator` relate the full constructed
+participants to the original occurrence processes for arbitrary typed inputs and
+replies. They preserve stops, all physical returns, the ordered history and the
+complete nested occurrence coordinates. Both property consumers use the same
+validator certificate installed by `CanonicalInstallation`; neither assumes a
+whole-program equality, helper success or an honest adversarial statement.
+
+The concrete GKR physical installation is owned by
+`lean/security/checks/generate_gkr_connections.py`. Recursive source/artifact
+descriptors supply frame lengths, read/yield maps and generated callback paths;
+the family template applies the existing explicit callback and loop laws.
+The generic `Original.Simulation.participant` checks the full input ABI, live
+captures and returned values around the generated body certificate. Every
+emitted proof is kernel checked. The same installation also certifies a formal
+artifact permutation with an additional root allocation and shifted callback
+frames (`TestsSecurity.GkrStructuralGeneration`); that control does not change
+the canonical native subject or assert a new native byte association. Exact
+regeneration ownership and the before/after authored inventory are recorded in
+`lean/security/checks/gkr-connection-{ownership,inventory}.json`.
+
+- `Generated.Completeness.compiled_ideal_complete` proves perfect completeness
+  in the registered honest-pair model. The actual source producer computes its
+  messages, and `CanonicalReadback.actual` proves their agreement with the actual
+  verifier under independent input admission and the true target. The generic
+  pair transport retains their shared post-state. An admitted true instance
+  discharges nonvacuity.
+- `Generated.Soundness.scalar_meaning` proves the canonical adaptive soundness
+  meaning over the selected BLS12-381 scalar field. An adversary may choose its
+  typed public statement after oracle queries. For at most `Q` queries the bound
+  is `4 * (Q + 40) / |F|`; no well-formedness premise restricts that adversary.
+- `Generated.Soundness.charged_meaning` uses the same validator with price
+  `4 / |F|` at each of its four selected challenge sites and total validator
+  cost `160 / |F|`. The at-most-40-draw proof follows the actual loops and source
+  maxima of four for width and layer count. This uniform price is deliberately
+  coarser than the phase-dependent prices of the earlier fixed-statement route.
+
+The request selects the target, model, budget and stage before evidence is
+constructed. The generated receipt clients apply these meanings through the
+common claim checker; zero-error and wrong-target mutations are refused.
+These are compiled-ideal results. They do not establish a concrete hash
+realization, native GKR execution correspondence or general knowledge extraction.
+The canonical pair clients are separate from the maintained manifest reports.
 
 ## Construction obligations
 

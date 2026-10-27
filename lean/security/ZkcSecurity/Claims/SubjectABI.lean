@@ -147,13 +147,9 @@ theorem holds_iff_of_read (subject : Subject model art) (statement : art.Stateme
     (arguments : Values model.Value subject.target.application.relation.declaration.inputs)
     (read : subject.target.application.read {} (subject.boundary statement)
       (subject.assignments statement witness) = some arguments) :
-    subject.Holds statement witness ↔ subject.target.formula.invokeRelationOn model arguments =
-      .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil) := by
-  constructor
-  · rintro ⟨actual, actualRead, truth⟩
-    cases Option.some.inj (read.symm.trans actualRead)
-    exact truth
-  · exact fun truth => ⟨arguments, read, truth⟩
+    subject.Holds statement witness ↔ subject.meaning.HoldsOn subject.target.booleanOutput arguments :=
+  (subject.target.clause subject.meaning).holds_iff_of_read {} (subject.boundary statement)
+    (subject.assignments statement witness) arguments read
 
 /-- Mathematical characterization is supplied after the exact retained read.
 Witness-independent public targets can eliminate their existential uniformly. -/

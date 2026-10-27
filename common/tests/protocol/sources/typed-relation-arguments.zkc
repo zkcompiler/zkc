@@ -1,0 +1,31 @@
+module sample;
+domain A = field("bls12-381.fr");
+domain B = field("koala-bear");
+
+relation Layer<F:Field, N:nat, Unused:nat>(statement point:F, witness value:F)
+  = opaque("vendor.layer/0", "layer", "0");
+relation Alias<F:Field, N:nat, Unused:nat>(statement renamed:F, witness other:F)
+  = opaque("vendor.layer/0", "layer", "0");
+relation Equal(statement left:bool, witness right:bool) { return left == right; }
+
+protocol Run roles(P,V)(a:A@(P,V), b:B@(P,V), flag:bool@(P,V))
+  ->(accepted:bool@V)
+spec {
+  input first = Layer<A,2,7>(in.a@V, in.a@P);
+  input other_domain = Layer<B,2,7>(in.b@V, in.b@P);
+  input other_natural = Layer<A,3,7>(in.a@V, in.a@P);
+  input other_unused = Layer<A,2,8>(in.a@V, in.a@P);
+  input alias = Alias<A,2,7>(in.a@V, in.a@P);
+  target equality = Equal(in.flag@V, in.flag@P) accept out.accepted;
+} {
+  let accepted@V = true;
+  return (accepted=accepted);
+}
+
+proof Demo = Run {
+  prover P;
+  verifier V;
+  public { a, b, flag };
+  accept accepted;
+  construction authored;
+}

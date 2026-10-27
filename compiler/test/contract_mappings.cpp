@@ -34,6 +34,7 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
+    {"multilinear.restrict_prefix", "algebra.exec.multilinear_restrict_prefix"},
     {"quotient.prepare_matrix", "runtime.prepare_quotient_matrix"},
     {"quotient.matvec", "runtime.quotient_matvec"},
     {"quotient.add", "poly.exec.quotient_add"},

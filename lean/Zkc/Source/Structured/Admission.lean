@@ -353,7 +353,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   match descriptor with
   | .exec .. => kind == .local
   | .booleanConstant _ => true
-  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEmbed .. | .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
@@ -439,6 +439,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .indexEqual => return .indexEqual
   | .indexLess => return .indexLess
   | .indexPowerOfTwo => return .indexPowerOfTwo
+  | .multilinearRestrictPrefix d => checkField d; return .multilinearRestrictPrefix d
   | .vectorLength d => checkField d; return .vectorLength d
   | .fieldConstant d text =>
     checkField d

@@ -53,8 +53,8 @@ theorem root_projection (values : List F) (claim : F) (rounds : Nat)
     rootProjection values claim rounds history = rootProcess values claim rounds history := by
   unfold rootProjection
   rw [← artifact_identity, participant_eq]
-  simp only [view, body, bodyStep0, bodyStep1, bodyStep2]
-  normalize_artifact_operations [empty_helper (F := F) (G := G), context_suite]
+  simp only [view, body, bodyStep0, bodyStep1, bodyStep2, bodyStep3, bodyStep4]
+  normalize_artifact_operations [pending_helper (F := F) (G := G), openClaim_helper (F := F) (G := G), atPrefix_helper (F := F) (G := G), context_suite]
     unfolding [inputSorts, outputSorts, returned, frame, PIR.Process.interpret,
       Original.forgetCheckpoints, Structured.Ty.isService, Bool.not_false, Bool.not_true]
   by_cases bounded : rounds ≤ 2
@@ -64,7 +64,8 @@ theorem root_projection (values : List F) (claim : F) (rounds : Nat)
   have loopEq := loop_projection (.data (.vector "bls12-381.fr" values))
     (.data (.field "bls12-381.fr" claim)) (.data (.index rounds))
     (.transcript SumcheckProof.context.suite history) (.data (.vector "bls12-381.fr" []))
-    (List.range rounds) [] claim history
+    (.data (.field "bls12-381.fr" claim)) (.data (.vector "bls12-381.fr" []))
+    (.data (.field "bls12-381.fr" claim)) (List.range rounds) [] claim history
   simp only [round_results, carried, context_suite] at loopEq
   rw [loopEq]
   simp only [PIR.Process.bind_assoc, PIR.Process.bind]
@@ -72,7 +73,7 @@ theorem root_projection (values : List F) (claim : F) (rounds : Nat)
   funext state
   cases state with
   | mk point scalar suffix =>
-      normalize_artifact_operations [check_helper (F := F) (G := G), context_suite]
+      normalize_artifact_operations [atPrefix_helper (F := F) (G := G), check_helper (F := F) (G := G), context_suite]
         unfolding [RoundState.values, carried, terminal, PIR.Process.interpret,
           Original.forgetCheckpoints, List.append_assoc]
       split_ifs <;> normalize_artifact_operations [context_suite]

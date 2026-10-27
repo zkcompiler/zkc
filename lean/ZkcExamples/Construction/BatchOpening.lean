@@ -28,7 +28,7 @@ abbrev producer := artifacts.producer
 abbrev validator := artifacts.validator
 
 structured_views snapshot
-  helpers [checkOpening, batchStep, batchValues, formula, realization, checkBatch]
+  helpers [checkOpening, batchStep, batchValues, formula, mathematicalAdmission, checkBatch]
   protocols [run]
 
 def context : Context := Context.plain snapshot.entry ["role00000000", "role00000001"] 0 1

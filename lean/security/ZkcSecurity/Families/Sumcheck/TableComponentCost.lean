@@ -38,29 +38,4 @@ theorem root_cost (layout : Layout program) (queries : QueryInterface program ab
     (absorb.walk (absorb.lossCharge charge)) (fun _ => bot_le)
     (terminal layout) (second := 0) (by intro _ _; trivial) _ rounds
 
-/-- The full sequential budget counts both children at the request's prices,
-without an independence or challenge-sharing assumption. -/
-theorem twoRoots_cost (layout : Layout program)
-    (charge : List E → E → ENNReal)
-    (leftCount rightCount : Nat) (leftContext rightContext : Context)
-    (left : State (0 + leftCount)) (right : State (0 + rightCount))
-    (leftBudget rightBudget : ENNReal)
-    (first : ∀ history, Typed.ChargedCostBound absorb charge
-      (root layout leftCount leftContext left) history leftBudget)
-    (second : ∀ history, Typed.ChargedCostBound absorb charge
-      (root layout rightCount rightContext right) history rightBudget)
-    (history : List E) :
-    Typed.ChargedCostBound absorb charge
-      (twoRoots layout leftCount rightCount leftContext rightContext left right) history
-      (leftBudget + rightBudget) := by
-  apply (Typed.chargedCostBound_iff absorb charge _ _ _).mpr
-  apply Walk.Bound.bind (absorb.walk (absorb.lossCharge charge)) (fun _ => bot_le)
-  · intro leftAccepted reached
-    have bound := (Typed.chargedCostBound_iff absorb charge _ _ _).mp (second reached)
-    simpa only [add_zero] using Walk.Bound.bind
-      (absorb.walk (absorb.lossCharge charge)) (fun _ => bot_le)
-      (fun rightAccepted => PIR.Process.done (leftAccepted && rightAccepted))
-      (second := 0) (by intro _ _; trivial) _ bound
-  · exact (Typed.chargedCostBound_iff absorb charge _ _ _).mp (first history)
-
 end ZkcSecurity.Families.Sumcheck.TableComponent

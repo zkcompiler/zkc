@@ -8,6 +8,7 @@ public import ZkcSecurity.Families.Sumcheck.TableComponentHistory
 /-! The nominal table-loop state and evaluator, independent of source adapters. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Families.Sumcheck.TableComponent.Execution
+open ZkcSecurity.FiatShamir
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 variable {F G : Type} [Field F] [DecidableEq F]
@@ -24,7 +25,7 @@ def advance (field : String) (sites : Nominal.Schedule field) (index : Nat)
       (sites.query index) (sites.delivery index) state.history low high challenge⟩
 
 noncomputable def run (field : String) (sites : Nominal.Schedule field) :
-    List Nat → State F G → PIR.Process (Nominal.signature F field) (State F G)
+    List Nat → State F G → PIR.Process (NominalField.signature F field) (State F G)
   | [], state => .done state
   | index :: rest, state =>
       .call (.receive (sites.low index)) fun low =>

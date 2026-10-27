@@ -8,8 +8,8 @@ namespace ZkcExamples.Construction.Generated.SchnorrAndAliasedPair.Producer
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:b83161f00837afaec7d892931354e12c103ab5e13b6a08a718d8fa263463a0bc"
-  candidate := "sha256:c5a47b865cde2eb2fa35a3f5c5a355783dea195caa6acbcaa2bd4aeb267cef64"
+  source := "sha256:4308ba28c8a1b020aae7cd04dc91c4ee4ce34a35b6a9b01279210be9b1918172"
+  candidate := "sha256:4a5e00853dd96ea7d1bc4fd9a145c1f3a338e8dbe51fb789b40f9e4de9e53bb4"
   policy := ⟨"s7h6578616d706c6510h416c6961736564416e64", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_0"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.field "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"]
@@ -50,8 +50,8 @@ namespace ZkcExamples.Construction.Generated.SchnorrAndAliasedPair.Validator
 open Zkc.Construction
 
 def participant : Participant where
-  source := "sha256:b83161f00837afaec7d892931354e12c103ab5e13b6a08a718d8fa263463a0bc"
-  candidate := "sha256:c5a47b865cde2eb2fa35a3f5c5a355783dea195caa6acbcaa2bd4aeb267cef64"
+  source := "sha256:4308ba28c8a1b020aae7cd04dc91c4ee4ce34a35b6a9b01279210be9b1918172"
+  candidate := "sha256:4a5e00853dd96ea7d1bc4fd9a145c1f3a338e8dbe51fb789b40f9e4de9e53bb4"
   policy := ⟨"s7h6578616d706c6510h416c6961736564416e64", "role00000000", "role00000001", 0, "merlin3.bls12-381.fr64be/0", [7], [0, 1, 2, 3], [("apply_2_s2_label_6368616c6c656e6765", "apply_2_s2_label_64656c6976657279_0")], "zkc.framed/0", ""⟩
   symbol := "_math_1"
   inputs := [.data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"]

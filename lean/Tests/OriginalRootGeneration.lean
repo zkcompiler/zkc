@@ -1,6 +1,6 @@
 module
 
-public import ZkcTools.StructuredSource.OriginalRoot
+public import ZkcTools.StructuredSource.Methods.SumcheckRoot
 
 @[expose] public section
 
@@ -9,7 +9,7 @@ supplies admitted programs; this module owns no root or family selections. -/
 set_option autoImplicit false
 namespace Tests.OriginalRootGeneration
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm
-open ZkcTools.StructuredSource.OriginalRoot
+open ZkcTools.StructuredSource.OriginalRoot ZkcTools.StructuredSource.Methods.SumcheckRoot
 
 def refusal {α : Type} (label expected : String) (result : Except String α) : IO Unit :=
   match result with

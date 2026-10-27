@@ -30,7 +30,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.Schnorr.compiled
   connection := ZkcSecurity.Examples.Subjects.Schnorr.sourceConnection
-  target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained
+  target := .retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []
   sitesUnique := .nil
@@ -39,7 +39,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
     | .idealMeaning => PUnit.unit
     | .executableBytes => ZkcSecurity.Examples.Subjects.Schnorr.lowering
   extractors := ZkcSecurity.Examples.Subjects.Schnorr.Registration.extractionProfile.registry
-    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained) rfl
+    (.retained ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained ZkcExamples.Construction.SchnorrProofBinding.formulaBinding) rfl
 
 def model : Model := ⟨.fixed, .symbolic "Q", "Q", "", .constant 0, none⟩
 
@@ -151,7 +151,7 @@ def otherArtifactsSubject : Subject F G ZkcSecurity.Examples.Subjects.ChaumPeder
   stageMatched := rfl
   compiled := ZkcSecurity.Examples.Subjects.ChaumPedersen.compiled
   connection := ZkcSecurity.Examples.Subjects.ChaumPedersen.sourceConnection
-  target := .retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.retained
+  target := .retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.retained ZkcSecurity.Examples.Subjects.ChaumPedersen.Contract.formulaBinding
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []
   sitesUnique := .nil
@@ -333,7 +333,7 @@ noncomputable def adaptiveResolved (binding : ApplicationBinding) (symbol : bind
   elaborated := by
     have relationChecked : checkDefaultRelation
         ZkcSecurity.Examples.Subjects.Schnorr.compiled.imported.program.payload.definitions
-        ZkcSecurity.Examples.Subjects.Schnorr.Contract.retained.formula.definition.helper =
+        ZkcExamples.Construction.SchnorrProofBinding.formulaBinding.definition.helper =
           .ok () := by decide +kernel
     simp [soundnessProperty, soundnessArguments, adaptiveWire, idealData, wire, Subject.check,
       subject, Subject.targetReference, Subject.acceptance, Wire.TargetRef.matches, checkCapabilities,

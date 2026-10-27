@@ -48,35 +48,33 @@ def publicContract : ContractInterpretation publicOwner F G sourceEnvironment wh
     omega
 
 def reductionContract : ContractInterpretation reductionOwner F G reductionEnvironment where
-  subjects index := by
-    have same : index = ⟨0, by decide +kernel⟩ := by
-      apply Fin.ext
-      have bound := index.isLt
-      change index.val < 1 at bound
-      change index.val = 0
+  subjects
+    | ⟨0, _⟩ => reductionShape
+    | ⟨1, _⟩ => reductionInput
+    | ⟨index + 2, outside⟩ => by
+      change index + 2 < 2 at outside
       omega
-    subst index
-    exact reductionInput
   residuals index residual selected := by
-    have same : index = ⟨0, by decide +kernel⟩ := by
-      apply Fin.ext
-      have bound := index.isLt
-      change index.val < 1 at bound
-      change index.val = 0
-      omega
-    subst index
-    change none = some residual at selected
-    cases selected
+    rcases index with ⟨index, bound⟩
+    change index < 2 at bound
+    rcases index with _ | index
+    · change none = some residual at selected
+      cases selected
+    rcases index with _ | index
+    · change some reductionResidual = some residual at selected
+      cases Option.some.inj selected
+      exact reductionOutput
+    omega
   decisions index selector selected := by
-    have same : index = ⟨0, by decide +kernel⟩ := by
-      apply Fin.ext
-      have bound := index.isLt
-      change index.val < 1 at bound
-      change index.val = 0
-      omega
-    subst index
-    change none = some selector at selected
-    cases selected
+    rcases index with ⟨index, bound⟩
+    change index < 2 at bound
+    rcases index with _ | index
+    · change none = some selector at selected
+      cases selected
+    rcases index with _ | index
+    · change none = some selector at selected
+      cases selected
+    omega
 
 theorem public_formulas (index : Fin publicOwner.contract.clauses.length) :
     ((publicContract (F := F) (G := G) (sourceEnvironment := sourceEnvironment)).subjects index).interpretation.FormulaLaw := by
@@ -90,18 +88,31 @@ theorem public_formulas (index : Fin publicOwner.contract.clauses.length) :
 
 theorem reduction_formulas (index : Fin reductionOwner.contract.clauses.length) :
     ((reductionContract (F := F) (G := G) (reductionEnvironment := reductionEnvironment)).subjects index).interpretation.FormulaLaw := by
-  have same : index = ⟨0, by decide +kernel⟩ := by
-    apply Fin.ext
-    have bound := index.isLt
-    change index.val < 1 at bound
-    change index.val = 0
-    omega
-  subst index
-  exact reduction_formula_law
+  rcases index with ⟨index, bound⟩
+  change index < 2 at bound
+  rcases index with _ | index
+  · exact reduction_shape_formula_law
+  rcases index with _ | index
+  · exact reduction_formula_law
+  omega
+
+theorem reduction_residual_formulas (index : Fin reductionOwner.contract.clauses.length)
+    (residual : RelationApplication) (selected : (reductionOwner.clause index).residual = some residual) :
+    ((reductionContract (F := F) (G := G) (reductionEnvironment := reductionEnvironment)).residuals index residual selected).interpretation.FormulaLaw := by
+  rcases index with ⟨index, bound⟩
+  change index < 2 at bound
+  rcases index with _ | index
+  · change none = some residual at selected
+    cases selected
+  rcases index with _ | index
+  · change some reductionResidual = some residual at selected
+    cases Option.some.inj selected
+    exact reduction_residual_formula_law
+  omega
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- The residual wrapper authors no extra clauses. Its mathematical request is
-external and must not be represented as an invented source continuation. -/
+/-- The wrapper authors no extra clauses. Its external experiment request
+is distinct from the child's authored Pending continuation. -/
 theorem reduction_root_inventory : reductionRoot.contract.clauses = [] := rfl
 
 end ZkcExamples.Structured.SumcheckContractInterpretations

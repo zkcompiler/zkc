@@ -28,11 +28,10 @@ abbrev closedMeaningsOn (model : DomainModel) (definitions : List CheckedDefinit
 variable {snapshot : Snapshot} {imported : Imported snapshot}
 variable {application : RelationApplication} {relation : RelationBinding snapshot application}
 
-/-- One explicit interpretation environment per imported subject or experiment,
+/-- One admitted registry environment per imported subject or experiment,
 over carriers. -/
-structure RelationEnvironmentOn {snapshot : Snapshot} (imported : Imported snapshot) (carriers : Carriers) where
-  meanings : (index : Fin snapshot.relations.length) →
-    Values carriers.Value (snapshot.relations.get index).inputs → Prop
+abbrev RelationEnvironmentOn {snapshot : Snapshot} (_imported : Imported snapshot) (carriers : Carriers) :=
+  RegisteredRelations (carriers.Value) snapshot.relations
 
 /-- Invocation at the relation ABI uses the exact retained formula symbol and
 the admitted helper table over the model. -/
@@ -42,7 +41,7 @@ def FormulaBinding.invokeRelationOn (model : DomainModel) (binding : FormulaBind
   invoke (closedMeaningsOn model imported.program.payload.definitions)
     ⟨binding.original.name, .math, relation.declaration.inputs, relation.declaration.outputs⟩ arguments
 
-/-- Opaque meanings are explicit interpretation choices; formula meanings are
+/-- Opaque meanings are fixed by the admitted registry; formula meanings are
 fixed by actual invocation over the model. -/
 inductive RelationInterpretationOn (imported : Imported snapshot)
     {application : RelationApplication} (relation : RelationBinding snapshot application)
@@ -52,7 +51,7 @@ inductive RelationInterpretationOn (imported : Imported snapshot)
       (domain predicate : Values model.Value relation.declaration.inputs → Prop)
       (decidablePredicate : DecidablePred predicate)
   | opaque (noFormula : relation.declaration.formula = none)
-      (opaqueKind : relation.declaration.kind ≠ "zkc.language.formula/0")
+      (opaqueKind : relation.declaration.isOpaque = true)
 
 namespace RelationInterpretationOn
 variable {model : DomainModel} {environment : RelationEnvironmentOn imported model.toCarriers}
@@ -156,7 +155,7 @@ variable {F G : Type}
 /-- A uniform environment as one over the uniform carriers. -/
 def RelationEnvironment.toOn (environment : RelationEnvironment imported F G) :
     RelationEnvironmentOn imported (uniformCarriers F G) :=
-  ⟨environment.meanings⟩
+  environment
 
 variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 

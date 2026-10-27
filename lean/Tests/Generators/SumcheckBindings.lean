@@ -21,7 +21,7 @@ def sumcheckCallbacksSource (program : Program) (output : Output) : Except Strin
   let appendHelper := ZkcExamples.Structured.SumcheckHelperBodies.appendHelper
   let appendBody := ZkcExamples.Structured.SumcheckHelperBodies.appendBody
   let some appendIndex := program.payload.definitions.findIdx? (fun definition =>
-    definition.helper == appendHelper && helperRegionText definition.body == helperRegionText appendBody)
+    definition.helper == appendHelper && ZkcTools.StructuredSource.Bindings.helperRegionText definition.body == ZkcTools.StructuredSource.Bindings.helperRegionText appendBody)
     | throw "callback-append-template-body"
   let laws : List LawKey := [⟨appendHelper, .returns [], []⟩]
   let mut text := ""
@@ -31,7 +31,7 @@ def sumcheckCallbacksSource (program : Program) (output : Output) : Except Strin
     "theorem append_plain (point : List F) (value : F) :\n" ++
     "    invoke (helpers (F := F) (G := G) payload).closed SumcheckHelperBodies.appendHelper (.cons point (.cons value .nil)) =\n" ++
     "      .done (.cons (point ++ [value]) .nil) := by\n" ++
-    "  rw [SumcheckVerifierHelpers.closed_invoke_plain payload]\n" ++
+    "  rw [Zkc.Source.Structured.closed_invoke_plain payload]\n" ++
     "  rw [append_association.invoke payload.linked, SumcheckHelperLaws.append_body]\n  rfl\n\n" ++
     "def callbackKeys : List LawKey := " ++ listText (laws.map lawText) ++ "\n\n" ++
     "def callbackResults : LawResults (ringModel F G) callbackKeys where\n" ++
@@ -77,7 +77,7 @@ def sumcheckSource (program : Program) (output : Output) : Except String String 
   text := text ++ "theorem helper_bodies : SumcheckVerifierHelpers.Bodies payload.definitions where\n"
   for template in verifierTemplates do
     let some index := program.payload.definitions.findIdx? (fun definition =>
-        definition.helper == template.helper && helperRegionText definition.body == helperRegionText template.body)
+        definition.helper == template.helper && ZkcTools.StructuredSource.Bindings.helperRegionText definition.body == ZkcTools.StructuredSource.Bindings.helperRegionText template.body)
       | throw ("endpoint-template-helper-body:" ++ template.field)
     text := text ++ "  " ++ template.field ++ " := ⟨payload.definitions.get ⟨" ++ toString index ++
       ", by decide +kernel⟩, List.get_mem _ _, rfl, by kernel_rfl⟩\n"

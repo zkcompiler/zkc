@@ -370,10 +370,13 @@ public:
                  profile.getValue() == zkc::protocol_ir::Profile::Physical) {}
   Expected<program::Participants> run(bool allowComputations = false) {
     if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
-        !attributes(root, {"profile"}) || !profile ||
+        !attributes(root, {"profile", "source_declarations"}) || !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
+    if (root->hasAttr("source_declarations") &&
+        !root->getAttrOfType<StringAttr>("source_declarations"))
+      return error("component-declaration");
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;

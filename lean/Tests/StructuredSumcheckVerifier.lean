@@ -14,11 +14,11 @@ open ZkcExamples.Structured
 open Tests.StructuredSumcheckVerifierSupport
 open Tests.StructuredSumcheckVerifierExecution
 
-/-- No P operand, active service, or claim is needed for zero Reduction rounds. -/
+/-- Zero Reduction rounds preserve a present claim without P operands or service. -/
 theorem zero_reduction_without_service :
     SumcheckReduceViews.program.participant (ZMod 5) (ZMod 5) 1
-      (SumcheckReduceVerifier.reduceRootInputs none none none (some 0) none) =
-        .done (.cons none (.cons none (.cons (some []) (.cons none .nil)))) := by
+      (SumcheckReduceVerifier.reduceRootInputs none none (some 0) (some 0) none) =
+        .done (.cons none (.cons none (.cons (some []) (.cons (some 0) .nil)))) := by
   rw [SumcheckReduceVerifier.verifier_optional]
   rfl
 
@@ -31,7 +31,7 @@ theorem missing_count_before_other_missing_inputs :
 
 theorem source_count_three_refused :
     SumcheckSourceViews.program.participant (ZMod 5) (ZMod 5) 1
-      (SumcheckSourceVerifier.sourceRootInputs none none (some 3) none) =
+      (SumcheckSourceVerifier.sourceRootInputs none (some 0) (some 3) none) =
         .halt .refused := by
   rw [SumcheckSourceVerifier.verifier_optional]
   rfl
@@ -162,7 +162,7 @@ theorem public_request_selects_named_target :
       publicOwner.namedClause "public_sum" = ⟨1, by decide⟩ := ⟨rfl, rfl⟩
 
 theorem child_request_uses_actual_formula :
-    childFormula.original.name = SumcheckRelationContract.tableSumHelper.name ∧
+    childFormula.original.name = SumcheckRelationContract.pendingHelper.name ∧
       childFormula.original.kind = .math := ⟨rfl, rfl⟩
 
 /-- An input formula has no acceptance selector, even on a returned boundary. -/

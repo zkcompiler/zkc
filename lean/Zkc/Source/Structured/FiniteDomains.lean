@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Source.Structured.Algebra
 public import Zkc.Source.Finite
 
@@ -106,3 +109,9 @@ theorem DomainBody.admit_stop {carriers : Carriers} {inputs items output : List 
   simp only [DomainBody.admit, stopped, Finite.continueWith]
 
 end Zkc.Source.Structured
+
+-- Own the unfolding equations here. Otherwise clients materialize the same
+-- public equation name with different private proof helpers, preventing an
+-- unambiguous stored-proof audit of their joint import closure.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getEqnsFor? ``Zkc.Source.Structured.zipDomainRows

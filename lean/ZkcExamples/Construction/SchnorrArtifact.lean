@@ -24,9 +24,10 @@ set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
+open ZkcExamples.Construction.SchnorrProofBodies in
 structured_views ZkcExamples.Construction.SchnorrProofData.snapshot
-  helpers [formula := ZkcExamples.Construction.SchnorrProofBodies.formula]
-  protocols [proof := ZkcExamples.Construction.SchnorrProofBodies.proof]
+  helpers [formula]
+  protocols [proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.SchnorrProofData.snapshot = .ok program := kernel_admission
 

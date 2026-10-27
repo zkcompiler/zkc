@@ -1,6 +1,6 @@
 module
 
-public import ZkcTools.StructuredSource.Discovery.Search
+public import ZkcTools.StructuredSource.Discovery.Json
 
 @[expose] public section
 
@@ -8,6 +8,14 @@ public import ZkcTools.StructuredSource.Discovery.Search
 
 namespace Tests.ReferenceDiscovery
 open Zkc.Source Zkc.Source.Structured ZkcTools.StructuredSource.Discovery
+
+/-- Discovery preserves both table and prefix operands and the restricted table result. -/
+example : opJson (.multilinearRestrictPrefix "bls12-381.fr") = Lean.Json.mkObj [
+    ("constructor", Lean.toJson "multilinearRestrictPrefix"),
+    ("arguments", Lean.toJson ([Lean.Json.arr #[.str "vector", .str "bls12-381.fr"],
+      Lean.Json.arr #[.str "vector", .str "bls12-381.fr"]] : List Lean.Json)),
+    ("results", Lean.toJson ([Lean.Json.arr #[.str "vector", .str "bls12-381.fr"]] : List Lean.Json)),
+    ("helpers", Lean.toJson ([] : List String)), ("parameters", .null)] := rfl
 
 private def raw : RawRegion Ty Op :=
   .letOp (.fieldAdd "bls12-381.fr") [0, 1] [.field "bls12-381.fr"] .nil

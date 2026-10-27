@@ -7,8 +7,8 @@ public import ZkcSecurity.Claims.Model
 
 @[expose] public section
 
-/-! Request-owned dependent verifier subjects. Formula truth reads the actual
-nominal values through the retained selectors and the model's helper table. -/
+/-! Request-owned dependent verifier subjects. Relation truth reads the actual
+nominal values through retained selectors and the request's fixed registry. -/
 set_option autoImplicit false
 namespace ZkcSecurity.Claims.Domain
 open Zkc.Claims Zkc.Source Zkc.Source.Structured Zkc.Construction
@@ -45,6 +45,8 @@ structure ChargeSite {art : ZkcSecurity.Endpoint.Domain.Artifacts}
 structure Subject (model : DomainModel) (art : ZkcSecurity.Endpoint.Domain.Artifacts) : Type 1 where
   compiled : ZkcSecurity.Endpoint.Domain.Compiled art
   target : RetainedTarget compiled.imported art.participant.policy art.publics
+  relations : RegisteredRelations model.Value art.original.relations
+  meaning : RelationMeaning compiled.imported target.application.relation model.Value relations.registry
   originalExport : String
   participantExport : String
   sites : List (ChargeSite compiled) := []
@@ -69,39 +71,27 @@ def check (request : Wire.Request) : Except ResolutionError Unit := do
   if !request.target.matches subject.targetReference then throw .targetMismatch
   if request.accept != subject.acceptance then throw .acceptanceMismatch
 
-abbrev Witness := (type : Ty) →
-  BoundarySelector subject.target.owner.protocol.signature type → Option (model.Value type)
+abbrev Witness := subject.target.WitnessOn model.Value
 
-def published (_subject : Subject model art) (statement : art.Statement model) (type : Ty) (index : Nat) : Option (model.Value type) := do
-  let position ← art.participant.policy.publicInputs.idxOf? index
-  let values ← Zkc.Construction.Domain.encodeValues statement
-  let value ← values[position]?
-  Zkc.Construction.Domain.Value.decode type value
-
-def publishedInputs (statement : art.Statement model) :
-    (types : List Ty) → Nat → Values (Component model.Value) types
-  | [], _ => .nil
-  | type :: rest, index => .cons (subject.published statement type index)
-      (publishedInputs statement rest (index + 1))
-
-def boundary (statement : art.Statement model) :
-    BoundaryValuation model.Value subject.target.owner.protocol.inputs subject.target.owner.protocol.outputs where
-  inputs self := if subject.target.owner.protocol.roles[self]? = some art.participant.policy.validator
-    then subject.publishedInputs statement _ 0 else Values.absent model.Value _
-  outputs _ := Values.absent model.Value _
-
-def assignments (statement : art.Statement model) (witness : subject.Witness) :
-    LogicalAssignments model.Value subject.target.owner ⟨subject.target.owner.protocolIndex.val, []⟩ where
-  parameters type selector := match selector.port with
-    | .input ref => subject.published statement type ref.index
-    | .output _ => none
-  witnesses := witness
+def published := subject.target.published (carriers := model.toCarriers)
+def publishedInputs := subject.target.publishedInputs (carriers := model.toCarriers)
+def boundary := subject.target.boundary (carriers := model.toCarriers)
+def assignments := subject.target.assignments (carriers := model.toCarriers)
 
 def Holds (statement : art.Statement model) (witness : subject.Witness) : Prop :=
-  ∃ arguments, subject.target.application.read {} (subject.boundary statement)
-      (subject.assignments statement witness) = some arguments ∧
-    subject.target.formula.invokeRelationOn model arguments =
-      .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil)
+  subject.target.HoldsOn subject.meaning statement witness
+
+/-- Exact preservation of the previous formula receipt meaning, including the
+same ordered publication/witness read and every stopped invocation. -/
+theorem holds_formula_iff (binding : FormulaBinding subject.compiled.imported subject.target.application.relation)
+    (statement : art.Statement model) (witness : subject.Witness) :
+    subject.Holds statement witness ↔
+      ∃ arguments, subject.target.application.read {} (subject.boundary statement)
+        (subject.assignments statement witness) = some arguments ∧
+        binding.invokeRelationOn model arguments =
+          .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil) :=
+  exists_congr fun arguments => and_congr Iff.rfl
+    (subject.meaning.formula_exact binding subject.target.booleanOutput arguments)
 
 def FalseStatement (statement : art.Statement model) : Prop := ¬ ∃ witness, subject.Holds statement witness
 

@@ -95,14 +95,16 @@ with case('source-component-contracts-use-the-existing-product-layout'):
                                 ['output', 1, 'role00000000'],
                                 ['output', 2, 'role00000001']]
     assert retained[3][4] == ['output', 3, 'role00000001']
-    assert snapshot[5][0][9] == interface['relations'][0]['definition']['function']
+    assert snapshot[5][0][6] == interface['relations'][0]['static_arguments']
+    assert snapshot[5][0][10] == interface['relations'][0]['definition']['function']
     prepared = commands.verified(emitted, None, '--zkc-prepare-protocol')
     assert export(prepared, symbol=interface['protocol'])[8] == snapshot[8]
 
 
 with case('all-contracts-and-explicit-formula-independent-of-selected-entry'):
     snapshot = export(source)
-    assert len(snapshot) == 10 and len(snapshot[5][0]) == 10
+    assert len(snapshot) == 11 and len(snapshot[5][0]) == 11
+    assert snapshot[5][0][6] == []
     assert snapshot[5][0][-1] == 'predicate'
     assert [row[0] for row in snapshot[8]] == ['child', 'main']
     table = dict(snapshot[8])

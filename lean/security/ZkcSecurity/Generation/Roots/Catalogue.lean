@@ -49,6 +49,7 @@ structure Selection where
   target : String
   mathematics : Mathematics
   formulaNamespace : String
+  registryExpression : String
 
 def Selection.sourceModule (root : Selection) : String :=
   "ZkcExamples.Structured.Generated.Bindings." ++ root.name ++ "Inputs"
@@ -70,13 +71,15 @@ noncomputable def selections : List Selection := [
     helpers := ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.program.payload.definitions.map (·.name)
     artifacts := ZkcExamples.Construction.Generated.SmallSumcheckPair.artifacts
     target := "public_sum", mathematics := primeField
-    formulaNamespace := "ZkcSecurity.Examples.Components.SmallSumcheck.Formula" },
+    formulaNamespace := "ZkcSecurity.Examples.Components.SmallSumcheck.Formula"
+    registryExpression := "Zkc.Source.Structured.OpaqueRegistry.empty" },
   { name := "TwoSums"
     snapshot := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.snapshot
     helpers := ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.program.payload.definitions.map (·.name)
     artifacts := ZkcExamples.Construction.Generated.TwoSumsPair.artifacts
     target := "public_sums", mathematics := primeField
-    formulaNamespace := "ZkcSecurity.Examples.Components.TwoSums.Formula" }]
+    formulaNamespace := "ZkcSecurity.Examples.Components.TwoSums.Formula"
+    registryExpression := "Zkc.Source.Structured.OpaqueRegistry.empty" }]
 
 /-- Materialize only closed selection data. Proof records and the source
 interpreter are not reimplemented or evaluated by a second language. -/
@@ -129,6 +132,7 @@ def subjectOutput (root : Selection) (originalExport producerExport validatorExp
     pairModule := root.pairModule, artifactsExpression := root.pairModule ++ ".artifacts"
     modelModule := root.mathematics.modelModule, modelExpression := root.mathematics.model
     targetName := root.target
+    registryExpression := root.registryExpression
     originalExportExpression := quoted originalExport
     producerExportExpression := quoted producerExport
     validatorExportExpression := quoted validatorExport

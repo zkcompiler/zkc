@@ -445,6 +445,52 @@ fn vector<S: Family>(
                 .get(index(1)?)
                 .ok_or_else(|| refused("vector-index"))?,
         ),
+        "multilinear.restrict_prefix" => {
+            let values = v(0)?;
+            let point = v(1)?;
+            p.vector_width(values.len(), width)?;
+            p.vector_width(point.len(), width)?;
+            call.work_items(point.len(), 1, 1)?;
+            let mut length = values.len();
+            for _ in point {
+                length /= 2;
+                if length == 0 {
+                    break;
+                }
+            }
+            // Output limits concern the final value; scratch has its own budget.
+            let bytes = size(length, width)?;
+            p.output(bytes, i.max_output_bytes)?;
+            if point.is_empty() {
+                call.work_items(values.len(), 2, 1)?;
+                let mut out = output(length, S::zero(), bytes)?;
+                out.as_mut_slice().copy_from_slice(values);
+                return Ok(vec![out.finish(|xs| Ok(S::vector_value(xs)))?]);
+            }
+            if length == 0 {
+                let out = output(0, S::zero(), bytes)?;
+                return Ok(vec![out.finish(|xs| Ok(S::vector_value(xs)))?]);
+            }
+            call.work_items(values.len(), 2, 1)?;
+            let mut scratch = call.scratch(values.len(), S::zero())?;
+            scratch.as_mut().copy_from_slice(values);
+            let mut active = values.len();
+            for r in point {
+                let half = active / 2;
+                call.work_items(half, 5, 1)?;
+                for j in 0..half {
+                    let low = scratch.as_mut()[j];
+                    let high = scratch.as_mut()[half + j];
+                    scratch.as_mut()[j] = low + (high - low) * *r;
+                }
+                active = half;
+            }
+            call.work_items(length, 2, 1)?;
+            let mut out = output(length, S::zero(), bytes)?;
+            out.as_mut_slice()
+                .copy_from_slice(&scratch.as_mut()[..length]);
+            Ok(vec![out.finish(|xs| Ok(S::vector_value(xs)))?])
+        }
         "vector.slice" => {
             let a = v(0)?;
             let start = index(1)?;
@@ -895,6 +941,17 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.get",
             "dalek/vector.get",
             "plonky3/vector.get",
+        ]),
+        field::operation(
+            "multilinear.restrict_prefix",
+            &[Vector, Vector],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/multilinear.restrict_prefix",
+            "dalek/multilinear.restrict_prefix",
+            "plonky3/multilinear.restrict_prefix",
         ]),
         field::operation(
             "vector.slice",

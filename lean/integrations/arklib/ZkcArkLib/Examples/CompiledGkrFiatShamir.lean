@@ -28,7 +28,7 @@ Three proved links compose:
 * Original. On a well-formed statement the original validator at the verifier
   is the plain GKR verifier
   (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`): the generated
-  normal form of the admitted root (`GkrSourceNormalForms.verifier_participant`),
+  normal form of the admitted root (`GkrRootNormalForms.verifier_participant`),
   its loops read as the folds of their callbacks' normal forms and its helper
   calls read with the admitted unit's helper laws.
 * Horizontal. The plain verifier's transform has a charged certificate composed

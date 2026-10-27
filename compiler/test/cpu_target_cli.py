@@ -120,6 +120,17 @@ for field in ('koala-bear', 'bls12-381.fr'):
             keep=f'internal-field-{field}-reduced')
         journal = json.loads(observations.read_text())
         assert journal['completed'] == (field == 'koala-bear')
+        physical_passes = [p for p in journal['passes']
+                           if p['pass'] == 'zkc-select-physical']
+        assert physical_passes, 'physical pass observation was never reached'
+        for record in physical_passes:
+            expected_names = {'linear-contraction-eligible', 'linear-contraction-selected',
+                              'linear-contraction-selected-producers'}
+            statistics = record['statistics']
+            assert isinstance(record['statistics_enabled'], bool)
+            assert {s['name'] for s in statistics} == (
+                expected_names if record['statistics_enabled'] else set())
+            assert all(type(s['value']) is int and s['value'] >= 0 for s in statistics)
         phases = [phase for phase in journal['phases']
                   if phase['unit'] == ['sample::Demo', deployment, 'sample::Work']]
         assert any(phase['phase'] == 'protocol' and

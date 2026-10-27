@@ -54,7 +54,7 @@ def check(output, lake):
                  ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []],
                  ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS]
+                "main", [], [], [], [helper, entry], [["main", []]], NO_ROWS, [[], []]]
         namespace = f"RenderedCase{index}"
         if index == 4:
             # Exercise the actual CLI under an ASCII locale as well as the
@@ -98,10 +98,10 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
         [["field.embed", "extension", "base"], [0], [["field", "extension"]], [], ""],
     ]
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
-            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"], None]], [],
+            [["relation", name, "public", name, name, name, [], [group], [["bool"]], ["statement"], None]], [],
             [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
               ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], ["main", []],
-              ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS]
+              ["block", operations, ["return", [1]]]]], [["main", []]], BLS_SERVICE_ROWS, [[], []]]
     source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
     points = str([ord(char) for char in name])
     source += f'''
@@ -151,7 +151,7 @@ example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
     entry = ["function", "main", "protocol", "public", [nested], [nested],
              ["protocol", ["P"], [["P"]], [["P"]]], [], ["main", []], ["block", [], ["return", [0]]]]
     aggregate_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                      "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS]
+                      "main", [], [], [], [make, get, entry], [["main", []]], BLS_ROWS, [[], []]]
     source = renderer.render(aggregate_data, "RenderedAggregates").replace("module\n\n", "", 1)
     identity_points = str([ord(char) for char in aggregate_identity])
     constructor_points = str([ord(char) for char in constructor])
@@ -212,6 +212,31 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
       some ⟨.output, 0, "V"⟩) := by rfl
 '''
     modules.append(source)
+    # Closed source declarations and static-only relation arguments survive the
+    # constructor boundary independently of executable ABI types.
+    declaration_data = copy.deepcopy(contract_data)
+    declaration_data[5][0][6] = [["field", "bls12-381.fr"], ["nat", "7"]]
+    declaration_data[10] = [[[["nominal", "record", "sample::Pending", [["field", "bls12-381.fr"]]],
+                             "linear", True, [[contract_name, ["field", "bls12-381.fr"]]]]],
+                            [["main", [[contract_name, ["bool"], ["V"], 1, 1]], []]]]
+    source = renderer.render(declaration_data, "RenderedDeclarations").replace("module\n\n", "", 1)
+    source += f'''
+open Zkc.Source.Structured in
+example : (RenderedDeclarations.snapshot.relations[0]?.map (·.staticArguments)) =
+    some [.field "bls12-381.fr", .natural "7"] := by rfl
+open Zkc.Source.Structured in
+example : (RenderedDeclarations.snapshot.sourceDeclarations.records.map fun record =>
+    (record.type, record.resource, record.sealed, record.fields.map fun (name, type) =>
+      (name.toList.map Char.toNat, type))) =
+    [(.nominal .record "sample::Pending" [.field "bls12-381.fr"], "linear", true,
+      [({contract_points}, .field "bls12-381.fr")])] := by rfl
+open Zkc.Source.Structured in
+example : (RenderedDeclarations.snapshot.sourceDeclarations.protocols.map fun protocol =>
+    (protocol.name, protocol.inputs.map fun port =>
+      (port.name.toList.map Char.toNat, port.type, port.roles, port.offset, port.count), protocol.outputs)) =
+    [("main", [({contract_points}, .boolean, ["V"], 1, 1)], [])] := by rfl
+'''
+    modules.append(source)
     malformed_contracts = [
         (renderer.contract_selector, ["unknown", 0, "P"]),
         (renderer.contract_selector, ["input", True, "P"]),
@@ -221,6 +246,11 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
         (renderer.contract_clause, ["target", "c", ["R", []], None]),
         (renderer.protocol_contract, ["main", [], "extra"]),
         (renderer.relation, data[5][0][:-1]),
+        (renderer.source_declarations, [[]]),
+        (renderer.source_record, [["bool"], "linear", 1, []]),
+        (renderer.source_record, [["bool"], "shared", True, []]),
+        (renderer.source_port, ["p", ["bool"], ["P"], 0, 513]),
+        (renderer.source_port, ["p", ["bool"], ["P"] * 17, 0, 1]),
         (renderer.descriptor, ["statement", "R", [], 0]),
         (renderer.descriptor, ["statement", "R", [], 0, True]),
         (renderer.descriptor, ["statement", "R", [], 0, None, "extra"]),
@@ -247,7 +277,7 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
                  [["index.equal"], [0, 1], [["bool"]], [], ""],
              ], ["return", [0]]]]
     primitive_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                      "main", [], [], binding_rows, [limit, entry], [["main", []]], BLS_ROWS]
+                      "main", [], [], binding_rows, [limit, entry], [["main", []]], BLS_ROWS, [[], []]]
     source = renderer.render(primitive_data, "RenderedPrimitives").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
@@ -318,7 +348,7 @@ example : (RenderedPrimitives.snapshot.catalogue.nominals.map fun row =>
               ["return", [0]]]]
     preparation_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                         "main", [], [], [], [identity, formula, realization, mapping, local, entry], [["main", []]],
-                        BLS_ROWS]
+                        BLS_ROWS, [[], []]]
     source = renderer.render(preparation_data, "RenderedPreparations").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPreparations.snapshot.definitions[2]?.bind fun definition =>
@@ -354,7 +384,7 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
              ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
                          [["bool"]], [], "nested"]], ["return", [0]]]]
     application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                   "main", [], [], [], [entry, child], [["main", []], ["child", []]], NO_ROWS]
+                   "main", [], [], [], [entry, child], [["main", []], ["child", []]], NO_ROWS, [[], []]]
     source = renderer.render(application, "RenderedApplication").replace("module\n\n", "", 1)
     source += '''
 open Zkc.Source.Structured in
@@ -458,6 +488,8 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
               "open_metadata_kernel_cases": 3,
               "aggregate_kernel_cases": 2, "aggregate_refusal_cases": len(malformed_aggregates),
               "contract_metadata_kernel_cases": 2,
+              "relation_static_arguments_kernel_cases": 1,
+              "source_declaration_kernel_cases": 2,
               "contract_metadata_refusal_cases": len(malformed_contracts),
               "primitive_metadata_kernel_cases": 4, "obsolete_envelope_refusal_cases": 2,
               "catalogue_refusal_cases": len(malformed_rows),

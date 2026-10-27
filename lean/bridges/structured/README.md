@@ -48,7 +48,35 @@ python3 lean/bridges/structured/scoped.py \
 The suites' retained subjects (each one's Entry, sources and Lean data module)
 are listed in [`fixtures.toml`](fixtures.toml); the cases run over each stay in
 the suites' code. `--write-fixtures` replaces the retained exports and data
-from the fresh ones.
+from the fresh ones. To refresh only this data boundary before checking its
+downstream consumers, use the same selections without running security proofs:
+
+```sh
+python3 lean/bridges/structured/regenerate.py \
+  --compiler build/compiler/zkc-compile --optimizer build/compiler/zkc-opt \
+  --write-fixtures --output build/experiments/structured-regeneration
+```
+
+Omit `--write-fixtures` to compare exact bytes. `--fixture NAME` limits the
+selection. This regenerates the manifest fixtures and the two finite-state
+fixtures; subject manifests and the generic opaque fixture retain their own
+generation paths. Admission and semantic checks remain separate.
+
+The bounded generic opaque boundary has a separate source fixture and explicit
+Lean registry. It needs only the compiler and local Lean modules:
+
+```sh
+python3 lean/bridges/structured/opaque_relations.py --compiler build/compiler/zkc-compile
+(cd lean && lake build Tests.GenericOpaqueRelations && lake env lean --run bridges/structured/RunOpaqueRelations.lean)
+```
+
+`--write-fixtures` regenerates its retained MLIR, eleven-slot relation JSON and
+constructor data through the compiler and `snapshot.py`. The Lean control reads
+that JSON strictly, imports the full source unit and separately admits its
+opaque rows against a registry fixed before evidence. Its kernel proofs identify
+the selected predicate, including the static natural absent from the runtime
+ABI, and show that another binding cannot replace it. It does not register GKR
+or proximity families or supply their protocol theorems.
 
 To add production execution comparisons, build `zkc` and supply it explicitly:
 
@@ -341,7 +369,7 @@ trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
 | [`sumcheck-round.toml`](normal-forms/sumcheck-round.toml) | One round and the whole `Reduce` body at both roles, for every unit whose checked body is the shared one |
 | [`sumcheck-source.toml`](normal-forms/sumcheck-source.toml), [`sumcheck-reduction.toml`](normal-forms/sumcheck-reduction.toml), [`sumcheck-repacked.toml`](normal-forms/sumcheck-repacked.toml) | The original Sumcheck roots, which apply `Reduce`: both roles, their invocation at any caller context and their participants |
 | [`gkr-rounds.toml`](normal-forms/gkr-rounds.toml) | The layer Sumcheck (`gkr::Rounds`) of the original GKR Entry: its typed body and both roles' normal forms of one round (with its repeat as a fold) and of the whole body |
-| [`gkr-source.toml`](normal-forms/gkr-source.toml) | The root of the original GKR Entry (`gkr::Gkr`): its typed body with the output-point, layer and line-coefficient callbacks named; both roles' normal forms of each callback, with the layer Sumcheck applications substituted, and their repeats as folds; both roles' normal forms of the whole root, their invocations and their participants |
+| [`gkr-root.toml`](normal-forms/gkr-root.toml) | The root of the original GKR Entry (`gkr::Gkr`): its typed body with the output-point, layer and line-coefficient callbacks named; both roles' normal forms of each callback, with the layer Sumcheck applications substituted, and their repeats as folds; both roles' normal forms of the whole root, their invocations and their participants |
 
 The subject driver regenerates the Okamoto unit's retained export, JSON,
 constructor data, printed bodies and Views from the fixture and checks its
@@ -485,16 +513,23 @@ present, and a helper law about the invocation rewrites the call later.
 The supported fragment is closed. A role's normal form branches on an optional
 input, or on a component read from a bound tuple (a kept call's, a repeat's or
 an application's results), where an operation first demands it, and on a
-guard's decided proposition; an operand that is already absent decides its
-operation without further branching. Missing owned inputs stop `incomplete`,
-and a false guard rejects. Calculations of literals fold. Shared normal forms
-cover two-role bodies with calculations, Math and owned Local calls with named
-laws or kept, exchanges, restrictions, draws, guards, protocol applications
-(also inside repeat callbacks) and repeats, at the end of a body or in its
-middle, whose returned state is bound like a kept call's results. Anything else
-is refused with a named diagnostic, for example `no law for helper ... at role
-0`, `guard 's8' condition ... is not a decided proposition` or `the repeat at
-site 's4' needs its callback`.
+guard's Boolean value or decided proposition; an operand that is already
+absent decides its operation without further branching. Missing owned inputs
+stop `incomplete`, and a false guard rejects. Calculations of literals fold.
+Whole-body normal forms, applications and invocation theorems support one or
+two distinct roles. A one-role callee retains its actual input/output masks;
+a two-role caller still establishes its own role separation. Empty output
+scopes remain absent without inventing another callee role.
+
+The supported operations include calculations, Math and owned Local calls with
+named laws or kept, exchanges, restrictions, draws, guards and protocol
+applications. Repeat callbacks and their fold presentation still require two
+roles. A repeat can occur at the end or in the middle of a body, with its
+returned state bound like a kept call's results. Unsupported shapes are refused,
+for example `no law for helper ... at role 0`, `expected one or two distinct
+roles and an in-range role`, or `the repeat at site 's4' needs its callback`.
+The focused printer controls run through `lean/checks/check_normal_form_printer.py`;
+generated process equations additionally require their ordinary Lean checks.
 
 What remains authored: the helper laws in the participant tables (once per
 helper family, for example `SumcheckRoundLaws`), the premises and facts a role's
@@ -620,6 +655,27 @@ presentation helper. Root configuration selects sources, nominal model,
 installed method or direct theorem and numeric error expression. It supplies no
 occurrence paths or structural proofs. Every emitted proof and receipt must
 elaborate independently.
+
+`OriginalRoot.templateSource` and `TemplateInstallation.source` assemble generic
+original-body templates and typed library-law installations. Their inputs retain
+the exact nominal model, helper table, role, callee signatures and immutable
+earlier protocol prefix. The public-table Sumcheck printer is an ordinary method
+in `ZkcTools.StructuredSource.Methods.SumcheckRoot`; its field, ABI and mathematical
+restrictions do not constrain the shared template printer. Its actual linear
+Reduce input carries both the pending point and value. Library correspondence
+allows an existing prefix and a restricted producer table while keeping the
+original reference table fixed. The current root clients initialize an empty
+prefix explicitly.
+
+`bridges/structured/check_root_composition.py --compiler COMPILER` checks a fresh
+four-call source with the production printers in a private overlay, including
+the canonical honest completeness, scalar soundness and charged soundness
+receipts. `--resume --phase receipts` reuses that overlay's checked body proofs
+and reissues the actual source requests. The acceptance check requires the named
+receipts to exist; successful printing alone is insufficient. One- and two-call
+clients retain their generated roots and exact source requests in the normal
+source tree. These checks concern the compiled ideal experiments and establish
+no native execution or performance correspondence.
 
 `security/checks/check_root_assembly.py --output DIRECTORY` compiles fresh
 readback, direct quantitative and canonical receipt outputs in a private overlay.

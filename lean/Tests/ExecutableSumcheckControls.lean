@@ -11,15 +11,15 @@ observes the transcript is refused, while a changed constant in the terminal
 check's body is accepted: the rule reads helper bodies only for their sorts and
 their freedom from transcript operations, and what a body computes is the
 preparation proof of the committed program. The helper rule reads what a body
-computes: it accepts the empty point and the point extension, refuses the
+computes: it accepts the Pending constructor and point extension, refuses the
 terminal check as outside its recipe table (the check iterates), and refuses
 the changed constant, an installed operation that implements another structured
 operation and a rebound name, each with its named reason. Semantic controls run
 the executable meaning on a small concrete instance (values in `ZMod 5`, every
 message a one-byte frame, a constant challenge) and fix observations the runtime
-reports for the same situations: the honest run returns from 186 instructions, a round
+reports for the same situations: the honest run returns from 190 instructions, a round
 message that fails the round check stops at the check's explicit rejection inside
-its local call after 21 instructions, and a stop inside a loop iteration leaves
+its local call after 23 instructions, and a stop inside a loop iteration leaves
 the call's frame, the iteration's frame and the participant's frame, innermost
 first. -/
 
@@ -58,7 +58,7 @@ def maximumRaised : Validator :=
     | action => action
 
 theorem maximumRaised_refused :
-    refusal (checkLowering installed constructed maximumRaised) = some (.anchor 1) := by
+    refusal (checkLowering installed constructed maximumRaised) = some (.anchor 2) := by
   decide +kernel
 
 /-- The round check compares the round's sum with itself instead of with the
@@ -85,20 +85,20 @@ def countRetargeted : Validator :=
 
 theorem countRetargeted_refused :
     refusal (checkLowering installed constructed countRetargeted) =
-      some (.loop "apply_18_label_726564756365_s15") := by
+      some (.loop "apply_18_label_726564756365_s18") := by
   decide +kernel
 
-/-- The empty point helper observes the transcript: its body is the first
+/-- The Pending constructor observes the transcript: its body is the first
 round's observation. -/
 def helperObserves : Validator :=
-  withFunction actual "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" fun function =>
+  withFunction actual "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0" fun function =>
     { function with body := match actual.function? "_transcript_0" with
         | some observation => observation.body
         | none => [] }
 
 theorem helperObserves_refused :
     refusal (checkLowering installed constructed helperObserves) =
-      some (.helper "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") := by
+      some (.helper "zkl_c0a3a2b8b5f989e0e9c138a171631d20dc8bd296769b6ee7636d2d79a8518ba0") := by
   decide +kernel
 
 /-- The terminal check reads its first constant as 2: the rule still accepts,
@@ -106,8 +106,8 @@ because what a helper body computes is the preparation proof's obligation. -/
 def checkConstantChanged : Validator :=
   withFunction actual "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc" fun function =>
     { function with body := function.body.map fun
-        | .operation "lc_2_s2" binding [.text "1"] inputs outputs =>
-            .operation "lc_2_s2" binding [.text "2"] inputs outputs
+        | .operation "lc_2_s4" binding [.text "1"] inputs outputs =>
+            .operation "lc_2_s4" binding [.text "2"] inputs outputs
         | step => step }
 
 theorem checkConstantChanged_accepted :
@@ -117,7 +117,7 @@ theorem checkConstantChanged_accepted :
 /-! ## Helper rule -/
 
 abbrev program := SumcheckProof.program
-abbrev emptyName := ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name
+abbrev pendingName := ZkcExamples.Structured.SumcheckPendingBodies.pendingHelper.name
 abbrev appendName := ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name
 abbrev checkName := ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name
 
@@ -126,8 +126,8 @@ def helperRefusal (validator : Validator) (name : String) : Option HelperRefusal
   | .error refusal => some refusal
   | .ok () => none
 
-/-- The rule accepts the empty point and the point extension. -/
-theorem rule_accepts : helperRefusal actual emptyName = none ∧ helperRefusal actual appendName = none := by
+/-- The rule accepts the Pending constructor and point extension. -/
+theorem rule_accepts : helperRefusal actual pendingName = none ∧ helperRefusal actual appendName = none := by
   decide +kernel
 
 /-- The terminal check iterates, which the recipe table does not cover: it keeps
@@ -138,7 +138,7 @@ theorem check_outside_table : helperRefusal actual checkName = some (.recipe "lo
 /-- The changed constant of the terminal check, which the lowering rule accepts,
 is refused at its step: the installed constant is not the structured one. -/
 theorem checkConstantChanged_refused :
-    helperRefusal checkConstantChanged checkName = some (.step "lc_2_s2") := by
+    helperRefusal checkConstantChanged checkName = some (.step "lc_2_s4") := by
   decide +kernel
 
 /-- The point extension applies the empty vector's binding: the installed
@@ -156,9 +156,9 @@ theorem appendWrongOperation_refused : helperRefusal appendWrongOperation append
 rebound name could change what the formal denotes. -/
 def appendRebound : Validator :=
   withFunction actual appendName fun function =>
-    { function with body := [.operation "lc_2_s0" "zkl_binding_11" [] ["v110", "v111"] ["v110"], .ret ["v110"]] }
+    { function with body := [.operation "s0" "zkl_binding_11" [] ["v114", "v115"] ["v114"], .ret ["v114"]] }
 
-theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "lc_2_s0") := by
+theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
   decide +kernel
 
 /-! ## Semantic controls on a concrete instance -/
@@ -198,22 +198,22 @@ def observed (run : Run F G) :
     | .stopped _ site call => some (site, call)
     | .returned _ => none, run.used, run.transitions, run.messages)
 
-/-- The honest proof is accepted from 186 instructions, with 8 transitions and
-4 messages, as the runtime reports; at 185 the final return is not charged. -/
+/-- The honest proof is accepted from 190 instructions, with 8 transitions and
+4 messages, as the runtime reports; at 189 the final return is not charged. -/
 theorem honest_threshold :
-    (runAt 186 honest).accepts SumcheckProof.acceptancePosition = true ∧
-      observed (runAt 186 honest) = (none, 186, 8, 4) ∧
-      (runAt 185 honest).result.outcome = .stopped .exhausted := by
+    (runAt 190 honest).accepts SumcheckProof.acceptancePosition = true ∧
+      observed (runAt 190 honest) = (none, 190, 8, 4) ∧
+      (runAt 189 honest).result.outcome = .stopped .exhausted := by
   decide +kernel
 
 /-- A first round message that fails the round check stops at the check's
-explicit rejection inside its local call, after 21 instructions, 2 transitions
+explicit rejection inside its local call, after 23 instructions, 2 transitions
 and 2 messages, as the runtime reports. -/
 theorem wrong_round_rejected :
     (runAt 1000 wrongRound).result matches .stopped (.explicit .reject) _ _ ∧
       observed (runAt 1000 wrongRound) =
-        (some (some "apply_18_label_726564756365_s24",
-          some ("apply_18_label_726564756365_s24", "_calculation_3")), 21, 2, 2) := by
+        (some (some "apply_18_label_726564756365_s27",
+          some ("apply_18_label_726564756365_s27", "_calculation_3")), 23, 2, 2) := by
   decide +kernel
 
 /-- Budget 100 stops inside the terminal check's region, as the runtime reports
@@ -221,16 +221,16 @@ for that budget: the stop site is the instruction's, the local call the
 check's. -/
 theorem exhausted_in_check :
     observed (runAt 100 honest) =
-      (some (some "lc_h_83c0ff67e4a5d43ca5b2dcc732569f0b16ace54d3d66745dfb2bf6af88c7bfac",
-        some ("s7", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc")), 100, 8, 4) := by
+      (some (some "lc_2_s5_68_zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655_3_s11",
+        some ("s9", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc")), 100, 8, 4) := by
   decide +kernel
 
 /-- A stop inside a round's local call leaves the call's frame, the iteration's
 frame and the participant's frame, innermost first, and the run is cleaned up. -/
 theorem cleanup_in_loop :
     (runAt 1000 wrongRound).events.drop ((runAt 1000 wrongRound).events.length - 3) =
-      [.leave (.call "apply_18_label_726564756365_s24" "_calculation_3") .stopped,
-        .leave (.loop "apply_18_label_726564756365_s15" 0) .stopped, .leave .participant .stopped] ∧
+      [.leave (.call "apply_18_label_726564756365_s27" "_calculation_3") .stopped,
+        .leave (.loop "apply_18_label_726564756365_s18" 0) .stopped, .leave .participant .stopped] ∧
       (runAt 1000 wrongRound).Cleaned := by
   decide +kernel
 

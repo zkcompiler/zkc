@@ -269,9 +269,10 @@ The APIs are:
 - `exportSourceClaims(const CheckedOriginal &, const Limits &)` in
   `zkc/Compiler/SourceClaims.h`: the same export with exact original/interface
   references in `admission`.
-- `checkSourceClaims` overloads for those two types: strict comparison with that
-  API's complete expected export. This is a comparison API, not a standalone
-  admission reader for arbitrary requests.
+- `checkSourceClaims` overloads: the ClosedEntry API compares its inspection
+  exactly. The CheckedOriginal API also checks editable, typed instantiation
+  proposals against actual calls and recomputes seams. Other fields remain an
+  exact comparison. Neither API independently admits mathematical requests.
 
 The export separates:
 
@@ -282,6 +283,156 @@ The export separates:
 | `claims[].attachment` | Module, block declaration, label, AST node address and source byte range |
 | `claims[].method` | Optional versioned method application; never part of request meaning |
 | `claims[].site_bindings` | Source origins and native label paths for every referenced request site; separate from request meaning |
+| `proposals` | Per actual `(caller, site)` logical assignment search choices, separate from runtime operands |
+| `seams` | Recomputed structural routes and successful-exit coverage; no mathematical evidence |
+
+For component contracts, the CheckedOriginal export derives the following
+ordered arrays from the original. ClosedEntry inspection supplies empty arrays;
+only CheckedOriginal has the admitted unit needed to derive them. Both arrays
+are required by the current version-zero schema, even when empty.
+
+Structural association also admits selected library protocols with linear
+inputs or residual outputs. `snapshot.entry` identifies the selected protocol;
+it need not be a deployed proof Entry. Selection retains exact port roles,
+sealed ownership and declared relation identity, and every live claim still
+needs a consumer, residual or checked acceptance exit. Clause-free wrappers
+assert no relation; a protocol with any clauses must still cover every linear
+port with one consistent relation. A residual remains an obligation.
+A concrete source/property request separately fixes its target and root
+acceptance interface; library selection supplies neither final acceptance nor
+a security theorem.
+
+```text
+proposal := [caller, site, callee, [actual-SSA-operand...], [actual-role...], [slot...]]
+slot := ["parameter" | "witness", ["input" | "output", port, formal-role], source]
+source := ["open"] | ["operand", callee-input, actual-role]
+        | ["parameter" | "witness", caller-input-selector]
+        | ["result", earlier-site, result-index, actual-role]
+        | ["math", defined-helper, result-index, [source...]]
+seam := [caller, endpoint, "direct" | "pure" | "terminal" | "method", [route...]]
+endpoint := ["argument", site, source-port] | ["output", source-port, "residual"]
+          | ["output", native-port, clause-index]
+          | ["guard", site, role]
+          | ["repeat_init" | "yield" | "repeat_result", site, state-index, role]
+          | ["repeat_input", site, operand-index, role]
+route := ["input", native-port, role]
+       | ["result" | "repeat_input" | "repeat_result", site, result-index, role]
+       | ["pure" | "terminal" | "action", actual-operation-descriptor, body-position,
+          result-index, role, [route...]]
+```
+
+Positions append the instruction ordinal, then callback ordinal zero for a
+repeat body. Result indices follow the complete native result order. Direct
+routes retain actual SSA identity. Pure routes retain actual operations and
+helper references, complete ordered arguments and actual role. Local helpers
+with Pending inputs retain pure provenance at call, repeat and residual
+handoffs, including unpacking, repacking and Boolean identity conversions.
+Every Local output projection carrying Pending ancestry adds an ownership
+obligation. A handoff consumes the union of its fields' ancestry together;
+missing projections and repeated identical projections refuse coverage.
+Separate consumers cannot reuse the same ancestry.
+
+Only a declared acceptance output selects terminal routes. A selected Boolean
+Math or deterministic Local helper retains its actual descriptor, position,
+result, role and arguments. Direct conjunction paths may expose terminals in
+their operands; no traversal through other Boolean operations or helper bodies
+is implicit. A Math conjunction helper itself therefore needs an exact helper
+acceptance theorem. A Boolean output type or helper name supplies no such
+theorem. Several clauses may select one output; distinct outputs cannot reuse
+its ownership. Arbitrary Boolean operations on Pending ancestry refuse
+`component-seam-acceptance` at an acceptance sink.
+
+Each callee parameter/witness selector appears once per occurrence, including
+selectors used by a residual. The deduplicated union across all subject and
+residual clauses has at most 512 slots. A producer refuses the 513th distinct
+slot with `component-instantiation-limit`; repeated occurrences do not consume
+another slot. The strict reader and schema use that same list bound.
+The default source is `open`: Lean must supply
+it, with no default runtime value or additional ghost carrier. Edited sources
+must have the exact type and role, use declared caller logical slots, and refer
+to dominating action results in the same block. Math terms use defined Math
+helpers of the full checked signature; nested `open` terms refuse. Roles must
+hold statement selectors in every relevant application. Proposal edits change
+no original or subject digest. They can leave the semantic anchor unprovable.
+
+The protocol seam traversal supports straight-line bodies, guards/stops and
+repeats with one yielding callback and explicitly carried claims.
+Every carried field, including ordinary values, has `repeat_init`, `yield`
+and `repeat_result` rows. The result row retains both initial and yielded
+routes, including zero iterations. A `repeat_input` row associates each
+boundary leaf with its actual operand source: operand zero is the count,
+followed by carried fields and captures. Carried rows additionally retain their
+yielded backedge; non-count rows retain the count's role-indexed sources.
+These are structural dependencies, not another evaluator for the loop.
+
+Effects are preserved at each boundary. The same traversal is repeated until
+effects close over all carried backedges, retaining only the stable rows and
+charging all candidate work to the existing limit. A refusal effect dominates
+sampling or messages. Count effects conservatively apply to all callback
+inputs and result alternatives. Initial and yielded alternatives remain
+mandatory even for maximum zero; the exporter does not specialize them away.
+No ordinary carried field, capture, count or yielded value can thereby erase
+an action dependency. The complete Pending tuple still transfers ownership
+atomically; ordinary dependencies add no Pending ownership. Pending
+captures, protocol branches/other callbacks and callbacks that only stop refuse
+`component-seam-control`.
+
+An admitted protocol's own draw and exchange operations retain `action`
+provenance with their exact descriptors and operands. Their dependent handoffs,
+repeat yields, alternatives and residuals are `method` rows. A guard observing
+Pending ancestry also emits a `method` row selecting its actual condition and
+role. On a successful path it covers that ancestry without invalidating a
+subsequent residual use; it supplies no coverage to a different callback or to
+the zero-iteration alternative. These rows require the actual protocol method
+law over its retained effects, guards, scope and residual relation. They cannot
+be discharged by a pure helper law. Action provenance does not authorize
+oracle operations or unknown effects, or effectful Local helper closures.
+An ordinary effectful repeat value may reach an explicit method handoff,
+including a deterministic Local repacking of a Pending tuple. Extending that
+route to a pure accepting helper refuses sampling/message dependencies. This
+classification is conservative about helper arguments and iteration bounds;
+it neither proves that an argument changes the result nor discharges the
+method's mathematical obligations.
+
+The schema's shared `structured_descriptor` definition specifies the tagged
+operation grammar used by `Format.descriptor`, including descriptor operands,
+roles, types and numeric bounds. A route descriptor is not an arbitrary array.
+The existing structured reader still owns name resolution, source association
+and admission; a schema-valid descriptor is no evidence of helper behavior.
+
+The separate Local helper effect inventory recursively inspects every stored
+branch, range-loop and conditional-loop region, including stopped arms and
+zero-iteration bodies. It follows actual Local calls, checked Math helpers,
+realization and map helpers, and both finite-fold/collection callbacks against
+their admitted domain. A map name alone does not classify its body as pure.
+Execution primitives require their actual admitted operation and binding.
+Sampling, messages, oracle operations, unregistered effects and protocol
+invocations remain inadmissible inside these Local helper closures. Callback
+inspection shares the traversal's work and depth limits. Local branches,
+loops and stops add no transcript effect by themselves; this inventory gives
+no domain, totality, successful-return or adequacy theorem. Such laws remain
+separate obligations for the exact helper and fixed relation.
+
+Boolean negation in a Local helper remains outside the native structured
+fragment and refuses `structured-source-binding`. Local construction from
+claim-free data is retained as provenance, not classified as a terminal.
+Linear outputs require residual coverage; live claims must reach a consumer,
+residual or checked acceptance exit. A stopped path has no exit obligation.
+Unsupported protocol shapes are not approximated.
+
+Sampling and messages inside Local helper closures or feeding a pure accepting
+seam refuse `component-seam-sampling` and `component-seam-message`; direct
+protocol actions at method handoffs remain explicit. Oracle access and other
+unadmitted effects refuse `component-seam-oracle` or `component-seam-effect`,
+including when nested alongside an admitted protocol action. Wrong/missing rows refuse
+`component-seam-association`; wrong calls, sources, roles or slot structure
+refuse `component-instantiation`. Traversal is bounded to 100000 expanded nodes
+and route depth 64. These rows do not establish Math totality, relation
+transport, terminal adequacy or any security theorem. Those are typed Lean
+obligations against the exact admitted helpers and selected relations. An
+effect-free Local helper may stop outside its mathematical domain. Its law
+must prove successful execution and defined readback on an operational domain
+that the caller independently establishes and preserves at the actual scope.
 
 The retained target reference remains exactly
 `{protocol:<closed protocol symbol>, clause:<clause array index>, name:<clause name>}`.

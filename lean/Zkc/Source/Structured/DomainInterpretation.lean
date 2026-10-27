@@ -124,7 +124,7 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values model.Value []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
     simp only [PIR.Process.interpret_bind, sites site, PIR.Process.interpret]
-  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with

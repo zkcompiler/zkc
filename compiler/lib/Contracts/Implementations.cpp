@@ -253,6 +253,7 @@ constexpr ContractRow contractRows[] = {
     {"field.inverse", Arithmetic},
     {"field.equal", Arithmetic},
     {"field.embed", Plonky3},
+    {"multilinear.restrict_prefix", Arithmetic},
     {"vector.get", Arithmetic},
     {"vector.slice", Arithmetic},
     {"vector.transpose", Arithmetic},

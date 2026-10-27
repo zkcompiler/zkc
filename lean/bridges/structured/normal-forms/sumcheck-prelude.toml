@@ -1,0 +1,46 @@
+# Exact seven-input Reduce normal forms. Optional inputs retain source stops;
+# the post-repeat atPrefix operation remains in the checked normal form.
+fixture = "lean/bridges/structured/fixtures/sumcheck-source.json"
+output = "lean/ZkcExamples/Structured/SumcheckPreludeNormalForms.lean"
+namespace = "ZkcExamples.Structured.SumcheckPreludeNormalForms"
+imports = ["ZkcExamples.Structured.SumcheckRoundNormalForms", "ZkcExamples.Structured.SumcheckPendingLaws"]
+open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
+helper_modules = ["lean/ZkcExamples/Structured/SumcheckPendingBodies.lean", "lean/ZkcExamples/Structured/SumcheckHelperBodies.lean", "lean/ZkcExamples/Structured/MapFirstBodies.lean"]
+
+[[shared]]
+protocol = "zkl_6489eec61b35dc83c10f78141ab9b724ba83c1e9d722a7d909e3ba149ae99ae5"
+body = "SumcheckVerifierBodies.reduceBody maximum"
+function = "reduceFn"
+parameters = "(U : UnitPayload) (maximum : Nat)"
+meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx"
+closed = "(plainHelpers (F := F) (G := G) U).closed"
+components = "(plainHelpers (F := F) (G := G) U).components"
+tables = "plainHelpers (F := F) (G := G) U"
+protocols = "U.plainProtocolTable F G"
+callback = "SumcheckRoundNormalForms.roundFn U"
+repeat_spec = "SumcheckVerifierBodies.repeatSpec maximum"
+callback_body = "SumcheckVerifierBodies.roundBody"
+
+[[shared.roles]]
+role = 1
+name = "verifierReduce"
+proof = "normal-form"
+binders = "(bodies : SumcheckVerifierHelpers.Bodies U.definitions) (claims : SumcheckPendingLaws.Bodies U.definitions)"
+inputs = [{ name = "raw", mode = "absent" }, { name = "dimension", mode = "absent" }, { name = "width", mode = "absent" }, { name = "point", mode = "optional" }, { name = "claim", mode = "optional" }, { name = "count", mode = "optional" }, { name = "service", mode = "optional" }]
+laws.widthHelper = { term = "width_optional U bodies {0} {1} {2}", results = ["{2}"], components = true }
+laws.variablesHelper = { term = "variables_optional U bodies {0} {1} {2}", results = ["{1}"], components = true }
+laws.openClaimHelper = { term = "SumcheckPendingLaws.identity_plain U _ claims.openClaim {0} {1}", results = ["{0}", "{1}"] }
+laws.atPrefixHelper = { term = "SumcheckPendingLaws.identity_plain U _ claims.atPrefix {0} {1}", results = ["{0}", "{1}"] }
+
+[[shared.roles]]
+role = 0
+name = "proverReduce"
+proof = "normal-form"
+binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
+premises = "(countBound : count < indexLimit) (roundsBound : rounds < indexLimit) (enough : rounds ≤ count)"
+inputs = [{ name = "entries" }, { name = "count" }, { value = "1" }, { name = "point", mode = "absent" }, { name = "claim", mode = "absent" }, { name = "rounds" }, { name = "service", mode = "absent" }]
+laws.widthHelper = { term = "width_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ {0} {1} {2}", results = ["{2}"], components = true }
+laws.variablesHelper = { term = "variables_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ {0} {1} {2}", results = ["{1}"], components = true }
+laws.lessHelper = { term = "by rw [SumcheckProverLaws.less_present U bodies {0} {1} countBound roundsBound, decide_eq_false (Nat.not_lt.mpr enough)]", results = ["false"] }
+laws.emptyHelper = { term = "empty_plain U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩", results = ["[]"] }
+

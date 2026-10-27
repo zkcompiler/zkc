@@ -33,7 +33,7 @@ def helper : Function := ⟨"helper", .local, .privateDef, [], [], none, [],
 -- contains only helper; the checked protocol table is [leaf, main].
 def snapshot : Snapshot := ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main",
   [], [], [], [.function root, .function helper, .function leaf],
-  [⟨"main", []⟩, ⟨"leaf", []⟩], blsRows⟩
+  [⟨"main", []⟩, ⟨"leaf", []⟩], blsRows, {}⟩
 
 def helperBody : Region dialect [] [] := .ret .nil
 def leafBody : Region protocolDialect [] [] := .ret .nil

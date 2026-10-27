@@ -26,7 +26,7 @@ def editList (instructions : List Instruction) (index : Nat) (edit : Instruction
 
 /-- Change one instruction of the round loop's body. -/
 def changeBody (participant : Participant) (index : Nat) (edit : Instruction → Instruction) : Participant :=
-  changeAt participant 1 fun loop => { loop with body := editList loop.body index edit }
+  changeAt participant 2 fun loop => { loop with body := editList loop.body index edit }
 
 /-- Accepted by the construction rule and refused by the composed check with
 `code`. -/
@@ -36,68 +36,65 @@ def RefusedByProjection (participant : Participant) (code : String) : Prop :=
 instance (participant : Participant) (code : String) : Decidable (RefusedByProjection participant code) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
-/-! Exported positions: inputs `0` table values, `1` claim, `2` round count;
-`4` is the initial point; the loop (instruction `1`) carries the point `6`, the
-claim `7` and the transcript, receives the round messages `9` and `13`,
-compares the claim with their sum `17` (`18`), guards on it (body instruction
-`10`), draws the challenge `21`, appends it to the point (`26`) and updates the
-claim (`27` … `31`). After the loop `5` is the point and `6` the claim; the
-terminal check (instruction `2`) reads `0`, `5` and `6`. -/
+/-! The first two instructions construct and open Pending at slots 4--7.
+The loop at instruction 2 captures eight values, carries point/claim/transcript,
+and yields [29,34,28]. The suffix consumes [8,9] through atPrefix; the terminal
+check at instruction 4 then reads [0,11,12]. -/
 
 /-- The round check is dropped. -/
 theorem roundCheckDropped_refused :
-    RefusedByProjection (changeAt actual 1 fun loop => { loop with body := loop.body.eraseIdx 10 })
+    RefusedByProjection (changeAt actual 2 fun loop => { loop with body := loop.body.eraseIdx 10 })
       "projection-guard" := by
   decide +kernel
 
 /-- The round check compares the sum with the claim: equal in algebra, but not the
 original comparison, so the guard's condition is not held. -/
 theorem roundCheckSwapped_refused :
-    RefusedByProjection (changeBody actual 9 fun instruction => { instruction with operands := [17, 7] })
+    RefusedByProjection (changeBody actual 9 fun instruction => { instruction with operands := [20, 10] })
       "projection-guard-operand" := by
   decide +kernel
 
 /-- The updated claim adds the low term twice. -/
 theorem claimUpdateMutated_refused :
-    RefusedByProjection (changeBody actual 22 fun instruction => { instruction with operands := [29, 29] })
+    RefusedByProjection (changeBody actual 22 fun instruction => { instruction with operands := [32, 32] })
       "projection-unexplained" := by
   decide +kernel
 
 /-- The challenge term scales the low message instead of the high one. -/
 theorem challengeTermMutated_refused :
-    RefusedByProjection (changeBody actual 21 fun instruction => { instruction with operands := [21, 9] })
+    RefusedByProjection (changeBody actual 21 fun instruction => { instruction with operands := [24, 12] })
       "projection-unexplained" := by
   decide +kernel
 
 /-- The loop yields the claim it started the iteration with. -/
 theorem staleClaimYielded_refused :
-    RefusedByProjection (changeAt actual 1 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s15" 2 [26, 7, 25] })
+    RefusedByProjection (changeAt actual 2 fun loop =>
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 2 [29, 10, 28] })
       "projection-repeat-yield" := by
   decide +kernel
 
 /-- The loop admits three rounds where the source repeat admits two. -/
 theorem loopBoundChanged_refused :
-    RefusedByProjection (changeAt actual 1 fun loop =>
-        { loop with operation := .loop "apply_18_label_726564756365_s15" 3 [26, 31, 25] })
+    RefusedByProjection (changeAt actual 2 fun loop =>
+        { loop with operation := .loop "apply_18_label_726564756365_s18" 3 [29, 34, 28] })
       "projection-repeat" := by
   decide +kernel
 
 /-- The loop names the repeat site without its application path. -/
 theorem loopSiteUnqualified_refused :
-    RefusedByProjection (changeAt actual 1 fun loop => { loop with operation := .loop "s15" 2 [26, 31, 25] })
+    RefusedByProjection (changeAt actual 2 fun loop => { loop with operation := .loop "s18" 2 [29, 34, 28] })
       "projection-repeat" := by
   decide +kernel
 
 /-- The loop starts from the table values instead of the empty point. -/
 theorem loopStartsFromTable_refused :
-    RefusedByProjection (changeAt actual 1 fun loop => { loop with operands := [2, 0, 1, 3] })
+    RefusedByProjection (changeAt actual 2 fun loop => { loop with operands := [2, 0, 7, 3] })
       "projection-repeat" := by
   decide +kernel
 
 /-- The terminal check reads the final claim and point in the other order. -/
 theorem terminalOperandsSwapped_refused :
-    RefusedByProjection (changeAt actual 2 fun call => { call with operands := [0, 6, 5] }) "projection-call" := by
+    RefusedByProjection (changeAt actual 4 fun call => { call with operands := [0, 12, 11] }) "projection-call" := by
   decide +kernel
 
 /-! Deployment checks of the transcript-construction rule inside the loop, which
@@ -113,14 +110,14 @@ instance (participant : Participant) (code : String) : Decidable (RefusedByConst
 /-- The first round observation reads coordinates built without the induction
 index; the observation's coordinate condition fails. -/
 theorem coordinatesWithoutIndex_refused :
-    RefusedByConstruction (changeBody actual 3 fun instruction => { instruction with operands := [8, 9, 10] })
+    RefusedByConstruction (changeBody actual 3 fun instruction => { instruction with operands := [11, 12, 13] })
       "construction-observe" := by
   decide +kernel
 
 /-- The first coordinate vector appends the carried point instead of the
 induction index. -/
 theorem coordinatesFromPoint_refused :
-    RefusedByConstruction (changeBody actual 2 fun instruction => { instruction with operands := [10, 6] })
+    RefusedByConstruction (changeBody actual 2 fun instruction => { instruction with operands := [13, 9] })
       "construction-coordinates" := by
   decide +kernel
 
@@ -139,19 +136,19 @@ theorem templateWithoutRepeat_refused :
 
 /-- The loop count reads the claim. -/
 theorem loopCountFromClaim_refused :
-    RefusedByConstruction (changeAt actual 1 fun loop => { loop with operands := [1, 4, 1, 3] })
+    RefusedByConstruction (changeAt actual 2 fun loop => { loop with operands := [1, 6, 7, 3] })
       "construction-loop" := by
   decide +kernel
 
 /-- The round check guards on the transcript. -/
 theorem guardOnTranscript_refused :
-    RefusedByConstruction (changeBody actual 10 fun instruction => { instruction with operands := [8] })
+    RefusedByConstruction (changeBody actual 10 fun instruction => { instruction with operands := [11] })
       "construction-guard" := by
   decide +kernel
 
 /-- The terminal check reads the final transcript. -/
 theorem callOnTranscript_refused :
-    RefusedByConstruction (changeAt actual 2 fun call => { call with operands := [0, 5, 7] }) "construction-call" := by
+    RefusedByConstruction (changeAt actual 4 fun call => { call with operands := [0, 11, 10] }) "construction-call" := by
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/

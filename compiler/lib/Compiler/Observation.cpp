@@ -4,6 +4,7 @@
 #include "mlir/Pass/PassInstrumentation.h"
 #include "mlir/Pass/PassManager.h"
 #include "zkc/Support/BoundedStream.h"
+#include "zkc/Transforms/PassStatistics.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
@@ -144,20 +145,14 @@ class Instrumentation : public PassInstrumentation {
       ++dropped;
       return;
     }
-    json::Array statistics;
-#if LLVM_ENABLE_STATS
-    for (auto *stat : pass->getStatistics().take_front(128))
-      statistics.push_back(json::Object{{"name", std::string(stat->getName())},
-                                        {"value", stat->getValue()}});
-#endif
-    passes.push_back(json::Object{
-        {"unit", owner.unit()},
-        {"pass", pass->getArgument().str()},
-        {"operation", op->getName().getStringRef().str()},
-        {"completed", completed},
-        {"inclusive_microseconds", elapsed},
-        {"statistics", std::move(statistics)},
-        {"statistics_enabled", static_cast<bool>(LLVM_ENABLE_STATS)}});
+    passes.push_back(
+        json::Object{{"unit", owner.unit()},
+                     {"pass", pass->getArgument().str()},
+                     {"operation", op->getName().getStringRef().str()},
+                     {"completed", completed},
+                     {"inclusive_microseconds", elapsed},
+                     {"statistics", readPassStatistics(*pass)},
+                     {"statistics_enabled", passStatisticsEnabled()}});
     // These are module passes, so no parallel child mutation can race a dump.
     if (completed && pass->getArgument() == "zkc-lower-math")
       if (auto module = dyn_cast<ModuleOp>(op))

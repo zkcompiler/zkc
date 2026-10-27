@@ -137,7 +137,7 @@ theorem source_transform (challenge : History F G → m F) (values : List F) (cl
           (some values) pc.1 pc.2) := verifier_optional (some values) (some claim) (some rounds) (some handle)
   have maximum : SumcheckSourceNormalForms.reduceMaximum = 2 := by kernel_rfl
   rw [SumcheckProof.verifier, SumcheckProof.process, original, retained_root]
-  simp only [SumcheckVerifierPrelude.admittedRounds, maximum]
+  simp only [SumcheckVerifierPrelude.admittedRounds, SumcheckVerifierPrelude.pendingRounds, maximum]
   by_cases bounded : rounds ≤ 2
   · simp only [bounded, ite_true]
     rw [repeat_present (F := F) (G := G) childContext handle rounds ([], claim)]

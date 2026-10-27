@@ -27,7 +27,7 @@ def snapshot : Snapshot :=
       .realization declaration, .realization emptyDeclaration]
    ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 def program : Program := (check snapshot).toOption.get (by decide +kernel)
 def imported : Imported snapshot := ⟨program, rfl⟩
 def summaries : IdentitySummaries := snapshot.identitySummaries.toOption.get (by decide +kernel)

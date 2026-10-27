@@ -197,12 +197,14 @@ def childFormula : FormulaBinding SumcheckSourceViews.imported childInput.relati
 def originalChildFormula : Function := childFormula.original
 
 def childSelection : SelectedApplication childOwner F G sourceEnvironment where
-  selection := .subject ⟨0, by decide⟩
+  selection := .subject (childOwner.namedClause "initial_sum")
   interpreted := {
     binding := childInput
     interpretation := .formula childFormula rfl
-      (fun args => (args.get .here).length < indexLimit)
-      (fun args => args.get (.there (.there (.there .here))) = (args.get .here).sum) inferInstance }
+      (fun args => (restrictPrefixValues (args.get .here)
+        (args.get (.there (.there (.there .here))))).length < indexLimit)
+      (fun args => args.get (.there (.there (.there (.there .here)))) =
+        (restrictPrefixValues (args.get .here) (args.get (.there (.there (.there .here))))).sum) inferInstance }
 
 set_option maxRecDepth 20000 in
 theorem child_formula_law :
@@ -211,11 +213,12 @@ theorem child_formula_law :
   cases args with | cons raw rest => ?_
   cases rest with | cons dimension rest => ?_
   cases rest with | cons width rest => ?_
+  cases rest with | cons point rest => ?_
   cases rest with | cons claim rest => ?_
   cases rest
-  exact tableSum_equation (F := F) (G := G) SumcheckSourceViews.unit.linked sourceBodies
-    (by exact_body SumcheckSourceViews.tableSumFormulaDefinition)
-    (by exact_body SumcheckSourceViews.valuesDefinition) raw dimension width claim bounded
+  exact pending_equation (F := F) (G := G) SumcheckSourceViews.unit.linked sourceBodies
+    (by exact_body SumcheckSourceViews.pendingFormulaDefinition)
+    (by exact_body SumcheckSourceViews.valuesDefinition) raw dimension width point claim bounded
 
 /-- The verifier's evaluated SSA environment at the maintained call. The three
 P-owned table components are absent. The surviving public raw vector is V's. -/
@@ -245,10 +248,10 @@ theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted 
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites]
   rw [SumcheckSourceVerifier.reduce_invoke_plain]
   change SumcheckVerifierPrelude.reduceDenote SumcheckSourceNormalForms.reduceMaximum SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 1
-    (SumcheckVerifierPrelude.reduceArguments none none none (some claim) (some count) (some handle)) = _
-  rw [SumcheckVerifierPrelude.reduce_optional SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies
+    (SumcheckVerifierPrelude.reduceArguments none none none (some []) (some claim) (some count) (some handle)) = _
+  rw [SumcheckVerifierPrelude.reduce_optional SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies SumcheckSourceVerifier.claimBodies
     SumcheckSourceVerifier.childContext 1 rfl (by decide)]
-  simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
+  simp only [SumcheckVerifierPrelude.pendingRounds, admitted, ↓reduceIte]
   rw [SumcheckVerifierLaws.repeat_present SumcheckSourceVerifier.childContext handle count ([], claim)]
   exact PIR.Process.bind_assoc _ _ _
 
@@ -277,19 +280,28 @@ theorem child_claim_read (raw : List F) (claim : F) (count handle : Nat) (outcom
     childClaim.read SumcheckSourceVerifier.childContext
       (childBoundary (G := G) raw claim count handle outcome) = some claim := by
   exact publicReductionCall.boundaryOfOutcome_input {} 1 _ outcome childClaim
+    (.there (.there (.there (.there .here)))) rfl rfl
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+theorem child_initial_point_read (raw : List F) (claim : F) (count handle : Nat) (outcome) :
+    childInitialPoint.read SumcheckSourceVerifier.childContext
+      (childBoundary (G := G) raw claim count handle outcome) = some [] := by
+  exact publicReductionCall.boundaryOfOutcome_input {} 1 _ outcome childInitialPoint
     (.there (.there (.there .here))) rfl rfl
 
 def childUse (raw : List F) (claim : F) (count handle : Nat) (outcome) :
     ApplicationUse (childSelection (G := G) (sourceEnvironment := sourceEnvironment))
       SumcheckSourceVerifier.childContext (childBoundary raw claim count handle outcome)
       (childAssignments raw claim count handle) where
-  arguments := .cons raw (.cons count (.cons 1 (.cons claim .nil)))
+  arguments := .cons raw (.cons count (.cons 1 (.cons [] (.cons claim .nil))))
   read := by
     change RoleFamily.sequence (Values.cons (ty := vector) (some raw)
       (.cons (ty := Ty.index) (publicCount.read {} ((publicInput raw claim count handle).boundary (.stopped .incomplete)))
-        (.cons (ty := Ty.index) (some 1) (.cons (ty := scalar)
-          (childClaim.read SumcheckSourceVerifier.childContext (childBoundary raw claim count handle outcome)) .nil)))) = _
-    rw [public_count_read, child_claim_read]
+        (.cons (ty := Ty.index) (some 1) (.cons (ty := vector)
+          (childInitialPoint.read SumcheckSourceVerifier.childContext (childBoundary raw claim count handle outcome))
+          (.cons (ty := scalar)
+            (childClaim.read SumcheckSourceVerifier.childContext (childBoundary raw claim count handle outcome)) .nil))))) = _
+    rw [public_count_read, child_claim_read, child_initial_point_read]
     rfl
 
 def childRefutation (raw : List F) (claim : F) (count handle : Nat) (outcome) :=
@@ -343,24 +355,27 @@ def reductionRootInput (proverValues : Option (List F)) (proverDimension : Optio
 
 def reductionCallEnvironment (claim : F) (count handle : Nat) :
     Environment (Component (assignment F G))
-      [vector, .index, .index, .index, vector, .index, scalar, .index,
+      [vector, scalar, vector, .index, .index, .index, vector, .index, scalar, .index,
         .service "random.bls12-381.fr/0"] :=
-  (Values.cons none (.cons none (.cons none (.cons (some 1) (.cons none (.cons none
-    (.cons (some claim) (.cons (some count) (.cons (some handle) .nil))))))))).get
+  (Values.cons (some []) (.cons (some claim) (.cons none (.cons none (.cons none
+    (.cons (some 1) (.cons none (.cons none (.cons (some claim)
+      (.cons (some count) (.cons (some handle) .nil))))))))))).get
 
 def reductionBoundary (claim : F) (count handle : Nat) (outcome) :=
   reductionCall.boundaryOfOutcome {} 1 (reductionCallEnvironment (G := G) claim count handle) outcome
 
 def reductionSelection : SelectedApplication reductionOwner F G reductionEnvironment :=
-  reductionContract.select (.subject ⟨0, by decide⟩)
+  reductionContract.select (.subject (reductionOwner.namedClause "initial_sum"))
 
 def reductionUse (raw : List F) (dimension : Nat) (claim : F) (count handle : Nat) (outcome) :
     ApplicationUse (reductionSelection (G := G) (reductionEnvironment := reductionEnvironment))
-      (ProtocolContext.enter {} "s3" [0, 1]) (reductionBoundary claim count handle outcome)
+      (ProtocolContext.enter {} "s5" [0, 1]) (reductionBoundary claim count handle outcome)
       (fixedReduction (invocation := reductionCall.childInvocation rootInvocation (fun index => Fin.elim0 index)) raw dimension) where
-  arguments := .cons raw (.cons dimension (.cons 1 (.cons claim .nil)))
+  arguments := .cons raw (.cons dimension (.cons 1 (.cons [] (.cons claim .nil))))
   read := reduction_application_read raw dimension claim _ _
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionClaim
+      (.there (.there (.there (.there .here)))) rfl rfl)
+    (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionInitialPoint
       (.there (.there (.there .here))) rfl rfl)
 
 def reductionRefutation (raw : List F) (dimension : Nat) (claim : F) (count handle : Nat) :=

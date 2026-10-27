@@ -42,9 +42,12 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
   unless role == 0 || role == 1 do throw "construction-binding-root-role"
   let producer := role == 0
   let root := program.payload.entry
-  let physicalInputs := root.inputs.zipIdx.filter fun (_, index) =>
-    (root.inputScopes[index]?.getD []).contains role &&
-    match root.inputs[index]? with | some (.service _) => false | _ => true
+  unless root.inputs.length == root.inputScopes.length do
+    throw "construction-binding-root-input-scope-arity"
+  let physicalInputs := (root.inputs.zip root.inputScopes).zipIdx.filterMap fun ((ty, scope), index) =>
+    if scope.contains role then
+      match ty with | .service _ => none | _ => some (ty, index)
+    else none
   let inputParams ← physicalInputs.mapM fun (ty, index) => do
     let symbol ← data ty ("input" ++ toString index)
     return (symbol.term, symbol.type)
@@ -81,9 +84,9 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
   let mut sourceCalls : List String := []
   let mut callIndex := 0
   let mut helperIndex := 0
-  let mut sourceFinished := false
   let mut mathLaws : List String := []
   let mut sourceLaws : List String := []
+  let mut currentHistory := "history"
   for (instruction, instructionIndex) in artifact.instructions.zipIdx do
     let read ← instruction.operands.mapM (symbolAt frame)
     let mut results : List Symbol := []
@@ -102,6 +105,16 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
       if selected == SumcheckHelperBodies.emptyHelper then
         results := [← data (.vector "bls12-381.fr") "[]"]
         mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.empty program " ++ bindingModule ++ ".helper_bodies.sumcheck"]
+      else if selected == SumcheckPendingBodies.pendingHelper && !producer then
+        let [scalar] := read | throw "construction-binding-pending-abi"
+        results := [← data (.vector "bls12-381.fr") "[]", scalar]
+        mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.pending (F := F) (G := G) program " ++ bindingModule ++ ".claim_bodies"]
+        sourceLaws := sourceLaws ++ ["SumcheckPendingLaws.pending_owned (F := F) (G := G) program.payload " ++ bindingModule ++ ".claim_bodies 1 " ++ scalar.term]
+      else if (selected == SumcheckPendingBodies.openClaimHelper || selected == SumcheckPendingBodies.atPrefixHelper) && !producer then
+        let [_, _] := read | throw "construction-binding-pending-identity-abi"
+        results := read
+        let field := if selected == SumcheckPendingBodies.openClaimHelper then "openClaim" else "atPrefix"
+        mathLaws := mathLaws ++ ["ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.claim_identity (F := F) (G := G) program " ++ quoted selected.name ++ " " ++ bindingModule ++ ".claim_bodies." ++ field]
       else if selected == MapFirstBodies.tableHelper then
         let [raw, dimension, width] := read | throw "construction-binding-table-abi"
         unless width.term == "1" && dimension.term == count do throw "construction-binding-table-domain"
@@ -125,9 +138,8 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
       else if selected == SumcheckHelperBodies.checkHelper && !producer then
         let [entries, point, scalar] := read | throw "construction-binding-check-abi"
         let name := "terminalRule" ++ toString helperIndex
-        localRules := localRules ++ "  have " ++ name ++ " " ++ params dynamic ++ " :=\n    terminal (F := F) (G := G) program " ++ bindingModule ++ ".helper_bodies (routing handle) ⟨[], " ++ (← symbolAt frame (frame.length - 1)).term ++ "⟩ 1\n      " ++ entries.term ++ " " ++ point.term ++ " " ++ scalar.term ++ " " ++ env frame ++ " " ++ natsText instruction.operands ++ " rfl\n"
+        localRules := localRules ++ "  have " ++ name ++ " " ++ params dynamic ++ " :=\n    terminal (F := F) (G := G) program " ++ bindingModule ++ ".helper_bodies (routing handle) ⟨[], " ++ currentHistory ++ "⟩ 1\n      " ++ entries.term ++ " " ++ point.term ++ " " ++ scalar.term ++ " " ++ env frame ++ " " ++ natsText instruction.operands ++ " rfl\n"
         let finishes := instructionIndex + 1 == artifact.instructions.length
-        sourceFinished := sourceFinished || finishes
         rules := rules ++ [(if finishes then "finish (" else "Original.Simulation.bind (") ++ name ++ " " ++ holes dynamic ++ ")"]
         let checked := "checked" ++ toString helperIndex
         results := [← data .boolean checked]
@@ -147,6 +159,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
       let initial ← loop.initial.mapM (symbolAt frame)
       let name := "loopRule" ++ toString callIndex
       let suffix := toString callIndex
+      currentHistory := "history" ++ suffix
       if producer then
         let [raw, dimension, width, _, reached] := initial | throw "construction-binding-producer-loop-abi"
         unless dimension.term == count && width.term == "1" do throw "construction-binding-producer-loop-domain"
@@ -155,15 +168,15 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
         results := [← data (.vector "bls12-381.fr") ("raw" ++ suffix), ← data .index "0", ← data .index ("width" ++ suffix), ← data (.vector "bls12-381.fr") ("point" ++ suffix), history ("history" ++ suffix)]
         dynamic := dynamic ++ [("raw" ++ suffix, "List F"), ("width" ++ suffix, "Nat"), ("point" ++ suffix, "List F"), ("history" ++ suffix, (history "").type)]
       else
-        let [_, scalar, reached] := initial | throw "construction-binding-validator-loop-abi"
-        localRules := localRules ++ "  have " ++ name ++ " " ++ params dynamic ++ " :=\n    (" ++ callback ++ " (F := F) (G := G) handle).reduce program " ++ bindingModule ++ ".verifier_bodies (routing handle) " ++ occurrence ++ " (by decide +kernel)\n      context " ++ outputs ++ " " ++ toString loop.offset ++ " " ++ toString loop.maximum ++ " handle _ " ++ captureExpr ++ " rfl " ++ count ++ " " ++ toString loop.count ++ " " ++ natsText loop.initial ++ " " ++ scalar.term ++ " " ++ reached.term ++ " rfl rfl\n"
+        let [point, scalar, reached] := initial | throw "construction-binding-validator-loop-abi"
+        localRules := localRules ++ "  have " ++ name ++ " " ++ params dynamic ++ " :=\n    (" ++ callback ++ " (F := F) (G := G) handle).reduce program " ++ bindingModule ++ ".verifier_bodies " ++ bindingModule ++ ".claim_bodies (routing handle) " ++ occurrence ++ " (by decide +kernel)\n      context " ++ outputs ++ " " ++ toString loop.offset ++ " " ++ toString loop.maximum ++ " handle _ " ++ captureExpr ++ " rfl " ++ count ++ " " ++ toString loop.count ++ " " ++ natsText loop.initial ++ " " ++ point.term ++ " " ++ scalar.term ++ " " ++ reached.term ++ " rfl rfl\n"
         results := [← data (.vector "bls12-381.fr") ("point" ++ suffix), ← data (.field "bls12-381.fr") ("scalar" ++ suffix), history ("history" ++ suffix)]
         dynamic := dynamic ++ [("point" ++ suffix, "List F"), ("scalar" ++ suffix, "F"), ("history" ++ suffix, (history "").type)]
       let earlier := if producer then dynamic.length - 4 else dynamic.length - 3
       rules := rules ++ ["Original.Simulation.bind (" ++ name ++ " " ++ holes (dynamic.take earlier) ++ ")"]
       if producer then
         let [raw, _, _, _, _] := initial | throw "construction-binding-producer-loop-abi"
-        sourceCalls := sourceCalls ++ ["OriginalSumcheckLibrary.reduce program.payload " ++ toString loop.maximum ++ " " ++ occurrence ++ ".protocol 0 []\n    (.cons (some " ++ raw.term ++ ") (.cons (some " ++ count ++ ") (.cons (some 1) (.cons none (.cons (some " ++ count ++ ") (.cons none .nil))))))"]
+        sourceCalls := sourceCalls ++ ["OriginalSumcheckLibrary.reduce program.payload " ++ toString loop.maximum ++ " " ++ occurrence ++ ".protocol 0 []\n    (.cons (some " ++ raw.term ++ ") (.cons (some " ++ count ++ ") (.cons (some 1) (.cons none (.cons none (.cons (some " ++ count ++ ") (.cons none .nil)))))))"]
       callIndex := callIndex + 1
     | _, _ => throw ("construction-binding-root-operation: " ++ toString instructionIndex ++ " " ++ reprStr instruction.operation)
     unless results.length == instruction.results.length do throw "construction-binding-root-result-abi"
@@ -176,16 +189,18 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     let keys := protocols.map fun definition => NormalForm.CalleeKey.mk definition.signature 1 (Bindings.optionalPattern definition.inputs) []
     let sig : NormalForm.Signature := ⟨[], false, true, program.payload.definitions.map (·.helper), keys⟩
     let form ← NormalForm.normalize sig root.body 1 root.roles.length (Bindings.optionalPattern root.inputs)
-    let binders := root.inputs.zipIdx.map fun (ty, index) => ZkcTools.StructuredSource.OriginalRoot.Binder.mk ("input" ++ toString index) (.component ty) index
-    pure (binders, ← ZkcTools.StructuredSource.OriginalRoot.assemble program keys root.inputs binders form 0)
+    let binders := root.inputs.zipIdx.map fun (ty, index) => ZkcTools.StructuredSource.Methods.SumcheckRoot.Binder.mk ("input" ++ toString index) (.component ty) index
+    pure (binders, ← ZkcTools.StructuredSource.Methods.SumcheckRoot.assemble program keys root.inputs binders form 0)
   -- The realized spine uses the realized alias for calls and the ordinary alias
   -- for helper steps. Select the definitions from that spine, for any layout.
   let sourceDefinitions := [sourceModule ++ ".realized"] ++ sourceAssembly.steps.map fun step =>
     sourceModule ++ "." ++ step.name ++ if step.callee.isSome then "Realized" else ""
   let selectedHelpers := (sourceAssembly.steps.filterMap (·.helper)).eraseDups
+  let mut helperIdentities : List String := []
   for selected in selectedHelpers do
     let index ← ZkcTools.StructuredSource.OriginalRoot.uniqueIndex (program.payload.definitions.map (·.helper)) selected
     let name := "sourceHelper" ++ toString index ++ "_identity"
+    helperIdentities := helperIdentities ++ [name]
     text := text ++ "theorem " ++ name ++ " : " ++ originalModule ++ ".sourceHelper" ++ toString index ++
       ".helper = " ++ literal selected ++ " := by kernel_rfl\n\n"
   let both := sourceAssembly.steps.filterMap fun step => step.helper.filter (·.kind == .math)
@@ -199,14 +214,14 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     let name := "mathHelper" ++ toString index
     text := text ++ "theorem " ++ name ++ " (left right : Option Bool) :\n    invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) program.payload).components " ++ selectedName ++ ".helper (.cons left (.cons right .nil)) =\n      .done (.cons (left.bind fun x => right.map fun y => x && y) .nil) := by\n" ++
       "  have association : BodyIn program.payload.definitions " ++ selectedName ++ ".helper " ++ sourceName ++ " := by bind_structured_bodies\n" ++
-      "  rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).components, SumcheckVerifierHelpers.component_body_plain program.payload " ++ selectedName ++ ".helper " ++ sourceName ++ " association]\n  cases left <;> cases right <;> rfl\n\n"
+      "  rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).components, Zkc.Source.Structured.component_body_plain program.payload " ++ selectedName ++ ".helper " ++ sourceName ++ " association]\n  cases left <;> cases right <;> rfl\n\n"
     booleanLaws := booleanLaws ++ [name]
   if !producer then text := text ++ "theorem mask_outputs (site : String) (point : List F) (scalar : F) :\n    (show Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs from\n    maskValues ((({} : ProtocolContext).enter site [0, 1]).roles 1)\n      ((({} : ProtocolContext).enter site [0, 1]).mapScopes " ++ originalModule ++ ".sourceProtocol0.outputScopes)\n      (.cons none (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) .nil))))))) =\n      (.cons none (.cons none (.cons none (.cons none (.cons (some point) (.cons (some scalar) .nil)))))) := by kernel_rfl\n\n"
   let rootParams := params inputParams ++ " " ++ params shapeParams
   -- Producer source assembly is already normalized by producer_source. Only
   -- validators still expose the realized source spine inside the simulation.
   let normalSource := if producer then [] else sourceDefinitions ++
-    ["ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall"] ++ booleanLaws ++
+    ["ZkcExamples.Structured.OriginalSumcheckCalls.realizeCall"] ++ helperIdentities ++ sourceLaws ++ booleanLaws ++
     ["Values.get", "SumcheckVerifierBodies.reduceReturnValues", "SumcheckVerifierLaws.embedV",
       "SumcheckRoundNormalForms.verifierState", "PIR.Process.bind", "PIR.Process.bind_assoc"]
   if producer then
@@ -220,7 +235,7 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     else do
     let [boolean, transcript] := artifact.returned | throw "construction-binding-validator-return-abi"
     pure (toString boolean ++ " " ++ toString transcript)
-  text := text ++ "def " ++ (if producer then "producer" else "validator") ++ " " ++ params inputParams ++ " (handle : Nat) " ++ params shapeParams ++ " (history : Domain.History (uniformCarriers F G)) :\n" ++
+  text := text ++ "set_option linter.unusedSimpArgs false in\ndef " ++ (if producer then "producer" else "validator") ++ " " ++ params inputParams ++ " (handle : Nat) " ++ params shapeParams ++ " (history : Domain.History (uniformCarriers F G)) :\n" ++
     (if producer then
       "    Original.Producer (model := ringModel F G) (program := program) (routing handle) artifact\n" ++
       "      (inputs " ++ arguments inputParams ++ " history) (" ++ originalValues ++ ") ⟨[], history⟩\n" ++
@@ -239,9 +254,10 @@ def source (program : Program) (artifact : Participant) (layout : Layout)
     else "      try (rename_i source final returned; change ReduceReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨point, scalar, reached, rfl, rfl⟩ := returned; refine ⟨?_⟩)\n      try (rename_i source final returned; change BooleanReturns _ _ _ _ at returned; apply Classical.choice; obtain ⟨value, rfl, rfl⟩ := returned; refine ⟨?_⟩)\n")
   -- finish already consumes the source return. Other spines retain a folded
   -- done node, independently of the number or ordering of preceding calls.
-  let foldRules := ["Original.fold_bind"] ++ if sourceFinished then [] else
-    ["Zkc.Construction.ArtifactBinding.fold_done"]
+  let foldRules := ["Original.fold_bind", "Zkc.Construction.ArtifactBinding.fold_done"]
   text := text ++ "      try simp only [" ++ ", ".intercalate (normalSource ++ foldRules) ++ "]\n" ++
+    (if producer then "" else String.join (sourceLaws.map fun law => "      try erw [" ++ law ++ "]\n") ++
+      "      try simp only [PIR.Process.bind, Zkc.Construction.ArtifactBinding.fold_done]\n") ++
     "      try normalize_artifact_operations [" ++ ", ".intercalate (mathLaws.eraseDups ++ ["boolean_and"]) ++ "] unfolding [" ++ constructed ++ ".inputSorts, " ++ constructed ++ ".outputSorts, " ++ constructed ++ ".returned, inputs, " ++ ", ".intercalate (captures ++ ["carried", "context", bindingModule ++ ".context"]) ++ "]\n" ++
     (if producer then "      try simp only [Nat.lt_irrefl, decide_false, Nat.sub_self]\n" else "") ++
     "      change Original.Simulation _ _ _ _)\n" ++

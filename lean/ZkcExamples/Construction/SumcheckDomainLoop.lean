@@ -27,11 +27,11 @@ def reduce : List Nat → List F → F → Domain.History (uniformCarriers F G) 
       (roundState index point scalar history).bind fun state =>
         reduce rest state.point state.scalar state.history
 
-theorem loop_projection (a b c d e : Domain.Value (uniformCarriers F G))
+theorem loop_projection (a b c d e f g h : Domain.Value (uniformCarriers F G))
     (indices : List Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) :
-    (Domain.iterate (bodyStep1Body (ringModel F G) SumcheckProof.program SumcheckProof.context)
-      [a, b, c, d, e] [26, 31, 25] roundInstruction.results indices (carried point scalar history)).interpret
+    (Domain.iterate (bodyStep2Body (ringModel F G) SumcheckProof.program SumcheckProof.context)
+      [a, b, c, d, e, f, g, h] [29, 34, 28] roundInstruction.results indices (carried point scalar history)).interpret
         Original.forgetCheckpoints =
       (reduce indices point scalar history).bind fun state => .done state.values := by
   induction indices generalizing point scalar history with
@@ -39,7 +39,7 @@ theorem loop_projection (a b c d e : Domain.Value (uniformCarriers F G))
   | cons index rest ih =>
       rw [iterate_bind, PIR.Process.interpret_bind]
       simp only [carried]
-      have roundEq := round_projection a b c d e index point scalar history
+      have roundEq := round_projection a b c d e f g h index point scalar history
       simp only [roundProjection, roundInputs] at roundEq
       rw [roundEq]
       simp only [roundProcess, reduce, PIR.Process.bind_assoc, PIR.Process.bind]

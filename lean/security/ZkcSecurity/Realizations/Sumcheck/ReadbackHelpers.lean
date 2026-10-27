@@ -1,7 +1,7 @@
 module
 
-public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
+public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 
 @[expose] public section

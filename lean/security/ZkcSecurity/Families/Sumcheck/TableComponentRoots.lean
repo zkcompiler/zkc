@@ -44,41 +44,6 @@ noncomputable def rootResidual (layout : Layout program)
   simp only [ne_eq, decide_eq_true_eq]
   exact (layout.no_iff result).mp residual
 
-/-- Both actual child calls run in source order, even when the first terminal
-returns false. The complete first poststate therefore reaches the second. -/
-noncomputable def twoRoots (layout : Layout program)
-    (leftCount rightCount : Nat) (leftContext rightContext : Context)
-    (left : State (0 + leftCount)) (right : State (0 + rightCount)) : PIR.Process I Bool :=
-  (root layout leftCount leftContext left).bind fun leftAccepted =>
-    (root layout rightCount rightContext right).bind fun rightAccepted =>
-      .done (leftAccepted && rightAccepted)
-
-/-- False conjunction composition uses the actual two histories. It does not
-identify their challenges or infer independence or a maximum error bound. -/
-noncomputable def twoRootsResidual (layout : Layout program)
-    (queries : QueryInterface program absorb)
-    (sampling : queries.ConditionalBound layout.representation 1 1 charge)
-    (leftCount rightCount : Nat) (leftContext rightContext : Context)
-    (left : State (0 + leftCount)) (right : State (0 + rightCount)) (history : List E)
-    (wrong : ¬ (program.claim left = (layout.entries left).sum ∧
-      program.claim right = (layout.entries right).sum)) :
-    Derivation absorb (boundedEscape charge) (fun _ accepted => accepted ≠ true)
-      history (twoRoots layout leftCount rightCount leftContext rightContext left right) := by
-  by_cases leftWrong : program.claim left ≠ (layout.entries left).sum
-  · apply (rootResidual layout queries sampling leftCount leftContext left history leftWrong).bind
-    intro reached leftAccepted leftFalse
-    apply (ZkcSecurity.Obligations.unrestricted (root layout rightCount rightContext right) reached).bind
-    intro final rightAccepted _
-    exact .done (by cases leftAccepted <;> cases rightAccepted <;> simp_all)
-  · have rightWrong : program.claim right ≠ (layout.entries right).sum := by
-      intro rightTrue
-      exact wrong ⟨Classical.not_not.mp leftWrong, rightTrue⟩
-    apply (ZkcSecurity.Obligations.unrestricted (root layout leftCount leftContext left) history).bind
-    intro reached leftAccepted _
-    apply (rootResidual layout queries sampling rightCount rightContext right reached rightWrong).bind
-    intro final rightAccepted rightFalse
-    exact .done (by cases leftAccepted <;> cases rightAccepted <;> simp_all)
-
 /-- Generated root bindings transport the entire root equation once. The
 mathematical root rule contains no protocol name or source-specific pipeline. -/
 noncomputable def boundRootResidual (layout : Layout program)

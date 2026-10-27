@@ -3,11 +3,29 @@ pub module expression;
 
 use zkc::vector::{Vector, sum, length, empty, append};
 
-// An evaluation obligation, not an acceptance certificate. The caller binds
-// the polynomial and its dimension; coordinates are MSB-first.
-pub use zkc::multilinear::{Evaluation};
 use zkc::multilinear as multilinear;
 use zkc::multilinear::{Table, fix_first, fix_prefix};
+
+// An obligation at V, with sealed construction and consumption. The reference
+// polynomial is a logical parameter, never a field available to the verifier.
+#[linear]
+pub struct Pending<F: Field> {
+  pub point: Vector<F>,
+  pub value: F
+}
+
+// Admission records a caller's scalar statement; it does not prove the sum.
+pub fn pending<F: Field>(claim: F) -> Pending<F> effects(stop) where () {
+  return Pending<F> { point: empty<F>(), value: claim };
+}
+
+fn open_claim<F: Field>(claim: Pending<F>) -> (Vector<F>, F) {
+  return unpack(claim);
+}
+
+fn at_prefix<F: Field>(point: Vector<F>, value: F) -> Pending<F> {
+  return Pending<F> { point: point, value: value };
+}
 
 math fn total<F: Field>(values: Vector<F>) -> F {
   return zkc::finite_math::fold(zkc::vector::elements(values), 0,
@@ -28,10 +46,20 @@ pub relation Sum<F: Field>(parameter values: Vector<F>, statement claim: F) {
   return claim == total(values);
 }
 
-// Width, dimension and decoding are separate domain obligations. In particular,
-// this formula does not make an arbitrary prover table authoritative for V.
-pub relation TableSum<F: Field>(parameter values: Table<F>, statement claim: F) {
-  return claim == total(multilinear::values(values));
+// One relation for every prefix of the same fixed mathematical table. Its
+// assignment is rebound at the caller, independently of P's working table.
+pub relation Residual<F: Field>(parameter values: Table<F>,
+    statement point: Vector<F>, statement claim: F) {
+  return claim == total(intrinsic<F>("multilinear.restrict_prefix",
+    multilinear::values(values), point));
+}
+
+// Shape is independent of residual truth. Total prefix restriction itself
+// neither validates the cube nor checks that the prefix fits its dimension.
+pub relation Shape<F: Field>(parameter values: Table<F>) {
+  return multilinear::width(values) == 1
+    && zkc::indices::power_of_two(intrinsic<F>("vector.length", multilinear::values(values)),
+      multilinear::variables(values));
 }
 
 fn sums<F: Field>(values: Table<F>) {
@@ -43,18 +71,23 @@ fn sums<F: Field>(values: Table<F>) {
 // drawing; P retains the residual table for a subsequent opening argument.
 // A complete caller must discharge the returned evaluation and dimension.
 pub protocol Reduce<F: Field, Max: nat> roles(P,V)
-    (values: Table<F> @P, claim: F @V, rounds: index @(P,V),
+    (values: Table<F> @P, claim: Pending<F> @V, rounds: index @(P,V),
      challenges: Random<F> @V)
     -> (point: Vector<F> @P, residual: Table<F> @P,
-        evaluation: Evaluation<F> @V)
-    where () spec { input initial_sum = TableSum<F>(in.values, in.claim); }
+        evaluation: Pending<F> @V)
+    where () spec {
+      input shape = Shape<F>(in.values);
+      continuation initial_sum = Residual<F>(in.values, in.claim.point, in.claim.value)
+        residual Residual<F>(in.values, out.evaluation.point, out.evaluation.value);
+    }
 {
   require @P multilinear::width(values) == 1;
   require @P !zkc::indices::less(multilinear::variables(values), rounds);
   let mut tableP = values;
   let mut pointP @P = empty<F>();
-  let mut pointV @V = empty<F>();
-  let mut current = claim;
+  let initial @V = open_claim(claim);
+  let mut pointV @V = initial.0;
+  let mut current = initial.1;
   for _ in 0..rounds roles(P,V) max Max {
     let parts = sums(tableP);
     #[site(round)] let actual = send P -> V(parts);
@@ -66,19 +99,20 @@ pub protocol Reduce<F: Field, Max: nat> roles(P,V)
     pointV = append(pointV, cv);
     current = (1 - cv) * actual.0 + cv * actual.1;
   }
-  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  let evaluation @V = at_prefix(pointV, current);
   return (point = pointP, residual = tableP, evaluation = evaluation);
 }
 
 // Complete public-table discharge. The supplied point must fix every variable.
-fn check_table<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool {
-  let table = multilinear::table(values, length(evaluation.point), 1);
-  let remaining = fix_prefix(table, evaluation.point);
-  return sum(multilinear::values(remaining)) == evaluation.value;
+fn check_table<F: Field>(values: Vector<F>, point: Vector<F>, expected: F) -> bool {
+  let table = multilinear::table(values, length(point), 1);
+  let remaining = fix_prefix(table, point);
+  return sum(multilinear::values(remaining)) == expected;
 }
-pub fn check<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool effects(stop) where () {
-  return multilinear::has_shape(values, length(evaluation.point), 1)
-    && check_table(values, evaluation);
+pub fn check<F: Field>(values: Vector<F>, evaluation: Pending<F>) -> bool effects(stop) where () {
+  let payload = unpack(evaluation);
+  return multilinear::has_shape(values, length(payload.0), 1)
+    && check_table(values, payload.0, payload.1);
 }
 
 pub protocol Sumcheck<F: Field, Max: nat> roles(P,V)
@@ -90,7 +124,8 @@ pub protocol Sumcheck<F: Field, Max: nat> roles(P,V)
     }
 {
   let table @P = multilinear::table(values, rounds, 1);
+  let initial @V = pending(claim);
   #[site(reduce)] let (point, residual, evaluation) =
-    Reduce<F,Max>(table, claim, rounds, challenges);
+    Reduce<F,Max>(table, initial, rounds, challenges);
   return check(values, evaluation);
 }

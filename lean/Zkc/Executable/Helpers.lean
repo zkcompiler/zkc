@@ -84,6 +84,7 @@ def operationKind : Structured.Op → String
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => "boolean"
   | .select _ => "select"
   | .boundedAt _ => "bounded-at"
+  | .multilinearRestrictPrefix _ => "multilinear-restrict-prefix"
   | .makeProduct .. => "product-make"
   | .getProduct .. => "product-get"
   | .invoke _ => "invoke"

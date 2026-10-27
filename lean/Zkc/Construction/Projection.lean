@@ -35,9 +35,10 @@ against the repeat body once, for every iteration. Transcript plumbing (coordina
 messages) is skipped. Every exported instruction must be accounted for, and the
 returned references must hold the validator's outputs.
 
-`Zkc.Construction.Uniform.project_sound` proves the legacy uniform profile's interactive
-reading equals the original validator's participant process, read through its
-outputs, for every handle, input and reply.
+There is currently no theorem deriving a full simulation from `project`
+acceptance under the nominal Domain meaning. Maintained consumers supply that
+simulation separately. A generic checker soundness theorem must preserve the
+source role masks, all typed replies and stops, live frames and output readback.
 -/
 
 set_option autoImplicit false

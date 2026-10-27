@@ -120,6 +120,7 @@ def receive_binding (site : String) (sender : Nat) (template : Template)
         DomainAdapter.embedPayload, eq_mp_eq_cast, cast_eq]
   apply Original.Simulation.call
   intro answer
+  simp only [PIR.Process.bind, event]
   rw [projected]
   apply Original.Simulation.call
   intro ignored

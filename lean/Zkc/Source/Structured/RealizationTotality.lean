@@ -34,7 +34,7 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
     cases args
     cases bodies
     exact ⟨_, rfl⟩
-  | indexEqual | indexLess | indexPowerOfTwo | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd |
+  | indexEqual | indexLess | indexPowerOfTwo | multilinearRestrictPrefix | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd |
       booleanOr | booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale |
       groupEqual =>
     cases args with

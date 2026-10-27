@@ -29,7 +29,7 @@ def main():
     args = parser.parse_args()
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    environment = dict(os.environ, LEAN_NUM_THREADS="2")
+    environment = dict(os.environ, LEAN_NUM_THREADS=os.environ.get("LEAN_NUM_THREADS", "2"))
     commands = []
 
     def execute(command):

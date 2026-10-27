@@ -54,7 +54,6 @@ def target : RetainedTarget imported validator.policy selection.publics where
   noResidual := rfl
   decision := rfl
   application := TableContractBindings.membershipApplication
-  formula := TableContractBindings.membershipFormula
   booleanOutput := rfl
   publicTypes := rfl
   publicArity := rfl
@@ -263,9 +262,9 @@ theorem target_arguments (table : List F) (queries : List (QueryValue F))
 execution. There is no weakened false-only relation or erased inactive value. -/
 theorem target_holds_iff (table : List F) (queries : List (QueryValue F))
     (witness : target.Witness F G) :
-    target.Holds (statement table queries) witness ↔
+    target.Holds TableContractBindings.membershipFormula (statement table queries) witness ↔
       Admissible table queries ∧ PIR.Relation.Table.membership table (queries.map decodeQuery) = true := by
-  rw [target.holds_iff_of_arguments (statement table queries) witness
+  rw [target.holds_iff_of_arguments TableContractBindings.membershipFormula (statement table queries) witness
     (.cons table (.cons queries .nil)) (target_arguments table queries witness)]
   change TableContractBindings.membershipFormula.invokeRelation (.cons table (.cons queries .nil)) =
     .done (.cons true .nil) ↔ _
@@ -290,7 +289,7 @@ theorem target_holds_iff (table : List F) (queries : List (QueryValue F))
 /-- Deterministic false-input rejection holds under every reply at every
 checkpoint. An empty charge schedule is not used as a rejection premise. -/
 theorem false_input_rejected (table : List F) (queries : List (QueryValue F))
-    (falseInput : target.FalseStatement (G := G) (statement table queries)) :
+    (falseInput : target.FalseStatement (G := G) TableContractBindings.membershipFormula (statement table queries)) :
     PIR.Yields (fun output => Domain.acceptanceAt 0 output.values ≠ some true)
       (Domain.participant (model (F := F) (G := G)) program context validator (inputs table queries)) := by
   rw [validator_equation]
@@ -307,7 +306,7 @@ theorem false_input_rejected (table : List F) (queries : List (QueryValue F))
 /-- Actual complete paired execution for every true retained target. The
 producer succeeds, no proof is left, and the original Boolean output is kept. -/
 theorem completeness {S : Type} (table : List F) (queries : List (QueryValue F))
-    (witness : target.Witness F G) (truth : target.Holds (statement table queries) witness)
+    (witness : target.Witness F G) (truth : target.Holds TableContractBindings.membershipFormula (statement table queries) witness)
     (oracle : Domain.Oracle Id carriers S) (state : S) :
     Domain.PairExecution.Success 0
       (Domain.executePair (m := Id) (model (F := F) (G := G)) program context producer validator [] (inputs table queries)
@@ -334,7 +333,7 @@ theorem admitted_execution {m : Type → Type} [Monad m] {S : Type}
   kernel_rfl
 
 theorem admitted_completeness {S : Type} (table : List F) (queries : List (QueryValue F))
-    (witness : target.Witness F G) (truth : target.Holds (statement table queries) witness)
+    (witness : target.Witness F G) (truth : target.Holds TableContractBindings.membershipFormula (statement table queries) witness)
     (history : Domain.History carriers) (oracle : Domain.Oracle Id carriers S) (state : S) :
     Domain.PairExecution.Success 0
       (AuthoredPair.execute (m := Id) imported selected (model (F := F) (G := G))
@@ -345,7 +344,7 @@ theorem admitted_completeness {S : Type} (table : List F) (queries : List (Query
 /-- Completeness has an actual related input. Empty queries legitimately skip
 all table scans, as specified by the existing eager finite computation law. -/
 theorem related_input_exists : ∃ witness : target.Witness F G,
-    target.Holds (statement [] []) witness := by
+    target.Holds TableContractBindings.membershipFormula (statement [] []) witness := by
   refine ⟨fun _ _ => none, (target_holds_iff [] [] _).mpr ?_⟩
   refine ⟨?_, rfl⟩
   constructor
@@ -355,7 +354,7 @@ theorem related_input_exists : ∃ witness : target.Witness F G,
 
 /-- Nonvacuity also holds with a selected row and a nonempty table. -/
 theorem related_nonempty_input_exists : ∃ witness : target.Witness F G,
-    target.Holds (statement [0] [(true, (0, ()))]) witness := by
+    target.Holds TableContractBindings.membershipFormula (statement [0] [(true, (0, ()))]) witness := by
   refine ⟨fun _ _ => none, (target_holds_iff _ _ _).mpr ⟨?_, ?_⟩⟩
   · exact ⟨by change 1 < indexLimit; decide, Or.inr (by change 1 < indexLimit; decide)⟩
   · simp [PIR.Relation.Table.membership, PIR.Relation.Table.contains, decodeQuery]
@@ -365,7 +364,7 @@ formula on its explicit operational domain. The mathematical target is not
 redefined to include resource admission. -/
 theorem target_agreement (table : List F) (queries : List (QueryValue F))
     (bounded : Admissible table queries) (witness : target.Witness F G) :
-    target.Holds (statement table queries) witness ↔
+    target.Holds TableContractBindings.membershipFormula (statement table queries) witness ↔
       PIR.Relation.Table.Membership table (queries.map decodeQuery) := by
   rw [target_holds_iff]
   exact ⟨fun truth => (PIR.Relation.Table.membership_exact _ _).mp truth.2,

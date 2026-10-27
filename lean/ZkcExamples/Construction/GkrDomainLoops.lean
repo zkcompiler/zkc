@@ -66,81 +66,81 @@ theorem round_sorts (source : (List F × F) × Hist (F := F) (G := G)) (actual :
   rfl
 
 /-- The complete output loop, with its exact captures, yields and bound refusal. -/
-def output_loop (outer : Env (F := F) (G := G)) (length : outer.length = 9)
+def output_loop (outer : Env (F := F) (G := G)) (length : outer.length = 35)
     (handle bound : Nat) (point : List F) (suffix : Hist (F := F) (G := G))
     (foundCount : outer[6]? = some (.data (.index bound)))
-    (foundInitial : Domain.read outer [8, 7] = some (pointValues point suffix)) :
+    (foundInitial : Domain.read outer [34, 7] = some (pointValues point suffix)) :
     Original.Simulation (AppendReturns PointReturns outer) (fun _ _ => True)
       (SourceProcess.sourceView context (output {} handle bound point) (history suffix))
-      ((Domain.View.loop 4 [19, 18] 6 [8, 7] [.data (.vector "bls12-381.fr"), .transcript context.suite]
+      ((Domain.View.loop 4 [45, 44] 6 [34, 7] [.data (.vector "bls12-381.fr"), .transcript context.suite]
         (View.output (ringModel F G) program context) outer).interpret operations) := by
   have certificate := loop_binding PointReturns (fun state _ => GkrVerifier.outputRound {} handle state)
-    (View.output (ringModel F G) program context) outer [19, 18] [.data (.vector "bls12-381.fr"), .transcript context.suite]
+    (View.output (ringModel F G) program context) outer [45, 44] [.data (.vector "bls12-381.fr"), .transcript context.suite]
     (fun state carried index related => by
       apply Classical.choice
       obtain ⟨point, suffix, rfl, rfl⟩ := related
       exact ⟨output_step outer length handle index point suffix⟩)
-    point_sorts bound 6 [8, 7] point suffix (pointValues point suffix)
+    point_sorts bound 6 [34, 7] point suffix (pointValues point suffix)
     foundCount foundInitial ⟨point, suffix, rfl, rfl⟩
   simpa only [output, List.range_eq_range', Finite.fold_range_repeatN] using certificate
 
 /-- The complete left loop, with its exact captures, yields and bound refusal. -/
-def left_loop (outer : Env (F := F) (G := G)) (length : outer.length = 17)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
-    (handle bound : Nat) (claim : F) (suffix : Hist (F := F) (G := G))
+def left_loop (outer : Env (F := F) (G := G)) (length : outer.length = 50)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
+    (handle bound : Nat) (pending : List F) (claim : F) (suffix : Hist (F := F) (G := G))
     (foundCount : outer[6]? = some (.data (.index bound)))
-    (foundInitial : Domain.read outer [16, 14, 15] = some (roundValues [] claim suffix)) :
+    (foundInitial : Domain.read outer [48, 49, 43] = some (roundValues pending claim suffix)) :
     Original.Simulation (AppendReturns RoundReturns outer) (fun _ _ => True)
-      (SourceProcess.sourceView context (rounds (GkrVerifier.leftContext {}) handle bound claim) (history suffix))
-      ((Domain.View.loop 4 [49, 53, 48] 6 [16, 14, 15] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
+      (SourceProcess.sourceView context (rounds (GkrVerifier.leftContext {}) handle bound pending claim) (history suffix))
+      ((Domain.View.loop 4 [82, 86, 81] 6 [48, 49, 43] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
         (View.left (ringModel F G) program context) outer).interpret operations) := by
   have certificate := loop_binding RoundReturns (fun state _ => GkrVerifier.round (GkrVerifier.leftContext {}) handle state)
-    (View.left (ringModel F G) program context) outer [49, 53, 48] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
+    (View.left (ringModel F G) program context) outer [82, 86, 81] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
     (fun state carried index related => by
       apply Classical.choice
       obtain ⟨point, claim, suffix, rfl, rfl⟩ := related
       exact ⟨left_step outer length layerIndex layerFound handle index point claim suffix⟩)
-    round_sorts bound 6 [16, 14, 15] ([], claim) suffix (roundValues [] claim suffix)
-    foundCount foundInitial ⟨[], claim, suffix, rfl, rfl⟩
+    round_sorts bound 6 [48, 49, 43] (pending, claim) suffix (roundValues pending claim suffix)
+    foundCount foundInitial ⟨pending, claim, suffix, rfl, rfl⟩
   simpa only [rounds, GkrVerifier.rounds, List.range_eq_range', Finite.fold_range_repeatN] using certificate
 
 /-- The complete right loop, with its exact captures, yields and bound refusal. -/
-def right_loop (outer : Env (F := F) (G := G)) (length : outer.length = 21)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
-    (handle bound : Nat) (claim : F) (suffix : Hist (F := F) (G := G))
+def right_loop (outer : Env (F := F) (G := G)) (length : outer.length = 57)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
+    (handle bound : Nat) (pending : List F) (claim : F) (suffix : Hist (F := F) (G := G))
     (foundCount : outer[6]? = some (.data (.index bound)))
-    (foundInitial : Domain.read outer [20, 18, 19] = some (roundValues [] claim suffix)) :
+    (foundInitial : Domain.read outer [55, 56, 52] = some (roundValues pending claim suffix)) :
     Original.Simulation (AppendReturns RoundReturns outer) (fun _ _ => True)
-      (SourceProcess.sourceView context (rounds (GkrVerifier.rightContext {}) handle bound claim) (history suffix))
-      ((Domain.View.loop 4 [53, 57, 52] 6 [20, 18, 19] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
+      (SourceProcess.sourceView context (rounds (GkrVerifier.rightContext {}) handle bound pending claim) (history suffix))
+      ((Domain.View.loop 4 [89, 93, 88] 6 [55, 56, 52] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
         (View.right (ringModel F G) program context) outer).interpret operations) := by
   have certificate := loop_binding RoundReturns (fun state _ => GkrVerifier.round (GkrVerifier.rightContext {}) handle state)
-    (View.right (ringModel F G) program context) outer [53, 57, 52] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
+    (View.right (ringModel F G) program context) outer [89, 93, 88] [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript context.suite]
     (fun state carried index related => by
       apply Classical.choice
       obtain ⟨point, claim, suffix, rfl, rfl⟩ := related
       exact ⟨right_step outer length layerIndex layerFound handle index point claim suffix⟩)
-    round_sorts bound 6 [20, 18, 19] ([], claim) suffix (roundValues [] claim suffix)
-    foundCount foundInitial ⟨[], claim, suffix, rfl, rfl⟩
+    round_sorts bound 6 [55, 56, 52] (pending, claim) suffix (roundValues pending claim suffix)
+    foundCount foundInitial ⟨pending, claim, suffix, rfl, rfl⟩
   simpa only [rounds, GkrVerifier.rounds, List.range_eq_range', Finite.fold_range_repeatN] using certificate
 
 /-- The complete coefficient loop, with its exact captures, yields and bound refusal. -/
-def coefficient_loop (outer : Env (F := F) (G := G)) (length : outer.length = 30)
-    (layerIndex : Nat) (layerFound : outer[12]? = some (.data (.index layerIndex)))
+def coefficient_loop (outer : Env (F := F) (G := G)) (length : outer.length = 72)
+    (layerIndex : Nat) (layerFound : outer[40]? = some (.data (.index layerIndex)))
     (bound : Nat) (point : List F) (suffix : Hist (F := F) (G := G))
     (foundCount : outer[6]? = some (.data (.index bound)))
-    (foundInitial : Domain.read outer [29, 27] = some (pointValues point suffix)) :
+    (foundInitial : Domain.read outer [71, 69] = some (pointValues point suffix)) :
     Original.Simulation (AppendReturns PointReturns outer) (fun _ _ => True)
       (SourceProcess.sourceView context (coefficients {} bound point) (history suffix))
-      ((Domain.View.loop 4 [38, 37] 6 [29, 27] [.data (.vector "bls12-381.fr"), .transcript context.suite]
+      ((Domain.View.loop 4 [80, 79] 6 [71, 69] [.data (.vector "bls12-381.fr"), .transcript context.suite]
         (View.coefficient (ringModel F G) program context) outer).interpret operations) := by
   have certificate := loop_binding PointReturns (fun state _ => GkrVerifier.lineCoefficient {} state)
-    (View.coefficient (ringModel F G) program context) outer [38, 37] [.data (.vector "bls12-381.fr"), .transcript context.suite]
+    (View.coefficient (ringModel F G) program context) outer [80, 79] [.data (.vector "bls12-381.fr"), .transcript context.suite]
     (fun state carried index related => by
       apply Classical.choice
       obtain ⟨point, suffix, rfl, rfl⟩ := related
       exact ⟨coefficient_step outer length layerIndex layerFound index point suffix⟩)
-    point_sorts bound 6 [29, 27] point suffix (pointValues point suffix)
+    point_sorts bound 6 [71, 69] point suffix (pointValues point suffix)
     foundCount foundInitial ⟨point, suffix, rfl, rfl⟩
   simpa only [coefficients, List.range_eq_range', Finite.fold_range_repeatN] using certificate
 

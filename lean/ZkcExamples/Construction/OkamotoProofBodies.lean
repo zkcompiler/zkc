@@ -29,7 +29,7 @@ def proofSignature : ProtocolSignature where
 
 def proofBody : Region protocolDialect proofSignature.inputs proofSignature.outputs :=
   .letOp (.mark "") .nil .nil <|
-  .letOp (.statement "zkl_c0f7bdccf86767a692c23203245eac7b9fa25c8263474880e3ae8f0eee6bc453" [.group "bls12-381.g1", .group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr", .field "bls12-381.fr"] ["role00000001", "role00000001", "role00000001", "role00000000", "role00000000"] 0) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))))) .nil <|
+  .letOp (.statement "zkl_c0f7bdccf86767a692c23203245eac7b9fa25c8263474880e3ae8f0eee6bc453" [(.group "bls12-381.g1"), (.group "bls12-381.g1"), (.group "bls12-381.g1"), (.field "bls12-381.fr"), (.field "bls12-381.fr")] ["role00000001", "role00000001", "role00000001", "role00000000", "role00000000"] 0) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))))) .nil <|
   .letOp (.mark "label_66697273745f6e6f6e6365") .nil .nil <|
   .letOp (.draw 0 "bls12-381.fr" "label_66697273745f6e6f6e6365") (.cons (.there (.there (.there (.there (.there .here))))) .nil) .nil <|
   .letOp (.mark "label_7365636f6e645f6e6f6e6365") .nil .nil <|

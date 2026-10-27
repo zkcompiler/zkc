@@ -20,7 +20,7 @@ open ZkcSecurity.Examples.Generated.Components.SmallSumcheckABI
 abbrev Scalar := ZkcSecurity.Examples.Components.SmallSumcheck.Formula.Scalar
 
 theorem formula_equation (raw : List Scalar) (claim : Scalar) (bounded : raw.length < indexLimit) :
-    validatorSubject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+    ZkcSecurity.Examples.Components.SmallSumcheck.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
       (.cons raw (.cons claim .nil)) =
       .done (.cons (decide (claim = raw.sum)) .nil) :=
   ZkcSecurity.Examples.Components.SmallSumcheck.Formula.equation raw claim bounded
@@ -30,7 +30,7 @@ theorem holds_iff (raw : List Scalar) (claim : Scalar) (count : Nat)
     validatorSubject.Holds (statement raw claim count) witness ↔ raw.sum = claim := by
   refine (ZkcSecurity.Claims.Domain.Subject.holds_iff_of_read validatorSubject _ witness _
     (validator_application_read raw claim count witness)).trans ?_
-  change validatorSubject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+  change ZkcSecurity.Examples.Components.SmallSumcheck.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
     (.cons raw (.cons claim .nil)) =
       (.done (.cons true .nil) : Closed (Values (assignment Scalar Scalar) [.boolean])) ↔ _
   rw [formula_equation raw claim bounded]
@@ -56,7 +56,7 @@ abbrev Scalar := ZkcSecurity.Examples.Components.TwoSums.Formula.Scalar
 
 theorem formula_equation (left right : List Scalar) (leftClaim rightClaim : Scalar)
     (leftBound : left.length < indexLimit) (rightBound : right.length < indexLimit) :
-    validatorSubject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+    ZkcSecurity.Examples.Components.TwoSums.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
       (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       .done (.cons (decide (leftClaim = left.sum) && decide (rightClaim = right.sum)) .nil) :=
   ZkcSecurity.Examples.Components.TwoSums.Formula.equation left right leftClaim rightClaim leftBound rightBound
@@ -68,7 +68,7 @@ theorem holds_iff (left right : List Scalar) (leftClaim rightClaim : Scalar) (co
       left.sum = leftClaim ∧ right.sum = rightClaim := by
   refine (ZkcSecurity.Claims.Domain.Subject.holds_iff_of_read validatorSubject _ witness _
     (validator_application_read left right leftClaim rightClaim count witness)).trans ?_
-  change validatorSubject.target.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
+  change ZkcSecurity.Examples.Components.TwoSums.Formula.formula.invokeRelationOn ZkcSecurity.Domains.PrimeField.blsScalarModel
     (.cons left (.cons right (.cons leftClaim (.cons rightClaim .nil)))) =
       (.done (.cons true .nil) : Closed (Values (assignment Scalar Scalar) [.boolean])) ↔ _
   rw [formula_equation left right leftClaim rightClaim leftBound rightBound]

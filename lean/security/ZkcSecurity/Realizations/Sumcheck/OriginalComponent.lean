@@ -25,7 +25,7 @@ structure Context where
 abbrev signature := OriginalSumcheckLibrary.signature (F := F) (G := G)
 
 def loopSite (context : Context) : String :=
-  qualifyProtocolSite context.protocol.applicationPrefix "s15"
+  qualifyProtocolSite context.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite
 
 noncomputable def program :
     Program (signature (F := F) (G := G)) Context (PrefixState F Frame) (Message.endpoints F) where

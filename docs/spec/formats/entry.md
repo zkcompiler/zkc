@@ -82,7 +82,21 @@ to this interface.
 
 ### Relations and logical schemas
 
-A relation record has `symbol`, `inputs` and `definition`. Each formal has `name`,
+A relation record has exactly `symbol`, `static_arguments`, `inputs` and
+`definition`. `static_arguments` is a required ordered list of the closed typed
+terms in the [protocol origin grammar](structured-source.md). It retains every
+opaque static parameter, including unused parameters, with its type, natural
+decimal spelling and domain identity. The list permits at most 128 arguments,
+4096 aggregate term nodes and 64 term levels; recursive lists permit at most
+512 children and term strings at most 512 UTF-8 bytes. Formula and captured
+relations require an empty list. Opaque identity is the native declaration's
+`(kind, key, revision, static_arguments)`; ordered argument trees are part of
+identity. The C++ reader compares this list with the original declaration.
+The Rust Host validates the typed carrier and retains its exact arguments; it
+does not reconstruct MLIR declarations or assign opaque predicate meaning.
+The authenticated package binds the original IR hash and compiler-checked
+interface bytes.
+Each formal has `name`,
 `purpose`, ordered `native` indices and `schema`. Definition records have exactly
 `{kind, function}` for a formula, `{kind}` for an opaque declaration, or
 `{kind, asset}` for a captured R1CS, AIR or bundle, with `kind` spelled `r1cs`,

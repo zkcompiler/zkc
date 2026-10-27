@@ -61,7 +61,7 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
                       and op[2][0] == "transcript.native.indexed.challenge"]
         assert len(challenges) == (2 if name == "TwoSums" else 1)
         assert all(op[2][1:] == [[policy[5]], ""] for op in challenges)
-        assert len(producer) == len(validator) == 10
+        assert len(producer) == len(validator) == 11
         assert validator[9] == []
         if name == "Schnorr":
             assert producer[9] == [["service_3", policy[2], "3", "3", "random.bls12-381.fr/0"]]

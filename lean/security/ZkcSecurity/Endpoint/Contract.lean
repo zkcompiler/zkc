@@ -25,13 +25,14 @@ structure ImportedLanguage {art : Artifacts} (_compiled : Compiled art) (F G : T
 /-- The two distinct sources of an ordinary soundness claim's meaning. -/
 inductive SoundnessTarget {art : Artifacts} (compiled : Compiled art) (F G : Type) where
   | retained (target : RetainedTarget compiled.imported art.participant.policy art.publics)
+      (formula : FormulaBinding compiled.imported target.application.relation)
   | importedLanguage (declaration : ImportedLanguage compiled F G)
 
 def SoundnessTarget.FalseStatement {art : Artifacts} {compiled : Compiled art} {F G : Type}
     [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (target : SoundnessTarget compiled F G) (statement : art.Statement F G) : Prop :=
   match target with
-  | .retained target => target.FalseStatement statement
+  | .retained target formula => target.FalseStatement formula statement
   | .importedLanguage declaration => declaration.read statement ∉ declaration.language
 
 end ZkcSecurity.Endpoint

@@ -38,7 +38,7 @@ def maximum : Nat := maximumOf ZkcExamples.Construction.SumcheckProof.participan
 def names : Names := Names.of ZkcExamples.Construction.SumcheckProof.participant.instructions
 
 def lowered (maximum : Nat) : Lowered :=
-  ⟨code names maximum, [8, 7], [.loop 2 maximum [.receive coordinate, .receive coordinate]]⟩
+  ⟨code names maximum, [13, 10], [.loop 2 maximum [.receive coordinate, .receive coordinate]]⟩
 
 -- The generated facts expose the same executable reading, including returns.
 theorem lowered_eq : ZkcExamples.Executable.SumcheckProof.lowered = lowered maximum := by kernel_rfl
@@ -47,7 +47,7 @@ def roundPrefix : List Code := (roundCode names).take 27
 def roundSuffix : List Code := (roundCode names).drop 28
 
 theorem round_split : roundCode names = roundPrefix ++
-    [.helper ⟨.call names.appendHelper, [6, 21], [.data (.vector names.scalar)], []⟩] ++ roundSuffix := by
+    [.helper ⟨.call names.appendHelper, [9, 24], [.data (.vector names.scalar)], []⟩] ++ roundSuffix := by
   decide +kernel
 
 theorem roundPrefix_static : Code.static roundPrefix = some 28 := by decide +kernel
@@ -59,9 +59,9 @@ def roundCharge : Nat :=
   (Code.charges (helperBound ZkcExamples.Executable.SumcheckProof.validator) (roundCode names)).getD 0
 
 def charge (rounds : Nat) : Nat :=
-  1 + 2 + 1 + rounds * (roundCharge + 1) + 1 + (62 + 20 * rounds) + 1
+  1 + 2 + 1 + 1 + 1 + rounds * (roundCharge + 1) + 1 + 1 + 1 + (62 + 20 * rounds) + 1
 
-theorem charge_eq (rounds : Nat) : charge rounds = 68 + 59 * rounds := by
+theorem charge_eq (rounds : Nat) : charge rounds = 72 + 59 * rounds := by
   simp only [charge, roundCharge, round_charge, Option.getD_some]
   omega
 
@@ -74,11 +74,11 @@ def Carried (count : Nat) (values : DomainVM.Environment F G) (_ : Proof F G) : 
 
 /-- A round's charge and the runtime point-length invariant hold for all typed
 replies, independently of the public table, current claim and proof stream. -/
-theorem round_fits (a b c d e : Domain.Value (Structured.uniformCarriers F G))
+theorem round_fits (a b c d e f g h : Domain.Value (Structured.uniformCarriers F G))
     (index : Nat) (point : List F) (scalar : F) (history : Domain.History (Structured.uniformCarriers F G))
     (proof : Proof F G) (used budget : Nat) (within : used + 38 ≤ budget) :
     DomainVM.FitsK ZkcExamples.Construction.SumcheckProof.program ZkcExamples.Construction.SumcheckProof.context cost budget (roundCode names)
-      (ZkcExamples.Construction.SumcheckDomainConnection.roundInputs [a,b,c,d,e] index point scalar history) proof used
+      (ZkcExamples.Construction.SumcheckDomainConnection.roundInputs [a,b,c,d,e,f,g,h] index point scalar history) proof used
       (fun final unread charged => charged ≤ used + 38 ∧ ∀ values,
         Domain.read final yielded = some values →
           Domain.sortsMatch (carriedSorts names) values = true → Carried (point.length + 1) values unread) := by
@@ -110,7 +110,7 @@ theorem round_fits (a b c d e : Domain.Value (Structured.uniformCarriers F G))
   all_goals normalize_artifact_operations [lowResolved, highResolved, drawResolved, deliveryResolved,
       requests.1, requests.2.1, requests.2.2, drawRequest,
       ZkcExamples.Construction.SumcheckDomainConnection.context_suite]
-    unfolding [PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true]
+    unfolding [Domain.evaluate, Domain.step, PIR.Yields, Structured.Ty.isService, Bool.not_false, Bool.not_true]
 
   intro ignored24 ignored25 ignored26 ignored27 ignored28 ignored29 answer
   change F at answer
@@ -159,9 +159,15 @@ def programShape (maximum : Nat) (small : maximum < 64) : ProgramShape.Descripti
 
 theorem programContract (maximum : Nat) (small : maximum < 64) :
     ProgramShape.Contract (programShape maximum small) (cost (F := F) (G := G)) 38 where
-  empty := ZkcExamples.Construction.SumcheckDomainConnection.empty_helper
-  emptyCost := helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
-    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.emptyHelper = some 2 by kernel_rfl) []
+  pending := ZkcExamples.Construction.SumcheckDomainConnection.pending_helper
+  openClaim := ZkcExamples.Construction.SumcheckDomainConnection.openClaim_helper
+  atPrefix := ZkcExamples.Construction.SumcheckDomainConnection.atPrefix_helper
+  pendingCost := fun _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.pendingHelper = some 2 by kernel_rfl) _
+  openClaimCost := fun _ _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.openClaimHelper = some 1 by kernel_rfl) _
+  atPrefixCost := fun _ _ => helperCost_le installed ZkcExamples.Executable.SumcheckProof.validator
+    (show helperBound ZkcExamples.Executable.SumcheckProof.validator names.atPrefixHelper = some 1 by kernel_rfl) _
   checkCost := fun _ _ _ small shaped => SumcheckHelpers.check_cost small shaped
   round := round_fits
 

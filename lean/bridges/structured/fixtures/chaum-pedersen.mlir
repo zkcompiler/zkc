@@ -36,7 +36,7 @@
       %4 = "arith.andi"(%1, %3) : (i1, i1) -> i1
       "func.return"(%4) : (i1) -> ()
     }) : () -> ()
-    "relation.declare"() <{formula = @zkf_0fd0bc9206a16953b9f027e3c2bf28737cd91c0b40c440ff5e38197b21b98147, key = "zkl_6fa494d885c8d82de9abef99a9a62e27fcf8c7f2af288743241532ee562f92e7", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "parameter", "statement", "witness"], revision = "ba2059dcc14692a71d992f2aaac1ac15f1b224edb53a0ae9e59fdfc364a956a4", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, sym_name = "zkl_6fa494d885c8d82de9abef99a9a62e27fcf8c7f2af288743241532ee562f92e7"}> : () -> ()
+    "relation.declare"() <{formula = @zkf_0fd0bc9206a16953b9f027e3c2bf28737cd91c0b40c440ff5e38197b21b98147, key = "zkl_6fa494d885c8d82de9abef99a9a62e27fcf8c7f2af288743241532ee562f92e7", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "parameter", "statement", "witness"], revision = "ba2059dcc14692a71d992f2aaac1ac15f1b224edb53a0ae9e59fdfc364a956a4", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, static_arguments = [], sym_name = "zkl_6fa494d885c8d82de9abef99a9a62e27fcf8c7f2af288743241532ee562f92e7"}> : () -> ()
   }) : () -> ()
 }) : () -> ()
 

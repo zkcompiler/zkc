@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.OpenAdmission
+public import Zkc.Source.Structured.RelationChecking
 
 @[expose] public section
 
@@ -55,7 +56,9 @@ def ContractClause.check (snapshot : Snapshot) (signature : ProtocolSignature)
 /-- Formula references must select a retained private Math definition with the
 entire declared ABI. Preconditions are retained, not discharged by this check. -/
 def checkFormulaLinks (snapshot : Snapshot) : Except String Unit := do
+  checkRelationIdentities snapshot.relations
   for relation in snapshot.relations do
+    relation.staticArguments.forM (OriginTerm.checkCatalogue snapshot.catalogue admittedCatalogue Limits.nesting)
     match relation.kind, relation.formula with
     | "zkc.language.formula/0", some name =>
       let definition ← lookupDefinition snapshot name

@@ -127,9 +127,9 @@ def soundnessArguments (registry : ModelRegistry)
   checkCapabilities request
   let parameters ← (soundnessParameters (Numeric.cardinality F art.original)).decode request.parameters
   match subject.target with
-  | .retained target =>
+  | .retained _ formula =>
       checkDefaultRelation subject.compiled.imported.program.payload.definitions
-        target.formula.definition.helper
+        formula.definition.helper
   | .importedLanguage _ => pure ()
   let model ← resolveModel registry F art.original endpoint request.model
   match parameters with
@@ -185,7 +185,7 @@ def knowledgeArguments (registry : ModelRegistry) (request : Wire.Request)
   | .ok model =>
     if fixed : model.form = .fixed then
       match subject.target with
-      | .retained _ =>
+      | .retained _ _ =>
         match registered : subject.extractors.lookup responseDifference with
         | .error error => throw error
         | .ok entry =>

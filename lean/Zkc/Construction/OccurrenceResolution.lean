@@ -36,6 +36,21 @@ def resolve (snapshot : Structured.Snapshot) (context : Context) (expected : Ori
   | [_] => some (Domain.atCoordinates expected (frames.map (·.index)))
   | _ => none
 
+/-- Source admission can be checked once for a fixed proposal list. Dynamic
+resolution still checks the complete static stack, nominal origin and indices. -/
+theorem filter_validated (snapshot : Structured.Snapshot) (context : Context)
+    (expected : Origin) (frames : Frames) (candidates : List Template)
+    (valid : ∀ candidate ∈ candidates, SourceOccurrences.valid snapshot context candidate = true) :
+    candidates.filter (matchesOccurrence snapshot context expected frames) =
+      candidates.filter (fun template =>
+        (SourceOccurrences.repeatSites template == frames.map (·.site)) &&
+        (template.origin context == some expected) &&
+        (Domain.templateOrigin context template (frames.map (·.index)) ==
+          some (Domain.atCoordinates expected (frames.map (·.index))))) := by
+  apply List.filter_congr
+  intro candidate member
+  simp only [matchesOccurrence, valid candidate member, Bool.true_and]
+
 /-- Every resolved key has the exact expected nominal base and reached indices. -/
 theorem resolved_origin {snapshot : Structured.Snapshot} {context : Context} {expected origin : Origin}
     {frames : Frames} {candidates : List Template}

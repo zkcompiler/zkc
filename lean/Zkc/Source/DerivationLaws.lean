@@ -30,6 +30,26 @@ theorem RegionMeaning.OperationLaw.identity {meaning : RegionMeaning dialect I}
   subst callbacks
   simpa only [PIR.Process.interpret_identity] using equation
 
+/-- The identity interpretation derives the existing region without
+normalizing its callback environments. This is a structural rule, not a
+whole-region equation premise. -/
+theorem Region.Derivation.identity
+    (meaning : RegionMeaning dialect I) {inputs outputs : List dialect.Ty}
+    (body : Region dialect inputs outputs) (env : Environment meaning.Value inputs) :
+    Region.Derivation meaning (fun op => .call op .done) body env (body.denote meaning env) := by
+  induction body using Region.rec
+    (motive_2 := fun _ bodies => Regions.Derivation meaning (fun op => .call op .done)
+      bodies (bodies.denote meaning)) with
+  | ret refs => exact .ret refs env
+  | stop reason => exact .stop reason env
+  | bind body next bodyIH nextIH =>
+    exact .bind (bodyIH env) (fun values => nextIH (env.prepend values))
+  | letOp op args bodies next bodiesIH nextIH =>
+    exact .letOp op args bodiesIH (RegionMeaning.OperationLaw.identity op _ _ rfl)
+      (fun values => nextIH (env.prepend values))
+  | nil => exact .nil
+  | cons body tail bodyIH tailIH => exact .cons (fun values => bodyIH values.get) tailIH
+
 /-- Reconstructing an ordered tuple from its typed projections preserves it. -/
 theorem Values.reify_get {Ty : Type} {Value : Ty → Type} {types : List Ty}
     (values : Values Value types) : Environment.toValues values.get = values := by

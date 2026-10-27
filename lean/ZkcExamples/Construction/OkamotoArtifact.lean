@@ -24,9 +24,10 @@ set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
+open ZkcExamples.Construction.OkamotoProofBodies in
 structured_views ZkcExamples.Construction.OkamotoProofData.snapshot
-  helpers [formula := ZkcExamples.Construction.OkamotoProofBodies.formula]
-  protocols [proof := ZkcExamples.Construction.OkamotoProofBodies.proof]
+  helpers [formula]
+  protocols [proof]
 
 theorem admitted : Structured.check ZkcExamples.Construction.OkamotoProofData.snapshot = .ok program := kernel_admission
 

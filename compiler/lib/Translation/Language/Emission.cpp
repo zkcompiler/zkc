@@ -16,6 +16,7 @@
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Language/Builtins.h"
+#include "zkc/Language/Inspection.h"
 #include "zkc/Language/Layout.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Language/SourceTerms.h"
@@ -702,6 +703,9 @@ class Emitter {
           case MathematicalIdentity::IndexEqual:
             name = "data.index_equal";
             break;
+          case MathematicalIdentity::MultilinearRestrictPrefix:
+            name = "algebra.multilinear_restrict_prefix";
+            break;
           case MathematicalIdentity::VectorLength:
             name = "data.dim";
             break;
@@ -1385,6 +1389,12 @@ public:
              1);
     if (!unit)
       return std::move(failure);
+    auto sourceDeclarations = inspectComponentDeclarations(project, limits);
+    if (!sourceDeclarations)
+      return sourceDeclarations.takeError();
+    if (*sourceDeclarations != "[[],[]]")
+      unit->setAttr("source_declarations",
+                    builder.getStringAttr(*sourceDeclarations));
     definitions = &unit->getRegion(0).front();
     for (auto &decl : declared) {
       if (!decl.body || !decl.parameters.empty())
@@ -1524,12 +1534,23 @@ public:
         key = asset.identity().str();
         revision = "0";
       }
+      json::Array staticArguments;
+      if (definition.kind == K::Opaque)
+        for (const auto &argument : decl.staticArguments) {
+          auto encoded = take(encodeStaticTerm(argument));
+          if (!encoded)
+            return std::move(failure);
+          staticArguments.push_back(std::move(*encoded));
+        }
       builder.setInsertionPointToEnd(definitions);
       SmallVector<mlir::NamedAttribute> attributes{
           text("sym_name", decl.symbol),
           text("kind", kind),
           text("key", key),
           text("revision", revision),
+          attr("static_arguments",
+               protocol_ir::protocolOriginAttr(
+                   &context, json::Value(std::move(staticArguments)))),
           attr("signature", mlir::TypeAttr::get(builder.getFunctionType(
                                 inputs, {builder.getI1Type()}))),
           attr("purposes", strings(purposes))};

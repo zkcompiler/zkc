@@ -42,7 +42,7 @@ theorem check_terminal (payload : UnitPayload) (bodies : TerminalBodies payload.
         (Zkc.Polynomial.Multilinear.restrictPrefixValues entries point).sum = claim))) := by
   obtain ⟨bindings, bodies⟩ := bodies
   obtain ⟨collectBindings, first⟩ := bodies.first
-  rw [← (helpers_lift payload).closed, SumcheckVerifierHelpers.closed_invoke_plain]
+  rw [← (helpers_lift payload).closed, Zkc.Source.Structured.closed_invoke_plain]
   rw [(bodies.check.invoke payload.linked (SumcheckHelperLaws.checkInputs entries point claim)).trans
     (SumcheckHelperLaws.check_generic_body _
       (MapPrefixContracts.laws_of_bodies payload.linked bodies.restriction first)

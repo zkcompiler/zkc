@@ -4,6 +4,15 @@ use Type::*;
 
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::selectable(
+        "multilinear.restrict_prefix",
+        (&[Vector, Vector], &[Vector], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/multilinear.restrict_prefix",
+        "dalek/multilinear.restrict_prefix",
+        "plonky3/multilinear.restrict_prefix",
+    ]),
+    Contract::selectable(
         "vector.find_last",
         (&[Vector, Field], &[Index], AttributeRule::None),
     )

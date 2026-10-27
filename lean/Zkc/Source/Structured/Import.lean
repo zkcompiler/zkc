@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ContractAdmission
+public import Zkc.Source.Structured.ComponentDeclarations
 public import Zkc.Source.Structured.Availability
 public import Zkc.Source.Structured.ApplicationMetadata
 public import Zkc.Specification
@@ -101,6 +101,7 @@ def checkUnitHeaders (snapshot : Snapshot) :
   let domains ← snapshot.domains.mapM Domain.resolve
   let headers ← collectProtocolHeaders snapshot
   checkContracts snapshot headers
+  snapshot.sourceDeclarations.check snapshot headers
   let summaries ← snapshot.identitySummaries
   return (domains, headers, summaries)
 

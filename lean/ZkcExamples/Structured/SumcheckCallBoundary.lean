@@ -51,8 +51,8 @@ theorem child_excess (raw : List F) (claim : F) (count handle : Nat) (large : Su
     SumcheckSourceVerifier.childContext 1
     (SumcheckSourceVerifier.childInputs (some claim) (some count) (some handle))).interpret forgetSites = _
   rw [SumcheckSourceViews.unit.protocolTable_forgetSites, SumcheckSourceVerifier.reduce_invoke_plain (F := F) (G := G)]
-  exact SumcheckVerifierPrelude.reduce_excess (G := G) SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies
-    SumcheckSourceVerifier.childContext 1 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum count large none none none (some claim) (some handle)
+  exact SumcheckVerifierPrelude.reduce_excess (G := G) SumcheckSourceViews.unit SumcheckSourceVerifier.helperBodies SumcheckSourceVerifier.claimBodies
+    SumcheckSourceVerifier.childContext 1 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum count large none none none [] claim (some handle)
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 /-- The actual shape guard and fixed-table decoding determine the point length. -/

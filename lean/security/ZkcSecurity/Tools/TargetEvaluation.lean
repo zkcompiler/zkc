@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.SubjectABI
+public import Zkc.Construction.TargetElaboration
 public import Zkc.Source.Structured.Algebra
 public meta import Mathlib.Tactic.Tauto
 public meta import ZkcSecurity.Tools.InputLaws
@@ -24,6 +25,8 @@ elab "prove_retained_target " "[" scalar:term "," group:term "]"
     first
     | apply (ZkcSecurity.Claims.Domain.Subject.holds_iff_of_read _ _ _ _ $read).mpr
     | apply (ZkcSecurity.Claims.HonestPair.Subject.relation_iff_of_read _ _ _ $read).mpr))
+  evalTactic (← `(tactic|
+    rw [Zkc.Source.Structured.RelationMeaning.formula_exact _ (by bind_contract)]))
   evalTactic (← `(tactic| erw [$equation:term]))
   for goal in ← getGoals do
     setGoals [goal]
@@ -71,6 +74,8 @@ elab "prepare_target_readback " "[" scalar:term "," group:term "]"
   let fact ← InputLaws.forwardIff law
   withMainContext do
     let name := mkIdent (← fact.getDecl).userName
+    evalTactic (← `(tactic|
+      rw [Zkc.Source.Structured.RelationMeaning.formula_exact _ (by bind_contract)] at $name:ident))
     evalTactic (← `(tactic| erw [$equation:term] at $name:ident))
     let main ← getMainGoal
     for premise in (← getGoals).tail do

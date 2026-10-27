@@ -25,16 +25,24 @@ def proverResults (raw : List F) (count : Nat) (point : List F) :
   .cons (some point) (.cons (some (restrictPrefixValues raw point))
     (.cons (some (count - point.length)) (.cons (some 1) (.cons none (.cons none .nil)))))
 
+/-- The prover return after the foreign `atPrefix` call: the verifier outputs
+are absent at this participant, for every carried state. -/
+def proverReturnValues (state : Values (Component (assignment F G)) repeatState) :
+    Values (Component (assignment F G)) reduceOutputs :=
+  .cons (state.get (.there (.there (.there .here))))
+    (.cons (state.get .here) (.cons (state.get (.there .here))
+      (.cons (state.get (.there (.there .here))) (.cons none (.cons none .nil)))))
+
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem mask_proverArguments (ctx : ProtocolContext) (self : Nat)
     (prover : self = ctx.roles 0) (separate : ctx.roles 1 ≠ self)
     (raw : List F) (count : Nat) (claim : Option F) (rounds service : Option Nat) :
     maskValues self (ctx.mapScopes reduceInputScopes)
-      (reduceArguments (G := G) (some raw) (some count) (some 1) claim rounds service) =
-        reduceArguments (some raw) (some count) (some 1) none rounds none := by
+      (reduceArguments (G := G) (some raw) (some count) (some 1) none claim rounds service) =
+        reduceArguments (some raw) (some count) (some 1) none none rounds none := by
   subst self
   unfold reduceArguments
-  iterate 7 unfold maskValues
+  iterate 8 unfold maskValues
   simp [reduceInputScopes, ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -57,11 +65,11 @@ theorem prelude_prover (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies 
     (reduceBody maximum).denote
       (participantMeaningWith (.silent _) (participantActions F G)
         (plainHelpers U) (ctx.roles 0) (U.plainProtocolTable F G) ctx)
-      (reduceArguments (G := G) (some raw) (some count) (some 1) none (some rounds) none).get =
+      (reduceArguments (G := G) (some raw) (some count) (some 1) none none (some rounds) none).get =
       (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 0) (some rounds)
         (embedP (G := G) (honestState raw count [])) (cap none)
-        (bodyFn U ctx (ctx.roles 0))).bind (fun state => .done (returnValues state)) :=
-  SumcheckRoundNormalForms.proverReduce_process U maximum bodies ctx _ rfl separate raw count rounds
+        (bodyFn U ctx (ctx.roles 0))).bind (fun state => .done (proverReturnValues state)) :=
+  SumcheckPreludeNormalForms.proverReduce_process U maximum bodies ctx _ rfl separate raw count rounds
     countBound roundsBound enough
 
 /-- The generated normal form of the whole body at the prover, with its repeat
@@ -71,13 +79,13 @@ theorem proverReduce_honest (U : UnitPayload) (bodies : SumcheckUnitContracts.Bo
     (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0) (maximum : Nat)
     (raw : List F) (count : Nat) (shape : HasShape raw count 1) (bound : raw.length < indexLimit)
     (rounds : Nat) (admitted : rounds ≤ maximum) :
-    SumcheckRoundNormalForms.proverReduceProcess (G := G) U maximum ctx raw count rounds =
+    SumcheckPreludeNormalForms.proverReduceProcess (G := G) U maximum ctx raw count rounds =
       (PIR.repeatN rounds (roundHonest ctx raw count) []).bind
         (fun point => .done (proverResults raw count point)) := by
-  unfold SumcheckRoundNormalForms.proverReduceProcess
+  unfold SumcheckPreludeNormalForms.proverReduceProcess
   change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 0) (some rounds)
     (embedP (G := G) (honestState raw count [])) (cap none) (bodyFn U ctx (ctx.roles 0))).bind
-      (fun state => .done (returnValues state)) = _
+      (fun state => .done (proverReturnValues state)) = _
   have inside : ((repeatSpec maximum).roles.map ctx.roles).contains (ctx.roles 0) = true := by
     simp
   rw [repeat_admitted (repeatSpec maximum) ctx (ctx.roles 0) _ _ _ rounds inside admitted,
@@ -96,7 +104,7 @@ theorem reduce_prover (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U
     (rounds : Nat) (admitted : rounds ≤ maximum) (enough : rounds ≤ count)
     (claim : Option F) (service : Option Nat) :
     reduceDenote (G := G) maximum U ctx self
-      (reduceArguments (some raw) (some count) (some 1) claim (some rounds) service) =
+      (reduceArguments (some raw) (some count) (some 1) none claim (some rounds) service) =
       (PIR.repeatN rounds (roundHonest ctx raw count) []).bind
         (fun point => .done (proverResults raw count point)) := by
   have countBound : count < indexLimit := Nat.lt_trans shape.2.1 (by decide +kernel)

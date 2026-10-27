@@ -2,6 +2,7 @@ module
 
 public import Zkc.Source.Structured.Linking
 public import Zkc.Source.RegionDerivation
+public import ZkcExamples.Structured.MapFirstBodies
 
 @[expose] public section
 
@@ -40,9 +41,6 @@ abbrev totalHelper : Helper :=
 abbrev sumHelper : Helper :=
   ⟨"zkf_116f3285742dd1275b8149c69b78a6713cd6256a8af715be7c346da1c793a766",
     .math, [vector, scalar], [.boolean]⟩
-abbrev tableSumHelper : Helper :=
-  ⟨"zkf_654a0e58b11e83f398996b9e830df00890bec0f8dc08a65c5750d6d9c759b643",
-    .math, [vector, .index, .index, scalar], [.boolean]⟩
 abbrev valuesHelper : Helper :=
   ⟨"zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33",
     .math, [vector, .index, .index], [vector]⟩
@@ -70,16 +68,39 @@ def sumBody : Region dialect sumHelper.inputs sumHelper.outputs :=
     (.cons (.there (.there .here)) (.cons .here .nil)) .nil
     (.ret (.cons .here .nil))
 
-def tableSumBody : Region dialect tableSumHelper.inputs tableSumHelper.outputs :=
+/-- The current continuation formula reads the full Pending prefix and scalar. -/
+abbrev pendingHelper : Helper :=
+  ⟨"zkf_c51d11bf318ad26bc2fce7b89eec63f85b98f57e91e0e9e6256f84a573b5b6e6",
+    .math, [vector, .index, .index, vector, scalar], [.boolean]⟩
+
+def pendingBody : Region dialect pendingHelper.inputs pendingHelper.outputs :=
   .letOp (.invoke valuesHelper)
     (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.multilinearRestrictPrefix "bls12-381.fr")
+    (.cons .here (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
   .letOp (.invoke totalHelper) (.cons .here .nil) .nil <|
   .letOp (.fieldEqual "bls12-381.fr")
-    (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil)) .nil
-    (.ret (.cons .here .nil))
+    (.cons (.there (.there (.there (.there (.there (.there (.there .here)))))))
+      (.cons .here .nil)) .nil <|
+  .ret (.cons .here .nil)
 
 def valuesBody : Region dialect valuesHelper.inputs valuesHelper.outputs :=
   .ret (.cons .here .nil)
+
+abbrev tableShapeHelper : Helper :=
+  ⟨"zkf_326ab2331715c62ba21cb6a967c927ba6ad7f7f2da5e84eb0e5de0fc610f26ca", .math, [(.vector "bls12-381.fr"), .index, .index], [.boolean]⟩
+
+def tableShapeBody : Region dialect tableShapeHelper.inputs tableShapeHelper.outputs :=
+  .letOp (.invoke (⟨ "zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.indexConstant 1) .nil .nil <|
+  .letOp .indexEqual (.cons (.there .here) (.cons .here .nil)) .nil <|
+  .letOp (.invoke (⟨ "zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", .math, [(.vector "bls12-381.fr"), .index, .index], [(.vector "bls12-381.fr")] ⟩ : Helper)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
+  .letOp (.vectorLength "bls12-381.fr") (.cons .here .nil) .nil <|
+  .letOp (.invoke (⟨ "zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", .math, [(.vector "bls12-381.fr"), .index, .index], [.index] ⟩ : Helper)) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))) .nil <|
+  .letOp .indexPowerOfTwo (.cons (.there .here) (.cons .here .nil)) .nil <|
+  .letOp .booleanAnd (.cons (.there (.there (.there (.there .here)))) (.cons .here .nil)) .nil <|
+  .ret (.cons .here .nil)
+
 
 /-- All dependencies must belong to the same actual linked helper inventory. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
@@ -205,19 +226,50 @@ theorem sum_equation (association : BodyIn definitions sumHelper sumBody) (xs : 
         exact .ret _ _
   exact derivation.sound_identity
 
-theorem tableSum_equation
-    (association : BodyIn definitions tableSumHelper tableSumBody)
-    (values : BodyIn definitions valuesHelper valuesBody) (xs : List F) (dimension width : Nat) (claim : F)
-    (bounded : xs.length < indexLimit) :
-    invoke (closedMeanings (F := F) (G := G) definitions) tableSumHelper
-      (.cons xs (.cons dimension (.cons width (.cons claim .nil)))) =
-      .done (.cons (decide (claim = xs.sum)) .nil) := by
+/-- One mathematical law for the exact retained continuation body in any unit. -/
+theorem pending_equation
+    (association : BodyIn definitions pendingHelper pendingBody)
+    (values : BodyIn definitions valuesHelper valuesBody) (xs : List F) (dimension width : Nat)
+    (point : List F) (claim : F)
+    (bounded : (Zkc.Polynomial.Multilinear.restrictPrefixValues xs point).length < indexLimit) :
+    invoke (closedMeanings (F := F) (G := G) definitions) pendingHelper
+      (.cons xs (.cons dimension (.cons width (.cons point (.cons claim .nil))))) =
+      .done (.cons (decide (claim =
+        (Zkc.Polynomial.Multilinear.restrictPrefixValues xs point).sum)) .nil) := by
   rw [association.invoke linked]
-  simp only [tableSumBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Values.get, Regions.denote]
+  change (invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper
+    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
   rw [values.invoke linked]
-  simp only [valuesBody, Region.denote, Operands.eval, Values.get, PIR.Process.bind, Environment.prepend, Environment.push]
-  rw [total_equation linked bodies xs bounded]
+  change (invoke (closedMeanings (F := F) (G := G) definitions) totalHelper
+    (.cons (Zkc.Polynomial.Multilinear.restrictPrefixValues xs point) .nil)).bind _ = _
+  rw [total_equation linked bodies _ bounded]
   rfl
+
+omit bodies in
+/-- The independent mathematical Table shape clause is total. -/
+theorem tableShape_equation
+    (association : BodyIn definitions tableShapeHelper tableShapeBody)
+    (widthBody : BodyIn definitions MapFirstBodies.widthHelper MapFirstBodies.widthBody)
+    (values : BodyIn definitions valuesHelper valuesBody)
+    (variablesBody : BodyIn definitions MapFirstBodies.variablesHelper MapFirstBodies.variablesBody)
+    (xs : List F) (dimension width : Nat) :
+    invoke (closedMeanings (F := F) (G := G) definitions) tableShapeHelper
+      (.cons xs (.cons dimension (.cons width .nil))) =
+      .done (.cons (decide (width = 1 ∧ xs.length = 2 ^ dimension)) .nil) := by
+  rw [association.invoke linked]
+  change (invoke (closedMeanings (F := F) (G := G) definitions) MapFirstBodies.widthHelper
+    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
+  rw [widthBody.invoke linked]
+  change (invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper
+    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
+  rw [values.invoke linked]
+  change (invoke (closedMeanings (F := F) (G := G) definitions) MapFirstBodies.variablesHelper
+    (.cons xs (.cons dimension (.cons width .nil)))).bind _ = _
+  rw [variablesBody.invoke linked]
+  change (PIR.Process.done (Values.cons
+    (decide (width = 1) && naturalPowerOfTwo xs.length dimension) .nil) :
+    Closed (Values (assignment F G) [.boolean])) = _
+  rw [naturalPowerOfTwo_eq_decide]
+  by_cases width = 1 <;> by_cases xs.length = 2 ^ dimension <;> simp_all
 
 end ZkcExamples.Structured.SumcheckRelationContract

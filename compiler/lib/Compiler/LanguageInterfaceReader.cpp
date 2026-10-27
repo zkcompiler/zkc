@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Protocol/Construction.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/Formula.h"
+#include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Names.h"
@@ -44,7 +45,8 @@ class Reader {
   InterfaceProtocol *current = nullptr;
   ArrayRef<Asset> assets;
   StringMap<unsigned> relationIndices;
-  std::map<std::tuple<std::string, std::string, std::string>, unsigned>
+  std::map<std::tuple<std::string, std::string, std::string, std::string>,
+           unsigned>
       relationIdentities;
   std::map<std::string, protocol_ir::MathematicalOp> nativeProtocols;
   std::map<std::string, relation::DeclareOp> nativeRelations;
@@ -599,7 +601,8 @@ class Reader {
   bool relationRecord(const json::Value &value) {
     if (!charge(1))
       return false;
-    auto *obj = object(value, {"symbol", "inputs", "definition"});
+    auto *obj =
+        object(value, {"symbol", "inputs", "static_arguments", "definition"});
     if (!obj)
       return false;
     auto symbol = text(*obj, "symbol", limits.symbolBytes);
@@ -617,6 +620,16 @@ class Reader {
     result.externalKind = native.getKind().str();
     result.key = native.getKey().str();
     result.revision = native.getRevision().str();
+    auto staticArguments =
+        relation::readStaticArguments(native.getStaticArguments());
+    auto *exportedArguments = obj->get("static_arguments");
+    if (!staticArguments) {
+      failure = staticArguments.takeError();
+      return false;
+    }
+    if (!exportedArguments || *exportedArguments != *staticArguments)
+      return fail("relation typed static arguments differ");
+    result.staticArguments = std::move(*staticArguments);
     unsigned flat = 0;
     std::set<std::string> names;
     std::vector<std::string> logicalTypes, logicalPurposes;
@@ -810,8 +823,11 @@ class Reader {
       result.asset = *found;
     } else
       return fail("unknown relation definition kind");
+    std::string canonical;
+    raw_string_ostream(canonical) << result.staticArguments;
     auto [identity, added] = relationIdentities.emplace(
-        std::make_tuple(result.externalKind, result.key, result.revision),
+        std::make_tuple(result.externalKind, result.key, result.revision,
+                        canonical),
         view.relations.size());
     if (!added) {
       const auto &previous = view.relations[identity->second];

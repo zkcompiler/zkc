@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Examples.Components.TwoSumsTarget
+public import ZkcSecurity.Examples.Components.TwoSumsHelpers
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 

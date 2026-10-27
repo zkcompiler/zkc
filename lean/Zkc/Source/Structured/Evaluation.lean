@@ -5,6 +5,8 @@ public import Zkc.Source.Structured.FiniteDomains
 public import Zkc.Source.Structured.CollectEvaluation
 public import Zkc.Source.Finite
 
+public import Zkc.Polynomial.Multilinear.ListRestriction
+
 @[expose] public section
 
 /-! One arithmetic and control evaluator for explicit scalar/group values and
@@ -86,6 +88,8 @@ def operation {F G : Type} {interface : PIR.Signature}
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
   | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
+      .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)

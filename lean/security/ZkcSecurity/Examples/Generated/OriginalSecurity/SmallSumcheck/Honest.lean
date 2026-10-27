@@ -22,6 +22,7 @@ def routes0 (handle : Nat) : OriginalHonest.Routes (ZkcExamples.Structured.Origi
     ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol handle :=
   ⟨_, ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.ProducerCall0.routes handle, ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0_routes handle⟩
 
+set_option linter.unusedSimpArgs false in
 theorem source (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input2 1) (bounded0 : input0.length < indexLimit)
     (admitted : input2 ≤ 2) (history : Domain.History (uniformCarriers F G)) :
     Readback RootPost
@@ -31,7 +32,8 @@ theorem source (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : Primiti
   rw [ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.producer_source input0 input2 shape0 bounded0, ZkcExamples.Structured.Generated.Original.SmallSumcheck.participant_binding]
   simp only [ZkcExamples.Structured.Generated.Original.SmallSumcheck.realized, Original.fold_bind,
     PIR.Process.bind_assoc, Zkc.Construction.ArtifactBinding.fold_done, PIR.Process.bind]
-  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program.payload ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck 2
+  simp only [ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Sources.pending0_raw, PIR.Process.bind, Zkc.Construction.ArtifactBinding.fold_done]
+  apply (OriginalHonest.reduce ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program.payload ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.helper_bodies.sumcheck ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.claim_bodies 2
     (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.routing handle) (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.routing handle) ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.occurrence0.protocol (by change 0 ≠ 1; decide)
     handle (routes0 handle) input0 input2 shape0 bounded0 admitted history).bind
   intro left0 right0 returned0
@@ -45,7 +47,7 @@ theorem source (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : Primiti
 
 theorem readback (input0 : List F) (input2 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input2 1) (bounded0 : input0.length < indexLimit)
     (admitted : input2 ≤ 2) (history : Domain.History (uniformCarriers F G)) :
-    Readback (ActualPost ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context 17 18 8 7)
+    Readback (ActualPost ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context 17 18 13 10)
       (Domain.participant (ringModel F G) ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.artifact (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.inputs input0 input2 history))
       (Domain.participant (ringModel F G) ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.program ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.context ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot.artifact (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot.inputs input0 input0.sum input2 history)) :=
   Readback.original (ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot.producer input0 input2 handle shape0 bounded0 history)

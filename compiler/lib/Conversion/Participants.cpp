@@ -10,6 +10,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/LinearContraction.h"
+#include "zkc/Transforms/PassStatistics.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/DenseMap.h"
@@ -75,12 +76,12 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       *this, "release-storage",
       llvm::cl::desc("Release discardable local storage after last use"),
       llvm::cl::init(false)};
-  Statistic eligible{this, "linear-contraction-eligible",
-                     "Semantic all-uses contraction pairs"};
-  Statistic selected{this, "linear-contraction-selected",
-                     "Selected local pairs"};
-  Statistic selectedProducers{this, "linear-contraction-selected-producers",
-                              "Atomically selected local producers"};
+  PassStatistic eligible{this, "linear-contraction-eligible",
+                         "Semantic all-uses contraction pairs"};
+  PassStatistic selected{this, "linear-contraction-selected",
+                         "Selected local pairs"};
+  PassStatistic selectedProducers{this, "linear-contraction-selected-producers",
+                                  "Atomically selected local producers"};
   StringRef getArgument() const final { return "zkc-select-physical"; }
   StringRef getDescription() const final {
     return "Select installed kernels and physical value representations for "
@@ -99,9 +100,9 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
       signalPassFailure();
       return;
     }
-    eligible += stats.eligiblePairs;
-    selected += stats.selectedPairs;
-    selectedProducers += stats.selectedProducers;
+    eligible.add(stats.eligiblePairs);
+    selected.add(stats.selectedPairs);
+    selectedProducers.add(stats.selectedProducers);
     if (output)
       *output = stats;
     else if (linearContractions)

@@ -20,6 +20,7 @@ proof method. Recovery and witness embedding are derived from `layout`, never
 supplied as functions by the evidence. The site is an actual construction draw. -/
 structure ExtractionProfile {art : Artifacts} (compiled : Compiled art) (F G : Type) where
   target : RetainedTarget compiled.imported art.participant.policy art.publics
+  formula : FormulaBinding compiled.imported target.application.relation
   layout : Extraction.Layout
   domain : String
   coordinates : layout.admitted target domain = true
@@ -49,8 +50,8 @@ def embed (witness : profile.Witness) : profile.target.Witness F G :=
 
 variable [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def registry (target : SoundnessTarget compiled F G) (selected : target = .retained profile.target) :
-    Registry { other : ExtractionProfile compiled F G // target = .retained other.target } :=
+def registry (target : SoundnessTarget compiled F G) (selected : target = .retained profile.target profile.formula) :
+    Registry { other : ExtractionProfile compiled F G // target = .retained other.target other.formula } :=
   ⟨[⟨responseDifference, "zkc.extractor.response-difference/0", some ⟨profile, selected⟩⟩]⟩
 
 /-- Run the actual verifier against the replay's recorded oracle. Every history

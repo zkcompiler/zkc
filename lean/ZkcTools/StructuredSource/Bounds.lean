@@ -513,6 +513,7 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
         | none => return if n.lower == 0 then some [.vector (exact 0)] else none
         | _ => throw .unknown
     | .exec p, _, .nil => primitive p args
+    | .vectorLength _, [.vector n], .nil => vectorWork n; return some [.index n]
     | .makeProduct .., _, .nil =>
         charge args.length
         return some [.product args]
@@ -579,6 +580,12 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
           operation definitions (.invoke spec.stepHelper) (← prepend current callbackArgs) .nil)
           domain.length.upper 0 initial
         return some result
+    | .multilinearRestrictPrefix _, [.vector n, .vector point], .nil =>
+        vectorWork n; vectorWork point
+        -- All intermediate halves together have at most the input length.
+        chargeRepeated 5 n.upper
+        let output ← length ⟨0, n.upper⟩
+        return some [output]
     | .collect spec, _, .nil =>
         let domainArgs := args.take spec.domain.inputs.length
         let captures := args.drop spec.domain.inputs.length

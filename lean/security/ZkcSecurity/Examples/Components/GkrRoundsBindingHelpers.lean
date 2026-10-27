@@ -17,6 +17,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Bindings
 open ZkcExamples.Structured.Generated.Bindings.GkrRoundsInputs
 open ZkcExamples.Structured.Generated.Bindings.GkrRounds (payload)
 open GkrRoundsHelpers GkrRoundsRealization
+open ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate
 
 noncomputable section
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
@@ -67,6 +68,81 @@ theorem owned_append (self : Nat) (point : Option (List F)) (r : F) :
   | some point =>
     change (invoke table appendHelper (.cons point (.cons r .nil))).bind _ = _
     rw [append]
+    rfl
+
+/-- The linear Pending boundaries retain both components and require both
+inputs, including when the source repeat has zero iterations. -/
+theorem owned_rounds_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+    Participant.owned self self
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed roundsOpenHelper)
+      (.cons point (.cons claim .nil)) =
+      match point, claim with
+      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | _, _ => .halt .incomplete := by
+  change Participant.owned self self (invoke (helpers payload).closed roundsOpenHelper) _ = _
+  rw [Participant.owned, ite_eq_left (Eq.refl self)]
+  cases point with
+  | none => rfl
+  | some point =>
+    cases claim with
+    | none => rfl
+    | some claim =>
+      change (invoke (helpers payload).closed roundsOpenHelper (.cons point (.cons claim .nil))).bind _ = _
+      rw [ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.roundsOpen_closed]
+      rfl
+
+theorem owned_rounds_close (self : Nat) (point : Option (List F)) (claim : Option F) :
+    Participant.owned self self
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed roundsCloseHelper)
+      (.cons point (.cons claim .nil)) =
+      match point, claim with
+      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | _, _ => .halt .incomplete := by
+  change Participant.owned self self (invoke (helpers payload).closed roundsCloseHelper) _ = _
+  rw [Participant.owned, ite_eq_left (Eq.refl self)]
+  cases point with
+  | none => rfl
+  | some point =>
+    cases claim with
+    | none => rfl
+    | some claim =>
+      change (invoke (helpers payload).closed roundsCloseHelper (.cons point (.cons claim .nil))).bind _ = _
+      rw [ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.roundsClose_closed]
+      rfl
+
+theorem owned_layer_open (self : Nat) (point : Option (List F)) (claim : Option F) :
+    Participant.owned self self
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed layerOpenHelper)
+      (.cons point (.cons claim .nil)) =
+      match point, claim with
+      | some point, some claim => .done (.cons (some point) (.cons (some claim) .nil))
+      | _, _ => .halt .incomplete := by
+  change Participant.owned self self (invoke (helpers payload).closed layerOpenHelper) _ = _
+  rw [Participant.owned, ite_eq_left (Eq.refl self)]
+  cases point with
+  | none => rfl
+  | some point =>
+    cases claim with
+    | none => rfl
+    | some claim =>
+      change (invoke (helpers payload).closed layerOpenHelper (.cons point (.cons claim .nil))).bind _ = _
+      rw [ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.layerOpen_closed]
+      rfl
+
+theorem owned_pending (self : Nat) (claim : Option F) :
+    Participant.owned self self
+      (invoke (helpers (F := F) (G := G) payload).toOn.closed pendingHelper)
+      (.cons claim .nil) =
+      match claim with
+      | some claim => .done (.cons (some []) (.cons (some claim) .nil))
+      | none => .halt .incomplete := by
+  change Participant.owned self self (invoke (helpers payload).closed pendingHelper) _ = _
+  rw [Participant.owned, ite_eq_left (Eq.refl self)]
+  cases claim with
+  | none => rfl
+  | some claim =>
+    change (invoke (helpers payload).closed pendingHelper (.cons claim .nil)).bind _ = _
+    rw [ZkcExamples.Structured.Generated.Bindings.GkrRoundsGate.pending_closed]
     rfl
 
 end

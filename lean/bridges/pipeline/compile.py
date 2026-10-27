@@ -25,8 +25,8 @@ def options(subject, entry, extra=(), *, protocol=False):
             *subject.compiler_options, *extra]
 
 
-def proof_entry(runner, subject, compiler, directory, executable=False):
-    """Compile and export the proof Entry; return its artifacts."""
+def proof_artifacts(runner, subject, compiler, directory, executable=False):
+    """Compile the original and participant bytes independently of claim resolution."""
     directory.mkdir(parents=True, exist_ok=True)
     entry = subject.get("entries", "proof")
     common = options(subject, entry)
@@ -40,10 +40,6 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     interface_text = run("language-interface", *common, name="interface")
     (directory / "interface.json").write_text(interface_text)
     interface = json.loads(interface_text)
-    claim_text = run("language-check", *common, "--source-claims", name="source-claims")
-    (directory / "source-claims.json").write_text(claim_text)
-    claim_report = source_claims.decode(claim_text)
-    claim_export = claim_report["source_claims"]
     runner.check(f"{prefix}:interface-source", interface["original"] == digest(source))
     deployment_text = run("language-bundle", *common, name="bundle").rstrip("\n")
     (directory / "deployment.json").write_text(deployment_text)
@@ -51,8 +47,7 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
     runner.check(f"{prefix}:deployment-source", deployment[1] == digest(source))
     policy = deployment[2][1]
     (directory / "policy.json").write_text(json.dumps(policy))
-    artifacts = dict(source=source, interface=interface, deployment=deployment,
-                     source_claim_inventory=claim_report["source_claim_inventory"],
+    artifacts = dict(source=source, interface=interface, interface_text=interface_text, deployment=deployment,
                      deployment_text=deployment_text, policy=policy)
     if executable:
         package_text = run("language-package", *common, name="package")
@@ -82,16 +77,29 @@ def proof_entry(runner, subject, compiler, directory, executable=False):
         text = run("language-bundle", *options(subject, entry, flags), name=f"bundle:{name}").rstrip("\n")
         (directory / f"deployment-{name}.json").write_text(text)
         variants[name] = json.loads(text)
-    bound_claims = source_claims.bind_export(
-        claim_export, entry=entry, source=source, interface_text=interface_text,
-        original_text=original_text, participant_text=export_text, program=artifacts.get("program"))
-    for claim in bound_claims["claims"]:
-        claim["resolved_sites"] = source_claims.resolve_sites(
-            json.loads(original_text), policy, claim["site_bindings"])
-    (directory / "bound-source-claims.json").write_text(json.dumps(bound_claims, indent=2) + "\n")
-    artifacts["source_claims"] = bound_claims
     artifacts.update(candidate=candidate, exported=exported, export_text=export_text,
                      original=json.loads(original_text), original_text=original_text, variants=variants)
+    return artifacts
+
+
+def proof_entry(runner, subject, compiler, directory, executable=False):
+    """Compile a proof Entry and bind its independently exported source requests."""
+    artifacts = proof_artifacts(runner, subject, compiler, directory, executable)
+    entry = subject.get("entries", "proof")
+    claim_text = runner.run([compiler, "language-check", *options(subject, entry), "--source-claims"],
+                            name=f"{subject.name}:proof:source-claims").stdout
+    (directory / "source-claims.json").write_text(claim_text)
+    claim_report = source_claims.decode(claim_text)
+    bound_claims = source_claims.bind_export(
+        claim_report["source_claims"], entry=entry, source=artifacts["source"],
+        interface_text=artifacts["interface_text"], original_text=artifacts["original_text"],
+        participant_text=artifacts["export_text"], program=artifacts.get("program"))
+    for claim in bound_claims["claims"]:
+        claim["resolved_sites"] = source_claims.resolve_sites(
+            artifacts["original"], artifacts["policy"], claim["site_bindings"])
+    (directory / "bound-source-claims.json").write_text(json.dumps(bound_claims, indent=2) + "\n")
+    artifacts["source_claims"] = bound_claims
+    artifacts["source_claim_inventory"] = claim_report["source_claim_inventory"]
     return artifacts
 
 

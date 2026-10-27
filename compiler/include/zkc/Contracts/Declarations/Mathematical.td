@@ -118,4 +118,7 @@ def MathIndexPowerOfTwo : ZKC_MathematicalIdentity<"IndexPowerOfTwo", 37>;
 def IntrinsicVectorLength : ZKC_MathematicalIntrinsic<"vector.length", MathVectorLength, "Field", 31>;
 def IntrinsicIndexPowerOfTwo : ZKC_MathematicalIntrinsic<"index.power_of_two", MathIndexPowerOfTwo, "Index", 32>;
 
+def MathMultilinearRestrictPrefix : ZKC_MathematicalIdentity<"MultilinearRestrictPrefix", 43>;
+def IntrinsicMultilinearRestrictPrefix : ZKC_MathematicalIntrinsic<"multilinear.restrict_prefix", MathMultilinearRestrictPrefix, "Field", 38>;
+
 #endif

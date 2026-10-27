@@ -1,110 +1,119 @@
 # Sumcheck
 
 The pair-valued [multilinear protocol](lib.zkc) and coefficient-valued
-[expression protocol](expression.zkc) share the same composition pattern.
-They have different round messages and are not interchangeable encodings.
+[expression protocol](expression.zkc) use different round messages. Their
+residual relations are different mathematical statements.
 
 | Declaration | Contract |
 |---|---|
-| `Reduce` | Check each received round polynomial, draw and deliver a challenge, and return a remaining evaluation obligation |
-| `Evaluation<F>` | Verifier's MSB-first point and expected value; ordinary data, not a certificate |
-| `Sumcheck` | Complete public-table composition, including terminal evaluation |
-| `sumcheck::expression::check`, `check_factors` | Check public factor tables or authenticated factor values against the captured expression |
-| `sumcheck::check` | Check a multilinear evaluation against the caller's table, including its final dimension |
+| `Pending<F>` | Sealed linear obligation held at V, containing an MSB-first prefix and expected residual sum |
+| `pending` | Admit a scalar caller statement with an empty prefix; this establishes no truth |
+| `Reduce` | Consume a pending claim, check each boundary sum before drawing, and return a successor claim |
+| `Residual<F>` | Exact sum of the fixed reference table after total prefix restriction |
+| `Shape<F>`, `TableShape<F, Max>` | Separate reference-table and public-input shape conditions |
+| `check` | Consume a pending claim and check a complete evaluation against V's public table |
+| `Sumcheck` | Complete public-table composition, returning acceptance |
 
-`Reduce` accepts a checked `multilinear::Table<F>` at P and returns its residual
-as the same view, preserving width and remaining dimensions. P also receives
-its delivered point; V receives its independently recorded point and expected
-value. Construct a table from raw data before the first reduction; pass the
-residual directly to later reductions. The same random service is threaded through
-all rounds. The caller binds the original polynomial, its dimension and, when
-applicable, its commitment before the relevant challenges. The `rounds` input
-must agree between participants and is bounded by `Max`.
+## Pending claims
 
-Each pair-valued round fixes one leading Boolean coordinate. An expression
-round fixes one coordinate of every ordered factor table; its coefficient count
-is `A::Degree + 1`, with `A::Inputs` factors and exactly one output. Expression
-composition must check `A(f1(point), ..., fk(point))`, not an unrelated single
-polynomial evaluation. P's residual preserves remaining entries/factor values.
-After a partial prefix, the obligation is the sum of the remaining Boolean
-rows, rather than a full-dimensional evaluation. The caller supplies the
-remaining reduction or check.
+Construct an initial claim with `pending(claim)`. Pass it to `Reduce` together
+with P's checked `multilinear::Table<F>`. The result has three ports: P's
+point for this call, P's residual table, and V's `Pending<F>` under the
+`evaluation` port. P's outputs are ordinary droppable data. V's claim must move
+into another reduction or a terminal check; it cannot be dropped, inspected
+by an external module, or returned through an Entry.
 
-With zero rounds the point is empty and the initial claim remains. The public
-multilinear composition accepts only a one-entry matching table; the expression
-composition requires exactly one row of `A::Inputs` factors and evaluates it.
-The complete `Sumcheck` wrappers check the prover table against the full
-`rounds` dimension before the first message. `Reduce` permits a partial prefix;
-requesting more rounds than its residual dimension stops before sending.
-Malformed round
-coefficients stop; a wrong final value returns false. These are distinct outcomes.
+A second reduction takes P's residual directly and consumes V's successor
+claim. P's returned point covers that call's coordinates; V's sealed prefix
+accumulates coordinates across calls. The terminal consumes the accumulated
+claim against the original public table. With zero rounds it still consumes
+and returns the initial obligation. A complete zero-round terminal accepts
+exactly a one-entry matching table.
 
-Public-table verification runs after the interaction, using the recorded point.
-A malformed verifier table is therefore detected during this final local
-computation. Received round checks still precede their challenges. Construction
-handlers on a complete Sumcheck use `reduce.round`, `reduce.challenge` and
-`reduce.delivery`; direct reductions use `round`, `challenge` and `delivery`.
+The continuation has no acceptance Boolean:
+
+```zkc
+continuation initial_sum = Residual<F>(in.values, in.claim.point, in.claim.value)
+  residual Residual<F>(in.values, out.evaluation.point, out.evaluation.value);
+```
+
+Specification field reads consume nothing. A continuing component makes no
+acceptance decision; `check` returns the Boolean used by the caller's target.
+A normal `false` return must also consume the claim. A failed guard stops and
+has no continuation obligation. Swapping two values of the same pending type
+is not a frontend refusal: their fixed reference instances must be checked by
+the mathematical seam evidence.
+
+## Fixed mathematical references
+
+`Residual<F>` means
+
+```text
+claim = sum(restrict_prefix(reference entries, accumulated prefix))
+```
+
+The source uses total `multilinear.restrict_prefix` and a Math finite fold.
+Cube shape, prefix length, repeat maxima and finite-domain representability
+remain separate applicability obligations. `Shape` constrains the reference
+Table's width and cube dimension; it does not assert residual truth.
+
+The `parameter values` slot is a fixed mathematical reference. At a call its
+assignment is rebound to the caller's chosen reference, independently of P's
+working table. In a public wrapper it must decode V's original public vector.
+In a partial-reduction chain both calls use the same original reference,
+although the second runtime operand is P's smaller residual. Binding to P's
+residual anew, choosing an existential table per clause, or choosing a table
+after its relevant challenges changes the statement. The binding and causal
+scope require checked evidence. They add no reference table to V's runtime
+inputs.
+
+`Sum<F>` remains the public target's total sum. `TableShape<F, Max>` selects
+V's public vector and round count. These authored clauses are mathematical
+contracts, not guards asserting that an adversarial initial claim is true.
+
+## Execution
+
+Each pair-valued round fixes one leading Boolean coordinate. P's table must
+have width one and enough remaining variables; excess rounds stop before
+sending. Each boundary sum is checked before its challenge. The same random
+service is threaded through every round and subsequent call.
+
+The complete wrapper constructs P's table at the full `rounds` dimension
+before the first message. The terminal checks V's table after the interaction:
+a malformed verifier dimension returns false, as does a wrong complete value.
+The pending wrapper adds no wire messages or challenges. Construction handlers
+retain `reduce.round`, `reduce.challenge` and `reduce.delivery`; direct
+reductions retain `round`, `challenge` and `delivery`.
 
 See the [composed client](../../../../examples/projects/sumcheck/composed/README.md)
-for two independently discharged reductions and the public-table clients for
-[multilinear](../../../../examples/projects/sumcheck/README.md) and
-[expression](../../../../examples/projects/sumcheck/product/README.md) Entries.
+for two independently discharged claims and the
+[public-table Entry](../../../../examples/projects/sumcheck/README.md).
+Partial reductions remain reusable protocols rather than Entry results.
 
-## Source relation contracts
+## Expression variant
 
-The pair-valued `Sumcheck<F, Max>` checks a public table indexed by Boolean vectors,
-using MSB-first variable order. Its `public_sum` target selects V's `values`, V's initial `claim`,
-and V's returned `accepted` Boolean. `Sum<F>` is a total mathematical fold of the
-selected vector. It does not check the vector's shape; decoding and dimension
-are separate obligations of a property consumer and of the executable checker.
+`sumcheck::expression` retains its arena-indexed scalar-input and ordinary
+`multilinear::Evaluation<F>` API. Its round carries `A::Degree + 1`
+coefficients for `A::Inputs` ordered factors and one output. Its terminal
+checks `A(f1(point), ..., fk(point))`. A partial residual is the sum of that
+expression over remaining Boolean assignments, not the multilinear extension
+of its Boolean product table.
 
-`Reduce<F, Max>` returns V's `Evaluation { point, value }` and P's residual table.
-Its `initial_sum` input clause uses `TableSum<F>` over the original table entries.
-That clause is an authored input proposition, not a runtime guard or a claim
-that an adversarial initial statement is true. Purpose `parameter` identifies a
-mathematical argument; it does not assign authority, secrecy, or quantifiers.
+The total Math reading of a captured Ring expression is a separate required
+operation. The existing Local `ring.point` and `ring.affine_sum` kernels do
+not supply it. This variant therefore does not advertise the pair-valued
+pending-claim contract. A migration needs a typed reference indexed by both
+`F: Field` and `A: Ring`, with the exact admitted arena identity and factor
+order retained; an opaque true predicate cannot replace that meaning.
 
-A residual security request must fix one original table before interaction and
-reuse it in both the initial sum and the residual predicate:
+See the [expression client](../../../../examples/projects/sumcheck/product/README.md).
 
-```
-length(pointV) = rounds
-sum over remaining Boolean variables of originalTable(pointV, suffix) = valueV
-```
+## Formal bindings
 
-For the public wrapper, this fixed table must decode V's input vector. For a
-reduction experiment it may be a typed external parameter; any agreement with
-P's runtime input is an explicit additional premise. A separate existential
-table for each clause, or substitution of P's returned residual for the original
-table, changes the property and can make it vacuous.
-
-The source currently has no formula-backed residual continuation. Dynamic
-prefix restriction uses Local operations; the total mathematical layer cannot
-call those operations. A monomorphic opaque relation can express a continuation
-clause, but the current opaque declaration profile cannot express the generic
-field/table signature of this library.
-The Lean source-contract client therefore exposes an explicit external residual
-request with checked output selectors. A caller needs a terminal discharge
-against that same fixed table before claiming acceptance. This limitation is
-not hidden behind a placeholder source relation or a new compiler primitive.
-
-The formal source adapters concern retained concrete instantiations and retain
-their actual count maxima, malformed-input behavior, stops, and uniform-service
-assumptions. The total source fold's structured interpretation also retains
-finite-domain capacity admission. These interfaces establish no native compiler,
-provider, commitment-opening, or Fiat–Shamir correctness by themselves.
-
-See the [checked contract bindings](../../../../lean/ZkcExamples/Structured/SumcheckContractBindings.lean),
-[fixed-table call instantiation](../../../../lean/ZkcExamples/Structured/SumcheckContractInstantiation.lean),
-[complete clause interpretations](../../../../lean/ZkcExamples/Structured/SumcheckContractInterpretations.lean),
-and [optional source bounds](../../../../lean/integrations/arklib/ZkcArkLib/Examples/CausalSumcheck/SourceContracts.lean).
-They retain source-formula adequacy and fixed-table assumptions separately from
-probabilistic acceptance and residual truth.
-The public caller's proof uses the child's residual bound through a generic
-probabilistic bind rule. It checks the actual terminal on arbitrary returned
-point/value pairs, so the caller theorem also applies to a replacement child
-with the same returned ABI and residual guarantee. The child's implementation
-and its own bound are proved separately.
-
-The expression-valued variant in `sumcheck::expression` has its existing arena
-semantics and is outside these pair-valued source-contract adapters.
+The retained formal adapters and generated artifacts concern their exact
+admitted bodies. Changing the source ABI and helper bodies requires their
+regeneration, new body associations and reissued canonical receipts. Existing
+proofs are not receipts for the changed source. The mathematical fixed-table,
+shape, stopping and uniform-service obligations remain explicit. No compiler,
+native provider, commitment-opening or Fiat–Shamir correctness follows from
+source formation alone.

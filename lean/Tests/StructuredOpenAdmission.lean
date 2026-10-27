@@ -17,7 +17,7 @@ private def unit (definitions : List Definition) (relations : List Relation := [
   (let contractDefinitions : List Definition := definitions
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 private def accepted (snapshot : Snapshot) : Bool := (check snapshot).isOk
 private def first := math "first" [.boolean, .boolean] [.boolean] (.block [] (.ret [0]))
 private def relay := math "relay" [.boolean, .boolean] [.boolean]
@@ -103,7 +103,7 @@ example : accepted (unit [drawing "P" ["P"], math "service-helper" [service] [] 
 example : accepted (unit [root [.service "unknown"] [] [["P"]] [] (.block [] (.ret []))]) = false := by decide +kernel
 
 private def relation : Relation := ⟨"relation", .publicDef, "opaque-kind", "opaque-key", "rev",
-  [.boolean], [.boolean], ["statement"], none⟩
+  [.boolean], [.boolean], ["statement"], none, []⟩
 private def statementRoot := root [.boolean] [.boolean] [["P"]] [["P"]]
   (.block [.instruction (.statement "relation" ["P"] 0 none) [0] [] [] ""] (.ret [0]))
 private def statementSource : Snapshot :=

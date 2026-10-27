@@ -64,6 +64,7 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .exec _ => "exec" | .indexConstant _ => "indexConstant" | .indexEqual => "indexEqual"
     | .indexLess => "indexLess" | .indexPowerOfTwo => "indexPowerOfTwo"
     | .vectorLength _ => "vectorLength"
+    | .multilinearRestrictPrefix _ => "multilinearRestrictPrefix"
     | .fieldConstant .. => "fieldConstant" | .fieldAdd _ => "fieldAdd"
     | .fieldSubtract _ => "fieldSubtract" | .fieldMultiply _ => "fieldMultiply"
     | .fieldEqual _ => "fieldEqual" | .fieldEmbed .. => "fieldEmbed"

@@ -336,7 +336,7 @@ for lower, upper in [(0, 0), (2, 1), (0, 1), (1, 3), (2, 5)]:
 
 with case('statement-zero-and-nonzero-acceptance-and-opaque-relation-metadata'):
     data = export(schnorr)
-    assert data[5] == [['relation', 'schnorr_relation', 'public', 'external', 'example/schnorr', '0',
+    assert data[5] == [['relation', 'schnorr_relation', 'public', 'external', 'example/schnorr', '0', [],
                         [group, group, field], [['bool']], ['parameter', 'statement', 'witness'], None]]
     statement = definitions(data)['main'][9][1][0]
     assert statement == [['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0, None], [0, 2, 1], [], [], '']

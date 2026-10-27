@@ -2,6 +2,7 @@ module
 
 public import Lean
 public meta import Mathlib.Tactic.Convert
+public meta import Mathlib.Tactic.Ring
 public meta import Zkc.Claims.Wire
 public meta import Zkc.Claims.ClosedString
 public import Zkc.Claims.Methods
@@ -422,9 +423,12 @@ elab "claim_apply_theorem " theoremTerm:term " normalizing "
   let goal ← goal.replaceTargetEq target.expr (← target.getProof)
   let goals ← withTransparency .all (goal.apply proof)
   replaceMainGoal goals
+  -- Expanded request quantities and factored library costs can leave an
+  -- equality of semiring expressions. Check that equality without changing
+  -- either fixed meaning or requiring a per-request arithmetic wrapper.
   evalTactic (← `(tactic| all_goals first
     | rfl
-    | solve | simp [$lemmas,*]))
+    | (simp [$lemmas,*] <;> ring)))
 
 private structure Failure where
   diagnostic : String
@@ -704,9 +708,12 @@ meta unsafe def evalClosedData (α : Type) (type : Expr) (stx : Syntax) : TermEl
       result requestName none [] (some error)
       elabCommand (← `(end))
       return
-    -- Requests using the same wire model in this source namespace share the
-    -- certificate. Its type contains the exact subject snapshot and stage.
-    let modelStem := "admittedModel" ++ toString (reprStr wire.model).hash
+    -- Pool admissions only within the same subject, registry and stage. A
+    -- namespace may contain requests for several protocols using identical
+    -- wire models. The hash is a naming aid; the certificate's full dependent
+    -- type, checked again when constructing a receipt, remains authoritative.
+    let modelKey := (subject.getId, models.getId, wire.subject.stage, wire.model)
+    let modelStem := "admittedModel" ++ toString (reprStr modelKey).hash
     let modelContext := mkIdent (Name.mkSimple (modelStem ++ "Context"))
     let selectedModel := mkIdent (Name.mkSimple modelStem)
     unless (← getEnv).contains (currentNamespace ++ selectedModel.getId) do

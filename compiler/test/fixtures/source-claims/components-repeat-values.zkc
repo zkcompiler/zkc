@@ -1,0 +1,39 @@
+module claims;
+domain F = field("bls12-381.fr");
+
+#[linear] struct Pending { pub value:bool }
+relation Truth(parameter reference:bool, statement value:bool) { return reference == value; }
+
+fn pending(value:bool)->Pending { return Pending{value:value}; }
+fn repack(claim:Pending, ordinary:F)->Pending { return claim; }
+fn check(claim:Pending)->bool { let payload=unpack(claim); return payload.0; }
+fn finish(claim:Pending, ordinary:F, reference:F)->bool {
+  let payload=unpack(claim);
+  return ordinary == reference;
+}
+fn count(value:F)->index { return 1; }
+
+protocol Reduce roles(V)(reference:bool@V,claim:Pending@V)->(claim:Pending@V,ok:bool@V)
+  spec {
+    continuation step=Truth(in.reference,in.claim.value)
+      residual Truth(in.reference,out.claim.value) accept out.ok;
+  }
+{ return(claim=claim,ok=true); }
+
+protocol Run roles(P,V)(value:bool@V,n:index@V,sent:F@P,challenges:Random<F>@V)
+  ->(accepted:bool@V)
+  spec { target result=Truth(in.value,in.value) accept out.accepted; }
+{
+  let initial@V=pending(value);
+  #[site(first)] let (last,firstOk)=Reduce roles(V)(value,initial);
+  let seed@V=challenges.draw();
+  let mut ordinary@V=seed;
+  for _ in 0..n roles(V) max 2 {
+    ordinary=ordinary;
+  }
+  let combined@V=repack(last,ordinary);
+  #[site(second)] let (result,secondOk)=Reduce roles(V)(value,combined);
+  let finished@V=check(result);
+  return(accepted=firstOk && secondOk && finished);
+}
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

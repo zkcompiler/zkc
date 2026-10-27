@@ -3,36 +3,25 @@ module
 public import ZkcExamples.Structured.SumcheckReduceViews
 public import Zkc.Source.Structured.OpenLaws
 public import ZkcExamples.Structured.SumcheckVerifierBodies
+public import ZkcExamples.Structured.SumcheckMathBindings
 
 @[expose] public section
 
-/-! Entire-source association and the actual six-slot return permutation.
+/-! Entire-source association of the seven-input body and consuming return.
 The helper/participant contracts and optional security consumers build on these laws. -/
 namespace ZkcExamples.Structured.SumcheckReduceLaws
 open Zkc.Source Zkc.Source.Structured SumcheckReduceBodies SumcheckReduceViews
 
-def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
-    Values Value reduceSignature.outputs :=
-  SumcheckVerifierBodies.reduceReturnValues state
-
-theorem return_indices : (reduceReturn []).erase =
-    .ret SumcheckVerifierBodies.reduceReturnIndices := rfl
-
-/-- This suffix is embedded directly in the admitted literal reduceBody. -/
-theorem return_equation {I : PIR.Signature} (meaning : RegionMeaning protocolDialect I)
-    (state : Values meaning.Value repeatState) :
-    (reduceReturn []).denote meaning state.get = .done (returnValues state) := rfl
+/-- The complete suffix invokes the consuming atPrefix helper. It is not a pure permutation. -/
+theorem return_uses_atPrefix :
+    ProtocolOp.localCall SumcheckPendingBodies.atPrefixHelper rfl 1 "s48" ∈
+      (SumcheckVerifierBodies.reduceReturn []).erase.operations := by structured_mem
 
 /-- Whole checked-tree formation fixes the callback along with the suffix. -/
 theorem reduce_checked_tree :
     reduceDefinition.raw.elaborate (dialect := protocolDialect)
       reduceSignature.inputs reduceSignature.outputs = .ok reduceBody :=
   reduceDefinition.formed
-
-/-- The original complete Reduce function has this same terminal permutation. -/
-theorem original_reduce_return :
-    ∃ instructions, (SumcheckReduceData.snapshot.protocolFunctions[1]).body =
-      .block instructions (.ret SumcheckVerifierBodies.reduceReturnIndices) := ⟨_, rfl⟩
 
 theorem run_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     [DecidableEq F] [DecidableEq G] (context : ProtocolContext) (self : Nat)
@@ -68,7 +57,7 @@ theorem source_protocol_permutation :
 
 def mapDeclaration : CollectDeclaration :=
   ⟨mapHelper.name, .privateDef, mapHelper.inputs, mapHelper.outputs,
-    collectBindings.domain, collectBindings.callback, ""⟩
+    SumcheckMathBindings.collection.domain, SumcheckMathBindings.collection.callback, ""⟩
 
 theorem map_retained : Definition.collect mapDeclaration ∈ SumcheckReduceData.snapshot.definitions :=
   by structured_mem

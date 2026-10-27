@@ -91,7 +91,7 @@ theorem retained_bound [Fintype F] [SampleableType F]
     mass (do
       let execution ← ((reductionRootInput proverValues proverDimension claim count handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after) s
       pure (retainedRequest remaining count table
         (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤
       (count : ENNReal) / Fintype.card F := by
@@ -103,7 +103,7 @@ theorem retained_bound [Fintype F] [SampleableType F]
     let execution ← (SumcheckReduceViews.imported.program.participant F G 1
       (SumcheckReduceVerifier.reduceRootInputs proverValues proverDimension (some claim) (some count)
         (some handle))).runM
-      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after) s
     pure (retainedRequest remaining count table
       (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤ _
   refine Eq.trans_le ?_ bound
@@ -145,7 +145,7 @@ theorem existing_bound_from_logical [Fintype F] [SampleableType F]
     mass (do
       let execution ← ((reductionRootInput proverValues proverDimension claim count handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle] before after) state
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle] before after) state
       pure (SourceContracts.residualRequest (reductionEnvironment := environment) raw remaining count
         (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤
       (count : ENNReal) / Fintype.card F := by
@@ -189,17 +189,17 @@ theorem repacked_observation
           (some handle))).runM handler s
       pure (returnedSatisfies (repackedObservation remaining count table) e)) = (do
       let e ← (PIR.repeatN count (SumcheckVerifierLaws.roundPresent
-        (ProtocolContext.enter {} "s3" [0, 1]) handle) ([], claim)).runM handler s
+        (ProtocolContext.enter {} "s5" [0, 1]) handle) ([], claim)).runM handler s
       pure (Causal.accepts (Causal.residualTerminal remaining count table) e)) := by
   have present : SumcheckRepackedViews.imported.program.participant F G 1
       (SumcheckRepackedVerifier.rootInputs (some claim) (some count) proverDimension proverValues
         (some handle)) =
       (PIR.repeatN count (SumcheckVerifierLaws.roundPresent
-        (ProtocolContext.enter {} "s3" [0, 1]) handle) ([], claim)).bind
+        (ProtocolContext.enter {} "s5" [0, 1]) handle) ([], claim)).bind
           (fun pc => .done (SumcheckRepackedVerifier.rootResults (some pc.1, some pc.2))) := by
     change SumcheckRepackedViews.program.participant F G 1 _ = _
     rw [SumcheckRepackedVerifier.verifier_optional]
-    simp only [SumcheckVerifierPrelude.admittedRounds, admitted, ↓reduceIte]
+    simp only [SumcheckVerifierPrelude.admittedRounds, SumcheckVerifierPrelude.pendingRounds, admitted, ↓reduceIte]
     rw [SumcheckVerifierLaws.repeat_present _ handle count ([], claim), PIR.Process.bind_assoc]
     rfl
   change (do
@@ -229,7 +229,7 @@ theorem repacked_bound [Fintype F] [SampleableType F]
     mass (do
       let execution ← ((repackedInput claim count proverDimension proverValues handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after) s
       pure (repackedRequest remaining count table
         (repackedInput claim count proverDimension proverValues handle) execution.outcome)) ≤
       (count : ENNReal) / Fintype.card F := by
@@ -241,7 +241,7 @@ theorem repacked_bound [Fintype F] [SampleableType F]
   change mass (do
     let execution ← PIR.Process.runM
       (A := Values (Component (assignment F G)) SumcheckRepackedBodies.runSignature.outputs)
-      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after)
+      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after)
       (SumcheckRepackedViews.imported.program.participant F G 1
         (SumcheckRepackedVerifier.rootInputs (some claim) (some count) proverDimension proverValues
           (some handle))) s
@@ -262,14 +262,14 @@ theorem repacked_bound [Fintype F] [SampleableType F]
           handle outputs).trans (residual_iff remaining count table proverValues proverDimension
             claim handle _))
     refine Eq.trans_le ?_ (repeat_uniform_residual_soundness network before after
-      (ProtocolContext.enter {} "s3" [0, 1]) handle remaining count table claim falseClaim s)
+      (ProtocolContext.enter {} "s5" [0, 1]) handle remaining count table claim falseClaim s)
     apply congrArg mass
     refine Eq.trans ?_ (repacked_observation _ claim count admitted proverDimension proverValues
       handle remaining table s)
     apply bind_congr
     intro execution
     exact congrArg pure (congrFun observed execution)
-  · erw [SumcheckRepackedVerifier.verifier_excess (some claim) count (Nat.lt_of_not_ge admitted)
+  · erw [SumcheckRepackedVerifier.verifier_excess claim count (Nat.lt_of_not_ge admitted)
       proverDimension proverValues (some handle)]
     simp [PIR.Process.runM, repackedRequest, ComponentInput.returnedEvent]
 
@@ -307,14 +307,14 @@ theorem zero_table_bounds {S E : Type}
     mass (do
       let execution ← ((reductionRootInput (G := ZMod 5) none none 1 1 handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after) s
       pure (retainedRequest 0 1 (fun _ => (0 : ZMod 5))
         (reductionRootInput none none 1 1 handle) execution.outcome)) ≤
         ((1 : Nat) : ENNReal) / Fintype.card (ZMod 5) ∧
     mass (do
       let execution ← ((repackedInput (G := ZMod 5) 1 1 none none handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0, 1]) handle] before after) s
       pure (repackedRequest 0 1 (fun _ => (0 : ZMod 5))
         (repackedInput 1 1 none none handle) execution.outcome)) ≤
         ((1 : Nat) : ENNReal) / Fintype.card (ZMod 5) :=

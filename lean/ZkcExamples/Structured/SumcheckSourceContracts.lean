@@ -47,7 +47,7 @@ theorem helper_plain (helper : Helper) (args : Values (assignment F G) helper.in
   unit.closed_invoke_forgetSites helper args
 
 theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G))
-    SumcheckSourceBodies.prefixBindings :=
+    SumcheckMathBindings.prefixBindings :=
   MapPrefixContracts.laws_of_bodies unit.linked prefix_bodies first_bodies
 
 theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
@@ -121,7 +121,7 @@ theorem check_point_exhausted (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
     invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) = .halt .exhausted :=
   (check_association.invoke unit.linked (checkInputs xs point claim)).trans
-    (SumcheckHelperLaws.check_point_exhausted (bindings := SumcheckSourceBodies.prefixBindings)
+    (SumcheckHelperLaws.check_point_exhausted (bindings := SumcheckMathBindings.prefixBindings)
       _ xs point claim overflow).1
 
 /-- Total actual lookup, preserving the source's ordered admission and short-circuit cases. -/

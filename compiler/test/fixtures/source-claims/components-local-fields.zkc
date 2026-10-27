@@ -1,0 +1,51 @@
+module claims;
+
+#[linear] struct Pending { pub first:bool, pub second:bool }
+relation Truth(parameter reference:bool, statement first:bool, statement second:bool) {
+  return reference == (first && second);
+}
+
+fn pending(value:bool)->Pending { return Pending{first:value,second:value}; }
+fn open(claim:Pending)->(bool,bool) { return unpack(claim); }
+fn pack(first:bool,second:bool)->Pending { return Pending{first:first,second:second}; }
+
+// This conversion is defined only when the first field holds. Purity supplies no
+// totality theorem outside that domain.
+fn guarded(claim:Pending)->Pending {
+  let payload=unpack(claim);
+  require payload.0;
+  return pack(payload.0,payload.1);
+}
+fn check(claim:Pending)->bool {
+  let payload=unpack(claim);
+  return payload.0 && payload.1;
+}
+
+protocol Reduce roles(V)(reference:bool@V,claim:Pending@V)->(claim:Pending@V,ok:bool@V)
+  spec {
+    continuation step=Truth(in.reference,in.claim.first,in.claim.second)
+      residual Truth(in.reference,out.claim.first,out.claim.second) accept out.ok;
+  }
+{
+  return(claim=claim,ok=true);
+}
+
+protocol Run roles(V)(value:bool@V,n:index@V)->(accepted:bool@V)
+  spec { target result=Truth(in.value,in.value,in.value) accept out.accepted; }
+{
+  let initial@V=pending(value);
+  #[site(first)] let (next,firstOk)=Reduce roles(V)(value,initial);
+  let payload@V=open(next);
+  let rebuilt@V=pack(payload.0,payload.1);
+  #[site(second)] let (last,secondOk)=Reduce roles(V)(value,rebuilt);
+  let mut state=last;
+  for _ in 0..n roles(V) max 2 {
+    let forwarded@V=guarded(state);
+    #[site(iteration)] let (successor,ok)=Reduce roles(V)(value,forwarded);
+    require @V ok;
+    state=successor;
+  }
+  let finished@V=check(state);
+  return(accepted=firstOk && secondOk && finished);
+}
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }

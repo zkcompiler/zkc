@@ -459,10 +459,24 @@ relation Machine(statement x0: Base, statement final: Base,
   = bundle(asset machine);
 ```
 
-Opaque identities must be nonempty and cannot use the `zkc.` namespace. They have
-fixed signatures without static parameters. Declarations sharing one
-(kind, key, revision) must have identical logical formal types and purposes;
-flattened native equality is insufficient. Formal names may differ.
+Opaque identities must be nonempty and cannot use the `zkc.` namespace. An opaque
+declaration may have ordinary typed static parameters, for example
+`relation Layer<F:Field, N:nat, Unused:nat>(statement x:F, witness w:F)`.
+Closure retains every argument in parameter order, including arguments absent
+from runtime input types. The closed identity is `(kind, key, revision, arguments)`;
+arguments use the canonical typed static tree also used by protocol origins.
+Reordering arguments or changing their types or values changes that identity.
+Declarations sharing one closed identity must have identical logical formal
+types and purposes; flattened native equality is insufficient. Formal names may
+differ. Source-to-native comparison refuses a changed static argument even if
+the runtime signature is unchanged.
+
+An external registry owns one interpretation of each family `(kind, key,
+revision)` and its typed instantiation function. Meaning admission requires an
+entry accepting the exact ordered arguments, input/output types and purposes.
+Unsupported arguments or a missing entry refuse; evidence cannot select a new
+predicate. Source names the family, without Lean implementation names. Source
+checking and structural export alone do not establish registered meaning.
 
 Captured definitions also have fixed signatures. R1CS uses the asset's exact field,
 public count and full assignment length, including ONE and the public prefix. The

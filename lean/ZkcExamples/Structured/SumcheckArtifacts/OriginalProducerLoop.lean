@@ -44,7 +44,7 @@ structure ProducerCallback (program : Structured.Program)
     ∀ history,
     Original.Simulation
       (RoundReturns context outputs
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
         raw dimension width point)
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold routing
@@ -52,7 +52,7 @@ structure ProducerCallback (program : Structured.Program)
           (occurrence.protocol.roles 0)
           (.cons (some index) ((SumcheckProverLaws.embedP (raw, dimension, width, point)).append
             (.cons none .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       (body (captured ++ .data (.index index) :: carried context raw dimension width point history))
 
 /-- The compiled callback followed by its exact physical yield and sort check. -/
@@ -99,7 +99,7 @@ def ProducerCallback.step (program : Structured.Program)
         (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) occurrence.protocol
           (occurrence.protocol.roles 0) (.cons none .nil)
           (OriginalSumcheckLibrary.round program.payload occurrence.protocol
-            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations "s15") source.2)
+            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations SumcheckVerifierBodies.repeatSite) source.2)
       (iteration context outputs body captured frame index) := by
   unfold iteration
   apply Classical.choice
@@ -155,7 +155,7 @@ def ProducerCallback.loop (program : Structured.Program)
         (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) occurrence.protocol
           (occurrence.protocol.roles 0) (.cons none .nil)
           (OriginalSumcheckLibrary.round program.payload occurrence.protocol
-            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations "s15") source.2)
+            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations SumcheckVerifierBodies.repeatSite) source.2)
         (List.range' start count) source)
       (Domain.iterate body captured
         outputs.references
@@ -176,7 +176,7 @@ def ProducerCallback.loop (program : Structured.Program)
         (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) occurrence.protocol
           (occurrence.protocol.roles 0) (.cons none .nil)
           (OriginalSumcheckLibrary.round program.payload occurrence.protocol
-            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations "s15") source.2)
+            (occurrence.protocol.roles 0)) source.1 index Occurrence.iterations SumcheckVerifierBodies.repeatSite) source.2)
         (List.range' (start + 1) count))
       (targetNext := Finite.fold (iteration context outputs body captured)
         (List.range' (start + 1) count))

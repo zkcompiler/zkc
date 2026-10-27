@@ -13,24 +13,36 @@ namespace ZkcSecurity.Tools.SourceInputClauses
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcSecurity.Claims.HonestPair
 
-/-- Existential rows are split in source order, including repeated sorts. -/
-theorem exists_cons {types : List Ty} {type : Ty} {Value : Ty → Type}
-    (predicate : Values Value (type :: types) → Prop) :
-    (∃ row, predicate row) ↔ ∃ head rest, predicate (.cons head rest) := by
-  constructor
-  · rintro ⟨row, holds⟩
-    cases row with | cons head rest => exact ⟨head, rest, holds⟩
-  · rintro ⟨head, rest, holds⟩; exact ⟨.cons head rest, holds⟩
-
-theorem exists_nil {Value : Ty → Type} (predicate : Values Value [] → Prop) :
-    (∃ row, predicate row) ↔ predicate .nil := by
-  constructor
-  · rintro ⟨⟨⟩, holds⟩; exact holds
-  · exact fun holds => ⟨.nil, holds⟩
-
 theorem option_elim_constant {α : Type} (value : Option α) (proposition : Prop) :
     value.elim proposition (fun _ => proposition) = proposition := by
   cases value <;> rfl
+
+/-- A present optional value satisfying equality has the same compact presentation
+as equality to `some`; this law does not assume presence. -/
+theorem option_elim_eq_some {α : Type} (value : Option α) (expected : α) :
+    value.elim False (fun actual => actual = expected) ↔ value = some expected := by
+  cases value <;> simp
+
+/-- Lift independently checked presence branches without assuming input presence. -/
+theorem option_presentation {α : Type} (value : Option α) (source : Option α → Prop)
+    (absent : Prop) (present : α → Prop)
+    (absentLaw : source none = absent)
+    (presentLaw : ∀ x, source (some x) = present x) :
+    source value = value.elim absent present := by
+  cases value with
+  | none => exact absentLaw
+  | some x => exact presentLaw x
+
+/-- Each clause supplies its own presence coordinates. Unrelated clauses do not
+multiply one another's optional-input cases. -/
+def clauseCoordinates {model : DomainModel} {original : Snapshot} {imported : Imported original}
+    {selected : AuthoredPair.Selection original}
+    (subject : Subject model original imported selected)
+    (index : Fin subject.target.owner.contract.clauses.length) : List Nat :=
+  let clause := subject.target.owner.clause index
+  if clause.kind == .input then (clause.subject.selectors.filterMap fun selector =>
+    if selector.direction == .input then some selector.port else none).eraseDups
+  else []
 
 end ZkcSecurity.Tools.SourceInputClauses
 
@@ -106,13 +118,14 @@ def normalizationSimprocs : CoreM Simp.SimprocsArray := do
   return #[procedures]
 
 /-- The simplifier supplies ordinary equality proofs for every nondefinitional
-step, including the all-natural correctness of the power-of-two decision. -/
+step. Keep a readback row intact so the standard existential-equality rules
+can substitute it before evaluating the retained relation. -/
 def normalizationContext : MetaM Simp.Context := do
   let mut theorems ← getSimpTheorems
-  for name in [``Fin.forall_fin_succ, ``exists_cons, ``exists_nil,
+  for name in [``Fin.forall_fin_succ,
       ``naturalPowerOfTwo_eq_true, ``Option.some.injEq, ``Values.cons.injEq,
       ``PIR.Process.done.injEq, ``decide_eq_true_eq, ``Bool.and_eq_true,
-      ``option_elim_constant] do
+      ``option_elim_constant, ``option_elim_eq_some] do
     theorems ← theorems.addConst name
   Simp.mkContext { maxSteps := 100000 } #[theorems] (← getSimpCongrTheorems)
 
@@ -163,7 +176,7 @@ partial def checkFinished (expression : Expr) : MetaM Unit := do
   if let .const name _ := expression.getAppFn then
     if name == ``FormulaBinding.invokeRelationOn || name == ``invoke ||
         name == ``Evaluation.operationOn || name == ``Region.denote ||
-        name == ``Subject.inputClause || name == ``Subject.inputFormulas ||
+        name == ``Subject.inputClause || name == ``Subject.inputMeanings ||
         name.toString.startsWith "PIR.Process." then
       throwError "source-input-clauses: unsupported residual formula semantics: {name}\npresentation: {expression}"
   match expression with
@@ -194,40 +207,93 @@ partial def withRow (family types : Expr) (locals : Array Expr)
         continuation locals row
   else throwError "source-input-clauses: input sorts are not a closed typed row"
 
-/-- Branch only on typed input presence, never on formula truth. Every leaf
-is reduced from the actual retained selectors and helper invocation. -/
-partial def splitPresence (row : Expr) (finish : Expr → TermElabM Expr) : TermElabM Expr := do
+partial def coordinateList (expression : Expr) : MetaM (List Nat) := do
+  let expression ← whnf expression
+  if expression.isAppOf ``List.nil then return []
+  unless expression.isAppOf ``List.cons do throwError "source-input-clauses: open coordinates"
+  let arguments := expression.getAppArgs
+  let some position := arguments[1]!.rawNatLit? | throwError "source-input-clauses: open coordinate"
+  return position :: (← coordinateList arguments[2]!)
+
+/-- Expand only the finite clause quantifier, preserving each source clause. -/
+def expandClauses (expression : Expr) : MetaM Simp.Result := do
+  let expression ← transform expression (pre := fun term => do
+    if let .forallE name domain body info := term then
+      let domain ← whnf domain
+      if domain.isAppOf ``Fin then
+        let count ← withTransparency .all <| reduce domain.getAppArgs[0]!
+        unless count.rawNatLit?.isSome do throwError "source-input-clauses: open clause count"
+        return .continue (some (.forallE name (mkApp (mkConst ``Fin) count) body info))
+    return .continue)
+  let mut finite : SimpTheorems := {}
+  finite ← finite.addConst ``Fin.forall_fin_succ
+  finite ← finite.addConst ``Fin.forall_fin_zero
+  return (← simp expression (← Simp.mkContext {} #[finite] (← getSimpCongrTheorems))).1
+
+partial def clauseIndex (expression : Expr) : Option Expr :=
+  if expression.isAppOf ``Subject.inputClause then
+    some expression.getAppArgs[expression.getAppArgs.size - 2]!
+  else match expression with
+  | .app f a => (clauseIndex f).orElse fun _ => clauseIndex a
+  | .forallE _ _ b _ | .lam _ _ b _ => clauseIndex b
+  | _ => none
+
+/-- Every optional branch carries an equality proved from the same clause. -/
+partial def splitPresentation (positions : List Nat) (row : Expr)
+    (source : Expr → TermElabM Expr) (offset : Nat := 0) : TermElabM Simp.Result := do
   let row ← whnf row
-  if row.isAppOf ``Values.nil then return ← finish row
-  unless row.isAppOf ``Values.cons do
-    throwError "source-input-clauses: expected a constructor input row"
+  if row.isAppOf ``Values.nil then
+    let result ← normalize (← source row)
+    checkFinished result.expr
+    return result
+  unless row.isAppOf ``Values.cons do throwError "source-input-clauses: expected constructor row"
   let arguments := row.getAppArgs
   let head := arguments[4]!
   let tail := arguments[5]!
-  let advance (value : Expr) := splitPresence tail fun rest => do
-    finish (mkAppN row.getAppFn ((arguments.set! 4 value).set! 5 rest))
+  let advance (value : Expr) := splitPresentation positions tail (fun rest =>
+    source (mkAppN row.getAppFn ((arguments.set! 4 value).set! 5 rest))) (offset + 1)
   let present ← whnf head
-  if present.isAppOf ``Option.none || present.isAppOf ``Option.some then
+  if !positions.contains offset || present.isAppOf ``Option.none || present.isAppOf ``Option.some then
     return ← advance head
   let optionType ← whnf (← inferType head)
-  unless optionType.isAppOf ``Option do
-    throwError "source-input-clauses: component is not optional"
   let valueType := optionType.getAppArgs[0]!
   let absent ← advance (← mkAppOptM ``Option.none #[some valueType])
-  let present ← withLocalDeclD `value valueType fun value => do
-    let body ← advance (← mkAppM ``Option.some #[value])
-    mkLambdaFVars #[value] body
-  mkAppM ``Option.elim #[head, absent, present]
+  let (present, presentProof) ← withLocalDeclD `value valueType fun value => do
+    let result ← advance (← mkAppM ``Option.some #[value])
+    return (← mkLambdaFVars #[value] result.expr, ← mkLambdaFVars #[value] (← result.getProof))
+  let predicate ← withLocalDeclD `input optionType fun value => do
+    mkLambdaFVars #[value] (← source (mkAppN row.getAppFn (arguments.set! 4 value)))
+  let proof ← mkAppM ``option_presentation
+    #[head, predicate, absent.expr, present, ← absent.getProof, presentProof]
+  return { expr := ← mkAppM ``Option.elim #[head, absent.expr, present], proof? := some proof }
+
+partial def interpretExpanded (subject row inputRow expression : Expr) : TermElabM Simp.Result := do
+  if expression.isAppOfArity ``And 2 then
+    let left ← interpretExpanded subject row inputRow expression.getAppArgs[0]!
+    let right ← interpretExpanded subject row inputRow expression.getAppArgs[1]!
+    let law ← mkAppM ``and_congr
+      #[← mkAppM ``Iff.of_eq #[← left.getProof], ← mkAppM ``Iff.of_eq #[← right.getProof]]
+    let proof ← mkAppM ``propext #[law]
+    return { expr := mkApp2 (mkConst ``And) left.expr right.expr, proof? := some proof }
+  let positions ← if let some index := clauseIndex expression then do
+    coordinateList (← withTransparency .all <| reduce (← mkAppM ``clauseCoordinates #[subject, index]))
+    else pure []
+  splitPresentation positions row (fun value => pure (expression.replaceFVar inputRow value))
+
+/-- Factor the retained conjunction before expanding presence branches. This
+changes proof construction cost, not the interpreted source input contract. -/
+def interpretRowProved (subject row : Expr) : TermElabM Simp.Result := do
+  withLocalDeclD `sourceInputs (← inferType row) fun inputRow => do
+    let expanded ← expandClauses (← clausesExpression subject inputRow)
+    let substitute (expression : Expr) (value : Expr) := expression.replaceFVar inputRow value
+    let result ← interpretExpanded subject row inputRow expanded.expr
+    let expansionProof := substitute (← expanded.getProof) row
+    let result := { result with proof? := some (← mkEqTrans expansionProof (← result.getProof)) }
+    let (simplified, _) ← simp result.expr (← normalizationContext) (← normalizationSimprocs)
+    result.mkEqTrans simplified
 
 def interpretRow (subject row : Expr) : TermElabM Expr := do
-  let expression ← splitPresence row fun row => do
-    let result ← normalize (← clausesExpression subject row)
-    checkFinished result.expr
-    return result.expr
-  -- A constructor row may still contain arbitrary optional service or unused
-  -- data values. Prune constant presence branches in this path as well.
-  let (simplified, _) ← simp expression (← normalizationContext) (← normalizationSimprocs)
-  return simplified.expr
+  return (← interpretRowProved subject row).expr
 
 /-- The typed input tuple determines the lambda arity. Every clause is read
 through its retained role selectors and evaluated in the admitted helper table. -/
@@ -248,24 +314,36 @@ elab "source_input_condition " subject:term:max " on " inputs:term:max : term =>
   mkAppOptM ``TypedABI.apply #[some inputType.getAppArgs[0]!, some family,
     some (mkSort Level.zero), some types, some function, some inputs]
 
+/-- Locate the actual subject and row below the clause quantifiers. -/
+partial def clauseArguments (expression : Expr) : Option (Expr × Expr) :=
+  if expression.isAppOf ``Subject.inputClause then
+    let arguments := expression.getAppArgs
+    some (arguments[arguments.size - 4]!, arguments[arguments.size - 3]!)
+  else match expression with
+  | .app function argument => (clauseArguments function).orElse fun _ => clauseArguments argument
+  | .forallE _ _ body _ | .lam _ _ body _ => clauseArguments body
+  | _ => none
+
+/-- Split only used coordinates. Irrelevant options stay universally quantified;
+no presence or formula truth is assumed when proving the complete equivalence. -/
+def proveClauses (goal : MVarId) : TermElabM Unit := goal.withContext do
+  let target ← whnf (← goal.getType)
+  let some (subject, row) := clauseArguments target
+    | throwError "source-input-clauses: expected retained clauses"
+  unless target.isAppOfArity ``Iff 2 do
+    throwError "source-input-clauses: expected presentation equivalence"
+  let result ← interpretRowProved subject row
+  let requested ← normalize target.getAppArgs[1]!
+  unless ← withTransparency .all <| isDefEq result.expr requested.expr do
+    throwError "source-input-clauses: presentation differs from retained clauses\nactual: {result.expr}\nrequested: {requested.expr}"
+  let equality ← mkEqTrans (← result.getProof) (← mkEqSymm (← requested.getProof))
+  goal.assign (← mkAppM ``Iff.of_eq #[equality])
+
 /-- Recompute the presentation and check the complete equivalence. Structural
 row elimination is generic; optional values remain arbitrary throughout. -/
 elab "source_input_clauses" : tactic => Term.withoutErrToSorry <| withoutRecover do
-  ZkcSecurity.Tools.SubjectABI.casesValues true
-  for goal in ← getGoals do
-    goal.withContext do
-      let target ← whnf (← goal.getType)
-      unless target.isAppOfArity ``Iff 2 do
-        throwError "source-input-clauses: expected a clause presentation equivalence"
-      let left := target.getAppArgs[0]!
-      let right := target.getAppArgs[1]!
-      let result ← normalize left
-      checkFinished result.expr
-      let requested ← normalize right
-      unless ← withTransparency .all <| isDefEq result.expr requested.expr do
-        throwError "source-input-clauses: presentation differs from retained clauses\nactual: {result.expr}\nrequested: {right}"
-      let equality ← mkEqTrans (← result.getProof) (← mkEqSymm (← requested.getProof))
-      goal.assign (← mkAppM ``Iff.of_eq #[equality])
+  ZkcSecurity.Tools.SubjectABI.casesValues false
+  for goal in ← getGoals do proveClauses goal
   setGoals []
 
 end ZkcSecurity.Tools.SourceInputClauses

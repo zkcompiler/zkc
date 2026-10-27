@@ -54,15 +54,6 @@ noncomputable def remaining [DecidableEq F] {n : Nat} :
 theorem remaining_zero [DecidableEq F] {n : Nat} (context : Context) (state : State n) :
     program.remaining 0 context state = .done state := rfl
 
-/-- Every typed path satisfies a trivial partial-return fact, even if it stops. -/
-private theorem returnsTrue {A : Type} (interaction : PIR.Interaction I)
-    (process : PIR.Process I A) (phase : interaction.Phase) :
-    PIR.Boundary.Returns interaction (fun _ _ => True) process phase := by
-  induction process generalizing phase with
-  | done => trivial
-  | halt => trivial
-  | call operation next stageIH => exact fun reply => stageIH reply _
-
 /-- A caller invariant is preserved along every typed-reply path that returns.
 No honest-message or sampling premise is needed for a private frame law. -/
 theorem returns [DecidableEq F] (interaction : PIR.Interaction I)
@@ -78,7 +69,7 @@ theorem returns [DecidableEq F] (interaction : PIR.Interaction I)
   | succ count ih =>
       unfold remaining
       have receiveReturns : PIR.Boundary.Returns interaction (fun _ _ => True)
-          (program.receive context s) phase := returnsTrue interaction _ _
+          (program.receive context s) phase := PIR.Boundary.returns_true interaction _ _
       apply PIR.Boundary.returns_bind interaction _ _ (fun _ _ => True) _ phase receiveReturns
       intro decoded reached _
       cases decoded with
@@ -88,7 +79,7 @@ theorem returns [DecidableEq F] (interaction : PIR.Interaction I)
           split
           · intro reply
             apply PIR.Boundary.returns_bind interaction _ _ (fun _ _ => True) _ _
-            · exact returnsTrue interaction _ _
+            · exact PIR.Boundary.returns_true interaction _ _
             · intro _ _ _
               exact ih _ _ (preserved context s initial m _)
           · trivial

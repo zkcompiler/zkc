@@ -5,7 +5,7 @@ fixture = "lean/bridges/structured/fixtures/sumcheck-repacked.json"
 output = "lean/ZkcExamples/Structured/SumcheckRepackedNormalForms.lean"
 namespace = "ZkcExamples.Structured.SumcheckRepackedNormalForms"
 summary = "Participant normal forms of the repacked Sumcheck reduction root"
-imports = ["ZkcExamples.Structured.SumcheckRepackedViews", "ZkcExamples.Structured.SumcheckRoundNormalForms",
+imports = ["ZkcExamples.Structured.SumcheckRepackedViews", "ZkcExamples.Structured.SumcheckPreludeNormalForms",
            "ZkcExamples.Structured.NormalFormSteps"]
 open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
 helper_modules = ["lean/ZkcExamples/Structured/SumcheckRepackedBodies.lean",
@@ -27,21 +27,23 @@ function = "runFn"
 [[shared.applications]]
 declaration = "reduce"
 body = "SumcheckVerifierBodies.reduceBody reduceMaximum"
-callee = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
+callee = "lean/bridges/structured/normal-forms/sumcheck-prelude.toml"
 function = "reduceFn"
 arguments = { U = "SumcheckRepackedViews.unit", maximum = "reduceMaximum" }
-roles.verifierReduce = { bodies = "bodies" }
+roles.verifierReduce = { bodies = "bodies", claims = "claims" }
 roles.proverReduce = { bodies = "bodies", countBound = "Nat.lt_trans shape.2.1 (by decide +kernel)", roundsBound = "Nat.lt_of_le_of_lt enough (Nat.lt_trans shape.2.1 (by decide +kernel))", enough = "enough" }
 
 [[shared.roles]]
 role = 1
 name = "verifier"
 proof = "normal-form"
-binders = "(bodies : SumcheckVerifierHelpers.Bodies SumcheckRepackedViews.unit.definitions)"
+opaque = ["pendingHelper"]
+binders = "(bodies : SumcheckVerifierHelpers.Bodies SumcheckRepackedViews.unit.definitions) (claims : SumcheckPendingLaws.Bodies SumcheckRepackedViews.unit.definitions)"
 inputs = [{ name = "claim", mode = "optional" }, { name = "count", mode = "optional" },
           { name = "dimension", mode = "absent" }, { name = "raw", mode = "absent" },
           { name = "service", mode = "optional" }]
 laws.valuesHelper = { term = "values_optional SumcheckRepackedViews.unit bodies {0} {1} {2}", results = ["{0}"], components = true }
+
 
 [[shared.roles]]
 role = 0

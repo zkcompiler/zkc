@@ -240,8 +240,7 @@ def soundnessArguments (capabilities : Capabilities model art.original)
   subject.check request
   checkCapabilities request
   let parameters ← (soundnessParameters capabilities.cardinality).decode request.parameters
-  checkDefaultRelation subject.compiled.imported.program.payload.definitions
-    subject.target.formula.definition.helper
+  checkRetainedMeaning subject.meaning
   let selected ← resolveModel registry request.model
   match parameters with
   | .error missing => return .error missing

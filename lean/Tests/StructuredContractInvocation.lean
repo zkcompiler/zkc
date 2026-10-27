@@ -18,7 +18,7 @@ private def caller : Function :=
       "loop"] (.ret [])⟩
 private def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [],
-    [.function leaf, .function caller], [⟨"leaf", []⟩, ⟨"main", []⟩], blsRows⟩
+    [.function leaf, .function caller], [⟨"leaf", []⟩, ⟨"main", []⟩], blsRows, {}⟩
 noncomputable section
 private def leafBody : Region protocolDialect [.boolean, .boolean] [.boolean] :=
   .letOp (.mark "") .nil .nil

@@ -31,27 +31,32 @@ local instance : ∀ event : Domain.Event carriers, SampleableType (Domain.Raw e
 def budget : Nat := 8
 def price : ENNReal := 1 / (Fintype.card Scalar : ENNReal)
 
+set_option linter.unusedSimpArgs false in
 /-- The formula is an explicit mathematical selection. This implication is
 checked against the unchanged retained target, separately from the ABI. -/
 def rejectedInputs (input0 : List Scalar) (input1 : List Scalar) (input2 : Scalar) (input3 : Scalar) (input4 : Nat)
     (falseStatement : validatorSubject.FalseStatement (statement input0 input1 input2 input3 input4))
     (initial : Domain.History carriers) :
-    Zkc.Obligations.Derivation (Nominal.interface (G := Group) "bls12-381.fr")
+    Zkc.Obligations.Derivation (NominalField.interface (G := Group) "bls12-381.fr")
       (boundedEscape (fun _ _ => price)) (fun _ result => acceptance result ≠ some true) initial
       (presentedInputs input0 input1 input2 input3 input4 initial) := by
-  apply twoRoots_rejected
+  apply composition_rejected
     (PrimeField.conditionalWithFrame blsModulus "bls12-381.fr"
       (TableComponent.Execution.frameUpdate (F := Scalar) (G := Group) "bls12-381.fr"))
-  intro ⟨⟨bounded0, shape0, equal0⟩, ⟨bounded1, shape1, equal1⟩⟩
+    4 (ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.calls input0 input1 input2 input3 input4 0) ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.terminalTree
+    (ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.terminal_coverage input0 input1 input2 input3 input4 0) ⟨[], initial⟩ initial
+  intro all
+  obtain ⟨bounded0, shape0, equal0⟩ := all ⟨⟨input0, input2, input4⟩, ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, 0⟩, ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0⟩ (by simp only [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.calls, List.mem_cons]; tauto)
+  obtain ⟨bounded1, shape1, equal1⟩ := all ⟨⟨input1, input3, input4⟩, ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, 0⟩, ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule1⟩ (by simp only [ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.calls, List.mem_cons]; tauto)
   apply falseStatement
   refine ⟨fun _ _ => none, ?_⟩
   prove_retained_target [Scalar, Group] reading (validator_application_read input0 input1 input2 input3 input4 _)
     evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation solving (first | assumption | simp [equal0, equal1])
 
 theorem inputCosts (input0 : List Scalar) (input1 : List Scalar) (input2 : Scalar) (input3 : Scalar) (input4 : Nat) (initial : Domain.History carriers) :
-    Typed.ChargedCostBound (Nominal.interface (G := Group) "bls12-381.fr") (fun _ _ => price)
+    Typed.ChargedCostBound (NominalField.interface (G := Group) "bls12-381.fr") (fun _ _ => price)
       (presentedInputs input0 input1 input2 input3 input4 initial) initial (budget • price) :=
-  twoRoots_cost price (fun _ _ => le_rfl) 4 ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule0 ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.schedule1 input0 input1 input2 input3 input4 ⟨[], initial⟩ initial
+  composition_cost price (fun _ _ => le_rfl) 4 (ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.calls input0 input1 input2 input3 input4 0) ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.terminalTree ⟨[], initial⟩ initial
 
 def rejected (statement : Statement) (falseStatement : validatorSubject.FalseStatement statement)
     (initial : Domain.History carriers) :
@@ -76,7 +81,7 @@ theorem schedule_prices (queries : Nat) : ∀ entry ∈ schedule.entries, entry.
 
 def reductionExport (queries : Nat) :
     Claims.Domain.ChargedExport validatorSubject schedule queries (budget • price) :=
-  installation.losslessChargedExport (Nominal.lossless "bls12-381.fr") schedule queries (budget • price)
+  installation.losslessChargedExport (NominalField.lossless "bls12-381.fr") schedule queries (budget • price)
     (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact rejected)
     (by rw [Claims.CompiledSoundness.charge_constant schedule queries price (by decide +kernel) (schedule_prices queries)]; exact costs)
 

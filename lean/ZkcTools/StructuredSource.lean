@@ -6,6 +6,7 @@ public import ZkcTools.StructuredSource.Presentation
 public import ZkcTools.StructuredSource.Bindings.Generate
 public import ZkcTools.StructuredSource.Bindings.Ledger
 public import ZkcTools.JsonSupport
+public import ZkcTools.SourceClaims.Components
 
 @[expose] public section
 
@@ -56,7 +57,7 @@ def run (args : List String) : IO UInt32 := do
   let mode := args.headD ""
   if (mode != "check" || args.length != 2) &&
       ((mode != "run" && mode != "open" && mode != "normal-form" && mode != "presentation" &&
-        mode != "bindings") || args.length != 3) then
+        mode != "bindings" && mode != "components") || args.length != 3) then
     return ← Zkc.Tools.refused "structured-source-arguments"
   let json ← read args[1]!
   let decoded := do
@@ -68,6 +69,14 @@ def run (args : List String) : IO UInt32 := do
     if mode == "check" then
       Zkc.Tools.emit (.arr #[.str "checked", .str program.snapshot.source, .str program.snapshot.entry])
       return 0
+    if mode == "components" then
+      let text ← ZkcTools.SourceClaims.Components.readText args[2]!
+      match text.bind (ZkcTools.SourceClaims.Components.check program.snapshot) with
+      | .error code => return ← Zkc.Tools.refused code
+      | .ok () =>
+        Zkc.Tools.emit (Lean.Json.mkObj [("status", .str "associated"),
+          ("mathematical_obligations", .str "unresolved")])
+        return 0
     match ← read args[2]! (1024 * 1024) with
     | .error code => Zkc.Tools.refused code
     | .ok inputs =>
@@ -80,7 +89,3 @@ def run (args : List String) : IO UInt32 := do
       | .ok result => Zkc.Tools.emit result; return 0
 
 end ZkcTools.StructuredSource
-
-def main (args : List String) : IO UInt32 := do
-  try ZkcTools.StructuredSource.run args
-  catch _ => Zkc.Tools.refused "structured-source-io"

@@ -30,6 +30,8 @@ def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
   | .indexEqual, _, .cons a (.cons b .nil) => .cons (decide (a = b)) .nil
   | .indexLess, _, .cons a (.cons b .nil) => .cons (decide (a < b)) .nil
   | .indexPowerOfTwo, _, .cons n (.cons r .nil) => .cons (naturalPowerOfTwo n r) .nil
+  | .multilinearRestrictPrefix _, _, .cons values (.cons point .nil) =>
+      .cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil
   | .vectorLength _, _, .cons values .nil => .cons values.length .nil
   | .fieldEmbed extension base, _, .cons value .nil =>
       .cons (model.embed extension base value) .nil

@@ -23,15 +23,15 @@ def iteration (payload : UnitPayload) (maximum : Nat) (context : ProtocolContext
   Original.fold routing
     (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) context self
       (.cons handle .nil) (OriginalSumcheckLibrary.round payload context self)
-      source.1 index Occurrence.iterations "s15") source.2
+      source.1 index Occurrence.iterations SumcheckVerifierBodies.repeatSite) source.2
 
 structure Routes (producerRouting validatorRouting : Original.Routing)
     (context : ProtocolContext) (handle : Nat) where
   origins : Nat → ArtifactBinding.Origins
   producer : ∀ index, OriginalProducer.Routes producerRouting context
-    [⟨qualifyProtocolSite context.applicationPrefix "s15", index⟩] (origins index)
+    [⟨qualifyProtocolSite context.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩] (origins index)
   validator : ∀ index, ArtifactBinding.Routes validatorRouting context
-    [⟨qualifyProtocolSite context.applicationPrefix "s15", index⟩] handle (origins index)
+    [⟨qualifyProtocolSite context.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩] handle (origins index)
 
 /-- Actual repeat entry, role masks and matching leave surround the callback.
 The common return history is passed through the original closing boundary. -/
@@ -57,7 +57,7 @@ theorem step (payload : UnitPayload) (bodies : SumcheckUnitContracts.Bodies payl
     Original.fold_bind, Original.fold_within, List.nil_append, PIR.Process.bind_assoc]
   apply (round payload bodies producerRouting validatorRouting context separate index handle
     (routes.origins index) state shape bounded honest
-    ⟨[⟨qualifyProtocolSite context.applicationPrefix "s15", index⟩], history⟩
+    ⟨[⟨qualifyProtocolSite context.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩
     (routes.producer index) (routes.validator index)).bind
   intro left right returned
   obtain ⟨challenge, reached, rfl, rfl⟩ := returned

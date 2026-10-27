@@ -85,11 +85,10 @@ end Subject
 input formula and the selected target. No input policy is read from a request. -/
 def checkHonestRelations (subject : Subject model original imported selected) :
     Except ResolutionError Unit := do
-  let definitions := imported.program.payload.definitions
-  checkDefaultRelation definitions subject.target.formula.definition.helper
+  checkRetainedMeaning subject.meaning
   for index in List.finRange subject.target.owner.contract.clauses.length do
     if isInput : (subject.target.owner.clause index).kind = .input then
-      checkDefaultRelation definitions (subject.inputFormulas index isInput).formula.definition.helper
+      checkRetainedMeaning (subject.inputMeanings index isInput).meaning
 
 def completenessArguments (capabilities : Domain.Capabilities model original)
     (registry : ModelRegistry) (request : Wire.Request)

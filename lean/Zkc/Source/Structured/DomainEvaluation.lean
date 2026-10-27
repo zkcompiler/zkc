@@ -3,6 +3,8 @@ module
 public import Zkc.Source.Structured.Meaning
 public import Zkc.Source.Structured.DomainModels
 
+public import Zkc.Polynomial.Multilinear.ListRestriction
+
 @[expose] public section
 
 /-! The structured evaluator over domain models.
@@ -179,6 +181,8 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
   | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .indexLess, .cons a (.cons b .nil), .nil => .done (.cons (decide (a < b)) .nil)
   | .indexPowerOfTwo, .cons n (.cons r .nil), .nil => .done (.cons (naturalPowerOfTwo n r) .nil)
+  | .multilinearRestrictPrefix _, .cons values (.cons point .nil), .nil =>
+      .done (.cons (Polynomial.Multilinear.restrictPrefixValues values point) .nil)
   | .vectorLength _, .cons values .nil, .nil => .done (.cons values.length .nil)
   | .fieldEmbed extension base, .cons value .nil, .nil =>
       .done (.cons (model.embed extension base value) .nil)

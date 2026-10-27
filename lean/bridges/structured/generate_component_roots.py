@@ -42,7 +42,7 @@ def validate_config(config):
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{location}: expected a nonempty string")
 
-    strings = {"schema", "model_module", "model", "sampling", "field_type",
+    strings = {"schema", "model_module", "model", "registry", "sampling", "field_type",
                "group_type", "capabilities"}
     lists = {"receipt_normalization", "theorem_normalization"}
     shape(config, strings | {"root"}, lists, "component roots")
@@ -119,7 +119,8 @@ class Generation:
                                             cwd=self.package, text=True).strip()
         self.lean = subprocess.check_output(["lake", "env", "which", "lean"],
                                             cwd=self.package, text=True).strip()
-        self.environment = dict(os.environ, LEAN_PATH=f"{self.output}:{self.base}", LEAN_NUM_THREADS="1")
+        self.environment = dict(os.environ, LEAN_PATH=f"{self.output}:{self.base}",
+                                LEAN_NUM_THREADS=os.environ.get("LEAN_NUM_THREADS", "2"))
         self.commands = []
         self.run_id = str(time.time_ns())
         self.generated = []
@@ -147,8 +148,11 @@ class Generation:
         (self.directory / f"commands-{self.run_id}.json").write_text(json.dumps(self.commands, indent=2) + "\n")
         (self.directory / "commands.json").write_text(json.dumps(self.commands, indent=2) + "\n")
         if result.returncode:
-            raise RuntimeError(f"{command[0]} failed (full output: {log}):\n"
-                               + (result.stdout + result.stderr)[-4000:])
+            lines = (result.stdout + result.stderr).splitlines()
+            first = next((index for index, line in enumerate(lines)
+                          if ": error" in line or line.startswith("error") or "fatal error" in line), 0)
+            excerpt = "\n".join(lines[first:first + 40])[:4000]
+            raise RuntimeError(f"{command[0]} failed (full output: {log}):\n" + excerpt)
         if "sorryAx" in result.stdout:
             raise RuntimeError("unfinished theorem in generated root")
         return result.stdout
@@ -241,7 +245,16 @@ class Generation:
             return self.execute([self.args.compiler, *args])
         original = native("language-emit", *flags)
         (directory / "original.mlir").write_text(original)
-        bundle = json.loads(native("language-bundle", *flags))
+        interface_text = native("language-interface", *flags)
+        interface = json.loads(interface_text)
+        (directory / "interface.json").write_text(interface_text)
+        bundle_text = native("language-bundle", *flags)
+        bundle = json.loads(bundle_text)
+        (directory / "deployment.json").write_text(bundle_text)
+        source_digest = hashlib.sha256(original.encode()).hexdigest()
+        if interface["original"] != source_digest or bundle[1] != source_digest:
+            raise RuntimeError("root interface or deployment identifies different source bytes")
+        (directory / "source-claims.json").write_text(native("language-check", *flags, "--source-claims"))
         policy = bundle[2][1]
         (directory / "policy.json").write_text(json.dumps(policy))
         candidate = native("protocol-construct-proof", directory / "original.mlir", directory / "policy.json")
@@ -257,6 +270,7 @@ class Generation:
                 raise RuntimeError("individual export differs from retained pair")
             individual[role] = text
             (directory / (role + ".json")).write_text(text)
+            (directory / (role + ".identity")).write_text(text)
         source = native("protocol-structured", directory / "original.mlir", "--symbol=" + policy[1])
         (directory / "source.json").write_text(source)
         for module, text in [
@@ -305,6 +319,7 @@ def main : IO Unit := do
     originalExpression := {quoted(data+'.snapshot')}, importedExpression := {quoted(inputs+'.imported')},
     pairModule := {quoted(pair_module)}, artifactsExpression := {quoted(pair_module+'.artifacts')},
     modelModule := {quoted(config['model_module'])}, modelExpression := {quoted(config['model'])},
+    registryExpression := {quoted(config['registry'])},
     targetName := {quoted(root['target'])},
     originalExportExpression := {quoted(quoted(identities['original']))},
     producerExportExpression := {quoted(quoted(identities['producer']))},

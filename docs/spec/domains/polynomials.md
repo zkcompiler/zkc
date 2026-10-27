@@ -40,6 +40,33 @@ The [structured native profile](../ir/mathematics.md)
 defines the concrete SSA signatures and bounded realization. Formal values have
 no runtime encoding; they differ from normalized coefficient objects below.
 
+## Total vector prefix restriction
+
+`multilinear.restrict_prefix<F>(values, point)` takes two field vectors and
+returns a field vector in the same nominal field. Its meaning, for every finite
+vector and point, is `Zkc.Polynomial.Multilinear.restrictPrefixValues`:
+start with `values` and consume `point` from first to last. For each coordinate
+`r`, let `h = floor(length / 2)` and replace the current vector by
+`[low[j] + (high[j] - low[j]) * r | j < h]`, where `low` starts at zero
+and `high` starts at `h`. This is contiguous, MSB-first restriction.
+An odd length discards the final unmatched high entry. An empty point is the
+identity, including on empty and odd vectors. Restricting a singleton once
+returns the empty vector; further coordinates leave it empty.
+
+The operation imposes no power-of-two or point-length premise. A relation that
+uses its result as a residual multilinear table separately requires
+`values.length = 2^variables` and `point.length <= variables`. Under these
+premises the result has length `2^(variables - point.length)` and denotes the
+extension with the leading coordinates fixed. The existing list-restriction
+laws establish this shape-dependent interpretation over a commutative ring,
+including characteristic two.
+
+Native execution has separate element, output, work and scratch-memory guards.
+Exceeding them exhausts the execution; it does not change this total meaning.
+The kernel uses the installed field arithmetic and has no standalone native
+refinement theorem. Focused execution controls test its numerical agreement;
+the Lean equations refer directly to the existing list definition.
+
 ## Univariate coefficient objects
 
 A univariate polynomial over `F` has a finite ascending coefficient sequence:

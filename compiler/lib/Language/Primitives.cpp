@@ -170,6 +170,7 @@ mathematicalRoots(Semantics &types, const Declaration &decl,
     return std::vector<Type>{input};
   const Type *anchor = &input;
   switch (intrinsic.identity) {
+  case I::MultilinearRestrictPrefix:
   case I::VectorLength:
     if (input.kind != K::Builtin || input.domain != "vector" ||
         input.arguments.size() != 1)

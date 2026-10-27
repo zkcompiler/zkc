@@ -37,7 +37,7 @@ def snapshot (definitions : List Definition) (domains : List Domain := []) : Sna
   (let contractDefinitions : List Definition := definitions
    ⟨digest, "main", domains, [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows, {}⟩)
 
 def totalStep (returned : List Nat := [2, 0]) (container : Nat := 3)
     (premises : List Bound := [⟨2, 3, 0⟩]) : Definition :=

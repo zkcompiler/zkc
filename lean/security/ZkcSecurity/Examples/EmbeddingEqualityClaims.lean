@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.Examples.EmbeddingEqualitySoundness
 public import ZkcSecurity.Examples.EmbeddingEqualityCapabilities
 public import ZkcSecurity.Tools.ClaimConstruction
+public import ZkcSecurity.Claims.SubjectABI
 
 @[expose] public section
 
@@ -25,8 +26,10 @@ open ZkcSecurity.Examples.EmbeddingEqualityCapabilities (capabilities)
 def subject : Claims.Domain.Subject model artifacts where
   compiled := checked
   target := retained
-  originalExport := "sha256:198a275c8dc1a3b5e7ef78b30676d63ff0f07b151b292a0a486269b8bb0c15ea"
-  participantExport := "sha256:51686b3d9ce3db7cf5e84aa1657cc0204fcbe9bd5c9666931b98423612bdc71b"
+  relations := .ofChecked .empty (by decide +kernel)
+  meaning := .formula ZkcExamples.Construction.EmbeddingEqualityBinding.formula
+  originalExport := "sha256:4b55a9463b0e4e2a42451a5a44e0f88db1f647a810f2c6ec2229d15cbb604e4e"
+  participantExport := "sha256:794c90d4922179daaad83fe2db3161ef1cfd70f79ce7fdb0febc86414b0c441f"
 
 theorem target_read (a b : Base) (witness : subject.Witness) :
     subject.target.application.read {} (subject.boundary (statement a b))
@@ -37,13 +40,7 @@ theorem target_read (a b : Base) (witness : subject.Witness) :
 Witness choices do not introduce a hidden equality assumption. -/
 theorem holds_iff (a b : Base) (witness : subject.Witness) :
     subject.Holds (statement a b) witness ↔ a = b := by
-  constructor
-  · rintro ⟨arguments, read, holds⟩
-    rw [target_read] at read
-    cases Option.some.inj read
-    exact (target_iff a b).mp holds
-  · intro equal
-    exact ⟨.cons a (.cons b .nil), target_read a b witness, (target_iff a b).mpr equal⟩
+  exact (subject.holds_iff_of_read _ witness _ (target_read a b witness)).trans (target_iff a b)
 
 def selectedModel : Claims.Model :=
   ⟨.fixed, .symbolic "Q", "Q", "", .constant 0, none⟩

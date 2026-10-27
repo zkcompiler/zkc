@@ -102,7 +102,7 @@ def Op.preparationAllowed (profile : PreparationProfile) : Op → Bool
   | .fieldEqual _ | .groupIdentity _ | .groupAdd _ | .groupEqual _ | .groupScale _ _ =>
     profile == .realization
   | .indexConstant n => profile == .realization && n < indexLimit
-  | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength _ |
+  | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength _ | .multilinearRestrictPrefix _ |
       .booleanConstant _ | .booleanAnd | .booleanOr |
       .booleanXor | .booleanEqual | .booleanNotEqual => profile == .realization
   | .makeProduct .. | .getProduct .. => profile == .realization

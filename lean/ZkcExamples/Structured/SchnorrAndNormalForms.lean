@@ -190,16 +190,9 @@ theorem relation_iff (firstBase firstKey secondBase secondKey : G) (firstWitness
   all_goals change ((decide (firstKey = firstWitness • firstBase)) && (decide (secondKey = secondWitness • secondBase))) = true ↔ firstKey = firstWitness • firstBase ∧ secondKey = secondWitness • secondBase
   all_goals simp
 
-/-- The subject's only relation is this formula. -/
-def environment : RelationEnvironment imported F G where
-  meanings index args := by
-    have same : index = application.relation.index := by
-      apply Fin.ext
-      have bound : index.val < 1 := index.isLt
-      change index.val = 0
-      omega
-    subst index
-    exact Relation (args.get .here) (args.get (.there .here)) (args.get (.there (.there .here))) (args.get (.there (.there (.there .here)))) (args.get (.there (.there (.there (.there .here))))) (args.get (.there (.there (.there (.there (.there .here))))))
+/-- Every retained relation uses its formula or captured body. -/
+def environment : RelationEnvironment imported F G :=
+  RegisteredRelations.formulaOnly (by decide +kernel)
 
 def target : InterpretedApplication owner clause.subject F G environment where
   binding := application

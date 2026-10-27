@@ -107,7 +107,7 @@ theorem missing_point_after_delivery :
 
 def verifier (count : Nat) :=
   protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [101]) (some [102]) (some [103]) (some [104])
-    (some 2) (some count) (some 83)
+    (some []) (some 2) (some count) (some 83)
 
 /-- Two malicious non-honest triples both pass; exact source loop count,
 point append and every private runtime output are checked. -/
@@ -132,13 +132,18 @@ theorem two_arbitrary_rounds :
 
 theorem source_maximum (count : Nat) (large : 4 < count) :
     verifier count = .halt .refused :=
-  above_maximum {} (RosterDistinct.root 1 2) _ _ _ _ _ _ count large
+  above_maximum {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _ count large
 
 theorem zero_missing_optional :
-    protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [1]) none (some [3]) none none (some 0) none =
+    protocol0Role1Process (F := ℚ) (G := ℚ) {} (some [1]) none (some [3]) none (some []) none (some 0) none =
+      .halt .incomplete :=
+  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _
+
+theorem zero_present_without_service (point : List ℚ) (claim : ℚ) :
+    protocol0Role1Process (F := ℚ) (G := ℚ) {} none none none none (some point) (some claim) (some 0) none =
       .done (.cons none (.cons none (.cons none (.cons none (.cons none
-        (.cons (some []) (.cons none .nil))))))) :=
-  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _
+        (.cons (some point) (.cons (some claim) .nil))))))) :=
+  zero {} (RosterDistinct.root 1 2) _ _ _ _ _ _ _
 
 /-- A perfectly decoded cubic input cannot instantiate the residual's layout
 premise. This reuses the existing actual-helper independence refusal. -/

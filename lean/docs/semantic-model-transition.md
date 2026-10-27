@@ -59,7 +59,7 @@ The executable connection has three separate consumers:
 acceptance proposition. Its hypotheses remain field-coordinate codec
 inversion and message-size bounds, a 32-byte binding, table length
 `2 ^ rounds`, rounds within the static maximum and budget at least
-`68 + 59 * rounds`. It requires no inverse law for unrelated payload types.
+`72 + 59 * rounds`. It requires no inverse law for unrelated payload types.
 The proof combines mathematical honest success, sufficient resources, exact
 message decoding and native correspondence. Success includes the returned
 Boolean and consumption of the whole proof.

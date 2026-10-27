@@ -105,7 +105,7 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     a source capture without changing the admitted protocol or request.
     """
     require(isinstance(export, dict), "source claims must be an object")
-    require(set(export) == {"format", "entry", "registry_resolution", "admission", "claims"},
+    require(set(export) == {"format", "entry", "registry_resolution", "admission", "claims", "proposals", "seams"},
             "unexpected source-claim export fields")
     require(export["format"] == "zkc.source-claims/0", "unsupported source-claim format")
     require(export["registry_resolution"] == "deferred-to-lean", "native claims cannot certify a meaning")
@@ -136,6 +136,8 @@ def bind_export(export, *, entry, source, interface_text, original_text,
     require(original[3] == admission.get("protocol_symbol"), "source claims bind another protocol")
     require(interface.get("protocol") == original[3],
             "native interface maps Entry to another protocol")
+    for field in ("proposals", "seams"):
+        require(isinstance(export[field], list), f"component {field} must be an array")
     require(isinstance(export["claims"], list), "source claims must be an array")
     results = []
     attachments = set()
@@ -180,6 +182,14 @@ def bind_export(export, *, entry, source, interface_text, original_text,
                         "resolution": "pending-lean", "source_scope": "ir-relative"})
     return {"format": "zkc.bound-source-claims/0", "entry": entry,
             "native_export_digest": digest(canonical(export)), "claims": results,
+            "proposals": deepcopy(export["proposals"]), "seams": deepcopy(export["seams"]),
             "checked_links": ["native-original", "native-interface", "source-entry-association",
                               "snapshot-source", "stage-artifacts"],
-            "required_links": ["typed-request-resolution", "source.correspondence"]}
+            "required_links": ["typed-request-resolution", "source.correspondence",
+                *(["typed-component-association"]
+                  if export["proposals"] or export["seams"] else [])],
+            # Component laws belong to this proof method. A direct proof of the
+            # fixed request meaning need not use the component method at all.
+            "method_obligations": ([{"method": "component-composition",
+                "required": ["component-law-obligations"]}]
+                if export["proposals"] or export["seams"] else [])}

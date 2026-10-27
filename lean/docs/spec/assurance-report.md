@@ -242,6 +242,35 @@ source-occurrence check. Pair links require exact pair admission, retained
 target and source input association, selected validator admission, and both
 source-occurrence equations.
 
+`RetainedTarget` selects one actual Boolean target clause, its ordered selectors,
+publication layout and exact acceptance output. Interpretation is selected
+separately by the request-owned subject: `RelationMeaning.formula` contains a
+`FormulaBinding`, and `RelationMeaning.opaque` contains an exact binding in the
+subject's admitted `RegisteredRelations` registry. Every opaque declaration in
+the original relation table must resolve before evidence. Family kind, key,
+revision, typed ordered static arguments, input/output sorts and logical purposes
+are all fixed by that lookup. Source supplies family identities and arguments,
+not Lean declaration names. Evidence cannot supply an unregistered predicate.
+
+Both domain and actual authored-pair subjects use this same meaning. All actual
+input clauses remain mandatory, with each formula or opaque interpretation bound
+to that same registry. The pair's validator projection transports the selected
+target and meaning along the checked policy equality. Domain and uniform readers
+share publication decoding and witness selection; all clause consumers share the
+ordered application reader. The formula equivalences
+`Domain.Subject.holds_formula_iff`, `HonestPair.Subject.relation_formula_iff` and
+`HonestPair.Subject.inputClause_formula_iff` retain the previous invocation
+propositions exactly. `HonestPair.Subject.honestInput_formula_iff` additionally
+preserves all input clauses, representability, preparation and both ABI checks.
+Truth requires a completed `true` result; a stop does not satisfy the relation. The existing uniform formula adapter additionally has
+`RetainedTarget.holds_formula_iff` against the canonical model reading. Its
+retained constructor now receives the exact source formula binding explicitly.
+
+Formula dependency admission retains `checkDefaultRelation` over the actual
+helper closure. Registered opaque meanings are mathematical registry entries;
+they introduce no executable helper or separate checker root. Registration does
+not prove a security or completeness property, nor a native correspondence.
+
 Adaptive domain adversaries return the actual statement and proof after their
 oracle queries. The typed public codec injectively binds every raw public value,
 including malformed vector widths and counts, in the selected application

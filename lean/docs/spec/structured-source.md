@@ -28,8 +28,8 @@ instructions. Admission refuses operations outside the vocabulary specified on
 this page, including conditional completion and construction-start, even in
 dormant declarations.
 
-Bindings are separate noncallable metadata in the exact ten-slot envelope
-`[format, original, digest, entry, domains, relations, bindings, definitions, contracts, catalogue]`.
+Bindings are separate noncallable metadata in the exact eleven-slot envelope
+`[format, original, digest, entry, domains, relations, bindings, definitions, contracts, catalogue, source-declarations]`.
 Each row is `["binding", name, contract, arguments, implementation]`. All rows,
 including unused rows, are checked. Names match ASCII
 `[A-Za-z_][A-Za-z0-9_.-]*`, occupy at most 256 bytes and share the domain,
@@ -39,10 +39,29 @@ field default or compatibility reader. Binding names cannot be called or
 selected as roots, domains or callbacks.
 
 Relations are noncallable metadata. Their input types, Boolean result, purposes,
-kind, key, revision and optional formula symbol are retained. A relation of kind
-`zkc.language.formula/0` must name a private Math helper of the unit with exactly
+kind, key, revision, ordered typed static arguments and optional formula symbol
+are retained. Relation wire rows have eleven required slots, with static
+arguments immediately after revision. `RelationChecking` reuses `OriginTerm`
+validation and checks aggregate limits, admitted catalogue domains (including
+phantom domains) and signature/purpose consistency at equal closed identities.
+A relation of kind `zkc.language.formula/0` must name a private Math helper of the unit with exactly
 the relation's input and output types. Other relation kinds must omit this link.
 Admission checks the link, not the formula's totality or mathematical adequacy.
+
+`OpaqueRegistry` fixes one `OpaqueFamily` per vendor `(kind, key, revision)`;
+its partial typed instantiation function determines the predicate, ordered
+input/output types and purposes for the exact `OriginTerm` argument list.
+Duplicate family ownership is refused. `resolve` checks canonical arguments,
+exact signature/purposes and the absence of a formula link. Formula and captured
+`zkc.` kinds cannot resolve as opaque. `RegisteredRelations` admits every opaque
+row against a registry fixed before evidence, including unused declarations.
+`ContractMeaning` and `DomainContract` consume this environment. Their predicates
+are derived from lookup rather than supplied independently by evidence;
+`Binding.unique_meaning` and `RegisteredRelations.meanings_exact` prove the exact
+adapter law. Structural `check` alone does not supply registered meaning or a
+security theorem. Formula helpers and captured assets retain their own meaning
+owners. A caller must supply its actual family registry and any protocol theorem.
+
 A statement retains its relation, exact entry operands, role selectors,
 Boolean acceptance-result index and optional target name. A named target must
 resolve to the containing protocol's retained target clause and agree with that
@@ -405,6 +424,18 @@ are supported. The premise is a process equation, not a totality assumption.
 The closed `Structured.inline_invoke` wrapper and `Payload.inline_body_view`
 reuse this law, exact declaration membership, linking and table-frame laws.
 
+`Descriptor.multilinearRestrictPrefix` reads the exact two-slot wire descriptor
+`["multilinear.restrict_prefix", field-domain]`. Admission requires the
+catalogue's field identity, two vectors in that field and one vector result,
+with no site or regions, in Math or a protocol calculation. Local use refuses.
+The admitted `Op.multilinearRestrictPrefix` returns
+`Polynomial.Multilinear.restrictPrefixValues values point` in both uniform
+and per-domain interpretations, without a shape, index-bound or native
+resource premise. It is a total calculation in preparation, optional-component
+and normal-form semantics. Relations separately require the table shape and
+prefix-length bounds. These equations establish source-model meaning;
+they do not establish compiler or native-provider correspondence.
+
 ## Checked primitives and index values
 
 `Primitive` owns a closed vocabulary and ordered ports; `PrimitiveEvaluation`
@@ -493,7 +524,7 @@ arithmetic must state those bounds.
 
 ## Retained realization and map declarations
 
-The ten-slot envelope retains two additional definition variants, in original
+The eleven-slot envelope retains two additional definition variants, in original
 encounter order:
 
 ```text
@@ -605,7 +636,7 @@ prescan: the stopping decision follows the ordered shape prefix above.
 The exact five-field instruction row is
 `[["protocol_apply", callee, roles], operands, resultTypes, [], site]`.
 The descriptor has exactly three fields and occupies an ordinary instruction
-row of the ten-slot snapshot envelope. Admission requires a flat nonempty target, exact ordered full ABI,
+row of the eleven-slot snapshot envelope. Admission requires a flat nonempty target, exact ordered full ABI,
 zero regions, a nonempty site, and one caller role for every ordered callee role.
 The substitution is injective and in range. Protocol declaration names, role names and real sites
 use ASCII `[A-Za-z_][A-Za-z0-9_]*` with the separate 512-byte source limit;
@@ -706,7 +737,7 @@ values.
 
 The descriptor is exactly
 `["protocol_repeat", carried, maximum, roles, carried_roles]` in the
-five-field instruction row of the ten-slot snapshot envelope. `carried` is a natural
+five-field instruction row of the eleven-slot snapshot envelope. `carried` is a natural
 at most 512; `maximum` is a natural at most 1048576. The first operand is the
 count. The next `carried` operands are state, and the remaining operands are
 immutable captures. Ordered result types equal the state types. There is exactly
@@ -885,3 +916,22 @@ a repeat callback's carried state and for an entry's `Program.participant`.
 Each generated participant normal form is an instance: the kernel checks by
 evaluation that the normalizer returns the printed form and that the form's
 process is the readable one.
+
+## Component declaration context
+
+`SourceDeclarations.check` admits the last structured-source slot against all
+protocol headers and their retained contracts. It reconstructs only the bounded
+source layout fragment in the [shared wire specification](../../../docs/spec/formats/structured-source.md#retained-source-declarations).
+It does not infer linearity from a Boolean/field carrier or invent missing
+source/static declarations. `Import.checkUnitHeaders` runs this check before
+body admission. Old ten-slot snapshots have no compatibility reader.
+
+The selected protocol may be a library root with linear inputs or residual
+outputs. Selection alone supplies no final acceptance evidence. The same exact
+layout, single holder, sealed linear declaration and successful-exit ownership
+checks apply to selected and nested protocols. Clause-free wrappers assert no
+relation. Protocols with any retained clauses still require unique relation
+coverage of every linear port, consistently across each closed source type.
+`EntryContractBinding` separately requires the actual selected root, its unique
+named target statement and the target's exact acceptance output. Component
+association does not supply that binding or prove its relation.

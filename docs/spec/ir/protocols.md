@@ -364,11 +364,21 @@ original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and
 binds ordered entry operands with explicit role selectors. The declaration has
-an external identity `(kind, key, revision)`, ordered logical input types, one
-Boolean result, and an explicit purpose for every input: `parameter`,
+an external identity `(kind, key, revision, static_arguments)`, ordered logical
+input types, one Boolean result, and an explicit purpose for every input: `parameter`,
 `statement`, or `witness`. Purpose comes from an author or adapter schema; role
 availability and secrecy do not determine it. The symbol implements no callable
 interface and cannot be invoked as a helper or executable local function.
+
+`static_arguments` is an ordered ArrayAttr of canonical typed static trees,
+using the protocol-origin serializer and checker. Its native default is empty;
+the structured wire row always contains the list. Arguments are retained even
+when unused by runtime input types. The origin limits apply: at most 128
+arguments, depth 64 and 4096 aggregate term nodes. Noncanonical naturals and
+malformed typed trees refuse with `relation-static-arguments`. Source-owned
+`zkc.` formula and captured-asset identities require an empty list and retain
+their exact helper or asset identity. Vendor families obtain meaning only from
+an explicit registry with a fixed typed instantiation and exact ABI/purposes.
 
 The statement's optional StringAttr `target` names exactly one `target` clause
 in the containing protocol's `contracts`. Its relation, actual input arguments,
@@ -592,3 +602,13 @@ source models have their own subjects and admission contracts.
 The native mathematical path also supports [conditional entry completion and
 bounded local termination](completion.md). Its records belong to the native executable; independent formal models require
 their own explicit interpretation.
+
+## Retained frontend declarations
+
+An original protocol module may carry the `source_declarations` string
+attribute specified by the [structured export](../formats/structured-source.md#retained-source-declarations).
+It retains checked closed source records and protocol port boundaries for
+component association. It has no execution meaning, is checked exactly by
+frontend correspondence, and is omitted by participant projection. Contracts
+and component routes remain original-stage facts; no second identity digest
+or executable routing table is introduced.

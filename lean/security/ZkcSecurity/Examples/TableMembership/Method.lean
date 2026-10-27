@@ -29,15 +29,19 @@ abbrev Statement := validatorArtifacts.Statement model
 abbrev carriers := model.toCarriers
 local instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 
+/-- The exact retained source helper, selected independently of property evidence. -/
+def formula : FormulaBinding imported subject.target.application.relation := by bind_contract
+
 /-- The retained source formula is characterized by the existing helper law.
 Successful bounded execution is part of retained truth, rather than an
 adversarial admission premise. -/
 theorem formula_truth (table : List Scalar) (queries : List Query) :
-    subject.target.formula.invokeRelationOn model (ABI.arguments table queries) =
+    formula.invokeRelationOn model (ABI.arguments table queries) =
       .done (subject.target.booleanOutput.symm ▸ Values.cons true .nil) ↔
     Admissible table queries ∧ PIR.Relation.Table.membership table (queries.map decodeQuery) = true := by
   let witness : ZkcExamples.Construction.TableMembership.target.Witness Scalar Scalar := fun _ _ => none
   exact (ZkcExamples.Construction.TableMembership.target.holds_iff_of_arguments
+      ZkcExamples.Structured.TableContractBindings.membershipFormula
     (ZkcExamples.Construction.TableMembership.statement table queries) witness
     (.cons table (.cons queries .nil))
     (ZkcExamples.Construction.TableMembership.target_arguments table queries witness)).symm.trans
@@ -130,6 +134,7 @@ theorem rejects (statement : Statement) (falseStatement : validatorSubject.False
     PIR.Yields (fun result => validatorCompiled.acceptance result ≠ some true) (presented statement initial) := by
   obtain ⟨table, queries, rfl⟩ := ABI.statement_surjective statement
   have falseTarget : ZkcExamples.Construction.TableMembership.target.FalseStatement
+      ZkcExamples.Structured.TableContractBindings.membershipFormula
       (ZkcExamples.Construction.TableMembership.statement table queries) (G := Scalar) := by
     rintro ⟨witness, truth⟩
     apply (false_iff table queries).mp falseStatement

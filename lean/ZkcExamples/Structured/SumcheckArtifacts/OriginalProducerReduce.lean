@@ -39,12 +39,12 @@ theorem source_reduce (payload : UnitPayload)
     (enough : count ≤ dimension) (handle : Option Nat) :
     OriginalSumcheckLibrary.reduce payload maximum context (context.roles 0) protocols
       (.cons (some raw) (.cons (some dimension) (.cons (some 1)
-        (.cons none (.cons (some count) (.cons handle .nil)))))) =
+        (.cons none (.cons none (.cons (some count) (.cons handle .nil))))))) =
       (denoteRepeatOn (carriers := uniformCarriers F G) (repeatSpec maximum) context
         (context.roles 0) (some count) (SumcheckProverLaws.embedP (raw, dimension, 1, []))
         (.cons handle .nil) (OriginalSumcheckLibrary.round payload context (context.roles 0))
-        Occurrence.iterations "s15").bind
-          (fun state => .done (reduceReturnValues state)) := by
+        Occurrence.iterations repeatSite).bind
+          (fun state => .done (producerReturnValues state)) := by
   have verifierBodies : SumcheckVerifierHelpers.Bodies payload.definitions :=
     ⟨bodies.empty, bodies.append, bodies.width, bodies.variables, bodies.values⟩
   change (invoke (helpers (F := F) (G := G) payload).components MapFirstBodies.widthHelper
@@ -76,15 +76,15 @@ theorem source_reduce (payload : UnitPayload)
   simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence, empty_lift payload verifierBodies,
     PIR.Process.bind]
   change (Participant.owned (context.roles 0) (context.roles 1)
-    (invoke (helpers (F := F) (G := G) payload).closed SumcheckHelperBodies.emptyHelper)
-    .nil).bind _ = _
+    (invoke (helpers (F := F) (G := G) payload).closed SumcheckPendingBodies.openClaimHelper)
+    (.cons none (.cons none .nil))).bind _ = _
   simp only [Participant.owned, separate, ↓reduceIte, PIR.Process.bind]
   change (denoteRepeatOn (carriers := uniformCarriers F G) (repeatSpec maximum) context
     (context.roles 0) (some count) (SumcheckProverLaws.embedP (raw, dimension, 1, []))
     (.cons handle .nil) (fun args => roundBody.denote
       (participantMeaningWithOn (ringModel F G) (.silent _) actions (helpers payload).toOn
         (context.roles 0) protocols context Occurrence.iterations) args.get)
-    Occurrence.iterations "s15").bind _ = _
+    Occurrence.iterations repeatSite).bind _ = _
   simp only [OriginalSumcheckLibrary.round_on]
   congr 1
   funext state
@@ -92,6 +92,10 @@ theorem source_reduce (payload : UnitPayload)
     cases state with | cons c state => cases state with | cons d state =>
       cases state with | cons e state => cases state with | cons f state =>
         cases state
+        change (Participant.owned (context.roles 0) (context.roles 1)
+          (invoke (helpers (F := F) (G := G) payload).closed SumcheckPendingBodies.atPrefixHelper)
+          (.cons e (.cons f .nil))).bind _ = _
+        simp only [Participant.owned, separate, ↓reduceIte, PIR.Process.bind]
         rfl
 
 /-- The full original Reduce result and all five appended target values. -/
@@ -126,7 +130,7 @@ def ProducerCallback.reduce (program : Structured.Program)
         (OriginalSumcheckLibrary.reduce program.payload maximum occurrence.protocol
           (occurrence.protocol.roles 0) []
           (.cons (some raw) (.cons (some dimension) (.cons (some 1)
-            (.cons none (.cons (some count) (.cons none .nil))))))) ⟨[], history⟩)
+            (.cons none (.cons none (.cons (some count) (.cons none .nil)))))))) ⟨[], history⟩)
       (Domain.View.loop maximum outputs.references
         countRef initialRefs
         [.data (.vector "bls12-381.fr"), .data .index, .data .index,

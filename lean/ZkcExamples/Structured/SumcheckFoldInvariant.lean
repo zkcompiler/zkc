@@ -264,14 +264,14 @@ theorem source_frames (raw : List F) (count : Nat) (shape : HasShape raw count 1
 theorem reduction_frames (raw : List F) (count : Nat) (shape : HasShape raw count 1)
     (bound : raw.length < indexLimit) (table : Table F count) (decoded : ofList? count raw = some table)
     (iterations : Nat) :
-    PIR.Boundary.Returns (receivedChallenges (G := G) (ProtocolContext.enter {} "s3" [0, 1]))
+    PIR.Boundary.Returns (receivedChallenges (G := G) (ProtocolContext.enter {} "s5" [0, 1]))
       (fun state received => HonestFrame raw count iterations received state ∧
         Holds count table iterations state)
-      (Repeat.loop (repeatSpec SumcheckReductionNormalForms.reduceMaximum) (ProtocolContext.enter {} "s3" [0, 1]) 0 (cap none)
-        (bodyFn SumcheckReduceViews.unit (ProtocolContext.enter {} "s3" [0, 1]) 0) 0 iterations
+      (Repeat.loop (repeatSpec SumcheckReductionNormalForms.reduceMaximum) (ProtocolContext.enter {} "s5" [0, 1]) 0 (cap none)
+        (bodyFn SumcheckReduceViews.unit (ProtocolContext.enter {} "s5" [0, 1]) 0) 0 iterations
         (embedP (G := G) (honestState raw count []))) [] :=
   prover_frames SumcheckReduceViews.unit SumcheckReduceContracts.bodies
-    (ProtocolContext.enter {} "s3" [0, 1]) 0 rfl (by decide) SumcheckReductionNormalForms.reduceMaximum none raw count shape bound table
+    (ProtocolContext.enter {} "s5" [0, 1]) 0 rfl (by decide) SumcheckReductionNormalForms.reduceMaximum none raw count shape bound table
     decoded iterations
 
 /-! ### Exported frame metadata -/
@@ -307,25 +307,25 @@ def resolution : Resolution vocabulary :=
 open SumcheckRoundNormalForms (proverEntriesPosition proverDimensionPosition proverWidthPosition
   proverPointPosition) in
 /-- The fold invariant in the proposed export form, written in Lean: the Reduce
-repeat at site `s15`, observed at local role 0 (the prover). The export format
+repeat at site `s18`, observed at local role 0 (the prover). The export format
 addresses carried slots by position; the positions are the generated ones of the
 prover's named slots. No compiler exporter produces it yet. -/
 def frameExport (count : Nat) : RawFrame where
-  site := "s15"
+  site := "s18"
   role := 0
   atoms := [⟨partialIdentity count, [.binder 0, .carried proverPointPosition, .carried proverEntriesPosition]⟩,
     ⟨remainingIdentity count, [.carried proverPointPosition, .carried proverDimensionPosition]⟩,
     ⟨widthIdentity, [.carried proverWidthPosition]⟩,
     ⟨roundIdentity count, [.binder 0, .carried proverPointPosition, .carried proverEntriesPosition]⟩]
 
-/-- The Reduction unit's actual Reduce body has its repeat at site `s15`, with
+/-- The Reduction unit's actual Reduce body has its repeat at site `s18`, with
 its own maximum, as does the Source unit's. -/
 theorem reduction_repeat :
-    repeatAt SumcheckReduceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec SumcheckReductionNormalForms.reduceMaximum) := by
+    repeatAt SumcheckReduceViews.reduceDefinition.raw.operations "s18" = some (repeatSpec SumcheckReductionNormalForms.reduceMaximum) := by
   decide +kernel
 
 theorem source_repeat :
-    repeatAt SumcheckSourceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec SumcheckSourceNormalForms.reduceMaximum) := by
+    repeatAt SumcheckSourceViews.reduceDefinition.raw.operations "s18" = some (repeatSpec SumcheckSourceNormalForms.reduceMaximum) := by
   decide +kernel
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in

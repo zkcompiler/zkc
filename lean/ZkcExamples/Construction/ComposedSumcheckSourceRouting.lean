@@ -68,12 +68,12 @@ theorem right_keys (index : Nat) : Keys occurrence1 index := by constructor <;> 
 
 def round (handle index : Nat) (occurrence : Occurrence)
     (routes : Routes (routing handle) occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       handle (occurrence.origins context index))
     (keys : Keys occurrence index) (point : Option (List F)) (claim : Option F) :
     Routed (routing handle)
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       ((SumcheckVerifierLaws.roundPlain (G := G) occurrence.protocol (some handle) (point, claim)).interpret
         OriginalSumcheckLibrary.actions) := by
   simp only [SumcheckVerifierLaws.roundPlain, PIR.Process.interpret,
@@ -100,7 +100,7 @@ def round (handle index : Nat) (occurrence : Occurrence)
 def callback (handle index : Nat) (occurrence : Occurrence)
     (separate : occurrence.protocol.roles 0 ≠ occurrence.protocol.roles 1)
     (routes : Routes (routing handle) occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       handle (occurrence.origins context index))
     (keys : Keys occurrence index)
     (state : Values (Component (assignment F G)) SumcheckVerifierBodies.repeatState) :
@@ -108,7 +108,7 @@ def callback (handle index : Nat) (occurrence : Occurrence)
       (Repeat.stepOn (carriers := uniformCarriers F G) (SumcheckVerifierBodies.repeatSpec 4)
         occurrence.protocol (occurrence.protocol.roles 1) (.cons (some handle) .nil)
         (OriginalSumcheckLibrary.round program.payload occurrence.protocol (occurrence.protocol.roles 1))
-        state index Occurrence.iterations "s15") := by
+        state index Occurrence.iterations SumcheckVerifierBodies.repeatSite) := by
   unfold Repeat.stepOn
   apply Routed.bind
   · apply Routed.within
@@ -133,26 +133,33 @@ def callback (handle index : Nat) (occurrence : Occurrence)
 def reduce (handle count : Nat) (occurrence : Occurrence)
     (separate : occurrence.protocol.roles 0 ≠ occurrence.protocol.roles 1)
     (routes : ∀ index, Routes (routing handle) occurrence.protocol
-      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩]
+      [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩]
       handle (occurrence.origins context index))
-    (keys : ∀ index, Keys occurrence index) (claim : Option F) :
+    (keys : ∀ index, Keys occurrence index) (point : Option (List F)) (claim : Option F) :
     Routed (routing handle) [] []
       (OriginalSumcheckLibrary.reduce program.payload 4 occurrence.protocol
         (occurrence.protocol.roles 1) []
-        (OriginalSumcheckLibrary.verifierInputs (G := G) claim (some count) (some handle))) := by
+        (OriginalSumcheckLibrary.verifierInputs (G := G) point claim (some count) (some handle))) := by
   unfold OriginalSumcheckLibrary.verifierInputs
   rw [OriginalSumcheckLibrary.reduce_verifier program.payload
     ZkcExamples.Structured.OriginalArtifacts.TwoSums.verifier_bodies _ _ separate]
   apply Routed.bind
-  · have active : ((SumcheckVerifierBodies.repeatSpec 4).roles.map occurrence.protocol.roles).contains
-        (occurrence.protocol.roles 1) = true := by simp []
-    simp only [denoteRepeatOn, active, ↓reduceIte]
-    split
-    · exact Routed.finite _ (fun state index => callback handle index occurrence separate
-        (routes index) (keys index) state) _ _
-    · exact .halt _ _ _
-  · intro result
-    exact .done _ _
+  · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
+  · intro opened
+    apply Routed.bind
+    · have active : ((SumcheckVerifierBodies.repeatSpec 4).roles.map occurrence.protocol.roles).contains
+          (occurrence.protocol.roles 1) = true := by simp []
+      simp only [denoteRepeatOn, active, ↓reduceIte]
+      split
+      · exact Routed.finite _ (fun state index => callback handle index occurrence separate
+          (routes index) (keys index) state) _ _
+      · exact .halt _ _ _
+    · intro state
+      unfold OriginalSumcheckLibrary.returnProcess
+      apply Routed.bind
+      · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
+      · intro returned
+        exact .done _ _
 
 def participant (left right : List F) (leftClaim rightClaim : F) (count handle : Nat) :
     Routed (routing handle) [] []
@@ -160,24 +167,33 @@ def participant (left right : List F) (leftClaim rightClaim : F) (count handle :
         (.cons (some left) (.cons (some right) (.cons (some leftClaim) (.cons (some rightClaim)
           (.cons (some count) (.cons (some handle) .nil))))))) := by
   rw [Generated.Original.TwoSums.participant_binding]
-  unfold Generated.Original.TwoSums.realized Generated.Original.TwoSums.step0Realized
+  unfold Generated.Original.TwoSums.realized Generated.Original.TwoSums.step0
+    Generated.Original.TwoSums.step1Realized Generated.Original.TwoSums.step2
+    Generated.Original.TwoSums.step3 Generated.Original.TwoSums.step4Realized
+    Generated.Original.TwoSums.step5 Generated.Original.TwoSums.step6
     OriginalSumcheckCalls.realizeCall
   apply Routed.bind
-  · exact (reduce handle count occurrence0 (by decide)
-      (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0_routes handle)
-      left_keys (some leftClaim)).bind fun result => .done _ _
-  · intro out0
+  · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
+  · intro pendingLeft
     apply Routed.bind
-    · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
-    · intro out1
+    · exact (reduce handle count occurrence0 (by decide)
+        (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0_routes handle)
+        left_keys (pendingLeft.get .here) (pendingLeft.get (.there .here))).bind fun result => .done _ _
+    · intro reducedLeft
       apply Routed.bind
-      · exact (reduce handle count occurrence1 (by decide)
-          (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1_routes handle)
-          right_keys (some rightClaim)).bind fun result => .done _ _
-      · intro out2
+      · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
+      · intro checkedLeft
         apply Routed.bind
         · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
-        · intro out3
-          exact helper_components handle [] _ _
+        · intro pendingRight
+          apply Routed.bind
+          · exact (reduce handle count occurrence1 (by decide)
+              (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1_routes handle)
+              right_keys (pendingRight.get .here) (pendingRight.get (.there .here))).bind fun result => .done _ _
+          · intro reducedRight
+            apply Routed.bind
+            · exact Routed.owned [] _ _ _ (helper_closed handle [] _) _
+            · intro checkedRight
+              exact helper_components handle [] _ _
 
 end ZkcExamples.Construction.ComposedSumcheckSourceRouting

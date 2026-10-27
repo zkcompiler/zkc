@@ -20,5 +20,6 @@ def snapshot : Snapshot where
   definitions := [.function ⟨"s18h7072696d69746976655f6578616d706c65739h50757265496e646578", .protocol, .publicDef, [.index], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000"]], [["role00000000"]]⟩, [], some (.protocol ⟨"primitive_examples::PureIndex", []⟩), (.block [.instruction (.indexConstant "0") [] [.index] [] "", .instruction (.indexEqual) [1, 0] [.boolean] [] ""] (.ret [0]))⟩]
   contracts := [⟨"s18h7072696d69746976655f6578616d706c65739h50757265496e646578", []⟩]
   catalogue := { nominals := [], services := [] }
+  sourceDeclarations := { records := [], protocols := [] }
 
 end ZkcExamples.Structured.PrimitivePureIndexData

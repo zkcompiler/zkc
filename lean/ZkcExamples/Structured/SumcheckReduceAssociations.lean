@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.SumcheckReduceLaws
 public import ZkcExamples.Structured.SumcheckHelperBodies
+public import ZkcExamples.Structured.SumcheckPendingLaws
 public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckReductionNormalForms
 
@@ -16,7 +17,8 @@ associates the formula helpers. The imported admission phases remain in Views;
 none of these facts equates this unit's meanings with another source table. -/
 
 structured_associations SumcheckReduceViews
-  [less := MapFirstBodies.less, rows := MapFirstBodies.rows, shape := MapFirstBodies.shape,
+  [pending := SumcheckPendingBodies.pending, openClaim := SumcheckPendingBodies.openClaim,
+    atPrefix := SumcheckPendingBodies.atPrefix, less := MapFirstBodies.less, rows := MapFirstBodies.rows, shape := MapFirstBodies.shape,
     table := MapFirstBodies.table, width := MapFirstBodies.width,
     «variables» := MapFirstBodies.variables, empty := SumcheckHelperBodies.empty,
     halves := MapFirstBodies.halves, sums := SumcheckHelperBodies.sums,
@@ -25,7 +27,7 @@ structured_associations SumcheckReduceViews
     first := SumcheckReduceBodies.first, append := SumcheckHelperBodies.append,
     values := MapFirstBodies.values]
 
-theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckReduceBodies.collectBindings :=
+theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckMathBindings.collection :=
   ⟨less_association, rows_association, shape_association, table_association,
     halves_association, interpolate_association, interpolateRealization_association,
     mapCallback_association, map_association, first_association⟩
@@ -40,18 +42,18 @@ theorem protocols_exact :
       reduceDefinition.raw = SumcheckReduceBodies.reduceBody.erase) :=
   ⟨⟨run_member, run_signature, run_raw⟩, ⟨reduce_member, reduce_signature, reduce_raw⟩⟩
 
-theorem helper_inventory_length : unit.definitions.length = 20 := rfl
+theorem helper_inventory_length : unit.definitions.length = 24 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :
-    ProtocolOp.repeat (SumcheckVerifierBodies.repeatSpec SumcheckReductionNormalForms.reduceMaximum) "s15" ∈
+    ProtocolOp.repeat (SumcheckVerifierBodies.repeatSpec SumcheckReductionNormalForms.reduceMaximum) "s18" ∈
       reduceDefinition.raw.operations :=
   by structured_mem
 
 /-- Preserve this original caller's application context. -/
 theorem application_context :
     ProtocolOp.protocolApply SumcheckReduceBodies.reduceSignature [0, 1]
-      "s3" ∈ runDefinition.raw.operations :=
+      "s5" ∈ runDefinition.raw.operations :=
   by structured_mem
 
 /-- Reduction's actual helper inventory has no terminal checker or prefix chain. -/

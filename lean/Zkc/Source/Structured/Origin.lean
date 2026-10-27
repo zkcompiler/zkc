@@ -16,7 +16,7 @@ open Lean
 
 inductive OriginNominalKind where
   | record | variant | associated | moduleType
-  deriving BEq, Repr
+  deriving BEq, DecidableEq, Repr
 
 inductive OriginTerm where
   | natural (decimal : String)
@@ -30,7 +30,64 @@ inductive OriginTerm where
   | nominal (kind : OriginNominalKind) (path : String) (arguments : List OriginTerm)
   | builtin (name : String) (arguments : List OriginTerm)
   | formal (name : String) (arguments : List OriginTerm)
-  deriving BEq, Repr
+  deriving Repr
+
+mutual
+  def originTermDecEq (a b : OriginTerm) : Decidable (a = b) := by
+    cases a <;> cases b
+    all_goals first | exact isFalse (OriginTerm.noConfusion ·) | skip
+    case natural.natural a a₂ =>
+      exact decidable_of_iff (a = a₂) (by simp only [OriginTerm.natural.injEq])
+    case field.field a a₂ =>
+      exact decidable_of_iff (a = a₂) (by simp only [OriginTerm.field.injEq])
+    case group.group a a₂ =>
+      exact decidable_of_iff (a = a₂) (by simp only [OriginTerm.group.injEq])
+    case domain.domain a b a₂ b₂ =>
+      exact decidable_of_iff (a = a₂ ∧ b = b₂) (by simp only [OriginTerm.domain.injEq])
+    case asset.asset a b a₂ b₂ =>
+      exact decidable_of_iff (a = a₂ ∧ b = b₂) (by simp only [OriginTerm.asset.injEq])
+    case boolean.boolean =>
+      exact isTrue rfl
+    case index.index =>
+      exact isTrue rfl
+    case unit.unit =>
+      exact isTrue rfl
+    case tuple.tuple xs xs₂ =>
+      letI : Decidable (xs = xs₂) := originTermsDecEq xs xs₂
+      exact decidable_of_iff (xs = xs₂) (by simp only [OriginTerm.tuple.injEq])
+    case array.array x a x₂ a₂ =>
+      letI : Decidable (x = x₂) := originTermDecEq x x₂
+      exact decidable_of_iff (x = x₂ ∧ a = a₂) (by simp only [OriginTerm.array.injEq])
+    case nominal.nominal k a xs k₂ a₂ xs₂ =>
+      letI : Decidable (xs = xs₂) := originTermsDecEq xs xs₂
+      exact decidable_of_iff (k = k₂ ∧ a = a₂ ∧ xs = xs₂) (by simp only [OriginTerm.nominal.injEq])
+    case builtin.builtin a xs a₂ xs₂ =>
+      letI : Decidable (xs = xs₂) := originTermsDecEq xs xs₂
+      exact decidable_of_iff (a = a₂ ∧ xs = xs₂) (by simp only [OriginTerm.builtin.injEq])
+    case formal.formal a xs a₂ xs₂ =>
+      letI : Decidable (xs = xs₂) := originTermsDecEq xs xs₂
+      exact decidable_of_iff (a = a₂ ∧ xs = xs₂) (by simp only [OriginTerm.formal.injEq])
+
+  def originTermsDecEq : (a b : List OriginTerm) → Decidable (a = b)
+    | [], [] => isTrue rfl
+    | [], _ :: _ => isFalse (by intro same; cases same)
+    | _ :: _, [] => isFalse (by intro same; cases same)
+    | x :: xs, y :: ys => by
+      letI : Decidable (x = y) := originTermDecEq x y
+      letI : Decidable (xs = ys) := originTermsDecEq xs ys
+      exact decidable_of_iff (x = y ∧ xs = ys) (by simp only [List.cons.injEq])
+end
+
+instance : DecidableEq OriginTerm := originTermDecEq
+
+/-- Closed origin comparisons are evaluated by the kernel in source admission.
+The derived equality for a nested inductive is opaque; use the checked,
+structurally recursive decision procedure for both equality interfaces. -/
+instance : BEq OriginTerm := ⟨fun first second => decide (first = second)⟩
+
+instance : LawfulBEq OriginTerm where
+  eq_of_beq := of_decide_eq_true
+  rfl := by intro value; exact decide_eq_true rfl
 
 structure ProtocolOrigin where
   path : String

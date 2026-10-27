@@ -394,6 +394,7 @@ int main() {
             toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
         *value.getAsObject()->getArray("relations") = json::Array{json::Object{
             {"symbol", "Claim"},
+            {"static_arguments", json::Array{}},
             {"definition", json::Object{{"kind", "opaque"}}},
             {"inputs", json::Array{json::Object{{"name", "expected"},
                                                 {"purpose", "statement"},

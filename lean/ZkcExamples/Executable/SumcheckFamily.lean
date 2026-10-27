@@ -30,11 +30,11 @@ structure Artifact where
   checked : DomainVM.checkNativeLowering description.program description.context vocabulary participant validator =
     .ok (lowered, final)
   instructions : participant.instructions = SumcheckShape.instructions description.names description.maximum
-  returns : participant.returned = [8,7]
+  returns : participant.returned = [13,10]
   inputSorts : participant.inputs = [.data (.vector description.names.scalar), .data (.field description.names.scalar),
     .data .index, .transcript description.names.suite]
   codeReading : lowered.code = code description.names description.maximum
-  returned : lowered.returned = [8,7]
+  returned : lowered.returned = [13,10]
   coordinate : PhysicalType
   plan : lowered.plan = [.loop 2 description.maximum [.receive coordinate, .receive coordinate]]
   admitted : ∀ {F G : Type} (values : List F) (claim : F) (rounds : Nat),
@@ -48,7 +48,7 @@ def dataInputs (a : Artifact) {F G : Type} (values : List F) (claim : F) (rounds
 def nominalInputs (a : Artifact) {F G : Type} (values : List F) (claim : F) (rounds : Nat) : DomainVM.Environment F G :=
   [.data (.vector a.description.names.scalar values), .data (.field a.description.names.scalar claim), .data (.index rounds)]
 
-def charge (_ : Artifact) (appendBound rounds : Nat) : Nat := 68 + (appendBound + 57) * rounds
+def charge (_ : Artifact) (appendBound rounds : Nat) : Nat := 72 + (appendBound + 57) * rounds
 end Artifact
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]

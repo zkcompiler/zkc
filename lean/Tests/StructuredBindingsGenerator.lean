@@ -89,6 +89,7 @@ private def subjectDescriptor : ZkcTools.StructuredSource.Root.FixedSubjectOutpu
   moduleName := "Generated.Subject", sourceModule := "Source", pairModule := "Pair", modelModule := "Model"
   originalExpression := "snapshot", importedExpression := "imported", artifactsExpression := "artifacts"
   modelExpression := "model", targetName := "fixed_target"
+  registryExpression := "registry"
   originalExportExpression := "sourceExport"
   producerExportExpression := "producerExport", validatorExportExpression := "validatorExport" }
 

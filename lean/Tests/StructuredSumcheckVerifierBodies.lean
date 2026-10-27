@@ -1,6 +1,7 @@
 import ZkcExamples.Structured.SumcheckVerifierBodies
 import ZkcExamples.Structured.SumcheckReduceLaws
 import ZkcExamples.Structured.SumcheckSourceLaws
+import ZkcExamples.Structured.SumcheckSourceVerifier
 import Mathlib.Data.ZMod.Basic
 
 /-! Literal associations are checked against both complete originals. The small
@@ -30,7 +31,7 @@ theorem original_reduction_maximum_four :
 theorem original_input_shape :
     SumcheckSourceViews.inputShapeDefinition.helper = SumcheckRelationContract.shapeHelper ∧
       SumcheckSourceViews.inputShapeDefinition.raw = SumcheckRelationContract.shapeBody.erase ∧
-      SumcheckSourceViews.unit.definitions.length = 30 :=
+      SumcheckSourceViews.unit.definitions.length = 34 :=
   ⟨rfl, SumcheckSourceViews.inputShape_raw, rfl⟩
 
 /-- Keeping the power equation while dropping the maximum changes the actual formula. -/
@@ -47,8 +48,9 @@ theorem omitted_maximum_breaks_shape_association :
   change 7 = 2 at lengths
   contradiction
 
-theorem original_return_order :
-    (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
+theorem original_return_consumes_pending :
+    ProtocolOp.localCall SumcheckPendingBodies.atPrefixHelper rfl 1 "s48" ∈
+      (reduceReturn []).erase.operations := SumcheckSourceLaws.return_uses_atPrefix
 
 /-- The verifier point incorrectly selects the absent prover point. -/
 def wrongPointReturn : Region protocolDialect repeatState reduceOutputs :=
@@ -60,8 +62,8 @@ def wrongPointReturn : Region protocolDialect repeatState reduceOutputs :=
 theorem return_mutation_breaks_raw_association :
     wrongPointReturn.erase ≠ (reduceReturn []).erase := by
   intro same
-  have : ([3, 0, 1, 2, 3, 5] : List Nat) = [3, 0, 1, 2, 4, 5] := by
-    injection same
+  have lengths := congrArg (fun body => body.operations.length) same
+  change 0 = 2 at lengths
   contradiction
 
 def verifierState : Values (Component (assignment (ZMod 5) (ZMod 5))) repeatState :=
@@ -76,12 +78,14 @@ theorem return_mutation_loses_verifier_point :
       .done (.cons none (.cons none (.cons none (.cons none
         (.cons none (.cons (some 1) .nil)))))) := rfl
 
+set_option backward.isDefEq.respectTransparency false in
 theorem original_return_retains_verifier_point :
     (reduceReturn []).denote
         (participantMeaningWith (.silent _) (participantActions (ZMod 5) (ZMod 5))
-          ⟨[], []⟩ 1 [] {}) verifierState.get =
+          (Zkc.Source.Structured.plainHelpers SumcheckSourceViews.unit) 1 [] {}) verifierState.get =
       .done (.cons none (.cons none (.cons none (.cons none
-        (.cons (some [1]) (.cons (some 1) .nil)))))) := rfl
+        (.cons (some [1]) (.cons (some 1) .nil)))))) := by
+  kernel_rfl
 
 /-- Same input/output ABI; only the actual append value changes. -/
 def zeroAppendBody : Region dialect SumcheckHelperBodies.appendHelper.inputs

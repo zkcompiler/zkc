@@ -41,22 +41,4 @@ theorem root_honest_run (layout : Layout program)
   simp only [PIR.Execution.follow, terminal, checked, decide_true, PIR.Process.run,
     List.append_nil]
 
-/-- The second child starts in the actual first child's poststate. This lemma
-cannot reset a handler's private state, observations or oracle cache. -/
-theorem twoRoots_honest_run (layout : Layout program)
-    (handler : PIR.Handler I H O)
-    (leftCount rightCount : Nat) (leftContext rightContext : Context)
-    (left : State (0 + leftCount)) (right : State (0 + rightCount))
-    (initial middle final : H) (leftEvents rightEvents : List O)
-    (first : (root layout leftCount leftContext left).run handler initial =
-      ⟨.returned true, middle, leftEvents⟩)
-    (second : (root layout rightCount rightContext right).run handler middle =
-      ⟨.returned true, final, rightEvents⟩) :
-    (twoRoots layout leftCount rightCount leftContext rightContext left right).run handler initial =
-      ⟨.returned true, final, leftEvents ++ rightEvents⟩ := by
-  rw [twoRoots, PIR.run_bind, first]
-  simp only [PIR.Execution.follow]
-  rw [PIR.run_bind, second]
-  simp only [PIR.Execution.follow, PIR.Process.run, List.append_nil, Bool.and_self]
-
 end ZkcSecurity.Families.Sumcheck.TableComponent

@@ -110,7 +110,7 @@ theorem both_present (left right : Bool) :
   change (invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) payload).closed bothHelper
     (.cons left (.cons right .nil))).bind _ = _
   rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
-    SumcheckVerifierHelpers.closed_invoke_plain, both_body.invoke payload.linked]
+    Zkc.Source.Structured.closed_invoke_plain, both_body.invoke payload.linked]
   rfl
 
 end ZkcExamples.Structured.OriginalSumcheckRoots.Two

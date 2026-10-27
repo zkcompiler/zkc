@@ -79,14 +79,14 @@ def roundProcess (index : Nat) (point : List F) (scalar : F)
 
 def roundProjection (captured : Domain.Environment (uniformCarriers F G)) (index : Nat)
     (point : List F) (scalar : F) (history : Domain.History (uniformCarriers F G)) :=
-  ((bodyStep1Body (ringModel F G) SumcheckProof.program SumcheckProof.context
+  ((bodyStep2Body (ringModel F G) SumcheckProof.program SumcheckProof.context
       (roundInputs captured index point scalar history)).bind
-    (yieldValues [26, 31, 25] roundInstruction.results)).interpret Original.forgetCheckpoints
+    (yieldValues [29, 34, 28] roundInstruction.results)).interpret Original.forgetCheckpoints
 
-theorem round_projection (a b c d e : Domain.Value (uniformCarriers F G))
+theorem round_projection (a b c d e f g h : Domain.Value (uniformCarriers F G))
     (index : Nat) (point : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G)) :
-    roundProjection [a, b, c, d, e] index point scalar history = roundProcess index point scalar history := by
+    roundProjection [a, b, c, d, e, f, g, h] index point scalar history = roundProcess index point scalar history := by
   have lowResolved := low_origin index
   have highResolved := high_origin index
   have drawResolved := draw_origin index
@@ -94,20 +94,20 @@ theorem round_projection (a b c d e : Domain.Value (uniformCarriers F G))
   have requests := message_requests index
   have drawRequest := draw_request index
   have appendResult (point : List F) (answer : F) := append_helper (G := G) point answer
-  have loopResults : (SumcheckProof.participant.instructions[1]'(by decide +kernel)).results =
+  have loopResults : (SumcheckProof.participant.instructions[2]'(by decide +kernel)).results =
       [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
         .transcript "merlin3.bls12-381.fr64be/0"] := by kernel_rfl
   simp only [lowTemplate, highTemplate, drawTemplate, deliveryTemplate, roundBody, roundInstruction,
       SumcheckProof.participant, SumcheckProofParticipant.participant, List.getElem_cons_zero, List.getElem_cons_succ]
     at lowResolved highResolved drawResolved deliveryResolved requests drawRequest
   simp only [context_suite] at drawResolved
-  simp only [roundProjection, roundInputs, bodyStep1Body,
-    bodyStep1BodyStep0, bodyStep1BodyStep1, bodyStep1BodyStep2, bodyStep1BodyStep3,
-    bodyStep1BodyStep4, bodyStep1BodyStep5, bodyStep1BodyStep6, bodyStep1BodyStep7,
-    bodyStep1BodyStep8, bodyStep1BodyStep9, bodyStep1BodyStep10, bodyStep1BodyStep11,
-    bodyStep1BodyStep12, bodyStep1BodyStep13, bodyStep1BodyStep14, bodyStep1BodyStep15,
-    bodyStep1BodyStep16, bodyStep1BodyStep17, bodyStep1BodyStep18, bodyStep1BodyStep19,
-    bodyStep1BodyStep20, bodyStep1BodyStep21, bodyStep1BodyStep22]
+  simp only [roundProjection, roundInputs, bodyStep2Body,
+    bodyStep2BodyStep0, bodyStep2BodyStep1, bodyStep2BodyStep2, bodyStep2BodyStep3,
+    bodyStep2BodyStep4, bodyStep2BodyStep5, bodyStep2BodyStep6, bodyStep2BodyStep7,
+    bodyStep2BodyStep8, bodyStep2BodyStep9, bodyStep2BodyStep10, bodyStep2BodyStep11,
+    bodyStep2BodyStep12, bodyStep2BodyStep13, bodyStep2BodyStep14, bodyStep2BodyStep15,
+    bodyStep2BodyStep16, bodyStep2BodyStep17, bodyStep2BodyStep18, bodyStep2BodyStep19,
+    bodyStep2BodyStep20, bodyStep2BodyStep21, bodyStep2BodyStep22]
   normalize_artifact_operations [roundDrawOrigin_actual, appendResult, lowResolved, highResolved, drawResolved, deliveryResolved, context_suite,
       requests.1, requests.2.1, requests.2.2, drawRequest,
       Domain.Calculations.fieldAdd (F := F) (G := G),
@@ -119,6 +119,7 @@ theorem round_projection (a b c d e : Domain.Value (uniformCarriers F G))
       Structured.Ty.isService, Bool.not_false, Bool.not_true]
   congr 1
   funext low
+  simp only [PIR.Process.bind]
   congr 1
   funext ignoredLow
   congr 1

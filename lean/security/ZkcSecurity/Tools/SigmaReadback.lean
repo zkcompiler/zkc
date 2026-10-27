@@ -4,6 +4,7 @@ public import ZkcSecurity.Families.Sigma.Realization
 public import ZkcSecurity.FiatShamir.HonestSampledReadback
 public import ZkcSecurity.FiatShamir.SampledCompiled
 public import ZkcSecurity.Claims.SubjectABI
+public import Zkc.Construction.TargetElaboration
 public meta import ZkcSecurity.Tools.InputLaws
 public meta import Zkc.Construction.ProcessViewTactic
 public meta import Lean.Elab.Tactic
@@ -94,8 +95,11 @@ elab "prepare_sigma_relation " "for " subject:term " reading " read:term : tacti
     withMainContext <| Term.withoutErrToSorry <| withoutRecover do
   let law ← `(ZkcSecurity.Claims.HonestPair.Subject.relation_iff_of_read $subject _ _ $read)
   let fact ← InputLaws.forwardIff law
+  let name ← withMainContext do pure (mkIdent (← fact.getDecl).userName)
+  evalTactic (← `(tactic|
+    rw [Zkc.Source.Structured.RelationMeaning.formula_exact _ (by bind_contract)] at $name:ident))
   withMainContext do
-    let declaration ← fact.getDecl
+    let declaration ← (← getFVarId name).getDecl
     let some (_, left, right) := declaration.type.eq?
       | throwError "retained Sigma relation must be a formula equation"
     let left ← withTransparency .all <| whnf left
@@ -103,7 +107,6 @@ elab "prepare_sigma_relation " "for " subject:term " reading " read:term : tacti
     unless left.isAppOf ``PIR.Process.done && right.isAppOf ``PIR.Process.done do
       throwError "retained formula does not return a Boolean"
     let normalized ← mkEq left right
-    let name := mkIdent declaration.userName
     let normalized ← Term.exprToSyntax normalized
     evalTactic (← `(tactic| change $normalized at $name:ident))
     let valuesType ← Term.exprToSyntax (← inferType left.getAppArgs.back!)

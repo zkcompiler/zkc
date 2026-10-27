@@ -60,6 +60,20 @@ The following flat operations are total on their verified types:
 | `poly.interpolate` | Array matching ordered `points` to their univariate interpolant |
 | `poly.fix_table` | Power-of-two table and prefix to the remaining power-of-two table |
 
+`algebra.multilinear_restrict_prefix` takes two dynamic field vectors and
+returns a vector of the same nominal field. It is total, with the
+[vector restriction meaning](../domains/polynomials.md#total-vector-prefix-restriction),
+and has no attributes. Both operands are ordered mathematical dependencies.
+Its checked Kernel recipe uses `algebra.exec.multilinear_restrict_prefix`
+bound to `multilinear.restrict_prefix<F>`, with exactly two vector inputs,
+one vector output and no parameters. The independent recipe reader checks
+that exact binding, field and operand order. Native execution separately
+admits resource limits before allocating scratch and publishing the result.
+The existing fixed-arity polynomial restriction requires a static shape, and
+checked `vector.split` refuses odd or empty inputs. Current finite Math
+operations lack total dynamic halving and truncating access, so this operation
+uses one direct vector recipe within the existing lowering checker.
+
 Every operand and result of a mathematical polynomial operation uses one field.
 An empty fixing prefix and a zero suffix count are identities. Fixing all axes
 produces arity zero, or a length-one table. Zero-length data arrays are admitted,

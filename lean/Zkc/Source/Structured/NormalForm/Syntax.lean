@@ -41,7 +41,7 @@ executions, bounded reads, helper calls, folds and maps can stop or depend on
 helper bodies and are excluded. -/
 def Op.total : Op → Bool
   | .makeProduct .. | .getProduct .. => true
-  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |
+  | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. | .multilinearRestrictPrefix .. |
     .fieldConstant .. | .fieldAdd .. | .fieldSubtract ..
   | .fieldMultiply .. | .fieldEmbed .. | .fieldEqual .. | .groupIdentity .. | .groupAdd .. | .groupScale ..
   | .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor

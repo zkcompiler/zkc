@@ -1,6 +1,7 @@
 #include "LanguageInterface.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Language/Layout.h"
+#include "zkc/Language/SourceTerms.h"
 #include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
@@ -65,6 +66,7 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         (input ? record.inputs : record.outputs).push_back(*layout);
       }
   }
+  Error staticFailure = Error::success();
   json::OStream out(stream);
   uint64_t remaining = limits.work;
   bool limited = false, formal = false;
@@ -371,6 +373,18 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
         const auto &definition = *decl.relation;
         out.object([&] {
           out.attribute("symbol", decl.symbol);
+          out.attributeArray("static_arguments", [&] {
+            if (definition.kind != RelationDefinition::Kind::Opaque)
+              return;
+            for (const auto &argument : decl.staticArguments) {
+              auto encoded = encodeStaticTerm(argument);
+              if (!encoded) {
+                staticFailure = encoded.takeError();
+                break;
+              }
+              out.value(*encoded);
+            }
+          });
           out.attributeArray("inputs", [&] {
             unsigned flat = 0;
             for (unsigned i = 0; i < decl.inputs.size(); ++i) {
@@ -413,6 +427,8 @@ Error writeInterface(BoundedStream &stream, const ClosedEntry &entry,
       }
     });
   });
+  if (staticFailure)
+    return staticFailure;
   if (spellingDiagnostic)
     return make_error<DiagnosticError>(std::move(*spellingDiagnostic));
   if (formal)

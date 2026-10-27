@@ -270,9 +270,8 @@ int main() {
             "source.limit");
   });
   cases.run("opaque identities have fixed exact logical signatures", [] {
-    refuses(check(R"(module sample;
-      relation Ext<N:nat>(statement x:[bool;N])=opaque("vendor.k/0","key","r");)"),
-            "source.relation");
+    take(check(R"(module sample;
+      relation Ext<N:nat>(statement x:[bool;N])=opaque("vendor.k/0","key","r");)"));
     for (StringRef second : {"[bool;2]", "Other"}) {
       auto text =
           ("module sample;struct Nominal{pub x:bool}struct Other{pub x:bool}"
@@ -369,5 +368,61 @@ int main() {
                   {}}}));
     refuses(analyze(captured).checkedProject(), "source.private");
   });
+  cases.run(
+      "generic opaque identities retain domains and phantom naturals", [] {
+        const std::string source = R"zkc(module sample;
+domain A = field("bls12-381.fr");
+domain B = field("koala-bear");
+
+relation Layer<F:Field, N:nat, Unused:nat>(statement point:F, witness value:F)
+  = opaque("vendor.layer/0", "layer", "0");
+relation Alias<F:Field, N:nat, Unused:nat>(statement renamed:F, witness other:F)
+  = opaque("vendor.layer/0", "layer", "0");
+
+protocol Run roles(P,V)(a:A@(P,V), b:B@(P,V))->(accepted:bool@V)
+spec {
+  input first = Layer<A,2,7>(in.a@V, in.a@P);
+  input other_domain = Layer<B,2,7>(in.b@V, in.b@P);
+  input other_natural = Layer<A,3,7>(in.a@V, in.a@P);
+  input other_unused = Layer<A,2,8>(in.a@V, in.a@P);
+  target alias = Alias<A,2,7>(in.a@V, in.a@P) accept out.accepted;
+} {
+  let accepted@V = true;
+  return (accepted=accepted);
+}
+
+entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
+)zkc";
+        auto entry = close(source);
+        std::vector<std::vector<Type>> instances;
+        for (const auto &decl : entry.declarations())
+          if (decl.origin && decl.relation) {
+            require(decl.parameters.empty() && !decl.body &&
+                        decl.staticArguments.size() == 3,
+                    "opaque instance was not closed with all static arguments");
+            require(decl.inputs[0].type == decl.staticArguments[0],
+                    "opaque field argument lost nominal domain");
+            instances.push_back(decl.staticArguments);
+          }
+        require(instances.size() == 5, "opaque instance or alias omitted");
+        std::vector<std::vector<Type>> distinct;
+        for (const auto &arguments : instances)
+          if (llvm::find(distinct, arguments) == distinct.end())
+            distinct.push_back(arguments);
+        require(distinct.size() == 4,
+                "unused statics or distinct fields collapsed");
+        auto conflict = source;
+        conflict.replace(conflict.find("statement renamed:F"), 19,
+                         "parameter renamed:F");
+        refuses(zkc::test::closeProtocolDeployment(take(check(conflict)),
+                                                   "sample::Demo"),
+                "source.relation");
+        conflict = source;
+        conflict.replace(conflict.find("witness other:F"), 15,
+                         "witness other:bool");
+        // A false ABI is rejected when the clause binds operands, before
+        // registry admission.
+        refuses(check(conflict), "source.specification");
+      });
   return cases.result();
 }

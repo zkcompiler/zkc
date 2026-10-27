@@ -13,9 +13,10 @@ open Zkc.Source Zkc.Source.Structured
 
 set_option smartUnfolding false
 
+open ZkcExamples.Structured.OkamotoBodies in
 structured_views OkamotoData.snapshot
-  helpers [formula := OkamotoBodies.formula]
-  protocols [interactive := OkamotoBodies.interactive]
+  helpers [formula]
+  protocols [interactive]
 
 theorem admitted : check OkamotoData.snapshot = .ok program := kernel_admission
 

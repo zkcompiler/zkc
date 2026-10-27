@@ -1,5 +1,10 @@
+#include "../lib/Compiler/ComponentContracts.h"
+#include "mlir/IR/DialectRegistry.h"
+#include "mlir/IR/MLIRContext.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/SourceClaims.h"
+#include "zkc/Compiler/StructuredSource.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Language/Names.h"
 #include "zkc/Support/Json.h"
@@ -974,6 +979,572 @@ int main() {
                     "accept=out.ok,stage=interactive,error=0);}"),
               "source.claim.subject");
     }
+  });
+  cases.run(
+      "component occurrences, zero-case routes and checked proposals", [] {
+        auto project = take(check(fixture("components")));
+        auto original =
+            take(prepareOriginal(take(closeSubject(project, "claims::Run"))));
+        auto bytes = take(exportSourceClaims(original));
+        cantFail(checkSourceClaims(original, bytes));
+        auto value = take(json::parse(bytes));
+        auto &root = *value.getAsObject();
+        auto &calls = *root.getArray("proposals");
+        require(calls.size() == 3,
+                "two ordinary calls and one loop call required");
+        for (auto &call : calls) {
+          const auto &slots = *(*call.getAsArray())[5].getAsArray();
+          require(slots.size() == 1 &&
+                      (*slots[0].getAsArray())[0] == json::Value("parameter"),
+                  "logical slot must use the retained input purpose");
+        }
+        require((*calls[0].getAsArray())[1] != (*calls[1].getAsArray())[1],
+                "repeated callee occurrences collapsed");
+        unsigned init = 0, yielded = 0, zero = 0, exits = 0;
+        for (auto &row : *root.getArray("seams")) {
+          auto &fields = *row.getAsArray();
+          auto &endpoint = *fields[1].getAsArray();
+          init += endpoint[0] == json::Value("repeat_init");
+          yielded += endpoint[0] == json::Value("yield");
+          if (endpoint[0] == json::Value("repeat_result")) {
+            ++zero;
+            require(fields[3].getAsArray()->size() == 2,
+                    "loop result must retain initial and yielded alternatives");
+          }
+          exits += fields[2] == json::Value("terminal");
+        }
+        require(init == 1 && yielded == 1 && zero == 1 && exits == 1,
+                "missing invariant or actual terminal exit");
+        auto encode = [](const json::Value &v) {
+          std::string result;
+          raw_string_ostream out(result);
+          out << v;
+          return result;
+        };
+        auto choose = [&](unsigned call, json::Value source) {
+          auto changed = take(json::parse(bytes));
+          auto &proposal =
+              *(*changed.getAsObject()->getArray("proposals"))[call]
+                   .getAsArray();
+          (*(*proposal[5].getAsArray())[0].getAsArray())[2] = std::move(source);
+          return changed;
+        };
+        StringRef role = "role00000000";
+        for (json::Value source :
+             {json::Value(json::Array{"operand", 0, role}),
+              json::Value(
+                  json::Array{"parameter", json::Array{"input", 0, role}})})
+          cantFail(checkSourceClaims(original,
+                                     encode(choose(0, std::move(source)))));
+        auto earlier = (*calls[0].getAsArray())[1];
+        cantFail(checkSourceClaims(
+            original,
+            encode(choose(1, json::Array{"result", earlier, 1, role}))));
+        auto interface = take(json::parse(original.interfaceJson()));
+        auto formula = *interface.getAsObject()
+                            ->getArray("relations")
+                            ->front()
+                            .getAsObject()
+                            ->getObject("definition")
+                            ->getString("function");
+        cantFail(checkSourceClaims(
+            original,
+            encode(choose(
+                0,
+                json::Array{"math", formula, 0,
+                            json::Array{json::Array{"operand", 0, role},
+                                        json::Array{"operand", 0, role}}}))));
+        for (json::Value source :
+             {json::Value(json::Array{"operand", 0, "absent"}),
+              json::Value(json::Array{"operand", 99, role}),
+              json::Value(
+                  json::Array{"witness", json::Array{"input", 0, role}}),
+              json::Value(
+                  json::Array{"parameter", json::Array{"output", 0, role}}),
+              json::Value(
+                  json::Array{"result", (*calls[1].getAsArray())[1], 0, role}),
+              json::Value(json::Array{"result", earlier, 99, role}),
+              json::Value(json::Array{"math", "missing", 0, json::Array{}}),
+              json::Value(
+                  json::Array{"math", formula, 0,
+                              json::Array{json::Array{"open"},
+                                          json::Array{"operand", 0, role}}}),
+              json::Value(json::Array{"open", "extra"})}) {
+          auto error =
+              checkSourceClaims(original, encode(choose(0, std::move(source))));
+          require(bool(error), "bad logical source accepted");
+          require(namesIdentifier(toString(std::move(error)),
+                                  "component-instantiation"),
+                  "wrong logical refusal");
+        }
+        for (unsigned variant = 0; variant != 5; ++variant) {
+          auto changed = take(json::parse(bytes));
+          auto &object = *changed.getAsObject();
+          if (variant == 0)
+            object.getArray("proposals")->push_back(calls[0]);
+          if (variant == 1)
+            (*(*object.getArray("proposals"))[0].getAsArray())[2] =
+                "wrong-callee";
+          if (variant == 2)
+            (*(*object.getArray("proposals"))[0].getAsArray())[4] =
+                json::Array{"wrong-role"};
+          if (variant == 3)
+            object.getArray("seams")->pop_back();
+          if (variant == 4)
+            (*object.getArray("seams"))[0].getAsArray()->push_back("unknown");
+          auto error = checkSourceClaims(original, encode(changed));
+          require(bool(error), "wrong call or seam accepted");
+          consumeError(std::move(error));
+        }
+        auto unknown = take(json::parse(bytes));
+        (*unknown.getAsObject())["unknown"] = true;
+        auto error = checkSourceClaims(original, encode(unknown));
+        require(bool(error), "unknown export field accepted");
+        consumeError(std::move(error));
+        auto duplicate = bytes;
+        duplicate.insert(1, "\"seams\":[],");
+        error = checkSourceClaims(original, duplicate);
+        require(bool(error), "duplicate export field accepted");
+        consumeError(std::move(error));
+      });
+  cases.run("pending vector declarations retain their source representation",
+            [] {
+              auto original = take(prepareOriginal(take(closeSubject(
+                  take(check(fixture("components-vectors"))), "claims::Run"))));
+              cantFail(checkSourceClaims(original,
+                                         take(exportSourceClaims(original))));
+            });
+  cases.run("selected library root retains linear residual ownership", [] {
+    auto source = fixture("components-local-fields") +
+                  "protocol Library roles(V)(reference:bool@V,value:bool@V)"
+                  "->(claim:Pending@V,ok:bool@V) spec{output result=Truth("
+                  "in.reference,out.claim.first,out.claim.second);}{"
+                  "let initial@V=pending(value);"
+                  "let(next,ok)=Reduce roles(V)(reference,initial);"
+                  "return(claim=next,ok=ok);}";
+    auto original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Library"))));
+    auto bytes = take(exportSourceClaims(original));
+    cantFail(checkSourceClaims(original, bytes));
+    auto claims = take(json::parse(bytes));
+    require(claims.getAsObject()->getArray("claims")->empty(),
+            "library association invented a property claim");
+    auto symbol = *claims.getAsObject()
+                       ->getObject("admission")
+                       ->getString("protocol_symbol");
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
+        original.bytes(), symbol, context))));
+    auto derived = take(deriveComponentContracts(baseline));
+    require(!derived.getArray("seams")->empty(), "missing library residual");
+    cantFail(checkComponentContracts(baseline, *claims.getAsObject()));
+    using A = json::Array;
+    using J = json::Value;
+    for (unsigned variant = 0; variant != 8; ++variant) {
+      auto snapshot = baseline;
+      auto &unit = *snapshot.getAsArray();
+      unsigned mutation = variant < 5 ? variant : variant - 5;
+      A *clauses = nullptr;
+      for (auto &value : *unit[8].getAsArray()) {
+        auto &contract = *value.getAsArray();
+        if (contract[0] == J(symbol))
+          clauses = contract[1].getAsArray();
+      }
+      require(clauses, "selected library contract missing");
+      if (variant >= 5)
+        *clauses = A{};
+      if (mutation < 2) {
+        for (auto &value : *unit[7].getAsArray()) {
+          auto &function = *value.getAsArray();
+          if (function[0] != J("function") || function[1] != J(symbol))
+            continue;
+          auto &returned =
+              *(*(*function[9].getAsArray())[2].getAsArray())[1].getAsArray();
+          returned[1] = returned[mutation == 0 ? 0 : 2];
+        }
+      } else if (mutation == 2) {
+        auto &owners = *(*unit[10].getAsArray())[1].getAsArray();
+        for (auto &value : owners) {
+          auto &owner = *value.getAsArray();
+          if (owner[0] == J(symbol))
+            (*(*owner[2].getAsArray())[0].getAsArray())[2] = A{};
+        }
+      } else {
+        auto &clause = *(*clauses)[0].getAsArray();
+        auto &application = *clause[2].getAsArray();
+        if (mutation == 3)
+          application[1] = A{A{"input", 0, "role00000000"}};
+        else
+          application[0] = "different-relation";
+      }
+      // These isolate the deriver after the ordinary source admission gate.
+      refuses(deriveComponentContracts(snapshot),
+              mutation < 2    ? "component-seam-coverage"
+              : mutation == 2 ? "component-claim-role"
+                              : "component-claim-relation");
+    }
+    auto declarations = (*baseline.getAsArray())[10];
+    auto &records = *(*declarations.getAsArray())[0].getAsArray();
+    (*records[0].getAsArray())[2] = false;
+    auto error = checkComponentDeclarations(declarations);
+    require(bool(error), "unsealed linear record accepted");
+    require(StringRef(toString(std::move(error)))
+                .contains("component-declaration-record"),
+            "wrong unsealed linear record diagnostic");
+    auto changed = take(json::parse(bytes));
+    auto &row = *changed.getAsObject()->getArray("seams")->front().getAsArray();
+    (*row[1].getAsArray())[1] = 999;
+    std::string changedBytes;
+    raw_string_ostream(changedBytes) << changed;
+    auto associationError = checkSourceClaims(original, changedBytes);
+    require(bool(associationError), "wrong library residual endpoint accepted");
+    require(StringRef(toString(std::move(associationError)))
+                .contains("component-seam-association"),
+            "wrong library endpoint diagnostic");
+  });
+  cases.run("clause-free library wrapper keeps its residual open", [] {
+    auto source = fixture("components-local-fields") +
+                  "protocol Library roles(V)(reference:bool@V,value:bool@V)"
+                  "->(claim:Pending@V){let initial@V=pending(value);"
+                  "let(next,ok)=Reduce roles(V)(reference,initial);"
+                  "require @V ok;return(claim=next);}";
+    auto original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Library"))));
+    auto bytes = take(exportSourceClaims(original));
+    cantFail(checkSourceClaims(original, bytes));
+    auto claims = take(json::parse(bytes));
+    require(claims.getAsObject()->getArray("claims")->empty(),
+            "wrapper association invented a property claim");
+    require(!claims.getAsObject()->getArray("seams")->empty(),
+            "wrapper association lost resource coverage");
+    // A structural library subject supplies no target for a property request.
+    refuses(check(source +
+                  "spec LibraryClaims for Library{sound:soundness@0("
+                  "target.missing,model=models.example@0(),accept=out.claim,"
+                  "stage=interactive,error=0);}"),
+            "source.claim.target");
+    refuses(closeSubject(take(check(fixture("components-local-fields"))),
+                         "claims::Reduce"),
+            "source.ingress");
+  });
+  cases.run("pending output requires an actual residual relation", [] {
+    auto source = editSource(
+        fixture("components"),
+        "continuation step=Truth(in.reference,in.claim.value)\n      residual "
+        "Truth(in.reference,out.claim.value) accept out.ok;",
+        "input step=Truth(in.reference,in.claim.value);");
+    auto original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Run"))));
+    refuses(exportSourceClaims(original), "component-claim-relation");
+  });
+  cases.run("component local stops leave mathematical adequacy open", [] {
+    auto source = fixture("components-stop");
+    auto original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Run"))));
+    auto stoppedClaims = take(exportSourceClaims(original));
+    cantFail(checkSourceClaims(original, stoppedClaims));
+    source =
+        editSource(fixture("components"), "return payload.0;", "return false;");
+    original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Run"))));
+    // A deterministic terminal still needs an authored adequacy law in Lean.
+    cantFail(checkSourceClaims(original, take(exportSourceClaims(original))));
+    refused(checkSourceClaims(original, stoppedClaims));
+    source = editSource(fixture("components"), "return payload.0;",
+                        "return !payload.0;");
+    original = take(prepareOriginal(
+        take(closeSubject(take(check(source)), "claims::Run"))));
+    // Boolean negation is outside the current native structured Local fragment.
+    refuses(exportSourceClaims(original), "structured-source-binding");
+  });
+  cases.run(
+      "Local nested loops branches and helper calls retain association", [] {
+        auto original = take(prepareOriginal(take(closeSubject(
+            take(check(fixture("components-local-control"))), "claims::Run"))));
+        cantFail(
+            checkSourceClaims(original, take(exportSourceClaims(original))));
+      });
+  cases.run(
+      "Boolean Pending identity remains pure through calls and repeat", [] {
+        auto original = take(prepareOriginal(take(closeSubject(
+            take(check(fixture("components-local-pending"))), "claims::Run"))));
+        auto bytes = take(exportSourceClaims(original));
+        cantFail(checkSourceClaims(original, bytes));
+        auto claims = take(json::parse(bytes));
+        unsigned conversions = 0;
+        for (const auto &value : *claims.getAsObject()->getArray("seams")) {
+          const auto &row = *value.getAsArray();
+          if ((*row[1].getAsArray())[0] != json::Value("argument"))
+            continue;
+          for (const auto &value : *row[3].getAsArray()) {
+            const auto &route = *value.getAsArray();
+            require(route[0] != json::Value("terminal"),
+                    "handoff discharged a Boolean Pending conversion");
+            conversions += route[0] == json::Value("pure");
+          }
+        }
+        require(conversions != 0, "identity lost its actual helper route");
+        auto negated = editSource(fixture("components-local-pending"),
+                                  "firstOk && secondOk && finished",
+                                  "firstOk && secondOk && !finished");
+        auto rejected = take(prepareOriginal(
+            take(closeSubject(take(check(negated)), "claims::Run"))));
+        refuses(exportSourceClaims(rejected), "component-seam-acceptance");
+      });
+  cases.run("multi-field Local conversion covers every output projection", [] {
+    auto original = take(prepareOriginal(take(closeSubject(
+        take(check(fixture("components-local-fields"))), "claims::Run"))));
+    auto claims = take(json::parse(take(exportSourceClaims(original))));
+    std::string bytes;
+    raw_string_ostream(bytes) << claims;
+    cantFail(checkSourceClaims(original, bytes));
+    auto symbol = *claims.getAsObject()
+                       ->getObject("admission")
+                       ->getString("protocol_symbol");
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
+        original.bytes(), symbol, context))));
+    using A = json::Array;
+    using J = json::Value;
+    for (unsigned maximum : {0, 2}) {
+      auto snapshot = baseline;
+      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
+        auto &function = *value.getAsArray();
+        if (function[0] != J("function") || function[1] != J(symbol))
+          continue;
+        auto &instructions = *(*function[9].getAsArray())[1].getAsArray();
+        A region{A{A{"index"}}, A{}, A{"block", A{}, A{"yield", A{}}}};
+        instructions.insert(
+            instructions.begin(),
+            A{A{"protocol_repeat", 0, maximum, A{"role00000000"}, A{}}, A{1},
+              A{}, A{std::move(region)}, "empty"});
+      }
+      require(bool(deriveComponentContracts(snapshot)),
+              "empty repeat lost unrelated Pending coverage");
+    }
+    for (unsigned variant = 0; variant != 7; ++variant) {
+      auto snapshot = baseline;
+      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
+        auto &function = *value.getAsArray();
+        if (function[0] != J("function") || function[2] != J("protocol"))
+          continue;
+        auto &body = *function[9].getAsArray();
+        if (function[1] != J(symbol)) {
+          auto &returned = *(*body[2].getAsArray())[1].getAsArray();
+          if (variant == 0)
+            returned[1] = returned[0];
+          if (variant == 1)
+            returned[1] = returned[2];
+          continue;
+        }
+        auto &instructions = *body[1].getAsArray();
+        for (auto &value : instructions) {
+          auto &instruction = *value.getAsArray();
+          auto &descriptor = *instruction[0].getAsArray();
+          if (descriptor[0] == J("protocol_repeat")) {
+            if (variant == 2)
+              (*instruction[1].getAsArray())[2] =
+                  (*instruction[1].getAsArray())[1];
+            if (variant == 3)
+              descriptor[1] = 1; // The other Pending field becomes a capture.
+            if (variant == 6)
+              (*(*(*instruction[3].getAsArray())[0].getAsArray())[2]
+                    .getAsArray())[2] = A{"stop", "abort", "stopped callback"};
+          }
+          if (variant == 4 && descriptor[0] == J("local_call"))
+            descriptor[2] = "absent";
+        }
+        if (variant == 5) {
+          auto &last = *instructions.back().getAsArray();
+          last[0] = A{"bool.equal"};
+        }
+      }
+      // Scanner controls are intentionally separate from whole-unit admission.
+      refuses(deriveComponentContracts(snapshot),
+              variant < 3                    ? "component-seam-coverage"
+              : variant == 3 || variant == 6 ? "component-seam-control"
+              : variant == 4                 ? "component-seam-role"
+                                             : "component-seam-acceptance");
+    }
+  });
+  cases.run("malformed seam descriptors refuse exact source association", [] {
+    auto original = take(prepareOriginal(take(closeSubject(
+        take(check(fixture("components-repeat-values"))), "claims::Run"))));
+    auto bytes = take(exportSourceClaims(original));
+    for (json::Array descriptor :
+         {json::Array{}, json::Array{"draw"}, json::Array{"future"},
+          json::Array{"bool.constant", 0}, json::Array{"product.get", 512}}) {
+      auto changed = take(json::parse(bytes));
+      bool replaced = false;
+      for (auto &value : *changed.getAsObject()->getArray("seams")) {
+        for (auto &value : *(*value.getAsArray())[3].getAsArray()) {
+          auto &route = *value.getAsArray();
+          if (!replaced && (route[0] == json::Value("pure") ||
+                            route[0] == json::Value("action") ||
+                            route[0] == json::Value("terminal"))) {
+            route[1] = std::move(descriptor);
+            replaced = true;
+          }
+        }
+      }
+      require(replaced, "missing operation descriptor control");
+      std::string encoded;
+      raw_string_ostream(encoded) << changed;
+      auto error = checkSourceClaims(original, encoded);
+      require(bool(error), "malformed descriptor accepted");
+      require(namesIdentifier(toString(std::move(error)),
+                              "component-seam-association"),
+              "wrong descriptor association refusal");
+    }
+  });
+  cases.run("Local callback effect inventory inspects every stored path", [] {
+    auto original = take(prepareOriginal(
+        take(closeSubject(take(check(fixture("components"))), "claims::Run"))));
+    auto claims = take(json::parse(take(exportSourceClaims(original))));
+    auto symbol = *claims.getAsObject()
+                       ->getObject("admission")
+                       ->getString("protocol_symbol");
+    mlir::DialectRegistry registry;
+    zkc::registerDialects(registry);
+    mlir::MLIRContext context(registry);
+    auto baseline = take(json::parse(take(zkc::protocol::exportStructuredSource(
+        original.bytes(), symbol, context))));
+    using A = json::Array;
+    using J = json::Value;
+    auto mutate = [&](A body) {
+      auto snapshot = baseline;
+      for (auto &value : *(*snapshot.getAsArray())[7].getAsArray()) {
+        auto &function = *value.getAsArray();
+        if (function[0] == J("function") && function[2] == J("local"))
+          function[9] = J(A(body));
+      }
+      return snapshot;
+    };
+    auto block = [](A instructions, A end = A{"yield", A{}}) {
+      return A{"block", std::move(instructions), std::move(end)};
+    };
+    auto region = [](A body) { return A{A{}, A{}, std::move(body)}; };
+    auto instruction = [](A descriptor, A regions = {}) {
+      return A{std::move(descriptor), A{}, A{}, std::move(regions),
+               "inventory"};
+    };
+    for (StringRef control : {"if", "for", "for_condition"}) {
+      auto nested =
+          block(A{instruction(A{control},
+                              A{region(block(A{}, A{"stop", "reject", "stop"})),
+                                region(block(A{}, A{"condition", A{}}))})},
+                A{"return", A{}});
+      take(deriveComponentContracts(mutate(nested)));
+      for (const auto &[descriptor, code] :
+           std::vector<std::pair<A, StringRef>>{
+               {A{"draw", "role00000000", "bls12-381.fr"},
+                "component-seam-sampling"},
+               {A{"exchange", "role00000000", "role00000000"},
+                "component-seam-message"},
+               {A{"exec", "oracle.query", "", A{}}, "component-seam-oracle"},
+               {A{"exec", "unknown.effect", "", A{}}, "component-seam-effect"},
+               {A{"exec", "exec.apply", "missing", A{}},
+                "component-seam-effect"},
+               {A{"apply", "missing"}, "component-seam-call"}}) {
+        for (unsigned arm : {0u, 1u}) {
+          A regions{region(block(A{})), region(block(A{}))};
+          regions[arm] = region(
+              block(A{instruction(descriptor)}, A{"stop", "reject", "stop"}));
+          auto hidden = block(A{instruction(A{control}, std::move(regions))},
+                              A{"return", A{}});
+          refuses(deriveComponentContracts(mutate(hidden)), code);
+        }
+      }
+    }
+    // Mutated wire units below test the scanner directly. They do not bypass
+    // whole-unit formation in either public admission API.
+    A callback;
+    for (const auto &value : *(*baseline.getAsArray())[7].getAsArray()) {
+      const auto &function = *value.getAsArray();
+      if (function[0] == J("function") && function[2] == J("local")) {
+        callback = function;
+        break;
+      }
+    }
+    require(!callback.empty(), "missing actual Local helper");
+    auto callbacks = [&](const A &descriptor, const A &effect,
+                         bool inPredicate = false) {
+      auto snapshot =
+          mutate(block(A{instruction(descriptor)}, A{"return", A{}}));
+      auto &definitions = *(*snapshot.getAsArray())[7].getAsArray();
+      for (StringRef name : {"effect.callback", "effect.predicate"}) {
+        A helper = callback;
+        helper[1] = name;
+        helper[9] = block(
+            !effect.empty() && ((name == "effect.predicate") == inPredicate)
+                ? A{instruction(A{"if"},
+                                A{region(block(A{})),
+                                  region(block(A{instruction(effect)},
+                                               A{"stop", "reject", "stop"}))})}
+                : A{},
+            A{"return", A{}});
+        definitions.push_back(std::move(helper));
+      }
+      definitions.push_back(
+          A{"realize", "effect.realize", A{}, A{}, "effect.callback"});
+      definitions.push_back(
+          A{"map", "effect.map", A{}, A{}, "effect.callback", A{}});
+      for (StringRef tag : {"finite", "collect"})
+        definitions.push_back(A{tag, ("effect." + tag).str(), "private", A{},
+                                A{}, "effect.domain", "effect.callback",
+                                "effect.predicate"});
+      (*snapshot.getAsArray())[4].getAsArray()->push_back(
+          A{"domain", "effect.domain", A{}, A{}, 0});
+      return snapshot;
+    };
+    for (const auto &descriptor : std::vector<A>{
+             A{"call", "effect.callback"}, A{"apply", "effect.realize"},
+             A{"apply", "effect.map"}, A{"apply", "effect.finite"},
+             A{"apply", "effect.collect"},
+             A{"fold", "effect.domain", "effect.callback",
+               "effect.predicate"}}) {
+      take(deriveComponentContracts(callbacks(descriptor, A{})));
+      for (const auto &[effect, code] : std::vector<std::pair<A, StringRef>>{
+               {A{"draw", "V", "bls12-381.fr"}, "component-seam-sampling"},
+               {A{"exchange", "P", "V"}, "component-seam-message"},
+               {A{"exec", "oracle.query", "", A{}}, "component-seam-oracle"},
+               {A{"exec", "unknown.effect", "", A{}}, "component-seam-effect"},
+               {A{"exec", "exec.apply", "missing", A{}},
+                "component-seam-effect"},
+               {A{"apply", "missing"}, "component-seam-call"}}) {
+        refuses(deriveComponentContracts(callbacks(descriptor, effect)), code);
+        if (descriptor == A{"apply", "effect.finite"} ||
+            descriptor == A{"apply", "effect.collect"} ||
+            descriptor[0] == J("fold"))
+          refuses(deriveComponentContracts(callbacks(descriptor, effect, true)),
+                  code);
+      }
+      if (descriptor == A{"apply", "effect.finite"} ||
+          descriptor == A{"apply", "effect.collect"} ||
+          descriptor[0] == J("fold")) {
+        auto missing = callbacks(descriptor, A{});
+        (*missing.getAsArray())[4] = A{};
+        refuses(deriveComponentContracts(missing), "component-seam-call");
+      }
+    }
+    auto deep = block(A{}, A{"return", A{}});
+    for (unsigned depth = 0; depth < 64; ++depth)
+      deep = block(A{instruction(A{"if"}, A{region(std::move(deep))})},
+                   A{"return", A{}});
+    take(deriveComponentContracts(mutate(deep)));
+    deep = block(A{instruction(A{"if"}, A{region(std::move(deep))})},
+                 A{"return", A{}});
+    refuses(deriveComponentContracts(mutate(deep)), "component-seam-depth");
+    A large;
+    for (unsigned work = 0; work < 100001; ++work)
+      large.push_back(instruction(A{"bool.constant", true}));
+    refuses(deriveComponentContracts(
+                mutate(block(std::move(large), A{"return", A{}}))),
+            "component-seam-limit");
   });
   cases.run("bounded parser and exporter", [] {
     auto entry = take(close(fixture("schnorr")));

@@ -11,10 +11,10 @@ open Lean Elab Command
 
 -- Both names occur in this theorem, but it is not a call correspondence.
 theorem unrelatedMentions
-    (_unused : ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
-      (F := Rat) (G := Rat) (some 0) (some 0) (some 0) =
-      ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
-      (F := Rat) (G := Rat) (some 0) (some 0) (some 0)) :
+    (_unused : ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
+      (F := Rat) (G := Rat) (some 0) (some 0) (.cons (some []) (.cons (some 0) .nil)) =
+      ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
+      (F := Rat) (G := Rat) (some 0) (some 0) (.cons (some []) (.cons (some 0) .nil))) :
     ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 =
       ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 := rfl
 
@@ -38,19 +38,19 @@ run_cmd do
     Tests.ProofAccount.expectRefusal "sibling occurrence" "typed association mismatch" <|
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
         ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
+        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
         ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
         4
     Tests.ProofAccount.expectRefusal "wrong static bound" "typed association mismatch" <|
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation graph
         ``ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources.call0_raw
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
+        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
         ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0
         3
     Tests.ProofAccount.expectRefusal "names in an unrelated statement" "typed association mismatch" <|
       ZkcSecurity.Generation.SumcheckAccounts.occurrenceAssociation
         (← ZkcTools.ProofAccount.reachable ``unrelatedMentions) ``unrelatedMentions
-        ``ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized
+        ``ZkcExamples.Structured.Generated.Original.TwoSums.step1Realized
         ``ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1
         4
     -- The WP root consumes the terminal contract. The mathematical discharge
@@ -58,7 +58,7 @@ run_cmd do
     Tests.ProofAccount.expectRefusal "stale direct terminal attribution" "missing application" <|
       ZkcTools.ProofAccount.account graph {
         identifier := "stale-terminal", phase := "terminal", responsibility := "M"
-        owner := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.root_rejected
+        owner := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.composition_rejected
         callee := ``ZkcSecurity.Realizations.Sumcheck.OriginalRaw.terminal_rejected
         proofObjectHeads := [``Zkc.Obligations.Derivation], route := .familyPackage }
     let some root := roots.head? | throwError "missing root"

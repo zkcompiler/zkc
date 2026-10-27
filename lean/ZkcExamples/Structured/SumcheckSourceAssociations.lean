@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.SumcheckSourceLaws
 public import ZkcExamples.Structured.SumcheckHelperBodies
+public import ZkcExamples.Structured.SumcheckPendingLaws
 public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckSourceNormalForms
 
@@ -16,7 +17,8 @@ associates the formula helpers. The imported admission phases remain in Views;
 none of these facts equates this unit's meanings with another source table. -/
 
 structured_associations SumcheckSourceViews
-  [less := MapFirstBodies.less, rows := MapFirstBodies.rows, shape := MapFirstBodies.shape,
+  [pending := SumcheckPendingBodies.pending, openClaim := SumcheckPendingBodies.openClaim,
+    atPrefix := SumcheckPendingBodies.atPrefix, less := MapFirstBodies.less, rows := MapFirstBodies.rows, shape := MapFirstBodies.shape,
     table := MapFirstBodies.table, width := MapFirstBodies.width,
     «variables» := MapFirstBodies.variables, empty := SumcheckHelperBodies.empty,
     halves := MapFirstBodies.halves, sums := SumcheckHelperBodies.sums,
@@ -29,12 +31,12 @@ structured_associations SumcheckSourceViews
     valuesRealization := SumcheckSourceBodies.valuesRealization,
     checkTable := SumcheckSourceBodies.checkTable, check := SumcheckHelperBodies.check]
 
-theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckSourceBodies.collectBindings :=
+theorem first_bodies : MapFirstContracts.Bodies unit.definitions SumcheckMathBindings.collection :=
   ⟨less_association, rows_association, shape_association, table_association,
     halves_association, interpolate_association, interpolateRealization_association,
     mapCallback_association, map_association, first_association⟩
 
-theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions SumcheckSourceBodies.prefixBindings :=
+theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions SumcheckMathBindings.prefixBindings :=
   ⟨step_association, foldStep_association, fold_association, foldWrapper_association,
     prefix_association, values_association, valuesRealization_association⟩
 
@@ -48,11 +50,11 @@ theorem protocols_exact :
       reduceDefinition.raw = SumcheckSourceBodies.reduceBody.erase) :=
   ⟨⟨run_member, run_signature, run_raw⟩, ⟨reduce_member, reduce_signature, reduce_raw⟩⟩
 
-theorem helper_inventory_length : unit.definitions.length = 30 := rfl
+theorem helper_inventory_length : unit.definitions.length = 34 := rfl
 
 /-- This is literal source identity; it is not a verifier or security bound. -/
 theorem repeat_metadata :
-    ProtocolOp.repeat (SumcheckVerifierBodies.repeatSpec SumcheckSourceNormalForms.reduceMaximum) "s15" ∈
+    ProtocolOp.repeat (SumcheckVerifierBodies.repeatSpec SumcheckSourceNormalForms.reduceMaximum) "s18" ∈
       reduceDefinition.raw.operations :=
   by structured_mem
 

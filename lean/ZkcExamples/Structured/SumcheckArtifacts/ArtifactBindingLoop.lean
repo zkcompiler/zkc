@@ -43,14 +43,14 @@ structure VerifierCallback (program : Structured.Program)
     ∀ index point scalar history,
     Original.Simulation
       (VerifierReturns context outputs
-        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩])
+        [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩])
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold routing
         (OriginalSumcheckLibrary.round program.payload occurrence.protocol
           (occurrence.protocol.roles 1)
           (.cons (some index) ((SumcheckVerifierLaws.embedV (some point, some scalar)).append
             (.cons (some handle) .nil))))
-        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩], history⟩)
+        ⟨[⟨qualifyProtocolSite occurrence.protocol.applicationPrefix SumcheckVerifierBodies.repeatSite, index⟩], history⟩)
       (body (captured ++ .data (.index index) :: carried context point scalar history))
 
 /-- One real source iteration, including opening/closing its source frame,
@@ -69,7 +69,7 @@ def VerifierCallback.step (program : Structured.Program)
         (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) occurrence.protocol (occurrence.protocol.roles 1)
           (.cons (some handle) .nil)
           (OriginalSumcheckLibrary.round program.payload occurrence.protocol
-            (occurrence.protocol.roles 1)) source.1 index Occurrence.iterations "s15") source.2)
+            (occurrence.protocol.roles 1)) source.1 index Occurrence.iterations SumcheckVerifierBodies.repeatSite) source.2)
       ((body (captured ++ .data (.index index) :: frame)).bind fun final =>
         match Domain.read final outputs.references with
         | none => .halt .refused
@@ -116,7 +116,7 @@ def VerifierCallback.loop (program : Structured.Program)
         (Repeat.stepOn (carriers := uniformCarriers F G) (repeatSpec maximum) occurrence.protocol (occurrence.protocol.roles 1)
           (.cons (some handle) .nil)
           (OriginalSumcheckLibrary.round program.payload occurrence.protocol
-            (occurrence.protocol.roles 1)) value index Occurrence.iterations "s15") state)
+            (occurrence.protocol.roles 1)) value index Occurrence.iterations SumcheckVerifierBodies.repeatSite) state)
         indices source)
       (Domain.iterate body captured outputs.references
         [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
@@ -148,28 +148,31 @@ excessive count before any iteration. The actual source chooses the repeat;
 the independent callback certificate proves its actual compiled realization. -/
 def VerifierCallback.reduce (program : Structured.Program)
     (bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions)
+    (claims : SumcheckPendingLaws.Bodies program.payload.definitions)
     (routing : Original.Routing) (occurrence : Occurrence)
     (separate : occurrence.protocol.roles 0 ≠ occurrence.protocol.roles 1)
     (context : Zkc.Construction.Context) (outputs : VerifierOutputs context.suite) (offset maximum handle : Nat)
     (body : Domain.View.Block (uniformCarriers F G))
     (certificate : VerifierCallback program routing occurrence context outputs offset handle body)
     (captured : Domain.Environment (uniformCarriers F G)) (size : captured.length = offset)
-    (count countRef : Nat) (initialRefs : List Nat) (scalar : F)
+    (count countRef : Nat) (initialRefs : List Nat) (initialPoint : List F) (scalar : F)
     (history : Domain.History (uniformCarriers F G))
     (countRead : captured[countRef]? = some (.data (.index count)))
-    (initialRead : Domain.read captured initialRefs = some (carried context [] scalar history)) :
+    (initialRead : Domain.read captured initialRefs = some (carried context initialPoint scalar history)) :
     Original.Simulation (ReduceReturns context captured)
       (fun _ frame => Zkc.Construction.ArtifactBinding.Captures captured frame)
       (Original.fold routing
         (OriginalSumcheckLibrary.reduce program.payload maximum occurrence.protocol
           (occurrence.protocol.roles 1) []
-          (.cons none (.cons none (.cons none (.cons (some scalar)
-            (.cons (some count) (.cons (some handle) .nil))))))) ⟨[], history⟩)
+          (.cons none (.cons none (.cons none (.cons (some initialPoint) (.cons (some scalar)
+            (.cons (some count) (.cons (some handle) .nil)))))))) ⟨[], history⟩)
       (Domain.View.loop maximum outputs.references
         countRef initialRefs
         [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"),
           .transcript context.suite] body captured) := by
   rw [OriginalSumcheckLibrary.reduce_verifier program.payload bodies maximum occurrence.protocol separate]
+  rw [SumcheckPendingLaws.identity_owned program.payload _ claims.openClaim, ite_eq_left rfl]
+  dsimp only [PIR.Process.bind, Values.get]
   rw [Original.fold_bind, Original.fold_repeat]
   have active : (((repeatSpec maximum).roles.map occurrence.protocol.roles).contains
       (occurrence.protocol.roles 1)) = true := by
@@ -182,13 +185,14 @@ def VerifierCallback.reduce (program : Structured.Program)
   · simp only [admitted, ↓reduceIte]
     apply (certificate.loop program routing occurrence context outputs offset maximum handle body
       captured size (List.range count)
-      (SumcheckVerifierLaws.embedV (some [], some scalar), ⟨[], history⟩)
-      (carried context [] scalar history) ⟨[], scalar, history, rfl, rfl⟩).bind
+      (SumcheckVerifierLaws.embedV (some initialPoint, some scalar), ⟨[], history⟩)
+      (carried context initialPoint scalar history) ⟨initialPoint, scalar, history, rfl, rfl⟩).bind
       (fun _ _ related => related)
     intro result final returned
     apply Classical.choice
     obtain ⟨point, scalar, history, rfl, rfl⟩ := returned
     refine ⟨?_⟩
+    rw [OriginalSumcheckLibrary.return_verifier program.payload claims occurrence.protocol point scalar]
     simp only [Original.fold, PIR.Process.interpretState, Domain.View.append, carried,
       Domain.sortsMatch, Domain.Value.sort, List.map_cons, List.map_nil,
       beq_self_eq_true, ↓reduceIte]

@@ -105,8 +105,10 @@ private theorem sumcheckPrepared : ∀ name ∈ Instruction.helperList ZkcExampl
     Prepared installed sumcheckValidator (Domain.helperTable (Structured.ringModel F G) ZkcExamples.Construction.SumcheckProof.program) name := by
   rw [Uniform.DomainAdapter.helperTable_eq]
   have names : Instruction.helperList ZkcExamples.Construction.SumcheckProof.participant.instructions =
-      [ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name,
+      [ZkcExamples.Structured.SumcheckPendingBodies.pendingHelper.name,
+        ZkcExamples.Structured.SumcheckPendingBodies.openClaimHelper.name,
         ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name,
+        ZkcExamples.Structured.SumcheckPendingBodies.atPrefixHelper.name,
         ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name] := by decide +kernel
   rw [names]
   exact ZkcExamples.Executable.SumcheckHelpers.prepared

@@ -124,7 +124,7 @@ mod tests {
                     "fields":[],"alternatives":[],"leaves":[logical]},
             })
         };
-        json!({"symbol":"Relation","definition":{"kind":"bundle","asset":bundle.identity()},
+        json!({"symbol":"Relation","static_arguments":[],"definition":{"kind":"bundle","asset":bundle.identity()},
         "inputs":[
             formal("x","statement","field","field:koala-bear"),
             formal("y","statement","field","field:koala-bear.ext8-binomial3"),

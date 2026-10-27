@@ -1,12 +1,14 @@
-"""Independent library clients must discharge each returned evaluation."""
+"""Independent library clients must consume every pending residual."""
 
 import json
+from pathlib import Path
 
 import pytest
 
-from entry import joint_execution
+from entry import Entry, joint_execution
 
 from input_files import input_files
+from source_modules import library_modules
 from test_source_projects import build, read
 
 
@@ -75,32 +77,38 @@ def test_sumcheck_rejects_only_the_verifier_table(toolchain, journal, directory,
     assert json.loads(outputs.read_text())['value']['V']['accepted'] is False
 
 
+PENDING_FIXTURE = Path(__file__).resolve().parents[3] / 'compiler/test/fixtures/source-claims/pending-sumcheck.zkc'
+
+
+def pending_entry(toolchain, journal, directory, flags=()):
+    return Entry(toolchain, journal, directory, PENDING_FIXTURE.read_text(),
+                 (*library_modules('protocols/polynomial/sumcheck'), *flags))
+
+
 @pytest.mark.parametrize('rounds', [0, 1, 2])
 def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, directory, rounds):
-    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
-    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': str(rounds)}, 'V': {'claim': '10', 'rounds': str(rounds)}}})
-    outputs = directory / 'outputs.json'
-    journal.run([toolchain.runtime, '--json', 'run', f'--package={package}',
-                 f'--sha256={pin}', *inputs, f'--results={outputs}'])
-    result = json.loads(outputs.read_text())['value']
-    assert result['P']['point'] == result['V']['evaluation']['point']
+    entry = pending_entry(toolchain, journal, directory)
+    common = {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': str(rounds), 'suffix_rounds': str(2 - rounds)}
+    result = entry.run_roles('prefix-and-terminal', {'P': common, 'V': common | {'claim': '10', 'finish': True}})
     assert len(result['P']['point']) == rounds
-    # Independent MSB-first interpolation of each remaining Boolean row.
+    # Independent MSB-first interpolation of the retained honest prefix.
     modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
     residual = [1, 2, 3, 4]
-    for coordinate in map(int, result['V']['evaluation']['point']):
+    for coordinate in map(int, result['P']['point']):
         half = len(residual) // 2
         residual = [(1-coordinate) * low + coordinate * high
                     for low, high in zip(residual[:half], residual[half:], strict=True)]
-    assert int(result['V']['evaluation']['value']) == sum(residual) % modulus
     assert list(map(int, result['P']['residual'])) == [x % modulus for x in residual]
+    assert result['V']['accepted'] is True
 
 
 def test_reduction_rejects_excess_rounds_before_sending(toolchain, journal, directory):
-    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
-    inputs = input_files(journal, 'interactive', package=package, arguments={'inputs': {'P': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '3'}, 'V': {'claim': '10', 'rounds': '3'}}})
-    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
-                           f'--sha256={pin}', *inputs], refuses='entry-host-run-failed')
+    entry = pending_entry(toolchain, journal, directory)
+    common = {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '3', 'suffix_rounds': '0'}
+    inputs = input_files(journal, 'interactive', package=entry.package,
+                         arguments={'inputs': {'P': common, 'V': common | {'claim': '10', 'finish': True}}})
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={entry.package}',
+                           f'--sha256={entry.pin}', *inputs], refuses='entry-host-run-failed')
     assert joint_execution(report)['wire']['sends'] == 0
 
 
@@ -190,30 +198,31 @@ def test_each_opening_participant_checks_its_own_domain(toolchain, journal, dire
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_residual_view_composes_two_partial_reductions(toolchain, journal, directory, flags):
-    from entry import Entry
-    from source_modules import library_modules
+    entry = pending_entry(toolchain, journal, directory, flags)
+    common = {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '1', 'suffix_rounds': '1'}
+    result = entry.run_roles('two-prefixes', {'P': common, 'V': common | {'claim': '10', 'finish': False}})
+    assert len(result['P']['point']) == 1
+    assert len(result['P']['residual']) == 2
+    assert result['V']['accepted'] is True
 
-    source = '''module sample;
-use zkc::multilinear as mle;
-use zkc::vector as vec;
-use sumcheck::{Reduce};
-domain F=field("bls12-381.fr");
-protocol Run roles(P,V)(values:vec::Vector<F>@P,claim:F@V,challenges:Random<F>@V)
- ->(point:vec::Vector<F>@P,residual:vec::Vector<F>@P,remaining:index@P,value:F@V){
- let table=mle::table(values,2,1);
- let (p0,residual0,e0)=Reduce<F,2>(table,claim,1,challenges);
- let (p1,residual1,e1)=Reduce<F,2>(residual0,e0.value,1,challenges);
- return(point=vec::concat(p0,p1),residual=mle::values(residual1),
-        remaining=mle::variables(residual1),value=e1.value);
-}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
-'''
-    entry = Entry(toolchain, journal, directory, source, (*library_modules('protocols/polynomial/sumcheck'), *flags))
-    result = entry.run_roles('two-prefixes', {
-        'P': {'values': ['1', '2', '3', '4']},
-        'V': {'claim': '10'}})
-    r0, r1 = map(int, result['P']['point'])
-    modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
-    expected = ((1-r0)*(1-r1) + 2*(1-r0)*r1 + 3*r0*(1-r1) + 4*r0*r1) % modulus
-    assert result['P']['remaining'] == '0'
-    assert result['P']['residual'] == [str(expected)]
-    assert result['V']['value'] == str(expected)
+
+@pytest.mark.parametrize('mutation,diagnostic', [
+    ('dropped', 'source.drop'),
+    ('false-leftover', 'source.drop'),
+    ('entry-result', 'source.host-data'),
+])
+def test_pending_sumcheck_refusals(toolchain, journal, directory, mutation, diagnostic):
+    source = PENDING_FIXTURE.read_text()
+    if mutation == 'dropped':
+        source = source.replace('(_, _, final)', '(_, _, _)').replace('terminal(values, final, finish)', 'true')
+    elif mutation == 'false-leftover':
+        source = source.replace('else { check(values, claim) }', 'else { false }')
+    else:
+        source = source.replace('residual: Vector<F> @P, accepted: bool @V',
+                                'residual: Vector<F> @P, accepted: sumcheck::Pending<F> @V')
+        source = source.replace('terminal(values, final, finish)', 'final')
+    path = directory / 'refused.zkc'
+    path.write_text(source)
+    journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
+                 *library_modules('protocols/polynomial/sumcheck'),
+                 f'--module=sample={path}', '--entry=sample::Demo'], refuses=diagnostic)

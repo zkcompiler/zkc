@@ -17,7 +17,7 @@ open Zkc.Claims ZkcSecurity.Claims
 open ZkcSecurity.Examples.EmbeddingEqualityClaims
 
 def idealData : Wire.Request := {
-  subject := ⟨"sha256:198a275c8dc1a3b5e7ef78b30676d63ff0f07b151b292a0a486269b8bb0c15ea", "s7h6578616d706c6517h456d62656464696e67457175616c697479", .compiledIdeal, [⟨"constructed-participant", "sha256:51686b3d9ce3db7cf5e84aa1657cc0204fcbe9bd5c9666931b98423612bdc71b"⟩]⟩
+  subject := ⟨"sha256:4b55a9463b0e4e2a42451a5a44e0f88db1f647a810f2c6ec2229d15cbb604e4e", "s7h6578616d706c6517h456d62656464696e67457175616c697479", .compiledIdeal, [⟨"constructed-participant", "sha256:794c90d4922179daaad83fe2db3161ef1cfd70f79ce7fdb0febc86414b0c441f"⟩]⟩
   property := ⟨"soundness", 0⟩
   parameters := none
   model := ⟨⟨"models.fiat_shamir", 0⟩, [(some "level", (.reference "levels.ideal")), (some "statement", (.reference "statements.fixed")), (some "oracle", (.application "oracles.random" (some 0) [(none, (.reference "construction.provider"))])), (some "queries", (.reference "Q")), (some "budget_symbol", (.reference "Q")), (some "validator_cost", (.natural 0))]⟩

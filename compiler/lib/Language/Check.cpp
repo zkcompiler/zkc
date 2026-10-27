@@ -110,6 +110,8 @@ Error Checker::run() {
     return types.takeError();
   if (!relationIdentities())
     return types.takeError();
+  if (!pendingClaimRelations())
+    return types.takeError();
   bodyState.resize(output.declarations.size());
   bodyHeights.resize(bodyState.size());
   for (auto &decl : output.declarations)

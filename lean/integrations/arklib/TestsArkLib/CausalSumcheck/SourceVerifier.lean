@@ -296,10 +296,10 @@ theorem reduction_residual_positive (xs : Option (List F5)) (dimension : Option 
       let e ← (SumcheckReduceViews.imported.program.participant F5 Unit 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension (some 1)
           (some 2) (some handle))).runM
-        (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r)) 1
+        (handler (ProtocolContext.enter {} "s5" [0,1]) handle (fun r _ => r)) 1
       pure (returnedSatisfies (residualObservation 1 2 (fun _ => 0)) e)) = 9/25 := by
   rw [reduction_observation _ xs dimension 1 2 (by decide)]
-  exact residual_positive_mass (ProtocolContext.enter {} "s3" [0,1]) handle
+  exact residual_positive_mass (ProtocolContext.enter {} "s5" [0,1]) handle
 
 
 /-- Padding coordinates is insufficient: a short point is not terminal truth. -/
@@ -334,11 +334,11 @@ theorem reduction_excess_record (xs : Option (List F5)) (dimension : Option Nat)
     (SumcheckReduceViews.imported.program.participant F5 Unit 1
       (SumcheckReduceVerifier.reduceRootInputs xs dimension (some 1)
         (some 5) (some handle))).runM
-      (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r)) initial =
+      (handler (ProtocolContext.enter {} "s5" [0,1]) handle (fun r _ => r)) initial =
         pure ⟨.stopped .refused, initial, []⟩ := by
   change PIR.Process.runM
     (A := Values (Component (assignment F5 Unit)) SumcheckReduceBodies.runSignature.outputs)
-    (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r))
+    (handler (ProtocolContext.enter {} "s5" [0,1]) handle (fun r _ => r))
     (SumcheckReduceViews.program.participant F5 Unit 1
       (SumcheckReduceVerifier.reduceRootInputs xs dimension (some 1)
         (some 5) (some handle))) initial = pure ⟨.stopped .refused, initial, []⟩
@@ -363,7 +363,7 @@ theorem reduction_excess_mass (xs : Option (List F5)) (dimension : Option Nat)
       let e ← (SumcheckReduceViews.imported.program.participant F5 Unit 1
         (SumcheckReduceVerifier.reduceRootInputs xs dimension (some 1)
           (some 5) (some handle))).runM
-        (handler (ProtocolContext.enter {} "s3" [0,1]) handle (fun r _ => r)) initial
+        (handler (ProtocolContext.enter {} "s5" [0,1]) handle (fun r _ => r)) initial
       pure (returnedSatisfies (residualObservation remaining 5 table) e)) = 0 := by
   rw [reduction_excess_record]
   simp [returnedSatisfies]

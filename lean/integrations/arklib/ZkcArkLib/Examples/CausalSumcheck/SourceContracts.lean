@@ -102,7 +102,7 @@ theorem reduction_request_bound [Fintype F] [SampleableType F]
     mass (do
       let execution ← ((reductionRootInput proverValues proverDimension claim count handle).process.interpret
         forgetSites).runM
-        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle] before after) state
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle] before after) state
       pure (residualRequest (reductionEnvironment := reductionEnvironment) raw remaining count
         (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤
       (count : ENNReal) / Fintype.card F := by
@@ -120,7 +120,7 @@ theorem reduction_request_bound [Fintype F] [SampleableType F]
     let execution ← (SumcheckReduceViews.imported.program.participant F G 1
       (SumcheckReduceVerifier.reduceRootInputs proverValues proverDimension (some claim)
         (some count) (some handle))).runM
-      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle] before after) state
+      (withUniformQueries network [queryKey (ProtocolContext.enter {} "s5" [0,1]) handle] before after) state
     pure (residualRequest (reductionEnvironment := reductionEnvironment) raw remaining count
       (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤ _
   refine Eq.trans_le ?_ bound
