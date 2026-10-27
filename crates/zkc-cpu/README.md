@@ -33,7 +33,8 @@ its `contracts()` view when linking. Support cannot be expanded with
 check timing authorization. Independent views with the same selected names
 still require linking against the actual view used by the backend.
 
-Serialize `installation.target()` as the compiler's `--cpu-target=FILE`:
+Serialize `installation.target()` for the low-level compiler's
+`zkc-compile --cpu-target=FILE`:
 
 ```json
 {"format":"zkc.cpu-target/0","providers":["arkworks","plonky3"]}
@@ -45,6 +46,10 @@ cannot install signatures, kernels or optimization laws. Omitting the option
 retains full compiled support; runtime admission still checks the actual
 installation. A mismatched package refuses rather than silently changing
 providers.
+
+Project-level `zkc compile` currently uses the complete compiler target. To
+compile for a selected subset, use `zkc-compile` or the C++ compiler API before
+admitting the package with that installation.
 
 `material` imports immutable numerical setup data under fixed numerical bounds
 and installation support. SDK Hosts own independent pins, per-invocation charges

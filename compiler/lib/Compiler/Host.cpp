@@ -1,5 +1,6 @@
 #include "zkc/Compiler/Host.h"
 #include "../Transforms/PreparedProtocol.h"
+#include "CompilationState.h"
 #include "LanguageInterface.h"
 #include "LanguagePackageReader.h"
 #include "NativeDeployment.h"
@@ -32,6 +33,8 @@ namespace {
 Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
                                 const EntryOptions &options) {
   TimeTraceScope timing("zkc.lower-entry-calculation");
+  zkc::detail::Diagnostics diagnostics(*original.getContext());
+  diagnostics.atRoot(original.getLoc());
   auto *observations = options.observations;
   if (observations)
     observations->phase("protocol", original);
@@ -42,10 +45,12 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
   if (observations)
     observations->decisions(original, trace);
   if (!preparation)
-    return error("entry.numeric", "numerical helper preparation failed");
+    return diagnostics.failure(
+        error("entry.numeric", "numerical helper preparation failed"));
   auto prepared = std::move(*preparation).execute();
   if (!prepared)
-    return error("entry.numeric", "numerical execution preparation failed");
+    return diagnostics.failure(
+        error("entry.numeric", "numerical execution preparation failed"));
   if (observations)
     observations->phase("execution", *prepared);
   mlir::PassManager pipeline(prepared->getContext());
@@ -55,8 +60,9 @@ Expected<std::string> numerical(mlir::ModuleOp original, StringRef root,
       {}, false, options.releaseStorage, nullptr, {},
       options.mathematicalSelection, options.cpuTarget));
   auto outcome = pipeline.run(*prepared);
-  if (mlir::failed(outcome))
-    return error("entry.numeric", "numerical physical lowering failed");
+  if (mlir::failed(outcome) || diagnostics.hasErrors())
+    return diagnostics.failure(
+        error("entry.numeric", "numerical physical lowering failed"));
   if (observations)
     observations->phase("physical", *prepared);
   auto result = protocol::exportModule(*prepared);

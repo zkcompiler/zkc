@@ -538,14 +538,14 @@ Setup input associations and authorized incoming PCS values follow the
 [setup contract](spec/formats/messages.md#application-authorized-setups).
 The protocol retains an explicit verifier-key-consuming terminal check.
 
-Registered services cover four RNG distributions/providers. Each offers field
-`draw`; the KoalaBear octic service also offers [UniformIndex](spec/runtime/services.md#uniformindex-realization)
+Registered services cover six RNG distributions/providers. Each offers field
+`draw`; the KoalaBear octic, BabyBear quartic and Goldilocks quadratic services also offer [UniformIndex](spec/runtime/services.md#uniformindex-realization)
 sampling over a static power-of-two domain (`coins.index<N>()`), interactively and
 as a typed [derived transcript transition](spec/ir/construction.md#uniformindex-transitions)
-under its Merlin and hash-chain suites. Explicit query handlers support other positive static
+under their installed transcript suites. Explicit query handlers support other positive static
 u64 bounds; `zkc::sampling` supplies bounded rejection over ordinary word
 providers. The installed interactive and native transcript samplers retain
-their power-of-two restriction. Runtime query bounds and other service fields
+their power-of-two restriction. Runtime query bounds and other service families
 remain unsupported. Tests check
 prover/verifier agreement and an independent replay of the framing; they make no
 uniformity or Fiat–Shamir security claim. Arbitrary user-defined

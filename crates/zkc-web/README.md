@@ -44,7 +44,7 @@ try {
   await client.admit({ package: packageBytes, pin: authorizedPin,
     options: { providers: ['arkworks', 'blst', 'dalek', 'halo2curves', 'plonky3'] } });
   const proved = await client.prove({ public: publicJSON, witness: witnessJSON,
-    context: applicationContext, budget: '18446744073709551615' });
+    context: applicationContext });
   if (!proved.report.success) throw new Error(proved.report.error);
   const checked = await client.verify({ public: publicJSON, proof: proved.proof,
     context: applicationContext });

@@ -112,7 +112,7 @@ and authority requirements to the shared executable.
 
 Domain and kernel contributions remain explicit extensions: declarations need
 their own interpretation, physical implementation, registration and consumer
-checks. The native service registry is currently closed to four RNG contracts
+checks. The native service registry is currently closed to six RNG contracts
 and their providers. An installed domain or kernel does not add an arbitrary
 request/reply service family; that requires a future service extension.
 

@@ -4,6 +4,7 @@
 #include "mlir/IR/Verifier.h"
 #include "support/NativeCases.h"
 #include "support/ScopedFixture.h"
+#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/Observation.h"
 #include "zkc/Contracts/Domains.h"
@@ -597,6 +598,36 @@ int main() {
       entry fn Demo(x:Fr)->Fr{return x;})");
         refuses(language::compileEntry(passthrough, options),
                 "cpu-target-unavailable");
+      });
+  cases.run(
+      "Host numerical refusal retains structured target diagnostics", [&] {
+        auto checked = original(R"(module sample;
+domain Fr=field("bls12-381.fr");
+fn from_index<F:Field>(value:index)->F=primitive("field.from_index");
+fn hidden(x:index)->bool { let a=from_index<Fr>(x); return a==0; }
+entry fn Demo(x:index)->bool { return hidden(x); })");
+        take(language::compileEntry(checked));
+        language::EntryOptions options;
+        options.cpuTarget = small;
+        auto compiled = language::compileEntry(checked, options);
+        require(!compiled, "excluded numerical provider compiled");
+        bool preserved = false;
+        auto remaining = handleErrors(
+            compiled.takeError(), [&](const CompilationError &error) {
+              preserved =
+                  any_of(error.refusals,
+                         [](const auto &refusal) {
+                           return refusal.code == "cpu-target-unavailable";
+                         }) &&
+                  any_of(error.locations, [](const auto &location) {
+                    return location.filename == "sample.zkc" &&
+                           location.line == 5;
+                  });
+            });
+        if (remaining)
+          throw std::runtime_error(toString(std::move(remaining)));
+        require(preserved,
+                "numerical lowering lost refusal metadata or source");
       });
   for (StringRef field : {"koala-bear", "bls12-381.fr"})
     cases.run("generic Host call reaches internal-field child: " + field, [&] {

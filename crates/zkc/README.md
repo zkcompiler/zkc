@@ -152,7 +152,7 @@ separate from numerical worker ownership.
 
 ## CPU execution
 
-Create `zkc::execution::CpuExecution::new(workers)?` with `1..=256` workers and
+With `parallel`, create `zkc::execution::CpuExecution::new(workers)?` with `1..=256` workers and
 pass it as the last argument to `admit_with_cpu` on `RunHost`,
 `NativeDeployment`, `RunEntry`, `ProofEntry` or `FunctionEntry`. For example:
 
@@ -169,7 +169,7 @@ idle admitted Host; use `admit_with_cpu` when the context is known at constructi
 to avoid creating an unused default pool. CPU ownership stays outside the
 limit and option structs.
 
-Each default `admit` creates one fresh, explicitly owned one-worker pool before
+With `parallel`, each default `admit` creates one fresh, explicitly owned one-worker pool before
 admission. Each independent `CpuExecution::serial()?` also creates a fresh pool;
 there is no process-global singleton. Clone a context to share one worker
 ceiling between independently admitted Hosts. `PreparedData` constructors and
@@ -185,6 +185,10 @@ outside the ceiling. Dropping the last clone requests Rayon worker shutdown;
 drop does not guarantee that worker threads have joined. CPU policy is separate
 from capacity, authority, invocation data and artifact identity. The SDK does
 not read Rayon environment variables to select its worker count.
+
+Without `parallel`, only a worker count of one is accepted. Numerical work runs
+inline on the caller, including `serial()` and default admission; no pool is
+created. This is the browser build's execution policy.
 
 ## Proof authority and outcomes
 
