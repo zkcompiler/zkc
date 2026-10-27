@@ -50,6 +50,12 @@ llvm::Error checkSourceClaims(const ClosedEntry &, llvm::StringRef,
 /// limits.apiInspectionBytes and returns no partial document on refusal.
 llvm::Expected<std::string> inspectWrittenSource(const CheckedProject &,
                                                  const Limits & = {});
+/// Local binder proposals in written AST coordinates, retained by resolution.
+/// Includes private and installation declarations, and reports generated uses
+/// without a written counterpart separately. Private lexical IDs never escape.
+/// These facts require independent checking; they do not certify elaboration.
+llvm::Expected<std::string> inspectLexicalBindings(const CheckedProject &,
+                                                   const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

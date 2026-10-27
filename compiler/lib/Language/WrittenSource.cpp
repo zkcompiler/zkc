@@ -229,12 +229,25 @@ StringRef syntaxKind(Declaration::Kind value) {
   }
   llvm_unreachable("unknown syntax kind");
 }
+using WrittenNodeKey =
+    std::tuple<uint32_t, uint32_t, uint32_t, LexicalNode::Kind, unsigned>;
+WrittenNodeKey nodeKey(Span declaration, LexicalNode node) {
+  return {declaration.source.index, declaration.begin, declaration.end,
+          node.kind, node.index};
+}
+struct WrittenAddress {
+  std::string owner;
+  std::vector<std::pair<std::string, unsigned>> path;
+};
+using WrittenAddresses = std::map<WrittenNodeKey, std::vector<WrittenAddress>>;
+
 /// A flat node table keeps the wire document's nesting bounded independently
 /// of source depth. Edges are structural paths relative to one authored owner.
 class Writer {
 public:
-  Writer(const CheckedProject &project, const Limits &limits)
-      : project(project), work{limits} {}
+  Writer(const CheckedProject &project, Work &work,
+         WrittenAddresses *addresses = nullptr)
+      : project(project), work(work), addresses(addresses) {}
   Expected<json::Value> run(const WrittenSources &written) {
     for (const auto &module : written.modules)
       declaration(module, module.name);
@@ -257,10 +270,22 @@ public:
 
 private:
   const CheckedProject &project;
-  Work work;
+  Work &work;
   Error error = Error::success();
   std::vector<std::pair<std::string, unsigned>> path;
   json::Array nodes, declarations;
+  WrittenAddresses *addresses;
+  Span currentDeclaration{};
+  std::string addressOwner;
+  void remember(Span declaration, LexicalNode node) {
+    if (!addresses || error)
+      return;
+    if (auto failure = work.charge(1 + 2 * path.size(), declaration)) {
+      error = std::move(failure);
+      return;
+    }
+    (*addresses)[nodeKey(declaration, node)].push_back({addressOwner, path});
+  }
   json::Array address() const {
     json::Array result;
     for (const auto &[category, index] : path)
@@ -385,6 +410,9 @@ private:
     return emit("port", value.span, std::move(result));
   }
   json::Value pattern(const Pattern &value) {
+    if (value.writtenToken)
+      remember(currentDeclaration,
+               {LexicalNode::Kind::Pattern, *value.writtenToken});
     json::Array shorthand;
     for (bool item : value.shorthand)
       shorthand.push_back(item);
@@ -425,6 +453,7 @@ private:
     return emit("notation", value.span, std::move(result));
   }
   json::Value expression(const SyntaxDeclaration &owner, uint32_t id) {
+    remember(owner.span, {LexicalNode::Kind::Expression, id});
     const auto &value = owner.expressions.at(id);
     if (!value.reductionBinders.empty()) {
       return emit(
@@ -602,6 +631,10 @@ private:
   }
   json::Value declarationNode(const SyntaxDeclaration &value, StringRef owner,
                               bool anonymous = false) {
+    auto previousDeclaration = currentDeclaration;
+    currentDeclaration = value.span;
+    auto restoreDeclaration =
+        scope_exit([&] { currentDeclaration = previousDeclaration; });
     json::Object result{
         {"name", anonymous ? json::Value(nullptr) : json::Value(value.name)},
         {"public", value.explicitPublic},
@@ -653,19 +686,21 @@ private:
                        {"source", value.assetDomain ? "asset" : "catalog"},
                        {"name", value.domain}};
     json::Array inputs;
-    if (value.inputOrder.empty())
-      inputs = list("input", value.inputs, [&](auto &p) { return port(p); });
-    else
-      for (unsigned i = 0; i < value.inputOrder.size(); ++i) {
-        const auto &slot = value.inputOrder[i];
-        using K = Declaration::InputSlot::Kind;
-        const auto &ports = slot.kind == K::Scoped    ? value.scopedInputs
-                            : slot.kind == K::Domain  ? value.domainInputs
-                            : slot.kind == K::Service ? value.services
-                                                      : value.inputs;
-        inputs.push_back(
-            child("input", i, [&] { return port(ports[slot.index]); }));
-      }
+    unsigned inputCount = value.inputOrder.empty() ? value.inputs.size()
+                                                   : value.inputOrder.size();
+    for (unsigned i = 0; i < inputCount; ++i) {
+      using K = Declaration::InputSlot::Kind;
+      auto slot = value.inputOrder.empty() ? Declaration::InputSlot{K::Data, i}
+                                           : value.inputOrder[i];
+      const auto &ports = slot.kind == K::Scoped    ? value.scopedInputs
+                          : slot.kind == K::Domain  ? value.domainInputs
+                          : slot.kind == K::Service ? value.services
+                                                    : value.inputs;
+      inputs.push_back(child("input", i, [&] {
+        remember(value.span, {LexicalNode::Kind::Input, i});
+        return port(ports[slot.index]);
+      }));
+    }
     result["inputs"] = std::move(inputs);
     // The parser synthesizes a bool result for every relation. It is not a
     // written output port. A function's synthetic result name is likewise not
@@ -914,6 +949,7 @@ private:
     if (error)
       return;
     path.clear();
+    addressOwner = owner.str();
     nodes = {};
     declarationNode(value, owner);
     declarations.push_back(
@@ -936,7 +972,8 @@ Expected<std::string> inspectWrittenSource(const CheckedProject &project,
                            "checked project exceeds source AST limits");
   if (!project.storage->writtenSources)
     return detail::failure("source.syntax", "written source was not retained");
-  auto value = Writer(project, limits).run(*project.storage->writtenSources);
+  Work work{limits};
+  auto value = Writer(project, work).run(*project.storage->writtenSources);
   if (!value)
     return value.takeError();
   std::string bytes;
@@ -944,6 +981,93 @@ Expected<std::string> inspectWrittenSource(const CheckedProject &project,
   out << *value;
   if (out.overflow())
     return detail::failure("source.limit", "source AST byte limit exceeded");
+  return bytes;
+}
+
+Expected<std::string> inspectLexicalBindings(const CheckedProject &project,
+                                             const Limits &limits) {
+  if (auto error = checkLimits(limits))
+    return std::move(error);
+  if (project.checkedWork() > limits.work ||
+      project.checkedDeclarations() > limits.declarations ||
+      project.checkedOperations() > limits.operations)
+    return detail::failure("source.limit",
+                           "checked project exceeds lexical export limits");
+  if (!project.storage->writtenSources)
+    return detail::failure("source.syntax", "written source was not retained");
+  WrittenAddresses addresses;
+  Work work{limits};
+  {
+    auto indexed =
+        Writer(project, work, &addresses).run(*project.storage->writtenSources);
+    if (!indexed)
+      return indexed.takeError();
+  }
+  auto encode =
+      [&](WrittenAddresses::const_iterator found) -> Expected<json::Array> {
+    json::Array result;
+    if (found != addresses.end())
+      for (const auto &address : found->second) {
+        if (auto error = work.charge(1 + 2 * address.path.size()))
+          return std::move(error);
+        json::Array path;
+        for (const auto &[category, ordinal] : address.path)
+          path.push_back(json::Array{category, ordinal});
+        result.push_back(
+            json::Object{{"owner", address.owner}, {"path", std::move(path)}});
+      }
+    return result;
+  };
+  json::Array references, unassociated;
+  for (const auto &resolution : project.storage->lexicalResolutions)
+    for (const auto &reference : resolution.references) {
+      if (auto error = work.charge(1, resolution.declaration))
+        return std::move(error);
+      auto uses =
+          addresses.find(nodeKey(resolution.declaration, reference.use));
+      auto binders = reference.binder
+                         ? addresses.find(nodeKey(resolution.declaration,
+                                                  *reference.binder))
+                         : addresses.end();
+      StringRef kind =
+          reference.access == LexicalReference::Access::Read   ? "read"
+          : reference.access == LexicalReference::Access::Call ? "call"
+                                                               : "assign";
+      auto from = encode(uses);
+      if (!from)
+        return from.takeError();
+      auto to = encode(binders);
+      if (!to)
+        return to.takeError();
+      if (uses != addresses.end() && binders != addresses.end()) {
+        references.push_back(json::Object{{"kind", kind},
+                                          {"uses", std::move(*from)},
+                                          {"binders", std::move(*to)}});
+      } else {
+        auto span = resolution.declaration;
+        unassociated.push_back(json::Object{
+            {"kind", kind},
+            {"uses", std::move(*from)},
+            {"binders", std::move(*to)},
+            {"declaration",
+             json::Object{
+                 {"module", project.sources()[span.source.index].module},
+                 {"begin", span.begin},
+                 {"end", span.end}}}});
+      }
+    }
+  json::Value value =
+      json::Object{{"format", "zkc.lexical-bindings/0"},
+                   {"capture", project.capture().identity()},
+                   {"installation", project.installationIdentity()},
+                   {"references", std::move(references)},
+                   {"unassociated", std::move(unassociated)}};
+  std::string bytes;
+  BoundedStream out(bytes, limits.apiInspectionBytes);
+  out << value;
+  if (out.overflow())
+    return detail::failure("source.limit",
+                           "lexical export byte limit exceeded");
   return bytes;
 }
 } // namespace zkc::language

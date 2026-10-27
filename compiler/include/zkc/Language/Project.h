@@ -886,6 +886,8 @@ private:
                    const Limits &);
   friend llvm::Expected<std::string>
   inspectWrittenSource(const CheckedProject &, const Limits &);
+  friend llvm::Expected<std::string>
+  inspectLexicalBindings(const CheckedProject &, const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
   friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,

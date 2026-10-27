@@ -2374,6 +2374,7 @@ private:
         return {};
     } else if (take("for")) {
       value.kind = Expression::Kind::For;
+      value.index.writtenToken = cursor;
       value.index.span = current().span;
       if (!name(value.index.name) || !expect("in"))
         return {};
@@ -2674,6 +2675,7 @@ private:
     if (!bounded(depth))
       return {};
     Pattern result;
+    result.writtenToken = cursor;
     result.span = current().span;
     if (take("_")) {
       result.kind = Pattern::Kind::Ignore;
@@ -2708,6 +2710,7 @@ private:
         if (!at("}"))
           do {
             Span fieldSpan = current().span;
+            const auto fieldToken = cursor;
             std::string label;
             if (!name(label))
               return {};
@@ -2720,6 +2723,7 @@ private:
               child.emplace();
               child->name = label;
               child->span = fieldSpan;
+              child->writtenToken = fieldToken;
             }
             if (!child)
               return {};
@@ -2925,6 +2929,7 @@ private:
                        .slice(tokens[cursor + 1].span.begin,
                               tokens[cursor + 1].span.end) == "=") {
         s.kind = Statement::Kind::Assign;
+        s.pattern.writtenToken = cursor;
         s.pattern.span = current().span;
         if (!name(s.pattern.name) || !expect("="))
           return {};
