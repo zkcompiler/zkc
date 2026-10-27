@@ -1,11 +1,13 @@
 """Written AST controls at the public compiler boundary."""
 
+import hashlib
 import json
 from pathlib import Path
 
 from cases import case, counted
 from commands import Commands
 from tools import compiler, records
+from project import project_arguments, project_inputs
 
 commands = Commands(records())
 fixtures = Path(__file__).parent / "fixtures" / "source-claims"
@@ -180,6 +182,47 @@ with case("one written construction handler keeps ordered selectors and one body
     assert not any(d["owner"].startswith("written::Derived::") for d in ast["declarations"])
     state = declaration(ast, "written::TestTranscript::State")
     assert node(state)["permissions"] == ["Copy"]
+
+for family in ("schnorr", "fri"):
+    with case(f"complete {family} capture retains bounded sources and linked syntax"):
+        manifest = Path(__file__).resolve().parents[2] / "examples/projects" / family / "zkc.toml"
+        report = json.loads(commands.run([
+            compiler, "language-check", "--source-format=zkc", "--source-ast",
+            *project_arguments(manifest),
+        ]))
+        ast = report["source_ast"]
+        modules, _ = project_inputs(manifest)
+        source_rows = {row["module"]: row for row in ast["sources"]}
+        for module, path in modules.items():
+            encoded = path.read_bytes()
+            assert source_rows[module]["bytes"] == len(encoded)
+            assert source_rows[module]["sha256"] == hashlib.sha256(encoded).hexdigest()
+        owners = {record["owner"] for record in ast["declarations"]}
+        assert len(owners) == len(ast["declarations"])
+        for record in ast["declarations"]:
+            keys = {json.dumps(n["path"]) for n in record["nodes"]}
+            assert len(keys) == len(record["nodes"]) and "[]" in keys
+            for n in record["nodes"]:
+                span = n["span"]
+                assert 0 <= span["begin"] <= span["end"] <= source_rows[span["module"]]["bytes"]
+            for member in node(record)["members"]:
+                if "owner" in member:
+                    assert member["owner"] in owners
+
+            def check_edges(value):
+                if isinstance(value, dict):
+                    for child in value.values():
+                        check_edges(child)
+                elif isinstance(value, list):
+                    if value and all(isinstance(part, list) and len(part) == 2
+                                     and isinstance(part[0], str) and type(part[1]) is int
+                                     for part in value):
+                        assert json.dumps(value) in keys, (record["owner"], value)
+                    else:
+                        for child in value:
+                            check_edges(child)
+
+            check_edges(record["nodes"])
 
 with case("source AST option is unique and check-only"):
     path = records() / "options.zkc"

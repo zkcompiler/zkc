@@ -462,6 +462,14 @@ public type contracts. The bounded diagnostic view supplies no linking authority
 and changes no source or executable identity. The
 [language specification](spec/language/definitions.md) owns its format and limits.
 
+The [written-source AST](spec/language/source-ast.md) is available through
+`inspectWrittenSource` and `zkc-compile language-check --source-ast`. It retains
+captured and installation syntax before elaboration, including written omissions,
+finite binders, inline relations and structural source-claim addresses. UTF-8 spans
+and capture/installation identities bind its inputs. It is an input for independent
+source correspondence; retaining it does not establish elaboration or remove the
+source/exporter trusted links. Elaboration associations remain separate work.
+
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
 `includeInstallation`, and `zkc inspect --view=notations` with `--notation-private` and
