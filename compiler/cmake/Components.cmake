@@ -311,6 +311,8 @@ add_zkc_component(Transforms
   lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
+  lib/Compiler/OracleLayout.cpp
+  lib/Compiler/OracleSchedule.cpp
   lib/Compiler/Host.cpp
   lib/Compiler/AssetSharing.cpp
   lib/Compiler/Language.cpp

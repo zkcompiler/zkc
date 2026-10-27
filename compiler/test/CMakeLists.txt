@@ -29,6 +29,8 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
+add_zkc_test(oracle_realization Compiler oracle-realization)
+
 add_zkc_test(computation_unit IR computation-unit)
 mlir_target_link_libraries(zkc-computation_unit-test PRIVATE MLIRParser)
 
