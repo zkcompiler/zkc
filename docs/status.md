@@ -468,7 +468,7 @@ captured and installation syntax before elaboration, including written omissions
 finite binders, inline relations and structural source-claim addresses. UTF-8 spans
 and capture/installation identities bind its inputs. It is an input for independent
 source correspondence; retaining it does not establish elaboration or remove the
-source/exporter trusted links. `inspectLexicalBindings` retains local read, call
+source/exporter trusted links. `inspectSourceBindings` retains local read, call
 and assignment associations in written AST coordinates, including shadowing,
 combined input order and finite binders. Generated syntax without a written
 association is reported explicitly. The remaining elaboration proposals and

@@ -276,8 +276,8 @@ add_zkc_test(language_notation Language language-notation)
 add_zkc_test(language_notation_inspection Language language-notation-inspection)
 add_zkc_test(language_api_inspection Language language-api-inspection)
 add_zkc_test(language_written_source Language language-written-source)
-add_zkc_test(lexical_bindings Language lexical-bindings)
-zkc_source_project(zkc-lexical_bindings-test
+add_zkc_test(source_bindings Language source-bindings)
+zkc_source_project(zkc-source_bindings-test
   "${PROJECT_SOURCE_DIR}/../examples/projects/fri/zkc.toml")
 add_zkc_test(notation_semantics Language notation-semantics)
 add_zkc_test(language_arguments Compiler language-arguments)

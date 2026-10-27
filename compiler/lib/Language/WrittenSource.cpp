@@ -240,13 +240,21 @@ struct WrittenAddress {
   std::vector<std::pair<std::string, unsigned>> path;
 };
 using WrittenAddresses = std::map<WrittenNodeKey, std::vector<WrittenAddress>>;
+using WrittenSpanKey = std::tuple<uint32_t, uint32_t, uint32_t>;
+WrittenSpanKey spanKey(Span span) {
+  return {span.source.index, span.begin, span.end};
+}
+struct WrittenIndex {
+  WrittenAddresses lexical;
+  std::map<WrittenSpanKey, std::vector<WrittenAddress>> spans;
+};
 
 /// A flat node table keeps the wire document's nesting bounded independently
 /// of source depth. Edges are structural paths relative to one authored owner.
 class Writer {
 public:
   Writer(const CheckedProject &project, Work &work,
-         WrittenAddresses *addresses = nullptr)
+         WrittenIndex *addresses = nullptr)
       : project(project), work(work), addresses(addresses) {}
   Expected<json::Value> run(const WrittenSources &written) {
     for (const auto &module : written.modules)
@@ -274,7 +282,7 @@ private:
   Error error = Error::success();
   std::vector<std::pair<std::string, unsigned>> path;
   json::Array nodes, declarations;
-  WrittenAddresses *addresses;
+  WrittenIndex *addresses;
   Span currentDeclaration{};
   std::string addressOwner;
   void remember(Span declaration, LexicalNode node) {
@@ -284,7 +292,8 @@ private:
       error = std::move(failure);
       return;
     }
-    (*addresses)[nodeKey(declaration, node)].push_back({addressOwner, path});
+    addresses->lexical[nodeKey(declaration, node)].push_back(
+        {addressOwner, path});
   }
   json::Array address() const {
     json::Array result;
@@ -298,6 +307,13 @@ private:
     if (auto failure = work.charge(1 + 2 * path.size(), span)) {
       error = std::move(failure);
       return nullptr;
+    }
+    if (addresses) {
+      if (auto failure = work.charge(1 + 2 * path.size(), span)) {
+        error = std::move(failure);
+        return nullptr;
+      }
+      addresses->spans[spanKey(span)].push_back({addressOwner, path});
     }
     fields["kind"] = kind.str();
     fields["path"] = address();
@@ -984,38 +1000,37 @@ Expected<std::string> inspectWrittenSource(const CheckedProject &project,
   return bytes;
 }
 
-Expected<std::string> inspectLexicalBindings(const CheckedProject &project,
-                                             const Limits &limits) {
+Expected<std::string> inspectSourceBindings(const CheckedProject &project,
+                                            const Limits &limits) {
   if (auto error = checkLimits(limits))
     return std::move(error);
   if (project.checkedWork() > limits.work ||
       project.checkedDeclarations() > limits.declarations ||
       project.checkedOperations() > limits.operations)
-    return detail::failure("source.limit",
-                           "checked project exceeds lexical export limits");
+    return detail::failure(
+        "source.limit", "checked project exceeds source binding export limits");
   if (!project.storage->writtenSources)
     return detail::failure("source.syntax", "written source was not retained");
-  WrittenAddresses addresses;
+  WrittenIndex index;
+  auto &addresses = index.lexical;
   Work work{limits};
   {
     auto indexed =
-        Writer(project, work, &addresses).run(*project.storage->writtenSources);
+        Writer(project, work, &index).run(*project.storage->writtenSources);
     if (!indexed)
       return indexed.takeError();
   }
-  auto encode =
-      [&](WrittenAddresses::const_iterator found) -> Expected<json::Array> {
+  auto encode = [&](ArrayRef<WrittenAddress> values) -> Expected<json::Array> {
     json::Array result;
-    if (found != addresses.end())
-      for (const auto &address : found->second) {
-        if (auto error = work.charge(1 + 2 * address.path.size()))
-          return std::move(error);
-        json::Array path;
-        for (const auto &[category, ordinal] : address.path)
-          path.push_back(json::Array{category, ordinal});
-        result.push_back(
-            json::Object{{"owner", address.owner}, {"path", std::move(path)}});
-      }
+    for (const auto &address : values) {
+      if (auto error = work.charge(1 + 2 * address.path.size()))
+        return std::move(error);
+      json::Array path;
+      for (const auto &[category, ordinal] : address.path)
+        path.push_back(json::Array{category, ordinal});
+      result.push_back(
+          json::Object{{"owner", address.owner}, {"path", std::move(path)}});
+    }
     return result;
   };
   json::Array references, unassociated;
@@ -1033,10 +1048,14 @@ Expected<std::string> inspectLexicalBindings(const CheckedProject &project,
           reference.access == LexicalReference::Access::Read   ? "read"
           : reference.access == LexicalReference::Access::Call ? "call"
                                                                : "assign";
-      auto from = encode(uses);
+      auto from = encode(uses == addresses.end()
+                             ? ArrayRef<WrittenAddress>{}
+                             : ArrayRef<WrittenAddress>(uses->second));
       if (!from)
         return from.takeError();
-      auto to = encode(binders);
+      auto to = encode(binders == addresses.end()
+                           ? ArrayRef<WrittenAddress>{}
+                           : ArrayRef<WrittenAddress>(binders->second));
       if (!to)
         return to.takeError();
       if (uses != addresses.end() && binders != addresses.end()) {
@@ -1056,18 +1075,60 @@ Expected<std::string> inspectLexicalBindings(const CheckedProject &project,
                  {"end", span.end}}}});
       }
     }
+  auto source = [&](Span span) {
+    return json::Object{{"module", project.sources()[span.source.index].module},
+                        {"begin", span.begin},
+                        {"end", span.end}};
+  };
+  auto declaration = [&](DeclarationId id) {
+    const auto &decl = project.declarations()[id.index];
+    return json::Object{{"name", decl.qualifiedName},
+                        {"source", source(decl.span)}};
+  };
+  // Preserve resolver observations, including repeated observations of a node.
+  // Exact-span candidates help the checker find a written occurrence; they do
+  // not select one or establish its lookup. Unlike local links, these records
+  // predate expression/body parsing for some declaration headers.
+  json::Array declarations;
+  for (const auto &reference : project.storage->api.references) {
+    const auto &owner = project.declarations()[reference.owner.index];
+    const auto &provider = project.declarations()[reference.provider.index];
+    const auto &target = project.declarations()[reference.target.index];
+    if (auto error = work.charge(
+            1 + reference.written.size() + owner.qualifiedName.size() +
+                provider.qualifiedName.size() + target.qualifiedName.size() +
+                (reference.abstractModule ? reference.abstractModule->size()
+                                          : 0),
+            reference.span))
+      return std::move(error);
+    auto found = index.spans.find(spanKey(reference.span));
+    auto candidates = encode(found == index.spans.end()
+                                 ? ArrayRef<WrittenAddress>{}
+                                 : ArrayRef<WrittenAddress>(found->second));
+    if (!candidates)
+      return candidates.takeError();
+    declarations.push_back(json::Object{
+        {"owner", owner.qualifiedName},
+        {"written", reference.written},
+        {"provider", declaration(reference.provider)},
+        {"target", declaration(reference.target)},
+        {"abstract_module", optionalString(reference.abstractModule)},
+        {"source", source(reference.span)},
+        {"candidates", std::move(*candidates)}});
+  }
   json::Value value =
-      json::Object{{"format", "zkc.lexical-bindings/0"},
+      json::Object{{"format", "zkc.source-bindings/0"},
                    {"capture", project.capture().identity()},
                    {"installation", project.installationIdentity()},
-                   {"references", std::move(references)},
-                   {"unassociated", std::move(unassociated)}};
+                   {"locals", std::move(references)},
+                   {"unassociated_locals", std::move(unassociated)},
+                   {"declarations", std::move(declarations)}};
   std::string bytes;
   BoundedStream out(bytes, limits.apiInspectionBytes);
   out << value;
   if (out.overflow())
     return detail::failure("source.limit",
-                           "lexical export byte limit exceeded");
+                           "source binding export byte limit exceeded");
   return bytes;
 }
 } // namespace zkc::language

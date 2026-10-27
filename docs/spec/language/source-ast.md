@@ -119,12 +119,12 @@ named trusted links. Retaining an AST or comparing native exports does not
 remove either assumption.
 
 
-## Lexical binding proposals
+## Source binding proposals
 
-`inspectLexicalBindings` exports `zkc.lexical-bindings/0` beside the AST. Its
-root has `format`, `capture`, `installation`, `references` and `unassociated`.
-A reference has `kind` (`read`, `call` or `assign`), `uses` and `binders`. The last
-two are nonempty arrays of written `{owner,path}` addresses. They retain every
+`inspectSourceBindings` exports `zkc.source-bindings/0` beside the AST. Its
+root has `format`, `capture`, `installation`, `locals`, `unassociated_locals`
+and `declarations`. A local reference has `kind` (`read`, `call` or `assign`),
+`uses` and `binders`. The last two are nonempty arrays of written `{owner,path}` addresses. They retain every
 written occurrence of that parser node; a checker must validate the indicated
 scope and binding, not pick a same-spelled name from the document.
 
@@ -138,8 +138,8 @@ there is no second path traversal or nearest-span lookup. Alpha renaming changes
 names and source bytes, but preserves these binding paths.
 
 Generated syntax can lack a written counterpart. Such records appear in
-`unassociated`, with the same kind/address fields and the containing declaration
-span (`module`, `begin`, `end`); at least one address list is empty. An empty list
+`unassociated_locals`, with the same kind/address fields and the containing
+declaration span (`module`, `begin`, `end`); at least one address list is empty. An empty list
 never authorizes a correspondence. An independent consumer determines whether
 the source fragment it checks has complete applicable coverage. Private and
 installation declarations are retained here, including declarations outside the
@@ -148,7 +148,22 @@ selected executable closure.
 Retention is charged before storing each resolution record. Inspection shares
 one work counter between structural indexing and proposal construction, rechecks
 the project's ceilings and bounds serialization by `apiInspectionBytes`. Refusal
-publishes no partial proposal. These native records support local name resolution
-only. Global declaration lookup, specialization, role/port inference, control,
-notation and oracle proposals remain separate obligations; the independent
-checker and its soundness theorem are still required.
+publishes no partial proposal.
+
+Each declaration lookup record contains `owner`, `written`, `provider`, `target`,
+`abstract_module`, `source` and `candidates`. Provider and target are separate
+`{name,source}` declaration references; `source` is a module and UTF-8 range.
+An abstract-module term is the resolver's selected binder, or null. Repeated
+resolver observations are retained in their original order. Private and
+installation references are not filtered through the public API view.
+
+Declaration lookup can precede body parsing. Its `candidates` therefore contains
+**all** AST addresses with exactly the observed source range, including different
+node kinds at an equal span. The array may be empty. It is a search hint, not an
+assertion that one of these nodes is the lookup occurrence. No nearest-span
+fallback or arbitrary first match is selected. The independent checker must
+recompute the occurrence and route against the written modules and imports.
+
+Specialization, role/port inference, control, notation and oracle proposals remain
+separate obligations; the independent checker and its soundness theorem are
+still required.
