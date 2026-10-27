@@ -1631,6 +1631,12 @@ public:
         return error("component-declaration");
       if (auto e = language::checkComponentDeclarations(*parsed))
         return std::move(e);
+      // These rows are emitted from the module's checked declaration context,
+      // not reconstructed from an executable function or a printed symbol.
+      for (unsigned table : {0, 1})
+        for (unsigned i = 0; i < (*rows)[table].getAsArray()->size(); ++i)
+          if (auto e = associate({10, table, i}, *unit))
+            return std::move(e);
       declarations = std::move(*parsed);
     }
     auto digest = SHA256::hash(arrayRefFromStringRef(bytes));
