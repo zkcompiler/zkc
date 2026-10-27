@@ -41,7 +41,7 @@ elaboration proposal.
 
 The root has exactly `format`, `capture`, `installation`, `sources` and
 `declarations`. A source has `module`, `origin` (`captured` or `installation`),
-`bytes` and `sha256`. A declaration record has `owner` and `nodes`. `owner` is
+`bytes` and `sha256` (64 lowercase hexadecimal digits, without a prefix). A declaration record has `owner` and `nodes`. `owner` is
 its canonical authored declaration path; no generated declaration is an owner.
 
 Each node has a discriminating `kind`, `path`, `span` and its syntax fields.
@@ -83,7 +83,7 @@ expressions, claims and declarations:
 The remaining kinds are `body`, `port`, `parameter`, `notation`, `selector`,
 `input_selector`, `name`, `requirement`, `clause`, `relation_application`,
 `spec_block`, `claim`, `verify`, `setup`, `alternative`, `proof`, `application`,
-`rule`, `module_link`, finite `binder` and callback `item_from`.
+`rule`, `import`, `module_link`, finite `binder` and callback `item_from`.
 
 A notation occurrence retains its parsed expression and written operator symbol. Its
 selected callable is not an AST fact. A callback's omitted effect allowance is
