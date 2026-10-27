@@ -75,6 +75,25 @@ void associations(const json::Value &document) {
       }
     }
   }
+  const auto &instances = *root.getObject("instances")->getArray("instances");
+  require(root.getArray("instance_rows")->size() == instances.size(),
+          "instance row coverage is incomplete");
+  unsigned associated = 0;
+  for (const auto &item : *root.getArray("instance_rows")) {
+    const auto &record = *item.getAsObject();
+    auto ordinal = *record.getInteger("instance");
+    require(ordinal >= 0 && uint64_t(ordinal) < instances.size(),
+            "invalid instance index");
+    auto symbol = instances[ordinal].getAsObject()->getString("symbol");
+    for (const auto &row : *record.getArray("rows")) {
+      ++associated;
+      auto &definition =
+          *at(*root.get("snapshot"), *row.getAsArray()).getAsArray();
+      require(definition[1].getAsString() == symbol,
+              "instance selected a different definition");
+    }
+  }
+  require(associated > 0, "no closed definition has an associated row");
   require(joined >= 2, "declaration/body source join absent");
 }
 } // namespace
@@ -117,8 +136,8 @@ int main() {
   cases.run("proposal edits cannot change the original or its publication", [] {
     auto value = original();
     auto pristine = report(value);
-    for (StringRef field :
-         {"source_ast", "bindings", "rows", "snapshot", "admission"}) {
+    for (StringRef field : {"source_ast", "bindings", "instances",
+                            "instance_rows", "rows", "snapshot", "admission"}) {
       auto changed = pristine;
       (*changed.getAsObject())[field] = nullptr;
       refused(checkSourceCorrespondenceExport(value, zkc::printJson(changed)));

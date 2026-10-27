@@ -57,6 +57,11 @@ llvm::Expected<std::string> inspectWrittenSource(const CheckedProject &,
 /// These facts require independent checking; they do not certify elaboration.
 llvm::Expected<std::string> inspectSourceBindings(const CheckedProject &,
                                                   const Limits & = {});
+/// Closed static substitutions, scoped-source origins, domain constructor
+/// graphs and capture alias layouts. Symbols select actual closed definitions;
+/// they are never decoded as source identity. This is a checking proposal.
+llvm::Expected<std::string> inspectSourceInstances(const ClosedEntry &,
+                                                   const Limits & = {});
 struct NotationInspectionOptions {
   /// Include private declarations and lexical notation overrides/occurrences.
   bool includePrivate = false;

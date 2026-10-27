@@ -174,6 +174,46 @@ exportSourceCorrespondence(const CheckedOriginal &original,
   auto snapshot = json::parse(structured->bytes);
   if (!snapshot)
     return snapshot.takeError();
+  auto instanceBytes = inspectSourceInstances(entry, limits);
+  if (!instanceBytes)
+    return instanceBytes.takeError();
+  auto instances = json::parse(*instanceBytes);
+  if (!instances)
+    return instances.takeError();
+  // Symbols select actual rows of this snapshot, never a decoded name/hash.
+  std::map<std::string, json::Array> definitions;
+  uint64_t remaining = limits.work;
+  auto charge = [&](uint64_t amount) -> bool {
+    if (amount > remaining)
+      return false;
+    remaining -= amount;
+    return true;
+  };
+  for (unsigned table : {4, 5, 6, 7}) {
+    const auto &rows = *(*snapshot->getAsArray())[table].getAsArray();
+    for (unsigned i = 0; i < rows.size(); ++i) {
+      auto symbol = *(*rows[i].getAsArray())[1].getAsString();
+      if (!charge(1 + symbol.size()))
+        return error("source.limit", "instance row association limit exceeded");
+      definitions[symbol.str()].push_back(json::Array{table, i});
+    }
+  }
+  json::Array instanceRows;
+  const auto &instanceList = *instances->getAsObject()->getArray("instances");
+  for (unsigned i = 0; i < instanceList.size(); ++i) {
+    auto symbol = *instanceList[i].getAsObject()->getString("symbol");
+    if (!charge(1 + symbol.size()))
+      return error("source.limit", "instance row association limit exceeded");
+    auto found = definitions.find(symbol.str());
+    json::Array selected;
+    if (found != definitions.end()) {
+      if (!charge(found->second.size()))
+        return error("source.limit", "instance row association limit exceeded");
+      selected = found->second;
+    }
+    instanceRows.push_back(
+        json::Object{{"instance", i}, {"rows", std::move(selected)}});
+  }
   auto rows =
       Associations(original, limits).run(*ast, structured->associations);
   if (!rows)
@@ -183,6 +223,8 @@ exportSourceCorrespondence(const CheckedOriginal &original,
                    {"admission", detail::sourceAdmission(original)},
                    {"source_ast", std::move(*ast)},
                    {"bindings", std::move(*bindings)},
+                   {"instances", std::move(*instances)},
+                   {"instance_rows", std::move(instanceRows)},
                    {"snapshot", std::move(*snapshot)},
                    {"rows", std::move(*rows)}};
   std::string bytes;

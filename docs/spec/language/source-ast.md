@@ -164,9 +164,10 @@ assertion that one of these nodes is the lookup occurrence. No nearest-span
 fallback or arbitrary first match is selected. The independent checker must
 recompute the occurrence and route against the written modules and imports.
 
-Specialization, role/port inference, control, notation and oracle proposals remain
-separate obligations; the independent checker and its soundness theorem are
-still required.
+Closed substitutions are recorded in the source-instance export below.
+Call-edge correspondence, role/port inference, control, notation and oracle
+proposals remain separate obligations; the independent checker and its
+soundness theorem are still required.
 
 ## Checked source artifact
 
@@ -176,8 +177,8 @@ still required.
 `source_correspondence`. A proof Entry can replace the explicit subject.
 Ordinary Host functions are outside the structured protocol export profile.
 
-The root has exactly `format`, `admission`, `source_ast`, `bindings`, `snapshot`
-and `rows`. `admission` is the same association used by the
+The root has exactly `format`, `admission`, `source_ast`, `bindings`, `snapshot`,
+`instances`, `instance_rows` and `rows`. `admission` is the same association used by the
 [source-claim export](claims.md): original-byte SHA-256, protocol symbol,
 interface SHA-256, capture and installation. `source_ast` and `bindings` use the
 formats above. `snapshot` is the actual [structured source](../formats/structured-source.md)
@@ -208,7 +209,52 @@ and interface must fit the requested ceilings too.
 canonical producer, accepting JSON whitespace/member-order differences and
 refusing duplicate keys, unknown fields and changed components. It does not
 admit a new original and is not the independent Lean checker. This artifact
-currently supplies written syntax, binding observations and source-to-row
-associations. Specialization, notation/scoped, role/control and oracle elaboration
-proposals remain to be added. Neither native comparison nor a location join
+currently supplies written syntax, binding observations, closed substitutions
+and source-to-row associations. Call-edge, notation/scoped extraction,
+role/control and oracle elaboration proposals remain to be added. Neither native comparison nor a location join
 removes the parser, source-correspondence or structured-denotation trusted links.
+
+## Closed source instances
+
+`inspectSourceInstances` exports `zkc.source-instances/0`, with `format`, `capture`,
+`installation` and `instances`. Each retained closed instance has `symbol`,
+`template`, `statics`, `scoped`, `domains` and `layout`. The symbol is an actual
+closed declaration name. No consumer decodes its hash to establish source origin.
+
+A declaration template has `kind: "declaration"`, its canonical `owner`, a
+`generated` flag, its source span and exact-span `candidates`. A scoped template
+has `kind: "scoped"`, its lexical owner, source span and exact written `nodes`.
+The latter uses retained expression provenance, never the generated helper's
+private expression number. Empty nodes remain explicit for generated adapters.
+Candidates remain search hints; a source correspondence checker must validate
+the template and substitution.
+
+`statics` contains `[parameter-name, term]` in declaration order, using the
+[closed source-term grammar](../formats/structured-source.md#definition-origins).
+`scoped` contains actual selected callback symbols in parameter order. `domains`
+contains closed finite constructor graphs: `inputs` are closed source terms;
+`nodes` have `kind`, `item`, `operands`, `children` and `axis`; `result` selects a
+node. Operands select this descriptor's input signature and children select prior
+nodes. Kinds are `elements`, `indices`, `range`, `zip`, `product`, `matrix_row`,
+`matrix_column`, `matrix_coordinates` and `source_array`. No open parameter or
+factory node, internal shape key, or caller SSA value is serialized as a domain.
+
+`layout.inputs` and `layout.captures` retain the closed source callable's alias
+partition in source argument/hidden-capture slots. They are not flattened
+structured-IR operand indices. An extracted callback's lexical data captures
+are ordinary helper inputs after its explicit arguments. Hidden captures at the
+caller carry the selected callback's environment or a domain's runtime operands.
+The two lists must not be conflated with lexical free variables. Domain and
+capture interpretation must be checked against the actual selected body.
+
+These are declaration substitutions. A finite operation can carry a closed
+domain and callback directly without instantiating a declaration with domain
+or scoped arguments; the presence of finite operations does not imply nonempty
+`domains` or `scoped` here.
+
+The combined source artifact adds `instances` and `instance_rows`. The former is
+this document; the latter contains one `{instance,rows}` entry per instance.
+`instance` is an ordinal in this export, and `rows` is every matching symbol row
+in the actual snapshot's domain, relation, binding and definition tables. Empty
+rows remain explicit for closed declarations without a standalone exported row.
+The association never guesses a definition from its printed name.
