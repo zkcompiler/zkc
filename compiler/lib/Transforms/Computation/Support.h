@@ -1,10 +1,10 @@
-#ifndef ZKC_TRANSFORMS_KERNEL_SUPPORT_H
-#define ZKC_TRANSFORMS_KERNEL_SUPPORT_H
+#ifndef ZKC_TRANSFORMS_COMPUTATION_SUPPORT_H
+#define ZKC_TRANSFORMS_COMPUTATION_SUPPORT_H
 #include "../MathematicalSupport.h"
 #include "../NumericalSelection.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 
-namespace zkc::kernel {
+namespace zkc::computation {
 // Private demand-formation input. The condition belongs to the total wrapper;
 // rejection remains an ordered Protocol action until scoped formation.
 struct CalculationGuard {
@@ -38,35 +38,35 @@ mlir::func::FuncOp resolveInvocation(mlir::Operation *call,
 // callers can apply fixed requests to the owned result before recipe discovery.
 // A frontier snapshot is needed only when checked polynomial origins permit
 // port rewrites. Every performed copy and context check shares the given bound.
-mlir::OwningOpRef<mlir::ModuleOp>
-prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared = nullptr,
-                      std::optional<CapacityCause> *capacity = nullptr,
-                      mathematical::NumericalSelection *selection = nullptr);
-// Materialize only Kernel occurrences in an already private candidate. The
+mlir::OwningOpRef<mlir::ModuleOp> prepareComputationRealization(
+    mlir::ModuleOp source, uint64_t *shared = nullptr,
+    std::optional<CapacityCause> *capacity = nullptr,
+    mathematical::NumericalSelection *selection = nullptr);
+// Materialize only computation occurrences in an already private candidate. The
 // containing numerical transaction owns cloning, map consumption and readback.
 // An outcome sink delegates retry to that transaction. optionalConstruction
 // classifies only its bounded copy/site envelope; it grants no replacement.
 mlir::LogicalResult
-materializeKernelCalls(mlir::ModuleOp candidate, MathematicalSelectionPolicy,
-                       mathematical::RealizationTrace *,
-                       mathematical::NumericalSelection &,
-                       mathematical::VerificationDecision *outcome = nullptr,
-                       bool optionalConstruction = false);
+materializeComputations(mlir::ModuleOp candidate, MathematicalSelectionPolicy,
+                        mathematical::RealizationTrace *,
+                        mathematical::NumericalSelection &,
+                        mathematical::VerificationDecision *outcome = nullptr,
+                        bool optionalConstruction = false);
 
-mlir::LogicalResult discoverKernelCalls(mlir::ModuleOp,
-                                        MathematicalSelectionPolicy,
-                                        mathematical::NumericalSelection &);
+mlir::LogicalResult discoverComputations(mlir::ModuleOp,
+                                         MathematicalSelectionPolicy,
+                                         mathematical::NumericalSelection &);
 // Return the actual complete, admitted executable candidate while preserving
-// the original Kernel source. The caller owns independent source/candidate
+// the original computation source. The caller owns independent source/candidate
 // correspondence checking before publication.
-mlir::OwningOpRef<mlir::ModuleOp>
-proposeKernelLowering(mlir::ModuleOp source,
-                      MathematicalSelectionPolicy policy = {},
-                      mathematical::RealizationTrace *trace = nullptr,
-                      mathematical::NumericalSelection *selection = nullptr,
-                      mlir::ModuleOp prepared = {});
-// Checked Kernel-to-Kernel normalization; generated-operation identities refer
-// to the returned owned unit and remain valid when that unit is adopted.
+mlir::OwningOpRef<mlir::ModuleOp> proposeComputationRealization(
+    mlir::ModuleOp source, MathematicalSelectionPolicy policy = {},
+    mathematical::RealizationTrace *trace = nullptr,
+    mathematical::NumericalSelection *selection = nullptr,
+    mlir::ModuleOp prepared = {});
+// Checked Computation-to-computation normalization; generated-operation
+// identities refer to the returned owned unit and remain valid when that unit
+// is adopted.
 mlir::OwningOpRef<mlir::ModuleOp>
 normalizeUnit(mlir::ModuleOp unit, uint64_t &remaining,
               llvm::DenseSet<mlir::Operation *> &polynomialGenerated,
@@ -86,7 +86,7 @@ effectiveSelectionPolicy(mlir::Operation *call,
   return policy;
 }
 
-// Convert one immutable normalized Kernel entry into an owned executable
+// Convert one immutable normalized computation entry into an owned executable
 // candidate through a checked standard numerical schedule. The output uses
 // scoped Func/CF and Exec. selectedSchedule optionally receives the actual
 // independently checked selected schedule, without replay or another copy.
@@ -131,15 +131,16 @@ verifyEntryRecipes(mlir::ModuleOp source, mlir::ModuleOp candidate,
                    finite::VerificationResult *outcome = nullptr,
                    mathematical::NumericalSelection *selection = nullptr);
 
-// Match the original Kernel function at an actual Local or scheduled cursor.
-// Source and target symbol contexts are distinct; call-specific identity and
-// policy are supplied explicitly and never stored in the mathematical source.
-mlir::FailureOr<llvm::SmallVector<mlir::Value>> verifyKernelRecipes(
+// Match the original computation function at an actual scoped or scheduled
+// cursor. Source and target symbol contexts are distinct; call-specific
+// identity and policy are supplied explicitly and never stored in the
+// mathematical source.
+mlir::FailureOr<llvm::SmallVector<mlir::Value>> verifyComputationRecipes(
     mlir::func::FuncOp source, mlir::Operation *targetRoot,
     llvm::StringRef callSite, mlir::ValueRange arguments,
     mlir::Operation *&cursor, uint64_t &remaining, uint64_t &remainingBytes,
     MathematicalSelectionPolicy policy, finite::VerificationLimits limits,
     finite::VerificationResult &outcome,
     mathematical::NumericalSelection *selection = nullptr);
-} // namespace zkc::kernel
+} // namespace zkc::computation
 #endif

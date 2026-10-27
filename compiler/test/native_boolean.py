@@ -54,7 +54,7 @@ for optimize in (False, True):
     logical = commands.verified(source, None, *passes, "--zkc-lower-math")
     assert "exec.computation" in logical and "exec.compute" in logical
     assert bound_count(logical, "bool.and") == 0
-    bound = commands.verified(logical, None, "--zkc-lower-kernels")
+    bound = commands.verified(logical, None, "--zkc-realize-computations")
     assert "arith.andi" not in bound and "exec.boolean" in bound
     commands.source("protocol-export", bound, refuses="native-physical-required")
     physical = commands.verified(bound, None, "--zkc-select-physical=release-storage=true")
@@ -95,8 +95,8 @@ for operation in ("andi", "select"):
     else:
         mutant, changed = re.subn(r"arith.select (%[a-zA-Z0-9_]+), (%[a-zA-Z0-9_]+), %[a-zA-Z0-9_]+ : i1", r"arith.select \1, \2, \2 : i1", endpoint, count=1)
     assert changed == 1
-    direct = commands.verified(mutant, None, "--zkc-lower-math", "--zkc-lower-kernels")
-    simplified = commands.verified(mutant, None, "--zkc-simplify-participant", "--zkc-lower-math", "--zkc-lower-kernels")
+    direct = commands.verified(mutant, None, "--zkc-lower-math", "--zkc-realize-computations")
+    simplified = commands.verified(mutant, None, "--zkc-simplify-participant", "--zkc-lower-math", "--zkc-realize-computations")
     if operation == "andi":
         assert bound_count(direct, 'bool.and') > bound_count(simplified, 'bool.and')
     else:
@@ -117,7 +117,7 @@ for label, parameters, signature, roles, expression, expected in [
         "protocol.return"(%out) : (i1) -> ()
       }}) {{sym_name="main", function_type=({signature}) -> i1, roles=["P"], input_roles=[{roles}], output_roles=[["P"]]}} : () -> ()
     }}) {{profile=#protocol.profile<protocol>}} : () -> () }}'''
-    bound = commands.verified(tiny, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-lower-kernels")
+    bound = commands.verified(tiny, None, "--zkc-project-protocol", "--zkc-lower-math", "--zkc-realize-computations")
     assert "exec.boolean" in bound
     c = json.loads(commands.source("protocol-export", commands.verified(bound, None, "--zkc-select-physical")))
     assert evaluate(c, [] if not parameters else [False]) == [expected]

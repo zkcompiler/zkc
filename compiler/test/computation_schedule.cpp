@@ -1,4 +1,4 @@
-#include "../lib/Transforms/Kernel/Schedule.h"
+#include "../lib/Transforms/Computation/Schedule.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
 #include "support/NumericalLoops.h"
@@ -20,18 +20,18 @@ schedule(mlir::ModuleOp source, MathematicalSelectionPolicy policy = fused) {
   mathematical::RealizationWork work;
   uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
   OwningOpRef<mlir::ModuleOp> selected;
-  auto actual = kernel::realizeEntry(source, "collect_fold", policy, work,
-                                     remaining, bytes, {}, nullptr, nullptr,
-                                     nullptr, false, &selected);
+  auto actual = computation::realizeEntry(source, "collect_fold", policy, work,
+                                          remaining, bytes, {}, nullptr,
+                                          nullptr, nullptr, false, &selected);
   require(bool(actual) && bool(selected), "selected schedule was not retained");
-  require(succeeded(kernel::verifyScheduledRecipeOutput(*selected)),
+  require(succeeded(computation::verifyScheduledRecipeOutput(*selected)),
           "scoped schedule admission refused");
   return selected;
 }
 void scheduleAccepts(mlir::ModuleOp source, mlir::ModuleOp schedule,
                      MathematicalSelectionPolicy policy = fused) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
-  require(succeeded(kernel::verifyEntrySchedule(
+  require(succeeded(computation::verifyEntrySchedule(
               source, schedule, "collect_fold", policy, {}, &outcome)) &&
               outcome.status == finite::VerificationStatus::Verified,
           "source does not match actual schedule");
@@ -39,17 +39,17 @@ void scheduleAccepts(mlir::ModuleOp source, mlir::ModuleOp schedule,
 void scheduleMismatch(mlir::ModuleOp source, mlir::ModuleOp schedule,
                       MathematicalSelectionPolicy policy = fused) {
   finite::VerificationResult outcome{finite::VerificationStatus::Verified, {}};
-  require(failed(kernel::verifyEntrySchedule(source, schedule, "collect_fold",
-                                             policy, {}, &outcome)) &&
+  require(failed(computation::verifyEntrySchedule(
+              source, schedule, "collect_fold", policy, {}, &outcome)) &&
               outcome.status == finite::VerificationStatus::Mismatch,
           "source difference was accepted or classified as capacity");
 }
 OwningOpRef<mlir::ModuleOp> consume(mlir::ModuleOp scheduled) {
   uint64_t work = 1000000;
-  auto result = kernel::consumeSchedule(scheduled, work);
+  auto result = computation::consumeSchedule(scheduled, work);
   require(bool(result) && work < 1000000,
           "schedule consumer failed or did not debit work");
-  require(succeeded(kernel::verifyScheduleLowering(scheduled, *result)),
+  require(succeeded(computation::verifyScheduleLowering(scheduled, *result)),
           "SCF to CFG comparison refused");
   return result;
 }
@@ -69,7 +69,7 @@ module {
 }
 )mlir",
                                                   &context);
-  require(bool(result), "Boolean/variant Kernel source did not verify");
+  require(bool(result), "Boolean/variant computation source did not verify");
   return result;
 }
 } // namespace
@@ -124,7 +124,7 @@ int main() {
                                     [](Diagnostic &) { return success(); });
       scheduleMismatch(unit, *changed);
       uint64_t work = 1000000;
-      require(!kernel::consumeSchedule(*changed, work),
+      require(!computation::consumeSchedule(*changed, work),
               "malformed schedule was consumed");
       scheduleAccepts(unit, *selected);
     });
@@ -168,8 +168,9 @@ int main() {
         }
         scheduleAccepts(*unit, *scheduled);
         auto actual = consume(*scheduled);
-        require(succeeded(kernel::verifyScheduleLowering(*scheduled, *actual)),
-                "nested conditional schedule consumption disagrees");
+        require(
+            succeeded(computation::verifyScheduleLowering(*scheduled, *actual)),
+            "nested conditional schedule consumption disagrees");
         accepts(*unit, *actual);
       });
   for (StringRef mutation :
@@ -209,8 +210,8 @@ int main() {
       }
       scheduleMismatch(unit, *changed);
       uint64_t work = 1000000;
-      require(!kernel::consumeSchedule(*changed, work) &&
-                  failed(kernel::verifyScheduleLowering(*changed, *local)),
+      require(!computation::consumeSchedule(*changed, work) &&
+                  failed(computation::verifyScheduleLowering(*changed, *local)),
               "malformed builtin shape reached a generated accessor");
       scheduleAccepts(unit, *scheduled);
     });
@@ -291,29 +292,30 @@ int main() {
               returned->setOperand(0, second);
               returned->setOperand(1, first);
             }
-            require(succeeded(kernel::verifyScheduledRecipeOutput(*changed)),
-                    "semantic mutation malformed the schedule");
+            require(
+                succeeded(computation::verifyScheduledRecipeOutput(*changed)),
+                "semantic mutation malformed the schedule");
             scheduleMismatch(*unit, *changed);
             auto actual = consume(*changed);
             mismatch(*unit, *actual);
             scheduleAccepts(*unit, *selected);
           });
-  cases.run("zero construction and comparison allowances preserve sources",
-            [&] {
-              auto unit = source(context, "elements");
-              auto selected = schedule(*unit), before = clone(*selected);
-              uint64_t work = 0;
-              require(!kernel::consumeSchedule(*selected, work) && !work &&
-                          same(*selected, *before),
-                      "zero copy allowance mutated input");
-              auto actual = consume(*selected);
-              finite::VerificationResult outcome{
-                  finite::VerificationStatus::Verified, {}};
-              require(failed(kernel::verifyScheduleLowering(*selected, *actual,
-                                                            &work, &outcome)) &&
-                          outcome.status ==
-                              finite::VerificationStatus::RequiredCapacity,
-                      "zero comparison allowance was not required capacity");
-            });
+  cases.run(
+      "zero construction and comparison allowances preserve sources", [&] {
+        auto unit = source(context, "elements");
+        auto selected = schedule(*unit), before = clone(*selected);
+        uint64_t work = 0;
+        require(!computation::consumeSchedule(*selected, work) && !work &&
+                    same(*selected, *before),
+                "zero copy allowance mutated input");
+        auto actual = consume(*selected);
+        finite::VerificationResult outcome{finite::VerificationStatus::Verified,
+                                           {}};
+        require(failed(computation::verifyScheduleLowering(*selected, *actual,
+                                                           &work, &outcome)) &&
+                    outcome.status ==
+                        finite::VerificationStatus::RequiredCapacity,
+                "zero comparison allowance was not required capacity");
+      });
   return cases.result();
 }

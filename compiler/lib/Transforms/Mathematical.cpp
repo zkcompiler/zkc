@@ -1,4 +1,5 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
+#include "MathematicalPassOptions.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
 #include "PreparedProtocol.h"
@@ -996,34 +997,21 @@ OwningOpRef<ModuleOp> projectPrepared(ModuleOp candidate) {
 
 struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PreparePass)
+  MathematicalPassOptions selection{*this};
   PreparePass() = default;
   RealizationTrace *observer = nullptr;
   explicit PreparePass(bool value, MathematicalSelectionPolicy policy,
                        RealizationTrace *trace)
       : observer(trace) {
     simplify = value;
-    optimizeFinite = policy.finiteBulk;
-    fuseVectorReductions = policy.vectorReductionFusion;
-    fuseCollectFold = policy.collectFoldFusion;
+    selection.set(policy);
   }
   PreparePass(const PreparePass &other)
-      : PassWrapper(other), observer(other.observer) {}
+      : PassWrapper(other), selection(*this, other.selection.get()),
+        observer(other.observer) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify after expansion"),
                         llvm::cl::init(true)};
-  Option<bool> optimizeFinite{
-      *this, "optimize-finite",
-      llvm::cl::desc("Select checked bulk finite realizations"),
-      llvm::cl::init(true)};
-  Option<bool> fuseVectorReductions{
-      *this, "fuse-vector-reductions",
-      llvm::cl::desc(
-          "Fuse admitted vector reductions under sufficient resources"),
-      llvm::cl::init(false)};
-  Option<bool> fuseCollectFold{
-      *this, "fuse-collect-fold",
-      llvm::cl::desc("Compose total collect and ordered fold traversals"),
-      llvm::cl::init(false)};
   Option<bool> traceMathematics{
       *this, "trace-mathematics",
       llvm::cl::desc("Report mathematical preparation stages and measurements"),
@@ -1053,13 +1041,10 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     auto *output =
         observer ? observer
                  : (traceMathematics || dumpMathematics ? &trace : nullptr);
-    RealizationScope scope(
-        output, "prepare-pass", source,
-        {optimizeFinite, fuseVectorReductions, fuseCollectFold});
-    scope.propose({optimizeFinite, fuseVectorReductions, fuseCollectFold});
-    auto candidate = prepareSource(
-        source, simplify,
-        {optimizeFinite, fuseVectorReductions, fuseCollectFold}, {}, output);
+    RealizationScope scope(output, "prepare-pass", source, selection.get());
+    scope.propose(selection.get());
+    auto candidate =
+        prepareSource(source, simplify, selection.get(), {}, output);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -1104,30 +1089,17 @@ struct SimplifyParticipantPass
 };
 struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ProjectPass)
+  MathematicalPassOptions selection{*this};
   ProjectPass() = default;
   explicit ProjectPass(bool value, MathematicalSelectionPolicy policy) {
     simplify = value;
-    optimizeFinite = policy.finiteBulk;
-    fuseVectorReductions = policy.vectorReductionFusion;
-    fuseCollectFold = policy.collectFoldFusion;
+    selection.set(policy);
   }
-  ProjectPass(const ProjectPass &other) : PassWrapper(other) {}
+  ProjectPass(const ProjectPass &other)
+      : PassWrapper(other), selection(*this, other.selection.get()) {}
   Option<bool> simplify{*this, "simplify",
                         llvm::cl::desc("Simplify before projection"),
                         llvm::cl::init(true)};
-  Option<bool> optimizeFinite{
-      *this, "optimize-finite",
-      llvm::cl::desc("Select checked bulk finite realizations"),
-      llvm::cl::init(true)};
-  Option<bool> fuseVectorReductions{
-      *this, "fuse-vector-reductions",
-      llvm::cl::desc(
-          "Fuse admitted vector reductions under sufficient resources"),
-      llvm::cl::init(false)};
-  Option<bool> fuseCollectFold{
-      *this, "fuse-collect-fold",
-      llvm::cl::desc("Compose total collect and ordered fold traversals"),
-      llvm::cl::init(false)};
   StringRef getArgument() const final { return "zkc-project-protocol"; }
   StringRef getDescription() const final {
     return "Project total mathematics and ordered actions into participant "
@@ -1141,9 +1113,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void runOnOperation() final {
     auto source = getOperation();
-    auto candidate =
-        prepareSource(source, simplify,
-                      {optimizeFinite, fuseVectorReductions, fuseCollectFold});
+    auto candidate = prepareSource(source, simplify, selection.get());
     if (!candidate)
       return signalPassFailure();
     auto output = projectPrepared(*candidate);

@@ -42,10 +42,11 @@ struct UseConversion {
   std::string site;
 };
 /// Preorder indices in the selected executable subject, never borrowed
-/// operation/value pointers. With Kernel input this is the retained numerical
-/// payload, not the original source; otherwise it is the unchanged source.
-/// Binding declaration/location and contraction indices use the same subject.
-/// Ports belong to individual definitions and uses, not a global logical map.
+/// operation/value pointers. With computation input this is the retained
+/// numerical payload, not the original source; otherwise it is the unchanged
+/// source. Binding declaration/location and contraction indices use the same
+/// subject. Ports belong to individual definitions and uses, not a global
+/// logical map.
 struct OperationDecision {
   OperationIndex operation;
   std::optional<BindingIndex> binding;
@@ -126,7 +127,7 @@ public:
   llvm::SmallVector<ContractionDecision> contractions;
   llvm::SmallVector<StorageRelease> releases;
   /// Freshness-check source and return an independently owned inspection copy
-  /// of the selected executable subject (a source clone for the no-Kernel
+  /// of the selected executable subject (a source clone for the no-computation
   /// path). Its preorder corresponds to all decision indices. Editing or
   /// destroying the copy cannot change this proposal or any checked plan
   /// derived from it.
@@ -168,9 +169,10 @@ llvm::Expected<CheckedPhysicalPlan>
 validatePhysical(mlir::ModuleOp, const PhysicalPlan &,
                  const CandidateCatalog & = installedCandidates(),
                  mlir::Location *failureLocation = nullptr);
-/// Preorder of the supplied module. For Kernel plans use cloneSelectedSubject
-/// to obtain the selected index space; the original source has different
-/// indices. Materialization uses the corresponding retained-subject clone.
+/// Preorder of the supplied module. For computation plans use
+/// cloneSelectedSubject to obtain the selected index space; the original source
+/// has different indices. Materialization uses the corresponding
+/// retained-subject clone.
 llvm::SmallVector<mlir::Operation *> physicalPlanOperations(mlir::ModuleOp);
 } // namespace zkc::target
 #endif

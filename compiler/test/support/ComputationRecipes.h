@@ -1,7 +1,7 @@
-#ifndef ZKC_TEST_KERNEL_RECIPES_H
-#define ZKC_TEST_KERNEL_RECIPES_H
+#ifndef ZKC_TEST_COMPUTATION_RECIPES_H
+#define ZKC_TEST_COMPUTATION_RECIPES_H
 
-#include "../../lib/Transforms/Kernel/Support.h"
+#include "../../lib/Transforms/Computation/Support.h"
 #include "NativeCases.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
@@ -13,15 +13,16 @@
 #include "llvm/ADT/STLExtras.h"
 
 namespace zkc::test {
-inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
+inline protocol_ir::ProtocolModuleOp
+computationRecipeOutput(mlir::ModuleOp module) {
   require(module->getAttrs().empty() &&
               llvm::hasSingleElement(*module.getBody()),
-          "Kernel recipe output must have one executable owner");
+          "computation recipe output must have one executable owner");
   auto owner =
       mlir::dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   require(owner && owner.getProfile() == protocol_ir::Profile::Exec &&
               owner.getBody().hasOneBlock(),
-          "Kernel recipe output must use the Exec profile");
+          "computation recipe output must use the Exec profile");
   unsigned entries = 0;
   for (auto &declaration : owner.getBody().front()) {
     if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(declaration)) {
@@ -30,9 +31,9 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
       entries += !function->hasAttr("runtime.region");
     } else
       require(mlir::isa<runtime::BindingOp>(declaration),
-              "Kernel recipe output retained a source declaration");
+              "computation recipe output retained a source declaration");
   }
-  require(entries == 1, "Kernel recipe output must have one scoped entry");
+  require(entries == 1, "computation recipe output must have one scoped entry");
   return owner;
 }
 
@@ -40,7 +41,7 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
 // owns pure standard functions and domains, including dormant mathematical
 // definitions and their premises. Scoped source callers are separate owners.
 inline mlir::OwningOpRef<mlir::ModuleOp>
-kernelRecipeUnit(mlir::Operation *sourceOwner) {
+computationRecipeUnit(mlir::Operation *sourceOwner) {
   mlir::OpBuilder builder(sourceOwner->getContext());
   mlir::OwningOpRef<mlir::ModuleOp> unit(
       mlir::ModuleOp::create(builder, sourceOwner->getLoc(), "numerical"));
@@ -60,41 +61,42 @@ kernelRecipeUnit(mlir::Operation *sourceOwner) {
 }
 
 inline mlir::OwningOpRef<mlir::ModuleOp>
-kernelRecipeSource(mlir::Operation *sourceOwner, llvm::StringRef helper,
-                   llvm::StringRef entryName) {
-  auto unit = kernelRecipeUnit(sourceOwner);
+computationRecipeSource(mlir::Operation *sourceOwner, llvm::StringRef helper,
+                        llvm::StringRef entryName) {
+  auto unit = computationRecipeUnit(sourceOwner);
   auto prototype = mlir::SymbolTable(*unit).lookup<mlir::func::FuncOp>(helper);
-  require(bool(prototype), "missing Kernel recipe helper");
+  require(bool(prototype), "missing computation recipe helper");
   require(!mlir::SymbolTable(*unit).lookup(entryName),
-          "Kernel recipe entry name collides with a dependency");
+          "computation recipe entry name collides with a dependency");
   mlir::OpBuilder builder(unit->getBody(), unit->getBody()->end());
   auto entry = mlir::cast<mlir::func::FuncOp>(builder.clone(*prototype));
   entry.setSymName(entryName);
   entry.setPublic();
   // Conditional callback fixtures retain their premises for isolated recipe
-  // checks. They do not exercise admission of an unconditional Kernel entry.
+  // checks. They do not exercise admission of an unconditional computation
+  // entry.
   return unit;
 }
 
 // Exercise recipe production directly, without normalizing away mutation
 // targets or debiting the optional callback work during test setup.
 inline mlir::OwningOpRef<mlir::ModuleOp>
-realizeKernelEntry(mlir::ModuleOp source, llvm::StringRef callSite,
-                   MathematicalSelectionPolicy policy,
-                   mathematical::RealizationWork &work,
-                   finite::VerificationLimits limits = {},
-                   mathematical::RealizationTrace *trace = nullptr) {
+realizeComputationEntry(mlir::ModuleOp source, llvm::StringRef callSite,
+                        MathematicalSelectionPolicy policy,
+                        mathematical::RealizationWork &work,
+                        finite::VerificationLimits limits = {},
+                        mathematical::RealizationTrace *trace = nullptr) {
   uint64_t remaining = 1000000, remainingBytes = 16 * 1024 * 1024;
-  return kernel::realizeEntry(source, callSite, policy, work, remaining,
-                              remainingBytes, limits, trace);
+  return computation::realizeEntry(source, callSite, policy, work, remaining,
+                                   remainingBytes, limits, trace);
 }
 
-inline std::string kernelRecipeSite(llvm::StringRef callSite,
-                                    unsigned ordinal) {
+inline std::string computationRecipeSite(llvm::StringRef callSite,
+                                         unsigned ordinal) {
   uint64_t remainingBytes = 16 * 1024 * 1024;
   auto site = protocol::algorithmSite({{callSite.str(), "kernel"}},
                                       std::to_string(ordinal), remainingBytes);
-  require(bool(site), "Kernel recipe site capacity exhausted");
+  require(bool(site), "computation recipe site capacity exhausted");
   return *site;
 }
 } // namespace zkc::test

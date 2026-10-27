@@ -1,6 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/ScopedFinite.h"
 #include "llvm/ADT/DenseMap.h"
 #include <variant>
@@ -77,12 +77,12 @@ int main() {
                                             &context);
   require(bool(source), "power fixture failed native formation");
   auto numerical =
-      kernelRecipeSource(&source->getBody()->front(), "power", "entry");
+      computationRecipeSource(&source->getBody()->front(), "power", "entry");
   mathematical::RealizationWork work;
-  auto candidate = realizeKernelEntry(*numerical, "power", {}, work);
+  auto candidate = realizeComputationEntry(*numerical, "power", {}, work);
   require(bool(candidate), "power recipe failed");
   require(succeeded(verify(*candidate)), "executable circuit failed formation");
-  auto owner = kernelRecipeOutput(*candidate);
+  auto owner = computationRecipeOutput(*candidate);
   SymbolTable symbols(owner);
   auto function = symbols.lookup<func::FuncOp>("entry");
   require(bool(function), "power recipe lost its scoped entry");
@@ -110,9 +110,9 @@ int main() {
                 "oversized exponent accepted");
   });
   cases.run("independent recipe reader rejects a changed constant", [&] {
-    require(
-        succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "power")),
-        "independent recipe reader refused the produced circuit");
+    require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                      "power")),
+            "independent recipe reader refused the produced circuit");
     auto constant = scopedFinite::application(function, "index.constant");
     auto parameters = constant.getParametersAttr();
     OpBuilder builder(&context);
@@ -122,7 +122,8 @@ int main() {
     require(succeeded(verify(*candidate)), "changed constant lost formation");
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(kernel::verifyEntryRecipes(*numerical, *candidate, "power")),
+    require(failed(computation::verifyEntryRecipes(*numerical, *candidate,
+                                                   "power")),
             "independent recipe reader accepted a changed exponent");
     constant.setParametersAttr(parameters);
   });

@@ -1,5 +1,5 @@
-#include "../lib/Transforms/Kernel/FrontierVerification.h"
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/FrontierVerification.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
@@ -84,7 +84,7 @@ SmallVector<Operation *> subtracts(func::FuncOp function) {
       result.push_back(&op);
   return result;
 }
-SmallVector<kernel::FrontierNormalizationOrigin>
+SmallVector<computation::FrontierNormalizationOrigin>
 origins(mlir::ModuleOp before) {
   // Explicit test evidence: the first two first-entry instructions and first
   // second-entry instruction stand for independently checked polynomial work.
@@ -97,8 +97,8 @@ origins(mlir::ModuleOp before) {
 }
 void accepts(mlir::ModuleOp before, mlir::ModuleOp after) {
   uint64_t remaining = 100000;
-  require(succeeded(kernel::verifyKernelFrontier(before, after, origins(before),
-                                                 remaining)),
+  require(succeeded(computation::verifyComputationFrontier(
+              before, after, origins(before), remaining)),
           "valid frontier rejected");
 }
 void forwardingReturns(mlir::ModuleOp module) {
@@ -146,15 +146,16 @@ void rejects(mlir::ModuleOp candidate,
   bool identifier = false;
   ScopedDiagnosticHandler handler(
       candidate.getContext(), [&](Diagnostic &diagnostic) {
-        identifier |= diagnostic.str().find("kernel-frontier-correspondence") !=
-                      std::string::npos;
+        identifier |=
+            diagnostic.str().find("computation-frontier-correspondence") !=
+            std::string::npos;
         return success();
       });
   require(failed(check()), "mutated frontier accepted");
   require(identifier, "frontier refusal lost diagnostic identifier");
 }
-kernel::KernelNormalizationRewrite rewrite(mlir::ModuleOp source,
-                                           mlir::ModuleOp candidate) {
+computation::ComputationNormalizationRewrite rewrite(mlir::ModuleOp source,
+                                                     mlir::ModuleOp candidate) {
   auto sourceCall = inner(source, "second");
   auto call = inner(candidate, "second");
   auto unit = cast<mlir::ModuleOp>(
@@ -208,14 +209,14 @@ int main() {
       require(succeeded(verify(function)), "CFG fixture is not valid SSA");
     return result;
   };
-  cases.run("normalization preserves full CFG and non-dominance block order",
-            [&] {
-              auto before = cfgFixture(), after = cfgFixture();
-              uint64_t remaining = 100000;
-              require(succeeded(kernel::verifyKernelNormalizationContext(
-                          *before, *after, {}, remaining)),
-                      "unchanged CFG context rejected");
-            });
+  cases.run(
+      "normalization preserves full CFG and non-dominance block order", [&] {
+        auto before = cfgFixture(), after = cfgFixture();
+        uint64_t remaining = 100000;
+        require(succeeded(computation::verifyComputationNormalizationContext(
+                    *before, *after, {}, remaining)),
+                "unchanged CFG context rejected");
+      });
   for (unsigned mutation = 0; mutation != 4; ++mutation)
     cases.run(
         "normalization refuses CFG mutation " + std::to_string(mutation), [&] {
@@ -241,8 +242,8 @@ int main() {
                     "CFG mutation must remain valid SSA");
           uint64_t remaining = 100000;
           rejects(*after, [&] {
-            return kernel::verifyKernelNormalizationContext(*before, *after, {},
-                                                            remaining);
+            return computation::verifyComputationNormalizationContext(
+                *before, *after, {}, remaining);
           });
         });
   for (StringRef name :
@@ -269,7 +270,7 @@ int main() {
           projection.addPass(protocol::createLowerMathPass(policy));
           require(succeeded(projection.run(*source)),
                   "scoped projection failed");
-          auto normalized = kernel::prepareKernelLowering(*source);
+          auto normalized = computation::prepareComputationRealization(*source);
           require(bool(normalized) && succeeded(verify(*normalized)),
                   "scoped shared frontier was refused");
           unsigned imports = 0, exports = 0;
@@ -290,11 +291,12 @@ int main() {
           require(imports && exports, "shared coefficients were recomputed");
           OwningOpRef<mlir::ModuleOp> lowered(
               cast<mlir::ModuleOp>(source->clone()));
-          require(succeeded(kernel::lowerKernels(*lowered, policy)) &&
-                      succeeded(verify(*lowered)),
-                  "scoped shared frontier realization failed");
-          require(succeeded(
-                      kernel::verifyKernelLowering(*source, *lowered, policy)),
+          require(
+              succeeded(computation::realizeComputations(*lowered, policy)) &&
+                  succeeded(verify(*lowered)),
+              "scoped shared frontier realization failed");
+          require(succeeded(computation::verifyComputationRealization(
+                      *source, *lowered, policy)),
                   "actual shared frontier candidate lost correspondence");
           protocol_ir::LocalCallOp consumer;
           lowered->walk([&](protocol_ir::LocalCallOp call) {
@@ -323,9 +325,9 @@ int main() {
                               std::string::npos;
                 return success();
               });
-          require(
-              failed(kernel::verifyKernelLowering(*source, *lowered, policy)),
-              "wrong actual coefficient import escaped correspondence");
+          require(failed(computation::verifyComputationRealization(
+                      *source, *lowered, policy)),
+                  "wrong actual coefficient import escaped correspondence");
           require(identifier, "coefficient import refusal lost its identifier");
         });
   cases.run("identity frontier", [&] {
@@ -351,8 +353,8 @@ int main() {
       else {
         uint64_t remaining = 100000;
         rejects(*after, [&] {
-          return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                              remaining);
+          return computation::verifyComputationFrontier(
+              *before, *after, origins(*before), remaining);
         });
       }
     });
@@ -457,35 +459,36 @@ int main() {
       else {
         uint64_t remaining = 100000;
         rejects(*after, [&] {
-          return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                              remaining);
+          return computation::verifyComputationFrontier(
+              *before, *after, origins(*before), remaining);
         });
       }
     });
-  auto packCase = [&](StringRef name, bool expected,
-                      llvm::function_ref<void(
-                          mlir::ModuleOp, mlir::ModuleOp,
-                          SmallVector<kernel::FrontierNormalizationOrigin> &)>
-                          mutate) {
-    cases.run(name, [&] {
-      auto before = fixture(context, "frontier-pack-before.mlir");
-      auto after = fixture(context, "frontier-pack-after.mlir");
-      auto first = entry(*before, "first_unit");
-      auto second = entry(*before, "second_unit");
-      SmallVector<kernel::FrontierNormalizationOrigin> evidence{
-          {first, {}}, {second, {&second.front().front()}}};
-      mutate(*before, *after, evidence);
-      uint64_t remaining = 100000;
-      auto check = [&] {
-        return kernel::verifyKernelFrontier(*before, *after, evidence,
-                                            remaining);
+  auto packCase =
+      [&](StringRef name, bool expected,
+          llvm::function_ref<void(
+              mlir::ModuleOp, mlir::ModuleOp,
+              SmallVector<computation::FrontierNormalizationOrigin> &)>
+              mutate) {
+        cases.run(name, [&] {
+          auto before = fixture(context, "frontier-pack-before.mlir");
+          auto after = fixture(context, "frontier-pack-after.mlir");
+          auto first = entry(*before, "first_unit");
+          auto second = entry(*before, "second_unit");
+          SmallVector<computation::FrontierNormalizationOrigin> evidence{
+              {first, {}}, {second, {&second.front().front()}}};
+          mutate(*before, *after, evidence);
+          uint64_t remaining = 100000;
+          auto check = [&] {
+            return computation::verifyComputationFrontier(*before, *after,
+                                                          evidence, remaining);
+          };
+          if (expected)
+            require(succeeded(check()), "exact packed coordinate rejected");
+          else
+            rejects(*after, check);
+        });
       };
-      if (expected)
-        require(succeeded(check()), "exact packed coordinate rejected");
-      else
-        rejects(*after, check);
-    });
-  };
   packCase("exact packed scalar crosses a numerical cut", true,
            [](auto, auto, auto &) {});
   packCase("packed scalar retains exact coordinate", false,
@@ -521,8 +524,8 @@ int main() {
       mutate(*after);
       uint64_t remaining = 100000;
       rejects(*after, [&] {
-        return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                            remaining);
+        return computation::verifyComputationFrontier(
+            *before, *after, origins(*before), remaining);
       });
     });
   };
@@ -645,7 +648,8 @@ int main() {
       origin.polynomialGenerated.clear();
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelFrontier(*before, *after, evidence, remaining);
+      return computation::verifyComputationFrontier(*before, *after, evidence,
+                                                    remaining);
     });
   });
   cases.run("sharing cannot use a later cut", [&] {
@@ -655,8 +659,8 @@ int main() {
       invocation(module, "second")->moveBefore(invocation(module, "first"));
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                          remaining);
+      return computation::verifyComputationFrontier(
+          *before, *after, origins(*before), remaining);
     });
   });
   cases.run("sharing cannot cross participant blocks", [&] {
@@ -676,8 +680,8 @@ int main() {
     }
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                          remaining);
+      return computation::verifyComputationFrontier(
+          *before, *after, origins(*before), remaining);
     });
   });
   cases.run("exhausted comparison budget", [&] {
@@ -685,8 +689,8 @@ int main() {
     auto after = fixture(context, "frontier-after.mlir");
     uint64_t remaining = 0;
     rejects(*after, [&] {
-      return kernel::verifyKernelFrontier(*before, *after, origins(*before),
-                                          remaining);
+      return computation::verifyComputationFrontier(
+          *before, *after, origins(*before), remaining);
     });
     require(remaining == 0, "comparison budget underflow");
   });
@@ -695,7 +699,7 @@ int main() {
     auto after = fixture(context, "frontier-before.mlir");
     auto record = rewrite(*before, *after);
     uint64_t remaining = 100000;
-    require(succeeded(kernel::verifyKernelNormalizationContext(
+    require(succeeded(computation::verifyComputationNormalizationContext(
                 *before, *after, {record}, remaining)),
             "checked normalization context rejected");
   });
@@ -707,8 +711,8 @@ int main() {
     changeGuard(function);
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelNormalizationContext(*before, *after, {record},
-                                                      remaining);
+      return computation::verifyComputationNormalizationContext(
+          *before, *after, {record}, remaining);
     });
   });
   cases.run("normalization retains original raw units", [&] {
@@ -719,8 +723,8 @@ int main() {
     function.front().front().setOperand(0, function.getArgument(1));
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelNormalizationContext(*before, *after, {record},
-                                                      remaining);
+      return computation::verifyComputationNormalizationContext(
+          *before, *after, {record}, remaining);
     });
   });
   cases.run("unrecorded normalization rewrite", [&] {
@@ -729,8 +733,8 @@ int main() {
     rewrite(*before, *after);
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelNormalizationContext(*before, *after, {},
-                                                      remaining);
+      return computation::verifyComputationNormalizationContext(*before, *after,
+                                                                {}, remaining);
     });
   });
   cases.run("normalization cannot change entry declaration attributes", [&] {
@@ -741,8 +745,8 @@ int main() {
         ->setAttr("changed_contract", UnitAttr::get(&context));
     uint64_t remaining = 100000;
     rejects(*after, [&] {
-      return kernel::verifyKernelNormalizationContext(*before, *after, {record},
-                                                      remaining);
+      return computation::verifyComputationNormalizationContext(
+          *before, *after, {record}, remaining);
     });
   });
   return cases.result();

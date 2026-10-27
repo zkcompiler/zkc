@@ -16,7 +16,7 @@ the [walkthrough](getting-started.md) compiles and runs a complete example.
 | Check implemented capabilities | [Status](status.md) |
 | Assess proofs and tests | [Assurance](assurance.md), [formal models](../lean/docs/README.md) |
 | Build, test or contribute | [Development](development/README.md), [tests](../common/tests/README.md) |
-| Understand adopted choices or future work | [Rationale](rationale/README.md), [roadmap](roadmap.md) |
+| Understand adopted choices or future work | [Rationale](rationale/README.md), [roadmap](roadmap.md), [IR ownership](compiler/ir-design.md) |
 
 ## Authority
 

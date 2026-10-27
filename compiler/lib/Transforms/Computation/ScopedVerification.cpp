@@ -11,7 +11,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 using Values = SmallVector<Value>;
 using mathematical::CandidatePorts;
@@ -149,9 +149,9 @@ class ScopedReader {
         finite::VerificationResult result{finite::VerificationStatus::Mismatch,
                                           {}};
         auto *begin = cursor;
-        auto outputs = verifyKernelRecipes(entry, candidate, compute.getSite(),
-                                           inputs, cursor, remaining, bytes,
-                                           *policy, limits, result);
+        auto outputs = verifyComputationRecipes(
+            entry, candidate, compute.getSite(), inputs, cursor, remaining,
+            bytes, *policy, limits, result);
         if (failed(outputs)) {
           outcome = mathematical::verificationDecision(result);
           outcome.invocation = mathematical::realizationSubject(compute);
@@ -325,4 +325,4 @@ verifyScopedNumericalContext(protocol_ir::ProtocolModuleOp original,
                       policy, work, outcome)
       .run();
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

@@ -151,7 +151,7 @@ binding allocation remain separate.
 Numerical realization chooses native contractions, compact pointwise expressions,
 bulk vector operations or a private standard SCF schedule before scoped CFG lowering.
 Retained pointwise maps and selected sums first use standard Tensor/Linalg
-computations with exact Algebra scalar regions. A separate reader checks the
+computations with exact Algebra scalar regions. The IR Analysis component independently reads the
 actual transformed packet and its source formula before the native handler
 adapter consumes that packet; final numerical readback remains independent.
 The native expression handlers borrow typed columns and scalar captures,
@@ -160,6 +160,8 @@ numerical scope. They share provider-packed slice arithmetic with dense vector
 kernels, without a new VM instruction or executable format. Compiler-generated
 writable-buffer layouts and target vector IR remain future work.
 Participant scheduling, transport and resource authority stay with their existing owners.
+The [IR ownership design](compiler/ir-design.md) explains current abstractions,
+standard MLIR use and the semantic boundaries reserved for future work.
 Installed numerical and effectful operations share the binding mechanism;
 installation alone does not authorize extraction into a numerical unit.
 

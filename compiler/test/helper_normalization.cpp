@@ -1,6 +1,6 @@
 #include "../lib/Target/PhysicalPlan.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/HelperNormalization.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -9,7 +9,7 @@
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -39,7 +39,7 @@ protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
 OwningOpRef<ModuleOp> copy(ModuleOp module) {
   return OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
 }
-void computation(ModuleOp module, StringRef helper, StringRef caller) {
+void computationFixture(ModuleOp module, StringRef helper, StringRef caller) {
   auto function = SymbolTable(unit(module)).lookup<func::FuncOp>(helper);
   require(bool(function), "missing computation helper");
   sc::computation(function, caller);
@@ -252,7 +252,7 @@ int main() {
   cases.run("outer correspondence checks the full realized tuple", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
     require(bool(source), "ordinary nested program refused");
-    computation(*source, "nested", "tuple");
+    computationFixture(*source, "nested", "tuple");
     auto logical = prepare(*source);
     auto candidate = select(*logical);
     auto returned = sc::returned(sf::function(*candidate, "tuple"));
@@ -266,11 +266,11 @@ int main() {
   cases.run("raw dependency bodies are frozen with their scoped caller", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
     require(bool(source), "raw closure source refused");
-    computation(*source, "nested", "tuple");
+    computationFixture(*source, "nested", "tuple");
     auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("nested");
     uint64_t remaining = 1000000;
-    auto closure = kernel::closeComputation(helper, remaining);
-    require(bool(closure) && succeeded(kernel::verifyKernelClosure(
+    auto closure = computation::closeComputation(helper, remaining);
+    require(bool(closure) && succeeded(computation::verifyComputationClosure(
                                  unit(*source), helper, *closure)),
             "closing computation changed the original dependency bodies");
     auto dependency = SymbolTable(*closure).lookup<func::FuncOp>("difference");
@@ -281,9 +281,9 @@ int main() {
             "same-typed dependency mutation lost formation");
     ScopedDiagnosticHandler expected(&context,
                                      [](Diagnostic &) { return success(); });
-    require(
-        failed(kernel::verifyKernelClosure(unit(*source), helper, *closure)),
-        "closure comparison ignored a changed dependency");
+    require(failed(computation::verifyComputationClosure(unit(*source), helper,
+                                                         *closure)),
+            "closure comparison ignored a changed dependency");
     auto candidate = copy(*source);
     auto changed =
         SymbolTable(unit(*candidate)).lookup<func::FuncOp>("difference");
@@ -336,7 +336,7 @@ int main() {
  )"),
                                                   &context);
         require(bool(source), "ordinary mixed helper refused");
-        computation(*source, "mixed", "mixed_exec");
+        computationFixture(*source, "mixed", "mixed_exec");
         auto logical = prepare(*source);
         auto candidate = select(*logical);
         auto function = sf::function(*candidate, "mixed_exec");
@@ -410,8 +410,8 @@ int main() {
         auto source =
             parseSourceString<ModuleOp>(insert(base, polynomials), &context);
         require(bool(source), "ordinary polynomial family refused");
-        computation(*source, "tables", "tables_exec");
-        computation(*source, "sum", "sum_exec");
+        computationFixture(*source, "tables", "tables_exec");
+        computationFixture(*source, "sum", "sum_exec");
         auto logical = prepare(*source);
         unsigned rawPolynomialOperations = 0;
         logical->walk([&](Operation *operation) {
@@ -493,8 +493,8 @@ int main() {
         auto source =
             parseSourceString<ModuleOp>(insert(base, declarations), &context);
         require(bool(source), "ordinary shared helper program refused");
-        computation(*source, "many", "one");
-        computation(*source, "many", "two");
+        computationFixture(*source, "many", "one");
+        computationFixture(*source, "many", "two");
         auto logical = prepare(*source);
         auto selected = select(*logical);
         require(sf::function(*selected, "one") &&
@@ -544,7 +544,8 @@ int main() {
                   pipeline.addPass(
                       protocol::createProjectProtocolPass(false, policy));
                   pipeline.addPass(protocol::createLowerMathPass(policy));
-                  pipeline.addPass(kernel::createLowerKernelsPass());
+                  pipeline.addPass(
+                      computation::createRealizeComputationsPass());
                   require(succeeded(pipeline.run(*source)),
                           "finite helper realization failed");
                 });

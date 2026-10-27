@@ -1,5 +1,5 @@
+#include "Computation/Support.h"
 #include "FiniteVerification.h"
-#include "Kernel/Support.h"
 #include "ScopedCandidate.h"
 #include "ScopedCollectionSum.h"
 #include "mlir/IR/OperationSupport.h"
@@ -530,8 +530,8 @@ LogicalResult verifyScopedFinitePreparation(
       !hasSingleElement(*source.getBody()) ||
       !hasSingleElement(*candidate.getBody()) ||
       source->getAttrDictionary() != candidate->getAttrDictionary() ||
-      !kernel::chargeCopy(source, work.numericalContextChecking) ||
-      !kernel::chargeCopy(candidate, work.numericalContextChecking))
+      !computation::chargeCopy(source, work.numericalContextChecking) ||
+      !computation::chargeCopy(candidate, work.numericalContextChecking))
     return failure();
   auto before =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());

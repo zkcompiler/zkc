@@ -11,11 +11,11 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 LogicalResult refuse(Operation *op, StringRef reason) {
-  return diagnostics::emit(op->emitOpError(), "kernel-frontier-correspondence",
-                           reason);
+  return diagnostics::emit(op->emitOpError(),
+                           "computation-frontier-correspondence", reason);
 }
 bool charge(Operation *op, uint64_t &remaining) {
   uint64_t cost = 1 + op->getNumOperands() + op->getNumResults() +
@@ -638,16 +638,17 @@ public:
 };
 } // namespace
 
-LogicalResult verifyKernelFrontier(
+LogicalResult verifyComputationFrontier(
     mlir::ModuleOp normalizedBefore, mlir::ModuleOp actualAfter,
     ArrayRef<FrontierNormalizationOrigin> checkedOrigins, uint64_t &remaining) {
   return FrontierReader(normalizedBefore, actualAfter, remaining)
       .run(checkedOrigins);
 }
 
-LogicalResult verifyKernelNormalizationContext(
+LogicalResult verifyComputationNormalizationContext(
     mlir::ModuleOp source, mlir::ModuleOp normalized,
-    ArrayRef<KernelNormalizationRewrite> checkedRewrites, uint64_t &remaining) {
+    ArrayRef<ComputationNormalizationRewrite> checkedRewrites,
+    uint64_t &remaining) {
   ContextReader context(remaining);
   llvm::DenseSet<Operation *> targets;
   if (!hasSingleElement(*source.getBody()) ||
@@ -702,4 +703,4 @@ LogicalResult verifyKernelNormalizationContext(
                     "normalization rewrote a different ordered call");
   return success();
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

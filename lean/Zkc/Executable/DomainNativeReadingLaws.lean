@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Executable.DomainCpuOperationSoundness
+public import Zkc.Executable.DomainNativeOperationSoundness
 
 @[expose] public section
 set_option autoImplicit false

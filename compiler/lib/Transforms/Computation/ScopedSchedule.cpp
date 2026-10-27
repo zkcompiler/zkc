@@ -9,7 +9,7 @@
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::kernel {
+namespace zkc::computation {
 namespace {
 using Values = SmallVector<Value>;
 using mathematical::ScopedCandidate;
@@ -218,4 +218,4 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
   }
   return finish(true);
 }
-} // namespace zkc::kernel
+} // namespace zkc::computation

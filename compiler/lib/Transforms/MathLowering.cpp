@@ -1,5 +1,6 @@
+#include "Computation/Support.h"
 #include "HelperNormalization.h"
-#include "Kernel/Support.h"
+#include "MathematicalPassOptions.h"
 #include "MathematicalSupport.h"
 #include "RealizationTrace.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -51,7 +52,7 @@ class Outliner {
   SmallVector<Attribute> calculations;
   struct Calculation {
     func::FuncOp function;
-    std::optional<kernel::CalculationGuard> guard;
+    std::optional<computation::CalculationGuard> guard;
   };
   SmallVector<Calculation> formed;
   uint64_t remaining = 1000000;
@@ -91,12 +92,12 @@ class Outliner {
         auto value = pending.pop_back_val();
         if (!remaining--)
           return diagnostics::emit(participant.emitError(),
-                                   "kernel-frontier-limit");
+                                   "computation-frontier-limit");
         bool formal = mathematical::isFormalType(value.getType());
         if (!formal && realized.contains(value)) {
           if (!computed.contains(value))
             return diagnostics::emit(
-                participant.emitError(), "kernel-frontier",
+                participant.emitError(), "computation-frontier",
                 "an earlier concrete coordinate was not exported");
           continue;
         }
@@ -140,7 +141,8 @@ class Outliner {
           if (&op == cut)
             break;
           if (!remaining--)
-            return diagnostics::emit(cut->emitError(), "kernel-frontier-limit");
+            return diagnostics::emit(cut->emitError(),
+                                     "computation-frontier-limit");
           if (demanded.contains(&op))
             for (auto value : op.getResults())
               if (!mathematical::isFormalType(value.getType()) &&
@@ -180,7 +182,7 @@ class Outliner {
             for (auto *user : current.getUsers()) {
               if (!remaining--)
                 return diagnostics::emit(cut->emitError(),
-                                         "kernel-frontier-limit");
+                                         "computation-frontier-limit");
               if (!needed.contains(user) && (!guard || user != cut))
                 escapes = true;
               for (auto result : user->getResults())
@@ -222,9 +224,9 @@ class Outliner {
       for (auto value : results)
         returned.push_back(mapping.lookup(value));
       func::ReturnOp::create(builder, cut->getLoc(), returned);
-      std::optional<kernel::CalculationGuard> condition;
+      std::optional<computation::CalculationGuard> condition;
       if (guard)
-        condition = kernel::CalculationGuard{
+        condition = computation::CalculationGuard{
             mapping.lookup(guard.getCondition()), guard.getSiteAttr()};
       formed.push_back({function, condition});
       std::string site;
@@ -327,43 +329,25 @@ public:
       call.erase();
     }
     for (auto &calculation : formed)
-      if (failed(kernel::formCalculation(calculation.function, unit, policy,
-                                         calculation.guard)))
+      if (failed(computation::formCalculation(calculation.function, unit,
+                                              policy, calculation.guard)))
         return failure();
     return success();
   }
 };
 struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerMathPass)
+  MathematicalPassOptions selection{*this};
   LowerMathPass() = default;
   RealizationTrace *observer = nullptr;
   explicit LowerMathPass(MathematicalSelectionPolicy policy,
                          RealizationTrace *trace)
       : observer(trace) {
-    optimizeFinite = policy.finiteBulk;
-    fuseVectorReductions = policy.vectorReductionFusion;
-    fuseCollectFold = policy.collectFoldFusion;
-    calculationBatching = policy.calculationBatching;
+    selection.set(policy);
   }
   LowerMathPass(const LowerMathPass &other)
-      : PassWrapper(other), observer(other.observer) {}
-  Option<bool> optimizeFinite{
-      *this, "optimize-finite",
-      llvm::cl::desc("Recognize checked native finite realizations"),
-      llvm::cl::init(true)};
-  Option<bool> fuseVectorReductions{
-      *this, "fuse-vector-reductions",
-      llvm::cl::desc("Select admitted vector reduction fusion"),
-      llvm::cl::init(false)};
-  Option<bool> fuseCollectFold{
-      *this, "fuse-collect-fold",
-      llvm::cl::desc("Compose total collect and ordered fold traversals"),
-      llvm::cl::init(false)};
-  Option<bool> calculationBatching{
-      *this, "calculation-batching",
-      llvm::cl::desc("Compute each calculation at its first demand; otherwise "
-                     "before the first action that follows it"),
-      llvm::cl::init(true)};
+      : PassWrapper(other), selection(*this, other.selection.get()),
+        observer(other.observer) {}
   Option<bool> traceMathematics{
       *this, "trace-mathematics",
       llvm::cl::desc("Report mathematical decisions and stages"),
@@ -390,8 +374,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                       ? observer
                       : (traceMathematics || dumpMathematics ? &diagnosticTrace
                                                              : nullptr);
-    MathematicalSelectionPolicy policy{optimizeFinite, fuseVectorReductions,
-                                       fuseCollectFold, calculationBatching};
+    auto policy = selection.get();
     RealizationScope scope(trace, "lower-math", source, policy);
     if (trace && trace->ir) {
       *trace->ir << "// Before mathematical demand lowering\n";
@@ -416,7 +399,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
     OutlineSymbols symbols(unit);
-    if (failed(Outliner(unit, symbols, calculationBatching).run(policy)))
+    if (failed(Outliner(unit, symbols, policy.calculationBatching).run(policy)))
       return signalPassFailure();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(verify(*candidate)) ||

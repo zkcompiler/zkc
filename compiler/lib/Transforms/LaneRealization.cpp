@@ -4,8 +4,10 @@
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/RingSharing.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Transforms/StructuredComputation.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 
@@ -326,10 +328,108 @@ emitVectorLanes(const LaneFormula &admitted, Type vector, Value length,
     return invalid("broadcast returned no value");
   return LaneRealizationResult{LaneRealizationStatus::Realized, value, {}};
 }
+namespace {
+/// Close the admitted source slice with its complete ordered input inventory.
+/// This is producer work: final numerical readback still compares the emitted
+/// payload against the original computation, independently of this closure.
+OwningOpRef<func::FuncOp> closeLaneFormula(const LaneFormula &formula,
+                                           algebra::FieldType field) {
+  if (!formula.source || !formula.source->getParentOp())
+    return {};
+  auto *context = field.getContext();
+  context->getOrLoadDialect<func::FuncDialect>();
+  OpBuilder builder(context);
+  auto location = formula.source->getParentOp()->getLoc();
+  SmallVector<Type> inputs(formula.slots.size(), field);
+  OwningOpRef<func::FuncOp> scalar(func::FuncOp::create(
+      location, "formula", builder.getFunctionType(inputs, {field})));
+  auto *body = scalar->addEntryBlock();
+  builder.setInsertionPointToEnd(body);
+  llvm::DenseMap<Value, Value> values;
+  unsigned next = 0;
+  auto bind = [&](Value value) {
+    if (!formula.bindings.contains(value))
+      return true;
+    if (next >= body->getNumArguments())
+      return false;
+    const auto &expected = formula.slots[next];
+    const auto &actual = formula.bindings.find(value)->second;
+    if (expected.value != actual.value || expected.lanes != actual.lanes)
+      return false;
+    values[value] = body->getArgument(next++);
+    return true;
+  };
+  for (Value value : formula.source->getArguments())
+    if (value.getType() == field && !bind(value))
+      return {};
+  for (Operation &op : formula.source->without_terminator()) {
+    if (op.getNumResults() != 1)
+      return {};
+    Value result = op.getResult(0);
+    if (formula.bindings.contains(result)) {
+      if (!bind(result))
+        return {};
+      continue;
+    }
+    if (!formula.live.contains(result))
+      continue;
+    if (auto literal = finite::fieldConstant(&op)) {
+      values[result] =
+          algebra::ConstantFieldOp::create(builder, location, field, *literal);
+      continue;
+    }
+    auto *meaning = finite::semantics(&op);
+    if (!meaning || op.getNumOperands() != 2)
+      return {};
+    auto left = values.lookup(op.getOperand(0)),
+         right = values.lookup(op.getOperand(1));
+    if (!left || !right)
+      return {};
+    switch (meaning->identity) {
+    case MathematicalIdentity::FieldAdd:
+      values[result] =
+          algebra::FieldAddOp::create(builder, location, field, left, right);
+      break;
+    case MathematicalIdentity::FieldSubtract:
+      values[result] = algebra::SubtractFieldOp::create(builder, location,
+                                                        field, left, right);
+      break;
+    case MathematicalIdentity::FieldMultiply:
+      values[result] = algebra::FieldMultiplyOp::create(builder, location,
+                                                        field, left, right);
+      break;
+    default:
+      return {};
+    }
+  }
+  if (next != formula.slots.size() || formula.terms.empty())
+    return {};
+  Value returned = values.lookup(formula.terms.front());
+  if (!returned)
+    return {};
+  for (Value term : drop_begin(formula.terms)) {
+    Value nextTerm = values.lookup(term);
+    if (!nextTerm)
+      return {};
+    if (formula.combine == MathematicalIdentity::FieldAdd)
+      returned = algebra::FieldAddOp::create(builder, location, field, returned,
+                                             nextTerm);
+    else if (formula.combine == MathematicalIdentity::FieldMultiply)
+      returned = algebra::FieldMultiplyOp::create(builder, location, field,
+                                                  returned, nextTerm);
+    else
+      return {};
+  }
+  func::ReturnOp::create(builder, location, returned);
+  return scalar;
+}
+} // namespace
+
 Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
                                                    Type vector, Value rows,
                                                    LaneResultMode mode,
-                                                   NumericalEmitter emit) {
+                                                   NumericalEmitter emit,
+                                                   uint64_t *remaining) {
   auto unsupported = [] {
     return LaneRealizationResult{
         LaneRealizationStatus::Unsupported,
@@ -369,6 +469,60 @@ Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
   std::string body = zkc::printJson(formula.expression.encode());
   if (body.size() > protocol::NumericalLimits::bodyBytes)
     return capacity("numerical-body-limit");
+  // A row-bearing pointwise formula uses the standard tensor profile. A
+  // product retains its native aggregate contract but optimizes its map here;
+  // the selected sum additionally exposes its reduction to upstream fusion.
+  // Row-free fills have no tensor extent witness and keep their exact scalar
+  // payload. They are a different profile, not a fallback after failed checks.
+  if (llvm::any_of(formula.slots,
+                   [](const LaneInput &slot) { return slot.lanes; })) {
+    if (!formula.source)
+      return zkc::error("mathematical-lane-realization",
+                        "missing scalar source");
+    uint64_t slots = formula.source->getNumArguments() + formula.terms.size();
+    for (Operation &op : *formula.source)
+      slots += 1 + op.getNumOperands() + op.getNumResults();
+    // Covers closing, two generic regions, fusion and actual-body readback.
+    // The packet reader separately bounds its nesting and operation inventory.
+    uint64_t cost = 16 * slots;
+    if (remaining && cost > *remaining) {
+      auto outcome =
+          OptimizationOutcome::exhausted(WorkOwner::Lanes, cost, *remaining);
+      *remaining = 0;
+      return LaneRealizationResult{LaneRealizationStatus::Capacity,
+                                   {},
+                                   "mathematical-structured-work",
+                                   outcome};
+    }
+    if (remaining)
+      *remaining -= cost;
+    auto scalar = closeLaneFormula(formula, field);
+    if (!scalar)
+      return zkc::error("mathematical-lane-realization",
+                        "scalar closure differs");
+    SmallVector<bool> rowwise;
+    for (const auto &slot : formula.slots)
+      rowwise.push_back(slot.lanes);
+    auto result = mode == LaneResultMode::Sum ? StructuredResult::Sum
+                                              : StructuredResult::Map;
+    auto candidate =
+        proposeStructuredComputation(scalar->front(), rowwise, result);
+    if (!candidate || failed(optimizeStructuredComputation(*candidate)))
+      return zkc::error("mathematical-lane-realization",
+                        "structured proposal failed");
+    auto actual = consumeStructuredComputation(scalar->front(), rowwise, result,
+                                               *candidate);
+    if (!actual)
+      return zkc::error("mathematical-lane-realization",
+                        "structured correspondence failed");
+    auto interpreted = algebra::describeRingExpression(
+        actual->front(), actual->front().back().getOperands());
+    if (!interpreted)
+      return interpreted.takeError();
+    body = zkc::printJson(interpreted->encode());
+    if (body.size() > protocol::NumericalLimits::bodyBytes)
+      return capacity("numerical-body-limit");
+  }
   StringRef contract = mode == LaneResultMode::Map   ? "numerical.map"
                        : mode == LaneResultMode::Sum ? "numerical.sum"
                                                      : "numerical.product";

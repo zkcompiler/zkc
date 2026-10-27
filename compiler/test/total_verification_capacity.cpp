@@ -1,9 +1,9 @@
-#include "../lib/Transforms/Kernel/Support.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -40,7 +40,7 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   auto source = parseSourceString<ModuleOp>(
       fixture("../structured-source/realization-finite.mlir"), &context);
   require(bool(source) && succeeded(verify(*source)), "sum source refused");
-  auto numerical = kernelRecipeSource(unit(*source), "sum", "calculation");
+  auto numerical = computationRecipeSource(unit(*source), "sum", "calculation");
   auto original = copy(*source);
   OwningOpRef<mlir::ModuleOp> before(cast<mlir::ModuleOp>(numerical->clone()));
   constexpr uint64_t copyLimit = 1000000;
@@ -52,13 +52,13 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   mathematical::RealizationWork orderedWork, bulkWork;
   uint64_t orderedRemaining = copyLimit, orderedBytes = siteLimit;
   auto ordered =
-      kernel::realizeEntry(*numerical, "x", {false, false}, orderedWork,
-                           orderedRemaining, orderedBytes, {100000, 1});
+      computation::realizeEntry(*numerical, "x", {false, false}, orderedWork,
+                                orderedRemaining, orderedBytes, {100000, 1});
   require(bool(ordered), "ordered sum baseline refused");
   const uint64_t siteCost = siteLimit - orderedBytes;
   uint64_t bulkRemaining = copyLimit, bulkBytes = siteLimit;
-  auto bulk = kernel::realizeEntry(*numerical, "x", {}, bulkWork, bulkRemaining,
-                                   bulkBytes);
+  auto bulk = computation::realizeEntry(*numerical, "x", {}, bulkWork,
+                                        bulkRemaining, bulkBytes);
   require(bool(bulk) && !same(*ordered, *bulk),
           "optional baseline did not select a distinct payload");
   const uint64_t bulkSiteCost = siteLimit - bulkBytes;
@@ -82,8 +82,9 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
     return success();
   });
   mathematical::RealizationTrace trace;
-  auto candidate = kernel::realizeEntry(*numerical, "x", {}, work, remaining,
-                                        remainingBytes, {100000, 1}, &trace);
+  auto candidate =
+      computation::realizeEntry(*numerical, "x", {}, work, remaining,
+                                remainingBytes, {100000, 1}, &trace);
   require(trace.policy.finiteBulk && trace.activeScopes.empty() &&
               trace.remainingWork.discardedRecipeCopy ==
                   work.discardedRecipeCopy &&
@@ -108,12 +109,12 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
     return;
   }
   require(bool(candidate), "sum fallback exhausted its construction reserve");
-  kernelRecipeOutput(*candidate);
-  require(
-      diagnostics.empty() && same(*candidate, *ordered) &&
-          succeeded(kernel::verifyRecipeOutput(*candidate)) &&
-          succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "x")),
-      "sum fallback diagnosed a discarded proposal or lost correspondence");
+  computationRecipeOutput(*candidate);
+  require(diagnostics.empty() && same(*candidate, *ordered) &&
+              succeeded(computation::verifyRecipeOutput(*candidate)) &&
+              succeeded(
+                  computation::verifyEntryRecipes(*numerical, *candidate, "x")),
+          "sum fallback diagnosed a discarded proposal or lost correspondence");
   require(remaining == initialCopy - copyCost &&
               remainingBytes == initialBytes - siteCost &&
               work.helperOperations == orderedWork.helperOperations &&
@@ -175,13 +176,13 @@ int main() {
             fixture("../structured-source/realization-finite.mlir"), &context);
         require(bool(source), "sum source refused");
         auto numerical =
-            kernelRecipeSource(unit(*source), "sum", "calculation");
+            computationRecipeSource(unit(*source), "sum", "calculation");
         mathematical::RealizationWork work, orderedWork;
         work.discardedRecipeExpansion = 0;
         auto candidate =
-            realizeKernelEntry(*numerical, "x", {}, work, {100000, 1});
-        auto ordered =
-            realizeKernelEntry(*numerical, "x", {false, false}, orderedWork);
+            realizeComputationEntry(*numerical, "x", {}, work, {100000, 1});
+        auto ordered = realizeComputationEntry(*numerical, "x", {false, false},
+                                               orderedWork);
         require(candidate && ordered && same(*candidate, *ordered) &&
                     work.helperOperations == orderedWork.helperOperations &&
                     work.helperSlots == orderedWork.helperSlots &&
@@ -193,7 +194,8 @@ int main() {
     auto source = parseSourceString<ModuleOp>(
         fixture("../structured-source/realization-finite.mlir"), &context);
     require(bool(source), "sum source refused");
-    auto numerical = kernelRecipeSource(unit(*source), "sum", "calculation");
+    auto numerical =
+        computationRecipeSource(unit(*source), "sum", "calculation");
     auto original = copy(*source);
     OwningOpRef<mlir::ModuleOp> before(
         cast<mlir::ModuleOp>(numerical->clone()));
@@ -201,14 +203,14 @@ int main() {
     constexpr uint64_t siteLimit = 16 * 1024 * 1024;
     uint64_t baselineCopy = 1000000, baselineBytes = siteLimit;
     auto ordered =
-        kernel::realizeEntry(*numerical, "x", {false, false}, orderedWork,
-                             baselineCopy, baselineBytes);
+        computation::realizeEntry(*numerical, "x", {false, false}, orderedWork,
+                                  baselineCopy, baselineBytes);
     require(bool(ordered), "ordered site baseline refused");
     auto siteCost = siteLimit - baselineBytes;
     baselineCopy = 1000000;
     baselineBytes = siteLimit;
-    auto bulk = kernel::realizeEntry(*numerical, "x", {}, bulkWork,
-                                     baselineCopy, baselineBytes);
+    auto bulk = computation::realizeEntry(*numerical, "x", {}, bulkWork,
+                                          baselineCopy, baselineBytes);
     require(bool(bulk), "optional site baseline refused");
     auto bulkSiteCost = siteLimit - baselineBytes;
     uint64_t remaining = 1000000, remainingBytes = 2 * siteCost;
@@ -220,7 +222,7 @@ int main() {
     });
     for (unsigned call = 0; call != 2; ++call) {
       const auto beforeWork = work;
-      auto candidate = kernel::realizeEntry(
+      auto candidate = computation::realizeEntry(
           *numerical, "x", {}, work, remaining, remainingBytes, {100000, 1});
       require(bool(candidate), "shared construction reserve refused sum");
       require(remainingBytes == siteCost * (1 - call) &&
@@ -251,25 +253,25 @@ int main() {
           }
           require(succeeded(verify(*source)), "total source refused");
           auto numerical =
-              kernelRecipeSource(unit(*source), "total", "calculation");
+              computationRecipeSource(unit(*source), "total", "calculation");
           auto original = copy(*source);
           OwningOpRef<mlir::ModuleOp> before(
               cast<mlir::ModuleOp>(numerical->clone()));
           mathematical::RealizationWork work, orderedWork, bulkWork;
           const auto initialWork = work;
           auto bulk =
-              realizeKernelEntry(*numerical, "calculation", {}, bulkWork);
+              realizeComputationEntry(*numerical, "calculation", {}, bulkWork);
           require(bool(bulk), "ordinary bulk path refused");
-          kernelRecipeOutput(*bulk);
+          computationRecipeOutput(*bulk);
           require(bulkWork.discardedRecipeCopy ==
                           initialWork.discardedRecipeCopy &&
                       bulkWork.discardedRecipeSiteBytes ==
                           initialWork.discardedRecipeSiteBytes,
                   "selected bulk construction spent the discard reserve");
-          auto ordered = realizeKernelEntry(*numerical, "calculation",
-                                            {false, false}, orderedWork);
+          auto ordered = realizeComputationEntry(*numerical, "calculation",
+                                                 {false, false}, orderedWork);
           require(bool(ordered), "ordered total path refused");
-          kernelRecipeOutput(*ordered);
+          computationRecipeOutput(*ordered);
           require(!same(*bulk, *ordered),
                   "fixture did not select optional bulk work");
           unsigned diagnostics = 0;
@@ -277,21 +279,21 @@ int main() {
             ++diagnostics;
             return success();
           });
-          auto candidate = realizeKernelEntry(*numerical, "calculation", {},
-                                              work, {100000, 1});
+          auto candidate = realizeComputationEntry(*numerical, "calculation",
+                                                   {}, work, {100000, 1});
           require(bool(candidate),
                   "optional total comparison exhaustion refused");
-          kernelRecipeOutput(*candidate);
+          computationRecipeOutput(*candidate);
           require(
               !diagnostics && same(*candidate, *ordered) &&
-                  succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+                  succeeded(computation::verifyRecipeOutput(*candidate)) &&
                   same(*source, *original) &&
                   OperationEquivalence::isEquivalentTo(
                       *numerical, *before,
                       OperationEquivalence::IgnoreLocations),
               "retry diagnosed a discarded proposal or changed source/output");
-          require(succeeded(kernel::verifyEntryRecipes(*numerical, *candidate,
-                                                       "calculation")),
+          require(succeeded(computation::verifyEntryRecipes(
+                      *numerical, *candidate, "calculation")),
                   "fallback lost original helper correspondence");
           require(work.helperOperations == orderedWork.helperOperations &&
                       work.helperSlots == orderedWork.helperSlots,
@@ -303,7 +305,8 @@ int main() {
   cases.run("required total reader exhaustion refuses atomically", [&] {
     auto source = parseSourceString<ModuleOp>(fixture(), &context);
     require(bool(source), "total source refused");
-    auto numerical = kernelRecipeSource(unit(*source), "total", "calculation");
+    auto numerical =
+        computationRecipeSource(unit(*source), "total", "calculation");
     auto original = copy(*source);
     OwningOpRef<mlir::ModuleOp> before(
         cast<mlir::ModuleOp>(numerical->clone()));
@@ -314,8 +317,8 @@ int main() {
     });
     mathematical::RealizationWork work;
     const auto initialWork = work;
-    auto candidate =
-        realizeKernelEntry(*numerical, "calculation", {}, work, {0, 100000});
+    auto candidate = realizeComputationEntry(*numerical, "calculation", {},
+                                             work, {0, 100000});
     require(!candidate && same(*source, *original) &&
                 OperationEquivalence::isEquivalentTo(
                     *numerical, *before, OperationEquivalence::IgnoreLocations),

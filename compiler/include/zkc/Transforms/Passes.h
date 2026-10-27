@@ -17,6 +17,9 @@ struct RealizationTrace;
 }
 struct LinearContractionStats;
 namespace protocol {
+/// Trace/statistics observers passed to these factories are borrowed for
+/// synchronous invocation. A caller that schedules concurrent copies must use
+/// separate observers; they are not pass-managed analyses.
 /// Admit source mathematics, realize polynomial recipes, expand protocol
 /// applications and prepare participant mathematics, with optional folding.
 /// Retain scoped definitions and finite requests for executable selection.
@@ -29,7 +32,7 @@ createPrepareProtocolPass(bool simplify = true,
 std::unique_ptr<mlir::Pass>
 createProjectProtocolPass(bool simplify = true,
                           MathematicalSelectionPolicy policy = {});
-/// Form demanded participant mathematics as logical Kernel units in Exec.
+/// Form demanded participant mathematics as closed computation units in Exec.
 std::unique_ptr<mlir::Pass>
 createLowerMathPass(MathematicalSelectionPolicy policy = {},
                     mathematical::RealizationTrace *trace = nullptr);
@@ -48,13 +51,13 @@ std::unique_ptr<mlir::Pass> createSelectPhysicalPass(
     MathematicalSelectionPolicy numericalPolicy = {},
     const target::CpuTarget &cpuTarget = {});
 } // namespace protocol
-namespace kernel {
+namespace computation {
 /// Realize logical numerical units into scoped Func/CF execution before
 /// physical planning. This is a separate independently checked Exec edge.
 std::unique_ptr<mlir::Pass>
-createLowerKernelsPass(MathematicalSelectionPolicy policy = {},
-                       mathematical::RealizationTrace *trace = nullptr);
-} // namespace kernel
+createRealizeComputationsPass(MathematicalSelectionPolicy policy = {},
+                              mathematical::RealizationTrace *trace = nullptr);
+} // namespace computation
 namespace relation {
 /// Remove only exact duplicate normalized rows; preserve witness/public layout
 /// and relation families.

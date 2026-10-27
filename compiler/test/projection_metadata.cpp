@@ -7,7 +7,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Execution.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Transforms/Computation.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Protocol.h"
@@ -156,7 +156,7 @@ void profileEdges(MLIRContext &context) {
   run(*participant, protocol::createProjectProtocolPass());
   auto executable = copy(*participant);
   run(*executable, protocol::createLowerMathPass());
-  run(*executable, kernel::createLowerKernelsPass());
+  run(*executable, computation::createRealizeComputationsPass());
   auto physical = copy(*executable);
   run(*physical, protocol::createSelectPhysicalPass());
   for (auto module : {participant.get(), executable.get(), physical.get()})
@@ -201,7 +201,7 @@ void suppliedMaterialization(MLIRContext &context) {
                      .begin();
   record.erase();
   require(succeeded(verify(*source)), "supplied executable is not well formed");
-  run(*source, kernel::createLowerKernelsPass());
+  run(*source, computation::createRealizeComputationsPass());
   auto candidate = copy(*source);
   run(*candidate, protocol::createSelectPhysicalPass());
   require(
@@ -351,7 +351,7 @@ void scheduling(MLIRContext &context) {
   run(*repeated, protocol::createLowerMathPass());
   executableIdentity(*bound);
   auto realized = copy(*bound);
-  run(*realized, kernel::createLowerKernelsPass());
+  run(*realized, computation::createRealizeComputationsPass());
   auto identityPhysical = copy(*realized);
   run(*identityPhysical, protocol::createSelectPhysicalPass());
   executableIdentity(*identityPhysical);
@@ -437,7 +437,7 @@ void scheduling(MLIRContext &context) {
                                     [](Diagnostic &) { return success(); });
     require(failed(verify(*invalid)), "duplicate calculation origin admitted");
   }
-  run(*bound, kernel::createLowerKernelsPass());
+  run(*bound, computation::createRealizeComputationsPass());
   auto physical = copy(*bound);
   run(*physical, protocol::createSelectPhysicalPass({}, false, true));
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),
@@ -523,7 +523,7 @@ int main() {
     require(failed(verify(*invalid)),
             "module did not validate malformed metadata");
   }
-  run(*bound, kernel::createLowerKernelsPass());
+  run(*bound, computation::createRealizeComputationsPass());
   auto physical = copy(*bound);
   run(*physical, protocol::createSelectPhysicalPass());
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),

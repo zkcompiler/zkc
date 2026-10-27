@@ -6,7 +6,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "support/KernelRecipes.h"
+#include "support/ComputationRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
@@ -183,19 +183,19 @@ module { "protocol.module"() ({
 OwningOpRef<ModuleOp> emitFold(ModuleOp source,
                                MathematicalSelectionPolicy policy = {},
                                RealizationWork *available = nullptr) {
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   RealizationWork standalone;
-  auto result = realizeKernelEntry(*numerical, "numerical", policy,
-                                   available ? *available : standalone);
+  auto result = realizeComputationEntry(*numerical, "numerical", policy,
+                                        available ? *available : standalone);
   require(bool(result), "numerical fold realization failed");
-  require(succeeded(kernel::verifyRecipeOutput(*result)),
+  require(succeeded(computation::verifyRecipeOutput(*result)),
           "invalid native output");
   return result;
 }
 bool compareFold(ModuleOp source, ModuleOp candidate) {
-  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  auto numerical = computationRecipeSource(unit(source), "total", "selected");
   return succeeded(
-      kernel::verifyEntryRecipes(*numerical, candidate, "numerical"));
+      computation::verifyEntryRecipes(*numerical, candidate, "numerical"));
 }
 bool hasLoop(ModuleOp module) {
   bool result = false;
@@ -214,6 +214,57 @@ int main(int argc, char **argv) {
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (bool native : {false, true})
+    cases.run(
+        native ? "native preparation enters the standard tensor profile"
+               : "vector preparation stays outside the tensor profile",
+        [&] {
+          MLIRContext lazy(registry, MLIRContext::Threading::DISABLED);
+          auto source = parse(lazy, mapText);
+          require(!lazy.getLoadedDialect("tensor") &&
+                      !lazy.getLoadedDialect("linalg"),
+                  "source fixture already loaded the implementation dialects");
+          auto candidate =
+              prepareMap(*source, native ? NumericalExpressionMode::PreferNative
+                                         : NumericalExpressionMode::VectorOnly);
+          require(
+              bool(lazy.getLoadedDialect("tensor")) == native &&
+                  bool(lazy.getLoadedDialect("linalg")) == native,
+              "production preparation bypassed its selected implementation");
+          require(bool(operation(*candidate, "numerical.map")) == native &&
+                      succeeded(compareMap(*source, *candidate)),
+                  "selected execution failed independent comparison");
+        });
+  cases.run("structured work capacity declines before native emission", [&] {
+    auto text = replaceText(mapText, "%sq = func.call @square(%a) : (!F)->!F",
+                            "%sq = algebra.field_multiply %a,%a : (!F,!F)->!F");
+    auto source = parse(context, text);
+    auto candidate = prepareMap(*source);
+    auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("formula");
+    auto mapped = SymbolTable(unit(*candidate)).lookup<func::FuncOp>("work");
+    llvm::DenseMap<Value, LaneInput> inputs;
+    for (auto [i, argument] : enumerate(helper.getArguments()))
+      inputs[argument] = {mapped.getArgument(i + 1), i < 3};
+    auto admitted = take(admitLaneFormula(helper.front(), inputs,
+                                          mapped.getArgument(1).getType(),
+                                          nullptr, mathematicalRecipes()));
+    require(bool(admitted.formula), "formula admission failed");
+    uint64_t remaining = 0;
+    unsigned emitted = 0;
+    auto result = take(emitNumericalLanes(
+        *admitted.formula, mapped.getArgument(1).getType(),
+        payload(operation(*candidate, "vector.length")), LaneResultMode::Map,
+        [&](const protocol::BindingApplication &, ValueRange, Type,
+            ArrayRef<std::string>) {
+          ++emitted;
+          return Value();
+        },
+        &remaining));
+    require(result.status == LaneRealizationStatus::Capacity &&
+                result.reason == "mathematical-structured-work" && !emitted &&
+                !remaining,
+            "structured work limit permitted incomplete emission");
+  });
   for (StringRef field :
        {"bls12-381.fr", "bn254.fr", "ristretto255.scalar", "koala-bear",
         "koala-bear.ext4-binomial3", "koala-bear.ext8-binomial3",
@@ -294,7 +345,7 @@ int main(int argc, char **argv) {
                   "contract",
                   StringAttr::get(&context, product ? "numerical.sum"
                                                     : "numerical.product"));
-              require(succeeded(kernel::verifyRecipeOutput(*wrong)) &&
+              require(succeeded(computation::verifyRecipeOutput(*wrong)) &&
                           !compareFold(*source, *wrong),
                       "wrong aggregate mode survived independent comparison");
             });
@@ -372,7 +423,7 @@ int main(int argc, char **argv) {
                   outputs[0] = nodes.size() - 1;
                 }
               });
-            require(succeeded(kernel::verifyRecipeOutput(*wrong)),
+            require(succeeded(computation::verifyRecipeOutput(*wrong)),
                     "semantic mutation failed ordinary admission");
             ScopedDiagnosticHandler quiet(
                 &context, [](Diagnostic &) { return success(); });
@@ -789,7 +840,7 @@ module { "protocol.module"() ({
             auto *changed = operation(*wrong, "numerical.sum");
             auto entry = cast<func::FuncOp>(changed->getParentOp());
             changed->setOperand(3, entry.getArgument(5));
-            require(succeeded(kernel::verifyRecipeOutput(*wrong)),
+            require(succeeded(computation::verifyRecipeOutput(*wrong)),
                     "unused vector substitution failed ordinary admission");
             ScopedDiagnosticHandler quiet(
                 &context, [](Diagnostic &) { return success(); });

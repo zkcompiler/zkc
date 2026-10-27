@@ -1,8 +1,8 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
+#include "../lib/Transforms/Computation/Support.h"
 #include "../lib/Transforms/FiniteVerification.h"
-#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/PreparedProtocol.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "../lib/Transforms/ScopedFinite.h"
@@ -622,9 +622,10 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           lowering.addPass(protocol::createLowerMathPass());
           require(succeeded(lowering.run(*source)),
                   "numerical source preparation failed");
-          auto candidate = kernel::proposeKernelLowering(*source);
-          require(bool(candidate) && succeeded(kernel::verifyKernelLowering(
-                                         *source, *candidate)),
+          auto candidate = computation::proposeComputationRealization(*source);
+          require(bool(candidate) &&
+                      succeeded(computation::verifyComputationRealization(
+                          *source, *candidate)),
                   "scoped numerical positive control failed");
           bool changed = false;
           candidate->walk([&](exec::ApplyOp op) {
@@ -666,7 +667,8 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
           require(changed && succeeded(verify(*candidate)),
                   "numerical mutation must remain admitted");
           ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
-          require(failed(kernel::verifyKernelLowering(*source, *candidate)),
+          require(failed(computation::verifyComputationRealization(*source,
+                                                                   *candidate)),
                   "changed scoped numerical candidate accepted");
         });
   auto finiteSource = [&] {
@@ -1003,10 +1005,12 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
             lowering.addPass(protocol::createLowerMathPass());
             require(succeeded(lowering.run(*source)),
                     "conditional computation preparation refused");
-            auto candidate = kernel::proposeKernelLowering(*source);
+            auto candidate =
+                computation::proposeComputationRealization(*source);
             require(
-                candidate && succeeded(kernel::verifyKernelLowering(
-                                 *source, *candidate)),
+                candidate &&
+                    succeeded(computation::verifyComputationRealization(
+                        *source, *candidate)),
                 "conditional computation selection or correspondence refused");
             return;
           }
