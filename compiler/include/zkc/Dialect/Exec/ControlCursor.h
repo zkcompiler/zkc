@@ -8,7 +8,8 @@
 namespace zkc::exec {
 // Bounded read-only navigation of a formed scoped Func body. The consumer owns
 // operation meaning, source/record association and whole-function ownership.
-// Structured inspection checks actual local CFG, scope and transfer edges;
+// Structured inspection checks actual CFG or the closed SCF loop schedule,
+// scope and transfer edges;
 // consumers that use custom dispatch cleanup own its complete inspection.
 // It borrows one immutable body and its consumer's cumulative work allowance.
 // Callers establish MLIR verification and the Scope/Outcome function signature
@@ -17,7 +18,9 @@ namespace zkc::exec {
 class ControlCursor {
 public:
   ControlCursor(mlir::func::FuncOp function, unsigned &remaining)
-      : function(function), remaining(remaining) {}
+      : function(function), remaining(remaining) {
+    regions.insert(&function.getBody());
+  }
   bool enter(mlir::Block *block);
   // Reserve a block for explicit consumer inspection without changing the
   // current position. The consumer must check all its operations and edges.
@@ -53,6 +56,13 @@ public:
             mlir::ValueRange captures, bool conditional, llvm::StringRef site,
             RegionCheck body, llvm::SmallVectorImpl<mlir::Value> &results);
 
+  // Read the transient SCF loop directly. This grants access only to the
+  // structurally checked SCF regions, not arbitrary nested executable IR.
+  bool scheduledLoop(mlir::Value lower, mlir::Value upper,
+                     mlir::ValueRange seeds, mlir::ValueRange captures,
+                     bool conditional, llvm::StringRef site, RegionCheck body,
+                     llvm::SmallVectorImpl<mlir::Value> &results);
+
 private:
   mlir::func::FuncOp function;
   unsigned &remaining;
@@ -60,6 +70,7 @@ private:
   mlir::Block *current = nullptr, *failed = nullptr;
   mlir::Block::iterator position;
   llvm::DenseSet<mlir::Block *> inspected;
+  llvm::DenseSet<mlir::Region *> regions;
   bool charge() {
     return remaining && (--remaining, ++consumedOperations, true);
   }

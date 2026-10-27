@@ -602,3 +602,28 @@ one interpretation or resource bound does not establish the others.
 These are consumer obligations. Current native coverage is recorded in
 [status](../../status.md), and maintained formal instances in
 [formal support](../../../lean/docs/support.md).
+
+## Transient structured loop construction
+
+The numerical cutover has a mechanical builder and an independent cursor for
+scoped `scf.while` schedules. These are preparation infrastructure; the default
+numerical route has not switched to this form. Executable admission continues
+to require the flat scoped CFG and refuses these nested regions.
+
+The schedule carries an i64 coordinate, a continuation bit and an outcome
+containing the current transfer. A reached `exec.range` checks both bounds before
+initial transfer packaging. The while condition combines unsigned comparison
+with the continuation bit. Each iteration uses `scf.execute_region` to retain
+its explicit dispatch, child-scope and transfer-cleanup edges. A stopped body
+releases the previous transfer, yields a stopped outcome and clears continuation.
+A successful conditional body carries its actual continuation decision. The
+final outcome is dispatched before parent acceptance; no failure resumes another
+iteration or publishes a payload. The unit increment has no overflow flags.
+Its input is below the admitted upper bound whenever the body is entered.
+
+The cursor inspects actual operations and SSA edges, including every nested
+block, using its consumer's shared allowance. It does not run a producer or a
+lowering pass. It checks bounds, continuation, iteration coordinates, calls,
+cleanup, final transfer and operation inventory. Outlined body meaning and
+whole-candidate admission remain the consumer's obligations. Standard SCF
+interfaces and `no_inline` hints supply no additional execution or metering law.

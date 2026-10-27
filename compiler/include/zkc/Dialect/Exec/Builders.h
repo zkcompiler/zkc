@@ -8,10 +8,10 @@
 #include "llvm/ADT/STLFunctionalExtras.h"
 
 namespace zkc::exec {
-// Mechanical construction of the bounded scoped CFG. Callers own source and
-// result-type selection and construct the actual outlined bodies. No native
-// record, source checker, admission cache or physical plan is stored here.
-// Callbacks return a formed scoped function; construction restores this
+// Mechanical construction of scoped CFG and transient SCF loops. Callers own
+// source and result-type selection and construct the actual outlined bodies. No
+// native record, source checker, admission cache or physical plan is stored
+// here. Callbacks return a formed scoped function; construction restores this
 // builder's insertion point even if the callback shares the builder. A null
 // callback result aborts that control construction. The caller owns the
 // failure state and discards its partial candidate before publication.
@@ -39,6 +39,13 @@ public:
   Values loop(mlir::Value lower, mlir::Value upper, mlir::ValueRange seeds,
               mlir::ValueRange captures, mlir::TypeRange outputs,
               bool conditional, llvm::StringRef site, RegionBuilder body);
+  // Transient numerical schedule. SCF carries continuation and outcome state;
+  // reached scope/transfer actions remain explicit. Native admission requires
+  // the corresponding flat CFG and does not accept this scheduling form.
+  Values scheduledLoop(mlir::Value lower, mlir::Value upper,
+                       mlir::ValueRange seeds, mlir::ValueRange captures,
+                       mlir::TypeRange outputs, bool conditional,
+                       llvm::StringRef site, RegionBuilder body);
   void release(mlir::ValueRange values);
   void reject(llvm::StringRef reason, llvm::StringRef site);
   // Charged native completion. Source helper return packaging has a different
@@ -54,6 +61,7 @@ private:
   mlir::Value scope;
   exec::OutcomeType result;
   mlir::Block *failure = nullptr;
+  mlir::Region *insertionRegion;
   mlir::Operation *make(llvm::StringRef name, mlir::TypeRange types,
                         mlir::ValueRange operands,
                         llvm::ArrayRef<mlir::NamedAttribute> attributes = {},

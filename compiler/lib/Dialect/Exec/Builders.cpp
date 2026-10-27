@@ -1,7 +1,9 @@
 #include "zkc/Dialect/Exec/Builders.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "zkc/Dialect/Data/Variant.h"
+#include "llvm/ADT/ScopeExit.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -18,7 +20,8 @@ ScopedExecutionBuilder::ScopedExecutionBuilder(OpBuilder &builder,
                                                func::FuncOp function)
     : builder(builder), location(function.getLoc()), function(function),
       scope(function.getArgument(0)),
-      result(cast<exec::OutcomeType>(function.getResultTypes().front())) {}
+      result(cast<exec::OutcomeType>(function.getResultTypes().front())),
+      insertionRegion(&function.getBody()) {}
 Operation *ScopedExecutionBuilder::make(StringRef name, TypeRange types,
                                         ValueRange operands,
                                         ArrayRef<NamedAttribute> attributes,
@@ -35,8 +38,7 @@ NamedAttribute ScopedExecutionBuilder::text(StringRef name, StringRef value) {
 }
 Block *ScopedExecutionBuilder::block(TypeRange types) {
   OpBuilder::InsertionGuard guard(builder);
-  return builder.createBlock(&function.getBody(), function.getBody().end(),
-                             types,
+  return builder.createBlock(insertionRegion, insertionRegion->end(), types,
                              SmallVector<Location>(types.size(), location));
 }
 Block *ScopedExecutionBuilder::failed() {
@@ -222,6 +224,108 @@ ScopedExecutionBuilder::Values ScopedExecutionBuilder::loop(
   branch(header, {advanced, increment->getArgument(0)});
   builder.setInsertionPointToEnd(finish);
   return accept(finish->getArgument(0), types);
+}
+
+ScopedExecutionBuilder::Values ScopedExecutionBuilder::scheduledLoop(
+    Value lower, Value upper, ValueRange seeds, ValueRange captures,
+    TypeRange types, bool conditional, StringRef site, RegionBuilder body) {
+  auto carry = transfer(types);
+  auto carriedOutcome = outcome(carry);
+  auto counters =
+      invoke("exec.range", {builder.getI64Type(), builder.getI64Type()},
+             {scope, lower, upper}, {text("site", site)});
+  auto initial =
+      make("runtime.borrow_transfer", carry, scoped(seeds))->getResult(0);
+  auto packaged = make("exec.returned", carriedOutcome, initial)->getResult(0);
+  auto running = arith::ConstantIntOp::create(builder, location, 1, 1);
+  SmallVector<Type> stateTypes{builder.getI64Type(), builder.getI1Type(),
+                               carriedOutcome};
+  OperationState state(location, "scf.while");
+  state.addOperands({counters[0], running, packaged});
+  state.addTypes(stateTypes);
+  state.addRegion();
+  state.addRegion();
+  auto loop = cast<scf::WhileOp>(builder.create(state));
+  auto parentPosition = builder.saveInsertionPoint();
+  auto *parentRegion = insertionRegion;
+  auto *parentFailure = failure;
+  auto restore = llvm::scope_exit([&] {
+    insertionRegion = parentRegion;
+    failure = parentFailure;
+  });
+  insertionRegion = &loop.getBefore();
+  auto *before = block(stateTypes);
+  builder.setInsertionPointToEnd(before);
+  auto inside =
+      arith::CmpIOp::create(builder, location, arith::CmpIPredicate::ult,
+                            before->getArgument(0), counters[1]);
+  auto proceed =
+      arith::AndIOp::create(builder, location, before->getArgument(1), inside);
+  scf::ConditionOp::create(builder, location, proceed, before->getArguments());
+
+  insertionRegion = &loop.getAfter();
+  auto *after = block(stateTypes);
+  builder.setInsertionPointToEnd(after);
+  auto packet = scf::ExecuteRegionOp::create(
+      builder, location, TypeRange{builder.getI1Type(), carriedOutcome});
+  packet.setNoInline(true);
+  auto afterPosition = builder.saveInsertionPoint();
+  insertionRegion = &packet.getRegion();
+  auto *entry = block();
+  failure = block(exec::StopType::get(builder.getContext()));
+  builder.setInsertionPointToEnd(failure);
+  auto stopped = make("exec.failed", carriedOutcome, failure->getArguments())
+                     ->getResult(0);
+  auto no = arith::ConstantIntOp::create(builder, location, 0, 1);
+  scf::YieldOp::create(builder, location, ValueRange{no, stopped});
+  builder.setInsertionPointToEnd(entry);
+  auto previous = dispatch(after->getArgument(2), failure).front();
+  auto *cleanup = block(exec::StopType::get(builder.getContext()));
+  builder.setInsertionPointToEnd(cleanup);
+  make("runtime.release_transfer", {}, previous);
+  branch(failure, cleanup->getArguments());
+  // The successful unpack block precedes cleanup. Restore its insertion point
+  // explicitly: the transfer remains owned until replacement or failure.
+  builder.setInsertionPointToEnd(cast<BlockArgument>(previous).getOwner());
+  auto coordinate = after->getArgument(0);
+  auto index = invoke("runtime.iteration", lower.getType(), {scope, coordinate},
+                      {text("site", site)}, cleanup)
+                   .front();
+  auto *peek = make("runtime.transfer_values", types, previous);
+  Values inputs{index};
+  append_range(inputs, peek->getResults());
+  append_range(inputs, captures);
+  auto helper = outline(body, 0);
+  if (!helper)
+    return {};
+  auto yielded =
+      cast<exec::OutcomeType>(helper.getResultTypes().front()).getPayload();
+  auto held = region(helper, inputs, yielded, "iteration", site, {}, coordinate,
+                     cleanup);
+  make("runtime.release_transfer", {}, previous);
+  Value keepGoing;
+  if (conditional) {
+    auto decision =
+        invoke("runtime.take_condition", {builder.getI1Type(), carry}, held);
+    keepGoing = decision[0];
+    held = decision[1];
+  } else
+    keepGoing = arith::ConstantIntOp::create(builder, location, 1, 1);
+  auto next = make("exec.returned", carriedOutcome, held)->getResult(0);
+  scf::YieldOp::create(builder, location, ValueRange{keepGoing, next});
+
+  builder.restoreInsertionPoint(afterPosition);
+  auto one = arith::ConstantIntOp::create(builder, location, 1, 64);
+  auto advanced = arith::AddIOp::create(builder, location, coordinate, one);
+  scf::YieldOp::create(
+      builder, location,
+      ValueRange{advanced, packet.getResult(0), packet.getResult(1)});
+  insertionRegion = parentRegion;
+  failure = parentFailure;
+  restore.release();
+  builder.restoreInsertionPoint(parentPosition);
+  auto final = dispatch(loop.getResult(2), nullptr).front();
+  return accept(final, types);
 }
 
 void ScopedExecutionBuilder::release(ValueRange values) {

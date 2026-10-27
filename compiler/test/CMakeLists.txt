@@ -47,6 +47,10 @@ target_compile_definitions(zkc-execution_comparison-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-execution_comparison-test PRIVATE MLIRParser)
 
+add_zkc_test(scoped_control_schedule IR scoped-control-schedule)
+target_compile_definitions(zkc-scoped_control_schedule-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-scoped_control_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
 add_zkc_test(execution_control_cursor IR execution-control-cursor)
 target_compile_definitions(zkc-execution_control_cursor-test PRIVATE
   ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
