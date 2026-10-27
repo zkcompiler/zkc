@@ -2720,3 +2720,26 @@ fn execution_counts_include_early_stop_cleanup() {
         assert_eq!(e["backend_leave_calls"], 2);
     }
 }
+
+/// The same exact bytes are consumed by the compiler and independent readers.
+/// These are admission controls, not execution or source-correspondence proofs.
+#[test]
+fn shared_program_byte_language_controls() {
+    let corpus: Json = serde_json::from_str(include_str!(
+        "../../../../common/tests/fixtures/program/bytes.json"
+    ))
+    .unwrap();
+    assert_eq!(corpus["format"], "zkc.program-byte-fixtures/0");
+    let contracts = Contracts::standard(ExecutionPolicy::general_purpose());
+    let mut names = BTreeSet::new();
+    let mut failures = Vec::new();
+    for case in corpus["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        assert!(names.insert(name), "duplicate byte control: {name}");
+        let result = Program::decode(case["wire"].as_str().unwrap().as_bytes(), &contracts);
+        if result.is_ok() != case["admitted"].as_bool().unwrap() {
+            failures.push(format!("program byte control {name}: {result:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

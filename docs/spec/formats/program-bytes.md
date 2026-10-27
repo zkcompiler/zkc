@@ -134,7 +134,8 @@ a canonical natural at most 1,048,576. The actual count remains an input value,
 checked against that maximum; the maximum is not the trip count. `Carried` has
 the same ordered binding/incoming-value shape as above. The
 [completion contract](../ir/completion.md) defines `return_if`, including the
-continuations retained on its nonreturning path.
+continuations retained on its nonreturning path. Only affine returned values
+have continuation bindings; ordinary copyable results do not.
 
 Local and participant instruction alternatives are distinct even when they
 share `yield` or `return` shapes. Participant bodies cannot contain `op`,
@@ -189,3 +190,11 @@ wrong arities, misplaced instruction tags, noncanonical naturals, duplicate
 declarations, malformed strings, extra trailing input, unknown bindings and
 mutations in dormant bodies. Existing native boundary tests exercise these
 classes; agreement does not prove a source-to-execution theorem.
+
+The shared [byte fixtures](../../../common/tests/fixtures/program/bytes.json)
+provide exact UTF-8 inputs and expected static-admission decisions. Both the
+compiler codec test and Rust reader consume this same corpus. It includes
+alternate JSON whitespace/escapes, explicit stops, local and participant loops,
+conditional completion, and malformed or unresolved records in dormant work.
+An independent formal reader can consume these fixtures without invoking the
+compiler. Their agreement is bounded evidence, not a proof of either reader.
