@@ -23,7 +23,7 @@ requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcTools"
-globs = ["ZkcTools.JsonSupport", "ZkcTools.ProofAccount", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.+", "ZkcTools.SourceClaims.+", "ZkcTools.ConstructionBindings.+"]
+globs = ["ZkcTools.JsonSupport", "ZkcTools.ProofAccount", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.*", "ZkcTools.SourceClaims.+", "ZkcTools.ConstructionBindings.+"]
 requiresModuleSystem = true
 
 [[lean_exe]]
@@ -36,7 +36,7 @@ root = "ZkcTools.ImportHeaders"
 
 [[lean_exe]]
 name = "structured-source"
-root = "ZkcTools.StructuredSource"
+root = "checks.StructuredSource"
 
 [[lean_lib]]
 name = "ZkcAudit"

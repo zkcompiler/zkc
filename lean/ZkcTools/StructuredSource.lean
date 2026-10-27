@@ -89,7 +89,3 @@ def run (args : List String) : IO UInt32 := do
       | .ok result => Zkc.Tools.emit result; return 0
 
 end ZkcTools.StructuredSource
-
-def main (args : List String) : IO UInt32 := do
-  try ZkcTools.StructuredSource.run args
-  catch _ => Zkc.Tools.refused "structured-source-io"
