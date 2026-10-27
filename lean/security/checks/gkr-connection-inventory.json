@@ -1,6 +1,12 @@
 {
   "format": "zkc.gkr-connection-inventory/1",
   "baseline": "db098cbcee1def9dae6709b4b72ba611f3327fc8",
+  "historical_baseline": {
+    "path": "lean/security/checks/gkr-connection-baseline.json",
+    "sha256": "b95fcbda0a3cbac090d7fd8d9ffd49b69e6a17f5e89123431596d270e70c7cb8",
+    "bytes": 4199,
+    "lines": 107
+  },
   "measurement": "Raw text lines, including whitespace and comments; not effort estimates.",
   "interpretation": "The original 2709 lines include legitimate mathematics and reusable rules. Generated schemas and shared tactics remain authored library work and are counted explicitly; this is a rebinding/ownership result, not a claim of zero family-specific code or reduced total LOC.",
   "before_linkage_files": 20,
@@ -212,9 +218,9 @@
   "authored_installation_rules_controls_and_docs": [
     {
       "path": "lean/security/checks/generate_gkr_connections.py",
-      "sha256": "4c06756ba344929e84b8a3795602b9b365708403fce4b489f3b4110417d7e845",
-      "bytes": 9685,
-      "lines": 179
+      "sha256": "088c6ded708c11cbdcecd10425bdd5f7f07bcc0ff6e0fa4c8e708b1eebcf8b45",
+      "bytes": 9679,
+      "lines": 180
     },
     {
       "path": "lean/security/checks/GenerateGkrConnections.lean",
@@ -284,15 +290,15 @@
     },
     {
       "path": "lean/security/TestsSecurity/ConstructionBindingsCertificates.lean",
-      "sha256": "90e6f98cf4972c720fef9c7f3e23d68677d1941fe95ccb69b35f7a009985b299",
-      "bytes": 11836,
-      "lines": 200
+      "sha256": "36b88f0071a932f3196d2d325cfc7e96def4028e0c6fa6ece6f9e6942144ff3b",
+      "bytes": 12424,
+      "lines": 206
     },
     {
       "path": "lean/security/ZkcSecurity/Realizations/Gkr/README.md",
-      "sha256": "f4d97041607a1575fdaaac2e1c18bf4ab37f6706540568e602db3bd6aee7dd70",
-      "bytes": 7795,
-      "lines": 134
+      "sha256": "6c422b9612d720a714461a203d3ccba65902fae882b375e59cd8b11137570562",
+      "bytes": 7998,
+      "lines": 137
     },
     {
       "path": "lean/docs/spec/fiat-shamir-security.md",

@@ -17,7 +17,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
 PACKAGE = ROOT / "lean/security"
-BASE = "db098cbcee1def9dae6709b4b72ba611f3327fc8"
+BASELINE = PACKAGE / "checks/gkr-connection-baseline.json"
 OWNER = "lean/security/checks/generate_gkr_connections.py"
 OWNERSHIP = PACKAGE / "checks/gkr-connection-ownership.json"
 INVENTORY = PACKAGE / "checks/gkr-connection-inventory.json"
@@ -57,16 +57,13 @@ def input_closure(seeds, outputs):
 
 
 def inventory(outputs):
-    names = subprocess.check_output(
-        ["git", "ls-tree", "-r", "--name-only", BASE, "lean"], cwd=ROOT, text=True).splitlines()
-    paths = [name for name in names if "/Gkr/Original" in name or
-             "ZkcExamples/Construction/GkrOriginal" in name]
+    baseline = json.loads(BASELINE.read_text())
     entries = []
-    for name in paths:
-        before = subprocess.check_output(["git", "show", BASE + ":" + name], cwd=ROOT)
+    for row in baseline["paths"]:
+        name = row["path"]
         path = ROOT / name
-        entries.append({"path": name, "before_lines": len(before.splitlines()),
-                        "before_sha256": sha(before), **{"after_" + k: v for k, v in
+        entries.append({"path": name, "before_lines": row["lines"],
+                        "before_sha256": row["sha256"], **{"after_" + k: v for k, v in
                         record(path).items() if k != "path"},
                         "after_owner": OWNER if path in outputs else "authored-library",
                         "disposition": "generated-concrete-installation" if path in outputs else
@@ -85,7 +82,8 @@ def inventory(outputs):
         "lean/security/TestsSecurity/ConstructionBindingsCertificates.lean",
         "lean/security/ZkcSecurity/Realizations/Gkr/README.md",
         "lean/docs/spec/fiat-shamir-security.md"]]
-    return {"format": "zkc.gkr-connection-inventory/1", "baseline": BASE,
+    return {"format": "zkc.gkr-connection-inventory/1", "baseline": baseline["source_revision"],
+            "historical_baseline": record(BASELINE),
             "measurement": "Raw text lines, including whitespace and comments; not effort estimates.",
             "interpretation": "The original 2709 lines include legitimate mathematics and reusable rules. "
             "Generated schemas and shared tactics remain authored library work and are counted explicitly; "
@@ -103,22 +101,25 @@ def inventory(outputs):
 def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="update owned files and committed manifests")
-    parser.add_argument("--lake", type=Path, default=Path.home() /
-                        ".elan/toolchains/leanprover--lean4---v4.35.0/bin/lake")
+    parser.add_argument("--lake", default="lake", help="Lake executable for this checkout's toolchain")
     parser.add_argument("--receipts", type=Path, default=ROOT / "build/experiments/component-generation/regeneration")
     args = parser.parse_args()
+    lake = shutil.which(str(args.lake))
+    if lake is None:
+        parser.error(f"selected Lake executable is unavailable: {args.lake}")
+    lake = str(Path(lake).absolute())
     receipts = args.receipts.resolve()
     receipts.mkdir(parents=True, exist_ok=True)
     commands = []
-    env = {**os.environ, "LEAN_NUM_THREADS": "4"}
+    env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS", "4")}
 
     def run(label, argv):
         log = receipts / (label + ".log")
         with log.open("w") as stream:
-            result = subprocess.run([str(args.lake), *map(str, argv)], cwd=PACKAGE, env=env,
+            result = subprocess.run([lake, *map(str, argv)], cwd=PACKAGE, env=env,
                                     stdout=stream, stderr=subprocess.STDOUT, check=False)
-        commands.append({"argv": [str(args.lake), *map(str, argv)], "cwd": str(PACKAGE),
-                         "LEAN_NUM_THREADS": 4, "exit_code": result.returncode,
+        commands.append({"argv": [lake, *map(str, argv)], "cwd": str(PACKAGE),
+                         "LEAN_NUM_THREADS": env["LEAN_NUM_THREADS"], "exit_code": result.returncode,
                          "log": str(log), "log_sha256": sha(log.read_bytes())})
         (receipts / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
         if result.returncode:
@@ -148,7 +149,7 @@ def main():
         seeds = [PACKAGE / "checks/GenerateGkrConnections.lean",
                  PACKAGE / "ZkcSecurity/Realizations/Gkr/ConnectionTactics.lean",
                  PACKAGE / "ZkcSecurity/Realizations/Gkr/OutputTemplate.lean",
-                 ROOT / "lean/Zkc/Construction/OriginalParticipant.lean", ROOT / OWNER]
+                 ROOT / "lean/Zkc/Construction/OriginalParticipant.lean", ROOT / OWNER, BASELINE]
         # The schema's explicit imports are proof dependencies as well as printer inputs.
         for source in outputs:
             seeds.extend(imports(source))

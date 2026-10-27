@@ -1,0 +1,107 @@
+{
+  "format": "zkc.gkr-connection-baseline/1",
+  "source_revision": "db098cbcee1def9dae6709b4b72ba611f3327fc8",
+  "scope": "Frozen historical source-size observations, not proof evidence. Current regeneration does not require this revision in Git history.",
+  "paths": [
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalCoefficient.lean",
+      "lines": 201,
+      "sha256": "63d7975e583ce6ad395e0b9a0322b92219fa08a19ff9e6af7bc0dc5914e0f151"
+    },
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalHelpers.lean",
+      "lines": 85,
+      "sha256": "7bc37cd59a272a0b6e8f724d231f4b31d9d8d80577308c9406bc2f1199b59540"
+    },
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalLine.lean",
+      "lines": 81,
+      "sha256": "d43deabda2f663f6b38a9907bd58f0efeab326cd0640a72878d8689ed51d4f36"
+    },
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalOutput.lean",
+      "lines": 164,
+      "sha256": "9d41e45b86813b042fa88f25cfbe63a03c73d5e1c08288071157799194844e51"
+    },
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalRounds.lean",
+      "lines": 355,
+      "sha256": "e64da87fbb01a23acd7eeff2bb2ce1362991c3ac08f86b691a0994687afc5188"
+    },
+    {
+      "path": "lean/ZkcExamples/Construction/GkrOriginalRoutes.lean",
+      "lines": 37,
+      "sha256": "b4d71a8c4591af5373ead51868cd4582ba2afc9d79e4ab0e552558f32d2d0448"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalCertificateFrames.lean",
+      "lines": 43,
+      "sha256": "356821f9459009ad8d4e8a467d56c3bfe6cdd872619679076942efe257e370bb"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalCertificates.lean",
+      "lines": 4,
+      "sha256": "f1ddd294ac3594053279e4606d7fc5674ae5c37495ee38989cd4c6bdd9c399b0"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalCoefficient.lean",
+      "lines": 205,
+      "sha256": "4c9bcd3fc888d4676148997d6561f61e8a15887953a9fc0f816a9ceecff75d6d"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalLayer.lean",
+      "lines": 4,
+      "sha256": "4c2181c1f131125e89b62d3744e69fe2dcfe418372a22a7d8bdef819aae5d516"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalOutput.lean",
+      "lines": 179,
+      "sha256": "73296fe86547691ea61adfb8e7bc7b4cac56d5b51dfa3239870e617342d55d4f"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalProducerBody.lean",
+      "lines": 129,
+      "sha256": "bcea61465fceead81cd399b60338bd2202e09138ca9be56fcf5ebfba9f3ae63d"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalProducerLayer.lean",
+      "lines": 214,
+      "sha256": "7d55b45bfdb0fd2f215f595e424a5c13d3d0c0202c045c8f58306c4641af6536"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalProducerRoot.lean",
+      "lines": 125,
+      "sha256": "bf872c85c789b4b274ae0b387983a1f199df0a237f516fef858d63e39a258c6c"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalRegions.lean",
+      "lines": 139,
+      "sha256": "50d08ab1e6818b508207f12184a970888c51002cae3eb78d937e44fe9e6a27b8"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalRootRegions.lean",
+      "lines": 71,
+      "sha256": "6f8df38c51d4385689e6b7adeb837ee9997a3efdd698861a9fa303b59a706e09"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalRounds.lean",
+      "lines": 200,
+      "sha256": "39397ebf7f5f573d0998bcebe0ba7737c0d78614aedfcec9aad86f098aa9bb2a"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalValidatorBody.lean",
+      "lines": 139,
+      "sha256": "55587882d49745c3c62edd0937389e91ff8cce53cb8f9d70383dd3d6fdd37182"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalValidatorLayer.lean",
+      "lines": 214,
+      "sha256": "343d8ba32f7d0bd9034477d8e96615f1a028491a6aa8f93cc7042902c6c10628"
+    },
+    {
+      "path": "lean/security/ZkcSecurity/Realizations/Gkr/OriginalValidatorRoot.lean",
+      "lines": 120,
+      "sha256": "f7dcbd73c807f9ba94a2f8267b860e57ee8dc5cde545e440e77f2744189fac70"
+    }
+  ]
+}

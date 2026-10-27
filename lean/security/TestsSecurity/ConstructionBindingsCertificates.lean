@@ -94,6 +94,12 @@ example : templateMatches true TwoSums.context TwoSums.occurrence0 firstProducer
 example : templateMatches false TwoSums.context TwoSums.occurrence1 firstValidator.offset validatorLoop = false := by kernel_rfl
 example : templateMatches true TwoSums.context TwoSums.occurrence1 firstProducer.offset producerLoop = false := by kernel_rfl
 
+-- Preserve out-of-scope yield refusals as well as the in-scope permutations.
+example : templateMatches false TwoSums.context TwoSums.occurrence0 firstValidator.offset
+    { validatorLoop with operation := .loop firstValidator.site firstValidator.maximum (fresh firstValidator :: firstValidator.yielded.tail) } = false := by kernel_rfl
+example : templateMatches true TwoSums.context TwoSums.occurrence0 firstProducer.offset
+    { producerLoop with operation := .loop firstProducer.site firstProducer.maximum (fresh firstProducer :: firstProducer.yielded.tail) } = false := by kernel_rfl
+
 -- A changed diagnostic guard label is invisible to View.guard but is checked syntax.
 example : templateMatches false TwoSums.context TwoSums.occurrence0 firstValidator.offset
     { validatorLoop with body := validatorLoop.body.map fun step =>

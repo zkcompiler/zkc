@@ -11,8 +11,9 @@ The plain rule carries data and loop indices only. The Fiat–Shamir rule tracks
 its affine transcript and pending observations, admitting recursively typed data.
 Both retain the exact declared return ABI. Nominal property consumers prove full
 Process equations through `Domain.Correspondence`; this check alone is not a
-source compilation or security theorem. The legacy uniform evaluator's theorem
-and its deliberately restricted checker live together in `Construction.Uniform`.
+source compilation or security theorem. The scalar presentation interprets the
+same nominal participant; it does not supply a second Instruction meaning or a
+generic source-to-participant soundness theorem.
 -/
 
 set_option autoImplicit false

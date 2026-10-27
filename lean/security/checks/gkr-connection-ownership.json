@@ -425,15 +425,15 @@
     },
     {
       "path": "lean/Zkc/Construction/Projection.lean",
-      "sha256": "96b35e8a9a909a903f45de44001bf9d0b9d056087884793517e51e41c867b63e",
-      "bytes": 26070,
-      "lines": 494
+      "sha256": "43c58c9e772cefdfea7d062ca47c1743eecd51ae54f26b0f90c28eeee77ffbc3",
+      "bytes": 26167,
+      "lines": 495
     },
     {
       "path": "lean/Zkc/Construction/Rule.lean",
-      "sha256": "8070b367524dec768587432198d5ae2d61a61adb233f1f443f5157b796628ab2",
-      "bytes": 15114,
-      "lines": 294
+      "sha256": "d618b9118f69fccff905b2c3480e5b21bbdaf843ce6848858d46228da8b59fc9",
+      "bytes": 15161,
+      "lines": 295
     },
     {
       "path": "lean/Zkc/Construction/Scalar.lean",
@@ -2393,9 +2393,15 @@
     },
     {
       "path": "lean/security/checks/generate_gkr_connections.py",
-      "sha256": "4c06756ba344929e84b8a3795602b9b365708403fce4b489f3b4110417d7e845",
-      "bytes": 9685,
-      "lines": 179
+      "sha256": "088c6ded708c11cbdcecd10425bdd5f7f07bcc0ff6e0fa4c8e708b1eebcf8b45",
+      "bytes": 9679,
+      "lines": 180
+    },
+    {
+      "path": "lean/security/checks/gkr-connection-baseline.json",
+      "sha256": "b95fcbda0a3cbac090d7fd8d9ffd49b69e6a17f5e89123431596d270e70c7cb8",
+      "bytes": 4199,
+      "lines": 107
     }
   ],
   "outputs": [

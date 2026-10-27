@@ -58,7 +58,10 @@ Run `python3 lean/security/checks/generate_gkr_connections.py --write` from the
 repository to regenerate the two constructed views and ten concrete connection
 modules for each installation. Omit `--write` for exact comparison, including
 the committed ownership and authored-connection inventory in `checks/`.
-The owner uses this checkout's Lake outputs and prepared dependencies.
+The owner uses the selected `lake` executable (`--lake` overrides `PATH`), this
+checkout's toolchain and prepared dependencies. Historical before/after counts
+come from the committed baseline data; regeneration does not require development
+commits to remain in Git history.
 
 `ZkcTools.ConstructionBindings.Frames` traverses recursive SSA syntax. Qualified
 source repeat occurrences select the output, layer, two rounds and coefficient
