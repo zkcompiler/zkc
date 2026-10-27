@@ -61,19 +61,17 @@ and adjusts their lengths to match the new interface.
 
 ## Formation and preservation
 
-Two compiler boundaries use the same unit formation mechanism:
+Scoped source emission and participant demand lowering use the same unit
+formation mechanism. Source execution references total mathematics through
+`exec.compute`; participant demand lowering extracts mathematics at an ordered
+action cut, retaining captures and escaped results.
 
-- Preparation replaces a `local.realize` request with its existing Local wrapper
-  and an owned numerical closure.
-- Participant demand lowering extracts total mathematics at an ordered action
-  cut, retaining captures, escaped results and the existing Local invocation.
-
-Guards and partial operations remain in Local control. Relation formulas do not
-become executable roots. The compiler checks copied helper and domain bodies,
+Guards and partial operations remain in scoped execution. Relation formulas do
+not become executable roots. The compiler checks copied helper and domain bodies,
 actual SSA operands and returned aliases. Units retain original helper bodies
-and polynomial DAGs until numerical realization; an origin label is not evidence of
-equivalence. Preparation and projection freeze and compare the complete units
-alongside their Local wrappers.
+and polynomial DAGs until numerical realization; an origin label is not evidence
+of equivalence. Preparation and projection freeze and compare the complete units
+alongside their scoped callers.
 
 The `protocol`, `participant` and `exec` profiles may retain logical units.
 Physical admission and executable publication refuse every residual unit or

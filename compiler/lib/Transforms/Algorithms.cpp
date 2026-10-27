@@ -13,7 +13,6 @@
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Mathematical.h"
-#include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
@@ -459,18 +458,6 @@ public:
   }
   std::vector<AlgorithmOrigin> takeOrigins() { return std::move(origins); }
 };
-struct AlgorithmExpansionPass
-    : PassWrapper<AlgorithmExpansionPass, OperationPass<ModuleOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(AlgorithmExpansionPass)
-  StringRef getArgument() const final { return "zkc-expand-algorithms"; }
-  StringRef getDescription() const final {
-    return "Expand acyclic local SSA calls under canonical local accounting";
-  }
-  void runOnOperation() final {
-    if (failed(expandAlgorithms(getOperation())))
-      signalPassFailure();
-  }
-};
 } // namespace
 static LogicalResult
 expandAlgorithmsImpl(ModuleOp module, AlgorithmExpansionPhase phase,
@@ -545,7 +532,4 @@ LogicalResult expandAlgorithms(ModuleOp module, AlgorithmExpansionPhase phase,
   return expandAlgorithmsImpl(module, phase, state, origins, trace);
 }
 
-std::unique_ptr<Pass> createExpandAlgorithmsPass() {
-  return std::make_unique<AlgorithmExpansionPass>();
-}
 } // namespace zkc::protocol

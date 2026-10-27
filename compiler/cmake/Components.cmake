@@ -269,7 +269,6 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalTrace.cpp
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
-  lib/Transforms/MathRealizations.cpp
   lib/Transforms/Kernel/Formation.cpp
   lib/Transforms/Kernel/Closure.cpp
   lib/Transforms/Kernel/Readback.cpp

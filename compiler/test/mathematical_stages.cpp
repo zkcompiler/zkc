@@ -127,18 +127,20 @@ int main() {
     auto source = parseSourceString<ModuleOp>(fixture(), &context);
     require(bool(source), "fixture refused");
     OwningOpRef<ModuleOp> original(cast<ModuleOp>((*source)->clone()));
-    auto unobserved = mathematical::rewriteLocalAlgorithms(*source);
+    auto unobserved = mathematical::prepareProtocol(*source, false);
     require(bool(unobserved), "ordinary preparation failed");
     mathematical::RealizationTrace trace;
     std::string dumps;
     llvm::raw_string_ostream stream(dumps);
     trace.ir = &stream;
-    auto observed = mathematical::rewriteLocalAlgorithms(*source, {}, &trace);
+    auto observed =
+        mathematical::prepareProtocol(*source, false, {}, {}, &trace);
     require(bool(observed) && same(*unobserved, *observed) &&
                 same(*source, *original),
             "observation changed the candidate or original");
-    const std::vector<std::string> expected{
-        "polynomial-recipes", "math-realizations", "finish-expansion"};
+    const std::vector<std::string> expected{"polynomial-recipes",
+                                            "protocol-applications",
+                                            "participant-mathematics"};
     bool finiteRequest = false;
     observed->walk([&](exec::FoldOp) { finiteRequest = true; });
     require(finiteRequest && !sf::hasLoop(*observed) &&
@@ -155,18 +157,18 @@ int main() {
                 "stage accounting lost an intermediate subject");
     }
     stream.flush();
-    require(dumps.find("Before mathematical stage: math-realizations") !=
+    require(dumps.find("Before mathematical stage: protocol-applications") !=
                     std::string::npos &&
-                dumps.find(
-                    "After mathematical stage: finish-expansion (completed)") !=
-                    std::string::npos,
+                dumps.find("After mathematical stage: participant-mathematics "
+                           "(completed)") != std::string::npos,
             "missing labeled IR snapshots");
     // A second invocation starts a fresh trace and records its own policy.
     trace.ir = nullptr;
-    auto ordered =
-        mathematical::rewriteLocalAlgorithms(*source, {false, true}, &trace);
+    auto ordered = mathematical::prepareProtocol(*source, false, {false, true},
+                                                 {}, &trace);
     require(bool(ordered) && !trace.policy.finiteBulk &&
-                trace.policy.vectorReductionFusion && trace.stages.size() == 6,
+                trace.policy.vectorReductionFusion &&
+                trace.stages.size() == expected.size(),
             "trace retained old state or reported the wrong effective policy");
   });
   return cases.result();

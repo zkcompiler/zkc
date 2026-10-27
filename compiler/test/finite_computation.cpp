@@ -476,7 +476,7 @@ int main(int argc, char **argv) {
             }
           });
   cases.run("default source preparation retains finite requests", [&] {
-    auto candidate = mathematical::rewriteLocalAlgorithms(*original);
+    auto candidate = mathematical::prepareProtocol(*original, false);
     require(bool(candidate), "checked source preparation failed");
     bool retained = false;
     candidate->walk([&](exec::FoldOp) { retained = true; });

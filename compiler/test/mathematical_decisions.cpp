@@ -308,17 +308,16 @@ int main() {
             cause->capacity->requested == 1 && cause->capacity->available == 0,
         "required reader capacity became a recognition failure");
   });
-  cases.run("map helper expansion remains deferred until realization", [&] {
+  cases.run("scoped helper expansion remains deferred until realization", [&] {
     auto source = fixture(context, "total-collect"), original = copy(*source);
     RealizationTrace trace;
-    RealizationWork work;
-    work.helperOperations = 0;
-    auto candidate = rewriteLocalAlgorithms(*source, {}, &trace, work);
+    auto candidate = prepareProtocol(*source, false, {}, {}, &trace);
     unsigned collections = 0;
     if (candidate)
       candidate->walk([&](algebra::FiniteCollectOp) { ++collections; });
     require(candidate && same(*source, *original) && collections == 1 &&
-                work.helperOperations == 0,
+                trace.remainingWork.helperOperations ==
+                    trace.initialWork.helperOperations,
             "preparation expanded a retained map or changed its source");
     require(events<DiscardDecision>(trace).empty() &&
                 trace.activeScopes.empty(),
@@ -341,6 +340,8 @@ int main() {
     RealizationTrace mapTrace;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
+    RealizationWork work;
+    work.helperOperations = 0;
     auto refused = realizeKernelEntry(numerical, request.getSite(),
                                       {false, false}, work, {}, &mapTrace);
     require(
@@ -545,13 +546,14 @@ int main() {
     auto source = fixture(context, "dot");
     RealizationTrace trace;
     {
-      auto candidate = rewriteLocalAlgorithms(*source, {}, &trace);
+      auto candidate = prepareProtocol(*source, false, {}, {}, &trace);
       require(bool(candidate), "first invocation failed");
     }
     auto count = trace.events.size();
-    require(count && !events<SelectionDecision>(trace).empty(),
-            "nested service cleared trace");
-    auto again = rewriteLocalAlgorithms(*source, {}, &trace);
+    require(count && !events<ProposalDecision>(trace).empty() &&
+                events<SelectionDecision>(trace).empty(),
+            "preparation cleared trace or performed numerical selection");
+    auto again = prepareProtocol(*source, false, {}, {}, &trace);
     require(bool(again) && trace.events.size() == count &&
                 trace.events[0].sequence == 1 && trace.activeScopes.empty(),
             "trace accumulated a prior invocation");

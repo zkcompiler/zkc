@@ -207,10 +207,9 @@ an expanded polynomial-free body; a separate reader follows the original helper
 calls under positional argument substitution and checks all result coordinates
 with the existing independent polynomial laws. A realization stage caches these
 checked bodies, copies them into its candidate, and reuses them for recipe
-checking; each emitted copy still consumes work. `local.realize` also compares
-against its original helper before publication, so a snapshot taken after
-normalization cannot hide a substitution
-or polynomial error. This is native compiler correspondence checking; the
+checking; each emitted copy still consumes work. Numerical realization also
+compares against its original helper closure before publication, so a snapshot
+taken after normalization cannot hide a substitution or polynomial error. This is native compiler correspondence checking; the
 independent Lean models do not establish a bridge to this implementation.
 
 Optional finite recognition shares separate structural, equation and bound/extent
@@ -319,29 +318,19 @@ simplify, storage release, vector reduction fusion, finite bulk, collect–fold 
 order; readers require all six choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
-The explicit `rewriteLocalAlgorithms` preparation service admits the immutable
-whole source and owns each proposed rewrite. It retains finite and map structure
-through the checked selection window, then expands residual helpers. When
-there is no finite declaration or requested fusion, helper expansion runs once;
-an empty intermediate window must not charge the same expansion twice. Independent
-readers compare each actual nested-collection, finite, map and fusion candidate and both staged
-expansion results before publication. Generic simplification runs afterward;
-projection and execution lowering retain their structural Local preservation
-checks against the accepted preparation result. No additional profile or
-post-projection Local rewrite window is introduced.
+The `prepareProtocol` service admits the immutable whole source and returns an
+owned candidate after three stages: polynomial recipe realization into scoped
+definitions, protocol application expansion, and participant helper expansion
+with optional total simplification. Independent readers compare each actual
+rewrite before publication. Preparation preserves scoped definitions, numerical
+closures, and finite requests; it does not select finite or map realizations.
 
-After numerical recipe inlining, an identity recipe can make two distinct
-Local captures refer to one SSA value. Capture normalization retains the first
-occurrence and rewrites region arguments and loop forwarding together. The
-independent kernel reader derives this layout from actual operand identities;
-distinct values of the same type and ordered loop state remain distinct.
-
-Preparation expands callers that reach retained computations and the callbacks
-those computations name. Unrelated definitions keep their exact bodies.
-Source inspection and actual helper substitution have separate cumulative
-allowances; copying an unchanged root is not a second helper expansion. Both
-phase results and their accounting are independently read before publication.
-The [function contract](../spec/ir/functions.md) defines these boundaries.
+After participant demand placement, executable preparation expands scoped
+helpers and selects numerical realizations at their actual occurrences. Source
+inspection, helper substitution, and numerical realization use separate bounded
+allowances. Their independent readers check the actual candidate and its ordered
+refusals before publication. The [function contract](../spec/ir/functions.md)
+defines these boundaries.
 
 ### Inspecting preparation
 

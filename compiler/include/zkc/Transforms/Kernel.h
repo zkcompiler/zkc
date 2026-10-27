@@ -10,24 +10,19 @@ namespace zkc::mathematical {
 struct RealizationTrace;
 }
 namespace zkc::kernel {
-/// Form a checked numerical calculation from an admitted immutable closure.
-/// The private wrapper may contain total mathematics and a trailing guard.
-mlir::LogicalResult formCalculation(local::FuncOp wrapper,
-                                    mlir::Operation *sourceOwner,
-                                    MathematicalSelectionPolicy policy);
 /// Form the scoped Func/CF calculation and retain its mathematical closure.
 mlir::LogicalResult formCalculation(mlir::func::FuncOp wrapper,
                                     mlir::Operation *sourceOwner,
                                     MathematicalSelectionPolicy policy);
-/// Materialize logical invocations into the existing Local execution
-/// vocabulary, retaining each call's policy. Numerical alternatives belong to
+/// Materialize logical invocations into scoped Func/CF execution,
+/// retaining each call's policy. Numerical alternatives belong to
 /// individual source occurrences; the reader checks their actual payloads.
 /// Transactional Exec -> Exec edge, independently checked before publication;
 /// no runtime frame, opcode or hidden target fallback.
 mlir::LogicalResult lowerKernels(mlir::ModuleOp,
                                  MathematicalSelectionPolicy = {},
                                  mathematical::RealizationTrace * = nullptr);
-/// Read original numerical closures and actual Local candidate instructions.
+/// Read original numerical closures and actual scoped candidate instructions.
 /// Both complete subjects are admitted, including dormant numerical units.
 mlir::LogicalResult verifyKernelLowering(mlir::ModuleOp original,
                                          mlir::ModuleOp candidate,

@@ -17,7 +17,10 @@ struct ApplicationStart {
   std::string protocol, site;
   llvm::SmallVector<unsigned> inputs;
 };
-/// Prepare an owned candidate without modifying the source. Selected
+/// Prepare an owned candidate without modifying the source. Realize polynomial
+/// recipes, expand protocol applications, then prepare participant mathematics.
+/// Preserve scoped definitions and finite requests for executable selection.
+/// Selected
 /// application starts are semantic construction inputs, not pass options.
 /// Expansion and correspondence check each selection before publication.
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -25,17 +28,6 @@ prepareProtocol(mlir::ModuleOp source, bool simplify = true,
                 MathematicalSelectionPolicy policy = {},
                 llvm::ArrayRef<ApplicationStart> starts = {},
                 RealizationTrace *trace = nullptr);
-
-/// Checked Local algorithm-selection window on an immutable protocol source.
-/// Returns an owned candidate only after admission and independent checks of
-/// actual nested-collection and finite rewrites and staged helper expansion.
-/// Maps, their scalar closures and adjacent reductions remain for late
-/// selection. Generic total simplification is separate; projection preserves
-/// this accepted Local input.
-mlir::OwningOpRef<mlir::ModuleOp>
-rewriteLocalAlgorithms(mlir::ModuleOp source,
-                       MathematicalSelectionPolicy policy = {},
-                       RealizationTrace *trace = nullptr);
 
 /// Admit the whole mathematical module, then check polynomial observations in
 /// selected pure helpers even when no execution path calls them. Expansion and
@@ -59,16 +51,6 @@ llvm::Error checkFormulaDefinitions(mlir::ModuleOp, uint64_t &remaining);
 mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
-
-/// Form owned logical Kernel closures for admitted data-signature helpers.
-/// Local wrappers retain ordered calls and their original logical origins.
-mlir::LogicalResult expandMathRealizations(
-    mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
-    RealizationWork *work = nullptr, RealizationTrace *trace = nullptr);
-/// Independently compare the original helper/domain closure with the actual
-/// logical unit and exact wrapper operands, returns and occurrence inventory.
-mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
-                                                    mlir::ModuleOp candidate);
 
 /// Replace each algebra.map_realize with an ordinary local.func of the same
 /// signature. The helper is expanded into a detached scalar formula and

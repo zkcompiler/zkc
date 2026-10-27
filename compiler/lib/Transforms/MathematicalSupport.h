@@ -9,11 +9,6 @@
 namespace zkc::mathematical {
 struct RealizationWork;
 struct RealizationTrace;
-// Private allowance seam for the same complete staged transaction.
-mlir::OwningOpRef<mlir::ModuleOp>
-rewriteLocalAlgorithms(mlir::ModuleOp source,
-                       MathematicalSelectionPolicy policy,
-                       RealizationTrace *trace, RealizationWork &work);
 // Bounded derived view: every map formula is admitted, including dead work;
 // entries identify exactly a multiplication of two rowwise argument slots in
 // scalar operand order. Reduction recipe selection remains separate; no IR or

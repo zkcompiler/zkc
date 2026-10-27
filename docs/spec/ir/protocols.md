@@ -147,25 +147,14 @@ bodies, attributes and bindings, independently of the participant call list.
 Plain mathematical definitions can be consumed later by the checked numerical
 realization boundary; scoped execution cannot be silently erased there.
 
-The protocol profile can declare an executable realization of a total helper:
-
-```mlir
-local.realize @evaluate = @mathematical_helper : (T...) -> (U...)
-```
-
-The helper is private, defined, acyclic and admitted by the same whole-module
-mathematical checker. Its exact signature must contain only executable total
-data; formal polynomials and capabilities cannot cross this boundary. A local
-body invokes the declaration with `local.apply`. The declaration is a preparation
-request, carries no body or runtime provider, and is forbidden in participant
-and executable profiles. Ordinary portable source admission has no external
-signature permission for such an application.
-
-Preparation forms an owned [Kernel unit](kernel.md) and a `local.func`
-wrapper with the realization's original symbol and signature. The wrapper's
-logical origin names the pure helper. The complete helper/domain closure and
-actual wrapper data flow are checked against the original request and frozen
-through projection. Relation formulas remain specification-only declarations.
+Scoped source execution invokes total mathematics through `exec.compute`, with
+an owned [numerical unit](kernel.md). Its helper is defined, acyclic and admitted
+by the whole-module mathematical checker. Only executable data crosses the call
+boundary; formal polynomials and capabilities remain inside their owning
+abstractions. The complete helper/domain closure and actual call data flow are
+checked against the original source and frozen through preparation and
+projection. Numerical selection occurs after demand placement. Relation formulas
+remain specification-only declarations.
 
 Numerical realization uses checked helper normalization, polynomial observation
 checks and execution recipes under bounded work. An independent read-only

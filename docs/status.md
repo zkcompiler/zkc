@@ -58,6 +58,11 @@ and maintained formal fixtures now exercise that default. The replaced native
 Local/Kernel implementation owners still need retirement; physical selection uses scoped Exec and Runtime directly. Transparent word
 arithmetic and compiler-selected writable-buffer execution also remain incomplete.
 The retained owners do not constitute a second supported publication route.
+Source preparation now has one service with polynomial recipe, protocol
+application and participant mathematics stages. The old Local preparation API,
+Local numerical-wrapper formation and standalone Local expansion pass are
+removed. Executable numerical recipe production still needs its Local
+intermediate removed.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
 The logical source-scoped API additionally retains ordinary helper calls,
