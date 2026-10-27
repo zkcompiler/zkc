@@ -10,7 +10,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Relation/IR/Assets.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
@@ -31,8 +30,6 @@ class ExecutionModelReader {
   bool physical;
   std::string problem;
   unsigned next = 0;
-  SymbolTableCollection kernelSymbols;
-  llvm::DenseMap<Operation *, std::string> kernelEntries;
   SmallVector<LocalRealization> kernelRealizations;
   llvm::DenseSet<Operation *> mapHelpers;
 
@@ -57,41 +54,6 @@ class ExecutionModelReader {
           (input ? value.inputs : value.outputs).push_back(bound->spelling());
         }
       kernelRealizations.push_back(std::move(value));
-    }
-    return true;
-  }
-
-  // Internal validation signatures, never executable bodies or published
-  // symbols. The enclosing stage has admitted every retained computation
-  // closure.
-  bool collectKernels() {
-    unsigned index = 0;
-    for (auto unit : root->getRegion(0).front().getOps<mlir::ModuleOp>()) {
-      if (physical) {
-        fail("kernel-profile");
-        return false;
-      }
-      auto entry = zkc::mathematical::getComputationEntry(unit);
-      auto type = signature(entry);
-      if (!type)
-        return false;
-      LocalRealization realization;
-      do {
-        realization.name = "kernel_entry_" + std::to_string(index++);
-      } while (SymbolTable::lookupSymbolIn(root, realization.name));
-      for (bool input : {true, false})
-        for (auto port : input ? type.getInputs() : type.getResults()) {
-          auto bound = encodeBoundType(port, false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            fail("kernel-entry");
-            return false;
-          }
-          (input ? realization.inputs : realization.outputs)
-              .push_back(bound->spelling());
-        }
-      kernelEntries[entry] = realization.name;
-      kernelRealizations.push_back(std::move(realization));
     }
     return true;
   }
@@ -294,24 +256,6 @@ class ExecutionModelReader {
         }
         out.push_back({site, program::Stop{attr(op, "reason").str()}});
 
-      } else if (auto call = dyn_cast<zkc::kernel::CallOp>(op)) {
-        if (!local || physical ||
-            !attributes(
-                op, {"site", "callee", "policy", "arg_attrs", "res_attrs"}) ||
-            failed(call.verify()) ||
-            failed(call.verifySymbolUses(kernelSymbols))) {
-          fail("kernel-call-context");
-          return {};
-        }
-        auto entry = zkc::kernel::resolve(call, kernelSymbols);
-        auto found = kernelEntries.find(entry);
-        if (found == kernelEntries.end()) {
-          fail("kernel-call-symbol");
-          return {};
-        }
-        out.push_back({site, program::LocalApply{found->second,
-                                                 names(op->getOperands(), env),
-                                                 results(op, env)}});
       } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
         auto *callee = SymbolTable::lookupSymbolIn(root, call.getCallee());
         bool common = localDefinitionsOnly &&
@@ -689,8 +633,6 @@ public:
     if (allowMapRequests &&
         failed(zkc::algebra::collectMapHelpers(root, mapHelpers)))
       return error("algebra-map-formula");
-    if (!collectKernels())
-      return error(problem);
     SmallVector<LocalRealization> realizations(kernelRealizations);
 
     for (auto &op : root->getRegion(0).front()) {
@@ -762,8 +704,6 @@ public:
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
-    if (allowLogicalKernels && !collectKernels())
-      return error(problem);
     allowMapRequests = allowLogicalKernels && !physical;
     if (allowMapRequests && !collectMaps())
       return error(problem);

@@ -11,6 +11,7 @@
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 
 using namespace mlir;
@@ -439,6 +440,91 @@ int main() {
             [&] { return finite::verifyCallPreconditions(call(*module)); });
   });
 
+  for (StringRef mutation :
+       {"entry visibility", "helper visibility", "entry signature",
+        "external entry", "empty block", "multiple blocks", "missing return"})
+    cases.run(
+        "safe early selected call admission with malformed " + mutation, [&] {
+          auto module = parse(
+              changed(source, "callee = @sum", "callee = @selected::@entry"));
+          auto unit = module->lookupSymbol<ModuleOp>("selected");
+          auto entry = unit.lookupSymbol<func::FuncOp>("entry");
+          if (mutation == "entry visibility") {
+            entry->setAttr("sym_visibility",
+                           StringAttr::get(&context, "invalid"));
+          } else if (mutation == "helper visibility") {
+            // Every dormant member of the selected unit is admitted by its
+            // owner.
+            auto helper = module->lookupSymbol<func::FuncOp>("sum").clone();
+            helper->setAttr("sym_visibility",
+                            StringAttr::get(&context, "invalid"));
+            unit.getBody()->push_back(helper);
+          } else if (mutation == "entry signature") {
+            entry->setAttr("function_type",
+                           TypeAttr::get(IntegerType::get(&context, 64)));
+          } else if (mutation == "external entry") {
+            entry.getBody().getBlocks().clear();
+          } else if (mutation == "multiple blocks") {
+            entry.getBody().push_back(new Block());
+          } else {
+            entry.getBody().front().back().erase();
+            if (mutation == "empty block")
+              entry.getBody().front().front().erase();
+          }
+          SymbolTableCollection symbols;
+          refuses(
+              mutation == "entry signature" ? "execution-computation-signature"
+                                            : "execution-computation-symbol",
+              context, [&] { return call(*module).verifySymbolUses(symbols); });
+        });
+  for (StringRef attribute : {"arg_attrs=[{}]", "res_attrs=[{}]",
+                              "arg_attrs=[{assume=true}]", "res_attrs=[]"})
+    reject(
+        ("adapter refuses ordinary call port dictionaries " + attribute).str(),
+        "site = \"sum\"", ("site = \"sum\", " + attribute).str(),
+        "execution-computation-attribute");
+  for (StringRef policy :
+       {"[]", "[true,false]", "[true,false,true,false]", "[1:i64,false,true]",
+        "[true,0:i64,false]", "[\"true\",false,true]"})
+    reject(("malformed selection choices " + policy).str(), "site = \"sum\"",
+           ("site = \"sum\",policy=" + policy).str(),
+           "execution-computation-policy");
+  cases.run("adapter cannot use a different nominal field", [&] {
+    auto module = parse(source);
+    call(*module).getInputs().front().setType(
+        parseType("!algebra.field<\"bls12-381.fr\">", &context));
+    SymbolTableCollection symbols;
+    refuses("execution-computation-signature", context,
+            [&] { return call(*module).verifySymbolUses(symbols); });
+  });
+  cases.run("mathematical invocation requires its owner's borrowed scope", [&] {
+    auto module = parse(source);
+    auto caller = module->lookupSymbol<func::FuncOp>("caller");
+    auto another = caller.getBody().front().addArgument(
+        runtime::ScopeType::get(&context), caller.getLoc());
+    call(*module).getScopeMutable().assign(another);
+    refuses("execution-computation-context", context,
+            [&] { return call(*module).verify(); });
+  });
+  cases.run("module scope is not an invocation context", [&] {
+    auto module = parse(source);
+    auto invocation = call(*module);
+    invocation->moveBefore(&module->getBody()->front());
+    refuses("execution-computation-context", context,
+            [&] { return invocation.verify(); });
+  });
+  cases.run("return-only numerical entry", [&] {
+    auto module = parse(R"mlir(
+module {
+  module @empty attributes {exec.computation} { func.func @entry() {func.return} }
+  func.func @caller(%scope:!runtime.scope)->!exec.outcome<> {
+    %call="exec.compute"(%scope) {callee=@empty::@entry,site="empty"} : (!runtime.scope)->!exec.outcome<>
+    func.return %call : !exec.outcome<>
+  }
+})mlir");
+    require(succeeded(verify(*module)), "zero-port computation refused");
+  });
+
   auto closureSource = changed(
       source, "-> !O {",
       "-> !O attributes {no_inline, runtime.origin=[\"caller\", []]} {");
@@ -486,6 +572,33 @@ int main() {
         require(bool(checked), "recursive post-check helper accepted");
         llvm::consumeError(std::move(checked));
       });
+  cases.run("unused nested units still require the computation profile", [&] {
+    auto module = parse(changed(participant, "  func.func private @twice",
+                                "  module @unclassified {func.func @entry() "
+                                "{func.return}}\n  func.func private @twice"));
+    refuses("computation-profile", context, [&] { return verify(*module); });
+  });
+  cases.run("unused external mathematical helpers are refused", [&] {
+    checkClosure(
+        changed(closureSource, "  func.func @caller",
+                "  func.func private @external()\n  func.func @caller"),
+        false);
+  });
+  cases.run("logical computations cannot be published as an executable", [&] {
+    auto module = parse(participant);
+    require(succeeded(verify(*module)), "participant control refused");
+    auto read = protocol::readExecutionModel(*module);
+    require(!read, "unresolved numerical call escaped executable publication");
+    llvm::consumeError(read.takeError());
+  });
+  cases.run("physical profile refuses a dormant logical unit", [&] {
+    auto module = parse(R"mlir(module {
+      "protocol.module"() ({ module @unused attributes {exec.computation} {
+        func.func @entry() { func.return }
+      } }) {profile=#protocol.profile<physical>} : ()->()
+    })mlir");
+    refuses("kernel-profile", context, [&] { return verify(*module); });
+  });
   cases.run("source closure checks dormant selected units", [&] {
     checkClosure(
         changed(

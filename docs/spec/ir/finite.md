@@ -156,7 +156,7 @@ streamed: a later map failure must precede a reducer failure that would have
 occurred on the first item.
 
 For total numerical computations, the explicit
-[collect–fold realization](kernel.md#collectfold-composition) can eliminate a
+[collect–fold realization](computation.md#collectfold-composition) can eliminate a
 private field vector or field sequence when both callbacks and every collection use meet its
 checked composition rules. Partial Local computations retain the order above.
 
@@ -221,7 +221,7 @@ operand dependencies until a checked decomposition supports narrower cloning.
 ## Realization and checking
 
 Total finite expressions and their actual helper/domain dependencies may remain
-inside [logical Kernel units](kernel.md). Their canonical and bulk recipes are
+inside [logical computation units](computation.md). Their canonical and bulk recipes are
 selected during checked Kernel realization. Ordered Local finite declarations
 retain their existing partial-control contract and preparation path.
 

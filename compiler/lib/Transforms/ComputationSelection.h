@@ -7,8 +7,9 @@
 
 namespace zkc::mathematical {
 /// Implementation constraints are queried only at algorithm selection,
-/// including the original kernel calls retained by structural substitution.
-/// Callers reserve payload and numerical-call visits in scoped equation work.
+/// including the original mathematical invocations retained by structural
+/// substitution. Callers reserve payload and numerical-call visits in scoped
+/// equation work.
 bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 

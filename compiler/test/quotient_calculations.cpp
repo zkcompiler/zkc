@@ -6,6 +6,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"

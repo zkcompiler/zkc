@@ -9,7 +9,6 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
@@ -113,17 +112,11 @@ class NumericalBodyReader {
         inputs.push_back(actual);
       }
       func::FuncOp callee;
-      if (auto call = dyn_cast<kernel::CallOp>(op)) {
-        // Structural substitution does not choose a realization. Preserve each
-        // original occurrence so selection can inspect its actual constraints.
-        // The visit was charged above, including calls with no scalar output.
-        result.numericalCalls.push_back(&op);
-        callee = kernel::resolve(call, symbols);
-      } else if (auto call = dyn_cast<func::CallOp>(op)) {
+      if (auto call = dyn_cast<func::CallOp>(op)) {
         callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
             call, call.getCalleeAttr());
       }
-      if (isa<kernel::CallOp, func::CallOp>(op)) {
+      if (isa<func::CallOp>(op)) {
         if (!callee || !callee.getBody().hasOneBlock() ||
             callee.front().empty())
           return failure();
@@ -853,7 +846,7 @@ public:
       for (auto &op : helper.getBody().front().without_terminator()) {
         if (!charge())
           return std::nullopt;
-        calls |= isa<kernel::CallOp, func::CallOp>(op);
+        calls |= isa<func::CallOp>(op);
       }
       if (calls) {
         numericalBody = readNumericalBody(*callback, work, diagnostic);

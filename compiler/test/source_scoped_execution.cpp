@@ -208,7 +208,18 @@ protocol Run roles(P)(xs:Vector<Fr>@P,seed:Fr@P)->(r:Fr@P){return work(xs,seed);
 )"},
     {"protocol forwarding has no numerical helper", R"(
 protocol Run roles(P,V)(x:Fr@(P,V))->(r:Fr@(P,V)){return x;}
-)"}};
+)"},
+    {"mathematical invocations retain branch captures", R"(
+math fn twice(x:Fr)->Fr{return x+x;}
+fn work(x:Fr,y:Fr,go:bool)->Fr{return if go{twice(x)}else{twice(y)};}
+protocol Run roles(P)(x:Fr@P,y:Fr@P,go:bool@P)->(r:Fr@P){return work(x,y,go);}
+)"},
+    {"mathematical invocations retain nested iteration captures", R"(
+math fn twice(x:Fr)->Fr{return x+x;}
+fn work(x:Fr,n:index)->Fr{let mut y=x;for _ in 0..n{for _ in 0..n{y=twice(y);}}return y;}
+protocol Run roles(P)(x:Fr@P,n:index@P)->(r:Fr@P){return work(x,n);}
+)"},
+};
 struct Fixture {
   CheckedProject checked;
   ClosedEntry entry;
@@ -1248,6 +1259,75 @@ protocol Run roles(P)(xs:Vector<Fr>@P,go:bool@P)->(a:Vector<Fr>@P,b:Vector<Fr>@P
             "failed expansion published partial occurrence paths");
     take(compareOriginal(fixture.entry, *fixture.module));
   });
+  cases.run(
+      "all unchanged scoped roots share independent checking allowances", [&] {
+        Fixture fixture(context, {"call-free checking", R"(
+fn work(x:Fr)->Fr{return x+x;}
+protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
+)"});
+        auto source = projected(fixture);
+        auto owner =
+            cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
+        func::FuncOp original;
+        for (auto function : owner.getBody().front().getOps<func::FuncOp>())
+          if (protocol::isScopedExecutionFunction(function)) {
+            original = function;
+            break;
+          }
+        require(bool(original), "missing call-free scoped root");
+        OpBuilder builder(&context);
+        for (unsigned i = 0; i < 48; ++i) {
+          auto clone = original.clone();
+          auto name = "unused_" + std::to_string(i);
+          clone.setSymName(name);
+          clone->setAttr("runtime.origin",
+                         builder.getArrayAttr({builder.getStringAttr(name),
+                                               builder.getArrayAttr({})}));
+          owner.getBody().front().push_back(clone);
+        }
+        require(succeeded(verify(*source)),
+                "unchanged-root source must be admitted");
+        mathematical::RealizationWork construction;
+        uint64_t constructionCopy = 1000000,
+                 constructionSites = 16 * 1024 * 1024;
+        std::optional<CapacityCause> constructionCapacity;
+        auto candidate = protocol::prepareScopedFinite(
+            *source, construction, constructionCopy, constructionSites,
+            constructionCapacity);
+        require(bool(candidate), "call-free expansion refused");
+        mathematical::RealizationWork measured;
+        const auto ceiling = measured.numericalContextChecking;
+        require(succeeded(protocol::verifyScopedFinitePreparation(
+                    *source, *candidate, measured)),
+                "call-free checking refused");
+        auto required = ceiling - measured.numericalContextChecking;
+        require(required > 1, "dormant root inspection was not charged");
+        ScopedDiagnosticHandler silence(&context, [](mlir::Diagnostic &) {});
+        for (bool sufficient : {false, true}) {
+          mathematical::RealizationWork work;
+          work.numericalContextChecking = required - unsigned(!sufficient);
+          auto checked = protocol::verifyScopedFinitePreparation(
+              *source, *candidate, work);
+          require(succeeded(checked) == sufficient,
+                  "shared checking did not respect the exact whole-inventory "
+                  "allowance");
+          if (sufficient)
+            require(work.numericalContextChecking == 0,
+                    "exact allowance was not consumed");
+        }
+        auto frozen = OwningOpRef<ModuleOp>(cast<ModuleOp>(source->clone()));
+        mathematical::RealizationWork work;
+        work.numericalContextChecking = required - 1;
+        uint64_t copy = 1000000, sites = 16 * 1024 * 1024;
+        std::optional<CapacityCause> capacity;
+        auto refused =
+            protocol::prepareScopedFinite(*source, work, copy, sites, capacity);
+        require(
+            !refused && OperationEquivalence::isEquivalentTo(
+                            source->getOperation(), frozen->getOperation(),
+                            OperationEquivalence::IgnoreLocations),
+            "independent checking exhaustion published or mutated a candidate");
+      });
   cases.run("projection refuses a changed scoped helper body", [&] {
     Fixture fixture(context, samples[0]);
     auto candidate = projected(fixture);

@@ -3,7 +3,7 @@
 Closed numerical computations use named `builtin.module` owners, standard
 `func.func` entries and the existing mathematical dialects. The
 `exec.computation` unit attribute requests zkc's closed-computation profile.
-The `kernel` dialect retains only the ordered invocation from Local control.
+The ordered invocation is `exec.compute` inside a scoped standard function.
 This boundary introduces no runtime instruction, frame, artifact format or
 alternative evaluator.
 
@@ -42,22 +42,30 @@ The entry has total, non-affine native data ports. Its explicit
 selects the entry and does not assert that its premises hold universally. A scoped
 `exec.compute` invocation must discharge those premises using its actual data
 operands. Closing or normalizing a helper retains the conditions verbatim.
-The retiring `kernel.call` path admits only unconditional entries. Formal polynomials and quotient elements may occur internally but cannot cross
-the entry boundary. Private helper conditions are checked against their actual
+Formal polynomials and quotient elements may occur internally but cannot cross
+the selected unit's entry boundary. Private helper conditions are checked against their actual
 arguments. The shared `TotalClosure` analysis checks the mathematical vocabulary,
 dependency closure, bounded access and polynomial observations. An installed
 backend implementation alone does not establish these properties.
 
-`kernel.call @square::@evaluate(%x) {site = "square"}` supplies exact positional
-input and result types. It appears inside a `local.func` or its structured Local
-control. It is an ordered invocation: it cannot be speculated, merged or moved
-across guards, effects or stopping operations merely because its body denotes
-total mathematics. The qualified reference must resolve to the public entry of
-a sibling unit. The call implements MLIR's standard `CallOpInterface` and
-`SymbolUserOpInterface`; these interfaces grant no purity or speculation.
-Optional argument and result attribute arrays contain only empty dictionaries.
-When realization changes the call's ports, it preserves these arrays' presence
-and adjusts their lengths to match the new interface.
+`exec.compute` supplies a borrowed `!runtime.scope`, exact positional data
+operands, a `callee = @square::@evaluate` symbol reference, and a nonempty `site`.
+Its result is `!exec.outcome` carrying the entry's data results. The enclosing
+standard function handles success and failure explicitly through
+`exec.dispatch`. The scope is the owning function's first entry argument.
+The qualified reference resolves to the public entry of a sibling computation
+unit; a flat reference instead selects a private mathematical function in the
+same symbol table.
+
+The invocation is ordered. It cannot be speculated, merged or moved across
+guards, effects or stops merely because its callee denotes total mathematics.
+It implements `SymbolUserOpInterface`, so ordinary MLIR symbol rewrites update
+its actual target. It does not implement `CallOpInterface`: the scope/outcome
+adapter has a different signature from its mathematical callee. Ordinary call
+argument/result attribute dictionaries and arbitrary assumptions are refused.
+Callee resolution and operation verification establish formation; consumers
+must also check the complete mathematical closure, actual premises, and
+source-to-realization correspondence.
 
 ## Formation and preservation
 
@@ -80,14 +88,14 @@ view uses numerical signatures only; it cannot be encoded as `zkc.program/0`.
 
 ## Realization
 
-`zkc-lower-kernels` transactionally realizes calls in their existing Local
+`zkc-lower-kernels` transactionally realizes invocations at their existing ordered
 positions and removes the units. Physical planning uses the same proposal and
-independent reader while retaining the original Kernel-bearing subject. Its
-checked plan owns the selected Local candidate and the binding, port and
+independent reader while retaining the original mathematical subject. Its
+checked plan owns the selected scoped candidate and the binding, port and
 conversion decisions for that candidate. Materialization applies those decisions
 without rerunning numerical selection. The [physical plan](../../compiler/representation.md#checked-physical-decisions)
 checks both correspondence edges before publishing the physical result.
-The same late transaction handles retained pointwise maps and mixed map/Kernel
+The same late transaction handles retained pointwise maps and mixed map/computation
 subjects. Each occurrence has bounded legal alternatives; a missing implementation,
 unavailable conversion or attributable program-capacity refusal can advance that
 occurrence before publication. Semantic mismatches and malformed bindings remain
@@ -104,14 +112,14 @@ Omitted policy uses the lowering request's defaults.
 Normalization produces another profiled standard module and retains checked polynomial
 origins in that owned subject. Recipe conversion consumes its standard entry
 and uses a private builtin module for ordinary MLIR conversion. The completed
-Local function and bindings use the existing executable Protocol owner for
+scoped function and bindings use the existing executable Protocol owner for
 closed admission before the body is inserted at the ordered call. This
 temporary storage is not another public IR stage. Source helpers resolve
 against the numerical owner, while generated bindings belong to the executable
 candidate. The independent numerical reader compares the original entry with
 actual output and never invokes the recipe producer.
 
-On the scoped path, a closed recipe fragment has one builtin module containing
+A closed recipe fragment has one builtin module containing
 one executable Protocol owner. Neither owner has operands, results or block
 arguments. Its declarations are resolved runtime bindings and scoped standard
 functions, with one root interface and any required outlined control bodies.
@@ -125,14 +133,14 @@ retained call's replacement restrictions. Analysis views borrow immutable source
 operations and must be rebuilt after body or interface edits.
 
 Numerical instruction sites derive deterministically from the ordered call site
-and normalized operation position. Authored Local sites and protocol event
+and normalized operation position. Authored execution sites and protocol event
 identities are preserved. No per-operation provenance list is stored in a call.
 
 Inside a total closure, normalization folds static dimensions and exact array
 projections and removes unused total arithmetic. Finite computations are not
 removed by this cleanup. The independent helper-meaning reader checks the
 simplified return coordinates. This is a mathematical realization choice before
-executable accounting, not permission to remove an existing Local instruction.
+executable accounting, not permission to remove an existing ordered instruction.
 
 Each authored invocation expands at its ordered position. Compiler-generated
 calculation wrappers may expose additional concrete ports to retain numerical
@@ -144,7 +152,7 @@ ordered, including unused work in its normalized input. Independent readers
 check normalization, actual port wiring, original
 return coordinates and unchanged surrounding guards and effects.
 
-On the default scoped path, these cuts are actual `protocol.local_call`
+These cuts are actual `protocol.local_call`
 actions into generated `func.func` definitions containing `exec.compute`.
 Original data arguments and return payloads remain exact prefixes. A new
 coefficient result extends the computation's outcome and its unique dispatch
@@ -156,9 +164,9 @@ all other block interfaces stay unchanged. The independent frontier reader
 checks these distinctions; an outcome result is never treated as a numerical
 data result, and the scope is never an exported coefficient.
 
-Expansion adds no Local frame,
+Expansion adds no native local frame,
 entry/return charge or destruction point. Installed implementation restrictions,
-native failure behavior and the [canonical Local accounting](functions.md)
+native failure behavior and the [canonical execution accounting](execution.md)
 contract remain applicable. Compile-time work is bounded independently of
 runtime capacity. Total mathematical meaning does not promise execution under
 arbitrary work or memory limits.
@@ -178,8 +186,7 @@ transcript state, transport and capability authority retain their own owners.
 The private schedule uses scoped `func.func`, Exec and Runtime operations, with
 `scf.while` and `scf.execute_region` carrying loop continuation and transfer
 outcomes. The numerical producer emits this form directly, including scalar
-branches and normalized finite callbacks. It constructs no intermediate Local
-function or raw Local loop packet. The schedule is an internal compiler carrier;
+branches and normalized finite callbacks. The schedule is an internal compiler carrier;
 its dedicated reader admits it, and executable admission still requires flat
 scoped CFG. A scheduled owner is not a publishable executable artifact.
 

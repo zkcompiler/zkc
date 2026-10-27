@@ -1,6 +1,7 @@
 #include "../NumericalLowering.h"
 #include "Support.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
@@ -51,8 +52,8 @@ checkLowering(mlir::ModuleOp original, mlir::ModuleOp candidate,
   }
   bool hasKernels = false;
   source.walk([&](Operation *op) {
-    hasKernels |= (mathematical::isComputationUnit(op) ||
-                   isa<CallOp, exec::ComputeOp>(op));
+    hasKernels |=
+        (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
   });
   if (hasKernels) {
     // Reconstruct and check mathematical normalization/frontier only. No

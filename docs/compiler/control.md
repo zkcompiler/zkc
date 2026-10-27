@@ -26,7 +26,7 @@ Isolated regions and explicit block arguments expose capture and backedge maps
 to MLIR. Helper expansion recurses without unrolling loops or executing both
 arms. Physical conversions and releases stay in their actual control region.
 The Runner uses managed frames and cleans up on every outcome. Numerical
-[Kernel loops](../spec/ir/kernel.md#numerical-loop-schedule) use a checked SCF
+[Numerical loops](../spec/ir/computation.md#numerical-loop-schedule) use a checked SCF
 schedule before Local execution. Extending SCF lowering to general Local control
 would also need to preserve its custody, early-exit, failure and work contracts.
 

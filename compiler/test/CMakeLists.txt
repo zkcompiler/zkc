@@ -29,8 +29,8 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
-add_zkc_test(kernel_ir IR kernel-ir)
-mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
+add_zkc_test(computation_unit IR computation-unit)
+mlir_target_link_libraries(zkc-computation_unit-test PRIVATE MLIRParser)
 
 add_zkc_test(execution_finite IR execution-finite)
 mlir_target_link_libraries(zkc-execution_finite-test PRIVATE MLIRParser)

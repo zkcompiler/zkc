@@ -2,6 +2,7 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
@@ -431,7 +432,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   SmallVector<KernelNormalizationRewrite> rewrites;
   SmallVector<Operation *> calls;
   source.walk([&](Operation *op) {
-    if (isa<CallOp, exec::ComputeOp>(op))
+    if (isa<exec::ComputeOp>(op))
       calls.push_back(op);
   });
   // One immutable unit can have several actual invocations. Give each proposal

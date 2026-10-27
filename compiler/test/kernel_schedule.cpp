@@ -2,6 +2,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
 #include "support/NumericalLoops.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 using namespace mlir;
 using namespace zkc;

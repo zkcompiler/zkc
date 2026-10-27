@@ -7,6 +7,7 @@
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Domains.h"

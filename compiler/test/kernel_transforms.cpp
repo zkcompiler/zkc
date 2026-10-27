@@ -9,6 +9,7 @@
 #include "support/ProtocolDeployment.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"

@@ -151,9 +151,10 @@ controls retain the oversized refusal and bounded realization cases before
 dead mathematics can be erased. Independent closure and recipe controls also
 cover changed polynomial operands, shortened arrays, inserted stops and partial
 operations, and changed result coordinates. The execution readers refuse
-unresolved mathematical requests. This is the default
-mathematical invocation; the replaced `kernel.call` registration and its
-remaining test consumers still await removal. See
+unresolved mathematical requests. This is the sole mathematical invocation.
+The Kernel dialect, its registration
+and its alternative readers have been removed. Computation-unit admission and
+scoped invocation controls cover the retained contracts. See
 [mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).
 
 Retained `exec.fold` and `exec.collect` have checked scoped callback ABIs,
@@ -208,7 +209,7 @@ the closed wire profile. Application identity, setup, public inputs and prepared
 computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
-Logical [numerical units](spec/ir/kernel.md) use named `builtin.module` with
+Logical [numerical units](spec/ir/computation.md) use named `builtin.module` with
 `exec.computation` and standard functions. Stage admission checks every retained
 definition; the marker alone is not admission evidence. `exec.compute` retains
 ordered scoped invocation. Preparation and participant demand lowering form
@@ -491,7 +492,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 
 | Capability | Support and boundary |
 |---|---|
-| Numerical scheduling | [Kernel](spec/ir/kernel.md) retains the mathematical subject and checks a private standard SCF loop schedule before scoped execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
+| Numerical scheduling | [Numerical computation](spec/ir/computation.md) retains the mathematical subject and checks a private standard SCF loop schedule before scoped execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
 | Scalar, collection and polynomial mathematics | Nominal Algebra field/group vectors, indices, field matrices and field arrays, with ordered `algebra.array_from_elements` packing. A shared collection interface reports structure without granting finite, mathematical, Copy/Drop or wire admission; shape evidence retains the logical family. Source syntax, logical binding spellings and native codecs retain their meanings; builtin tensors have no compatibility alias. Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
 | Group identity | Total `intrinsic<G>("curve.identity")`, Algebra identity and independently checked native recipe. Dalek Ristretto255 and prime-order Edwards25519; arkworks BLS12-381 G1/G2/GT and BN254 G1/G2/GT, including multiplicative-one GT. Empty MSM identity is checked for the six installed dense group families; [contract](spec/domains/values.md#group-identity). No native proof claim. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/protocols/polynomial/sumcheck/README.md) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |

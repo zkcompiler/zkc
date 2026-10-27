@@ -361,7 +361,7 @@ options are refused by `check`, `inspect`, `prepare` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
 Collect–fold fusion defaults to false and follows the
-[numerical realization contract](../ir/kernel.md#collectfold-composition).
+[numerical realization contract](../ir/computation.md#collectfold-composition).
 
 `zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
 setup names, proof selections and input group schemas. Input schemas are derived

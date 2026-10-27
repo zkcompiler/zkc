@@ -1,8 +1,9 @@
 #ifndef ZKC_TRANSFORMS_KERNEL_H
 #define ZKC_TRANSFORMS_KERNEL_H
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Transforms/MathematicalSelection.h"
 

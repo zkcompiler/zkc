@@ -7,7 +7,6 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -41,7 +40,7 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
         (void)refuse(op, "physical profile requires expanded local requests");
         return WalkResult::interrupt();
       }
-      if (isa<mlir::ModuleOp, kernel::CallOp>(op)) {
+      if (isa<mlir::ModuleOp>(op)) {
         (void)diagnostics::emit(
             op->emitOpError(), "kernel-profile",
             "physical profile requires realized Kernel units and calls");

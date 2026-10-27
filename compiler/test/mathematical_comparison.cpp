@@ -10,6 +10,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Exec/Builders.h"

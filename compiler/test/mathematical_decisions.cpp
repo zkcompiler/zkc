@@ -10,6 +10,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedFinite.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"

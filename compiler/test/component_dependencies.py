@@ -160,7 +160,7 @@ def main():
         "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
-        "lib/Dialect/Kernel/IR/Kernel.cpp": "ZkcIR",
+        "lib/Dialect/Exec/IR/Computation.cpp": "ZkcIR",
         "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",

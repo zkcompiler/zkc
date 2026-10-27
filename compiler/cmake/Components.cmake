@@ -184,8 +184,6 @@ add_zkc_component(IR
   lib/Dialect/Runtime/Ownership.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
-  lib/Dialect/Kernel/IR/KernelDialect.cpp
-  lib/Dialect/Kernel/IR/Kernel.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
   lib/Dialect/Data/IR/Variant.cpp

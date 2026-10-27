@@ -9,6 +9,7 @@
 #include "support/NativeCases.h"
 #include "support/ScopedComputation.h"
 #include "support/ScopedFinite.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -149,7 +150,7 @@ int main(int argc, char **argv) {
                         "realized program did not compile");
                 module->walk([&](Operation *op) {
                   require(!isa<local::RealizeOp, local::ApplyOp, local::FuncOp,
-                               kernel::CallOp, exec::ComputeOp>(op),
+                               exec::ComputeOp>(op),
                           "preparation construct escaped into execution");
                   if (auto f = dyn_cast<func::FuncOp>(op))
                     require(protocol::isScopedExecutionFunction(f),

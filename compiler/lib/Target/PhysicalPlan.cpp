@@ -8,6 +8,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Variant.h"

@@ -5,7 +5,6 @@ set(zkc_builtin_dialects
   "local|Local|none"
   "exec|Exec|types"
   "runtime|Runtime|types"
-  "kernel|Kernel|none"
   "data|Data|types"
   "crypto|Crypto|types"
   "algebra|Algebra|types"

@@ -36,7 +36,7 @@ container's layout from its active values or reconstruct default children.
 ## Checked physical decisions
 
 One physical plan retains the original subject, including retained maps and
-[logical Kernel units](../spec/ir/kernel.md), until selection and checking finish.
+[logical computation units](../spec/ir/computation.md), until selection and checking finish.
 Numerical transforms propose a complete scoped execution candidate without changing that
 subject. The candidate records the actual numerical choices, including ordered
 fallbacks; compile-time permission flags alone do not determine those choices.

@@ -90,7 +90,7 @@ operational limits.
 
 ## Analysis and realization boundaries
 
-[Logical Kernel units](../spec/ir/kernel.md) own numerical bodies and their
+[Logical computation units](../spec/ir/computation.md) own numerical bodies and their
 helper/domain dependencies. Preparation forms units for executable helper
 requests; demand lowering forms them for participant calculations. Both retain
 an ordered Local wrapper. Physical planning retains those units alongside the

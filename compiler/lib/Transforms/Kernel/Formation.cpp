@@ -1,6 +1,7 @@
 #include "../HelperNormalization.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"

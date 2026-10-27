@@ -8,6 +8,7 @@
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"

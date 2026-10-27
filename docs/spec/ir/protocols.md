@@ -148,7 +148,7 @@ Plain mathematical definitions can be consumed later by the checked numerical
 realization boundary; scoped execution cannot be silently erased there.
 
 Scoped source execution invokes total mathematics through `exec.compute`, with
-an owned [numerical unit](kernel.md). Its helper is defined, acyclic and admitted
+an owned [numerical unit](computation.md). Its helper is defined, acyclic and admitted
 by the whole-module mathematical checker. Only executable data crosses the call
 boundary; formal polynomials and capabilities remain inside their owning
 abstractions. The complete helper/domain closure and actual call data flow are

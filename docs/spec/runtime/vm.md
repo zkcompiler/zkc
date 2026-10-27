@@ -225,7 +225,7 @@ counts describe actual implementation work and may differ from metered work.
 A checked compiler realization may instead produce a different physical program
 with an explicitly justified work or storage contract. This is a compiler
 transformation obligation, not permission for an evaluator to silently fuse
-instructions. Numerical Kernel IR belongs at that realization boundary.
+instructions. Closed numerical computation belongs at that realization boundary.
 Generated native code requires trusted installation and a checked representation
 ABI; a digest alone establishes
 identity, not executable safety.
