@@ -137,6 +137,9 @@ struct Pattern {
   std::vector<std::string> labels;
   std::vector<bool> shorthand;
   std::optional<BindingId> binding;
+  /// Original binder token in its source module, retained across parser sugar.
+  /// It is private provenance, never an exported identity.
+  std::optional<uint32_t> writtenToken;
   Span span;
 };
 struct Expression {
@@ -277,6 +280,7 @@ struct Binding {
   bool scoped = false;
   unsigned scope = 0;
   bool domain = false;
+  std::optional<LexicalNode> written = {};
 };
 /// Token intervals refer to the module's non-trivia token sequence. Fixed
 /// declaration headers are collected before imports; expression bodies are

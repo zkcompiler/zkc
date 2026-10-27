@@ -117,3 +117,38 @@ elaboration proposals. Until their checker and soundness theorem cover a
 fragment, `source.correspondence` and `exporter.structured-denotation` remain
 named trusted links. Retaining an AST or comparing native exports does not
 remove either assumption.
+
+
+## Lexical binding proposals
+
+`inspectLexicalBindings` exports `zkc.lexical-bindings/0` beside the AST. Its
+root has `format`, `capture`, `installation`, `references` and `unassociated`.
+A reference has `kind` (`read`, `call` or `assign`), `uses` and `binders`. The last
+two are nonempty arrays of written `{owner,path}` addresses. They retain every
+written occurrence of that parser node; a checker must validate the indicated
+scope and binding, not pick a same-spelled name from the document.
+
+The lexical resolver records the chosen binder while its scope environment is
+live. Input binders translate the separate data/service/callback/domain slots
+back to the combined written input order. Pattern binders retain their original
+parser-token provenance through record shorthand, loop indices and finite
+reduction expansion. Expression indices remain private links into the frozen
+written tree. The AST writer itself assigns the exported structural paths;
+there is no second path traversal or nearest-span lookup. Alpha renaming changes
+names and source bytes, but preserves these binding paths.
+
+Generated syntax can lack a written counterpart. Such records appear in
+`unassociated`, with the same kind/address fields and the containing declaration
+span (`module`, `begin`, `end`); at least one address list is empty. An empty list
+never authorizes a correspondence. An independent consumer determines whether
+the source fragment it checks has complete applicable coverage. Private and
+installation declarations are retained here, including declarations outside the
+selected executable closure.
+
+Retention is charged before storing each resolution record. Inspection shares
+one work counter between structural indexing and proposal construction, rechecks
+the project's ceilings and bounds serialization by `apiInspectionBytes`. Refusal
+publishes no partial proposal. These native records support local name resolution
+only. Global declaration lookup, specialization, role/port inference, control,
+notation and oracle proposals remain separate obligations; the independent
+checker and its soundness theorem are still required.

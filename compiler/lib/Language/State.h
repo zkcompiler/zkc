@@ -1,6 +1,7 @@
 #ifndef ZKC_LANGUAGE_STATE_H
 #define ZKC_LANGUAGE_STATE_H
 #include "APIRecords.h"
+#include "LexicalRecords.h"
 #include "NotationRecords.h"
 #include "zkc/Language/Project.h"
 #include <map>
@@ -42,6 +43,7 @@ struct CheckedStorage {
   std::shared_ptr<const WrittenSources> writtenSources;
   NotationRecords notations;
   APIRecords api;
+  std::vector<LexicalResolution> lexicalResolutions;
   std::shared_ptr<const NameEnvironment> names;
   /// Immutable authored callback and effect contracts, independent of mutable
   /// checked metadata.
