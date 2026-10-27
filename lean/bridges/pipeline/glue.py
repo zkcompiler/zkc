@@ -1,15 +1,11 @@
 """Render the generated per-Entry Lean modules of a subject.
 
 The generated construction glue states, for one compiled proof Entry, the
-facts every downstream proof uses: the admitted original, the constructed
+static facts downstream proofs use: the admitted original, the constructed
 validator, the checked selection of its inputs and acceptance output, the
-occurrence context, the three positional premises of
-`Zkc.Construction.compiled_transform`, and its instance at the Entry's
-published inputs. Every statement is checked by the kernel when the module is
-built: Python proposes literal values read from the exports (positions, slots,
-the context), the module states them, and `decide`, `rfl` or the generic
-selection theorem (`Zkc.Construction.selection_sound`) proves them. A wrong
-proposal is a build failure, never a trusted fact.
+occurrence context, and original participant Process. Python proposes literal
+metadata; the kernel checks admission, selection and source normal forms.
+Actual Domain/source correspondence lives in a separate maintained module.
 
 The executable facts module states, for the executable validator, the facts the
 lowering rule's theorems take as premises: its accepted reading, its helper
@@ -211,9 +207,9 @@ def construction_glue(subject, entry, modules):
     validator = entry.validator
     roles = "[" + ", ".join(text(role) for role in entry.roles) + "]"
     draws = "[" + ", ".join(f"({text(query)}, {text(delivery)})" for query, delivery in entry.draws) + "]"
-    context_literal = (f"⟨{data}.snapshot.entry, {roles}, {entry.producer}, {validator}, {entry.service}, "
-                       f"{text(entry.contract)}, {entry.request}, participant.policy.suite, {draws}⟩")
-    module_imports = ["Zkc.Construction.Compiled", "Zkc.Source.Structured.CommonAdapter", data,
+    context_literal = (f"Context.fiatShamir {data}.snapshot.entry {roles} {entry.producer} {validator} {entry.service} "
+                       f"{text(entry.contract)} ({entry.request}) participant.policy.suite {draws}")
+    module_imports = ["Zkc.Construction.Compiled", "Zkc.Construction.Uniform.DomainHandler", "Zkc.Source.Structured.CommonAdapter", data,
                       participant_module]
     if admission == "views":
         module_imports.insert(0, "Zkc.Source.Structured.UnitViews")
@@ -326,14 +322,6 @@ def decision (options : List (Option (Value F G))) : Option Bool :=
   | some (some (.data (.boolean value))) => some value
   | _ => none
 
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- On every list of the returned length, the acceptance output is the decision
-among the validator's outputs. -/
-theorem acceptance_decision (values : List (Value F G))
-    (length : values.length = participant.returned.length) :
-    acceptance values = decision (values.dropLast.map some) :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).1 values length
-
 /-- Data inputs of the constructed validator: the policy's public inputs, in
 policy order. -/
 def inputs {typed} : {inputs_type} :=
@@ -344,17 +332,6 @@ absent inputs of other roles, and the challenge service handle. -/
 def verifierInputs {typed} (handle : Nat) :
     Values (Component (assignment F G)) program.payload.entry.inputs :=
   {verifier_inputs}
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The constructed program's data inputs hold the validator's original inputs:
-the published values at their exported positions and the handle as the replaced
-service. -/
-theorem inputs_related {typed} (handle : Nat) (initial : History F G) :
-    HoldsValues handle ({published} ++ [.transcript initial])
-      (inputSlots context participant.policy program.payload.entry.inputs)
-      (verifierInputs (F := F) (G := G) {args} handle) :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.1 handle
-    ({held}) [.transcript initial]
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The constructed program's data inputs are the published inputs and the
@@ -382,12 +359,6 @@ theorem public_values {typed} (handle : Nat) :
 helpers. -/
 abbrev table : Structured.Meanings F G := helperTable program F G
 
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The decision among the validator's outputs is its acceptance output. -/
-theorem decision_outputs (outputs : Values (Component (assignment F G)) program.payload.entry.outputs) :
-    decision (validatorOutputs {validator} program.payload.entry.outputScopes outputs) = outputs.get {output} :=
-  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
-
 /-- The admitted root's validator process, read through its acceptance output. -/
 def process {typed} (handle : Nat) : PIR.Process (participantInterface F G) (Option Bool) :=
   (program.participant F G {validator} (verifierInputs {args} handle)).bind fun outputs =>
@@ -397,48 +368,8 @@ def process {typed} (handle : Nat) : PIR.Process (participantInterface F G) (Opt
 def verifier {typed} (handle : Nat) : PIR.Process (Actions F G) (Option Bool) :=
   (process {args} handle).interpret CommonAdapter.project
 
-/-- The original validator, read through its outputs, is the verifier. -/
-theorem original_verifier {typed} (handle : Nat) :
-    ((program.participant F G context.validator (verifierInputs {args} handle)).bind fun outputs =>
-      .done (decision (validatorOutputs context.validator program.payload.entry.outputScopes
-        outputs))).interpret CommonAdapter.project = verifier {args} handle := by
-  unfold verifier process
-  rw [validator_eq]
-  simp only [decision_outputs]
-
-/-- The compiled verifier, under the ideal transcript model with any challenge
-function in any lawful monad, is the Fiat–Shamir transform of the original
-Proof Entry's validator: equal acceptance outcomes, stops and unread proof
-suffixes, for every published input, initial transcript, proof and service
-handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
-premises the checked selection discharges. -/
-theorem compiled_transform {{m : Type → Type}} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) {typed} (handle : Nat) (initial : History F G)
-    (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge table participant.returned participant.instructions
-          ({published} ++ [.transcript initial]) proof =
-      transform context challenge (verifier {args} handle) initial proof :=
-  (compiled_selected imported participant compiled selected selection_checked).2 challenge handle
-    ({held}) initial proof
-
-/-- By the construction rule alone, the compiled verifier is the Fiat–Shamir
-transform of the interactive reading of its exported instructions, read through
-the acceptance output, for every service handle. -/
-theorem spec_transform {{m : Type → Type}} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (handle : Nat) (data : List (Value F G))
-    (arity : data.length = {len(names)}) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge table participant.returned participant.instructions
-          (data ++ [.transcript initial]) proof =
-      transform context challenge
-        ((spec context handle table participant.returned participant.instructions
-          (data ++ [.transcript initial])).bind fun values => .done (acceptance values))
-        initial proof := by
-  rw [check_sound context challenge handle table participant checked data initial proof
-    (by rw [arity]; rfl), transform_bind_done]
-""".replace("{typed}", typed).replace("{args}", args).replace("{published}", published)
-       .replace("{held}", held).replace("{output}", output).replace("{validator}", str(validator)))
+""".replace("{typed}", typed).replace("{args}", args).replace("{output}", output)
+       .replace("{validator}", str(validator)))
     if model:
         out.append(f"""/-! ## The model the original validator is, by computation -/
 
@@ -451,42 +382,7 @@ theorem verifier_correspondence {typed} (handle : Nat) :
     verifier (F := F) (G := G) {args} handle = {model} {args} handle := by
   rw [verifier, process_equation, CommonAdapter.project_embed]
 
-/-- The constructed program's interactive reading is the model, with every
-reply, stop and acceptance decision. Derived from the projection rule; no
-computation specific to this Entry is involved. -/
-theorem spec_equation {typed} (handle : Nat) (initial : History F G) :
-    (spec context handle table participant.returned participant.instructions
-        ({published} ++ [.transcript initial])).bind
-      (fun values => .done (acceptance values)) =
-      {model} {args} handle := by
-  rw [spec_bind_congr context handle table participant.returned participant.instructions _ acceptance
-    (fun values => decision (values.dropLast.map some)) acceptance_decision]
-  have projected' := project_sound program context participant projected handle
-    ({published}) initial (verifierInputs {args} handle)
-    (inputs_related {args} handle initial) rfl
-  calc (spec context handle table participant.returned participant.instructions
-          ({published} ++ [.transcript initial])).bind
-          (fun values => .done (decision (values.dropLast.map some)))
-      = ((spec context handle table participant.returned participant.instructions
-          ({published} ++ [.transcript initial])).bind
-          (fun values => .done (values.dropLast.map some))).bind
-          (fun options => .done (decision options)) := by
-        rw [PIR.Process.bind_assoc]
-        rfl
-    _ = (((program.participant F G context.validator (verifierInputs {args} handle)).bind
-          fun outputs => .done (validatorOutputs context.validator program.payload.entry.outputScopes
-            outputs)).interpret CommonAdapter.project).bind
-          (fun options => .done (decision options)) := by
-        rw [projected']
-    _ = ((program.participant F G context.validator (verifierInputs {args} handle)).bind
-          fun outputs => .done (decision (validatorOutputs context.validator
-            program.payload.entry.outputScopes outputs))).interpret CommonAdapter.project := by
-        rw [PIR.Process.interpret_bind, PIR.Process.interpret_bind, PIR.Process.bind_assoc]
-        rfl
-    _ = {model} {args} handle := by
-        rw [original_verifier, verifier_correspondence]
-""".replace("{typed}", typed).replace("{args}", args).replace("{published}", published)
-       .replace("{model}", model))
+""".replace("{typed}", typed).replace("{args}", args).replace("{model}", model))
     out.append(f"end {namespace}\n")
     return omit_declarations("\n".join(out), subject.get("construction", "omit", []))
 
@@ -519,7 +415,8 @@ def construction_only_glue(subject, entry, modules):
     typed = binders(names, types)
     inputs_body = "[" + ", ".join(value_term(ty, name) for name, ty in zip(names, types)) + "]"
     doc = subject.get("construction", "doc") or default_glue_doc(subject, modules)
-    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured"]), doc=doc) + f"""
+    return HEADER.format(imports=imports([data, participant_module, "Zkc.Construction.Structured",
+                                         "Zkc.Construction.Scalar"]), doc=doc) + f"""
 namespace {namespace}
 open Zkc.Construction
 
@@ -566,16 +463,11 @@ def default_glue_doc(subject, modules):
                 f"`{modules['participant'].rsplit('.', 1)[-1]}` its constructed validator. The per-compile\n"
                 "transcript-construction check accepts the pair (`accepted`); the participant\n"
                 "projection rule is not applied to this Entry.")
-    return (f"Generated construction facts of the compiled `{entry}` Entry of the subject\n"
-            f"`{subject.name}`. Regenerate with `lean/bridges/subject.py --write`.\n\n"
-            f"`{modules['data'].rsplit('.', 1)[-1]}` is the Entry's original export and\n"
-            f"`{modules['participant'].rsplit('.', 1)[-1]}` its constructed validator. The composed\n"
-            "transcript-construction and participant projection check accepts the pair\n"
-            "(`compiled`), and the selection check (`selection_checked`) discharges the\n"
-            "positional premises of the composed rules from data the kernel reads, so\n"
-            "`compiled_transform` holds with no proof specific to this Entry: for every\n"
-            "challenge function, the compiled verifier's ideal meaning is the Fiat–Shamir\n"
-            "transform of the original validator.")
+    return (f"Generated artifact admission and source metadata for `{entry}` of `{subject.name}`.\n"
+            "Regenerate with `lean/bridges/subject.py --write`.\n\n"
+            "The structural checks do not establish source correspondence. The maintained\n"
+            "endpoint imports this metadata and a separate checked Domain connection.")
+
 
 
 def views_module(namespace, data, bodies, helpers, protocols):
@@ -631,7 +523,7 @@ def facts_module(namespace, construction, program_module, facts, form):
     glue = construction["glue"]
     data = f"({glue}.inputs (F := F) (G := G) {args}).map .data" if form == "payloads" else \
         f"{glue}.inputs (F := F) (G := G) {args}"
-    out = [HEADER.format(imports=imports([program_module, glue, "Zkc.Executable.NormalizationSoundness",
+    out = [HEADER.format(imports=imports([program_module, construction["module"], "Zkc.Executable.Reading",
                                           "Zkc.Executable.Installed"]),
                          doc=f"Generated facts of the executable validator `{program_module.rsplit('.', 1)[-1]}`.\n"
                              "Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering\n"

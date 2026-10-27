@@ -45,7 +45,7 @@ example : Domain.modelSchema capabilities .empty adaptiveModel =
 
 example (subject : Domain.Subject model art) (selected : Model) :
     Domain.chargeSchedule capabilities subject selected [] =
-      .ok (.error ⟨["nonempty charge schedule"]⟩) := rfl
+      .ok (.ok (.empty subject)) := rfl
 
 example (subject : Domain.Subject model art) (selected : Model)
     (empty : subject.sites = []) :

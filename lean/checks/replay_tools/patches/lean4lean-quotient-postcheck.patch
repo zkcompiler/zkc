@@ -1,0 +1,19 @@
+--- a/Main.lean
++++ b/Main.lean
+@@ -112,7 +112,15 @@
+     -- Lean's kernel interprets just the addition of `Quot as adding all of these so adding them
+     -- multiple times leads to errors.
+     constMap := constMap.erase `Quot.mk |>.erase `Quot.lift |>.erase `Quot.ind
+-    let (n, _) ← replay { newConstants := constMap, verbose, compare, checkQuot := false, fuel } (.empty .anonymous) none
++    let (n, env) ← replay { newConstants := constMap, verbose, compare, checkQuot := false, fuel } (.empty .anonymous) none
++    -- Quotient declarations are reconstructed together. Compare every exported
++    -- record, including those removed above, with the checked environment.
++    for quotTarget in [`Quot, `Quot.mk, `Quot.lift, `Quot.ind] do
++      if let some info := solution.constMap[quotTarget]? then
++        let some info' := env.constants.find? quotTarget |
++          throw <| IO.userError s!"Could not find quotient constant in final kernel env: {quotTarget}"
++        if info != info' then
++          throw <| IO.userError s!"Quotient constant mismatch on: {quotTarget}"
+     println! "checked {n} declarations"
+     return 0
+ 

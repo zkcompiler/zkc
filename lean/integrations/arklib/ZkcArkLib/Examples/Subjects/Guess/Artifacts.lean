@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcExamples.Construction.GuessArtifact
 public import ZkcExamples.Construction.GuessProof
 
 @[expose] public section
@@ -33,6 +34,15 @@ def compiled : Compiled artifacts where
   selected := ZkcExamples.Construction.GuessProof.selected
   checked := ZkcExamples.Construction.GuessProof.selection_checked
   publics := by decide +kernel
+  occurrences := by decide +kernel
+
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+/-- Actual all-reply source transport, separate from static admission. -/
+theorem sourceConnection : compiled.SourceConnection (F := F) (G := G) where
+  equation challenge statement handle initial proof := by
+    match statement with
+    | .cons value0 .nil => exact ZkcExamples.Construction.GuessProof.compiled_transform challenge value0 handle initial proof
 
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/

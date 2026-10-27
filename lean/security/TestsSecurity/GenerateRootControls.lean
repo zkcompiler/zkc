@@ -15,9 +15,17 @@ private meta def refuses {α : Type} (code : String) (result : Except String α)
 
 run_cmd do
   for ty in [Ty.sequence .boolean, Ty.product "query" "Query" (.cons .boolean .nil)] do
-    refuses "uniform-root-aggregate-type" (ZkcSecurity.Generation.UniformRoot.carrier ty)
+    unless (ZkcSecurity.Generation.UniformRoot.carrier ty).contains
+        (ZkcTools.StructuredSource.Constructed.literal ty) do
+      Lean.throwError "uniform presentation erased the nominal aggregate type"
     refuses "sigma-completeness-aggregate-type" (ZkcSecurity.Generation.SigmaCompleteness.zeroInput ty)
-    refuses "subject-abi-aggregate-type" (ZkcSecurity.Generation.SubjectABI.encoded ty "value")
+    let .ok encoded := ZkcSecurity.Generation.SubjectABI.encoded ty "value"
+      | Lean.throwError "subject ABI refused data aggregate"
+    unless encoded.contains (ZkcTools.StructuredSource.Constructed.literal ty) do
+      Lean.throwError "subject ABI erased nominal data type"
+  for ty in [Ty.service "rng", Ty.sequence (.service "rng"),
+      Ty.product "opaque" "Opaque" (.cons (.service "rng") .nil)] do
+    refuses "subject-abi-service-projection" (ZkcSecurity.Generation.SubjectABI.encoded ty "value")
   let [first, _] ← evaluateSelections | Lean.throwError "expected two production roots"
   let some definition := first.snapshot.definitions.find? (fun
     | .function function => function.kind == .local

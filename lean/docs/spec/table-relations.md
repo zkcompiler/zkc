@@ -60,3 +60,48 @@ monad or new formal carrier is introduced for the native Data/Exec operation
 layout. The [native contract](../../../docs/spec/ir/execution.md) and
 [table library](../../../libraries/relations/table/README.md) record their own
 implementation evidence.
+
+## Actual plain construction consumer
+
+`ZkcExamples.Construction.TableMembership` imports the unchanged library target
+and checks the actual native plain producer/validator pair. The policy has no
+selected service, suite or draw pair; the real validator ABI is a vector and a
+sequence of the nominal Query product, with its sole Boolean output retained.
+The source input tuple determines both prepared participant frames.
+
+`validator_binding` is one complete all-environment Process equation.
+`helper_equation`, `validator_equation`, `validate_equation` and `pair_equation`
+reuse the actual helper closure and preserve every checkpoint, oracle/proof
+state and exhausted scan. `target_agreement` connects the retained formula to
+mathematical selected membership under the explicit reached bounds above.
+`membership_completeness` proves success of the admitted actual pair under
+those bounds; `membership_false_rejected` proves rejection of mathematical
+false statements under every reply, including executions that exhaust bounds.
+There are related inputs with both empty queries and a nonempty selected row.
+No empty-schedule premise is used as a soundness proof. Inactive query values remain in the bound input data.
+These are nominal constructed-model theorems, without a selected codec/native
+execution realization or a new baseline acceptance.
+
+`ZkcSecurity.Examples.TableMembership.Subject` fixes that same admitted pair,
+`selected_rows` clause and catalogue-compatible prime field `ZMod 2130706433`.
+The shared `Generation.SubjectABI` emits the full source input tuple, exact
+plain participant frames and a separate semantic initial public history. That
+history binds both query fields, including inactive values; no transcript value
+is appended to either participant frame. Optional inputs, representation bounds
+and any retained input clauses keep the existing honest-input meaning.
+
+`Method.compiled_ideal_complete` proves canonical perfect completeness with an
+actual related admitted input and the actual producer execution.
+`Method.bridge` and `Method.rejects` reuse the same whole-validator equation and
+helper mathematics as completeness. They preserve exhausted inputs and prove
+rejection independently of the empty charge schedule. Soundness quantifies
+every raw typed statement and proof, without an honest-input bound.
+`Method.adaptive_zero` also removes the adversary query-count premise, using
+the existing zero-cost theorem for arbitrary terminating oracle computations.
+`Claims` registers the existing canonical completeness and adaptive soundness
+meanings and closes their required construction/source links at zero error;
+it also supplies an empty charged receipt. The generic random-oracle interface
+remains available to the adversary, while the actual plain validator makes no
+query. These receipts cover the compiled ideal model, without a native runtime
+or byte-codec correspondence claim. The [focused driver](../../security/checks/check_table_membership.py)
+regenerates the ABI and endpoint and checks the receipts and refusal controls.

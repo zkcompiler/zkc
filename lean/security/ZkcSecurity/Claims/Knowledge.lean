@@ -140,6 +140,7 @@ variable {subject : Subject F G art endpoint} {profile : ExtractionProfile subje
 def evidence : KnowledgeEvidence art endpoint justification.Stmt profile.Witness profile.Commit
     justification.PrvState profile.Witness (fun statement witness => profile.target.Holds statement (profile.embed witness)) where
   compiled := subject.compiled
+  connection := subject.connection
   target := profile.target
   witness := profile.embed
   relationPinned _ _ := Iff.rfl
@@ -162,7 +163,7 @@ theorem verify_eq (statement : art.Statement F G) (initial : History F G)
           (justification.family.key statement) commitment challenge response
       | none => false := by
   unfold ExtractionProfile.verify
-  rw [← justification.shape, Compiled.transform_eq _ _ statement justification.handle, justification.model,
+  rw [← justification.shape, Compiled.transform_eq _ subject.connection _ statement justification.handle, justification.model,
     justification.family.transform_shape, justification.shape, profile.shape.route_append]
   cases cache (.inl initial, commitment) <;> rfl
 

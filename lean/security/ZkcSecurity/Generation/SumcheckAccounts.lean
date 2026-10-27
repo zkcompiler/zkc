@@ -1,7 +1,7 @@
 module
 
 public import ZkcTools.ProofAccount
-public import ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
+public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding
 public import ZkcSecurity.Realizations.Sumcheck.OriginalRawComposition
 public import ZkcSecurity.Families.Sumcheck.TableComponentPrimeField
 public import ZkcSecurity.Generation.OriginalSecurityBindings
@@ -159,14 +159,14 @@ unsafe def measure (root : Roots.Selection) (receipt : Name) : TermElabM Json :=
     let index := invocation.occurrence
     let some nominal := layout.calls[index]?
       | throwError "proof-account: missing nominal occurrence"
-    let occurrence := ("ZkcSecurity.Examples.Generated.OriginalArtifacts." ++ root.name ++
+    let occurrence := ("ZkcExamples.Structured.OriginalArtifacts." ++ root.name ++
       ".occurrence" ++ toString index).toName
     let step := ("ZkcExamples.Structured.Generated.Original." ++ root.name ++ "." ++
       invocation.call.name ++ "Realized").toName
     let proof := (root.securityModule ++ ".Sources.call" ++ toString index ++ "_raw").toName
     let sourceProof ← occurrenceAssociation graph proof step occurrence binding.maximum
     let occurrenceIdent := mkIdent occurrence
-    let nominalValue ← mkAppM ``ArtifactBinding.Occurrence.mk
+    let nominalValue ← mkAppM ``ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Occurrence.mk
       #[mkStrLit root.snapshot.entry, mkStrLit nominal.library, mkStrLit nominal.application]
     requireSame (← dataTerm (← `($occurrenceIdent))) nominalValue
     let branchId := "branch-" ++ toString index

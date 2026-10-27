@@ -22,8 +22,8 @@ from native_entry import native_subject
 from registry import CONTRACTS
 from request_support import Obligation, require
 from snapshot import render, string, natural
-from symbolic import process, program, indent, Unsupported
-from candidate import expression, program_expression
+from program_syntax import program, indent
+from candidate import program_expression
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = 'zkc.proof-request/0'
@@ -181,18 +181,15 @@ def wiring_term(contract, wiring):
 
 def generate(data, request):
     """Propose pure expressions only; the reviewed renderer owns all commands."""
-    contract = validate(data, request)
-    initial = [None if binding is None else contract.inputs[binding][0] for binding in request['inputs']]
-    return {'program': program(data), 'process': process(data, request['role'], initial)}
+    validate(data, request)
+    return {'program': program(data)}
 
 
 def render_certificate(data, request, proposal):
     contract = validate(data, request)
-    require(type(proposal) is dict and set(proposal) == {'program', 'process'},
-            'candidate-shape', 'Expected only program and process expression proposals')
+    require(type(proposal) is dict and set(proposal) == {'program'},
+            'candidate-shape', 'Expected only a typed program constructor proposal')
     source_program = program_expression(proposal['program'])
-    source_process = expression(proposal['process'], 'process',
-                                [item[0] for item in contract.inputs.values()])
     namespace = contract.namespace
     initial = [None if binding is None else contract.inputs[binding][0] for binding in request['inputs']]
     values = '.nil'
@@ -203,25 +200,15 @@ def render_certificate(data, request, proposal):
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
     actual_type = f'PIR.Process (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
-    unfolds = ['sourceProcess', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
+    unfolds = ['processView', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
 
-    # Guard distribution is needed only when the selected role executes a guard.
-    guarded = any(op[0] == 'guard' and op[2] == request['role'] for op in data[8])
-    expansion = ["  repeat' first", '    | (apply PIR.Process.call_congr; intro reply)']
-    if guarded:
-        expansion += ['    | (change (if _ then _ else _ : PIR.Process _ _).bind _ = _',
-                      '       rw [PIR.Process.bind_ite]', '       simp only [↓reduceIte])']
-    expansion.append('    | rfl')
-    if guarded:
-        expansion.append('    | fail_if_no_progress congr 1')
-    expansion_proof = '\n'.join(expansion)
     group_rule = '    (add safe tactic (by abel1))\n' if contract.group else ''
 
     source_data = render(data, 'GeneratedCertificate.Data').split('namespace ', 1)[1]
     external_imports = ''.join('import ' + module + '\n' for module in sorted({
         contract.properties[prop].module for prop in request['properties']
         if contract.properties[prop].module}))
-    result = external_imports + f'''import Zkc.Source.Common.Import
+    result = external_imports + f'''import Zkc.Source.Common.ProcessView
 import {contract.module}
 import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Abel
@@ -266,19 +253,14 @@ def inputs {contract.binders} :
 def verifier {contract.binders} : {actual_type} :=
   imported.denote (scalarMeaning F {generic}) id {request['role']} (inputs {parameters} {contract.arguments})
 
-def sourceProcess {contract.binders} : {actual_type} :=
-{indent(source_process)}
+noncomputable def processView {contract.binders} : {actual_type} :=
+  common_process% (verifier {parameters} {contract.arguments})
 
-theorem source_expansion {contract.binders} :
-    verifier {parameters} {contract.arguments} = sourceProcess {parameters} {contract.arguments} := by
-  change (imported.program.denote (scalarMeaning F {generic}) id {request['role']}
-    (inputs {parameters} {contract.arguments}).get).bind PIR.Process.done = _
-  rw [PIR.Process.bind_done]
-{expansion_proof}
+theorem process_view_eq {contract.binders} :
+    verifier {parameters} {contract.arguments} = processView {parameters} {contract.arguments} := rfl
 
-{('omit [DecidableEq F] in' if contract.group else '')}
 theorem correspondence {contract.binders} :
-    sourceProcess {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
+    processView {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
   aesop (rule_sets := [-builtin, -default]) (config := {{ enableSimp := false }})
     (add norm tactic (by fail_if_no_progress dsimp +instances [{', '.join(unfolds)}, PIR.Process.bind{', terminal, publicChecks, value' if contract.composed else ''}]))
     (add norm tactic (by rw [PIR.Process.bind_ite]))
@@ -289,10 +271,10 @@ theorem correspondence {contract.binders} :
 {group_rule}    (add 50% tactic (by fail_if_no_progress congr 1))
 
 theorem contract : VerifierContract {cert_args} :=
-  ⟨fun {contract.arguments} => ⟨(source_expansion {parameters} {contract.arguments}).trans
+  ⟨fun {contract.arguments} => ⟨(process_view_eq {parameters} {contract.arguments}).trans
     (correspondence {parameters} {contract.arguments})⟩⟩
 '''
-    names = ['admitted', 'source_expansion', 'correspondence', 'contract']
+    names = ['admitted', 'process_view_eq', 'correspondence', 'contract']
     for prop in request['properties']:
         registered = contract.properties[prop]
         name = 'property_' + prop.replace('-', '_')
@@ -467,7 +449,7 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
         partial = exc.stdout or b''
         (output / 'lean.log').write_text(partial.decode(errors='replace') if isinstance(partial, bytes) else partial)
         receipt['obligations'].append({'code': 'proof-budget', 'detail': 'Lean exceeded the bounded proof-generation timeout'})
-    except (Unsupported, ValueError, TypeError, KeyError, IndexError) as exc:
+    except (ValueError, TypeError, KeyError, IndexError) as exc:
         receipt['obligations'].append({'code': 'unsupported-input', 'detail': str(exc)})
     except OSError as exc:
         receipt['obligations'].append({'code': 'tool-unavailable', 'detail': str(exc)})

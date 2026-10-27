@@ -10,6 +10,7 @@ set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalHonest
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
+open ZkcExamples.Structured.SumcheckArtifacts
 open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck
 open SumcheckVerifierBodies TableComponent
 

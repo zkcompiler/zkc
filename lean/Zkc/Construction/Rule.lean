@@ -1,23 +1,18 @@
 module
 
-public import Zkc.Construction.Semantics
+public import Zkc.Construction.Context
+public import Zkc.Source.Structured.Admission
 
 @[expose] public section
 
-/-! The transcript-construction rule.
+/-! Structural construction admission for explicit plain and Fiat–Shamir profiles.
 
-`check` walks an exported validator once and accepts only programs whose
-transcript operations follow the selected construction: every received message
-is observed next with its message occurrence and the current transcript state;
-each challenge consumes the current state, carries a selected query occurrence
-and has its delivery observed next; calculations, helper calls and guards read
-data only; a loop carries the current transcript exactly once, starts and ends
-its body with nothing pending and yields its final state. Occurrence coordinates
-must be exactly the enclosing loop indices. `Zkc.Construction.check_sound`
-proves that every accepted program's ideal meaning is the Fiat–Shamir transform
-of its interactive reading. Apart from the absence of a pending observation at
-the end, the final clauses of `check` and the coordinate and occurrence-count
-conditions are deployment checks that the proof does not use.
+The plain rule carries data and loop indices only. The Fiat–Shamir rule tracks
+its affine transcript and pending observations, admitting recursively typed data.
+Both retain the exact declared return ABI. Nominal property consumers prove full
+Process equations through `Domain.Correspondence`; this check alone is not a
+source compilation or security theorem. The legacy uniform evaluator's theorem
+and its deliberately restricted checker live together in `Construction.Uniform`.
 -/
 
 set_option autoImplicit false
@@ -51,7 +46,7 @@ def CheckState.path (state : CheckState) (reference : Nat) : Option (List Nat) :
   state.paths.lookup reference
 
 def isData : Option ValueSort → Bool
-  | some (.data _) => true
+  | some (.data ty) => !ty.isService
   | _ => false
 
 /-- The transcript occurrence carries exactly the enclosing induction values. -/
@@ -75,16 +70,16 @@ starts and ends its body with nothing pending, and yields its final state.
 Every other operation refuses. -/
 def checkStep (context : Context) (state : CheckState) : Instruction → Except String CheckState
   | ⟨.receive site schema peer ty, [], results, []⟩ =>
-      match state.pending, scalarType ty with
-      | .none, some _ =>
+      match state.pending with
+      | .none =>
+          if ty.isService then .error "construction-receive-type" else
           if schema = site ∧ peer = context.role context.producer ∧ results = [.data ty] then
             .ok { state with
               sorts := state.sorts ++ [.data ty]
               pending := .observe state.sorts.length
                 (context.message site context.producer context.validator) }
           else .error "construction-receive"
-      | .none, none => .error "construction-receive-type"
-      | _, _ => .error "construction-pending"
+      | _ => .error "construction-pending"
   | ⟨.indicesEmpty, [], [.indices], []⟩ =>
       .ok { state with
         sorts := state.sorts ++ [.indices]
@@ -193,7 +188,7 @@ one host transcript of the selected suite; the selected query sites are
 distinct and each is challenged at exactly one exported operation; nothing
 remains pending, the last returned value is the final transcript state and the
 other returned values are data matching the declared outputs. -/
-def check (context : Context) (participant : Participant) : Except String Unit :=
+def checkFiatShamir (context : Context) (participant : Participant) : Except String Unit :=
   match participant.inputs.getLast? with
   | some (.transcript suite) =>
       if suite = context.suite ∧ participant.inputs.dropLast.all (fun sort => isData (some sort)) then
@@ -211,6 +206,89 @@ def check (context : Context) (participant : Participant) : Except String Unit :
         | .error error => .error error
       else .error "construction-inputs"
   | _ => .error "construction-inputs"
+
+
+/-- A plain frame carries only data and the enclosing induction references.
+There is no transcript reference or pending transcript observation. -/
+structure PlainState where
+  sorts : List ValueSort
+  inductions : List Nat := []
+  deriving DecidableEq, Repr
+
+mutual
+def checkPlainFrom (context : Context) (self peer : Nat) :
+    PlainState → List Instruction → Except String PlainState
+  | state, [] => .ok state
+  | state, instruction :: rest => do
+      let next ← checkPlainStep context self peer state instruction
+      checkPlainFrom context self peer next rest
+
+def checkPlainStep (context : Context) (self peer : Nat) (state : PlainState) :
+    Instruction → Except String PlainState
+  | ⟨.receive site schema sender ty, [], results, []⟩ =>
+      if !ty.isService ∧ schema = site ∧ sender = context.role peer ∧ results = [.data ty] then
+        .ok { state with sorts := state.sorts ++ results }
+      else .error "construction-plain-receive"
+  | ⟨.send site schema receiver, [value], [], []⟩ =>
+      if schema = site ∧ receiver = context.role peer ∧ isData state.sorts[value]? then .ok state
+      else .error "construction-plain-send"
+  | ⟨.calculate calculation, operands, results, []⟩ =>
+      if operands.map (state.sorts[·]?) = calculation.op.arguments.map (some ∘ .data) ∧
+          results = calculation.op.results.map .data ∧
+          results.all (fun sort => isData (some sort)) then
+        .ok { state with sorts := state.sorts ++ results }
+      else .error "construction-plain-calculation"
+  | ⟨.call _, operands, results, []⟩ =>
+      if operands.all (fun operand => isData state.sorts[operand]?) ∧
+          results.all (fun sort => isData (some sort)) then
+        .ok { state with sorts := state.sorts ++ results }
+      else .error "construction-plain-call"
+  | ⟨.guard _, [condition], [], []⟩ =>
+      if state.sorts[condition]? = some (.data .boolean) then .ok state
+      else .error "construction-plain-guard"
+  | ⟨.localService port request template coordinates, [], results, []⟩ =>
+      match request with
+      | ⟨"draw", [], .field field⟩ =>
+          if port.owner = context.role self ∧ port.contract = "random." ++ field ++ "/0" ∧
+              results = [.data (.field field)] ∧ template.entry = context.entry ∧
+              coordinates = state.inductions ∧ template.repeats = coordinates.length then
+            .ok { state with sorts := state.sorts ++ results }
+          else .error "construction-plain-local-service"
+      | _ => .error "construction-plain-local-service-request"
+  | ⟨.loop _ _ yielded, count :: initial, results, body⟩ =>
+      let fresh := state.sorts.length
+      if state.sorts[count]? = some (.data .index) ∧
+          initial.map (state.sorts[·]?) = results.map some ∧
+          results.all (fun sort => isData (some sort)) ∧ yielded.length = results.length then
+        match checkPlainFrom context self peer
+            ⟨state.sorts ++ .data .index :: results, state.inductions ++ [fresh]⟩ body with
+        | .ok final =>
+            if yielded.map (final.sorts[·]?) = results.map some then
+              .ok { state with sorts := state.sorts ++ results }
+            else .error "construction-plain-loop-yield"
+        | .error error => .error error
+      else .error "construction-plain-loop"
+  | ⟨.challenge .., _, _, _⟩ => .error "construction-plain-challenge"
+  | ⟨.observe .., _, _, _⟩ => .error "construction-plain-transcript"
+  | _ => .error "construction-plain-shape"
+end
+
+def checkPlain (context : Context) (self peer : Nat) (participant : Participant) : Except String Unit := do
+  if !participant.inputs.all (fun sort => isData (some sort)) then
+    throw "construction-plain-inputs"
+  let final ← checkPlainFrom context self peer ⟨participant.inputs, []⟩ participant.instructions
+  if participant.returned.map (final.sorts[·]?) = participant.outputs.map some ∧
+      participant.outputs.all (fun sort => isData (some sort)) then return ()
+  else throw "construction-plain-final"
+
+/-- Profile admission follows the actual ABI. Plain checks never append, consume
+or remove a transcript value. The legacy uniform theorem has its own explicitly
+scoped checker in `Construction.Uniform`. Generic consumers use nominal Process
+correspondence, including all frames, replies and stops. -/
+def check (context : Context) (participant : Participant) : Except String Unit :=
+  match context.profile with
+  | .plain => checkPlain context context.validator context.producer participant
+  | .fiatShamir _ => checkFiatShamir context participant
 
 
 end Zkc.Construction

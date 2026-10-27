@@ -24,12 +24,12 @@ open OracleComp OracleSpec
 variable {model : DomainModel} {art : ZkcSecurity.Endpoint.Domain.Artifacts}
   {subject : Claims.Domain.Subject model art}
 
-/-- Equal declared prices preserve the actual site classifier, including the
-maximum declared price for unknown adversary keys. -/
-theorem charge_constant (schedule : Claims.Domain.ChargeSchedule subject)
-    (queries : Nat) (value : ENNReal)
+/-- A uniform method needs a nonempty declaration to identify the maximum
+with its selected price. The general schedule schema admits no entries. -/
+theorem maximum_constant (schedule : Claims.Domain.ChargeSchedule subject)
+    (queries : Nat) (value : ENNReal) (nonempty : schedule.entries ≠ [])
     (allPrices : ∀ entry ∈ schedule.entries, entry.2.value queries = value) :
-    schedule.charge queries = fun _ _ => value := by
+    schedule.maximum queries = value := by
   have folded : ∀ entries : List (Claims.Domain.ChargeSite subject.compiled × Claims.Bound),
       entries ≠ [] → (∀ entry ∈ entries, entry.2.value queries = value) →
       (entries.map (fun entry => entry.2.value queries)).foldr max 0 = value := by
@@ -45,7 +45,14 @@ theorem charge_constant (schedule : Claims.Domain.ChargeSchedule subject)
         change max (first.2.value queries)
           (((second :: tail).map (fun entry => entry.2.value queries)).foldr max 0) = value
         rw [prices first (by simp), tailEq, max_self]
-  have maximum : schedule.maximum queries = value := folded schedule.entries schedule.nonempty allPrices
+  exact folded schedule.entries nonempty allPrices
+
+/-- Uniform pricing preserves the complete native origin classifier. -/
+theorem charge_constant (schedule : Claims.Domain.ChargeSchedule subject)
+    (queries : Nat) (value : ENNReal) (nonempty : schedule.entries ≠ [])
+    (allPrices : ∀ entry ∈ schedule.entries, entry.2.value queries = value) :
+    schedule.charge queries = fun _ _ => value := by
+  have maximum := maximum_constant schedule queries value nonempty allPrices
   funext history event
   unfold Claims.Domain.ChargeSchedule.charge
   cases event <;> try exact maximum
@@ -58,17 +65,15 @@ theorem charge_constant (schedule : Claims.Domain.ChargeSchedule subject)
 /-- Assign one declared price to every source-selected actual charge site.
 Site discovery and its source labels remain owned by the generated Subject. -/
 def uniformSchedule (subject : Claims.Domain.Subject model art) (price : Claims.Bound)
-    (nonempty : subject.sites ≠ [])
     (unique : (subject.sites.map (·.label)).Nodup)
     (nativeUnique : (subject.sites.map (·.native)).Nodup) : Claims.Domain.ChargeSchedule subject where
   entries := subject.sites.map (fun site => (site, price))
-  nonempty := by simpa using nonempty
   unique := by simpa only [List.map_map, Function.comp_def] using unique
   nativeUnique := by simpa only [List.map_map, Function.comp_def] using nativeUnique
 
-theorem uniformSchedule_prices (price : Claims.Bound) (nonempty unique nativeUnique)
+theorem uniformSchedule_prices (price : Claims.Bound) (unique nativeUnique)
     (queries : Nat) :
-    ∀ entry ∈ (uniformSchedule subject price nonempty unique nativeUnique).entries,
+    ∀ entry ∈ (uniformSchedule subject price unique nativeUnique).entries,
       entry.2.value queries = price.value queries := by
   intro entry member
   obtain ⟨site, _, rfl⟩ := List.mem_map.mp member
@@ -83,7 +88,7 @@ structure Installation (subject : Claims.Domain.Subject model art) where
   presented : art.Statement model → Domain.History model.toCarriers → PIR.Process signature (Domain.Result model.toCarriers)
   bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
     (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context art.participant
-      (inputs statement ++ [.transcript subject.compiled.selection.context.suite initial]))
+      (Domain.inputFrame subject.compiled.selection.context (inputs statement) initial))
     (presented statement initial)
 
 /-- All-data public ABIs have one shared nominal encoder. A root supplies
@@ -95,7 +100,7 @@ def Installation.typed
     (presented : art.Statement model → Domain.History model.toCarriers → PIR.Process signature (Domain.Result model.toCarriers))
     (bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
       (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context art.participant
-        ((Domain.encodeValues statement).getD [] ++ [.transcript subject.compiled.selection.context.suite initial]))
+        (Domain.inputFrame subject.compiled.selection.context ((Domain.encodeValues statement).getD []) initial))
       (presented statement initial)) : Installation subject where
   signature := signature
   absorb := absorb
@@ -107,16 +112,16 @@ def Installation.typed
 variable (installation : Installation subject)
 variable [∀ event, SampleableType (@Domain.Raw model.toCarriers event)]
 
-/-- One certificate construction for all installed components and sequences. -/
-noncomputable def assembled (value cost : ENNReal)
+/-- Assemble a certificate at the exact supplied schedule. No distribution,
+price or syntactic query count is inferred by this consumer. -/
+noncomputable def assembled (schedule : Claims.Domain.ChargeSchedule subject)
+    (queries : Nat) (cost : ENNReal)
     (rejects : ∀ statement, subject.FalseStatement statement → ∀ initial,
-      Zkc.Obligations.Derivation installation.absorb (boundedEscape (fun _ _ => value))
+      Zkc.Obligations.Derivation installation.absorb (boundedEscape (schedule.charge queries))
         (fun _ result => subject.compiled.acceptance result ≠ some true)
         initial (installation.presented statement initial))
-    (costs : ∀ statement initial, Typed.ChargedCostBound installation.absorb (fun _ _ => value)
-      (installation.presented statement initial) initial cost)
-    (schedule : Claims.Domain.ChargeSchedule subject) (queries : Nat)
-    (prices : ∀ entry ∈ schedule.entries, entry.2.value queries = value) :
+    (costs : ∀ statement initial, Typed.ChargedCostBound installation.absorb (schedule.charge queries)
+      (installation.presented statement initial) initial cost) :
     Claims.Domain.ChargedExport subject schedule queries cost where
   signature := installation.signature
   absorb := installation.absorb
@@ -127,19 +132,12 @@ noncomputable def assembled (value cost : ENNReal)
   certificate := (reduction installation.absorb
     (fun _ result => subject.compiled.acceptance result ≠ some true)
     (schedule.charge queries)).toCertificate _ (fun _ _ post => post)
-  doomed := by
-    intro statement falseStatement initial
-    rw [charge_constant schedule queries value prices]
-    exact derived_doomed (rejects statement falseStatement initial)
-  costBound := by
-    intro statement initial
-    rw [charge_constant schedule queries value prices]
-    exact costs statement initial
+  doomed statement falseStatement initial := derived_doomed (rejects statement falseStatement initial)
+  costBound := costs
 
 noncomputable abbrev binding (subject : Claims.Domain.Subject model art) (application : String) :
     BindingCodec (art.Statement model) (Domain.Event model.toCarriers) :=
-  DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-    (DomainReduction.policyArity subject.compiled) application
+  DomainReduction.policyCodec subject.compiled application
 
 /-- Full acceptance includes the absence of unread proof values. -/
 noncomputable def probability (subject : Claims.Domain.Subject model art) (application : String)
@@ -166,37 +164,22 @@ theorem adaptive_charged {schedule : Claims.Domain.ChargeSchedule subject} {quer
     (binding subject application).encode exported.inputs
     (fun statement => exported.presented statement ((binding subject application).encode statement))
     exported.encoded (fun statement => exported.bridge statement _)
-    (DomainReduction.policyCodec_determined _ _ (DomainReduction.policyArity subject.compiled) _)
+    (DomainReduction.policyCodec_determined subject.compiled _)
     subject.FalseStatement (exported.certificate.toReduction exported.absorb)
     (fun _ _ post => post) (fun statement falseStatement => exported.doomed statement falseStatement _)
     cost (fun statement => exported.costBound statement _) prover proverCost bounded
 
-/-- Total query budgets count every visit, including repeated cached keys. -/
+/-- Total query budgets count every visit, including repeated cached keys.
+The maximum comes from the checked schedule and can depend on the query bound. -/
 theorem adaptive {schedule : Claims.Domain.ChargeSchedule subject} {queries : Nat} {cost : ENNReal}
     (exported : Claims.Domain.ChargedExport subject schedule queries cost)
-    (value : ENNReal) (prices : ∀ entry ∈ schedule.entries, entry.2.value queries = value)
     (application : String)
     (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
     (bounded : IsTotalQueryBound prover queries) :
-    probability subject application prover ≤ (queries : ENNReal) * value + cost := by
-  have priced : ∀ history event, schedule.charge queries history event ≤ value := by
-    rw [charge_constant schedule queries value prices]
-    exact fun _ _ => le_rfl
+    probability subject application prover ≤ (queries : ENNReal) * schedule.maximum queries + cost := by
   exact adaptive_charged exported application prover _
     (Typed.worstCaseCostBound_of_isTotalQueryBound (Typed.keyCharge (schedule.charge queries))
-      (fun key => Typed.keyCharge_le priced key) prover queries bounded)
-
-/-- A uniform per-event field price gives the advertised scalar query bound. -/
-theorem adaptive_fraction {schedule : Claims.Domain.ChargeSchedule subject} {queries : Nat}
-    (divisor : ENNReal) (budget : Nat)
-    (exported : Claims.Domain.ChargedExport subject schedule queries (budget • (1 / divisor)))
-    (prices : ∀ entry ∈ schedule.entries, entry.2.value queries = 1 / divisor)
-    (application : String)
-    (prover : OracleComp (TranscriptOracle.DomainSpec model.toCarriers) (art.Statement model × Domain.Proof model.toCarriers))
-    (bounded : IsTotalQueryBound prover queries) :
-    probability subject application prover ≤ ((queries : ENNReal) + budget) / divisor := by
-  have result := adaptive exported (1 / divisor) prices application prover bounded
-  simpa only [nsmul_eq_mul, div_eq_mul_inv, one_mul, add_mul] using result
+      (fun key => Typed.keyCharge_le (schedule.charge_le_maximum queries) key) prover queries bounded)
 
 end ZkcSecurity.Claims.CompiledSoundness
 
@@ -209,27 +192,26 @@ variable {model : DomainModel} {art : ZkcSecurity.Endpoint.Domain.Artifacts}
   (capabilities : Claims.Domain.Capabilities model art.original)
 local instance : DecidableEq (Domain.Event model.toCarriers) := Classical.decEq _
 
-/-- Canonical scalar specialization of one installed all-statement export. -/
-theorem scalar_meaning (schedule : Claims.Domain.ChargeSchedule subject) (divisor : ENNReal)
-    (budget : Nat)
-    (exports : ∀ queries, @Claims.Domain.ChargedExport model art subject schedule queries (budget • (1 / divisor)) capabilities.samples)
-    (prices : ∀ queries entry, entry ∈ schedule.entries → entry.2.value queries = 1 / divisor)
+/-- Scalar output requires a checked conversion from the schedule maximum
+and the query-dependent validator cost to the selected error function. -/
+theorem scalar_meaning (schedule : Claims.Domain.ChargeSchedule subject)
+    (cost error : Nat → ENNReal)
+    (exports : ∀ queries, @Claims.Domain.ChargedExport model art subject schedule queries (cost queries) capabilities.samples)
+    (bound : ∀ (queries : Nat), (queries : ENNReal) * schedule.maximum queries + cost queries ≤ error queries)
     (selected : Model) (adaptiveForm : selected.form = .adaptive) :
-    Claims.Domain.Soundness capabilities subject selected
-      (fun queries => ((queries : ENNReal) + budget) / divisor) := by
+    Claims.Domain.Soundness capabilities subject selected error := by
   classical
   let _ := capabilities.samples
   simp only [Claims.Domain.Soundness, adaptiveForm]
   intro prover queries _ bounded
-  have result := adaptive (exports queries) (1 / divisor) (prices queries) selected.application prover bounded
-  simpa only [probability, binding, nsmul_eq_mul, div_eq_mul_inv, one_mul, add_mul] using result
+  exact (adaptive (exports queries) selected.application prover bounded).trans (bound queries)
 
 /-- Canonical charged meaning retains the exact reduction witness as well as
 weighted soundness of the full compiled experiment. -/
-theorem charged_meaning (schedule : Claims.Domain.ChargeSchedule subject) (cost : ENNReal)
-    (exports : ∀ queries, @Claims.Domain.ChargedExport model art subject schedule queries cost capabilities.samples)
+theorem charged_meaning (schedule : Claims.Domain.ChargeSchedule subject) (cost : Nat → ENNReal)
+    (exports : ∀ queries, @Claims.Domain.ChargedExport model art subject schedule queries (cost queries) capabilities.samples)
     (selected : Model) (adaptiveForm : selected.form = .adaptive)
-    (validatorCost : ∀ queries, selected.validatorCost.value queries = cost) :
+    (validatorCost : ∀ queries, selected.validatorCost.value queries = cost queries) :
     Claims.Domain.SoundnessArguments.meaning capabilities
       (⟨selected, .charged schedule⟩ : Claims.Domain.SoundnessArguments subject) := by
   classical

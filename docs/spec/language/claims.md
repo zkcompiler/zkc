@@ -136,10 +136,15 @@ Every property application has one positional target, required named `model`,
 | `accept` | `out.port` with optional product field path; Boolean result, same selector as the retained target and proof Entry where present; imported-language claims require the checked proof Entry's selector |
 | `stage` | `interactive`, `compiled_ideal` or `executable_bytes`; protocol subjects support `interactive` |
 | `error` | Scalar expression, including completeness failure bounds when a registered property defines that meaning |
-| `charge` | `per_site(sites.path, expression)` or a nonempty list of these with distinct paths |
+| `charge` | `per_site(sites.path, expression)` or a list of these with distinct paths (possibly empty) |
 | `guarantee` | Versioned guarantee application, such as `guarantees.forking@0(...)` |
 | `capabilities` | Optional list of distinct versioned capability applications; defaults to `[]` |
 | `parameters` | Optional expression carrying property-specific arguments; defaults to `null` |
+
+An empty `charge=[]` requests the charged property at an empty schedule. Its
+per-key charge is zero; it does not assert rejection or discharge a reduction
+capability. The selected registered property still fixes the experiment,
+validator cost and required evidence.
 
 Unknown envelope fields, duplicate named arguments at any depth, multiple
 quantities and positional arguments following named arguments are refused.

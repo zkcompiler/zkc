@@ -54,7 +54,7 @@ theorem challenge_reading (context : Context) (suite field : String) (template :
         (env ++ [.data (.field field (fieldReply request raw)),
           .transcript suite (history ++ [.challenge origin])])) := by
     simp [Domain.View.challenge, transcript, indices, found, request, fieldReply,
-      Domain.View.append, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty]
+      Domain.View.append, Domain.sortsMatch, Domain.Value.sort]
   rw [actual]
   apply ReadingTo.query (I := Domain.effects carriers) history origin _ (.query history origin) _ id
     (drawRequest_of_request request) rfl
@@ -75,7 +75,7 @@ theorem challenge_coherent (context : Context) (suite field : String) (template 
         (env ++ [.data (.field field (fieldReply request raw)),
           .transcript suite (history ++ [.challenge origin])])) := by
     simp [Domain.View.challenge, transcript, indices, found, request, fieldReply,
-      Domain.View.append, Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty]
+      Domain.View.append, Domain.sortsMatch, Domain.Value.sort]
   rw [actual]
   exact .query history origin _ (drawRequest_of_request request) (fun _ => .done _ _ trivial)
 

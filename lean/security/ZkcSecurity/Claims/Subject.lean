@@ -37,6 +37,7 @@ structure Subject (F G : Type) [Field F] [DecidableEq F] [AddCommGroup G] [Modul
   reference : SubjectRef
   stageMatched : reference.stage = stage endpoint
   compiled : Compiled art
+  connection : compiled.SourceConnection (F := F) (G := G)
   target : SoundnessTarget compiled F G
   /-- A selected imported language must be exported under this versioned key.
   Retained targets do not consult this field. -/

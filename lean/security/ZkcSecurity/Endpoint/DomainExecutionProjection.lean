@@ -79,14 +79,14 @@ theorem Compiled.verifier_readExecution {art : Artifacts} (compiled : Compiled a
         (fun result => (Zkc.Transcript.mapOutcome compiled.acceptance result.1, result.2)) <$>
           readExecution query
             (Construction.Domain.participant model compiled.imported.program compiled.selection.context
-              art.participant (inputs ++ [.transcript compiled.selection.context.suite initial])) proof := by
+              art.participant (Construction.Domain.inputFrame compiled.selection.context inputs initial)) proof := by
   unfold verifier
   cases Construction.Domain.encodeValues statement with
   | none => rfl
   | some inputs =>
     simp only
     rw [← readExecution_eq query _
-      ⟨inputs ++ [.transcript compiled.selection.context.suite initial], proof, ()⟩]
+      ⟨Construction.Domain.inputFrame compiled.selection.context inputs initial, proof, ()⟩]
     simp [Construction.Domain.validate, Functor.map_map]
 
 end ZkcSecurity.Endpoint.Domain

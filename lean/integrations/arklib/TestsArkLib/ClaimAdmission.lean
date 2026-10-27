@@ -2,6 +2,7 @@ import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Arithmetic
 import Zkc.Claims.Receipt
 import ZkcArkLib.Examples.Subjects.Sumcheck.Evidence
+import ZkcArkLib.Examples.Subjects.Sumcheck.Lowering
 
 /-! The actual Sumcheck source-shaped scalar requests, at both interpreted
 stages, retain symbolic Q and a universally bound application context. -/
@@ -23,6 +24,7 @@ private def subject (endpoint : Semantics) : Subject F G artifacts endpoint wher
   reference := ⟨"admitted-sumcheck-unit", "example::Proof", stage endpoint, []⟩
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .retained Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := []

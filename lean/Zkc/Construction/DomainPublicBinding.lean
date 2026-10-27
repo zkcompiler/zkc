@@ -14,107 +14,60 @@ namespace Zkc.Construction.Domain.PublicBinding
 open Zkc.Source Zkc.Source.Structured
 variable {carriers : Carriers}
 
-mutual
-  def publicValue : (ty : Ty) → carriers.Value ty → PublicValue (Payload carriers)
-    | .boolean, value => .scalar (.boolean value)
-    | .index, value => .count value
-    | .field domain, value => .scalar (.field domain value)
-    | .vector domain, values => .vector (values.map (.field domain))
-    | .group domain, value => .scalar (.group domain value)
-    | .service _, handle => .count handle
+/-- Checked public schemas contain data only. This does not assert validity,
+representability, canonical byte encoding or any relation. -/
+def DataSchema (tys : List Ty) : Prop := tys.all dataType = true
 
-    | .sequence element, values => .sequence (PublicValues.ofList (values.map (publicValue element)))
-    | .product identity constructor fields, value =>
-      .product identity constructor (publicFields fields value)
+/-- Mandatory arity prevents truncation, including when the last value is absent.
+The fixed schema proof excludes capabilities without erasing raw invalid data. -/
+def encodeRow : (positions : List Nat) → {tys : List Ty} → (values : Values carriers.Value tys) →
+    positions.length = tys.length → DataSchema tys → List (Nat × Payload carriers)
+  | [], [], .nil, _, _ => []
+  | position :: positions, ty :: _, .cons value rest, arity, data =>
+      (position, ⟨ty, by simpa [DataSchema, dataType] using (Bool.and_eq_true_iff.mp data).1, value⟩) ::
+        encodeRow positions rest (by simpa using arity) (Bool.and_eq_true_iff.mp data).2
 
-  def publicFields : (fields : ProductFields) → carriers.ProductValue fields → PublicValues (Payload carriers)
-    | .nil, () => .nil
-    | .cons type rest, (value, values) => .cons (publicValue type value) (publicFields rest values)
-end
-
-mutual
-  theorem publicValue_injective : ∀ ty : Ty,
-      Function.Injective (publicValue (carriers := carriers) ty)
-    | .boolean, _, _, same => by simpa [publicValue] using same
-    | .index, _, _, same => by simpa [publicValue] using same
-    | .field _, _, _, same => by simpa [publicValue] using same
-    | .vector _, _, _, same => by
-        simp only [publicValue, PublicValue.vector.injEq] at same
-        exact (List.map_inj_right (fun _ _ equal => by cases equal; rfl)).mp same
-    | .group _, _, _, same => by simpa [publicValue] using same
-    | .service _, _, _, same => by simpa [publicValue] using same
-
-    | .sequence element, _, _, same => by
-        simp only [publicValue, PublicValue.sequence.injEq] at same
-        exact (List.map_inj_right (fun _ _ equal => publicValue_injective element equal)).mp (PublicValues.ofList_injective same)
-    | .product _ _ fields, _, _, same => by
-        simp only [publicValue, PublicValue.product.injEq, true_and] at same
-        exact publicFields_injective fields same
-
-  theorem publicFields_injective : ∀ fields : ProductFields,
-      Function.Injective (publicFields (carriers := carriers) fields)
-    | .nil, (), (), _ => rfl
-    | .cons type rest, (value, values), (other, others), same => by
-        have components := PublicValues.cons.inj same
-        have head := publicValue_injective type components.1
-        have tail := publicFields_injective rest components.2
-        cases head
-        cases tail
-        rfl
-end
-
-/-- Decimal source coordinates cover every Nat, without bounded-port truncation. -/
-theorem coordinate_injective : Function.Injective (toString : Nat → String) := by
-  intro first second same
-  have decoded := congrArg (fun text : String => Nat.ofDigitChars 10 text.toList 0) same
-  simpa only [Nat.toString_eq_repr, Nat.toList_repr, Nat.ofDigitChars_ten_toDigits] using decoded
-
-/-- Mandatory arity prevents truncation, including when the last value is absent. -/
-def row : (positions : List Nat) → {tys : List Ty} → (values : Values carriers.Value tys) →
-    positions.length = tys.length → Row (Payload carriers)
-  | [], [], .nil, _ => []
-  | position :: positions, _ :: _, .cons value rest, arity =>
-      (toString position, publicValue _ value) :: row positions rest (by simpa using arity)
-
-theorem row_injective : ∀ (positions : List Nat) {tys : List Ty}
-    (arity : positions.length = tys.length),
-    Function.Injective (fun values : Values carriers.Value tys => row positions values arity)
-  | [], [], _, .nil, .nil, _ => rfl
-  | position :: positions, ty :: _, arity, .cons value rest, .cons value' rest', same => by
-      simp only [row, List.cons.injEq, Prod.mk.injEq, true_and] at same
-      rw [publicValue_injective ty same.1,
-        row_injective positions (by simpa using arity) same.2]
+theorem encodeRow_injective : ∀ (positions : List Nat) {tys : List Ty}
+    (arity : positions.length = tys.length) (data : DataSchema tys),
+    Function.Injective (fun values : Values carriers.Value tys => encodeRow positions values arity data)
+  | [], [], _, _, .nil, .nil, _ => rfl
+  | position :: positions, ty :: _, arity, data, .cons value rest, .cons value' rest', same => by
+      simp only [encodeRow, List.cons.injEq, Prod.mk.injEq, true_and, Payload.mk_inj] at same
+      rw [same.1, encodeRow_injective positions (by simpa using arity)
+        (Bool.and_eq_true_iff.mp data).2 same.2]
 
 def history {tys : List Ty} (application : String) (positions : List Nat)
-    (values : Values carriers.Value tys) (arity : positions.length = tys.length) : History carriers :=
-  [.publicBinding ⟨application, row positions values arity⟩]
+    (values : Values carriers.Value tys) (arity : positions.length = tys.length)
+    (data : DataSchema tys) : History carriers :=
+  [.publicBinding ⟨application, encodeRow positions values arity data⟩]
 
 /-- Identity of applications is explicit, while typed determination is raw-all. -/
 theorem history_eq_iff {tys : List Ty} (application other : String) (positions : List Nat)
-    (arity : positions.length = tys.length) (values values' : Values carriers.Value tys) :
-    history application positions values arity = history other positions values' arity ↔
+    (arity : positions.length = tys.length) (data : DataSchema tys)
+    (values values' : Values carriers.Value tys) :
+    history application positions values arity data = history other positions values' arity data ↔
       application = other ∧ values = values' := by
   constructor
   · intro same
-    have fields : application = other ∧ row positions values arity = row positions values' arity := by
+    have fields : application = other ∧ encodeRow positions values arity data = encodeRow positions values' arity data := by
       simpa [history] using same
-    exact ⟨fields.1, row_injective positions arity fields.2⟩
+    exact ⟨fields.1, encodeRow_injective positions arity data fields.2⟩
   · rintro ⟨rfl, rfl⟩
     rfl
 
 /-- Decode at the admitted public ABI, then use the same typed constructor.
 Exact decoding refuses missing/excess values and wrong nominal data types. -/
 def fromEnvironment {tys : List Ty} (application : String) (positions : List Nat)
-    (arity : positions.length = tys.length) (environment : Environment carriers) :
-    Option (History carriers) := do
+    (arity : positions.length = tys.length) (data : DataSchema tys)
+    (environment : Environment carriers) : Option (History carriers) := do
   let values ← decodeValues tys environment
-  return history application positions values arity
+  return history application positions values arity data
 
 theorem fromEnvironment_encodeValues {tys : List Ty} (values : Values carriers.Value tys)
     (application : String) (positions : List Nat) (arity : positions.length = tys.length)
-    {encoded : Environment carriers} (encoding : encodeValues values = some encoded) :
-    fromEnvironment application positions arity encoded =
-      some (history application positions values arity) := by
+    (data : DataSchema tys) {encoded : Environment carriers} (encoding : encodeValues values = some encoded) :
+    fromEnvironment application positions arity data encoded =
+      some (history application positions values arity data) := by
   simp [fromEnvironment, decodeValues_encodeValues encoding]
 
 /-- Preserve every original input coordinate, including absent private/service inputs. -/
@@ -187,6 +140,12 @@ theorem selectionArity {original : Snapshot} (imported : Imported original)
     (checked : selection.check imported participant = true) :
     participant.policy.publicInputs.length = selection.publics.length := by
   simp only [Selection.check, Bool.and_eq_true, beq_iff_eq] at checked
-  exact checked.1.1.2.symm
+  exact checked.2.1.1.2.symm
+
+/-- Public data eligibility is checked once at selection, independently of values. -/
+theorem selectionData {original : Snapshot} (imported : Imported original)
+    (participant : Participant) (selection : Selection imported.program.payload.entry.outputs)
+    (checked : selection.check imported participant = true) : DataSchema selection.publics := by
+  exact (Bool.and_eq_true_iff.mp checked).1
 
 end Zkc.Construction.Domain.PublicBinding

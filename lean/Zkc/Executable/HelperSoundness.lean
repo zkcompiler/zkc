@@ -1,7 +1,8 @@
 module
 
+public import Zkc.Construction.ScalarAdapter
 public import Zkc.Executable.Helpers
-public import Zkc.Executable.Soundness
+public import Zkc.Executable.NativeLaws
 public import Zkc.Source.Structured.Linking
 
 @[expose] public section
@@ -451,7 +452,7 @@ theorem sound_calculation (table : Structured.Meanings F G) (calculation : Calcu
     (Resolved.calculate calculation).evaluate (encodeValues arguments) =
       mapOutcome encodeValues (Construction.closedOutcome
         (Evaluation.operation SiteObservations.closed table calculation.op arguments callbacks)) := by
-  rw [Calculation.operation_eq]
+  rw [Evaluation.operation_eq_operationOn, Uniform.DomainAdapter.operationOn_calculation]
   simp only [Resolved.evaluate, Zkc.Construction.calculate, decodeValues_encodeValues arguments data]
   cases calculation.evaluate arguments <;> rfl
 
@@ -824,7 +825,7 @@ theorem walkOperation_sound (table : Structured.Meanings F G) {op : Structured.O
                         refine ⟨fun outs returned => ?_, fun reason stopped => ?_⟩
                         · rw [returned] at computed
                           have encodedLength : outputs'.length = (encodeValues outs).length := by
-                            rw [encodeValues_length]; exact length
+                            rw [Zkc.Construction.Uniform.encodeValues_length]; exact length
                           refine ⟨evalSteps_operation vocabulary validator resolvedEq looked computed encodedLength,
                             fresh_zip fresh _, NamesAgree.zip outs env distinct length, length, ?_⟩
                           exact ScopeHolds.bind holds bindEq encodedLength
@@ -1321,7 +1322,7 @@ theorem walkRegion_sound : ∀ (fuel : Nat) (available : List CheckedDefinition)
                                               obtain ⟨cost, evaluated⟩ := region_values vocabulary validator takenEnds
                                                 regionSound
                                               have encodedLength : bound.length = (encodeValues results).length := by
-                                                rw [encodeValues_length]; exact length
+                                                rw [Zkc.Construction.Uniform.encodeValues_length]; exact length
                                               have reached := evalSteps_cond vocabulary validator (rest := rest)
                                                 (site := site) (yes := yesSteps) (no := noSteps) (outputs := bound)
                                                 conditionLooked capturesLooked (by rw [sameSteps]; exact evaluated)
@@ -1442,7 +1443,7 @@ theorem checkHelper_sound {definitions : List CheckedDefinition} (distinct : (de
                                           rw [reached, evalSteps_ret vocabulary validator
                                             (lookupAll_of_agrees outs returnedLength returnedAgree)]
                                           refine ⟨rfl, ?_, ?_⟩
-                                          · rw [encodeValues_length]
+                                          · rw [Zkc.Construction.Uniform.encodeValues_length]
                                             simpa using (congrArg List.length resultSorts).symm
                                           · rw [resultSorts]
                                             exact encodeValues_sorted outs

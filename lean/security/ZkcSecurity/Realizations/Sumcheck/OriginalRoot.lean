@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Realizations.Sumcheck.OriginalRawComposition
 public import ZkcSecurity.Realizations.Sumcheck.OriginalHonestReduce
-public import ZkcSecurity.Realizations.Sumcheck.ArtifactRoot
+public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot
 public import ZkcSecurity.FiatShamir.HonestReadbackCompleteness
 public import ZkcSecurity.Families.Sumcheck.TableComponentNominalLossless
 
@@ -16,6 +16,7 @@ set_option maxRecDepth 50000
 noncomputable section
 namespace ZkcSecurity.Realizations.Sumcheck.OriginalRoot
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
+open ZkcExamples.Structured.SumcheckArtifacts
 open ZkcSecurity.FiatShamir ZkcSecurity.Families.Sumcheck TableComponent
 open ZkcSecurity.Realizations.Sumcheck
 open ZkcSecurity.Realizations.Sumcheck.OriginalRaw
@@ -69,7 +70,7 @@ def closedPost (reached : Domain.History (uniformCarriers F G))
     (result : Result (F := F) (G := G)) : Prop :=
   result.2.history = reached ∧ result.2.frames = []
 
-def schedule (occurrence : Realizations.Sumcheck.ArtifactBinding.Occurrence)
+def schedule (occurrence : ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Occurrence)
     (context : Zkc.Construction.Context) : Nominal.Schedule "bls12-381.fr" where
   low index := (occurrence.origins context index).low
   high index := (occurrence.origins context index).high
@@ -78,8 +79,8 @@ def schedule (occurrence : Realizations.Sumcheck.ArtifactBinding.Occurrence)
   request _ := rfl
 
 theorem routes (routing : Original.Routing)
-    (occurrence : Realizations.Sumcheck.ArtifactBinding.Occurrence) (handle : Nat)
-    (checked : ∀ index, Realizations.Sumcheck.ArtifactBinding.Routes routing occurrence.protocol
+    (occurrence : ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Occurrence) (handle : Nat)
+    (checked : ∀ index, ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Routes routing occurrence.protocol
       [⟨qualifyProtocolSite occurrence.protocol.applicationPrefix "s15", index⟩] handle
       (occurrence.origins routing.context index)) :
     OriginalSecurity.Routes routing ⟨occurrence.protocol, handle⟩ (schedule occurrence routing.context) [] := by

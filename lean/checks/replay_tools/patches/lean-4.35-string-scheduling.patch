@@ -1,0 +1,43 @@
+--- a/src/Lean/Replay.lean
++++ b/src/Lean/Replay.lean
+@@ -39,6 +39,7 @@
+   pending : NameSet := {}
+   postponedConstructors : NameSet := {}
+   postponedRecursors : NameSet := {}
++  hasStrings : Bool := false
+ 
+ abbrev M := ReaderT Context <| StateRefT State IO
+ 
+@@ -74,6 +75,10 @@
+ partial def replayConstant (name : Name) : M Unit := do
+   if ← isTodo name then
+     let some ci := (← read).newConstants[name]? | unreachable!
++    unless (← get).hasStrings do
++      if (ci.type.find? Expr.isStringLit).isSome ||
++          (ci.value? (allowOpaque := true)).any (fun e => (e.find? Expr.isStringLit).isSome) then
++        replayStringPrimitives
+     replayConstants ci.getUsedConstantsAsSet
+     -- Check that this name is still pending: a mutual block may have taken care of it.
+     if (← get).pending.contains name then
+@@ -139,6 +144,21 @@
+ partial def replayConstants (names : NameSet) : M Unit := do
+   for n in names do replayConstant n
+ 
++/-- Install implicit literal dependencies before traversing ordinary dependencies.
++`pending` means scheduled, not installed; a prerequisite still pending here is a cycle.
++The readiness flag is set only after both declarations have passed normal kernel checking. -/
++partial def replayStringPrimitives : M Unit := do
++  for name in [`Char.ofNat, `String.ofList] do
++    if ((← get).env.find? name).isNone then
++      if (← get).pending.contains name then
++        throw <| IO.userError s!"Cyclic string literal prerequisite: {name}"
++      unless (← get).remaining.contains name do
++        throw <| IO.userError s!"Unavailable string literal prerequisite: {name}"
++      replayConstant name
++      unless ((← get).env.find? name).isSome do
++        throw <| IO.userError s!"String literal prerequisite not installed: {name}"
++  modify fun s => { s with hasStrings := true }
++
+ end
+ 
+ /--

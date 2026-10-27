@@ -69,8 +69,9 @@ def published (_target : RetainedTarget imported policy publics)
     (statement : Values (assignment F G) publics) (type : Ty) (index : Nat) :
     Option (assignment F G type) := do
   let position ← policy.publicInputs.idxOf? index
-  let value ← (encodeValues statement)[position]?
-  Value.decode type value
+  let encoded ← Domain.encodeValues statement
+  let value ← encoded[position]?
+  Domain.Value.decode type value
 
 def publishedInputs (target : RetainedTarget imported policy publics)
     (statement : Values (assignment F G) publics) :

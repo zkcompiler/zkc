@@ -7,7 +7,7 @@ public import ZkcExamples.Structured.SumcheckSourceVerifier
 
 /-! The compiled Sumcheck verifier read through the source rounds.
 
-`SumcheckProof` is generated from the Entry's exports. With an admitted round
+`SumcheckArtifact` records the Entry's exports. With an admitted round
 count and a decoded verifier table, its original validator is the source rounds
 followed by the multilinear terminal check
 (`SumcheckSourceVerifier.verifier_checked`), so the compiled verifier is the
@@ -27,9 +27,7 @@ theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
     (handle : Nat) (table : Zkc.Polynomial.Multilinear.Table F rounds)
     (decoded : Zkc.Polynomial.Multilinear.ofList? rounds values = some table)
     (vectorBound : values.length < indexLimit) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
-          (inputs values claim rounds ++ [.transcript initial]) proof =
+    compiledVerifier challenge values claim rounds initial proof =
       transform context challenge
         (((PIR.repeatN rounds (ZkcExamples.Structured.SumcheckVerifierLaws.roundPlain (G := G)
             ZkcExamples.Structured.SumcheckSourceVerifier.childContext (some handle)) (some [], some claim)).bind

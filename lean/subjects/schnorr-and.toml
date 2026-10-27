@@ -16,7 +16,7 @@ construction = true
 data = "lean/ZkcExamples/Construction/SchnorrAndProofData.lean"
 bodies = "lean/ZkcExamples/Construction/SchnorrAndProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/SchnorrAndProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SchnorrAndProof.lean"
+glue = "lean/ZkcExamples/Construction/SchnorrAndArtifact.lean"
 artifacts = "lean/security/ZkcSecurity/Examples/Subjects/SchnorrAnd/Artifacts.lean"
 claims = "lean/security/ZkcSecurity/Examples/Subjects/SchnorrAnd/Claims.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrAndData.lean"
@@ -35,6 +35,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "native-challenge-reads-host", "native-domain-separator"]
 
 [construction]
+namespace = "ZkcExamples.Construction.SchnorrAndProof"
+connection = "ZkcExamples.Construction.SchnorrAndProof"
 admission = "views"
 inputs = "values"
 model = "Zkc.Protocols.Schnorr.Variants.conjunction wiring"

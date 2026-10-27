@@ -24,14 +24,23 @@ private def site : Site compiled.context where
   label := "challenge"
   native := "label_6368616c6c656e6765"
   delivery := "label_64656c6976657279_0"
-  selected := by change _ ∈ ZkcExamples.Construction.GuessProof.context.draws; rw [ZkcExamples.Construction.GuessProof.context_eq]; simp
+  selected := by
+    change _ ∈ ZkcExamples.Construction.GuessProof.context.draws
+    rw [ZkcExamples.Construction.GuessProof.context_eq]
+    change ("label_6368616c6c656e6765", "label_64656c6976657279_0") ∈
+      [("label_6368616c6c656e6765", "label_64656c6976657279_0")]
+    exact List.mem_cons_self
   request := .draw "bls12-381.fr"
-  requestSelected := by change ZkcExamples.Construction.GuessProof.context.request = _; rw [ZkcExamples.Construction.GuessProof.context_eq]
+  requestSelected := by
+    change ZkcExamples.Construction.GuessProof.context.request = _
+    rw [ZkcExamples.Construction.GuessProof.context_eq]
+    rfl
 
 private def subject : Subject F G artifacts .idealMeaning where
   reference := ⟨"admitted-guess-unit", "example::Proof", .compiledIdeal, []⟩
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .importedLanguage Contract.importedLanguage
   importedRegistry := ⟨[⟨⟨"languages.guess", 0⟩, "arklib.guess.language/0", some Contract.importedLanguage⟩]⟩
   importedRegistered := by

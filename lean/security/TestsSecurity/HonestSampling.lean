@@ -19,8 +19,7 @@ noncomputable instance samples : (event : Domain.Event carriers) → SampleableT
 noncomputable instance : DecidableEq (Domain.Event carriers) := Classical.decEq _
 
 def context : Context :=
-  ⟨"sampling-control", ["prover", "verifier"], 0, 1, 4,
-    "random.f7/0", some (.draw "f7"), "ideal", []⟩
+  Context.fiatShamir "sampling-control" (["prover", "verifier"]) 0 1 4 "random.f7/0" (some (.draw "f7")) "ideal" ([])
 def port : ServicePort := ⟨"service_3", "prover", 3, 3, "random.f7/0"⟩
 def origin : Origin := .query context.entry "draw" "input_3" port.contract port.owner (.draw "f7")
 
@@ -143,7 +142,8 @@ theorem public_pair_shares_cache (program : Structured.Program) :
     Domain.queryOrigin, Domain.templateOrigin, Template.origin, Template.repeats,
     Template.qualify, Template.applicationPrefix, context, publicTemplate,
     Domain.atCoordinates, Domain.sortsMatch, Domain.Value.sort, Domain.read,
-    Context.query, Context.role, Origin.query, Domain.Payload.ty, Domain.drawRequest, Request.draw,
+    Context.query, Context.role, Context.fiatShamir, Context.replacement?,
+    Context.contract, Context.request, Context.suite, Origin.query, Domain.drawRequest, Request.draw,
     PIR.Process.bind, PIR.Process.runM, PIR.Execution.followM, Domain.handler,
     SampledCompiled.tableOracle, HonestCompiled.tableOracle, PairRepliesAgree]
 

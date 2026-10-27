@@ -18,7 +18,7 @@ open scoped ZkcSecurity.VCVio.UniformChallenge
 
 The subject is the compiler's constructed validator for `example::Proof`,
 accepted by the per-compile transcript-construction check
-(`SchnorrProof.accepted`). Its meaning is the ideal transcript interpretation
+(`SchnorrProof.accepted`). Its meaning is actual checked Domain execution
 of the exported operations, run on the binding history, the public inputs and
 the proof's two messages; the verifier accepts when the selected output is true
 and the whole proof is read.
@@ -175,7 +175,7 @@ theorem transform_experiment {m : Type → Type} [Monad m] [LawfulMonad m]
   rcases proof with ⟨commitment, response⟩
   simp [Zkc.Protocols.Schnorr.Common.experiment, transform_eq_done, transform_eq_receive,
     transform_eq_query, transform_eq_send, Payload.value, Payload.ofValue, SchnorrProof.wiring, ZkcExamples.NativePrograms.Schnorr.wiring, commitmentOrigin,
-    challengeOrigin, SchnorrProof.context_eq]
+    challengeOrigin, SchnorrProof.context_eq, Context.fiatShamir]
 
 /-- Prover oracles: uniform coins and the transcript oracle on histories. -/
 abbrev HistorySpec (F G : Type) := unifSpec + (History F G →ₒ F)
@@ -189,11 +189,8 @@ def historyChallenge (history : History F G) : OracleComp (HistorySpec F G) F :=
 /-- The compiled verifier, with every challenge answered by the history oracle. -/
 def verify (application : String) (base key : G) (proof : G × F) :
     OracleComp (HistorySpec F G) Bool :=
-  (fun result => accepted (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
-    ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
-      SchnorrProof.participant.instructions
-      ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-      [.group groupDomain proof.1, .field fieldDomain proof.2]
+  accepted <$> SchnorrProof.compiledVerifier historyChallenge base key
+    (initial application base key) [.group groupDomain proof.1, .field fieldDomain proof.2]
 
 omit [SampleableType F] [SampleableType G] in
 /-- The compiled verifier asks one challenge, at its initialized transcript
@@ -206,14 +203,7 @@ theorem verify_eq (application : String) (base key : G) (proof : G × F) :
   have compiled := SchnorrProof.compiled_transform (historyChallenge (F := F) (G := G)) base key 0
     (initial application base key) [.group groupDomain proof.1, .field fieldDomain proof.2]
   rw [SchnorrProof.verifier_correspondence, transform_experiment] at compiled
-  have projected : verify application base key proof = accepted <$>
-      ((fun result => (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
-        ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
-          SchnorrProof.participant.instructions
-          ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-          [.group groupDomain proof.1, .field fieldDomain proof.2]) := by
-    simp only [verify, Functor.map_map]
-  rw [projected, compiled]
+  rw [verify, compiled]
   simp [accepted]
 
 /-- Route each history query to its oracle key; uniform coins pass through. -/
@@ -384,7 +374,6 @@ theorem verify_eq_evidence (application : String) (base key : G) (proof : G × F
         (.cons base (.cons key .nil)) (initial application base key) proof =
       verify application base key proof := by
   unfold ZkcSecurity.Endpoint.KnowledgeEvidence.verify verify ZkcSecurity.Endpoint.Compiled.verifier
-  rw [Functor.map_map]
   rfl
 
 /-- Probability that the compiled verifier accepts the prover's proof. -/

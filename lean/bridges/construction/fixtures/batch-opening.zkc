@@ -1,0 +1,28 @@
+module batch_opening;
+use zkc::sequence::{Sequence};
+
+// A transport/validation client, without a commitment-security assertion.
+pub struct Opening<F: Field> { pub point: F, pub value: F }
+
+pub math fn batch_values<F: Field>(point: F, value: F, batch: Sequence<Opening<F>>) -> bool where () {
+  return zkc::finite_math::fold(zkc::sequence::elements(batch), true,
+    fn(valid, opening) => valid && opening.point == point && opening.value == value);
+}
+pub relation BatchValues<F: Field>(parameter point: F, parameter value: F,
+                                  witness batch: Sequence<Opening<F>>) {
+  return batch_values(point, value, batch);
+}
+pub fn check_batch<F: Field>(point: F, value: F, batch: Sequence<Opening<F>>) -> bool effects(stop) where () {
+  return batch_values(point, value, batch);
+}
+pub protocol CheckBatch<F: Field> roles(P, V)
+    (point: F @V, value: F @V, batch: Sequence<Opening<F>> @P)
+    -> (accepted: bool @V, delivered: Sequence<Opening<F>> @V)
+    where () spec {
+      target values = BatchValues<F>(in.point, in.value, in.batch) accept out.accepted;
+    } {
+  #[site(batch)] let received = send P -> V(batch);
+  let accepted = check_batch(point, value, received);
+  return (accepted = accepted, delivered = received);
+}
+domain Scalar = field("koala-bear");

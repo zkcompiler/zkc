@@ -55,7 +55,7 @@ FIELDS = {
                   "program": STRING, "facts": STRING, "interactive_data": STRING,
                   "interactive_bodies": STRING, "interactive_views": STRING,
                   "interactive_export": STRING, "interactive_source": STRING,
-                  "original_export": STRING, "artifacts": STRING, "claims": STRING},
+                  "original_export": STRING, "artifacts": STRING, "claims": STRING, "lowering": STRING},
     "normal_forms": {"request": STRING},
     "lean": {"namespace": STRING, "imports": STRINGS},
     "assumptions": {"requested": STRINGS},
@@ -64,7 +64,7 @@ FIELDS = {
                    "exact": TABLE, "charge": STRING, "charge_arguments": STRINGS, "completeness_module": STRING,
                    "namespace": STRING},
     # Optional extensions (lean/subjects/README.md).
-    "construction": {"admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
+    "construction": {"namespace": STRING, "connection": STRING, "admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
                      "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,
                      "omit": STRINGS},
     "bodies": {"entry": STRING, "interactive_entry": STRING, "closed": BOOLEAN},
@@ -125,7 +125,7 @@ class Subject:
 
     def generated(self, key):
         value = self.get("generated", key)
-        return None if value is None else ROOT / value
+        return None if value is None else (ROOT / value).resolve()
 
     def generated_package(self, key):
         """Actual Lake provider, independent of declaration namespaces."""
@@ -145,6 +145,11 @@ class Subject:
         if path is None:
             return None
         return ".".join(path.relative_to(self.generated_package(key)).with_suffix("").parts)
+
+    @property
+    def construction_namespace(self):
+        """Declaration owner, independent of the generated metadata module."""
+        return self.get("construction", "namespace", self.module_name("glue"))
 
     def module_arguments(self):
         return ([f"--module={name}={source.relative_to(ROOT)}" for name, source in sorted(self.modules.items())]
@@ -190,14 +195,31 @@ def load(path):
     for key, value in subject.table("generated").items():
         require(not Path(value).is_absolute() and ".." not in Path(value).parts,
                 f"{path}: generated.{key} must be a repository path")
+        require(subject.generated(key).is_relative_to(ROOT),
+                f"{path}: generated.{key} must resolve inside the repository")
     for key in ("glue", "data", "participant", "program", "facts", "bodies", "interactive_data",
-                "interactive_bodies", "interactive_views", "artifacts", "claims"):
+                "interactive_bodies", "interactive_views", "artifacts", "claims", "lowering"):
         module = subject.module_name(key)
         require(module is None or __import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: generated.{key} is not a Lean module path")
+    paths = [subject.generated(key) for key in subject.table("generated")]
+    require(len(paths) == len(set(paths)), f"{path}: generated output paths must be distinct")
+    require(not (subject.generated("claims") and subject.profile("executable")) or subject.generated("lowering"),
+            f"{path}: executable claims require generated.lowering")
     namespace = subject.get("lean", "namespace")
     require(namespace is None or __import__("re").fullmatch(NAMESPACE, namespace) is not None,
             f"{path}: lean.namespace must be a Lean namespace")
+    for key in ("namespace", "connection"):
+        value = subject.get("construction", key)
+        require(value is None or __import__("re").fullmatch(NAMESPACE, value) is not None,
+                f"{path}: construction.{key} must be a Lean name")
+    connection = subject.get("construction", "connection")
+    require(not subject.generated("claims") or connection,
+            f"{path}: generated.claims requires a maintained construction.connection module")
+    generated_modules = {subject.module_name(key) for key, value in subject.table("generated").items()
+                         if Path(value).suffix == ".lean"}
+    require(not connection or connection not in generated_modules,
+            f"{path}: construction.connection must differ from every generated module")
     for module in subject.get("lean", "imports", []):
         require(__import__("re").fullmatch(NAMESPACE, module) is not None,
                 f"{path}: lean.imports must contain Lean module names")

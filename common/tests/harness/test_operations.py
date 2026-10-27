@@ -298,7 +298,7 @@ def test_current_lean_checks_do_not_run_snapshot_tools():
     developer = load("test_runner_snapshot_selection", "common/tests/run.py")
     selected = {path.name for path in developer.lean_checks()}
     assert {"audit_imports.py", "check_package_ownership.py", "check_records.py"} <= selected
-    assert not selected.intersection({"check_independent.py", "check_migration.py", "source_responsibility.py",
+    assert not selected.intersection({"build_replay_tools.py", "check_independent.py", "check_migration.py", "source_responsibility.py",
                                       "check_subject_roots.py", "check_local_service_admission.py"})
 
 

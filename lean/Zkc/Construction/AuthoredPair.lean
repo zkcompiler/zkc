@@ -9,8 +9,9 @@ public import Zkc.Construction.SourceOccurrences
 /-! Request-owned selection of actual compiled artifacts. Association checks
 complete instruction trees, not their digest strings. The original snapshot is
 an index: helper interpretation cannot be replaced independently. Admission
-includes the existing validator construction/projection theorem. It does not
-assert the still separate producer compilation or domain transport theorem.
+checks the producer and validator construction and projection structurally.
+Consumers additionally supply the semantic Process bindings and the
+property-specific laws for the selected domain and execution stage.
 -/
 set_option autoImplicit false
 namespace Zkc.Construction.AuthoredPair
@@ -83,10 +84,11 @@ def selectionValid {original : Snapshot} (selected : Selection original) : Bool 
     contract.clauses.contains selected.target) &&
   selected.target.kind == .target && selected.target.residual == none &&
   selected.target.decision == some ⟨.output, policy.acceptance, policy.validator⟩ &&
-  roleInputSorts original policy.producer == some p.inputs.dropLast &&
-  roleOutputSorts original policy.producer == some p.outputs.dropLast &&
-  p.inputs.getLast? == some (.transcript policy.suite) &&
-  p.outputs.getLast? == some (.transcript policy.suite)
+  roleInputSorts original policy.producer == some (policy.dataPorts p.inputs) &&
+  roleOutputSorts original policy.producer == some (policy.dataPorts p.outputs) &&
+  (if policy.suite = "" then true else
+    p.inputs.getLast? == some (.transcript policy.suite) &&
+    p.outputs.getLast? == some (.transcript policy.suite))
 
 /-- Construct the selection before proof search from an explicit retained
 target name. Ambiguous, missing or changed targets refuse. -/

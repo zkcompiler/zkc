@@ -39,7 +39,9 @@ def artifacts(audit, root, directory, legacy=False):
     rows = {}
     for package, group in groups.items():
         target = directory / f'{package}.ndjson'
-        target.write_text(f'{package} test artifact\n')
+        target.write_text(json.dumps({'in': 1, 'str': {'pre': 0, 'str': package}}) + '\n' +
+                          json.dumps({'in': 2, 'str': {'pre': 1, 'str': 'locked'}}) + '\n' +
+                          json.dumps({'thm': {'name': 2}}) + '\n')
         rows[package] = {'file': target.name, 'theorems': group['theorems'],
                          'sha256': audit.digest(target), 'bytes': target.stat().st_size,
                          'modules': group['modules'], 'inputs': {}, 'comparator_sha256': audit.digest(group['config']),
@@ -57,10 +59,10 @@ def artifacts(audit, root, directory, legacy=False):
     return directory / 'manifest.json'
 
 
-def test_repository_covers_all_88_locked_declarations():
+def test_repository_covers_all_107_locked_declarations():
     groups = checker().configuration(ROOT / 'lean')
     assert {p: len(g['theorems']) for p, g in groups.items()} == {
-        'main': 41, 'security': 24, 'arklib': 20, 'clean': 3}
+        'main': 49, 'security': 31, 'arklib': 24, 'clean': 3}
 
 
 @pytest.mark.parametrize('defect', ['missing', 'extra', 'duplicate', 'hole', 'axiom', 'unknown-field', 'module'])
@@ -129,6 +131,13 @@ def test_unversioned_manifest_is_rejected(configured, tmp_path):
     path = artifacts(audit, root, tmp_path / 'baseline', legacy=True)
     with pytest.raises(audit.CheckError, match='unsupported'):
         audit.load_artifacts(path, audit.configuration(root), list(audit.PACKAGES))
+
+
+def test_loaded_exports_are_bounded_before_checking(configured, tmp_path):
+    audit, root = configured
+    path = artifacts(audit, root, tmp_path / 'capture')
+    with pytest.raises(audit.CheckError, match='export output limit'):
+        audit.load_artifacts(path, audit.configuration(root), ['main'], export_limit=1)
 
 
 @pytest.mark.parametrize('alias', ['manifest', 'symlink', 'hardlink'])
@@ -223,21 +232,27 @@ def test_cli_requires_explicit_base_and_candidate_and_rejects_overwrite(configur
     output.mkdir()
     with pytest.raises(SystemExit):
         audit.main(['compare', '--output', str(output)])
+    with pytest.raises(SystemExit):
+        audit.main(['capture', '--output', str(output), '--replay-toolset', 'tools.json'])
+    with pytest.raises(SystemExit):
+        audit.main(['replay', '--output', str(output), '--base-manifest', 'base.json'])
     assert audit.main(['capture', '--lean-root', str(root), '--output', str(output)]) == 1
     assert list(output.iterdir()) == []
 
 
-@pytest.mark.parametrize('failure', ['exit', 'log', 'export', 'timeout', 'memory'])
+@pytest.mark.parametrize('failure', ['exit', 'log', 'combined', 'export', 'timeout', 'memory'])
 def test_process_failures_remain_failures_and_outputs_are_bounded(tmp_path, failure):
     audit = checker()
     runner = audit.Runner(tmp_path, memory_mb=256, log_mb=1, export_mb=1, timeout=1)
     code = {'exit': 'import sys; sys.exit(7)',
             'log': 'import os; os.write(2, b"x" * 2000000)',
+            'combined': 'import os; os.write(1, b"x" * 600000); os.write(2, b"x" * 600000)',
             'export': 'import os; os.write(1, b"x" * 2000000)',
             'timeout': 'import time; time.sleep(10)',
             'memory': 'bytearray(512 * 1024**2)'}[failure]
     target = tmp_path / 'out.ndjson' if failure == 'export' else None
     with pytest.raises(audit.CheckError, match={'exit': 'exited 7', 'log': 'log output limit',
+                                             'combined': 'log output limit',
                                              'export': 'export output limit', 'timeout': 'timeout',
                                              'memory': 'exited 1'}[failure]):
         runner.run([sys.executable, '-c', code], tmp_path, 'child', export=target)
@@ -248,3 +263,163 @@ def test_process_failures_remain_failures_and_outputs_are_bounded(tmp_path, fail
 def test_missing_command_is_not_acceptance(tmp_path):
     with pytest.raises(OSError):
         checker().Runner(tmp_path).run(['/missing/command'], tmp_path, 'missing')
+
+
+@pytest.fixture
+def toolset(tmp_path, monkeypatch):
+    audit = checker()
+    root = tmp_path / 'tools'
+    stock = tmp_path / 'stock'
+    pins = {'sources': {'lean/Replay.lean': 'unused'}, 'patches': []}
+    recipe = tmp_path / 'recipe.json'
+    write(recipe, pins)
+    monkeypatch.setattr(audit, 'REPLAY_SOURCES', recipe)
+    source = root / 'sources/lean/Replay.lean'
+    source.parent.mkdir(parents=True)
+    source.write_text('pinned source')
+    pins['sources']['lean/Replay.lean'] = audit.digest(source)
+    write(recipe, pins)
+    runtime, installed = {}, {}
+    for name in audit.RUNTIME_FILES:
+        for directory in [root / 'sysroot', stock]:
+            file = directory / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text('stock ' + name)
+            file.chmod(0o755)
+        installed[name] = audit.identity(stock / name)[0]
+        if name in {f'bin/{n}' for n in audit.PATCHED_CHECKERS}:
+            (root / 'sysroot' / name).write_text('patched ' + name)
+        runtime[name] = audit.identity(root / 'sysroot' / name)[0]
+    receipt = {'format': audit.TOOLSET_FORMAT, 'label': 'patched Lean 4.35.0 replay',
+               'recipe_sha256': audit.digest(recipe),
+               'builder_sha256': audit.digest(ROOT / 'lean/checks/build_replay_tools.py'),
+               'inputs': {'toolchain': installed, 'sources': pins['sources'], 'patches': []},
+               'commands': [{'command': ['pinned-build'], 'exit_code': 0}], 'runtime': runtime, 'reuse': None}
+    write(root / 'manifest.json', receipt)
+    return audit, root, stock
+
+
+@pytest.mark.parametrize('defect', ['recipe', 'source', 'binary', 'library', 'stock', 'missing-checker',
+                                  'extra-file', 'symlink-file', 'symlink-directory', 'commands',
+                                  'unknown-field', 'path', 'executable'])
+def test_replay_toolset_cannot_change_recipe_stock_tools_or_omit_checkers(toolset, defect):
+    audit, root, stock = toolset
+    path = root / 'manifest.json'
+    receipt = audit.read_json(path)
+    target = root / 'sysroot/bin/lean4lean'
+    if defect == 'recipe': receipt['recipe_sha256'] = '0' * 64
+    if defect == 'source': (root / 'sources/lean/Replay.lean').write_text('changed source')
+    if defect == 'binary': target.write_text('changed binary')
+    if defect == 'library':
+        target = root / 'sysroot/lib/lean/libleanshared.so'
+        target.write_text('changed library')
+        receipt['runtime']['lib/lean/libleanshared.so'] = audit.identity(target)[0]
+    if defect == 'stock': (stock / 'bin/lake').write_text('changed stock lake')
+    if defect == 'missing-checker': del receipt['runtime']['bin/con-ron']
+    if defect == 'extra-file': (root / 'sysroot/bin/unreviewed').write_text('extra')
+    if defect == 'symlink-file':
+        target.unlink()
+        target.symlink_to(stock / 'bin/lean4lean')
+    if defect == 'symlink-directory':
+        (root / 'sysroot/lib').rename(root / 'libraries')
+        (root / 'sysroot/lib').symlink_to(root / 'libraries', target_is_directory=True)
+    if defect == 'commands': receipt['commands'] = []
+    if defect == 'unknown-field': receipt['unchecked'] = True
+    if defect == 'path': receipt['runtime']['../bin/lean4lean'] = receipt['runtime'].pop('bin/lean4lean')
+    if defect == 'executable': target.chmod(0o644)
+    write(path, receipt)
+    with pytest.raises(audit.CheckError):
+        audit.replay_toolset(path, stock)
+
+
+@pytest.mark.parametrize('mutation', ['replace', 'restore-bytes', 'symlink-parent', 'transient-library'])
+def test_replay_runtime_snapshot_detects_changes_even_when_bytes_match(toolset, tmp_path, mutation):
+    audit, root, stock = toolset
+    output = tmp_path / 'report'
+    output.mkdir()
+    runner = audit.Runner(output)
+    prefix, provenance = audit.select_replay_toolset(root / 'manifest.json', stock, {'version': 'test'}, output, runner)
+    target = prefix / 'bin/lean4lean'
+    original = target.read_bytes()
+    assert not target.samefile(root / 'sysroot/bin/lean4lean')
+    assert provenance['replay_toolset']['provenance']['label'] == 'patched Lean 4.35.0 replay'
+    if mutation == 'replace':
+        target.unlink()
+        target.write_bytes(original)
+    elif mutation == 'restore-bytes':
+        target.chmod(0o755)
+        target.write_bytes(b'changed')
+        target.write_bytes(original)
+        target.chmod(0o555)
+    elif mutation == 'symlink-parent':
+        (prefix / 'bin').rename(prefix / 'renamed')
+        (prefix / 'bin').symlink_to(prefix / 'renamed', target_is_directory=True)
+    else:
+        injected = prefix / 'lib/lean/libc.so.6'
+        injected.write_text('extra loader input')
+        injected.unlink()
+    with pytest.raises(audit.CheckError, match='changed during checking'):
+        runner.run([sys.executable, '-c', 'pass'], output, 'must-not-start')
+    assert not (output / 'must-not-start.log').exists()
+
+
+@pytest.mark.parametrize('variable', ['LAKE_CHECK_EXPORT', 'LEAN_SYSROOT', 'LAKE_OVERRIDE_LEAN',
+                                      'LEAN', 'LAKE_HOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'])
+def test_inherited_environment_cannot_redirect_checked_toolset(monkeypatch, variable):
+    audit = checker()
+    monkeypatch.setenv(variable, '')
+    with pytest.raises(audit.CheckError, match=f'unset {variable}'):
+        audit.checking_environment()
+
+
+@pytest.mark.parametrize('failure', [True, False])
+def test_replay_has_separate_verdict_and_retains_full_lake_check(configured, tmp_path, monkeypatch, failure):
+    audit, root = configured
+    candidate = artifacts(audit, root, tmp_path / 'candidate')
+    monkeypatch.setattr(audit, 'tools_for', lambda *a, **k: (Path('/bundled'), {'version': 'test'}))
+
+    class RecordingRunner:
+        commands = []
+
+        def run(self, command, cwd, label):
+            self.commands.append(command)
+            if failure: raise audit.CheckError('kernel rejection')
+
+    runner = RecordingRunner()
+    output = tmp_path / 'report'
+    output.mkdir()
+    if failure:
+        with pytest.raises(audit.CheckError):
+            audit.replay(root, audit.configuration(root), ['main'], output, 'lake', runner, candidate)
+    else:
+        audit.replay(root, audit.configuration(root), ['main'], output, 'lake', runner, candidate)
+    report = audit.read_json(output / 'report.json')
+    assert report['format'] == audit.REPLAY_FORMAT
+    assert report['status'] == ('failed' if failure else 'passed')
+    assert 'no model comparison or baseline acceptance' in report['scope']
+    assert runner.commands == [['/bundled/bin/lake', 'check', '--paranoid', '--from-export',
+                                str(candidate.parent / 'main.ndjson')]]
+
+
+def test_replay_requires_roots_in_export_not_only_manifest(tmp_path):
+    audit = checker()
+    path = tmp_path / 'export.ndjson'
+    path.write_text('{"in":1,"str":{"pre":0,"str":"Unrelated"}}\n{"thm":{"name":1}}\n')
+    audit.require_export_roots(path, ['Unrelated'])
+    with pytest.raises(audit.CheckError, match='missing locked export roots'):
+        audit.require_export_roots(path, ['Locked.root'])
+    path.write_text('not an export')
+    with pytest.raises(audit.CheckError, match='malformed export inventory'):
+        audit.require_export_roots(path, ['Locked.root'])
+    path.write_text('{"in":1,"str":{"pre":0,"str":"Unrelated"}}\n' * 2)
+    with pytest.raises(audit.CheckError, match='duplicate root name table entry'):
+        audit.require_export_roots(path, ['Unrelated'])
+    path.write_text('{"in":1,"str":{"pre":0,"str":"Locked.root"}}\n{"thm":{"name":1}}\n')
+    with pytest.raises(audit.CheckError, match='missing locked export roots'):
+        audit.require_export_roots(path, ['Locked.root'])
+    path.write_text('{"in":1,"in":2,"str":{"pre":0,"str":"Unrelated"}}\n')
+    with pytest.raises(audit.CheckError, match='duplicate JSON key'):
+        audit.require_export_roots(path, ['Unrelated'])
+    path.write_text(' ' * (8 * 1024**2 + 1))
+    with pytest.raises(audit.CheckError, match='export record exceeds'):
+        audit.require_export_roots(path, ['Locked.root'])

@@ -104,7 +104,8 @@ def test_threshold_is_evaluated_after_the_generated_facts(driver_module, tmp_pat
                 ("executable", "completeness_module"): "Example.Completeness",
                 ("entries", "proof"): "example::Proof"}
     subject = SimpleNamespace(
-        name="example", get=lambda table, key, default=None: settings.get((table, key), default),
+        name="example", construction_namespace="Example.Glue",
+        get=lambda table, key, default=None: settings.get((table, key), default),
         module_name=lambda key: f"Example.{key.capitalize()}", generated=lambda key: tmp_path / f"{key}.lean",
         inputs=lambda entry, kind: public)
     entry = SimpleNamespace(names=[], types=[])
@@ -141,7 +142,8 @@ def test_claim_records_preserve_semantic_status_and_every_source_node(
     """Automation failure must not invent missing definitions or a receipt."""
     settings = {("lean", "namespace"): "Example", ("executable", "namespace"): None}
     subject = SimpleNamespace(
-        name="example", get=lambda table, key, default=None: settings.get((table, key), default),
+        name="example", construction_namespace="Example.Glue",
+        get=lambda table, key, default=None: settings.get((table, key), default),
         profile=lambda key: False, module_name=lambda key: "Example." + key.capitalize(),
         generated=lambda key: tmp_path / (key.capitalize() + ".lean"),
         generated_package=lambda key: tmp_path)
@@ -234,3 +236,66 @@ def test_structured_only_subject_preserves_unselected_claim_inventory(driver_mod
     record = json.loads(driver.write_evidence(subject.name).read_text())
     assert record["source_claim_inventory"] == [dict(inventory[0], selection="unselected-subject")]
     assert "claim_receipts" not in record
+
+
+def test_construction_regeneration_preserves_the_maintained_endpoint(driver_module, tmp_path, monkeypatch):
+    """Admission regeneration must never replace an authored source connection."""
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    driver, _ = recording(driver_module, tmp_path, write=True)
+    endpoint = tmp_path / "Connection.lean"
+    metadata = tmp_path / "AdmissionData.lean"
+    endpoint.write_text("maintained actual Domain connection\n")
+    subject = SimpleNamespace(
+        name="arbitrary-entry", generated=lambda key: metadata,
+        get=lambda table, key, default=None: default)
+    record = {"generated": {}}
+    driver.generated(subject, "glue", "generated static admission\n", record)
+    assert endpoint.read_text() == "maintained actual Domain connection\n"
+    assert metadata.read_text() == "generated static admission\n"
+    assert set(record["generated"]) == {"AdmissionData.lean"}
+
+
+def test_byte_evidence_regeneration_preserves_source_artifacts(driver_module, tmp_path, monkeypatch):
+    """A byte proof dependency must not be reintroduced into source metadata."""
+    monkeypatch.setattr(driver_module, "ROOT", tmp_path)
+    driver, _ = recording(driver_module, tmp_path, write=True)
+    artifact = tmp_path / "Artifacts.lean"
+    artifact.write_text("fixed artifact and checked source connection\n")
+    subject = SimpleNamespace(name="arbitrary-entry", generated=lambda key:
+                              tmp_path / "Lowering.lean" if key == "lowering" else artifact)
+    record = {"generated": {}}
+    driver.generated(subject, "lowering", "actual byte-to-Domain transport\n", record)
+    assert artifact.read_text() == "fixed artifact and checked source connection\n"
+    assert (tmp_path / "Lowering.lean").read_text() == "actual byte-to-Domain transport\n"
+    assert set(record["generated"]) == {"Lowering.lean"}
+
+
+@pytest.mark.parametrize("evaluated", ["true", "false"])
+def test_receipt_process_equations_are_attribution_only(driver_module, tmp_path, monkeypatch, evaluated):
+    driver, _ = recording(driver_module, tmp_path)
+    theorem = "Example.receipt"
+    equation = "ZkcExamples.ValidConnection"
+    values = {("receipt", "theorem"): theorem, ("receipt", "chain"): [theorem],
+              ("receipt", "security_module"): "Example"}
+    subject = SimpleNamespace(name="example", table=lambda key: {"theorem": theorem},
+                              get=lambda table, key, default=None: values.get((table, key), default))
+    monkeypatch.setattr(driver_module, "printed_axioms", lambda _: {theorem: []})
+    driver.evaluate = lambda *args, **kwargs: SimpleNamespace(stdout=(
+        "control-equation ZkcExamples.ClassificationControl.compiled evaluated=true compiled=true\n"
+        f"process-equation {theorem} {equation} evaluated={evaluated} compiled=true\n"))
+    report = driver.receipt_axioms([subject])["example"]
+    assert report["compiled_stage_equations"] == [equation]
+    assert report["evaluated_compiled_stage_equations"] == ([equation] if evaluated == "true" else [])
+
+
+def test_receipt_attribution_does_not_relax_axiom_check(driver_module, tmp_path, monkeypatch):
+    from bridges.common.lean_render import CheckFailed
+    driver, _ = recording(driver_module, tmp_path)
+    values = {("receipt", "theorem"): "Example.receipt", ("receipt", "chain"): ["Example.receipt"],
+              ("receipt", "security_module"): "Example"}
+    subject = SimpleNamespace(name="example", table=lambda key: values,
+                              get=lambda table, key, default=None: values.get((table, key), default))
+    driver.evaluate = lambda *args, **kwargs: SimpleNamespace(stdout="")
+    monkeypatch.setattr(driver_module, "printed_axioms", lambda _: {"Example.receipt": ["sorryAx"]})
+    with pytest.raises(CheckFailed, match="axioms:Example.receipt"):
+        driver.receipt_axioms([subject])

@@ -1,7 +1,8 @@
 module
 
-public import Zkc.Executable.Lowering
-public import Zkc.Construction.Soundness
+public import Zkc.Executable.Reading
+public import Zkc.Executable.Decoding
+public import Zkc.Construction.ScalarLaws
 
 @[expose] public section
 
@@ -438,14 +439,16 @@ theorem evaluate_stopped [Field F] [DecidableEq F] [AddCommGroup G] [Module F G]
   cases calculation with
   | boundedAt domain =>
       rcases values with _ | ⟨container, _ | ⟨index, _ | _⟩⟩
-      simp only [Calculation.evaluate] at stopped
+      simp only [Calculation.evaluate, Calculation.op,
+        Structured.Evaluation.operationOn_boundedAt] at stopped
       split at stopped
       · cases stopped
       · cases stopped
         rfl
   | _ =>
       rcases values with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩
-      simp [Calculation.evaluate] at stopped
+      change PIR.Outcome.returned _ = PIR.Outcome.stopped reason at stopped
+      cases stopped
 
 /-- A calculation stops only by refusing. -/
 theorem calculate_stopped [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]

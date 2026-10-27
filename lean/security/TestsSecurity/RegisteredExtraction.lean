@@ -2,6 +2,7 @@ import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import ZkcSecurity.Examples.Subjects.ChaumPedersen.Registration
 import ZkcSecurity.Examples.Subjects.Okamoto.Registration
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
+import ZkcSecurity.Claims.FiniteRecovery
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
 
@@ -100,5 +101,26 @@ example : knowledgeArguments (models .empty .idealMeaning)
 
 example : ("wrong.challenge", "label_64656c6976657279_0") ∉ Schnorr.compiled.context.draws := by
   decide +kernel
+
+set_option maxRecDepth 8192 in
+/-- Straight-line recovery cannot be read as the existing forking guarantee. -/
+example : knowledgeArguments (models .empty .idealMeaning)
+    { wire (.natural 0) with quantity := .guarantee ⟨FiniteRecovery.identifier, []⟩ }
+    (Schnorr.Registration.subject (F := F) (G := F) .idealMeaning) =
+      .error (.unknownIdentifier FiniteRecovery.identifier) := rfl
+
+example : FiniteRecovery.evaluate FiniteRecovery.registry responseDifference
+    (⟨3⟩ : ZkcSecurity.Commitment.FiniteRecovery.Request Nat) 2 =
+      .error (.unknownIdentifier responseDifference) := rfl
+
+/-- A caller cannot alias the closed finite token to the forking extractor's
+name, even by explicitly assembling a registry under that key. -/
+example : FiniteRecovery.evaluate
+    ⟨[{ FiniteRecovery.profileEntry with identifier := responseDifference }]⟩ responseDifference
+    (⟨3⟩ : ZkcSecurity.Commitment.FiniteRecovery.Request Nat) 2 =
+      .error (.schema "finite recovery profile identifier mismatch") := rfl
+
+#check_failure (show ExtractionProfile Schnorr.compiled F F from
+  FiniteRecovery.Profile.orderedTwoCellSum)
 
 end TestsSecurity.RegisteredExtraction

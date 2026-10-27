@@ -398,6 +398,7 @@ noncomputable def soundness (endpoint : Semantics) (form : Form) (binding : Bind
     (lowering : LoweringRequirement artifacts compiled F G endpoint) :
     SoundnessEvidence (F := F) (G := G) artifacts endpoint form Contract.falseStatement (Regime.exact F) where
   compiled := compiled
+  connection := sourceConnection
   target := .retained Contract.retained
   claimPinned := Contract.falseStatement_pinned
   handle := 0

@@ -308,10 +308,15 @@ families use the same explicit `F,G` assignment and evaluator.
 `SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
 There is no separate scalar arithmetic or unsupported-sort fallback.
 Selection is interpreted for every admitted type, including products and sequences.
-The Common scalar effect adapter refuses aggregate messages. Construction
-transcript payload profiles also refuse aggregates until a separate encoding
-rule admits them. The logical public-value binding representation retains
-products and sequences injectively; this establishes no canonical byte encoding.
+The Common scalar effect adapter refuses aggregate messages. The nominal
+construction runtime transports data as one exact `Ty` paired with its existing
+`Carriers.Value` and a proof that it contains no service capability. Products and
+sequences, including differently typed empty containers, retain their complete
+nominal sort; decoding requires exact sort equality. This runtime support does
+not bypass the separate construction rule, projection or generated ABI admission
+gates. The logical public-value binding representation retains products and
+sequences injectively; neither representation establishes a canonical byte
+encoding.
 
 ### Domain carriers and models
 

@@ -5,7 +5,9 @@ public import ZkcSecurity.Endpoint.Contract
 public import ZkcSecurity.Endpoint.Binding
 public import ZkcSecurity.FiatShamir.Soundness
 public import ZkcSecurity.FiatShamir.Binding
-public import Zkc.Executable.NormalizationSoundness
+public import Zkc.Executable.HelperSchemas
+public import Zkc.Executable.NativeLaws
+public import Zkc.Executable.Observations
 public import Zkc.Executable.Installed
 
 @[expose] public section
@@ -19,8 +21,8 @@ claim is about:
 - the **artifacts** (`Artifacts`): the original export, the constructed
   validator export, the published input types and, for program bytes, the
   executable validator;
-- the **covered semantic endpoint** (`Semantics`): the compiled verifier's ideal
-  meaning, or host validation of program bytes;
+- the **covered semantic endpoint** (`Semantics`): the compiled verifier's resource-free actual Domain
+  execution, or host validation of program bytes;
 - the **statement form** (`Form`): a statement fixed before the prover runs, or
   chosen by the prover after its oracle queries;
 - the **application claim**: for ordinary soundness, which policy statements
@@ -93,7 +95,7 @@ open ZkcSecurity.FiatShamir
 
 /-- The semantic endpoint a claim covers. -/
 inductive Semantics where
-  /-- The compiled verifier's ideal meaning. -/
+  /-- Resource-free actual Domain execution (retained request spelling). -/
   | idealMeaning
   /-- Host validation of the deployed program's proof bytes. -/
   | executableBytes
@@ -177,6 +179,21 @@ structure Hypothesis where
 section Evidence
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
+/-- Fixed byte/Domain transport at every resource budget. Static lowering
+admission alone cannot produce this semantic connection. -/
+def BytePruning (art : Artifacts) (c : Compiled art) (F G : Type) [Field F] [DecidableEq F]
+    [AddCommGroup G] [Module F G] [DecidableEq G]
+    (validator : Zkc.Executable.Validator) (lowered : Zkc.Executable.Lowered) : Prop :=
+  ∀ {m : Type → Type} [Monad m] [LawfulMonad m] (challenge : History F G → m F)
+    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+    (binding : List UInt8) (statement : art.Statement F G) (initial : History F G) (bytes : List UInt8),
+    Zkc.Executable.Prunes (fun accepted => accepted = false)
+      (Zkc.Executable.validate Zkc.Executable.installed validator c.context challenge codec budget binding
+        c.position (encodeValues statement) initial bytes)
+      (verdict <$> c.verifier challenge statement initial
+        (Zkc.Executable.decodeProof codec (Zkc.Executable.Plan.types (encodeValues statement) lowered.plan)
+          (bytes.drop 40)))
+
 /-- The executable validator of the artifacts, accepted by the lowering rule
 against the constructed validator, with its helpers prepared and sorted for the
 admitted original's checked helpers, and admitting every statement's published
@@ -189,9 +206,12 @@ structure LoweringEvidence (art : Artifacts) (c : Compiled art) (F G : Type) [Fi
   accepted : Zkc.Executable.checkLowering Zkc.Executable.installed art.participant validator = .ok lowered
   prepared : ∀ name ∈ Zkc.Executable.Instruction.helpers art.participant.instructions,
     Zkc.Executable.Prepared Zkc.Executable.installed validator (helperTable c.imported.program F G) name
-  sorted : ∀ call ∈ Zkc.Executable.Instruction.callList art.participant.instructions,
+  sorted : ∀ call ∈ Zkc.Construction.Instruction.callList art.participant.instructions,
     Zkc.Executable.HelperSorted (helperTable c.imported.program F G) call.1 call.2
   admits : ∀ statement : art.Statement F G, validator.admits (encodeValues statement) = true
+  /-- Actual all-budget byte/Domain transport, separately proved from the static
+  lowering check. Its validator, decoder, input policy and target are fixed. -/
+  pruning : BytePruning art c F G validator lowered
 
 /-- Lowering evidence, required exactly when the endpoint covers program bytes. -/
 def LoweringRequirement (art : Artifacts) (c : Compiled art) (F G : Type) [Field F] [DecidableEq F]
@@ -232,6 +252,7 @@ regime. -/
 structure SoundnessEvidence (art : Artifacts) (endpoint : Semantics) (form : Form)
     (claim : art.Statement F G → Prop) (regime : Regime F) where
   compiled : Compiled art
+  connection : compiled.SourceConnection (F := F) (G := G)
   /-- The retained target or the explicitly declared imported-language fixture. -/
   target : SoundnessTarget compiled F G
   /-- A compatibility name for exactly the derived false set. No independently

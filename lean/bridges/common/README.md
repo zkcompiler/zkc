@@ -89,8 +89,8 @@ in place of `--module` and `--subject`. `--module NAME=PATH` is repeatable for
 multi-module sources. `--compiler` and `--lake` select explicit tools.
 
 A successful receipt says `verified-in-model` and lists each property and its
-premises. `Certificate.lean` contains admission, imported-to-symbolic process
-equality, source-to-contract equality and the property terms. Lean checks the
+premises. `Certificate.lean` contains admission, a definitionally checked view of
+the actual Lean interpreter, source-to-contract equality and the property terms. Lean checks the
 candidate and audits its transitive axioms. A separate request interpreter checks
 that this contract concerns the admitted source's actual denotation with the
 requested inputs and wiring, then derives the reported `ExpectedRequest`
@@ -101,16 +101,25 @@ and proof-budget failures produce `unresolved` receipts and a nonzero exit.
 A copied hash or a printed success marker cannot replace a proof.
 
 `registry.py` owns reviewed contract descriptions and independent property
-consumers. `symbolic.py` proposes typed source syntax and selected-role processes.
-`candidate.py` restricts these expressions to pure constructor and scalar syntax;
-the reviewed renderer owns every Lean command, proof script and audit. Generator
-inputs are disposable copies, separate from the checker and receipt subjects.
-The proposed expressions are untrusted; Python execution, the validator, renderer,
-registry and selected toolchain remain trusted. Explicit syntax avoids repeated
-dependent-type checking through the importer. `Snapshot.check_parts` still requires all admission checks
-and equality to the actual elaboration. The correspondence proof normalizes pure
-algebra while retaining effects, arbitrary replies, guards and stops. This is a
-bounded partial evaluator and equality procedure, not a general theorem search.
+consumers. `program_syntax.py` renders typed source constructors and checks variable
+references against their binding contexts, without executing instructions.
+The only proposal field is `program`; `candidate.py` restricts it
+to constructor syntax. The reviewed renderer owns every Lean command, proof script
+and audit. Generator inputs are disposable copies, separate from the checker and
+receipt subjects. The proposed syntax is untrusted; Python execution, the
+validator, renderer, registry and selected toolchain remain trusted.
+`Snapshot.check_parts` requires all admission checks and equality to the actual
+elaboration.
+
+`common_process%` in `Zkc.Source.Common.ProcessView` definitionally reduces the
+actual `Imported.denote` term with Lean's reduction and traversal APIs. It unfolds
+the existing interpreter definitions, preserving symbolic arithmetic, unresolved
+conditionals and decisions, arbitrary replies, guards and stops; it defines no
+operation or instruction evaluator. The elaborator
+checks definitional equality, and each certificate proves `process_view_eq` with
+`rfl`. Correspondence then connects this view to the requested contract with pure
+algebra and process laws. This is bounded normalization and equality checking,
+not a general theorem search.
 
 The three registered contracts cover Schnorr, two-round quadratic Sumcheck and
 Sumcheck followed by public factor openings. Completeness and soundness properties

@@ -1,0 +1,134 @@
+{
+  "format": "zkc.replay-sources/0",
+  "lean_version": "4.35.0",
+  "repositories": {
+    "lean": {
+      "url": "https://github.com/leanprover/lean4",
+      "revision": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc"
+    },
+    "lean4lean": {
+      "url": "https://github.com/Kha/lean4lean",
+      "revision": "456abe5015fc8f54ea595561fc39523d7733c93f"
+    },
+    "batteries": {
+      "url": "https://github.com/leanprover-community/batteries",
+      "revision": "f8e1f4b2e1478e39113d32d0af75234aa86423fb"
+    },
+    "lean4export": {
+      "url": "https://github.com/leanprover/lean4export",
+      "revision": "411dce7db58a3afc60ecab2d211acd1042b593dc"
+    }
+  },
+  "sources": {
+    "lean/Lean/Replay.lean": "251ed00e1cedd95c5d1fc4104ac191beb1de618abbc2fc49319ff0e37d139329",
+    "lean/LeanChecker.lean": "4a406b8ed95da0377206600b7b00a03bedc05102c0fadad641ffe0bfdb95122f",
+    "lean4lean/Lean4Lean/Declaration.lean": "cefbf66e2134bec472aa9fd643122a3052bbbfd12ab04e6dbd85fe21e32fb0fa",
+    "lean4lean/Lean4Lean/List.lean": "4ddde2232aff649a50a8d1bec44e9495e2387dd3fcc29833d4f9c67c514431a4",
+    "lean4lean/Lean4Lean/Level.lean": "65b4a2e62ca830848e80e5740f86a023078ec574564d1046f7207a5caafbb271",
+    "batteries/Batteries/Tactic/OpenPrivate.lean": "a7258d60e4d27e4599bb1247dd742b01de5fd933e328a19d118e68af7e5ff4dc",
+    "lean4lean/Lean4Lean/Environment/Basic.lean": "549c16d924d7840858935da71e60169ea3990cf484187e11a2382c39d89e7620",
+    "lean4lean/Lean4Lean/Expr.lean": "27777912eaabbe8daa2c7a7109eefd3ac03d10fb02fba8243f6629da10c00bc7",
+    "lean4lean/Lean4Lean/Instantiate.lean": "ae08b31657faf3b54de22688ae287d0bff362c573d6a2dd09f12f417b1975ec2",
+    "lean4lean/Lean4Lean/LocalContext.lean": "5baf7b6b379cbbd3902578c5da9d454558031b52f2af508481bc4647c0d91a1b",
+    "lean4lean/Lean4Lean/Quot.lean": "79c51dae8b2ac0e09537aaabfb32075fe4a9d5dd34a1a78d47a88229a74926c5",
+    "lean4lean/Lean4Lean/Inductive/Reduce.lean": "07850375534ba73e5e7d6ebeddc9eb77bdbe0f953cbd940a269e9e6e3894bb31",
+    "lean4lean/Lean4Lean/ForEachExprV.lean": "260167ef5e882a5bd2482734dd72749b809857dbe99bc2aa32e28c6b4b2fb37e",
+    "batteries/Batteries/Tactic/Lint/Basic.lean": "a6df6a54285448c19a3a4a721011f36a8735e027707fa3225c718380f14081e3",
+    "batteries/Batteries/Tactic/Lint/Misc.lean": "ac46c3ae1d9716d6da0c2bd9991dbb30975276c3bfac4fd0c14c72f1f3039fe7",
+    "batteries/Batteries/Tactic/SeqFocus.lean": "b978f1ec3b614fda93ef10847cefe117698cfd1390d1c419b1c50c027c0c76a6",
+    "batteries/Batteries/Util/Panic.lean": "5160533567103ad67ab7bb6a2e3b9b7f71e76086b082dbde268b11fb1629ecb9",
+    "batteries/Batteries/Data/UnionFind/Basic.lean": "9d8959c0d0b04f129c483d1ff9e2bfaf6e843934eedcb03ab3da8ada7fe4bb99",
+    "lean4lean/Lean4Lean/PtrEq.lean": "395e6b6907e548582d9e40e37f5344d6919e597500608c597048e621f27f0aa2",
+    "lean4lean/Lean4Lean/EquivManager.lean": "d99076acb5b384936133d8c6e28879953cacc31b749b6e6cd938809f00e40aa1",
+    "lean4lean/Lean4Lean/FuelConfig.lean": "6ab1ef0928076d9b8be352bbfb2abd4f9a9baa50c1f174935477e5908438041d",
+    "lean4lean/Lean4Lean/TypeChecker.lean": "8519a0e575cfe79541c2129cdba12e12484aa7a198a3cc67cdf50d987e260944",
+    "batteries/Batteries/CodeAction/Deprecated.lean": "eb8e4c2b5e86626e3fc291c77d31b29f036e788808d838df6c3b6d4f0d8a5b84",
+    "batteries/Batteries/Tactic/Alias.lean": "b1496378e661be928e53117d08f285eba8cea45ac6f7c03e64af0748d3337c34",
+    "batteries/Batteries/Data/List/Basic.lean": "39c7936ce368d1819ad6bb1d34f41339212ee1c80b3d1a032845765ce868e3e5",
+    "lean4lean/Lean4Lean/Inductive/Add.lean": "cdf936aa1d2629b68d5338f0b13cad8bc51d30d8bb00d14463433685c1c1d382",
+    "lean4lean/Lean4Lean/Primitive.lean": "9a7d4c660dc8d00b3817b562ef6ae4b67bc7e5b352d44a9fc1001da23635df38",
+    "lean4lean/Lean4Lean/Environment.lean": "8de5b7407e225c96ed4116bc46e2e3bad5009b6bfb0cb4f68d4ce2799eff4f11",
+    "lean4lean/Lean4Lean/Replay.lean": "245b79946d527869fae09953a1c60d19cc40022b00cb54a5f491bb4ac9fa2b77",
+    "lean4export/Export/Parse.lean": "1f943b5cc776eece6d528937b976509c8bd57d10bc69a39b1c119bfb6d664286",
+    "lean4lean/Main.lean": "562d5cbf77b46720732a33e6b1d93bef8123aec9b57bbd4d317bd3cd3342f8b0",
+    "lean/lake/Lake/CLI/Check.lean": "55daf430e5adea38453b21798cbdf4cd099f66ec969494022a566a8ae098c00b",
+    "lean/lake/Lake/Config/InstallPath.lean": "fc5bc3094122fb0384c01cb4d70bf0bd0e84744ec340affadf04b09c88088277"
+  },
+  "patches": [
+    {
+      "file": "lean-4.35-string-scheduling.patch",
+      "sha256": "c150945da75569beb13b2334d6f1081a28e7e01d072671cdaaa41f7fe1fe71b9",
+      "target": "lean/Lean/Replay.lean",
+      "patched_sha256": "a289d54300dd4b2e580f395653f736e7050334208285ed4dc8c89f3def92e161"
+    },
+    {
+      "file": "lean4lean-string-scheduling.patch",
+      "sha256": "88e85853a23b24b65eb48ed7742704cbf2953171eb5af3a852d5478a61d7fc4c",
+      "target": "lean4lean/Lean4Lean/Replay.lean",
+      "patched_sha256": "053962be1ea6935ba05737b464dcf9b2c47ecd887a1c44249a91975ca192cca0"
+    },
+    {
+      "file": "lean4lean-quotient-postcheck.patch",
+      "sha256": "402488123cbdb61cc879c07d4144c1f8bc83ed44efaba2d971c98961c2b6c2b6",
+      "target": "lean4lean/Main.lean",
+      "patched_sha256": "f235dc21a6b0e94174734f4eecee755d6bcebdefdd6e2508229bf2d00d8ce202"
+    }
+  ],
+  "modules": {
+    "native": [
+      "lean/Lean/Replay.lean",
+      "lean/LeanChecker.lean"
+    ],
+    "lean4lean": [
+      "lean4lean/Lean4Lean/Declaration.lean",
+      "lean4lean/Lean4Lean/List.lean",
+      "lean4lean/Lean4Lean/Level.lean",
+      "batteries/Batteries/Tactic/OpenPrivate.lean",
+      "lean4lean/Lean4Lean/Environment/Basic.lean",
+      "lean4lean/Lean4Lean/Expr.lean",
+      "lean4lean/Lean4Lean/Instantiate.lean",
+      "lean4lean/Lean4Lean/LocalContext.lean",
+      "lean4lean/Lean4Lean/Quot.lean",
+      "lean4lean/Lean4Lean/Inductive/Reduce.lean",
+      "lean4lean/Lean4Lean/ForEachExprV.lean",
+      "batteries/Batteries/Tactic/Lint/Basic.lean",
+      "batteries/Batteries/Tactic/Lint/Misc.lean",
+      "batteries/Batteries/Tactic/SeqFocus.lean",
+      "batteries/Batteries/Util/Panic.lean",
+      "batteries/Batteries/Data/UnionFind/Basic.lean",
+      "lean4lean/Lean4Lean/PtrEq.lean",
+      "lean4lean/Lean4Lean/EquivManager.lean",
+      "lean4lean/Lean4Lean/FuelConfig.lean",
+      "lean4lean/Lean4Lean/TypeChecker.lean",
+      "batteries/Batteries/CodeAction/Deprecated.lean",
+      "batteries/Batteries/Tactic/Alias.lean",
+      "batteries/Batteries/Data/List/Basic.lean",
+      "lean4lean/Lean4Lean/Inductive/Add.lean",
+      "lean4lean/Lean4Lean/Primitive.lean",
+      "lean4lean/Lean4Lean/Environment.lean",
+      "lean4lean/Lean4Lean/Replay.lean",
+      "lean4export/Export/Parse.lean",
+      "lean4lean/Main.lean"
+    ]
+  },
+  "recipe": {
+    "lean": [
+      "-j2",
+      "-M8192"
+    ],
+    "compile": [
+      "-O2",
+      "-DNDEBUG"
+    ],
+    "link": {
+      "leanchecker": [],
+      "leanchecker-paranoid": [
+        "-lmimalloc_paranoid",
+        "-linitialize_minimal"
+      ],
+      "lean4lean": [
+        "-linitialize_minimal"
+      ]
+    }
+  }
+}

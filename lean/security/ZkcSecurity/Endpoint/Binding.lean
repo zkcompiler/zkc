@@ -1,7 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Binding
-public import Zkc.Construction.Semantics
+public import Zkc.Construction.Scalar
 
 @[expose] public section
 

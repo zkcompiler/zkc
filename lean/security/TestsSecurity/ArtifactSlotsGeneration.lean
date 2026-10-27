@@ -45,25 +45,25 @@ run_cmd do
       let selected ← accepted (ZkcTools.ConstructionBindings.analyzeWithContext program layout.context artifact)
       for loop in selected.loops do
         let references ← if producer then do
-          pure (← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.producerOutputs selected.context.suite artifact loop.instruction)).references
+          pure (← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.producerOutputs selected.context.suite artifact loop.instruction)).references
         else do
-          pure (← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.verifierOutputs selected.context.suite artifact loop.instruction)).references
+          pure (← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.verifierOutputs selected.context.suite artifact loop.instruction)).references
         unless references == loop.yielded do Lean.throwError "selected outputs differ from actual yields"
         let replace (yielded : List Nat) := { artifact with instructions := (artifact.instructions.mapIdx
           fun index instruction => if index == loop.instruction then
             { instruction with operation := .loop loop.site loop.maximum yielded } else instruction) }
         refuses "construction-binding-loop-yield-sort"
-          (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.loopYieldLayout (replace loop.yielded.tail) loop.instruction)
+          (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.loopYieldLayout (replace loop.yielded.tail) loop.instruction)
         refuses "construction-binding-loop-yield-reference"
-          (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.loopYieldLayout (replace [1000000]) loop.instruction)
+          (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.loopYieldLayout (replace [1000000]) loop.instruction)
         refuses "construction-binding-loop-yield-sort"
-          (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.loopYieldLayout (replace loop.yielded.reverse) loop.instruction)
+          (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.loopYieldLayout (replace loop.yielded.reverse) loop.instruction)
         if producer then
           refuses "construction-binding-producer-output-abi"
-            (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.producerOutputs "wrong-suite" artifact loop.instruction)
+            (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.producerOutputs "wrong-suite" artifact loop.instruction)
         else
           refuses "construction-binding-verifier-output-abi"
-            (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.verifierOutputs "wrong-suite" artifact loop.instruction)
+            (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.verifierOutputs "wrong-suite" artifact loop.instruction)
     for method in [ConstructionBindings.ProofMethod.sharedTemplate, .checkedDerivation] do
       let .error _ := ConstructionBindings.source program root.artifacts.validator
           { root.artifacts.producer with policy := { root.artifacts.producer.policy with suite := "wrong-suite" } }

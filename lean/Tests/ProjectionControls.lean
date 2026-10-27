@@ -25,7 +25,7 @@ def modify (participant : Participant) (index : Nat) (change : Instruction → I
   { participant with instructions := participant.instructions.mapIdx fun position instruction =>
       if position = index then change instruction else instruction }
 
-theorem compiled_accepted : checkCompiled imported actual = .ok () := SchnorrProof.compiled
+theorem compiled_accepted : checkCompiled imported actual = .ok () := by decide +kernel
 
 /-! The verifier's arithmetic. Exported positions: inputs `0` base, `1`
 statement; `3` commitment, `7` challenge, `11` response; `14` is `response •

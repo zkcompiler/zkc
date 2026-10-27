@@ -10,6 +10,11 @@ open Lean (Name)
 open ZkcSecurity.Registry
 
 def entries : List Entry := [
+  ⟨"hypothesis.kzg-scoped-sdh", .libraryHypothesis,
+    some `ZkcArkLib.Kzg.ScopedHardness,
+    "The SDH success probability is bounded only for algorithms admitted by the \
+    request's resource predicate and budget. The opening reduction separately \
+    proves closure into that class; no efficiency meaning is supplied by this registry."⟩,
   ⟨"family.upstream-realization", .familyProperty, some `ZkcSecurity.FiatShamir.Upstream.Realizes,
     "A participant process realizes an upstream process-form residual operation by \
     operation."⟩,

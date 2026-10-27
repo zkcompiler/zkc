@@ -16,10 +16,11 @@ executable = true
 [generated]
 data = "lean/ZkcExamples/Structured/SumcheckSourceData.lean"
 participant = "lean/ZkcExamples/Construction/SumcheckProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SumcheckProof.lean"
+glue = "lean/ZkcExamples/Construction/SumcheckArtifact.lean"
 program = "lean/ZkcExamples/Executable/SumcheckProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SumcheckProofFacts.lean"
 artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Artifacts.lean"
+lowering = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Lowering.lean"
 claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Sumcheck/Claims.lean"
 
 [normal_forms]
@@ -51,6 +52,8 @@ charge_arguments = ["rounds"]
 completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"
 
 [construction]
+namespace = "ZkcExamples.Construction.SumcheckProof"
+connection = "ZkcExamples.Construction.SumcheckProof"
 admission = "external"
 views = "ZkcExamples.Structured.SumcheckSourceViews"
 inputs = "values"
@@ -69,41 +72,33 @@ chain = [
   "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.adaptive_soundness",
   "ZkcSecurity.Examples.CompiledSumcheckFiatShamir.soundness",
   "ZkcExamples.Executable.SumcheckProof.accepted",
+  "ZkcExamples.Executable.SumcheckProof.native_checked",
+  "ZkcExamples.Executable.SumcheckProof.domain_prepared",
   "ZkcExamples.Executable.SumcheckProof.executable_metered",
-  "ZkcExamples.Executable.SumcheckProof.executable_prunes",
+  "ZkcExamples.Executable.SumcheckProof.domain_prunes",
   "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes",
+  "ZkcExamples.Executable.SumcheckProof.normalized",
   "ZkcExamples.Executable.SumcheckHelpers.prepared",
   "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
   "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted",
   "ZkcExamples.Executable.SumcheckCharges.sufficient",
-  "ZkcExamples.Executable.SumcheckCharges.check_cost",
-  "Zkc.Executable.metered_sufficient",
-  "Zkc.Executable.validate_sufficient",
-  "ZkcExamples.Construction.SumcheckProof.compiled",
+  "ZkcExamples.Executable.SumcheckHelpers.check_cost",
   "ZkcExamples.Construction.SumcheckProof.compiled_transform",
-  "Zkc.Executable.execute_metered",
-  "Zkc.Executable.validate_metered",
-  "Zkc.Executable.metered_prunes",
-  "Zkc.Executable.validate_prunes",
-  "Zkc.Executable.validate_prunes_export",
-  "Zkc.Executable.checkLowering_sound",
-  "Zkc.Executable.checkNormalized_sound",
-  "ZkcExamples.Executable.SumcheckProof.helpersSorted",
+  "Zkc.Executable.CanonicalNormalization.accepted_sound",
+  "Zkc.Executable.DomainVM.checked_execute_metered",
+  "Zkc.Executable.DomainVM.checked_validate_metered",
+  "Zkc.Executable.DomainVM.checked_validate_prunes",
+  "Zkc.Executable.DomainVM.metered_sufficient",
   "Zkc.Executable.execute_cleaned",
-  "Zkc.Construction.compiled_transform",
-  "Zkc.Construction.check_sound",
-  "Zkc.Construction.project_sound",
 ]
 used = [
-  "Zkc.Construction.compiled_transform",
-  "Zkc.Construction.check_sound",
-  "Zkc.Construction.project_sound",
-  "ZkcExamples.Structured.SumcheckSourceViews.imported",
-  "ZkcExamples.Construction.SumcheckProof.compiled",
-  "Zkc.Executable.validate_prunes",
-  "Zkc.Executable.validate_prunes_export",
-  "ZkcExamples.Executable.SumcheckProof.accepted",
+  "ZkcExamples.Executable.SumcheckProof.native_checked",
+  "ZkcExamples.Executable.SumcheckProof.domain_prunes",
+  "ZkcExamples.Executable.SumcheckProof.normalized",
   "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
+  "ZkcExamples.Construction.SumcheckProof.compiled_transform",
+  "Zkc.Executable.DomainVM.checked_validate_prunes",
+  "Zkc.Executable.CanonicalNormalization.accepted_sound",
   "ZkcSecurity.VCVio.Pruning.Prunes.prEvent_le",
   "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.initial_determined",
 ]

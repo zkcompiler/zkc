@@ -1,0 +1,43 @@
+--- a/Lean4Lean/Replay.lean
++++ b/Lean4Lean/Replay.lean
+@@ -170,16 +170,13 @@
+ partial def replayConstant (name : Name) : M Unit := do
+   if ← isTodo name then
+     let some ci := (← read).newConstants[name]? | unreachable!
+-    let mut usedConstants := ci.getUsedConstants
+     -- We want `String.ofList` to be available when encountering string literals.
+     -- Presumably faster to first check if we already have it, before traversing
+     -- the declaration
+     unless (← get).hasStrings do
+       if ci.hasStrLit then
+-        usedConstants := usedConstants.insert ``String.ofList
+-        usedConstants := usedConstants.insert ``Char.ofNat
+-        modify ({· with hasStrings := true })
+-    replayConstants usedConstants
++        replayStringPrimitives
++    replayConstants ci.getUsedConstants
+     -- Check that this name is still pending: a mutual block may have taken care of it.
+     if (← get).pending.contains name then
+       let addDeclAt (d : Declaration) :=
+@@ -225,6 +222,21 @@
+ partial def replayConstants (names : NameSet) : M Unit := do
+   for n in names do replayConstant n
+ 
++/-- Install implicit literal dependencies before traversing ordinary dependencies.
++`pending` means scheduled, not installed; a prerequisite still pending here is a cycle.
++The readiness flag is set only after both declarations have passed normal kernel checking. -/
++partial def replayStringPrimitives : M Unit := do
++  for name in [``Char.ofNat, ``String.ofList] do
++    if ((← get).env.constants.find? name).isNone then
++      if (← get).pending.contains name then
++        throw <| IO.userError s!"Cyclic string literal prerequisite: {name}"
++      unless (← get).remaining.contains name do
++        throw <| IO.userError s!"Unavailable string literal prerequisite: {name}"
++      replayConstant name
++      unless ((← get).env.constants.find? name).isSome do
++        throw <| IO.userError s!"String literal prerequisite not installed: {name}"
++  modify fun s => { s with hasStrings := true }
++
+ end
+ 
+ /--

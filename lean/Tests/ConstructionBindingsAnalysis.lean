@@ -29,7 +29,7 @@ def run (program : Program) (validator producer : Participant) : IO Unit := do
   refusal "missing source root" "construction-binding-source-root"
     (analyzeWithContext program { layout.context with entry := "absent" } validator)
   refusal "missing source delivery" "construction-binding-source-delivery"
-    (analyzeWithContext program { layout.context with draws := [] } validator)
+    (analyzeWithContext program (layout.context.mapReplacement (fun replacement => { replacement with draws := [] })) validator)
   refusal "absent association" "construction-binding-test" (unique "test" ([] : List Nat))
   refusal "ambiguous association" "construction-binding-test" (unique "test" [0, 0])
   refusal "missing artifact loop" "construction-binding-call-order"

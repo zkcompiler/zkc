@@ -29,10 +29,11 @@ theorem uniformInterface_receive (context : Context) (ty : Structured.Ty)
 
 /-- The dependent raw carrier reduces to F only because this exact occurrence
 requests the named field under the uniform carrier specialization. -/
-theorem uniformInterface_query (context : Context) (site field : String)
+theorem uniformInterface_query (context : Context) (replacement : Replacement)
+    (profile : context.profile = .fiatShamir replacement) (site field : String)
     (arguments : Values (Structured.assignment F G) (Structured.services.arguments field)) :
     uniformInterface context (.query site field arguments) =
       .query (.challenge (context.query site (.draw field))) some := by
-  rfl
+  simp only [uniformInterface, Domain.interface, profile]
 
 end ZkcSecurity.FiatShamir.DomainReduction

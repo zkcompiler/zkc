@@ -19,13 +19,14 @@ scalar = true
 data = "lean/ZkcExamples/Construction/SchnorrProofData.lean"
 bodies = "lean/ZkcExamples/Construction/SchnorrProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/SchnorrProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/SchnorrProof.lean"
+glue = "lean/ZkcExamples/Construction/SchnorrArtifact.lean"
 program = "lean/ZkcExamples/Executable/SchnorrProofProgramData.lean"
 facts = "lean/ZkcExamples/Executable/SchnorrProofFacts.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrInteractiveData.lean"
 interactive_export = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-interactive.mlir"
 artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Artifacts.lean"
+lowering = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Lowering.lean"
 claims = "lean/security/ZkcSecurity/Examples/Subjects/Schnorr/Claims.lean"
 
 [assumptions]
@@ -48,6 +49,8 @@ threshold = "derived"
 namespace = "ZkcExamples.Executable.SchnorrProof"
 
 [construction]
+namespace = "ZkcExamples.Construction.SchnorrProof"
+connection = "ZkcExamples.Construction.SchnorrProof"
 admission = "views"
 inputs = "payloads"
 model = "Zkc.Protocols.Schnorr.Common.experiment wiring"
@@ -65,33 +68,34 @@ chain = [
   "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.acceptance_le",
   "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness",
   "ZkcExamples.Executable.SchnorrProof.accepted",
+  "ZkcExamples.Executable.SchnorrProof.native_checked",
+  "ZkcExamples.Executable.SchnorrProof.domain_prunes",
   "ZkcExamples.Executable.SchnorrProof.executable_validate",
   "ZkcExamples.Executable.SchnorrProof.executable_rejects",
-  "ZkcExamples.Construction.SchnorrProof.kernel_admission",
-  "ZkcExamples.Construction.SchnorrProof.compiled",
+  "ZkcExamples.Executable.SchnorrProof.executable_transform",
+  "ZkcExamples.Executable.SchnorrProof.schedule_source",
   "ZkcExamples.Construction.SchnorrProof.compiled_transform",
-  "Zkc.Executable.execute_metered",
-  "Zkc.Executable.validate_ideal",
-  "Zkc.Executable.validate_rejects",
+  "ZkcExamples.Construction.SchnorrDomainConnection.participant_values",
+  "Zkc.Executable.DomainVM.checked_execute_static",
+  "Zkc.Executable.DomainVM.checked_validate_rejects_static",
+  "Zkc.Executable.DomainVM.checked_execute_metered",
+  "Zkc.Executable.DomainVM.checked_validate_metered",
+  "Zkc.Executable.DomainVM.checked_validate_prunes",
+  "Zkc.Executable.DomainVM.metered_sufficient",
   "Zkc.Executable.execute_cleaned",
-  "Zkc.Executable.checkLowering_sound",
-  "Zkc.Executable.checkNormalized_sound",
-  "Zkc.Construction.compiled_transform",
-  "Zkc.Construction.check_sound",
-  "Zkc.Construction.project_sound",
 ]
 used = [
-  "Zkc.Construction.compiled_transform",
-  "Zkc.Construction.check_sound",
-  "Zkc.Construction.project_sound",
-  "ZkcExamples.Construction.SchnorrProof.imported",
-  "ZkcExamples.Construction.SchnorrProof.compiled",
-  "Zkc.Executable.validate_ideal",
-  "Zkc.Executable.validate_rejects",
-  "Zkc.Executable.checkLowering_sound",
-  "ZkcExamples.Executable.SchnorrProof.accepted",
+  "ZkcExamples.Executable.SchnorrProof.native_checked",
+  "ZkcExamples.Executable.SchnorrProof.executable_validate",
+  "ZkcExamples.Executable.SchnorrProof.executable_rejects",
+  "ZkcExamples.Executable.SchnorrProof.schedule_source",
+  "ZkcExamples.Construction.SchnorrDomainConnection.participant_values",
+  "Zkc.Executable.DomainVM.checked_execute_static",
+  "Zkc.Executable.DomainVM.checked_validate_rejects_static",
 ]
-unused = ["ZkcExamples.Construction.SchnorrProof.spec_equation"]
+unused = [
+  "ZkcExamples.Executable.SchnorrProof.helpersSorted",
+]
 
 [scalar]
 contract = "schnorr.verifier/0"

@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Executable.SumcheckProofProgramData
-public import ZkcExamples.Construction.SumcheckProof
-public import Zkc.Executable.NormalizationSoundness
+public import ZkcExamples.Construction.SumcheckArtifact
+public import Zkc.Executable.Reading
 public import Zkc.Executable.Installed
 
 @[expose] public section

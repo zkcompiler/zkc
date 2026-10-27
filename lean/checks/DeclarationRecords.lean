@@ -1408,8 +1408,12 @@ def record (env : Environment) (registered : Std.HashSet Name) (properties : Std
   return Json.mkObj fields
 
 def runMeta {α : Type} (env : Environment) (action : MetaM α) : IO α := do
+  -- Keep Core's finite metadata budget stable when pretty printing uses
+  -- `withOptions`: empty options would reset the context's 1000 limit to 512.
+  let options := Lean.maxRecDepth.set {} 1000
   let context : Core.Context :=
-    { fileName := "<declaration records>", fileMap := default, maxHeartbeats := 0 }
+    { fileName := "<declaration records>", fileMap := default, maxHeartbeats := 0,
+      options, maxRecDepth := Lean.maxRecDepth.get options }
   let (result, _, _) ← action.toIO context { env }
   return result
 
@@ -1659,19 +1663,22 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     ("endpoints", endpoints)]
   let mut lines := #[header.compress]
   for (_, module, name, info) in sorted do
-    let recordStarted ← IO.monoMsNow
-    if options.traceRecords then IO.eprintln s!"declaration-records: start {name}"
-    let claimDeclaration ← runMeta env (forallTelescope info.type fun _ body =>
-      pure (headName body == some `Zkc.Claims.Wire.Request || headName body == some `Zkc.Claims.Receipt || headName body == some `ZkcSecurity.Claims.AdmittedReceipt ||
-        headName body == some `ZkcSecurity.Claims.CanonicalReceipt || headName body == some `ZkcSecurity.Claims.AuthorExtensionReceipt ||
-        (headName body).any (evidenceStructures.contains ·)))
-    let detailed := options.details.contains name || endpointTheorems.contains name || claimDeclaration
-    let some actualAxioms := checkedAxioms[name]?
-      | throw <| IO.userError s!"selected declaration was not provenance audited: {name}"
-    let json ← runMeta env (record env registered properties name info module actualAxioms detailed)
-    lines := lines.push json.compress
-    if options.traceRecords then
-      IO.eprintln s!"declaration-records: done {name} {(← IO.monoMsNow) - recordStarted}ms"
+    try
+      let recordStarted ← IO.monoMsNow
+      if options.traceRecords then IO.eprintln s!"declaration-records: start {name}"
+      let claimDeclaration ← runMeta env (forallTelescope info.type fun _ body =>
+        pure (headName body == some `Zkc.Claims.Wire.Request || headName body == some `Zkc.Claims.Receipt || headName body == some `ZkcSecurity.Claims.AdmittedReceipt ||
+          headName body == some `ZkcSecurity.Claims.CanonicalReceipt || headName body == some `ZkcSecurity.Claims.AuthorExtensionReceipt ||
+          (headName body).any (evidenceStructures.contains ·)))
+      let detailed := options.details.contains name || endpointTheorems.contains name || claimDeclaration
+      let some actualAxioms := checkedAxioms[name]?
+        | throw <| IO.userError s!"selected declaration was not provenance audited: {name}"
+      let json ← runMeta env (record env registered properties name info module actualAxioms detailed)
+      lines := lines.push json.compress
+      if options.traceRecords then
+        IO.eprintln s!"declaration-records: done {name} {(← IO.monoMsNow) - recordStarted}ms"
+    catch error =>
+      throw <| IO.userError s!"declaration record {name}: {error}"
   IO.FS.writeFile output (String.intercalate "\n" lines.toList ++ "\n")
   IO.eprintln s!"declaration-records: records and output {(← IO.monoMsNow) - audited}ms"
   IO.println s!"{sorted.size} declarations from {modules.size} modules"

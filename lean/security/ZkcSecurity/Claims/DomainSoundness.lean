@@ -41,13 +41,16 @@ def ChargeSite.matches {compiled : ZkcSecurity.Endpoint.Domain.Compiled art}
 
 structure ChargeSchedule (subject : Subject model art) where
   entries : List (ChargeSite subject.compiled × Bound)
-  nonempty : entries ≠ []
   unique : (entries.map (fun entry => entry.1.label)).Nodup
   nativeUnique : (entries.map (fun entry => entry.1.native)).Nodup
 
 noncomputable def ChargeSchedule.maximum {subject : Subject model art}
     (schedule : ChargeSchedule subject) (queries : Nat) : ENNReal :=
   (schedule.entries.map (fun entry => entry.2.value queries)).foldr max 0
+
+/-- Empty schedules declare zero cost; rejection still requires a certificate. -/
+def ChargeSchedule.empty (subject : Subject model art) : ChargeSchedule subject :=
+  ⟨[], by simp, by simp⟩
 
 /-- Unmapped and malformed keys pay the maximum declared price. The complete
 key is retained by the oracle; classification selects only its charge. -/
@@ -61,6 +64,38 @@ noncomputable def ChargeSchedule.charge {subject : Subject model art}
     | some entry => entry.2.value queries
     | none => schedule.maximum queries
   | _ => schedule.maximum queries
+
+theorem ChargeSchedule.empty_charge (subject : Subject model art) (queries : Nat) :
+    (ChargeSchedule.empty subject).charge queries = fun _ _ => 0 := by
+  funext history event
+  cases event <;> rfl
+
+theorem ChargeSchedule.charge_le_maximum {subject : Subject model art}
+    (schedule : ChargeSchedule subject) (queries : Nat)
+    (history : Zkc.Construction.Domain.History model.toCarriers)
+    (event : Zkc.Construction.Domain.Event model.toCarriers) :
+    schedule.charge queries history event ≤ schedule.maximum queries := by
+  have memberBound : ∀ entry ∈ schedule.entries,
+      entry.2.value queries ≤ schedule.maximum queries := by
+    have folded : ∀ (values : List ENNReal) value, value ∈ values → value ≤ values.foldr max 0 := by
+      intro values
+      induction values with
+      | nil => simp
+      | cons head rest ih =>
+        intro value member
+        rcases List.mem_cons.mp member with rfl | member
+        · exact le_max_left _ _
+        · exact (ih value member).trans (le_max_right _ _)
+    intro entry member
+    exact folded _ _ (List.mem_map.mpr ⟨entry, member, rfl⟩)
+  cases event <;> try exact le_rfl
+  rename_i origin
+  change (match schedule.entries.find? (fun entry => entry.1.matches origin) with
+    | some entry => entry.2.value queries
+    | none => schedule.maximum queries) ≤ schedule.maximum queries
+  cases found : schedule.entries.find? (fun entry => entry.1.matches origin) with
+  | none => exact le_rfl
+  | some entry => exact memberBound entry (List.mem_of_find?_eq_some found)
 
 /-- A fixed endpoint reduction obligation. Witness processes/interfaces cannot
 change the actual verifier, retained target, complete acceptance, or charges:
@@ -79,7 +114,7 @@ structure ChargedExport (subject : Subject model art) (schedule : ChargeSchedule
   bridge : ∀ statement initial, DomainReduction.Bridge absorb (fun _ _ => True) initial
     (Zkc.Construction.Domain.participant model subject.compiled.imported.program
       subject.compiled.selection.context art.participant
-      (inputs statement ++ [.transcript subject.compiled.selection.context.suite initial]))
+      (Domain.inputFrame subject.compiled.selection.context (inputs statement) initial))
     (presented statement initial)
   certificate : Typed.ChargedCertificate absorb
     (fun result => subject.compiled.acceptance result = some true) (schedule.charge queries)
@@ -111,8 +146,7 @@ noncomputable def AdaptiveSoundness (capabilities : Capabilities model art.origi
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.compiled.verifier model
         (Typed.ask (R := Typed.ByLast Zkc.Construction.Domain.Raw)) claimed.1
-        ((DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-          (DomainReduction.policyArity subject.compiled) selected.application).encode claimed.1)
+        ((DomainReduction.policyCodec subject.compiled selected.application).encode claimed.1)
         claimed.2)).run' ∅}[
       subject.FalseStatement result.1 ∧ ZkcSecurity.Endpoint.Domain.CompleteAccepted result.2] ≤ error queries
 
@@ -148,8 +182,7 @@ noncomputable def WeightedAdaptiveSoundness (capabilities : Capabilities model a
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
       (fun result => (claimed.1, result)) <$> subject.compiled.verifier model
         (Typed.ask (R := Typed.ByLast Zkc.Construction.Domain.Raw)) claimed.1
-        ((DomainReduction.policyCodec art.publics art.participant.policy.publicInputs
-          (DomainReduction.policyArity subject.compiled) selected.application).encode claimed.1)
+        ((DomainReduction.policyCodec subject.compiled selected.application).encode claimed.1)
         claimed.2)).run' ∅}[
       subject.FalseStatement result.1 ∧ ZkcSecurity.Endpoint.Domain.CompleteAccepted result.2] ≤
         cost + selected.validatorCost.value queries
@@ -195,13 +228,11 @@ def chargeSchedule (capabilities : Capabilities model art.original)
   return do
     let entries ← sites.mapM fun (site, expression) => do
       return (site, ← Bound.elaborateWith capabilities.cardinality selected.budgetSymbol expression)
-    if nonempty : entries ≠ [] then
-      if unique : (entries.map (fun entry => entry.1.label)).Nodup then
-        if nativeUnique : (entries.map (fun entry => entry.1.native)).Nodup then
-          return ⟨entries, nonempty, unique, nativeUnique⟩
-        else .error ⟨["distinct construction occurrences"]⟩
-      else .error ⟨["distinct charge sites"]⟩
-    else .error ⟨["nonempty charge schedule"]⟩
+    if unique : (entries.map (fun entry => entry.1.label)).Nodup then
+      if nativeUnique : (entries.map (fun entry => entry.1.native)).Nodup then
+        return ⟨entries, unique, nativeUnique⟩
+      else .error ⟨["distinct construction occurrences"]⟩
+    else .error ⟨["distinct charge sites"]⟩
 
 def soundnessArguments (capabilities : Capabilities model art.original)
     (registry : ModelRegistry) (request : Wire.Request) (subject : Subject model art) :

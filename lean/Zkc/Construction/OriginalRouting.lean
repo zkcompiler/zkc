@@ -54,10 +54,16 @@ def Routing.message (routing : Routing) (frames : Frames) (site : String)
 /-- Only the selected public service may use this route. -/
 def Routing.draw (routing : Routing) (frames : Frames) (site field : String)
     (handle : Nat) : Option Origin :=
-  if handle = routing.selectedHandle then
+  if handle = routing.selectedHandle ∧ routing.context.service.isSome = true then
     OccurrenceResolution.resolve routing.snapshot routing.context
       (routing.context.query site (.draw field)) frames routing.draws
   else none
+
+/-- A plain source has no selected public draw, for any handle or frames. -/
+theorem Routing.draw_plain (routing : Routing) (plain : routing.context.profile = .plain)
+    (frames : Frames) (site field : String) (handle : Nat) :
+    routing.draw frames site field handle = none := by
+  simp [Routing.draw, Context.service, Context.replacement?, plain]
 
 /-- The producer can replace only a receive backed by a checked original
 public draw and its direct def-use delivery. Ambiguity refuses. -/
@@ -78,6 +84,33 @@ def Routing.delivery (routing : Routing) (frames : Frames) (site field : String)
   let draw ← OccurrenceResolution.resolve routing.snapshot routing.context
     (routing.context.query querySite (.draw field)) frames [candidate.draw]
   return (draw, message)
+
+/-- A resolved selected query certifies that a public replacement exists. -/
+theorem Routing.draw_profile {routing : Routing} {frames : Frames} {site field : String}
+    {handle : Nat} {origin : Origin}
+    (found : routing.draw frames site field handle = some origin) :
+    ∃ replacement, routing.context.profile = .fiatShamir replacement := by
+  cases profile : routing.context.profile with
+  | fiatShamir replacement => exact ⟨replacement, rfl⟩
+  | plain => rw [routing.draw_plain profile] at found; cases found
+
+/-- The producer delivery policy cannot select an exchange in the plain profile. -/
+theorem Routing.delivery_plain (routing : Routing) (plain : routing.context.profile = .plain)
+    (frames : Frames) (site field : String) (sender : Nat) :
+    routing.delivery frames site field sender = none := by
+  have empty : routing.deliveries.filter (fun _ => false) = [] := by
+    induction routing.deliveries with
+    | nil => rfl
+    | cons _ _ ih => exact ih
+  simp [Routing.delivery, Context.draws, Context.replacement?, plain, empty]
+
+theorem Routing.delivery_profile {routing : Routing} {frames : Frames} {site field : String}
+    {sender : Nat} {origins : Origin × Origin}
+    (found : routing.delivery frames site field sender = some origins) :
+    ∃ replacement, routing.context.profile = .fiatShamir replacement := by
+  cases profile : routing.context.profile with
+  | fiatShamir replacement => exact ⟨replacement, rfl⟩
+  | plain => rw [routing.delivery_plain profile] at found; cases found
 
 /-- Owner-local services keep their actual capability, root, nominal request
 and complete source path. They never become public transcript queries. -/

@@ -71,6 +71,14 @@ existing perfect-completeness theorem. Local service assumptions and the
 producer-to-validator state handoff remain explicit. Stops cannot be counted as
 success, and the oracle state is not reset between the participants.
 
+The [private-producer consumer](selected-property-adapters.md#private-producer-and-concrete-verifier-wp)
+extends this route without assigning a common answer table to private draws.
+It quantifies over actual supported sampled producer executions and proves the
+same concrete verifier WP for each emitted proof. The canonical consumer retains
+input preparation, nonvacuity and all unsuccessful probability mass. Its selected
+verifier scope is a returning deterministic table run; fresh private validator
+continuations require a separate support-aware proof.
+
 The validator WP does not replace the probabilistic experiment/adversary layer.
 An opaque adaptive adversary still requires its existing resource and interface
 contract. Cache hits and fresh samples have different laws; distributional

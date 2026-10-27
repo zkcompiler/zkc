@@ -117,6 +117,56 @@ theorem callHelper_of_lookup (model : Structured.DomainModel) (program : Structu
   simp only [callHelper, found, ↓reduceIte, decodeValues_encodeValues encoding]
   kernel_rfl
 
+/-- A complete equation on the exact looked-up helper transports returns
+and stops alike. The lookup pins its full nominal signature and implementation. -/
+theorem callHelper_of_invoke_outcome (model : Structured.DomainModel) (program : Structured.Program)
+    (entry : Structured.HelperDefinition model.Value Structured.closedInterface)
+    (found : (helperTable model program).find? (fun item => item.helper.name == entry.helper.name) =
+      some entry)
+    (arguments : Values model.Value entry.helper.inputs)
+    (meaning : PIR.Process Structured.closedInterface (Values model.Value entry.helper.outputs))
+    (law : entry.invoke arguments = meaning)
+    (encodedArguments : Environment model.toCarriers)
+    (argumentsEncoding : encodeValues arguments = some encodedArguments) :
+    callHelper model program entry.helper.name (entry.helper.outputs.map ValueSort.data) encodedArguments =
+      (match closedOutcome meaning with
+      | .stopped reason => .stopped reason
+      | .returned results =>
+          match encodeValues results with
+          | some encoded => .returned encoded
+          | none => .stopped .refused) := by
+  rw [callHelper_of_lookup model program entry found arguments encodedArguments argumentsEncoding, law]
+  rfl
+
+/-- A non-refused invoke equation also authenticates the requested helper's
+full signature. This variant covers finite exhaustion as well as returns. -/
+theorem callHelper_of_invoke_not_refused (model : Structured.DomainModel) (program : Structured.Program)
+    (helper : Structured.Helper) (arguments : Values model.Value helper.inputs)
+    (meaning : PIR.Process Structured.closedInterface (Values model.Value helper.outputs))
+    (law : Structured.invoke (helperTable model program) helper arguments = meaning)
+    (notRefused : meaning ≠ .halt .refused)
+    (encodedArguments : Environment model.toCarriers)
+    (argumentsEncoding : encodeValues arguments = some encodedArguments) :
+    callHelper model program helper.name (helper.outputs.map ValueSort.data) encodedArguments =
+      (match closedOutcome meaning with
+      | .stopped reason => .stopped reason
+      | .returned results =>
+          match encodeValues results with
+          | some encoded => .returned encoded
+          | none => .stopped .refused) := by
+  cases found : (helperTable model program).find? (fun entry => entry.helper.name == helper.name) with
+  | none =>
+      simp only [Structured.invoke, found] at law
+      exact False.elim (notRefused law.symm)
+  | some entry =>
+      by_cases signature : entry.helper = helper
+      · subst helper
+        simp only [Structured.invoke, found, ↓reduceDIte] at law
+        rw [callHelper_of_lookup model program entry found arguments encodedArguments argumentsEncoding, law]
+        cases closedOutcome meaning <;> rfl
+      · simp only [Structured.invoke, found, signature, ↓reduceDIte] at law
+        exact False.elim (notRefused law.symm)
+
 /-- A successful typed invoke law on the actual closed helper table provides
 its own exact signature check. Both nominal ABI encodings remain explicit. -/
 theorem callHelper_of_invoke_return (model : Structured.DomainModel) (program : Structured.Program)

@@ -14,7 +14,7 @@ construction = true
 data = "lean/ZkcExamples/Construction/GuessProofData.lean"
 bodies = "lean/ZkcExamples/Construction/GuessProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/GuessProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/GuessProof.lean"
+glue = "lean/ZkcExamples/Construction/GuessArtifact.lean"
 artifacts = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Artifacts.lean"
 claims = "lean/integrations/arklib/ZkcArkLib/Examples/Subjects/Guess/Claims.lean"
 
@@ -28,6 +28,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "native-domain-separator"]
 
 [construction]
+namespace = "ZkcExamples.Construction.GuessProof"
+connection = "ZkcExamples.Construction.GuessProof"
 admission = "views"
 inputs = "payloads"
 model = "experiment"

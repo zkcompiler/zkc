@@ -1,7 +1,8 @@
 module
 
 public import ZkcSecurity.Endpoint.Knowledge
-public import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
+public import ZkcSecurity.Examples.Subjects.Schnorr.CompiledEndpoints
+public import ZkcSecurity.Examples.Subjects.Schnorr.Lowering
 
 @[expose] public section
 
@@ -29,18 +30,5 @@ theorem knowledge_soundness_bytes :
       (evidence (F := F) (G := G)) :=
   ZkcSecurity.Endpoint.knowledge_soundness_bytes (evidence)
 
-/-! ## Other covered endpoints and statement forms -/
-
-/-- The evidence of knowledge soundness of the ideal meaning for fixed
-statements. -/
-noncomputable def idealEvidence :=
-  knowledge (F := F) (G := G) .idealMeaning PUnit.unit
-
-/-- Also covered: knowledge soundness of the ideal meaning for fixed statements,
-at the subject's artifacts and contract. -/
-theorem knowledge_soundness :
-    KnowledgeSoundness (art := artifacts) (holds := Contract.holds)
-      (idealEvidence (F := F) (G := G)) :=
-  ZkcSecurity.Endpoint.knowledge_soundness (idealEvidence)
 
 end ZkcSecurity.Examples.Subjects.Schnorr

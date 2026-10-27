@@ -651,19 +651,7 @@ private def dependencyPolicyJson : String := r##"{
       ]
     }
   ],
-  "exceptions": [
-    {
-      "name": "clean-subjects-to-tests",
-      "reason": "Move reusable native Clean clients out of the test library.",
-      "edges": [
-        [
-          "CleanExamples",
-          "TestsClean.NativeClients",
-          true
-        ]
-      ]
-    }
-  ]
+  "exceptions": []
 }"##
 -- END DEPENDENCY POLICY
 

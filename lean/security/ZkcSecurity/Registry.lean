@@ -18,8 +18,8 @@ Categories:
 - a *model* is a cryptographic model or idealization: the random oracle on
   typed histories, challenges answered as exactly uniform field elements, and
   commitments read in the clear;
-- a *law* is the realized law of a challenge decoder relative to the ideal
-  sampler, discharged per decoder;
+- a *law* states a realized decoder distribution or a semantic connection
+  between execution stages, discharged by the selected implementation;
 - a *trusted link* is an implementation correspondence outside Lean. Its schema
   states the correspondence over the uninterpreted native component, so an
   endpoint that takes it as a premise names the component it trusts;
@@ -189,6 +189,13 @@ def entries : List Entry := [
   ⟨"model.history-oracle-replay", .model, some `ZkcSecurity.Endpoint.Sigma.historyOracle,
     "The transcript challenge on a typed history is a lazily sampled, exactly uniform field \
     element, shared by the prover and verification, drawn through VCVio's replay oracle."⟩,
+  ⟨"law.compiled-source-connection", .law,
+    some `ZkcSecurity.Endpoint.Compiled.SourceConnection,
+    "The actual selected compiled verifier equals the admitted source transform for every \
+    lawful challenge computation, typed statement, initial history and proof."⟩,
+  ⟨"law.byte-pruning", .law, some `ZkcSecurity.Endpoint.BytePruning,
+    "At every budget and for every decoder, framed proof and typed statement, actual byte \
+    validation can only remove acceptance from the selected compiled verifier."⟩,
   ⟨"law.balanced-decoding", .law, some `ZkcSecurity.FiatShamir.Balanced,
     "Every event of the decoded challenge is at most a stated loss likelier than under the \
     uniform field."⟩,
@@ -293,6 +300,14 @@ def entries : List Entry := [
     the width plus one per query."⟩,
   ⟨"budget.provider-family-queries", .budget, some `ZkcSecurity.FiatShamir.Provider.FamilyQueryBound,
     "At most a budget of calls of each primitive family on every path."⟩,
+  ⟨"family.private-producer-wp", .familyProperty,
+    some `ZkcSecurity.FiatShamir.PrivatePairWP.producerWP,
+    "Every supported private-coin producer execution returns and its generated proof \
+    satisfies the deterministic validator's success WP under the fixed answer table."⟩,
+  ⟨"family.private-validator-wp", .familyProperty,
+    some `ZkcSecurity.FiatShamir.PrivatePairWP.validatorWP,
+    "The actual validator under the fixed answer table returns true and consumes the \
+    complete proof; a stopped execution cannot satisfy this WP."⟩,
   ⟨"family.participant-step", .familyProperty, some `ZkcSecurity.FiatShamir.Step,
     "The local obligation of a doomed set at one residual of a participant validator."⟩,
   ⟨"family.participant-step-to", .familyProperty, some `ZkcSecurity.FiatShamir.StepTo,
@@ -341,6 +356,9 @@ def entries : List Entry := [
     checkpoint of one of its transcript queries."⟩,
   ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
     "A policy statement denotes no model statement."⟩,
+  ⟨"event.domain-false-statement", .event,
+    some `ZkcSecurity.Claims.Domain.Subject.FalseStatement,
+    "No witness satisfies the fixed Domain subject's retained relation on this statement."⟩,
   ⟨"event.false-statement", .event, some `ZkcSecurity.Endpoint.ApplicationFalse,
     "A policy statement the claim's application contract counts as false."⟩,
   ⟨"event.unmapped-statement", .event, some `ZkcSecurity.Endpoint.ModelRelation.Unmapped,
@@ -474,7 +492,7 @@ def entries : List Entry := [
     "Both carried environments encode the same dimension-indexed prefix state and \
     original table, with the remaining dimension bounded and the scalar equal to the residual sum."⟩,
   ⟨"wellformed.sumcheck-source-helper-bodies", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.DomainHelpers.Bodies,
+    some `ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies,
     "The admitted source program contains the exact sumcheck, prefix, terminal-check \
     and table-check helper bodies with their complete checked dependencies."⟩,
   ⟨"wellformed.honest-pair-pointwise-wp", .wellFormedness,
@@ -548,6 +566,10 @@ def entries : List Entry := [
     some `ZkcSecurity.Examples.Components.GkrRoundsResidual.Prefix,
     "The state is reached from the fixed caller state by successive factor restrictions \
     under arbitrary received coefficient triples and challenges."⟩,
+  ⟨"wellformed.gkr-finite-call-contexts", .wellFormedness,
+    some `ZkcSecurity.Examples.Components.GkrFiniteCalls.Valid,
+    "Each selected gate call maps its two local roles to distinct participants; \
+    every call retains its own immutable protocol context."⟩,
   ⟨"event.gkr-rounds-false-residual", .event,
     some `ZkcSecurity.Examples.Components.GkrRoundsResidual.NoReturn,
     "The complete returned ABI encodes a state at the fixed residual dimension that \
@@ -561,23 +583,23 @@ def entries : List Entry := [
     "Receive and query reply maps are bijective with representable payloads, and send \
     operations have only the selected reply, permitting full-result presentation transport."⟩,
   ⟨"wellformed.sumcheck-original-validator-routes", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.Routes,
+    some `ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.Routes,
     "The validator's source message, draw and delivery sites resolve at the given frames \
     to the selected nominal origins, service handle and validator mode."⟩,
   ⟨"wellformed.sumcheck-original-validator-return", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.ArtifactBinding.VerifierReturns,
+    some `ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding.VerifierReturns,
     "The full optional validator callback ABI agrees with the selected live point and \
     scalar slots, transcript history and source occurrence frames."⟩,
   ⟨"wellformed.sumcheck-original-root-return", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.ArtifactRoot.ValidatorReturns,
+    some `ZkcExamples.Structured.SumcheckArtifacts.ArtifactRoot.ValidatorReturns,
     "The original Boolean return agrees with the artifact's complete returned values, \
     selected live Boolean and transcript slots, reached history and empty source frames."⟩,
   ⟨"wellformed.sumcheck-original-producer-return", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Returns,
+    some `ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Returns,
     "The complete optional producer callback ABI agrees with its five selected live \
     carried slots, reached transcript history and source occurrence frames."⟩,
   ⟨"wellformed.sumcheck-original-producer-routes", .wellFormedness,
-    some `ZkcSecurity.Realizations.Sumcheck.OriginalProducer.Routes,
+    some `ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer.Routes,
     "The producer's source message and challenge-delivery sites resolve at the given \
     frames to the selected nominal origins and producer mode."⟩,
   ⟨"wellformed.sumcheck-original-pair-postcondition", .wellFormedness,

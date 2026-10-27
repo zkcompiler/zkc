@@ -5,7 +5,7 @@ public import ZkcSecurity.FiatShamir.HonestSampledReadback
 public import ZkcSecurity.FiatShamir.SampledCompiled
 public import ZkcSecurity.Claims.SubjectABI
 public meta import ZkcSecurity.Tools.InputLaws
-public meta import ZkcSecurity.Tools.ProcessView
+public meta import Zkc.Construction.ProcessViewTactic
 public meta import Lean.Elab.Tactic
 public meta import Zkc.Construction.TransportReduction
 public meta import Mathlib.Tactic.Linter.UnusedTactic

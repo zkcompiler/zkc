@@ -94,5 +94,6 @@ theorem validator_receive (routing : Routing) (state : State carriers)
         .call (.observe (.message origin (.field field value))) (fun _ =>
           .done (value, { state with history := state.history ++ [.message origin (.field field value)] }))) := by
   simp only [receive, mode, route, Domain.Payload.ofValue, record, PIR.Process.bind]
+  rfl
 
 end Zkc.Construction.Original

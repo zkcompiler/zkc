@@ -1,6 +1,9 @@
 import ZkcTools.StructuredSource.Constructed
 import ZkcExamples.Construction.Generated.SmallSumcheckPair
 import ZkcExamples.Construction.Generated.TwoSumsPair
+import ZkcExamples.Construction.ChaumPedersenProofParticipant
+import ZkcExamples.Construction.OkamotoProofParticipant
+import ZkcExamples.Construction.GuessProofParticipant
 
 namespace Tests.Constructed.Generate
 
@@ -19,7 +22,13 @@ def main (args : List String) : IO Unit := do
        ("TwoSumsProducer", "ZkcExamples.Construction.Generated.TwoSumsPair", "ZkcExamples.Construction.Generated.TwoSumsPair.Producer.participant",
           ZkcExamples.Construction.Generated.TwoSumsPair.Producer.participant),
        ("TwoSumsValidator", "ZkcExamples.Construction.Generated.TwoSumsPair", "ZkcExamples.Construction.Generated.TwoSumsPair.Validator.participant",
-          ZkcExamples.Construction.Generated.TwoSumsPair.Validator.participant)] do
+          ZkcExamples.Construction.Generated.TwoSumsPair.Validator.participant),
+       ("ChaumPedersenValidator", "ZkcExamples.Construction.ChaumPedersenProofParticipant", "ZkcExamples.Construction.ChaumPedersenProofParticipant.participant",
+          ZkcExamples.Construction.ChaumPedersenProofParticipant.participant),
+       ("OkamotoValidator", "ZkcExamples.Construction.OkamotoProofParticipant", "ZkcExamples.Construction.OkamotoProofParticipant.participant",
+          ZkcExamples.Construction.OkamotoProofParticipant.participant),
+       ("GuessValidator", "ZkcExamples.Construction.GuessProofParticipant", "ZkcExamples.Construction.GuessProofParticipant.participant",
+          ZkcExamples.Construction.GuessProofParticipant.participant)] do
     let output : Output := ⟨"ZkcExamples.Structured.Generated.Constructed." ++ name,
       artifactModule, expression⟩
     match source artifact output with

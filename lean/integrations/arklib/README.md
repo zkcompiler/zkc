@@ -35,3 +35,11 @@ before this package and checks actual package providers, pin consistency and
 imports. Declaration audits inspect stored types, bodies and transitive axiom
 closures. These are model-specific results; [formal support](../../docs/support.md)
 states their premises and open implementation links.
+
+The [selected property adapters](../../docs/spec/selected-property-adapters.md)
+include `ZkcArkLib.Kzg.EvaluationBinding` and its concrete group/field
+`OpeningClient`, plus `ZkcArkLib.Knowledge.FiniteRecovery`. KZG bounds use the
+pinned intermediate reduction results with explicit admissibility closure;
+they do not invoke the upstream all-functions hardness assumption. Finite
+straight-line recovery has its own request and exact two-cell access. Neither
+adapter supplies native bytes or a compiled KZG knowledge receipt.

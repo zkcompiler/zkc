@@ -30,7 +30,7 @@ def validatorStatement : String :=
 
 def sharedValidatorProof : String :=
   r###"  rw [body_instance, output_instance]
-  exact ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound
+  exact ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.validatorRound
     program helper_bodies.sumcheck verifier_bodies (routing handle) context rfl occurrence
     (by decide +kernel) $ORIGINS $OFFSET captured size index handle point scalar history
     (routes handle index)
@@ -67,7 +67,7 @@ def producerStatement : String :=
 
 def sharedProducerProof : String :=
   r###"  rw [body_instance, output_instance]
-  exact ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound
+  exact ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerRound
     program helper_bodies.sumcheck (routing handle) context rfl occurrence
     (by decide +kernel) $ORIGINS $OFFSET captured size index raw dimension width point
     shape bounded positive history (routes handle index)

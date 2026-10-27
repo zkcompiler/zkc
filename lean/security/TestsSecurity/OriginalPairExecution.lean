@@ -1,9 +1,9 @@
 module
 
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot
+public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot
+public import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot
+public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot
+public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot
 
 @[expose] public section
 
@@ -16,7 +16,7 @@ set_option backward.isDefEq.respectTransparency false
 noncomputable section
 namespace TestsSecurity.OriginalPairExecution
 open Zkc.Source Zkc.Source.Structured Zkc.Construction ZkcExamples.Structured
-open ZkcSecurity.Examples.Generated.OriginalArtifacts
+open ZkcExamples.Structured.OriginalArtifacts
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 

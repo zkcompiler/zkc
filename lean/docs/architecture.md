@@ -155,7 +155,9 @@ moves or dependency disappears. An optional package not selected for a run is
 not declared stale. The Lean audit accepts the same exact pairs but does not
 check list freshness, because a client audit may select only one module.
 
-The only retained exception is `CleanExamples` importing `TestsClean.NativeClients`.
+The Clean native clients are owned by `CleanExamples.NativeClients`; executable
+examples and tests both consume that module. No example-to-test dependency exception
+is retained.
 The former family-to-probability, generic-security-to-adapter and
 `JointOpening`-to-example exceptions have been removed. ArkLib upstream is a
 separate policy layer from VCVio/PolyFun upstream. In addition to header and

@@ -1,4 +1,9 @@
-import ZkcExamples.Executable.SchnorrProof
+import ZkcExamples.Executable.SchnorrProofFacts
+import ZkcExamples.Construction.SchnorrProof
+import Zkc.Executable.DomainLowering
+import Zkc.Executable.Relation
+import Zkc.Executable.Decoding
+import Zkc.Executable.NativeLaws
 import Zkc.Executable.Cleanup
 import Mathlib.Algebra.Field.ZMod
 
@@ -269,14 +274,18 @@ theorem exhausted_after_challenge :
       observed (runAt 8 honest) = (some (some "_transcript_13", some ("_transcript_13", "_transcript_4")), 8, 2, 1) := by
   decide +kernel
 
-/-- The budget premise is necessary: at budget 8 the executable stops while the
-ideal meaning of the constructed validator returns. -/
+/-- The canonical metered Domain execution at the actual checked reading. -/
+def canonicalAt (budget : Nat) (bytes : List UInt8) :
+    PIR.Outcome (List (Value F G)) × Proof F G :=
+  DomainVM.validate SchnorrProof.program SchnorrProof.context id [] challengeToy
+    (helperCost installed actual) budget constructed ZkcExamples.Executable.SchnorrProof.lowered
+    (SchnorrDomainConnection.inputs (F := F) (G := G) 1 3)
+    (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives bytes)
+
+/-- The budget premise is necessary: the native execution at budget 8 stops,
+while the canonical execution at its sufficient budget returns. -/
 theorem budget_dropped :
-    (runAt 8 honest).result.outcome ≠
-      (Id.run (ideal SchnorrProof.context challengeToy SchnorrProof.table constructed.returned
-        constructed.instructions
-        ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives honest))).1 := by
+    (runAt 8 honest).result.outcome ≠ (canonicalAt 25 honest).1 := by
   decide +kernel
 
 /-- A commitment that does not decode stops at its receive after one charged
@@ -319,15 +328,9 @@ decoding stop the metered equation fails on an undecodable commitment, while
 the rule's classification satisfies it. -/
 theorem stop_misclassified :
     misclassified (runAt 25 (frame 9 ++ frame 0)).result ≠
-      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table (helperCost installed actual) 25
-        ZkcExamples.Executable.SchnorrProof.lowered
-        ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives (frame 9 ++ frame 0)))).1 ∧
+      (canonicalAt 25 (frame 9 ++ frame 0)).1 ∧
     (runAt 25 (frame 9 ++ frame 0)).result.outcome =
-      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table (helperCost installed actual) 25
-        ZkcExamples.Executable.SchnorrProof.lowered
-        ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives (frame 9 ++ frame 0)))).1 := by
+      (canonicalAt 25 (frame 9 ++ frame 0)).1 := by
   decide +kernel
 
 /-- A stop inside a helper leaves that frame and then the participant frame,

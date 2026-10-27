@@ -11,13 +11,25 @@ def policy():
     return load('lean_dependencies', 'lean/support/dependencies.py')
 
 
+def legacy_policy(audit):
+    data = deepcopy(audit.POLICY)
+    data['exceptions'] = [{
+        'name': 'clean-subjects-to-tests',
+        'reason': 'Synthetic legacy edge used only to test exception retirement.',
+        'edges': [['CleanExamples', 'TestsClean.NativeClients', True]],
+    }]
+    return data
+
+
 def legacy_graph():
     return {'CleanExamples': ['TestsClean.NativeClients'], 'TestsClean.NativeClients': []}
 
 
 def test_existing_exception_and_unselected_packages():
     audit = policy()
-    result = audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'])
+    result = audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'],
+                               legacy_policy(audit))
+    assert audit.audit_graph({}, ['Zkc'], legacy_policy(audit))['reachable_exceptions'] == 0
     assert result['reachable_exceptions'] == result['direct_exceptions'] == 1
 
 
@@ -29,19 +41,30 @@ def test_existing_exception_and_unselected_packages():
 ])
 def test_deleted_owner_removed_import_and_relocated_violation_are_refused(graph):
     with pytest.raises(ValueError, match='stale dependency exception|forbidden dependency'):
-        policy().audit_graph(graph, ['CleanExamples', 'TestsClean'])
+        audit = policy()
+        audit.audit_graph(graph, ['CleanExamples', 'TestsClean'], legacy_policy(audit))
 
 
 def test_transitive_exception_does_not_authorize_new_direct_import():
-    graph = {'Zkc.Protocols.Sumcheck.Acceptance': ['ZkcSecurity.Probability.UniformTape']}
+    audit = policy()
+    data = legacy_policy(audit)
+    data['exceptions'][0]['edges'][0][2] = False
+    with pytest.raises(ValueError, match='new direct dependency'):
+        audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'], data)
+
+
+def test_current_policy_has_no_dependency_exceptions():
+    audit = policy()
+    assert audit.POLICY['exceptions'] == []
     with pytest.raises(ValueError, match='forbidden dependency'):
-        policy().audit_graph(graph, ['Zkc.Protocols.Sumcheck.Acceptance'])
+        audit.audit_graph(legacy_graph(), ['CleanExamples', 'TestsClean'])
 
 
 def test_new_user_of_an_existing_violation_is_refused():
     graph = legacy_graph() | {'CleanExamples.NewClient': ['CleanExamples']}
     with pytest.raises(ValueError, match='forbidden dependency'):
-        policy().audit_graph(graph, ['CleanExamples', 'TestsClean'])
+        audit = policy()
+        audit.audit_graph(graph, ['CleanExamples', 'TestsClean'], legacy_policy(audit))
 
 
 def test_hard_guard_applies_through_an_otherwise_allowed_layer():
@@ -72,7 +95,7 @@ def test_policy_refuses_ambiguous_or_unjustified_rows(tmp_path, defect):
     import json
 
     audit = policy()
-    data = deepcopy(audit.POLICY)
+    data = legacy_policy(audit)
     if defect == 'duplicate':
         data['exceptions'][0]['edges'] *= 2
     elif defect == 'shadowed':

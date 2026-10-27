@@ -67,7 +67,7 @@ def build_inputs(root, with_arklib=False, with_clean=False, with_security=False)
         files.extend(optional.glob('*.lean'))
         files.extend(optional / name for name in ('compatibility.json', 'compatibility.patch'))
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcClean', 'TestsClean'):
+        for directory in ('ZkcClean', 'TestsClean', 'CleanExamples'):
             files.extend((optional / directory).rglob('*.lean'))
         files.append(root / CLEAN_CONTROL)
     return {str(p.relative_to(root)): support.lake.sha(p) for p in sorted(files)}

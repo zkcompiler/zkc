@@ -25,7 +25,7 @@ PACKAGES = {
                     "ZkcTools/ConstructionBindings"]),
     "security": (LEAN / "security", ["ZkcSecurity", "TestsSecurity"]),
     "arklib": (LEAN / "integrations/arklib", ["ZkcArkLib", "TestsArkLib"]),
-    "clean": (LEAN / "integrations/clean", ["ZkcClean", "TestsClean"]),
+    "clean": (LEAN / "integrations/clean", ["ZkcClean", "TestsClean", "CleanExamples"]),
 }
 # The registry tables the emitter evaluates where the package defines them.
 REGISTRY = {"security": ("ZkcSecurity.Registry.table", "ZkcSecurity.Registry.endpoints"),

@@ -25,6 +25,7 @@ def subject (endpoint : Semantics) : Subject F G artifacts endpoint where
   reference := sourceReference (stage endpoint)
   stageMatched := rfl
   compiled := compiled
+  connection := sourceConnection
   target := .retained Contract.retained
   importedRegistered := by intro declaration impossible; cases impossible
   sites := sourceSites

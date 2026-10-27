@@ -11,9 +11,7 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 private abbrev snapshot := ZkcExamples.Structured.SumcheckSourceData.snapshot
 private abbrev exported := ZkcExamples.Construction.SumcheckProofParticipant.participant
 private def context : Context :=
-  ⟨exported.policy.entry, ["role00000000", "role00000001"], 0, 1, 3,
-    "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), exported.policy.suite,
-    exported.policy.draws⟩
+  Context.fiatShamir (exported.policy.entry) (["role00000000", "role00000001"]) 0 1 3 "random.bls12-381.fr/0" (some (.draw "bls12-381.fr")) (exported.policy.suite) (exported.policy.draws)
 
 private def pair : Option (Template × Template) :=
   let edge := context.draws[0]!
@@ -41,7 +39,7 @@ example : OccurrenceResolution.resolve snapshot context origin [⟨"other-loop",
 example : OccurrenceResolution.resolve snapshot context origin (frames 0) [query, query] = none := by
   decide +kernel
 example : OccurrenceResolution.resolve snapshot context origin (frames 0) [] = none := by decide +kernel
-example : OccurrenceResolution.resolve snapshot { context with service := 0 }
+example : OccurrenceResolution.resolve snapshot (context.mapReplacement (fun replacement => { replacement with service := 0 }))
     origin (frames 0) [query] = none := by decide +kernel
 
 -- Def-use identity permits visibility restriction but not arithmetic on the

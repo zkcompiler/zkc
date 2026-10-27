@@ -39,8 +39,8 @@ theorem abi_readback (values : Data) (related : subject.Relation (abi.pack value
   change Nat at input4
   change Option Nat at input5
   change Readback _
-    (Domain.participant (ringModel Scalar Group) _ _ ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot.artifact (producerInputs input0 input1 input2 input3 input4))
-    (Domain.participant (ringModel Scalar Group) _ _ ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot.artifact (validatorInputs input0 input1 input2 input3 input4))
+    (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot.artifact (producerInputs input0 input1 input2 input3 input4))
+    (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.artifact (validatorInputs input0 input1 input2 input3 input4))
   prepare_target_readback [Scalar, Group] for subject using honestInput_iff
     reading (application_read input0 input1 input2 input3 input4 input5) evaluating ZkcSecurity.Examples.Components.TwoSums.Formula.equation
   have shape0 : PrimitiveLibrary.HasShape input0 input4 1 := by

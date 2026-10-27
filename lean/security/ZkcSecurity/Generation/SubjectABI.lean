@@ -43,18 +43,14 @@ def existentialBinders (declarations : String) : String :=
 def existential (types : List Ty) (optional : Ty → Bool) : String :=
   existentialBinders (binders types optional)
 def names (types : List Ty) : List String := (List.range types.length).map inputName
-def isService (ty : Ty) : Bool := !Domain.dataType ty
+def isService (ty : Ty) : Bool := ty.isService
 
-def encoded (ty : Ty) (name : String) : Except String String := do
-  let payload ← match ty with
-    | .boolean => pure (".boolean " ++ name)
-    | .index => pure (".index " ++ name)
-    | .field domain => pure (".field " ++ literal domain ++ " " ++ name)
-    | .vector domain => pure (".vector " ++ literal domain ++ " " ++ name)
-    | .group domain => pure (".group " ++ literal domain ++ " " ++ name)
-    | .service _ => throw "subject-abi-service-projection"
-    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
-  pure (".data (" ++ payload ++ ")")
+/-- Emit the existing nominal data constructor; no second carrier enumeration
+or recursive data encoding is owned by the generator. The kernel checks the
+closed capability-exclusion proof in the generated module. -/
+def encoded (ty : Ty) (name : String) : Except String String :=
+  if ty.isService then .error "subject-abi-service-projection"
+  else .ok (".data ⟨" ++ literal ty ++ ", by decide, " ++ name ++ "⟩")
 
 def atPositions (types : List Ty) (positions : List Nat) : Except String (List Ty) :=
   positions.mapM fun position => match types[position]? with
@@ -62,11 +58,14 @@ def atPositions (types : List Ty) (positions : List Nat) : Except String (List T
     | none => throw "subject-abi-input-position"
 
 def environment (types : List Ty) (positions : List Nat) (history : String)
-    (suite : String) : Except String String := do
+    (suite : String) (profile : Profile) : Except String String := do
   let entries ← positions.mapM fun index => do
     let some ty := types[index]? | throw "subject-abi-input-position"
     encoded ty (inputName index)
-  pure ("[" ++ ", ".intercalate (entries ++ [".transcript " ++ literal suite ++ " " ++ history]) ++ "]")
+  let entries := match profile with
+    | .plain => entries
+    | .fiatShamir _ => entries ++ [".transcript " ++ literal suite ++ " " ++ history]
+  pure ("[" ++ ", ".intercalate entries ++ "]")
 
 def rawEnvironment (types : List Ty) (positions : List Nat) : Except String String := do
   let entries ← positions.mapM fun index => do
@@ -80,8 +79,21 @@ def representationProposition (types : List Ty) : String :=
   let bounds := types.zipIdx.filterMap fun (ty, index) => match ty with
     | .index => some (inputName index ++ " < indexLimit")
     | .vector _ => some (inputName index ++ ".length < indexLimit")
+    | .sequence _ | .product .. => some ("inputRepresentable (carriers := model.toCarriers) " ++
+        literal ty ++ " (some " ++ inputName index ++ ")")
     | _ => none
   if bounds.isEmpty then "True" else " ∧ ".intercalate bounds
+
+/-- Print the explicit constructor rather than inherited record `Repr` syntax. -/
+def contextLiteral (context : Context) : String :=
+  let identity := literal context.entry ++ " " ++ literal context.roles ++ " " ++
+    toString context.producer ++ " " ++ toString context.validator
+  match context.profile with
+  | .plain => "(Context.plain " ++ identity ++ ")"
+  | .fiatShamir replacement =>
+    "(Context.fiatShamir " ++ identity ++ " " ++ toString replacement.service ++ " " ++
+      literal replacement.contract ++ " " ++ literal replacement.request ++ " " ++
+      literal replacement.suite ++ " " ++ literal replacement.draws ++ ")"
 
 structure Metadata where
   types : List Ty
@@ -120,10 +132,6 @@ def metadata {model : DomainModel} {original : Snapshot} {imported : Imported or
 
 def source (metadata : Metadata) (output : Output) : Except String String := do
   let types := metadata.types
-  for type in types do
-    match type with
-    | .sequence _ | .product .. => throw "subject-abi-aggregate-type"
-    | _ => pure ()
   let some producerPositions := metadata.producerPositions | throw "subject-abi-source-interface"
   let publicPositions := metadata.publicPositions
   -- This presentation stores every data coordinate as present. Refuse profiles
@@ -155,7 +163,10 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let targetPublicNames := targetPublicPositions.map inputName
   let targetPublicBinders := String.join (targetPublicPositions.map fun index => binder index types[index]! false)
   let producerArgumentPositions := (List.range types.length).filter fun index =>
-    producerPositions.contains index || publicPositions.contains index
+    producerPositions.contains index ||
+      (match metadata.context.profile with
+       | .plain => false
+       | .fiatShamir _ => publicPositions.contains index)
   let producerNames := producerArgumentPositions.map inputName
   let producerBinders := String.join (producerArgumentPositions.map fun index => binder index types[index]! false)
   let targetNames := targetPositions.map inputName
@@ -165,8 +176,8 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
   let targetBinderNames := targetBinderPositions.map inputName
   let targetBinders := String.join (targetBinderPositions.map fun index => binder index types[index]! false)
   let history := call "initialHistory" publicNames
-  let producer ← environment types producerPositions history metadata.suite
-  let validator ← environment types publicPositions history metadata.suite
+  let producer ← environment types producerPositions history metadata.suite metadata.context.profile
+  let validator ← environment types publicPositions history metadata.suite metadata.context.profile
   let producerData ← rawEnvironment types producerPositions
   let validatorData ← rawEnvironment types publicPositions
   let pair := "(" ++ call "producerInputs" producerNames ++ ", " ++ call "validatorInputs" publicNames ++ ")"
@@ -237,7 +248,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "    statementData (statementOfData fields) = fields := TypedABI.unpack_pack fields\n\n" ++
     "def initialHistory" ++ publicBinders ++ " : Domain.History model.toCarriers :=\n" ++
     "  Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs\n" ++
-    "    " ++ call "statement" publicNames ++ " subject.publicBindingArity\n\n" ++
+    "    " ++ call "statement" publicNames ++ " subject.publicBindingArity subject.publicBindingData\n\n" ++
     "def producerInputs" ++ producerBinders ++ " : Domain.Environment model.toCarriers :=\n  " ++ producer ++ "\n\n" ++
     "def validatorInputs" ++ publicBinders ++ " : Domain.Environment model.toCarriers :=\n  " ++ validator ++ "\n\n" ++
     "theorem producer_sorts" ++ producerBinders ++ " :\n" ++
@@ -297,7 +308,7 @@ def source (metadata : Metadata) (output : Output) : Except String String := do
     "      (validatorSubject.assignments " ++ call "statement" publicNames ++ " witness) =\n" ++
     "      " ++ (if hasPrivate then call "validatorArguments" (targetPublicNames ++ ["witness"])
       else "some " ++ values targetNames) ++ " := by\n  rfl\n\n" ++
-    "theorem context_eq : subject.selection.context = " ++ literal metadata.context ++ " := rfl\n\n" ++
+    "theorem context_eq : subject.selection.context = " ++ contextLiteral metadata.context ++ " := rfl\n\n" ++
     "theorem pair_eq : selected.artifacts = artifacts := rfl\n\n" ++
     "theorem original_export : subject.originalExport = " ++ literal metadata.originalExport ++ " := rfl\n" ++
     "theorem producer_export : subject.producerExport = " ++ literal metadata.producerExport ++ " := rfl\n" ++

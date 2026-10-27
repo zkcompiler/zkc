@@ -39,7 +39,7 @@ private def validator : Participant :=
     outputs := [.data .boolean, .transcript "suite"], instructions := [], returned := [0, 1] }
 private def artifacts : Artifacts := ⟨producer, validator⟩
 private def context : Context :=
-  ⟨"main", ["P", "V"], 0, 1, 1, scalarServiceContract, none, "suite", []⟩
+  Context.fiatShamir "main" (["P", "V"]) 0 1 1 (scalarServiceContract) none "suite" ([])
 private def selected : Zkc.Construction.AuthoredPair.Selection original :=
   ⟨artifacts, policy, "producer", "validator", ⟨[], [inputClause]⟩, target⟩
 

@@ -45,6 +45,19 @@ symbol of the participant whose instance is the policy entry and whose role is
 the selected policy producer or validator; exactly one must exist. `inputs` and `outputs` are the
 printed MLIR types of its signature, in order.
 
+The installed empty-suite policy has no replaced service or draw pair. It exports
+the actual projected plain participants without transcript construction: all
+input and output types are the real data ABI, including products and sequences.
+The single-service Fiat–Shamir policy exports its final transcript capability
+as before. Readers must not infer or append a capability for an empty suite,
+and must not drop a plain participant's last real data output.
+
+The independent formal reader maps recursive `!data.sequence` and one-constructor
+`!local.variant` products to the shared structured type. It checks canonical
+variant DAG spelling and retains the exact nominal identity, constructor and
+ordered component types. Recursive service types are not message data. This
+logical admission does not select a native wire codec or prove its realization.
+
 `service-ports` is the complete retained native service interface, separate
 from those data and transcript inputs, including ports with no queries. Each
 row is `[name, owner, root-input, role-input, contract]`. The two indices are

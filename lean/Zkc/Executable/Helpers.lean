@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Executable.Lowering
+public import Zkc.Executable.Reading
 public import Zkc.Construction.Structured
 
 @[expose] public section

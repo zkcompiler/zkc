@@ -83,6 +83,25 @@ parameters; an unknown helper can remain opaque. Exact constructed views
 retain the nominal sorts of every operand/result and the full producer and
 validator instruction sequences.
 
+`Bindings.Template` packages an actual checked protocol's normal form at its
+dependent helper, callee, role and roster indices. `OriginalRoot.templateSource`
+emits that package with exact helper tables, an immutable earlier protocol
+prefix, and an equation from the actual full protocol-table lookup to the
+selected closure. `OriginalSecurityBindings.templateBindings` checks the
+installed nominal model's `DomainLaws`, selected field applicability, helper
+results and callee equations before applying the shared binding theorem.
+Selection strings supply no laws. This route supports heterogeneous carriers;
+the older table root printer retains its supported realization domain.
+
+The fresh-client check in `security/checks/check_parametric_bindings.py` compiles
+the emitted KoalaBear base/octic embedding installation and GKR Rounds/caller
+templates. It applies the mixed installation to the actual original participant
+and refuses a different model, a same-signature but incorrect helper result,
+an uninstalled field, and a changed captured prefix. The helper and model laws
+concern the exact imported bodies and catalogue. The existing mixed compiled
+endpoint separately retains base cardinality `q`, octic cardinality `q^8`, and
+the injective constant-coefficient embedding.
+
 The nominal source interpreter also supports optional iteration observations.
 `Occurrence.participant` uses the same admitted helper and protocol bodies and
 records each reached repeat site and induction index. Call-site qualification,
@@ -220,6 +239,29 @@ restricted separately, preserving off-cube evaluations. The GKR round adapter
 requires explicit independence of the inactive variable and the actual
 caller table layout. A product of Boolean tables alone does not establish
 that polynomial identity.
+
+`Examples.Components.GkrFiniteCircuit` connects the selected two-wire circuit
+to `Protocols.Gkr.values`: inputs `(3,5)` produce `(8,15)` and then `(120,30)`.
+At every field point its output extension equals the four-factor reference
+total. Inactive-wire independence covers both active-variable stages and every
+first challenge; the round polynomial has degree at most two.
+`GkrFiniteGate` runs the complete imported Rounds process, within its maximum
+of four, and executes a terminal comparison after restricting the original
+four factors at the returned point. Terminal adequacy follows from an anchored
+restriction trace. Honest execution and arbitrary-message rejection use the
+same all-answer process equation. Rejection retains the actual raw query's
+conditional collision law.
+
+`Families.Sumcheck.FiniteCalls` composes a short-circuit conjunction at arbitrary
+list lengths, threading reached histories, handler state, events and stops.
+Its honest invariant can describe a finite remaining proof buffer.
+`GkrFiniteCalls` applies those rules to the named gate component. The checked
+1/2/4-call clients use distinct context prefixes and preserve unread suffixes;
+their source is emitted from one instantiation template. This is a
+Lean-assembled gate-checking component with a Lean terminal algorithm. It
+does not discharge the multilayer caller's remaining line and terminal input
+checks or supply a compiled pair or new canonical GKR receipt. The existing
+eager TwoSums root keeps its own execution semantics.
 
 Joint-IR discovery proposes a reference and dependency cuts. It does not prove
 representation, degree, freshness or target agreement. An explicitly supplied

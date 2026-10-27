@@ -24,9 +24,11 @@ import ZkcArkLib.Examples.Subjects.Guess.Evidence
 import ZkcArkLib.Examples.Subjects.Guess.Registration
 import ZkcArkLib.Examples.Subjects.Sumcheck.Artifacts
 import ZkcArkLib.Examples.Subjects.Sumcheck.Claims
+import ZkcArkLib.Examples.Subjects.Sumcheck.CompiledEndpoints
 import ZkcArkLib.Examples.Subjects.Sumcheck.Contract
 import ZkcArkLib.Examples.Subjects.Sumcheck.Endpoints
 import ZkcArkLib.Examples.Subjects.Sumcheck.Evidence
+import ZkcArkLib.Examples.Subjects.Sumcheck.Lowering
 import ZkcArkLib.Examples.Subjects.Sumcheck.Registration
 import ZkcArkLib.Examples.Sumcheck
 import ZkcArkLib.Examples.SumcheckFiatShamir
@@ -42,6 +44,10 @@ import ZkcArkLib.Fri.Protocol
 import ZkcArkLib.Fri.Soundness
 import ZkcArkLib.Fri.UniqueDecoding
 import ZkcArkLib.Gkr.Layer
+import ZkcArkLib.Knowledge.FiniteRecovery
+import ZkcArkLib.Knowledge.RegisteredFiniteRecovery
+import ZkcArkLib.Kzg.EvaluationBinding
+import ZkcArkLib.Kzg.OpeningClient
 import ZkcArkLib.Registry
 import ZkcArkLib.Sumcheck.Bridge
 import ZkcArkLib.Sumcheck.Domain
@@ -72,8 +78,11 @@ import TestsArkLib.CommitmentBridge
 import TestsArkLib.Compatibility
 import TestsArkLib.CompiledSumcheckFiatShamir
 import TestsArkLib.Endpoints
+import TestsArkLib.FiniteRecovery
 import TestsArkLib.FriSecurity
+import TestsArkLib.KzgEvaluationBinding
 import TestsArkLib.MultilinearSumcheck
+import TestsArkLib.RegisteredFiniteRecovery
 import TestsArkLib.ReportControls
 import TestsArkLib.SumcheckFiatShamir
 import TestsArkLib.UpstreamImports

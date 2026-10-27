@@ -36,7 +36,7 @@ structure Installation (subject : ZkcSecurity.Claims.Domain.Subject model art) w
   acceptance : result → Option Bool
   bridge : ∀ statement initial, Original.Bridge absorb Post initial (source statement initial)
     (Domain.participant model subject.compiled.imported.program subject.compiled.selection.context
-      art.participant (inputs statement ++ [.transcript subject.compiled.selection.context.suite initial]))
+      art.participant (Domain.inputFrame subject.compiled.selection.context (inputs statement) initial))
     (presented statement initial) returns (live statement initial)
   agrees : ∀ source actual, returns source actual → acceptance source = subject.compiled.acceptance actual
 

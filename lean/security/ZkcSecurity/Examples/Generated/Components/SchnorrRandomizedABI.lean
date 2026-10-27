@@ -63,13 +63,13 @@ theorem statementData_statementOfData (fields : StatementData) :
 
 def initialHistory (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) : Domain.History model.toCarriers :=
   Domain.PublicBinding.history subject.originalExport selected.policy.publicInputs
-    (statement input0 input1) subject.publicBindingArity
+    (statement input0 input1) subject.publicBindingArity subject.publicBindingData
 
 def producerInputs (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) : Domain.Environment model.toCarriers :=
-  [.data (.group ("bls12-381.g1") input0), .data (.group ("bls12-381.g1") input1), .data (.field ("bls12-381.fr") input2), .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1)]
+  [.data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input1⟩, .data ⟨(Zkc.Source.Structured.Ty.field "bls12-381.fr"), by decide, input2⟩, .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1)]
 
 def validatorInputs (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) : Domain.Environment model.toCarriers :=
-  [.data (.group ("bls12-381.g1") input0), .data (.group ("bls12-381.g1") input1), .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1)]
+  [.data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input1⟩, .transcript ("merlin3.bls12-381.fr64be/0") (initialHistory input0 input1)]
 
 theorem producer_sorts (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) :
     Domain.sortsMatch selected.artifacts.producer.inputs (producerInputs input0 input1 input2) = true := rfl
@@ -80,7 +80,7 @@ theorem validator_sorts (input0 : (model.Value (Zkc.Source.Structured.Ty.group "
 theorem runtimeInputs_eq (input0 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input1 : (model.Value (Zkc.Source.Structured.Ty.group "bls12-381.g1"))) (input2 : (model.Value (Zkc.Source.Structured.Ty.field "bls12-381.fr"))) (input3 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) (input4 : Option (model.Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0"))) :
     subject.runtimeInputs (inputs input0 input1 input2 input3 input4) = some ((producerInputs input0 input1 input2), (validatorInputs input0 input1)) := by
   exact Subject.runtime_of_projections subject (inputs input0 input1 input2 input3 input4) (by rfl)
-    [.data (.group ("bls12-381.g1") input0), .data (.group ("bls12-381.g1") input1), .data (.field ("bls12-381.fr") input2)] [.data (.group ("bls12-381.g1") input0), .data (.group ("bls12-381.g1") input1)] (statement input0 input1)
+    [.data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input1⟩, .data ⟨(Zkc.Source.Structured.Ty.field "bls12-381.fr"), by decide, input2⟩] [.data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input0⟩, .data ⟨(Zkc.Source.Structured.Ty.group "bls12-381.g1"), by decide, input1⟩] (statement input0 input1)
     (by rfl) (by rfl) (by rfl)
 
 theorem preparation (values : subject.Inputs) :
@@ -137,7 +137,7 @@ theorem validator_application_read (input0 : (model.Value (Zkc.Source.Structured
       (validatorArguments input0 input1 witness) := by
   rfl
 
-theorem context_eq : subject.selection.context = ({ entry := "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad",   roles := ["role00000000", "role00000001"],   producer := 0,   validator := 1,   service := 4,   contract := "random.bls12-381.fr/0",   request := some { method := "draw", operands := [], sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" },   suite := "merlin3.bls12-381.fr64be/0",   draws := [("label_6368616c6c656e6765", "label_64656c6976657279_0")] }) := rfl
+theorem context_eq : subject.selection.context = (Context.fiatShamir ("zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad") (["role00000000", "role00000001"]) 0 1 4 ("random.bls12-381.fr/0") (some { method := "draw", operands := [], sort := Zkc.Source.Structured.Ty.field "bls12-381.fr" }) ("merlin3.bls12-381.fr64be/0") ([("label_6368616c6c656e6765", "label_64656c6976657279_0")])) := rfl
 
 theorem pair_eq : selected.artifacts = artifacts := rfl
 

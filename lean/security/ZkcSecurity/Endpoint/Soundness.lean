@@ -25,8 +25,8 @@ program bytes. Each is a chain of quantitative stage relations
 3. **Executable bytes.** A prover of proof bytes is translated into the prover
    of the typed proofs its bytes decode to at the validator's receive types
    (`Relation.ofLe`), with the same weighted budget; host validation prunes the
-   ideal acceptance of the decoded proof by rejections at every instruction
-   budget and with every framing header (`validate_prunes_export`), a zero-loss
+   Domain acceptance of the decoded proof by rejections at every instruction
+   budget and with every framing header (`LoweringEvidence.pruning`), a zero-loss
    stage (`Relation.ofPrunesImage`).
 
 Fixed-statement endpoints bound the acceptance of a policy statement the
@@ -109,7 +109,7 @@ theorem verify_eq (statement : art.Statement F G) (initial : History F G) (proof
     evidence.verify statement initial proof =
       Typed.transform evidence.absorb Typed.ask (evidence.compiled.original statement evidence.handle)
         initial proof := by
-  rw [verify, Compiled.transform_eq _ _ statement evidence.handle, transform_eq]
+  rw [verify, Compiled.transform_eq _ evidence.connection _ statement evidence.handle, transform_eq]
 
 /-- The original validator of a statement the application counts as false is
 doomed after every initial transcript: the statement is false in the model, whose
@@ -303,18 +303,7 @@ theorem prunes {m : Type → Type} [Monad m] [LawfulMonad m] (challenge : Histor
     Zkc.Executable.Prunes (fun accepted => accepted = false)
       (lowering.validate challenge codec budget binding statement initial bytes)
       (verdict <$> c.verifier challenge statement initial (lowering.decoded codec statement bytes)) := by
-  have pruned := Zkc.Executable.validate_prunes_export Zkc.Executable.installed lowering.validator c.context
-    challenge (helperTable c.imported.program F G) codec budget lowering.accepted lowering.prepared
-    lowering.sorted binding c.position (encodeValues statement) initial bytes (lowering.admits statement)
-  have same : verdict <$> c.verifier challenge statement initial (lowering.decoded codec statement bytes) =
-      (fun result => Zkc.Executable.Accepts c.position (Zkc.Executable.idealObservation result)) <$>
-        ideal c.context challenge (helperTable c.imported.program F G) art.participant.returned
-          art.participant.instructions (encodeValues statement ++ [.transcript initial])
-          (lowering.decoded codec statement bytes) := by
-    rw [Compiled.verifier, Functor.map_map]
-    exact congrArg (· <$> _) (funext fun result => verdict_eq c.position result)
-  rw [same]
-  exact pruned
+  exact lowering.pruning challenge codec budget binding statement initial bytes
 
 end LoweringEvidence
 

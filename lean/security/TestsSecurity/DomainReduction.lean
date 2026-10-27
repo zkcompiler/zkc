@@ -14,8 +14,7 @@ abbrev carriers := Structured.uniformCarriers Bool Unit
 abbrev State := Domain.History carriers × Bool
 
 def context : Context :=
-  ⟨"entry", ["producer", "validator"], 0, 1, 0, "random.scalar/0",
-    some (.draw "scalar"), "suite", []⟩
+  Context.fiatShamir "entry" (["producer", "validator"]) 0 1 0 "random.scalar/0" (some (.draw "scalar")) "suite" ([])
 
 def message (site : String) (value : Bool) : Domain.Event carriers :=
   .message (context.message site 0 1) (.field "scalar" value)
@@ -57,7 +56,7 @@ theorem read_round (history : Domain.History carriers) (state : State) (same : s
   intro payload low decoded
   have encoded := Domain.Payload.ofValue_value decoded
   have same : payload = .field "scalar" low := by
-    simpa only [Domain.Payload.ofValue, Option.some.injEq] using encoded.symm
+    simpa [Domain.Payload.ofValue, Structured.Ty.isService] using encoded.symm
   subst payload
   apply ReadingTo.observe
   apply ReadingTo.receive (I := Domain.Actions carriers) (.field "scalar") "high" "high" "producer" _
@@ -66,7 +65,7 @@ theorem read_round (history : Domain.History carriers) (state : State) (same : s
   intro payload high decoded
   have encoded := Domain.Payload.ofValue_value decoded
   have same : payload = .field "scalar" high := by
-    simpa only [Domain.Payload.ofValue, Option.some.injEq] using encoded.symm
+    simpa [Domain.Payload.ofValue, Structured.Ty.isService] using encoded.symm
   subst payload
   apply ReadingTo.observe
   change ReadingTo _ _ _ (if low = high then _ else _) (if low = high then _ else _)

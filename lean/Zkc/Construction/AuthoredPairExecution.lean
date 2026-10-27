@@ -6,9 +6,10 @@ public import Zkc.Construction.PairAcceptance
 @[expose] public section
 
 /-! The actual compiled producer, followed by the actual compiled validator.
-The same oracle is used with the producer's final oracle state. Both initial
-transcripts are the request's public binding history; the producer's final
-transcript, environment and observations remain in the result. This operational
+The same oracle is used with the producer's final oracle state. Fiat–Shamir initializes both
+transcripts with the request's public binding history; plain uses exactly its
+data frames. The producer's complete environment and observations remain in
+the result. This operational
 experiment carries no probability, oracle coherence or completeness assumption.
 -/
 set_option autoImplicit false
@@ -49,12 +50,12 @@ def prepare {original : Snapshot} (imported : Imported original) (selected : Sel
     (model : DomainModel) (inputs : Values model.Value imported.program.payload.entry.inputs)
     (history : Domain.History model.toCarriers) :
     Option (Domain.Environment model.toCarriers × Domain.Environment model.toCarriers) := do
+  let context ← exportContext original selected.artifacts.validator
   let (types, interface) ← entryInterface original
   let values := inputValues model inputs
   let producer ← projectInputs values (dataInputs types interface.inputScopes selected.policy.producer)
   let validator ← projectInputs values selected.policy.publicInputs
-  return (producer ++ [.transcript selected.policy.suite history],
-    validator ++ [.transcript selected.policy.suite history])
+  return (Domain.inputFrame context producer history, Domain.inputFrame context validator history)
 
 /-- No separate producer implementation or input projection is chosen by
 evidence. Failed preparation is a stopped experiment with no validator run. -/

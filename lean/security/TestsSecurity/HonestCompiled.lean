@@ -38,7 +38,7 @@ def unit : Structured.UnitPayload where
 def program : Structured.Program := ⟨snapshot, unit⟩
 
 def context : Context :=
-  ⟨"main", ["P", "V"], 0, 1, 0, "random.field/0", some (.draw "field"), "suite", []⟩
+  Context.fiatShamir "main" (["P", "V"]) 0 1 0 "random.field/0" (some (.draw "field")) "suite" ([])
 def policy : Policy := ⟨"main", "P", "V", 0, "suite", [], [], [], "test", "test"⟩
 def query : Template :=
   ⟨"main", [], ["query", "main", "q", "input_0", "random.field/0", "draw", "V"]⟩
@@ -99,11 +99,12 @@ theorem accepts_all_tables (answers : QueryImpl (FiatShamir.TranscriptOracle.Dom
     PIR.Process.runM, PIR.Execution.followM, PIR.Process.bind, sortsMatch,
     queryOrigin, templateOrigin, Template.origin, Template.qualify, Template.repeats,
     Template.applicationPrefix, atCoordinates, Context.query, Context.role, Origin.query,
-    Structured.qualifyProtocolSite, context, query, decimal, decimalDigit, Domain.read,
-    Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, Domain.Payload.ty, drawRequest, Request.draw,
+    Structured.qualifyProtocolSite, context, Context.fiatShamir, query, decimal, decimalDigit, Domain.read,
+    Domain.dataType, Domain.Value.encode, Domain.Payload.ofValue, Domain.Value.sort, drawRequest, Request.draw,
     FiatShamir.HonestCompiled.tableOracle, Typed.readTable,
     booleanConstant_calculates, fieldEqual_calculates,
-    Domain.Payload.value, bind, pure,
+    Domain.Payload.value, Context.replacement?, Context.suite, Context.contract,
+    Context.request, Context.service, Structured.Ty.isService, bind, pure,
     Domain.PairExecution.Success, Domain.acceptanceAt]
 theorem perfect : Honest.failure computation (Domain.PairExecution.Success 0) = 0 := by
   classical

@@ -6,6 +6,7 @@ compiler and runtime. A native export is a connection boundary, not an assertion
 that all native behavior already has a Lean model.
 
 - [Architecture](architecture.md): packages, interfaces and proof composition.
+- [Typed model transition](semantic-model-transition.md): canonical execution, retained claims and explicit model-change boundaries.
 - [Checked components](spec/components.md): shared process bindings, reference mathematics,
   honest execution, adversarial reductions and canonical receipts.
 - [PIR semantics](spec/semantics.md): typed mathematics, participants, effects,
@@ -17,6 +18,8 @@ that all native behavior already has a Lean model.
   programs with shared helpers, participants, services, retained contracts,
   protocol applications and repeats.
 - [Exact tables](spec/table-relations.md): complete Boolean membership and indexed-read evaluator laws.
+- [Selected data codecs](spec/data-codecs.md): executable partial encoding,
+  canonical acceptance, compositional framing and nominal batch payloads.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.
@@ -66,6 +69,7 @@ that all native behavior already has a Lean model.
 - [Assurance reports](spec/assurance-report.md): the `zkc.assurance-report/0`
   format, declaration records, the registry, the claims ledger and the
   generated tables.
+- [Selected property adapters](spec/selected-property-adapters.md): scoped KZG evaluation binding, request-fixed finite oracle recovery, and private-producer verifier WP.
 - [Support](support.md): theorem scope, assumptions, proved subjects and tested
   boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
@@ -85,3 +89,5 @@ that all native behavior already has a Lean model.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.
+
+- [Nominal data and execution boundaries](spec/nominal-data.md)

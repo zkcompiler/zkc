@@ -404,9 +404,6 @@ bool detail::Checker::sourceClaims() {
             ArrayRef<E> charges = charge->kind == E::Kind::List
                                       ? ArrayRef(charge->arguments)
                                       : ArrayRef(*charge);
-            if (charges.empty())
-              return types.fail("source.claim.field",
-                                "charge list must be nonempty", charge->span);
             for (const auto &site : charges)
               if (!valid(site) || !unique.insert(site.arguments[0].text).second)
                 return types.fail("source.claim.field",

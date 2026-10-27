@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Construction.DeferredRoundsData
 public import ZkcExamples.Construction.DeferredRoundsParticipant
 public import Zkc.Construction.Structured
+public import Zkc.Construction.Scalar
 
 @[expose] public section
 

@@ -15,7 +15,7 @@ construction = true
 data = "lean/ZkcExamples/Construction/OkamotoProofData.lean"
 bodies = "lean/ZkcExamples/Construction/OkamotoProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/OkamotoProofParticipant.lean"
-glue = "lean/ZkcExamples/Construction/OkamotoProof.lean"
+glue = "lean/ZkcExamples/Construction/OkamotoArtifact.lean"
 artifacts = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Artifacts.lean"
 claims = "lean/security/ZkcSecurity/Examples/Subjects/Okamoto/Claims.lean"
 
@@ -32,6 +32,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 entry = "proof"
 
 [construction]
+namespace = "ZkcExamples.Construction.OkamotoProof"
+connection = "ZkcExamples.Construction.OkamotoProof"
 model = "Zkc.Protocols.Schnorr.Variants.representation wiring"
 model_imports = ["ZkcExamples.Construction.OkamotoProofModel"]
 

@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
+public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 public import ZkcSecurity.Families.Sumcheck.TableComponentReadbackTactics
 
 @[expose] public section
@@ -17,7 +18,7 @@ open ZkcExamples.Structured.SumcheckHelperBodies
 variable {F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-theorem terminal (program : Structured.Program) (bodies : DomainHelpers.Bodies program)
+theorem terminal (program : Structured.Program) (bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program)
     (raw : List F) (state : PrefixState F (Domain.History (ringModel F G).toCarriers) 0)
     (original : state.original = raw) (bounded : raw.length < indexLimit)
     (honest : state.scalar = state.entries.sum) :
@@ -25,7 +26,7 @@ theorem terminal (program : Structured.Program) (bodies : DomainHelpers.Bodies p
       [.data (.vector "bls12-381.fr" raw), .data (.vector "bls12-381.fr" state.point),
         .data (.field "bls12-381.fr" state.scalar)] = .returned [.data (.boolean true)] := by
   have truth := DomainHelpers.terminal_condition raw state original bounded honest
-  have law := DomainHelpers.check (G := G) program bodies.prefixBodies bodies.sumcheck.first
+  have law := ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check (G := G) program bodies.prefixBodies bodies.sumcheck.first
     bodies.check bodies.checkTable raw state.point state.scalar bounded
     (truth.1.2.1.trans (by decide +kernel))
   simpa only [truth, and_self, decide_true] using law
@@ -40,9 +41,9 @@ macro "normalize_sumcheck_readback " "[" F:term ", " G:term ", " program:term ",
         [terminal $program $bodies])
     | fail_if_no_progress (simp (disch := first | assumption | omega |
           (apply ZkcExamples.Structured.PrimitiveLibrary.hasShape_of_length <;> omega)) only
-        [DomainHelpers.table (G := $G) $program ($bodies).sumcheck,
-          DomainHelpers.empty (F := $F) (G := $G) $program ($bodies).sumcheck,
-          DomainHelpers.less (F := $F) (G := $G) $program ($bodies).sumcheck])
+        [ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.table (G := $G) $program ($bodies).sumcheck,
+          ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.empty (F := $F) (G := $G) $program ($bodies).sumcheck,
+          ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.less (F := $F) (G := $G) $program ($bodies).sumcheck])
     | fail_if_no_progress (
         normalize_table_readback [] unfolding
           [ReadbackRound.producerCarried, ReadbackRound.validatorCarried, $definitions,*]

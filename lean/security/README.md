@@ -35,3 +35,22 @@ optional schemas live in [the ArkLib package](../integrations/arklib/README.md).
 These models do not by themselves prove native correspondence or unspecified
 cryptographic assumptions. See [architecture](../docs/architecture.md) and
 [formal support](../docs/support.md).
+
+The actual plain aggregate table consumer is configured by
+[`Generation/TableMembership.lean`](ZkcSecurity/Generation/TableMembership.lean).
+With current core/security dependencies already checked (including
+`Generation.SubjectABI.Command`, `Generation.OriginalEndpoint`,
+`Claims.Completeness`, `Claims.CompiledSoundness`, `Endpoint.DomainSafety` and
+`Tools.ClaimConstruction`), run from this directory under the prepared Lean
+environment:
+
+```sh
+python3 checks/check_table_membership.py /tmp/zkc-table-claims
+```
+
+The driver fixes `LEAN_NUM_THREADS=2`, uses the supplied `LEAN_PATH`, and writes
+only its output directory. It regenerates and compares the ABI/endpoint twice,
+then checks the actual subject, method, canonical requests, receipts and
+positive/refusal controls. Its `manifest.json` records commands, generated versus
+authored source hashes, byte/line counts and results. This is a compiled-ideal
+claim, without a native byte correspondence or baseline acceptance.

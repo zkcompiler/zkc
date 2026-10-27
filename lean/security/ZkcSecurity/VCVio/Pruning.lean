@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Executable.Pruning
+public import Zkc.Executable.Observations
 public import VCVio.EvalDist.ProbabilityNotation
 public import VCVio.OracleComp.SimSemantics.SimulateQ
 public import VCVio.OracleComp.Constructions.SampleableType.Measure
@@ -16,7 +16,7 @@ the same oracle calls in the same order otherwise. Simulated by any stateful
 oracle implementation from any initial state, `first` then satisfies an event
 disjoint from `rejects` with at most the probability of `second`
 (`Prunes.prEvent_le`). Host validation of proof bytes prunes the ideal
-acceptance of the decoded proof by rejections (`Zkc.Executable.validate_prunes`),
+acceptance of the decoded proof by rejections through its checked native/Domain connection,
 so this bounds executable acceptance by ideal acceptance in every random-oracle
 experiment, at every budget.
 

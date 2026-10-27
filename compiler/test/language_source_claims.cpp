@@ -703,6 +703,17 @@ int main() {
               std::get<2>(edit));
     });
   }
+  cases.run("empty charges retain the exact charged request", [] {
+    auto value = report(
+        editSource(fixture("sumcheck"),
+                   "charge=[per_site(sites.round_challenge,2/cardinality(Fr))]",
+                   "charge=[]"));
+    auto selected = request(value);
+    auto *quantity = selected.getAsObject()->getObject("quantity");
+    require(quantity->getString("kind") == "charged" &&
+                quantity->getArray("charges")->empty(),
+            "empty charge schedule changed request kind or entries");
+  });
   cases.run("unexported and duplicated charges", [] {
     refuses(check(editSource(fixture("sumcheck"), "sites.round_challenge",
                              "sites.missing")),
@@ -772,11 +783,6 @@ int main() {
                          "capabilities=[capabilities.charged_reduction@0()]",
                          "capabilities=0")),
         "source.claim.field");
-    refuses(check(editSource(
-                fixture("sumcheck"),
-                "charge=[per_site(sites.round_challenge,2/cardinality(Fr))]",
-                "charge=[]")),
-            "source.claim.field");
   });
   cases.run("wrong retained Entry target and acceptance", [] {
     auto source = fixture("schnorr");

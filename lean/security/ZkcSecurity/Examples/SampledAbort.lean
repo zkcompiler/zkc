@@ -6,7 +6,7 @@ public import ZkcSecurity.Examples.Generated.Components.SampledAbortABI
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortProducer
 public import ZkcExamples.Structured.Generated.Constructed.SampledAbortValidator
 public import Zkc.Construction.DomainCalculations
-public meta import ZkcSecurity.Tools.ProcessView
+public meta import Zkc.Construction.ProcessViewTactic
 
 @[expose] public section
 
@@ -69,7 +69,7 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
     Domain.View.receive, Domain.View.send, Domain.View.indicesEmpty,
     Domain.View.observe, Domain.View.challenge, Domain.View.calculation, Domain.View.append,
     Domain.View.empty, Domain.View.guard, Domain.read, Domain.localCoordinates,
-    Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, Domain.Value.encode,
+    Domain.sortsMatch, Domain.Value.sort, Domain.Value.encode,
     Domain.Payload.value, Domain.Payload.ofValue, Domain.dataType,
     Domain.localOrigin, Domain.templateOrigin, Domain.queryOrigin,
     Domain.Calculations.fieldEqual, Domain.Calculations.fieldConstant,
@@ -80,7 +80,8 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
     decide_true, decide_false, Bool.false_beq, and_true, true_and, and_self,
     Template.origin, Template.qualify, Template.applicationPrefix, Template.repeats,
     Context.query, Context.role, Origin.query, Origin.message, Domain.atCoordinates,
-    Request.draw]
+    Request.draw, Context.fiatShamir, Context.replacement?, Context.request, Context.contract,
+    Context.suite, Ty.isService, dite_true]
   conv_lhs => simp [PIR.Process.runM, Domain.handler, PIR.Execution.followM,
     SampledCompiled.services, SampledCompiled.privateServices, SampledCompiled.allowed,
     ZkcExamples.Construction.Generated.SampledAbortPair.Producer.participant,
@@ -94,13 +95,13 @@ theorem exact_failure (value expected : Scalar) (nonces challenges : Option Nat)
       Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.Value.sort, Domain.Payload.ty, PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
+      Domain.Value.sort, PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
       Subject.Success, Domain.PairExecution.Success]
   · simp [zero, Domain.Calculations.fieldConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.fieldEqual (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanConstant (F := Scalar) (G := Scalar),
       Domain.Calculations.booleanEqual (F := Scalar) (G := Scalar),
-      Domain.Value.sort, Domain.Payload.ty, Domain.Raw,
+      Domain.Value.sort, Domain.Raw,
       PIR.Process.bind, PIR.Process.runM, Domain.handler, PIR.Execution.followM,
       Domain.drawRequest, SampledCompiled.oracle, HonestCompiled.oracle,
       Domain.Payload.value, Domain.Value.sort, Subject.Success, Domain.PairExecution.Success, Domain.acceptanceAt, acceptance_position,

@@ -31,7 +31,7 @@ run_cmd do
   unless root.sourceModule == "ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs" do
     Lean.throwError "layout fixture no longer matches first production selection"
   let pairModule := "TestsSecurity.ArtifactSlotsLayout"
-  let bindingModule := "ZkcSecurity.Examples.Generated.OriginalArtifacts.LayoutControl"
+  let bindingModule := "ZkcExamples.Structured.OriginalArtifacts.LayoutControl"
   let mut sources := []
   for (role, artifact) in [("Validator", validator), ("Producer", producer)] do
     let moduleName := "ZkcExamples.Structured.Generated.Constructed.LayoutControl" ++ role
@@ -57,16 +57,16 @@ run_cmd do
   sources := sources ++ [(bindingModule, generated)]
   let layout ← accepted (ZkcTools.ConstructionBindings.analyze program validator)
   let original ← accepted (ZkcTools.ConstructionBindings.analyze program root.artifacts.validator)
-  let shifted ← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.verifierOutputs layout.context.suite validator
+  let shifted ← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.verifierOutputs layout.context.suite validator
     (← accepted (ZkcTools.ConstructionBindings.unique "control-loop" layout.loops)).instruction)
-  let old ← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.verifierOutputs original.context.suite root.artifacts.validator
+  let old ← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.verifierOutputs original.context.suite root.artifacts.validator
     (← accepted (ZkcTools.ConstructionBindings.unique "control-loop" original.loops)).instruction)
   unless shifted.references != old.references do Lean.throwError "callback output references did not change"
   let producerLayout ← accepted (ZkcTools.ConstructionBindings.analyzeWithContext program layout.context producer)
   let oldProducerLayout ← accepted (ZkcTools.ConstructionBindings.analyzeWithContext program layout.context root.artifacts.producer)
-  let shiftedProducer ← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.producerOutputs layout.context.suite producer
+  let shiftedProducer ← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.producerOutputs layout.context.suite producer
     (← accepted (ZkcTools.ConstructionBindings.unique "control-loop" producerLayout.loops)).instruction)
-  let oldProducer ← accepted (ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs.producerOutputs layout.context.suite root.artifacts.producer
+  let oldProducer ← accepted (ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs.producerOutputs layout.context.suite root.artifacts.producer
     (← accepted (ZkcTools.ConstructionBindings.unique "control-loop" oldProducerLayout.loops)).instruction)
   unless shiftedProducer.references != oldProducer.references do
     Lean.throwError "producer callback output references did not change"

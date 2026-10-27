@@ -1,8 +1,8 @@
 module
 
 public import ZkcExamples.Structured.Generated.Original.TwoSums
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot
-public import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot
+public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot
+public import ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot
 public import ZkcSecurity.Realizations.Sumcheck.OriginalRoot
 
 @[expose] public section
@@ -19,33 +19,33 @@ open ZkcSecurity.Realizations.Sumcheck.OriginalRaw
 open ZkcSecurity.Realizations.Sumcheck.OriginalRoot
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-abbrev program := ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.program
+abbrev program := ZkcExamples.Structured.OriginalArtifacts.TwoSums.program
 abbrev payload := program.payload
-abbrev routing := ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.routing
-abbrev context := ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.context
+abbrev routing := ZkcExamples.Structured.OriginalArtifacts.TwoSums.routing
+abbrev context := ZkcExamples.Structured.OriginalArtifacts.TwoSums.context
 theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions := by bind_structured_bodies
 
-theorem source_root_association : ZkcExamples.Structured.Generated.Original.TwoSums.root.signature = ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.program.payload.entry.signature := by kernel_rfl
+theorem source_root_association : ZkcExamples.Structured.Generated.Original.TwoSums.root.signature = ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload.entry.signature := by kernel_rfl
 
-theorem nominal_order : [ZkcExamples.Structured.Generated.Original.TwoSums.callContext0, ZkcExamples.Structured.Generated.Original.TwoSums.callContext2] = [ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol] := by kernel_rfl
+theorem nominal_order : [ZkcExamples.Structured.Generated.Original.TwoSums.callContext0, ZkcExamples.Structured.Generated.Original.TwoSums.callContext2] = [ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol] := by kernel_rfl
 
 theorem check0_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper30.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
 theorem check1_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper30.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
-def schedule0 := schedule ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0 context
+def schedule0 := schedule ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0 context
  theorem routes0 (handle : Nat) : OriginalSecurity.Routes (routing handle)
-    ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ schedule0 [] :=
-  routes (routing handle) ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0 handle (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0_routes handle)
+    ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ schedule0 [] :=
+  routes (routing handle) ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0 handle (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0_routes handle)
 
 theorem call0_raw (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized (G := G) (some scalar) (some count) (some handle) =
       if count ≤ 4 then
-        (run (G := G) ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
+        (run (G := G) ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
           (fun result => .done (output result))
       else .halt .refused := by
-  change verifierCall payload 4 ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle = _
-  rw [call_raw payload ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.verifier_bodies 4 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ (by change 0 ≠ 1; decide)]
+  change verifierCall payload 4 ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle = _
+  rw [call_raw payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.verifier_bodies 4 ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ (by change 0 ≠ 1; decide)]
   split
   · apply congrArg (PIR.Process.bind _)
     funext result
@@ -62,7 +62,7 @@ theorem check0_raw (raw : List F) (state : State F) :
 theorem checked0 (raw : List F) (scalar : F) (count handle : Nat) :
     (ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized (G := G) (some scalar) (some count) (some handle)).bind
       (ZkcExamples.Structured.Generated.Original.TwoSums.step1 (OriginalSumcheckLibrary.helpers payload) (some raw)) =
-      sourceRoot 4 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ raw scalar count := by
+      sourceRoot 4 ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ raw scalar count := by
   rw [call0_raw]
   unfold sourceRoot
   split
@@ -72,19 +72,19 @@ theorem checked0 (raw : List F) (scalar : F) (count handle : Nat) :
     exact check0_raw raw state
   · rfl
 
-def schedule1 := schedule ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1 context
+def schedule1 := schedule ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 context
  theorem routes1 (handle : Nat) : OriginalSecurity.Routes (routing handle)
-    ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ schedule1 [] :=
-  routes (routing handle) ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1 handle (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1_routes handle)
+    ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ schedule1 [] :=
+  routes (routing handle) ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1 handle (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1_routes handle)
 
 theorem call1_raw (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step2Realized (G := G) (some scalar) (some count) (some handle) =
       if count ≤ 4 then
-        (run (G := G) ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
+        (run (G := G) ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ (List.range count) ⟨[], scalar⟩).bind
           (fun result => .done (output result))
       else .halt .refused := by
-  change verifierCall payload 4 ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle = _
-  rw [call_raw payload ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.verifier_bodies 4 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ (by change 0 ≠ 1; decide)]
+  change verifierCall payload 4 ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle = _
+  rw [call_raw payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.verifier_bodies 4 ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ (by change 0 ≠ 1; decide)]
   split
   · apply congrArg (PIR.Process.bind _)
     funext result
@@ -101,7 +101,7 @@ theorem check1_raw (raw : List F) (state : State F) :
 theorem checked1 (raw : List F) (scalar : F) (count handle : Nat) :
     (ZkcExamples.Structured.Generated.Original.TwoSums.step2Realized (G := G) (some scalar) (some count) (some handle)).bind
       (ZkcExamples.Structured.Generated.Original.TwoSums.step3 (OriginalSumcheckLibrary.helpers payload) (some raw)) =
-      sourceRoot 4 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ raw scalar count := by
+      sourceRoot 4 ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ raw scalar count := by
   rw [call1_raw]
   unfold sourceRoot
   split
@@ -113,13 +113,13 @@ theorem checked1 (raw : List F) (scalar : F) (count handle : Nat) :
 
 theorem call0_binding (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step0Realized (G := G) (some scalar) (some count) (some handle) =
-      verifierCall payload 4 ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle := by rfl
+      verifierCall payload 4 ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle := by rfl
 
 theorem check0_honest (state : OriginalHonest.MathState F 0)
     (bounded : state.original.length < indexLimit) (pointBound : state.point.length < 64) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step1 (OriginalSumcheckLibrary.helpers payload) (some state.original)
-      (maskValues (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol.roles 1)
-        (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol.mapScopes ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes)
+      (maskValues (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol.roles 1)
+        (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol.mapScopes ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes)
         (SumcheckVerifierBodies.reduceReturnValues (OriginalHonest.verifierValues (G := G) state))) =
       .done (.cons (some (decide (state.entries.sum = state.scalar))) .nil) := by
   change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)
@@ -128,13 +128,13 @@ theorem check0_honest (state : OriginalHonest.MathState F 0)
 
 theorem call1_binding (scalar : F) (count handle : Nat) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step2Realized (G := G) (some scalar) (some count) (some handle) =
-      verifierCall payload 4 ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle := by rfl
+      verifierCall payload 4 ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes scalar count handle := by rfl
 
 theorem check1_honest (state : OriginalHonest.MathState F 0)
     (bounded : state.original.length < indexLimit) (pointBound : state.point.length < 64) :
     ZkcExamples.Structured.Generated.Original.TwoSums.step3 (OriginalSumcheckLibrary.helpers payload) (some state.original)
-      (maskValues (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol.roles 1)
-        (ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol.mapScopes ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes)
+      (maskValues (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol.roles 1)
+        (ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol.mapScopes ZkcExamples.Structured.Generated.Original.TwoSums.reduceDefinition.outputScopes)
         (SumcheckVerifierBodies.reduceReturnValues (OriginalHonest.verifierValues (G := G) state))) =
       .done (.cons (some (decide (state.entries.sum = state.scalar))) .nil) := by
   change Participant.owned 1 1 (invoke (OriginalSumcheckLibrary.helpers payload).closed SumcheckHelperBodies.checkHelper)
@@ -151,11 +151,11 @@ theorem combine (left right : Values (Component (assignment F G)) [.boolean]) :
       cases right
       change invoke (OriginalSumcheckLibrary.helpers payload).components ZkcExamples.Structured.Generated.Original.TwoSums.terminalHelper
         (.cons a (.cons b .nil)) = _
-      exact ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot.mathHelper31 a b
+      exact ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.mathHelper31 a b
 
 theorem source_root (input0 : List F) (input1 : List F) (input2 : F) (input3 : F) (input4 : Nat) (handle : Nat) :
     Occurrence.participant (ringModel F G) program 1 (.cons (some input0) (.cons (some input1) (.cons (some input2) (.cons (some input3) (.cons (some input4) (.cons (some handle) .nil)))))) =
-      sourceTwoRoots 4 ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ input0 input1 input2 input3 input4 := by
+      sourceTwoRoots 4 ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ input0 input1 input2 input3 input4 := by
   rw [ZkcExamples.Structured.Generated.Original.TwoSums.participant_binding]
   unfold ZkcExamples.Structured.Generated.Original.TwoSums.realized sourceTwoRoots
   rw [← checked0 input0 input2 input4 handle, ← checked1 input1 input3 input4 handle]
@@ -170,6 +170,6 @@ theorem bridge (input0 : List F) (input1 : List F) (input2 : F) (input3 : F) (in
       (presented input0 input1 input2 input3 input4 history) := by
   unfold Original.participant
   rw [source_root]
-  exact twoRoots_bridge (routing handle) ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ ⟨ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ schedule0 schedule1 4 input0 input1 input2 input3 input4 ⟨[], history⟩ (routes0 handle) (routes1 handle)
+  exact twoRoots_bridge (routing handle) ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, handle⟩ ⟨ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol, handle⟩ schedule0 schedule1 4 input0 input1 input2 input3 input4 ⟨[], history⟩ (routes0 handle) (routes1 handle)
 
 end ZkcSecurity.Examples.Generated.OriginalSecurity.TwoSums.Sources

@@ -1,24 +1,35 @@
 # Participant projection
 
-This chapter defines the formal check that a compiler-exported role-local
-validator implements the original protocol program at the validator role, and
-its composition with the
+This chapter defines the structural check relating a compiler-exported
+role-local validator to the original protocol program, and its composition with
+the
 [transcript-construction rule](fiat-shamir.md#the-rule). The native
 [export](../../../docs/spec/formats/constructed-participant.md) supplies the
 validator; the [structured import](structured-source.md) supplies the admitted
 original program.
 
+The generic checker uses the same recursive data eligibility as the nominal
+runtime, including products and sequences. Its result is structural admission.
+Typed property consumers also supply a checked complete Process binding and
+source laws; the table root reuses the exact retained helper and formula
+closure. `Domain.Correspondence` quantifies every environment and typed reply,
+retaining stops, frames and all outputs. A general source-to-constructed theorem
+for every generically admitted program is not asserted here.
+
 ## Readings
 
-The original side is the admitted root's participant process at the validator
-role, `Program.participant F G validator inputs`: the root body under the
-structured semantics with every component outside the role's scopes absent,
-with masked outputs. The exported side is the constructed program's interactive
-reading `spec` (see [constructed programs](fiat-shamir.md#constructed-programs)):
-each challenge is the selected query on a service handle, the observation of a
-message the validator sends is its delivery to the producer, and transcript
-values are inert histories. Calls name helpers of the original program and are
-read with its closed helper table, `helperTable program`.
+The original side is the admitted root's role-local participant Process, with
+components outside that role's scope absent and its helper calls interpreted
+by the admitted program. The constructed side is `Domain.participant`, with
+nominal data, transcript custody, dynamic coordinates and physical checkpoints.
+An explicit handler supplies proof messages, public challenges and private
+services. There is no additional interactive interpretation of Instruction.
+
+`ScalarVerifier.verify` installs the selected scalar ABI for the maintained
+Fiat–Shamir consumers. It prepares the exact nominal input frame, runs the
+actual participant, selects the declared acceptance output and reads back the
+unread proof. An unrepresentable readback refuses; it cannot silently erase a
+message. Original-source correspondence is a separate proved connection.
 
 ## Slots
 
@@ -28,7 +39,9 @@ program holds for it (`Slot`):
 - `absent`: the component is absent at the validator;
 - `held r`: the exported value at reference `r` encodes the component;
 - `free`: the component is present, and the exported program does not keep it;
-- `service`: the component is the replaced challenge service.
+- `service`: the component is the replaced challenge service;
+- `local root`: the component is an independently owned service capability at
+  that original input, matched with a nominal local request.
 
 The root's input slots hold each published data input at its exported position
 and the replaced service as `service`; every other input is absent. The root's
@@ -37,10 +50,11 @@ input scopes then mask the slots as the semantics masks the values.
 ## The rule
 
 `project program context participant` walks the root body in lockstep with the
-exported instructions. Before every instruction it consumes, it skips transcript
-plumbing, which the interactive reading runs without any action: coordinate
-constructions and observations of messages the validator does not send. For each
-original operation:
+exported instructions. Before every instruction it consumes, it skips the
+coordinate constructions and transcript observations that have no direct source
+operation counterpart. This is a structural traversal decision; the actual
+Domain execution still performs their checks and effects, which the separate
+source binding must account for. For each original operation:
 
 - marks and retained statements have no action and no exported counterpart;
 - a restriction keeps its operand's slot when the validator is among its roles,
@@ -66,7 +80,7 @@ original operation:
   other roles are absent;
 - a guard owned by the validator must be implemented by a guard on the
   reference holding its condition;
-- an exchange must have distinct sender and receiver roles and a scalar type. A
+- an exchange must have distinct sender and receiver roles and a recursively service-free data type. A
   message from the producer to the validator must be implemented by a receive at
   the same qualified site with the same type; the received value is held. A
   message from the validator to the producer must be implemented by the
@@ -99,8 +113,9 @@ original operation:
   validator is absent.
 
 After the body, only plumbing may remain, every returned reference must be
-bound, and the returned references other than the last (the final transcript)
-must hold the validator's outputs in original order. Each refusal names its
+bound, and the data return references must hold the validator's outputs in
+original order. Plain profiles keep every returned reference. Only the
+Fiat–Shamir profile excludes its final transcript from that comparison. Each refusal names its
 obligation (`projection-calculation`, `projection-receive`,
 `projection-unexplained`, …).
 
@@ -119,165 +134,119 @@ or output requires a held reference and is refused, and a total calculation on a
 
 ## Soundness
 
-`project_sound` proves, for every accepted export, service handle, data input,
-initial transcript and original inputs related to the exported inputs by the
-input slots:
+Structural admission and semantic correspondence have distinct obligations.
+`project` rejects mismatched source/artifact structure. Its acceptance alone
+is not used as an assumed execution equation. `Domain.Correspondence` checks
+an actual artifact against a generated or authored Process view, quantifying
+all environments and all typed replies and preserving actual stops, frames
+and returned values. An `Original.Simulation` or source equation connects that
+view to the admitted original, with the appropriate role masks, helper laws,
+service routing and output relation.
 
-```text
-spec context handle (helperTable program) returned instructions (data ++ [transcript initial])
-    >>= (values ↦ done (dropLast values))
-  = (participant validator inputs >>= (outputs ↦ done (validatorOutputs outputs))).interpret project
-```
-
-The two processes take the same actions with the same replies, stop at the same
-points with the same reasons, and return the same validator outputs. Outputs
-outside the validator's scopes are omitted; the others are encoded as optional
-values. The proof is a simulation over
-the walk: each accepted operation transports agreement of continuations
-(`OperationSound`, `walkStep_sound`), with the invariant that every slot relates
-its original component to the exported environment (`Holds`). Helper calls use
-the closed helper table's lookup of the checked helper; calculations use the
-structured evaluator, an absence-preserving Math helper's component
-evaluation is absent on absent inputs (`absentPreserving_component`), and an
-inlined helper body is related to the helper's component evaluation by its own
-walk (`walkHelper_sound`). An
-application uses the callee's linked body (`protocol_invoke_body`). A repeat is
-proved by induction on its iterations (`iterate_projects`): each body iteration
-implements one step of the repeat's fold, with the carried values related to the
-masked state (`carriedSlots`); a count above the maximum stops both sides with
-the same reason. `walk_sound` composes the steps by induction on the walk's
-fuel, and the final step reads the returned references through the output
-slots.
+This division makes the view reusable for completeness, adversarial soundness
+and cost arguments. Generating a readable view does not discover a mathematical
+invariant or prove its intended reference law. Helpers and loops use reusable
+structural rules; authors supply the missing helper mathematics, source routing
+and state relation when existing library laws do not suffice. Actual artifact
+and source identities are kernel checked, not inferred from matching labels.
 
 ## Composition with transcript construction
 
-`checkCompiled imported participant` takes an admitted original,
-`imported : Structured.Imported original`: the program together with the proof
-`Structured.check original = .ok program`. It runs `checkExport` (the
-transcript-construction rule against the original snapshot) and then `project`
-against `imported.program` with the derived context. Both rules therefore read
-the same original: a program admitted from another snapshot cannot be paired
-with this snapshot's export. `compiled_transform` composes the two soundness
-theorems at the exported program's interactive reading: for every export
-accepted against an admitted original, monad, challenge function, service
-handle, related input, initial transcript and proof, and for any final
-selection of the returned values that agrees with a selection of the
-validator's outputs,
+`checkCompiled imported participant` checks the transcript construction and
+projection against the same `Structured.Imported original`. It cannot pair an
+admitted program from a different snapshot with the export's claimed original.
+`select` and `Selection.check` fix the context, public input order, service
+replacement, declared sorts and Boolean output position. These are finite
+admission facts, not a universal source-equivalence theorem.
+
+For a maintained scalar consumer, its checked all-reply binding yields:
 
 ```text
-ideal context challenge (helperTable program) returned instructions (data ++ [transcript initial]) proof
-  = transform context challenge (participant validator inputs, read through its outputs) initial proof
+ScalarVerifier.verify program context artifact position challenge public initial proof
+  = transform context challenge originalVerifier initial proof
 ```
 
-up to that selection, where `program` is `imported.program`. The construction
-rule supplies `ideal = transform ∘ spec` and the projection rule supplies
-`spec = original`; the Fiat–Shamir transform is unchanged and applied to the
-original validator. The admission ties the checked program to the snapshot and
-so to the export's source digest.
+The equation retains arbitrary typed public values, scalar proof messages,
+initial history, lawful monadic challenges, exact unread suffixes and stops.
+Its source side may later be rewritten using a decoded mathematical table or
+well-formed circuit; those extra hypotheses belong to that later theorem.
 
-The equation leaves three positional premises to each Entry: where the export
-returns its acceptance output, how its data inputs hold the original validator's
-inputs, and how many data inputs there are. `select imported participant`
-constructs that selection from the admitted original and the export's policy:
-the derived context, the acceptance output's position among the returned values,
-the types of the published inputs in policy order, the validator's input slots
-and its acceptance output. `Selection.check` validates it against the export
-(the acceptance output precedes the final transcript, every slot holds a
-published value of its type, the replaced service or nothing, and the acceptance
-output is the validator's output at that position), and `selection_sound`
-proves the three premises from an accepted check. `compiled_selected` then
-states the equation for every list of published values of the selected types,
-read through the acceptance output on both sides, with no positional fact about
-the Entry.
+When a selected scalar ABI projects occurrence coordinates, projection happens
+before invoking the existing oracle and cache. The initial scalar history is
+an opaque prefix. The equation does not identify a fresh random oracle on
+nominal coordinate-bearing keys with the projected scalar oracle. Native byte
+correspondence and its resource/codec assumptions remain separate.
 
 ## The compiled Sumcheck proof Entry
 
-`ZkcExamples.Construction.SumcheckProof` checks the compiled `example::Proof`
-of the Sumcheck example. Its original export is the admitted Sumcheck source
-(`SumcheckSourceData`, rendered from the same bytes by both bridges); its
-validator has a protocol application with a repeat, guards and helper calls.
-`compiled` runs the composed check in the kernel, and `compiled_transform`
-proves, for every challenge function, that the compiled verifier's ideal meaning
-is the Fiat–Shamir transform of the original Sumcheck validator, read through
-its acceptance output. `compiled_transform_rounds` rewrites the original with
-`SumcheckSourceVerifier.verifier_checked`: for an admitted round count and a
-decoded verifier table, the transformed process is the source rounds followed by
-the multilinear terminal check. `ZkcArkLib.Examples.CompiledSumcheckFiatShamir`
-composes this equation with the multi-round Fiat–Shamir soundness of the
-imported verifier's transform
-([multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)):
-the compiled verifier's ideal interpretation accepts a false claim with
-probability at most `(Q + count) / |F|` for a fixed statement, and adaptively
-chosen statements are bounded under a binding that determines them.
+`SumcheckArtifact` holds generated admission and input metadata.
+`SumcheckDomainConnection` checks the actual artifact's round, loop and root
+Process; `SumcheckSourceConnection` connects it directly to the admitted
+source. `ZkcExamples.Construction.SumcheckProof.compiled_transform` selects
+acceptance of that actual canonical execution for every raw typed table,
+claim and round count. It does not assume a valid table or honest proof.
+
+`compiled_transform_rounds` adds the source theorem's admitted-count and decoded
+table premises to interpret the terminal as multilinear evaluation.
+`ZkcArkLib.Examples.CompiledSumcheckFiatShamir` then applies the multi-round
+bound: `(Q + count) / |F|` for a fixed well-formed false statement, with the
+separate adaptive theorem under typed public binding. The same canonical
+participant also underlies the [byte consumer](executable.md#the-compiled-sumcheck-proof-verifier).
 
 ## The compiled composed Sumcheck proof Entry
 
-`ZkcExamples.Construction.ComposedSumcheckProof` checks the compiled
-`example::Proof` of `examples/projects/sumcheck/composed`. Its `TwoSums`
-protocol applies the Sumcheck `Reduce` protocol at two sites, each with its own
-repeat and both drawing from one challenge service, then runs two terminal
-checks and conjoins them with the Math helper `zkc::boolean::both`, which the
-compiler inlines as a Boolean conjunction. Its original is admitted from the
-typed bodies printed from the admitted snapshot (`admitted`), the composed check
-accepts the export (`compiled`) and the selection check accepts it
-(`selection_checked`), so `compiled_transform` is `compiled_selected` at the
-Entry's published inputs and acceptance output: no proof is specific to the
-Entry. No security theorem is stated for this Entry.
+The retained `TwoSums` source applies `Reduce` at two sites, each with its own
+loop, then checks both residual claims and conjoins the results. Its complete
+source and artifact identities match the existing TwoSums validator
+certificate. `ComposedSumcheckDomainConnection` reuses that certificate and
+proves the routing of both applications. The maintained
+`ComposedSumcheckProof.compiled_transform` therefore concerns the actual
+canonical participant, rather than another instruction interpreter.
+
+The connection covers raw tables, claims and counts, every reply, zero and
+excess counts, and helper failure. It supplies no composed security theorem by
+itself; the separately generated TwoSums receipts retain their own fixed
+requests and property proofs.
 
 ## The compiled Sigma proof Entries
 
-`ZkcExamples.Construction.SchnorrAndProof` and
-`ZkcExamples.Construction.ChaumPedersenProof` check the compiled
-`example::AndProof` and `example::EqualityProof` of `examples/projects/sigma`:
-two Schnorr statements with independent witnesses and one shared challenge, and
-one witness for two bases. Both validators receive two commitments, take one
-challenge, receive the responses (two for AND, one for Chaum–Pedersen) and
-conjoin two checked equations. Each original is admitted from typed bodies
-printed by `bridges/structured/bodies.py` and checked by `structured_views` in
-the kernel, so its entry types are literal. The composed check accepts the
-export (`compiled`), and `compiled_transform` instantiates the generic theorem
-at the Entry's public inputs and acceptance output (`inputs_related`,
-`acceptance_decision`), as for Schnorr, with no equation about the program's
-meaning specific to the Entry. The Fiat–Shamir theorems of the Sigma
-compositions are about the transforms of the imported interactive verifiers; no
-security theorem is stated for these compiled Entries.
+`SchnorrAndProof` and `ChaumPedersenProof` connect the actual compiled
+`AndProof` and `EqualityProof` participants to their admitted originals. Their
+Domain/source bindings preserve the two commitments, shared challenge,
+response arities, guards, result selection and stops. They reuse generic
+Process and handler laws; source-specific finite equations remain checked
+facts rather than trusted premises.
+
+Their fixed-statement knowledge claims are applications of the registered
+knowledge endpoint to those subjects' evidence. The source connection is
+independent of the extraction method. Okamoto uses the same boundary with its
+own representation relation and checked participant connection.
 
 ## The compiled GKR proof Entry
 
-`ZkcExamples.Construction.GkrProof` checks the compiled `example::Proof` of
-`examples/projects/gkr`. Its original export is the admitted GKR source
-(`GkrSourceData`); the whole unit, honest prover included, is admitted from
-typed bodies by `structured_views` in the kernel. The validator has an
-output-point loop and a layer loop whose body holds three inner loops, the two
-`Rounds` applications and the line coefficients, with guards for the round and
-wiring checks and helper calls for the extensions, blocks, line point and power
-sum. `compiled` runs the composed check in the kernel, and `compiled_transform`
-is the generic equation at the Entry's public inputs and acceptance output, as
-for Sumcheck: the compiled verifier's ideal meaning is the Fiat–Shamir
-transform of the original GKR validator, read through its acceptance output.
-On a well-formed statement that original validator is the plain GKR verifier
-(`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`, over the generated
-normal form of the admitted root, `GkrSourceNormalForms.verifier_participant`,
-an instance of the
-[normalizer's soundness](structured-source.md#participant-normal-forms)),
-which `ZkcArkLib.Examples.CompiledGkrFiatShamir` bounds
-([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
-No equation about the compiled program's meaning is specific to the Entry.
+`GkrArtifact` records admission of the full `examples/projects/gkr` proof
+Entry. The actual validator contains the output-point loop, layer loop, both
+nested degree-two Sumcheck loops, and the line-coefficient phase. Its checked
+connection retains all four raw public tables, dimensions, replies, helper
+failures and zero/excess counts. It is separate from the smaller finite GKR
+gate component used to test reusable bindings.
+
+`GkrProof.compiled_transform` connects that complete canonical participant to
+the admitted original. On well-formed statements, `GkrSourceVerifier.verifier_reads`
+rewrites the original into the mathematical GKR verifier; the ArkLib consumer
+transfers its weighted and query-count bounds for widths/layers within the
+exported maxima. This source/constructed theorem does not establish a native
+GKR byte verifier or nominal-ROM equivalence.
 
 ## The compiled guessing proof Entry
 
-`ZkcExamples.Construction.GuessProof` checks the compiled `example::Proof` of
-the construction bridge's fixture `lean/bridges/construction/fixtures/guess.zkc`:
-the validator receives a guess, takes a field challenge, delivers it and returns
-whether the guess plus the public offset is the challenge. Its original is
-admitted from typed bodies by `structured_views` in the kernel, the composed
-check accepts the export (`compiled`), and `compiled_transform` is the generic
-equation at the Entry's public offset and acceptance output, as for Schnorr. The
-original validator is the four-operation participant process `experiment`, by
-computation (`verifier_correspondence`).
-`ZkcArkLib.Examples.CompiledGuessFiatShamir` bounds the compiled verifier by a
-certificate imported from an ArkLib verifier
-([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
+`GuessProof` connects the actual participant of the guessing fixture to its
+source: receive a guess, draw and deliver a field challenge, then compare the
+guess plus the public offset with the challenge. `verifier_correspondence`
+identifies the source Process by computation, and the checked Domain binding
+supplies `compiled_transform`. `ZkcArkLib.Examples.CompiledGuessFiatShamir`
+uses a certificate imported from ArkLib's round-by-round framework for that
+fixed actual verifier.
 
 ## Controls
 

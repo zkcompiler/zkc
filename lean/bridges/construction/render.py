@@ -22,12 +22,12 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from bridges.common import lean_render  # noqa: E402
+from bridges.construction.types import data_type, render_type  # noqa: E402
+from bridges.common.lean_render import Refused as Refused  # noqa: E402
 from bridges.common.lean_render import (  # noqa: E402
-    CALCULATIONS, FIELD_MODULUS, Refused, decimal, origin, record, require, seq, text)
+    CALCULATIONS, FIELD_MODULUS, decimal, origin, record, require, seq, text)
 
 FORMAT = "zkc.constructed-participant/0"
-SCALAR_DOMAINS = {"field": r'!algebra\.field<"([^"\\]+)">', "group": r'!algebra\.group<"([^"\\]+)">'}
-VECTOR_DOMAIN = r'!algebra\.field_vector<"([^"\\]+)">'
 
 
 def nat(value, limit=1 << 20):
@@ -37,29 +37,26 @@ def nat(value, limit=1 << 20):
 def sort(value):
     """Return (Lean term, logical kind) for an exported MLIR type string."""
     require(isinstance(value, str), "type must be a string")
-    if value == "i1":
-        return ".data .boolean", ("boolean", None)
-    if value == "ui64":
-        return ".data .index", ("index", None)
-    match = re.fullmatch(VECTOR_DOMAIN, value)
-    if match:
-        return f".data (.vector {text(match[1])})", ("vector", match[1])
-    for kind, pattern in SCALAR_DOMAINS.items():
-        match = re.fullmatch(pattern, value)
-        if match:
-            return f".data (.{kind} {text(match[1])})", (kind, match[1])
     match = re.fullmatch(r'!local\.capability<"transcript:([^"\\]+)">', value)
     if match:
         return f".transcript {text(match[1])}", ("transcript", match[1])
     if value == "!algebra.indices":
         return ".indices", ("indices", None)
-    raise Refused(f"unsupported exported type {value!r}")
+    data = data_type(value)
+    if data[0] in ("bool", "index"):
+        tag = "boolean" if data[0] == "bool" else "index"
+        return f".data .{tag}", (tag, None)
+    if data[0] in ("field", "group", "vector"):
+        return f".data ({render_type(data)})", (data[0], data[1])
+    return f".data ({render_type(data)})", ("data", data)
 
 
-def scalar_ty(kind):
+def data_ty(kind):
     tag, domain = kind
-    require(tag in ("boolean", "field", "group"), "expected a scalar data type")
-    return ".boolean" if tag == "boolean" else f"(.{tag} {text(domain)})"
+    if tag == "data":
+        return f"({render_type(domain)})"
+    require(tag in ("boolean", "index", "field", "vector", "group"), "expected data type")
+    return ".boolean" if tag == "boolean" else ".index" if tag == "index" else f"(.{tag} {text(domain)})"
 
 
 def attributes(value):
@@ -127,7 +124,7 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
     if name == "protocol.receive" and set(attrs) == {"peer", "schema", "site"} and binding == []:
         require(not operand_kinds and len(result_kinds) == 1, "receive shape")
         return (f".receive {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
-                f"{text(string_attribute(attrs, 'peer'))} {scalar_ty(result_kinds[0])}")
+                f"{text(string_attribute(attrs, 'peer'))} {data_ty(result_kinds[0])}")
     if name == "protocol.send" and set(attrs) == {"peer", "schema", "site"} and binding == []:
         return (f".send {text(string_attribute(attrs, 'site'))} {text(string_attribute(attrs, 'schema'))} "
                 f"{text(string_attribute(attrs, 'peer'))}")
@@ -195,6 +192,13 @@ def policy(value):
     (version, entry, producer, validator, acceptance, suite, services, public, draws,
      framing, construction) = record(value, 11)
     require(version == "zkc.native-proof-policy/0", "wrong policy version")
+    require(isinstance(services, list) and isinstance(public, list) and isinstance(draws, list),
+            "invalid policy lists")
+    require(producer != validator and construction == "", "unsupported construction profile")
+    if suite == "":
+        require(services == [] and draws == [], "plain policy has a challenge replacement")
+    else:
+        require(isinstance(suite, str) and len(services) == 1 and draws, "invalid Fiat-Shamir profile")
     pairs = [record(pair, 2) for pair in draws]
     return (f"⟨{text(entry)}, {text(producer)}, {text(validator)}, {decimal(acceptance)}, {text(suite)}, "
             f"{seq(services, decimal)}, {seq(public, decimal)}, "
@@ -238,7 +242,7 @@ def local_service(attrs, binding, operands, result_kinds, retained, ports, place
 
 
 # Sorts a loop may capture: immutable data, never a transcript.
-CAPTURED = {"boolean", "index", "field", "vector", "group"}
+CAPTURED = {"boolean", "index", "field", "vector", "group", "data"}
 
 
 def references(values, places, what):
@@ -317,6 +321,9 @@ def render_declaration(data, namespace):
         roots.add(port[2])
         positions.add(port[3])
     kinds = [sort(value)[1] for value in inputs]
+    if selected[5] == "":
+        require(all(kind[0] in CAPTURED for kind in kinds + [sort(value)[1] for value in outputs]),
+                "plain-profile-abi")
     rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ", ports=ports)
     returned = references(returned, places, "returned")
     body = ",\n".join(rendered)

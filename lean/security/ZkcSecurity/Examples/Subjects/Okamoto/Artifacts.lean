@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.Claims.Subject
+public import ZkcExamples.Construction.OkamotoArtifact
 public import ZkcExamples.Construction.OkamotoProof
 
 @[expose] public section
@@ -33,6 +34,15 @@ def compiled : Compiled artifacts where
   selected := ZkcExamples.Construction.OkamotoProof.selected
   checked := ZkcExamples.Construction.OkamotoProof.selection_checked
   publics := by decide +kernel
+  occurrences := by decide +kernel
+
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+/-- Actual all-reply source transport, separate from static admission. -/
+theorem sourceConnection : compiled.SourceConnection (F := F) (G := G) where
+  equation challenge statement handle initial proof := by
+    match statement with
+    | .cons value0 (.cons value1 (.cons value2 .nil)) => exact ZkcExamples.Construction.OkamotoProof.compiled_transform challenge value0 value1 value2 handle initial proof
 
 /-- Fresh physical attribution, checked against pipeline bytes by reporting.
 Digest attribution is distinct from the kernel checked compiled facts above. -/

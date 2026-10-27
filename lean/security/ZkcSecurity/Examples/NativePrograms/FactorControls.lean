@@ -32,7 +32,7 @@ theorem correct_point_accepts :
 theorem swapped_point_rejects :
     (run FactorWrongPoint.verifier xStatement 2 7 xStrategy 1 0).outcome = .stopped .reject := by
   unfold run
-  rw [FactorWrongPoint.source_expansion]
+  rw [FactorWrongPoint.process_view_eq]
   rfl
 
 theorem wrong_point_no_contract :
@@ -52,7 +52,7 @@ theorem correct_residual_accepts :
 theorem forged_residual_false :
     (run FactorWrongResidual.verifier yStatement 2 7 yStrategy 3 5).outcome = .returned (some false) := by
   unfold run
-  rw [FactorWrongResidual.source_expansion]
+  rw [FactorWrongResidual.process_view_eq]
   rfl
 
 theorem wrong_residual_no_contract :

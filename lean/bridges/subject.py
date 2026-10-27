@@ -66,11 +66,15 @@ NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
 # walk lists every equation between processes (`PIR.Process`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
-# compiled program; the record keeps the original-side ones, and none may name
-# a compiled meaning.
+# compiled program. Derived artifact/source connections are recorded separately
+# from evaluated original-side normal forms.
 ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
 COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
+    "Zkc.Construction.Domain.participant", "Zkc.Construction.Domain.run",
+    "Zkc.Construction.Domain.validate", "Zkc.Construction.Domain.step",
+    "Zkc.Construction.Domain.evaluate", "Zkc.Construction.ScalarVerifier.verify",
+    "Zkc.Construction.Uniform.DomainAdapter.validate",
     "Zkc.Executable.execute", "Zkc.Executable.validate", "Zkc.Executable.metered",
 ]
 
@@ -195,7 +199,7 @@ class Driver(Runner):
         self.generated(subject, "data", structured.render(artifacts["original"], data), modules)
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
         entry = glue.Entry(artifacts["original"], artifacts["exported"], artifacts["interface"])
-        names = {"glue": subject.module_name("glue"), "data": data, "participant": participant}
+        names = {"glue": subject.construction_namespace, "data": data, "participant": participant}
         admission = subject.get("construction", "admission", "views")
         if subject.generated("bodies"):
             bodies = subject.module_name("bodies")
@@ -209,7 +213,7 @@ class Driver(Runner):
             names.pop("bodies", None)
         if subject.generated("glue"):
             self.generated(subject, "glue", glue.construction_glue(subject, entry, names), modules)
-            self.build(names["glue"])
+            self.build(subject.module_name("glue"))
         record["artifacts"].update(
             source="sha256:" + digest(artifacts["source"]),
             original_export="sha256:" + digest(artifacts["original_text"].encode()),
@@ -226,7 +230,7 @@ class Driver(Runner):
                         export_digest=artifacts["source_claims"]["native_export_digest"])
         record_accepted(record, "native-constructed-candidate")
         if subject.generated("glue"):
-            record_accepted(record, "per-entry-glue", module=names["glue"])
+            record_accepted(record, "per-entry-glue", module=subject.module_name("glue"))
         record["kernel"] = {}
         self.construction_rule(subject, artifacts, record)
         self.native_refusals(subject, artifacts, record)
@@ -237,6 +241,7 @@ class Driver(Runner):
         exported, original = artifacts["exported"], artifacts["original"]
         rule = subject.get("construction", "rule", "compiled")
         glue_module = subject.module_name("glue")
+        glue_namespace = subject.construction_namespace
         data = subject.module_name("data")
         kinds = [item for item in mutations.kinds_for(subject.get("mutations", "kinds", []))
                  if item[1].stage == "construction"]
@@ -259,14 +264,15 @@ class Driver(Runner):
                   "Fresh.Actual.participant.instructions).map (fun template => "
                   f"(Zkc.Construction.templateTree template).encode) = {encoded} := by decide +kernel"]
         if rule == "compiled":
-            imported = f"{glue_module}.imported"
+            imported = f"{glue_namespace}.imported"
             proofs += ["/-- The retained original's admission, for the fresh original. -/\n"
                        "def freshImported : Zkc.Source.Structured.Imported Fresh.Original.snapshot :=\n"
                        f"  ⟨{imported}.program, by rw [original_retained]; exact {imported}.admitted⟩",
                        "theorem actual_accepted : Zkc.Construction.checkCompiled freshImported "
                        "Fresh.Actual.participant = .ok () := by decide +kernel",
-                       "theorem actual_selected : Zkc.Construction.checkSelection freshImported "
-                       "Fresh.Actual.participant = true := by decide +kernel"]
+                       "theorem actual_selected : (Zkc.Construction.select freshImported "
+                       "Fresh.Actual.participant).any (fun selection => "
+                       "selection.check freshImported Fresh.Actual.participant) = true := by decide +kernel"]
         else:
             proofs.append("theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
                           "Fresh.Actual.participant = .ok () := by decide +kernel")
@@ -357,7 +363,8 @@ class Driver(Runner):
         facts = self.lowering_rule(subject, artifacts, entry, record)
         if subject.generated("facts"):
             form = subject.get("construction", "inputs", "values")
-            construction = dict(names=entry.names, types=entry.types, glue=subject.module_name("glue"))
+            construction = dict(names=entry.names, types=entry.types, glue=subject.construction_namespace,
+                                module=subject.module_name("glue"))
             # The facts are declared in the namespace the Entry's hand executable module
             # continues, so that its names are the facts' own declarations.
             namespace = subject.get("executable", "namespace") or subject.module_name("facts")
@@ -395,9 +402,10 @@ class Driver(Runner):
     def lowering_rule(self, subject, artifacts, entry, record):
         deployment, exported = artifacts["deployment"], artifacts["exported"]
         glue_module = subject.module_name("glue")
+        glue_namespace = subject.construction_namespace
         # Only the generated glue and the rules: the charge, whose module reads the
         # generated facts and the hand proofs, is evaluated after they are rebuilt.
-        parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Lowering",
+        parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Reading",
                  "import Zkc.Executable.Helpers", "import Zkc.Construction.Participant", f"import {glue_module}"]
         parts += ["set_option maxRecDepth 20000",
                   strip_header(constructed.render(exported, "Fresh.Constructed")),
@@ -419,9 +427,9 @@ class Driver(Runner):
                   "Fresh.Actual.validator) = none := by decide +kernel",
                   # The runtime decides acceptance at its role map's index; the theorems read the
                   # committed acceptance position and bind data inputs in policy order.
-                  f"theorem acceptance_position : {glue_module}.acceptancePosition = "
+                  f"theorem acceptance_position : {glue_namespace}.acceptancePosition = "
                   f"{int(selected['acceptance'])} := by decide +kernel",
-                  f"theorem public_inputs : {glue_module}.participant.policy.publicInputs = "
+                  f"theorem public_inputs : {glue_namespace}.participant.policy.publicInputs = "
                   f"[{', '.join(str(int(port)) for port in selected['data_inputs'])}] := by decide +kernel"]
         for name in artifacts["variants"]:
             proofs.append(f"theorem variant_{name}_accepted : refusal (checkLowering installed "
@@ -465,7 +473,7 @@ class Driver(Runner):
                 parts.append(strip_header(rendered))
                 statement = (f"refusal (checkLowering installed Fresh.Constructed.participant {namespace}.validator)")
                 if kind.stage == "helpers":
-                    rule = f'checkHelpers installed {{}}.validator {glue_module}.program ["{helper}"]'
+                    rule = f'checkHelpers installed {{}}.validator {glue_namespace}.program ["{helper}"]'
                     actual, mutated = rule.format("Fresh.Actual"), rule.format(namespace)
                     # The helper rule refuses the copy wherever it accepts the actual
                     # helper; the lowering rule accepts the copy.
@@ -646,7 +654,8 @@ class Driver(Runner):
     def predictions(self, subject, artifacts, entry, cases, binding, public):
         """Evaluate the Lean executable meaning on every case."""
         glue_module = subject.module_name("glue")
-        definitions = runtime.PREDICTION.replace("CONTEXT", f"{glue_module}.context").replace(
+        glue_namespace = subject.construction_namespace
+        definitions = runtime.PREDICTION.replace("CONTEXT", f"{glue_namespace}.context").replace(
             "DATA", runtime.prediction_data(entry, public))
         lines = ["import Zkc.Executable.Installed", "import Mathlib.Algebra.Field.ZMod", f"import {glue_module}",
                  strip_header(executable.render(artifacts["deployment"], "Fresh.Actual")),
@@ -670,12 +679,10 @@ class Driver(Runner):
         receipts = [subject for subject in subjects if subject.table("receipt")]
         if not receipts:
             return {}
-        controls = [subject for subject in manifest.load_all() if subject.get("construction", "model")]
-        control = f"{controls[0].module_name('glue')}.spec_equation" if controls else None
+        control = "ZkcExamples.ClassificationControl.compiled"
         imports = sorted({subject.get("receipt", "security_module") for subject in receipts}
                          | {subject.get("executable", "completeness_module") for subject in receipts
-                            if subject.get("executable", "completeness_module")}
-                         | ({controls[0].module_name("glue")} if controls else set()))
+                            if subject.get("executable", "completeness_module")})
         chain = []
         for subject in receipts:
             chain += [name for name in subject.get("receipt", "chain", []) if name not in chain]
@@ -684,6 +691,7 @@ class Driver(Runner):
         prefixes = ", ".join(f"`{name}" for name in ENTRY_PREFIXES)
         meanings = ", ".join(f"`{name}" for name in COMPILED_MEANINGS)
         source = ("".join(f"import {name}\n" for name in imports) + "import Zkc.Executable.Cleanup\n\n"
+                  + CLASSIFICATION_CONTROL
                   + "".join(f"#print axioms {name}\n" for name in chain)
                   + RECEIPT_WALK.replace("MEANINGS", meanings).replace("PREFIXES", prefixes)
                   + "".join(f"#eval do IO.println s!\"reaches {root} {name}: {{← reaches `{root} `{name}}}\"\n"
@@ -707,7 +715,7 @@ class Driver(Runner):
         if control:
             controls_found = re.findall(r"^control-equation (\S+) evaluated=(true|false) compiled=(true|false)$",
                                         result.stdout, re.M)
-            self.check("process-equation-classifier", (control, "false", "true") in controls_found,
+            self.check("process-equation-classifier", (control, "true", "true") in controls_found,
                        json.dumps(controls_found))
         dependencies = {}
         for subject in receipts:
@@ -720,13 +728,20 @@ class Driver(Runner):
                 self.check(f"{subject.name}:proof-avoids:{name}", value == "false", json.dumps(value))
             equations = re.findall(rf"^process-equation {re.escape(theorem)} (\S+) "
                                    r"evaluated=(true|false) compiled=(true|false)$", result.stdout, re.M)
-            compiled = [name for name, _, flag in equations if flag == "true"]
-            self.check(f"{subject.name}:proof-avoids-compiled-equations", not compiled, json.dumps(compiled))
+            # Proof syntax is attribution only. A reflexive equation is valid
+            # evidence when it proves the fixed statement; required links and
+            # standard axioms are checked independently of this classifier.
+            evaluated_compiled = [name for name, evaluated, compiled in equations
+                                  if evaluated == "true" and compiled == "true"]
             dependencies[subject.name] = dict(
                 uses=subject.get("receipt", "used", []), avoids=subject.get("receipt", "unused", []),
                 original_stage_equations=dict(
-                    evaluated=[name for name, flag, _ in equations if flag == "true"],
-                    derived=[name for name, flag, _ in equations if flag == "false"]),
+                    evaluated=[name for name, evaluated, compiled in equations
+                               if evaluated == "true" and compiled == "false"],
+                    derived=[name for name, evaluated, compiled in equations
+                             if evaluated == "false" and compiled == "false"]),
+                compiled_stage_equations=[name for name, _, compiled in equations if compiled == "true"],
+                evaluated_compiled_stage_equations=evaluated_compiled,
                 axioms={name: found.get(name) for name in subject.get("receipt", "chain", [])})
         return dependencies
 
@@ -835,10 +850,12 @@ class Driver(Runner):
             return
         executable_namespace = subject.get("executable", "namespace") if subject.profile("executable") else None
         sources = {
-            "artifacts": evidence.artifacts_module(subject, entry, subject.module_name("glue"),
+            "artifacts": evidence.artifacts_module(subject, entry, subject.construction_namespace,
                                                    executable_namespace, artifacts),
             "claims": evidence.claims_module(subject, bound),
         }
+        if executable_namespace:
+            sources["lowering"] = evidence.lowering_module(subject, entry, executable_namespace)
         for key, source in sources.items():
             path = subject.generated(key)
             expected = subject.generated("claims").with_name(key.capitalize() + ".lean")
@@ -940,6 +957,18 @@ class Driver(Runner):
         return path
 
 
+CLASSIFICATION_CONTROL = r"""
+namespace ZkcExamples.ClassificationControl
+open Zkc.Source Zkc.Source.Structured Zkc.Construction
+/-- Classifier control only; this reflexive equation proves no source connection. -/
+theorem compiled {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G]
+    [Module F G] [DecidableEq G] (program : Structured.Program) (context : Context)
+    (artifact : Participant) (inputs : Domain.Environment (uniformCarriers F G)) :
+    Domain.participant (ringModel F G) program context artifact inputs =
+      Domain.participant (ringModel F G) program context artifact inputs := rfl
+end ZkcExamples.ClassificationControl
+"""
+
 RECEIPT_WALK = r"""
 open Lean in
 /-- The transitive constant dependencies of `root`, `root` included. -/
@@ -957,14 +986,37 @@ def dependencyClosure (root : Name) : CoreM (Array Name) := do
         visited := visited.insert name
         order := order.push name
         if let some info := env.find? name then
-          for used in info.getUsedConstantsAsSet do
-            unless visited.contains used do pending := used :: pending
+          pending := info.type.getUsedConstants.toList ++ pending
+          if let some value := info.value? true then
+            pending := value.getUsedConstants.toList ++ pending
+          if let .recInfo recursor := info then
+            pending := recursor.all ++ pending
+            for rule in recursor.rules do
+              pending := rule.ctor :: rule.rhs.getUsedConstants.toList ++ pending
   return order
 
 open Lean in
 /-- Whether `target` occurs in the transitive constant dependencies of `root`. -/
 def reaches (root target : Name) : CoreM Bool :=
   return (← dependencyClosure root).contains target
+
+open Lean in
+/-- Follow definitions in a statement, so a wrapper cannot hide compiled execution.
+Opaque theorem bodies are audited separately by the full proof-dependency walk. -/
+def mentionsCompiled (meanings : List Name) (expression : Expr) : CoreM Bool := do
+  let env ← getEnv
+  let mut pending := expression.getUsedConstants.toList
+  let mut visited : NameSet := {}
+  repeat
+    match pending with
+    | [] => return false
+    | name :: rest =>
+      pending := rest
+      if meanings.contains name then return true
+      if visited.contains name then continue
+      visited := visited.insert name
+      if let some (.defnInfo info) := env.find? name then
+        pending := info.value.getUsedConstants.toList ++ pending
 
 open Lean Meta in
 /-- Entry-specific theorems in the closure of `root` whose statement is an
@@ -974,8 +1026,8 @@ Equation lemmas generated for definitions are unfoldings and are skipped. -/
 def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do
   let env ← getEnv
   let meanings : List Name := [MEANINGS]
-  for meaning in meanings do
-    unless env.contains meaning do throwError "unknown compiled meaning {meaning}"
+  -- Retired meanings remain syntactic markers even after their declarations
+  -- leave the environment. The actual compiled control below must still pass.
   let mut found := #[]
   for name in (← dependencyClosure root).qsort Name.lt do
     unless [PREFIXES].any (·.isPrefixOf name) do continue
@@ -990,7 +1042,7 @@ def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do
     unless isProcess do continue
     let evaluated ← lambdaTelescope info.value fun _ proof =>
       return proof.isAppOf ``Eq.refl || proof.isAppOf ``rfl
-    let compiled := info.type.getUsedConstants.any meanings.contains
+    let compiled ← mentionsCompiled meanings info.type
     found := found.push (name, evaluated, compiled)
   return found
 

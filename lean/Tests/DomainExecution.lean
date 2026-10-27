@@ -22,7 +22,7 @@ private def model : Structured.DomainModel where
   smul _ _ _ _ := 0
 
 private def context : Context :=
-  ⟨"main", ["P", "V"], 0, 1, 0, "random.extension/0", some (.draw "extension"), "suite", []⟩
+  Context.fiatShamir "main" (["P", "V"]) 0 1 0 "random.extension/0" (some (.draw "extension")) "suite" ([])
 
 private def helper (swapped : Bool) : Structured.Definition :=
   .function ⟨"pair", .math, .privateDef, [.boolean, .boolean], [.boolean, .boolean],
@@ -181,9 +181,9 @@ example : (run .producer oracle failAfterSend (state [] [])).state.environment =
     [base 7, .data (.boolean false)] := by rfl
 
 -- Malformed request/domain/method/template and unsupported private coins refuse.
-example : queryOrigin { context with request := some (.draw "base") } "suite" "extension" query [] = none := by rfl
+example : queryOrigin (context.mapReplacement (fun replacement => { replacement with request := some (.draw "base") })) "suite" "extension" query [] = none := by rfl
 example : queryOrigin context "suite" "base" query [] = none := by rfl
-example : queryOrigin { context with request := some ⟨"index", [], .field "extension"⟩ }
+example : queryOrigin (context.mapReplacement (fun replacement => { replacement with request := some ⟨"index", [], .field "extension"⟩ }))
     "suite" "extension" query [] = none := by rfl
 -- Runtime normalization reads the selected root service. Exact local port
 -- identity is checked against source by SourceOccurrences before execution.
@@ -262,5 +262,47 @@ example : calculate model (.fieldEmbed "extension" "base") [base 7] =
     .returned [extension 0] := by rfl
 example : calculate model (.fieldEmbed "extension" "base") [extension 1] =
     .stopped .refused := by rfl
+
+-- A batch response carries products of different nominal domains through the
+-- actual producer/validator interpreter. This is a transport control, not a
+-- commitment-security theorem or a source/artifact correspondence claim.
+private abbrev opening : Structured.Ty := .product "batch.Opening" "Opening"
+  (.cons (.field "base") (.cons (.field "extension") .nil))
+private abbrev batch : Structured.Ty := .sequence opening
+private def response : Payload model.toCarriers :=
+  ⟨batch, rfl, [(4, 2, ()), (9, 3, ())]⟩
+private def batchProducer : Participant := constructed
+  [⟨.send "response" "response" "V", [0], [], []⟩] [.data batch] [] []
+private def batchValidator : Participant := constructed
+  [⟨.receive "response" "response" "P" batch, [], [.data batch], []⟩] [] [.data batch] [0]
+
+example : (produce model (program false) context batchProducer [.data response] oracle 0).state.proof =
+    [response] := rfl
+example : (validate model (program false) context batchValidator [] [response] oracle 0).outcome =
+    .returned ⟨[.data response], [.data response]⟩ := rfl
+example : (validate model (program false) context batchValidator [] [response] oracle 0).state.proof =
+    [] := rfl
+
+-- The same host tuple under another nominal identity is not the same message.
+private def renamedResponse : Payload model.toCarriers :=
+  ⟨.sequence (.product "other.Opening" "Opening"
+    (.cons (.field "base") (.cons (.field "extension") .nil))), rfl,
+    [(4, 2, ()), (9, 3, ())]⟩
+example : (validate model (program false) context batchValidator [] [renamedResponse] oracle 0).outcome =
+    .stopped .refused := rfl
+example : (validate model (program false) context batchValidator [] [renamedResponse] oracle 0).state.proof =
+    [renamedResponse] := rfl
+
+-- Empty containers still retain their element sort. A vector and a sequence
+-- do not become interchangeable merely because both are represented by List.
+example : (Payload.mk (.sequence .boolean) rfl [] : Payload model.toCarriers).value
+    (.sequence .index) = none := rfl
+example : (Payload.vector "base" [] : Payload model.toCarriers).value
+    (.sequence (.field "base")) = none := rfl
+example : Value.encode (carriers := model.toCarriers)
+    (.sequence (.product "Capability" "Capability" (.cons (.service "private") .nil)))
+    [(0, ())] = none := rfl
+example : Domain.dataType (.sequence (.product "Capability" "Capability"
+    (.cons (.service "private") .nil))) = false := rfl
 
 end Tests.DomainExecution

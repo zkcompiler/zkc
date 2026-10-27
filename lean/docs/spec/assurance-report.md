@@ -325,10 +325,20 @@ registry's chosen list. The report validates these emitted obligations:
 | `compiled-ideal` | `construction.checked` | `ideal-meaning` |
 | `executable-bytes` | `construction.checked`, `lowering.interpreted_bytes` | `interpreted-executable-bytes` |
 
-`Subject.ConstructionChecked` pins the actual `checkCompiled`, selection,
-selection check and public schema. `Subject.LoweringChecked` additionally pins
-the actual program and `checkLowering` result, helper preparation and sorting,
-and public admission of the interpreted validator. Admission supplies their
+`Subject.ConstructionChecked` pins the generic `checkCompiled`, selection,
+selection check, public schema and source-occurrence check, and requires the
+actual subject's `Compiled.SourceConnection`. The connection's target is fixed
+by the admitted artifacts: actual Domain execution with the fixed scalar ABI
+and the admitted source's transform, for all typed public values, proofs,
+initial histories and lawful challenge handlers. It is separate from static
+admission and cannot choose the meaning or extractor.
+
+`Subject.LoweringChecked` additionally pins the actual program and
+`checkLowering` result, helper preparation and sorting, and public admission of
+the interpreted validator. It requires `BytePruning` from that validator's
+actual byte execution to complete acceptance of the same fixed Domain verifier,
+at every decoder, budget and framing header. This link does not replace byte
+completeness or full execution observations. Admission supplies their
 dependent proofs through `Subject.stageLinkProofs`, independently of the family
 method that proves the requested property.
 

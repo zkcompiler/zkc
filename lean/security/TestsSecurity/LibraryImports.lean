@@ -16,6 +16,7 @@ import ZkcSecurity.Claims.DomainSubject
 import ZkcSecurity.Claims.Endpoint
 import ZkcSecurity.Claims.EndpointHypotheses
 import ZkcSecurity.Claims.Extractor
+import ZkcSecurity.Claims.FiniteRecovery
 import ZkcSecurity.Claims.HonestModel
 import ZkcSecurity.Claims.Knowledge
 import ZkcSecurity.Claims.Model
@@ -23,6 +24,7 @@ import ZkcSecurity.Claims.PairValidator
 import ZkcSecurity.Claims.Parameters
 import ZkcSecurity.Claims.Premise
 import ZkcSecurity.Claims.PrimitiveDependencies
+import ZkcSecurity.Claims.PrivateCompleteness
 import ZkcSecurity.Claims.ReceiptAdmission
 import ZkcSecurity.Claims.Resolution
 import ZkcSecurity.Claims.Soundness
@@ -36,6 +38,7 @@ import ZkcSecurity.Commitment.Cost
 import ZkcSecurity.Commitment.Escape
 import ZkcSecurity.Commitment.Experiment
 import ZkcSecurity.Commitment.Extractable
+import ZkcSecurity.Commitment.FiniteRecovery
 import ZkcSecurity.Commitment.HashedLeaves
 import ZkcSecurity.Commitment.HistoryKeys
 import ZkcSecurity.Commitment.Merkle
@@ -71,6 +74,9 @@ import ZkcSecurity.Examples.Components.GkrCallerRealization
 import ZkcSecurity.Examples.Components.GkrCallerResidual
 import ZkcSecurity.Examples.Components.GkrCallerSetup
 import ZkcSecurity.Examples.Components.GkrCallerSource
+import ZkcSecurity.Examples.Components.GkrFiniteCalls
+import ZkcSecurity.Examples.Components.GkrFiniteCircuit
+import ZkcSecurity.Examples.Components.GkrFiniteGate
 import ZkcSecurity.Examples.Components.GkrRoundsBinding
 import ZkcSecurity.Examples.Components.GkrRoundsBindingHelpers
 import ZkcSecurity.Examples.Components.GkrRoundsBindingInvocation
@@ -113,12 +119,6 @@ import ZkcSecurity.Examples.Generated.Components.TwoSumsABI
 import ZkcSecurity.Examples.Generated.Components.TwoSumsCompleteness
 import ZkcSecurity.Examples.Generated.Components.TwoSumsSoundness
 import ZkcSecurity.Examples.Generated.Components.TwoSumsSources
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot
 import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Completeness
 import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Honest
 import ZkcSecurity.Examples.Generated.OriginalSecurity.SmallSumcheck.Installation
@@ -177,9 +177,11 @@ import ZkcSecurity.Examples.Subjects.Okamoto.Evidence
 import ZkcSecurity.Examples.Subjects.Okamoto.Registration
 import ZkcSecurity.Examples.Subjects.Schnorr.Artifacts
 import ZkcSecurity.Examples.Subjects.Schnorr.Claims
+import ZkcSecurity.Examples.Subjects.Schnorr.CompiledEndpoints
 import ZkcSecurity.Examples.Subjects.Schnorr.Contract
 import ZkcSecurity.Examples.Subjects.Schnorr.Endpoints
 import ZkcSecurity.Examples.Subjects.Schnorr.Evidence
+import ZkcSecurity.Examples.Subjects.Schnorr.Lowering
 import ZkcSecurity.Examples.Subjects.Schnorr.Registration
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Artifacts
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Claims
@@ -187,6 +189,11 @@ import ZkcSecurity.Examples.Subjects.SchnorrAnd.Contract
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Endpoints
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Evidence
 import ZkcSecurity.Examples.Subjects.SchnorrAnd.Registration
+import ZkcSecurity.Examples.TableMembership.ABI
+import ZkcSecurity.Examples.TableMembership.Claims
+import ZkcSecurity.Examples.TableMembership.Endpoint
+import ZkcSecurity.Examples.TableMembership.Method
+import ZkcSecurity.Examples.TableMembership.Subject
 import ZkcSecurity.Families.Schnorr
 import ZkcSecurity.Families.SchnorrVariants
 import ZkcSecurity.Families.Sigma.Algebra
@@ -201,6 +208,7 @@ import ZkcSecurity.Families.Sumcheck.Cost
 import ZkcSecurity.Families.Sumcheck.Derivation
 import ZkcSecurity.Families.Sumcheck.FactorOpening.Security
 import ZkcSecurity.Families.Sumcheck.FactorReference
+import ZkcSecurity.Families.Sumcheck.FiniteCalls
 import ZkcSecurity.Families.Sumcheck.Message
 import ZkcSecurity.Families.Sumcheck.Process
 import ZkcSecurity.Families.Sumcheck.Reference
@@ -260,6 +268,8 @@ import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.OriginalClaims
 import ZkcSecurity.FiatShamir.OriginalReadback
 import ZkcSecurity.FiatShamir.OriginalTransport
+import ZkcSecurity.FiatShamir.PrivatePairWP
+import ZkcSecurity.FiatShamir.PrivateReadbackWP
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Roles
@@ -293,6 +303,7 @@ import ZkcSecurity.Generation.SigmaCompleteness
 import ZkcSecurity.Generation.SubjectABI.Command
 import ZkcSecurity.Generation.SubjectABI
 import ZkcSecurity.Generation.SumcheckAccounts
+import ZkcSecurity.Generation.TableMembership
 import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 import ZkcSecurity.Generation.UniformRoot
 import ZkcSecurity.HashChain.Bound
@@ -317,21 +328,11 @@ import ZkcSecurity.Obligations.WeakestPrecondition
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.Oracle.Keys
 import ZkcSecurity.Probability.UniformTape
-import ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
-import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingHelpers
-import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingLoop
-import ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates
-import ZkcSecurity.Realizations.Sumcheck.ArtifactOutputs
-import ZkcSecurity.Realizations.Sumcheck.ArtifactRoot
 import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 import ZkcSecurity.Realizations.Sumcheck.OriginalComponent
 import ZkcSecurity.Realizations.Sumcheck.OriginalHonest
 import ZkcSecurity.Realizations.Sumcheck.OriginalHonestLoop
 import ZkcSecurity.Realizations.Sumcheck.OriginalHonestReduce
-import ZkcSecurity.Realizations.Sumcheck.OriginalProducer
-import ZkcSecurity.Realizations.Sumcheck.OriginalProducerLoop
-import ZkcSecurity.Realizations.Sumcheck.OriginalProducerReduce
-import ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates
 import ZkcSecurity.Realizations.Sumcheck.OriginalRawComposition
 import ZkcSecurity.Realizations.Sumcheck.OriginalRawPresentation
 import ZkcSecurity.Realizations.Sumcheck.OriginalRawReading
@@ -356,7 +357,6 @@ import ZkcSecurity.Tools.ComponentReadback
 import ZkcSecurity.Tools.ComponentView
 import ZkcSecurity.Tools.InputLaws
 import ZkcSecurity.Tools.PairConstruction
-import ZkcSecurity.Tools.ProcessView
 import ZkcSecurity.Tools.SigmaReadback
 import ZkcSecurity.Tools.SourceInputClauses
 import ZkcSecurity.Tools.SubjectABI
@@ -431,6 +431,7 @@ import TestsSecurity.EmbeddingEqualityControls
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.ExtractionCounterexample
 import TestsSecurity.FiatShamirTyped
+import TestsSecurity.FiniteRecoveryRegistration
 import TestsSecurity.GenerateClaimLibraries
 import TestsSecurity.GenerateCompletenessClaims
 import TestsSecurity.GenerateRootControls
@@ -439,6 +440,7 @@ import TestsSecurity.GenerateSubjects
 import TestsSecurity.GenerateSumcheckCompleteness
 import TestsSecurity.GenerateSumcheckSoundness
 import TestsSecurity.GkrCaller
+import TestsSecurity.GkrFiniteGate
 import TestsSecurity.GkrRoundsRealization
 import TestsSecurity.GkrRoundsReference
 import TestsSecurity.GkrRoundsResidual
@@ -466,6 +468,8 @@ import TestsSecurity.LosslessPresentation
 import TestsSecurity.LosslessPresentationNominal
 import TestsSecurity.LosslessPresentationRefusal
 import TestsSecurity.LosslessPresentationRoots
+import TestsSecurity.MethodNeutralChargeAssembly
+import TestsSecurity.MethodNeutralEndpointClients
 import TestsSecurity.Obligations
 import TestsSecurity.OriginalEndpointGeneration
 import TestsSecurity.OriginalEndpointRequests
@@ -481,6 +485,9 @@ import TestsSecurity.OriginalSecurityRoots
 import TestsSecurity.OriginalSecurityTransport
 import TestsSecurity.OriginalSumcheckBinding
 import TestsSecurity.PairConstruction
+import TestsSecurity.ParametricBindings
+import TestsSecurity.ParametricBindingsGeneration
+import TestsSecurity.PrivateProducerWP
 import TestsSecurity.ProofSearchDiagnostics
 import TestsSecurity.ProtocolObligations
 import TestsSecurity.ProviderSimulation
@@ -491,6 +498,7 @@ import TestsSecurity.RootAssemblyFixture
 import TestsSecurity.RootAssemblyGeneration
 import TestsSecurity.SampledReadback
 import TestsSecurity.SampledRootClaims
+import TestsSecurity.ScalarDomainEndpoints
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.SourceAdmission.CurrentSubjects
@@ -517,4 +525,5 @@ import TestsSecurity.SumcheckHonestReferences
 import TestsSecurity.SumcheckReference
 import TestsSecurity.SumcheckRootCompleteness
 import TestsSecurity.SumcheckSubjectInputs
+import TestsSecurity.TableMembershipClaims
 import TestsSecurity.WeakestPrecondition

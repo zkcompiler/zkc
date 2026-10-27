@@ -155,6 +155,6 @@ theorem callOnTranscript_refused :
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/
-theorem actual_accepted : checkCompiled imported actual = .ok () := SumcheckProof.compiled
+theorem actual_accepted : checkCompiled imported actual = .ok () := by decide +kernel
 
 end Tests.SumcheckProjectionControls

@@ -1,5 +1,8 @@
 module
 
+meta import Lean.Elab.Command
+meta import Lean.Meta.Eqns
+
 public import Zkc.Semantics.Interaction
 
 @[expose] public section
@@ -66,3 +69,9 @@ theorem Yields.repeatN {I : Signature} {A : Type} {invariant : Nat → A → Pro
         rwa [Nat.add_right_comm, Nat.add_assoc] at rest
 
 end PIR
+
+-- Own generated equations here, before independent clients request them.
+-- Their proofs remain kernel checked and retain a single stored provider.
+run_cmd Lean.Elab.Command.liftTermElabM do
+  discard <| Lean.Meta.getUnfoldEqnFor? ``PIR.Yields
+  discard <| Lean.Meta.getEqnsFor? ``PIR.Yields

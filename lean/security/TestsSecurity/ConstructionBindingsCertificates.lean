@@ -1,9 +1,9 @@
 module
 
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckProducerRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheckValidatorRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsProducerRoot
-import ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSumsValidatorRoot
+import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckProducerRoot
+import ZkcExamples.Structured.OriginalArtifacts.SmallSumcheckValidatorRoot
+import ZkcExamples.Structured.OriginalArtifacts.TwoSumsProducerRoot
+import ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot
 import ZkcSecurity.Generation.ConstructionBindings
 meta import Lean.Util.FoldConsts
 meta import Lean.Elab.Command
@@ -13,10 +13,10 @@ legacy per-root component certificates. False callback/root equations must fail.
 set_option autoImplicit false
 namespace TestsSecurity.ConstructionBindingsCertificates
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
-open ZkcSecurity.Examples.Generated.OriginalArtifacts
+open ZkcExamples.Structured.OriginalArtifacts
 
 open ZkcSecurity.Generation.ConstructionBindings
-open ZkcSecurity.Realizations.Sumcheck.ArtifactBinding
+open ZkcExamples.Structured.SumcheckArtifacts.ArtifactBinding
 
 def validatorLoop : Zkc.Construction.Instruction := TwoSums.validatorArtifact.instructions[1]'(by decide +kernel)
 def producerLoop : Zkc.Construction.Instruction := TwoSums.producerArtifact.instructions[10]'(by decide +kernel)
@@ -117,8 +117,8 @@ example : True := by
 #print axioms TwoSums.ValidatorCall1.callback
 #print axioms TwoSums.ProducerCall0.callback
 #print axioms TwoSums.ProducerCall1.callback
-#print axioms ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound
-#print axioms ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.validatorRound
+#print axioms ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerRound
 #print axioms SmallSumcheckProducerRoot.producer_source
 #print axioms TwoSumsProducerRoot.producer_source
 #print axioms SmallSumcheckProducerRoot.producer
@@ -133,8 +133,8 @@ meta def checkSharing (callback shared : Name) : CommandElabM Unit := do
   let env ← getEnv
   let owner := env.getModuleIdxFor? callback
   let simulations := [
-    `ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound,
-    `ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound]
+    `ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.validatorRound,
+    `ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerRound]
   let constructors := [
     `Zkc.Construction.Original.Simulation.done,
     `Zkc.Construction.Original.Simulation.halt,
@@ -155,7 +155,7 @@ meta def checkSharing (callback shared : Name) : CommandElabM Unit := do
       let index ← env.getModuleIdxFor? name
       (env.header.modules[index.toNat]?).map (·.module)
     if env.getModuleIdxFor? name == owner || moduleName.any (fun moduleName =>
-        moduleName.toString.startsWith "ZkcSecurity.Examples.Generated.OriginalArtifacts.") then
+        moduleName.toString.startsWith "ZkcExamples.Structured.OriginalArtifacts.") then
       let information ← getConstInfo name
       pending := information.getUsedConstantsAsSet.toList ++ pending
   unless seen.contains shared do throwError "missing shared proof below {callback}: {shared}"
@@ -163,14 +163,14 @@ meta def checkSharing (callback shared : Name) : CommandElabM Unit := do
 
 run_cmd do
   for callback in [
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.ValidatorCall0.callback,
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.ValidatorCall0.callback,
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.ValidatorCall1.callback] do
-    checkSharing callback `ZkcSecurity.Realizations.Sumcheck.ArtifactBindingTemplates.validatorRound
+      `ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.ValidatorCall0.callback,
+      `ZkcExamples.Structured.OriginalArtifacts.TwoSums.ValidatorCall0.callback,
+      `ZkcExamples.Structured.OriginalArtifacts.TwoSums.ValidatorCall1.callback] do
+    checkSharing callback `ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates.validatorRound
   for callback in [
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.SmallSumcheck.ProducerCall0.callback,
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.ProducerCall0.callback,
-      `ZkcSecurity.Examples.Generated.OriginalArtifacts.TwoSums.ProducerCall1.callback] do
-    checkSharing callback `ZkcSecurity.Realizations.Sumcheck.OriginalProducerTemplates.producerRound
+      `ZkcExamples.Structured.OriginalArtifacts.SmallSumcheck.ProducerCall0.callback,
+      `ZkcExamples.Structured.OriginalArtifacts.TwoSums.ProducerCall0.callback,
+      `ZkcExamples.Structured.OriginalArtifacts.TwoSums.ProducerCall1.callback] do
+    checkSharing callback `ZkcExamples.Structured.SumcheckArtifacts.OriginalProducerTemplates.producerRound
 
 end TestsSecurity.ConstructionBindingsCertificates

@@ -265,6 +265,26 @@ the charged reduction at the requested prices. A successful scalar bound does
 not imply that capability. Registry-owned obligations determine required links;
 provenance cannot remove them.
 
+`Claims.Domain.ChargeSchedule` admits an empty list. It still refuses duplicate
+source labels and duplicate native construction occurrences. Empty schedules
+charge zero for every key, including unmapped keys; they establish neither
+rejection nor soundness. Charged request elaboration retains the ordinary
+weighted experiment and requires a `ChargedExport` at that exact empty schedule
+and requested validator cost. Nonempty declarations are a condition of the
+uniform method's constant-price equality, not the general request schema.
+
+`Generation.OriginalEndpoint` consumes declarations for the subject-indexed
+schedule, `validatorCost : Nat → ENNReal` and a full `ChargedExport` for every
+query bound. Generated annotations check their dependent types. Its conservative
+syntactic challenge count is metadata only. Optional scalar output additionally
+checks a theorem bounding the total-query contribution (the query count times
+the schedule maximum) plus validator cost by the selected scalar error.
+`CompiledSoundness` preserves the whole actual participant binding for these
+consumers, including all statements, histories, complete returns and unread
+proof values. The installed Sumcheck degree-one method owns its uniform field
+price, cardinality, validator budget and scalar fraction conversion. Common
+assembly does not infer mathematical prices from source types or query counts.
+
 The [assurance report](assurance-report.md) compares actual emitted typed indices
 and wire data against each bound source request and the pipeline's artifact
 bytes. Only structured registered-but-undefined interpretations are incomplete;
@@ -281,10 +301,27 @@ including unsupported interactive models. Reports remain IR-relative with an
 explicit `source.correspondence` premise; interpreted executable-byte claims
 never establish native executable conformance by themselves.
 
-For compiled ideal, the actual subject's construction check, selection and
-public schema discharge `construction.checked`. Interpreted bytes also require
-`lowering.interpreted_bytes`, pinning that subject's actual program, checked
-lowering, helper interpretation and public admission. Reporting reconstructs
+For compiled ideal, `Endpoint.Compiled` reuses `Endpoint.Domain.Compiled` for
+static admission, selection, public schema and source occurrences. Its scalar
+verifier executes `Domain.run` on `Domain.participant`, through the fixed
+`ScalarVerifier` ABI. The nominal input carries an empty transcript suffix;
+the initial scalar history is an opaque prefix. The artifact determines the
+origin map, which is applied before invoking the caller's oracle and cache.
+
+`construction.checked` additionally requires `Compiled.SourceConnection`:
+the all-reply transport from that exact actual verifier to that exact admitted
+source. Neither side, the origin map, the extractor nor a resource boundary
+can be selected by evidence. Structural checker acceptance alone cannot supply
+this proof. Maintained instances derive it from their actual artifact binding,
+including malformed typed proof values and every typed public statement.
+
+Interpreted bytes also require `lowering.interpreted_bytes`, pinning that
+subject's actual program, checked lowering, helper interpretation and public
+admission, together with `Endpoint.BytePruning`. This is a fixed-target proof
+at every budget and framing header from actual Lean byte validation to complete
+acceptance of the same Domain verifier on the decoded proof. Static lowering
+admission does not imply this transport. Byte completeness and exact execution
+observations remain separate obligations. Reporting reconstructs
 these goals from the typed subject and compares them with each registered
 obligation and its proof. Direct lower-stage proofs can certify that interpreted
 endpoint while native closure stays open; native realization is a separate
@@ -385,11 +422,15 @@ accepted by the actual imported relation.
 
 ## Contract proof and property application
 
-The bounded generator symbolically expands the selected role and proposes pure
-source and process expressions. A restricted vocabulary admits constructor and
-scalar terms, with no commands, comments, imports, macros or tactics. The reviewed
-renderer owns the Lean declarations, subject bindings, normalization proofs and
-audits. Lean checks admission and the verifier-contract equality.
+The bounded generator proposes only typed source constructors, without evaluating
+operations or selecting runtime branches. Its sole `program` proposal field uses
+a restricted constructor vocabulary, with no commands, comments, imports, macros
+or tactics. The reviewed renderer owns the Lean declarations, subject bindings,
+normalization proofs and audits. Lean's `common_process%` elaborator simplifies
+the actual admitted program's denotation by unfolding the existing interpreter,
+checks definitional equality, and emits a process view connected by `rfl`.
+It supplies no independent runtime semantics. Lean checks admission and the
+verifier-contract equality, including arbitrary replies, guards and stops.
 A separate request interpreter reconstructs the inputs, role, sites and actual
 program denotation. It checks the candidate contract against that subject and
 re-derives the requested properties. A separate relation-subject check does the

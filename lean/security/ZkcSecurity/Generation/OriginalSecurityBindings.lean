@@ -66,7 +66,7 @@ def analyze (program : Program) (validator producer : Participant) : Except Stri
   let producers := root.inputs.zipIdx.filterMap fun (ty, index) =>
     if Domain.dataType ty && (root.inputScopes[index]?.getD []).contains 0 then some index else none
   let count ← one "count" (root.inputs.zipIdx.filterMap fun (ty, index) => if ty == .index then some index else none)
-  let service := layout.context.service
+  let some service := layout.context.service | throw "original-security-replacement-service"
   let some (.service contract) := root.inputs[service]? | throw "original-security-service"
   let mut calls : List Invocation := []
   let mut rest := assembly.steps
@@ -113,7 +113,7 @@ def analyze (program : Program) (validator producer : Participant) : Except Stri
     booleanRef, transcriptRef, producerRef, producerLayout.arity⟩
 
 def validateABI (program : Program) (binding : Binding) (metadata : SubjectABI.Metadata) : Except String Unit := do
-  unless metadata.types == program.payload.entry.inputs && metadata.context.service == binding.service &&
+  unless metadata.types == program.payload.entry.inputs && metadata.context.service == some binding.service &&
       metadata.publicPositions == binding.publicPositions && metadata.producerPositions == some binding.producerPositions do
     throw "original-security-subject-abi-association"
   unless (← metadata.targetPositions).all binding.publicPositions.contains do
@@ -151,5 +151,52 @@ def sourceValues (program : Program) (binding : Binding) (producer honest : Bool
       | some call => "(some " ++ input call.raw ++ ".sum)"
       | none => "(some " ++ input index ++ ")"
     else "(some " ++ input index ++ ")")
+
+
+/-- Installed mathematics for the nominal template route. These are source
+expressions only; every applicability, helper and capture equation is checked
+at the emitted dependent type, against the actual admitted declaration. -/
+structure TemplateInstallation where
+  moduleName : String
+  templateModule : String
+  mathematicsModule : String
+  model : String
+  modelLaws : String
+  domain : String
+  fieldLaw : String
+  results : String
+  helperLaws : String
+  processes : String
+  calleeLaws : String
+  role : Nat
+  roster : Nat
+
+/-- This route has no carrier-name table, uniform price or root-count case
+split. The template fixes the source, helpers, nominal signature and capture;
+installed mathematics must meet those exact indices. -/
+def templateBindings (output : TemplateInstallation) : String :=
+  "module\n\npublic import " ++ output.templateModule ++ "\npublic import " ++ output.mathematicsModule ++
+    "\n\n@[expose] public section\nset_option autoImplicit false\nnoncomputable section\nnamespace " ++
+    output.moduleName ++ "\nopen Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.NormalForm " ++
+    "Zkc.Source.Structured.Bindings\nopen " ++ output.templateModule ++ "\n" ++
+    "def model : DomainModel := " ++ output.model ++ "\n" ++
+    "theorem modelLaws : DomainLaws program.snapshot.catalogue model := " ++ output.modelLaws ++ "\n" ++
+    "theorem domainApplicable : program.snapshot.catalogue.require " ++ Presentation.quoted output.domain ++
+      " .field \"Field\" = .ok () := by decide +kernel\n" ++
+    "theorem fieldLaw : IsField (model.Field " ++ Presentation.quoted output.domain ++ ") := " ++ output.fieldLaw ++ "\n" ++
+    "def results : LawResults model signature.laws := " ++ output.results ++ "\n" ++
+    "theorem helperLaws {inputs : List Ty} (input : Values (Component model.Value) inputs) :\n" ++
+      "    LawsHold (helperTables model) results input := " ++ output.helperLaws ++ "\n" ++
+    "def processes : CalleeProcesses model signature.callees := " ++ output.processes ++ "\n" ++
+    "theorem calleeLaws {inputs : List Ty} (input : Values (Component model.Value) inputs) :\n" ++
+      "    CalleesHold (capture model) processes input := " ++ output.calleeLaws ++ "\n" ++
+    "theorem binding (ctx : ProtocolContext) (distinct : RosterDistinct ctx " ++ toString output.role ++
+      " " ++ toString output.roster ++ ") (input : Values (Component model.Value) definition.inputs) :\n" ++
+      "    invokeProtocol (program.payload.plainProtocolTableOn model) definition.signature " ++
+      "ctx (ctx.roles " ++ toString output.role ++ ") input =\n" ++
+      "      template.view model (helperTables model) (capture model) results processes ctx input :=\n" ++
+      "  (congrFun (congrFun (congrFun (source_capture model) ctx) (ctx.roles " ++ toString output.role ++
+      ")) input).trans (template.binding model (helperTables model) (capture model) results processes ctx distinct input " ++
+      "(helperLaws _) (calleeLaws _))\nend " ++ output.moduleName ++ "\n"
 
 end ZkcSecurity.Generation.OriginalSecurityBindings

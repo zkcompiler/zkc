@@ -62,7 +62,7 @@ CAPTURING = [
 
 def export(inputs, instructions, returned):
     policy = ["zkc.native-proof-policy/0", "entry", "role00000000", "role00000001", "0",
-              "merlin3.bls12-381.fr64be/0", ["9"], [str(index) for index in range(len(inputs) - 1)], [],
+              "merlin3.bls12-381.fr64be/0", ["9"], [str(index) for index in range(len(inputs) - 1)], [["q", "d"]],
               "zkc.framed/0", ""]
     return ["zkc.constructed-participant/0", "sha256:" + "0" * 64, "sha256:" + "1" * 64, policy, "_math_1",
             inputs, ["i1", TRANSCRIPT], instructions, returned, []]

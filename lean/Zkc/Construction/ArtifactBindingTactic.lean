@@ -32,6 +32,7 @@ partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
       if startsCheckpoint actual then
           let obligations ← reached.apply (← mkConstWithFreshMVarLevels ``Original.Simulation.checkpoint)
           for obligation in obligations do
+            if ← obligation.isAssigned then continue
             let simulation ← obligation.withContext do
               pure ((← obligation.getType).isAppOf ``Original.Simulation)
             if simulation then derive obligation rules normalize side
@@ -70,7 +71,20 @@ partial def derive (goal : MVarId) (rules : Array (TSyntax `term))
           break
         catch _ => pure ()
       if let some obligations := applied then
+        -- Equations can determine witnesses hidden by an opaque component certificate.
+        -- Solve them before asking the side tactic to construct an unconstrained witness.
+        let mut primary : List MVarId := []
+        let mut witnesses : List MVarId := []
         for obligation in obligations do
+          if ← obligation.isAssigned then continue
+          let primaryGoal ← obligation.withContext do
+            let type ← instantiateMVars (← obligation.getType)
+            let simulation ← forallTelescope type fun _ body => pure (body.isAppOf ``Original.Simulation)
+            return simulation || (← isProp type)
+          if primaryGoal then primary := primary ++ [obligation]
+          else witnesses := witnesses ++ [obligation]
+        for obligation in primary ++ witnesses do
+          if ← obligation.isAssigned then continue
           let simulation ← obligation.withContext do
             forallTelescope (← obligation.getType) fun _ body =>
               pure (body.isAppOf ``Original.Simulation)

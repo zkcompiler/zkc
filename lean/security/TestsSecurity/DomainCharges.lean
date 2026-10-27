@@ -56,7 +56,6 @@ example : (Domain.chargeSchedule capabilities aliased selected
 
 def schedule : Domain.ChargeSchedule TwoSums.validatorSubject where
   entries := [(left, .constant 1), (right, .constant 2)]
-  nonempty := by decide +kernel
   unique := by decide +kernel
   nativeUnique := by decide +kernel
 

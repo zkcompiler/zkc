@@ -47,7 +47,7 @@ theorems = [
 [[proved]]
 subject = "Compiled Schnorr proof"
 result = '''
-Checked transcript-construction and participant projection rules accept the actual compiled validator; by their composed soundness, the ideal interpretation of the exported validator is the Fiat–Shamir transform of the original verifier, with a fixed-statement extraction-probability bound in the random-oracle model via VCVio'''
+Finite admission and checked all-reply source correspondence connect the actual canonical constructed validator to the Fiat–Shamir transform of the original verifier. Its fixed-statement extraction-probability bound transfers through that connection in the scalar history-oracle model via VCVio'''
 owners = [["Fiat–Shamir construction", "docs/spec/fiat-shamir.md"], ["participant projection", "docs/spec/participant-projection.md"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcExamples.Construction.SchnorrProof.compiled_transform",
@@ -58,7 +58,7 @@ subjects = ["schnorr"]
 [[proved]]
 subject = "Executable Schnorr proof"
 result = '''
-A checked lowering rule accepts the `zkc.program/0` validator the runtime admits against that constructed validator; its meaning, with proof framing, any decoder, an instruction budget, frames and transcript custody, reflects acceptance at every budget, and the extraction bound transfers to provers of proof bytes through the general construction, projection and lowering rules, with no Entry-specific equation about the compiled program'''
+The actual `zkc.program/0` validator is connected to canonical Domain execution with exact input/output schemas, framing, arbitrary decoders and instruction budgets. At every budget its acceptance is bounded by the selected compiled verifier; at budget 25 or greater its observation equals the original verifier transform. The extraction bound transfers to byte provers through the native, participant and checked source connections'''
 owners = [["Executable stage", "docs/spec/executable.md"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcExamples.Executable.SchnorrProof.executable_transform",
@@ -69,10 +69,12 @@ subjects = ["schnorr"]
 [[proved]]
 subject = "Executable Sumcheck proof and normalization"
 result = '''
-The lowering rule accepts the executable Sumcheck validator, with a loop and helper calls whose program bodies are proved to implement the source's checked helpers (the helpers inside the helper rule's recipe table by the rule, proved sound once, and the terminal check by its own proof), and, through checked normalization of pure total calculations, a deferred-rounds program that computes a round's product after a later draw; accepted normal forms have equal ideal meanings. Host validation prunes the transform of the original Sumcheck verifier at every budget, so the compiled bounds transfer to provers of proof bytes; at a budget sufficient for every run the executable is the ideal meaning, and honest-prover completeness holds at every budget of at least `68 + 59 · rounds` instructions for every round count up to the Entry's static maximum, with proofs that do not depend on the value of the maximum'''
+Canonical normalization proves equal observations of actual Domain execution, including stops and exact returned values. The native bridge covers the looped Sumcheck validator and its proved helper bodies, as well as the rescheduled DeferredRounds validator. Host validation prunes the original Sumcheck transform at every budget. Parameterized local helper, occurrence and price laws derive actual native byte completeness; the retained Entry instantiates the family at `68 + 59 · rounds` with the original message codec, shape and maximum hypotheses. Typed request admission is explicit, and the family theorem has no whole-program success premise. No separate Instruction evaluator supplies these proofs'''
 owners = [["Executable stage", "docs/spec/executable.md#the-compiled-sumcheck-proof-verifier"], ["normalization", "docs/spec/executable.md#normalization"], ["support", "docs/support.md"]]
 theorems = [
-  "Zkc.Executable.checkNormalized_sound",
+  "Zkc.Executable.CanonicalNormalization.accepted_sound",
+  "Zkc.Executable.DomainVM.checked_execute_metered",
+  "Zkc.Executable.DomainVM.checked_validate_prunes",
   "Zkc.Executable.checkHelpers_sound",
   "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes",
   "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted",
@@ -85,7 +87,7 @@ subjects = ["sumcheck", "deferred-rounds"]
 [[proved]]
 subject = "Compiled Sumcheck proofs"
 result = '''
-The same composed rules accept the actual compiled validators of the Sumcheck example, with a protocol application and a repeat, and of its composed variant, with two applications; the ideal interpretation of each is the Fiat–Shamir transform of the original verifier, for the first the source rounds followed by the multilinear check. Composed with the multi-round bound, the first's ideal interpretation accepts a false claim with probability at most `(Q + n) / \|F\|` in the random-oracle model for a fixed well-formed statement, attained on a concrete instance, and adaptively chosen statements are bounded under the typed public-value binding of the table values, claim and round count, which establishes statement determination only (native absorption of the encoded rows remains assumed); these legacy construction modules do not supply a composed security theorem; the same composed source now has separate generated TwoSums root receipts, documented in the subject routes'''
+The actual canonical validators of the Sumcheck example and its composed two-application variant have checked all-reply connections to their admitted original verifiers. The first's selected acceptance satisfies `(Q + n) / \|F\|` for a fixed well-formed false statement and the stated adaptive bound under typed public-value binding. This proves statement determination; native absorption remains assumed. The composed source has separate generated TwoSums root receipts; its construction connection alone is not a composed security theorem'''
 owners = [["Participant projection", "docs/spec/participant-projection.md#the-compiled-sumcheck-proof-entry"], ["multi-round security", "docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcExamples.Construction.SumcheckProof.compiled_transform",
@@ -98,7 +100,7 @@ subjects = ["sumcheck"]
 [[proved]]
 subject = "GKR"
 result = '''
-The plain verifier of the GKR library has a charged certificate composed from one reduction per phase, each at its challenge site's error (`1 / \|F\|` at the output point, ArkLib's degree-two successor bound `2 / \|F\|` for the layer rounds, Schwartz–Zippel on a line `width / \|F\|` for the line challenge); against a weighted adversary budget, each oracle key charged its site's error, its transform accepts claimed outputs other than the circuit's with probability at most the prover's charge plus `(width + layers (2 width + 1)) max 2 width / \|F\|`, and against `Q` queries at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|`, in a random oracle on all typed histories. The composed construction and projection check accepts the compiled GKR proof Entry, so its ideal interpretation is the transform of the admitted original, whose generated normal form reads as the plain verifier on well-formed statements within the Entry's maxima (width and layers at most four); the compiled verifier inherits both bounds for a fixed statement'''
+The plain verifier of the GKR library has a charged certificate composed from one reduction per phase, each at its challenge site's error (`1 / \|F\|` at the output point, ArkLib's degree-two successor bound `2 / \|F\|` for the layer rounds, Schwartz–Zippel on a line `width / \|F\|` for the line challenge); against a weighted adversary budget, each oracle key charged its site's error, its transform accepts claimed outputs other than the circuit's with probability at most the prover's charge plus `(width + layers (2 width + 1)) max 2 width / \|F\|`, and against `Q` queries at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|`, in a random oracle on all typed histories. The actual compiled GKR validator has a checked all-reply Domain/source connection to the admitted original. Its generated normal form reads as the plain verifier on well-formed statements within the Entry's maxima (width and layers at most four); the selected scalar verifier inherits both bounds for a fixed statement. Key projection precedes the existing oracle; no fresh nominal-ROM equivalence or native GKR theorem is claimed'''
 owners = [["Multi-round security", "docs/spec/fiat-shamir-security.md#the-plain-gkr-verifier"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcSecurity.Examples.GkrFiatShamir.soundness",
@@ -280,4 +282,77 @@ theorems = [
   "ZkcClean.guarantees_of_export",
   "ZkcClean.holds_iff",
   "ZkcClean.table_spec",
+]
+
+[[proved]]
+subject = "Nominal data and public binding"
+result = '''
+A shared recursive nominal payload admits data and refuses nested service capabilities; fixed-sort packing/decoding round trips and typed public rows are injective for the selected schema and ordered source coordinates, including inactive raw values. This is logical binding, not a native byte or cryptographic game equivalence'''
+owners = [["Nominal data", "docs/spec/nominal-data.md"]]
+theorems = [
+  "Zkc.Construction.Domain.Payload.value_ofValue",
+  "Zkc.Construction.Domain.Payload.ofValue_value",
+  "Zkc.Construction.Domain.PublicBinding.encodeRow_injective",
+]
+
+[[proved]]
+subject = "Plain aggregate membership"
+result = '''
+The actual admitted CheckMembership pair, its nominal aggregate ABI and retained bounded-execution target satisfy the fixed compiled-ideal perfect-completeness, adaptive zero-error soundness and empty-charge meanings. Both properties use the same whole-validator connection; overbound raw inputs remain in the adversary interface, and the empty schedule still requires independent rejection evidence'''
+owners = [["Formal support", "docs/support.md"], ["Security package", "security/README.md"]]
+theorems = [
+  "ZkcSecurity.Examples.TableMembership.Method.compiled_ideal_complete",
+  "ZkcSecurity.Examples.TableMembership.Endpoint.scalar_meaning",
+  "ZkcSecurity.Examples.TableMembership.Soundness.charged_meaning",
+]
+
+[[proved]]
+subject = "Aggregate message byte connection"
+result = '''
+The actual constructed BatchOpening producer and validator agree with a selected finite interpreted codec, including the complete returned frame, oracle state, failures and unread proof suffix. The codec admits at most sixteen openings with eight-byte field elements; it is not native ZKCV framing or a polynomial-commitment security result'''
+owners = [["Data codecs", "docs/spec/data-codecs.md"]]
+theorems = [
+  "ZkcExamples.Construction.BatchOpeningByteConnection.produce_encoded",
+  "ZkcExamples.Construction.BatchOpeningByteConnection.validate_equation",
+  "ZkcExamples.Construction.BatchOpeningByteConnection.validate_malformed",
+]
+
+[[proved]]
+subject = "Finite GKR gate connection"
+result = '''
+One binding connects the actual imported GKR Rounds invocation, followed by a finite terminal gate check, to the degree-two reference process for up to four rounds. Its honest handler laws imply successful complete execution, with explicit representation, state and delivery premises. This component is not a complete compiled multilayer GKR receipt'''
+owners = [["Formal support", "docs/support.md"]]
+theorems = [
+  "ZkcSecurity.Examples.Components.GkrFiniteGate.binding",
+  "ZkcSecurity.Examples.Components.GkrFiniteGate.honest_run",
+]
+
+[[proved]]
+subject = "Private-producer completeness WP"
+result = '''
+A producer WP over fresh private coins and a shared public oracle implies canonical honest completeness when the actual validator has a returning deterministic table run. The actual randomized Schnorr subject consumes this rule; stops retain their unsuccessful probability mass. Arbitrary randomized validator continuations are outside the rule'''
+owners = [["Selected property adapters", "docs/spec/selected-property-adapters.md"]]
+theorems = [
+  "ZkcSecurity.Claims.HonestPair.perfect_of_private_producer_wp",
+  "TestsSecurity.PrivateProducerWP.randomizedSchnorr_complete",
+]
+
+[[proved]]
+subject = "Scoped KZG evaluation binding"
+result = '''
+The concrete average-success opening game is the pinned ArkLib binding experiment and is bounded by the pinned reduction, under a named resource-admissibility predicate, reduction closure, budget and scoped SDH hardness. No efficiency theorem, all-functions hardness, knowledge soundness, source import or native realization is claimed'''
+owners = [["Selected property adapters", "docs/spec/selected-property-adapters.md"], ["ArkLib integration", "integrations/arklib/README.md"]]
+theorems = [
+  "ZkcArkLib.Kzg.averageSuccess_eq_bindingExperiment",
+  "ZkcArkLib.Kzg.scoped_bound",
+]
+
+[[proved]]
+subject = "Registered finite recovery"
+result = '''
+A closed registered two-read sum extractor has its algorithm, access and query count fixed by the request. Its fixed meaning is certified through ArkLib's actual immutable two-cell receive/access runner, and the extractor equals the same-path upstream witness map. This finite model is separate from compiler-stage forking, KZG knowledge and native extraction'''
+owners = [["Selected property adapters", "docs/spec/selected-property-adapters.md"], ["ArkLib integration", "integrations/arklib/README.md"]]
+theorems = [
+  "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.certify_native",
+  "ZkcArkLib.Knowledge.RegisteredFiniteRecovery.registered_extractor",
 ]

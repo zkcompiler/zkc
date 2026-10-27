@@ -74,8 +74,24 @@ theorem action_frames (routing : Routing)
     (operation : (Structured.participantInterfaceOn carriers).Op) (state : State carriers) :
     PIR.Yields (fun result => result.2.frames = state.frames) (operations routing (.action operation) state) := by
   cases operation with
-  | receive => exact receive_frames _ _ _ _ _
-  | send => exact send_frames _ _ _ _ _ _
+  | receive =>
+      cases profile : routing.context.profile with
+      | fiatShamir _ => simpa only [operations, profile] using receive_frames routing state _ _ _
+      | plain =>
+          simp only [operations, profile, receivePlain]
+          split
+          · trivial
+          · split
+            · trivial
+            · intro value; rfl
+  | send =>
+      cases profile : routing.context.profile with
+      | fiatShamir _ => simpa only [operations, profile] using send_frames routing state _ _ _ _
+      | plain =>
+          simp only [operations, profile, sendPlain]
+          split
+          · intro value; rfl
+          · trivial
   | query site field args =>
       cases args with
       | cons handle tail => cases tail; exact query_frames _ _ _ _ _

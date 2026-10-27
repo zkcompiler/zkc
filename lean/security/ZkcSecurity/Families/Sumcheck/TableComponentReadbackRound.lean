@@ -144,7 +144,7 @@ theorem readback (plan : Plan) (program : Structured.Program)
         Domain.View.guard, Domain.View.indicesEmpty, Domain.View.indicesAppend,
         Domain.View.observe, Domain.View.challenge, Domain.View.calculation, Domain.View.empty,
         Domain.View.append, Domain.read, Domain.Value.encode, Domain.Payload.ofValue,
-        Domain.sortsMatch, Domain.Value.sort, Domain.Payload.ty, Domain.dataType, List.append_assoc,
+        Domain.sortsMatch, Domain.Value.sort, Domain.dataType, Ty.isService, Bool.not_false, eq_self, List.append_assoc,
         lowFound, highFound, queryFound, deliveryFound, lowMessage, highMessage, deliveryMessage, request,
         boundary, PIR.Process.bind, List.mapM_cons, List.mapM_nil, List.getElem?_cons_zero, List.getElem?_cons_succ,
         List.cons_append, List.nil_append, Bind.bind, Option.bind, Option.pure_def, Option.map_some,
@@ -170,7 +170,7 @@ theorem readback (plan : Plan) (program : Structured.Program)
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldSubtract (F := F) (G := G)])
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldMultiply (F := F) (G := G)])
     | fail_if_no_progress (with_reducible rw [Domain.Calculations.fieldAdd (F := F) (G := G)])
-    | fail_if_no_progress (simp only [Domain.Value.sort, Domain.Payload.ty, List.append_assoc,
+    | fail_if_no_progress (simp only [Domain.Value.sort, List.append_assoc,
         PIR.Process.bind, List.cons_append, List.nil_append, List.map_cons, List.map_nil, beq_self_eq_true, getInternal_suffix, getInternal_zero, getInternal_succ, ↓reduceIte, ])
     | fail_if_no_progress (dsimp only [Bind.bind, Pure.pure, instMonadOption,
         Option.bind, GetElem?.getElem?, List.instGetElem?NatLtLength, List.get?Internal])
