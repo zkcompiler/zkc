@@ -6,8 +6,10 @@
 #include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Data/IR/DataAttrs.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -57,22 +59,27 @@ Value ComputationEnvironment::resolveCapture(Value value) const {
 namespace {
 // An invocation-local standard SSA view, not a normalizer. Call arguments and
 // every returned coordinate are substituted exactly. In particular, dead
-// arithmetic, pins and opaque Local control remain visible to recognition.
+// arithmetic, pins and opaque scoped control remain visible to recognition.
 class NumericalBodyReader {
   ComputationBody &result;
   ComputationWork &work;
   ComputationDiagnostic &diagnostic;
   SymbolTableCollection symbols;
   llvm::DenseSet<Operation *> active;
-  llvm::DenseMap<Operation *, local::OperationBindingOp> bindings;
+  llvm::DenseMap<Operation *, runtime::BindingOp> bindings;
   OpBuilder builder;
+  SymbolTable targetSymbols;
+  const protocol::SourceExecutionClosure *scopedSource;
   bool charge(Operation *op) {
     return consumeComputationWork(
         work.structural, 1 + op->getNumOperands() + op->getNumResults(),
         WorkOwner::Structural, &diagnostic.outcome);
   }
   FailureOr<SmallVector<Value>> copy(Block &source, ValueRange arguments,
-                                     Block &target, bool numerical) {
+                                     Block &target) {
+    if (auto function = dyn_cast<func::FuncOp>(source.getParentOp());
+        function && protocol::isScopedExecutionFunction(function))
+      return copyScoped(function, arguments, target);
     auto *owner = source.getParentOp();
     if (active.size() >= 64) {
       diagnostic.outcome = {OptimizationStatus::Unsupported,
@@ -104,21 +111,15 @@ class NumericalBodyReader {
         inputs.push_back(actual);
       }
       func::FuncOp callee;
-      if (auto call = dyn_cast<kernel::CallOp>(op)) {
-        // Structural substitution does not choose a realization. Preserve each
-        // original occurrence so selection can inspect its actual constraints.
-        // The visit was charged above, including calls with no scalar output.
-        result.numericalCalls.push_back(&op);
-        callee = kernel::resolve(call, symbols);
-      } else if (auto call = dyn_cast<func::CallOp>(op)) {
+      if (auto call = dyn_cast<func::CallOp>(op)) {
         callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
             call, call.getCalleeAttr());
       }
-      if (isa<kernel::CallOp, func::CallOp>(op)) {
+      if (isa<func::CallOp>(op)) {
         if (!callee || !callee.getBody().hasOneBlock() ||
             callee.front().empty())
           return failure();
-        auto outputs = copy(callee.front(), inputs, target, true);
+        auto outputs = copy(callee.front(), inputs, target);
         if (failed(outputs) || outputs->size() != op.getNumResults())
           return failure();
         for (auto [expected, actual] : zip(op.getResultTypes(), *outputs))
@@ -131,7 +132,7 @@ class NumericalBodyReader {
       // substituted by this bounded view and conservatively keeps fallback.
       // Nested finite invocations inside standard numerical helpers also need
       // their own call-occurrence axes; this scalar view does not flatten them.
-      if (op.getNumRegions() || (numerical && isComputation(&op)))
+      if (op.getNumRegions() || isComputation(&op))
         return failure();
       // Exact pack projection is descriptor substitution, not arithmetic
       // simplification. Keep every scalar producer and its occurrence order.
@@ -150,8 +151,7 @@ class NumericalBodyReader {
       result.sources[copy] = &op;
       if (auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding")) {
         auto binding =
-            symbols.lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, reference);
+            symbols.lookupNearestSymbolFrom<runtime::BindingOp>(&op, reference);
         if (!binding)
           return failure();
         auto &retained = bindings[binding];
@@ -159,17 +159,15 @@ class NumericalBodyReader {
           if (!charge(binding))
             return failure();
           auto *declaration = binding->clone();
-          SymbolTable table(*result.storage);
-          table.insert(declaration);
-          retained = cast<local::OperationBindingOp>(declaration);
+          targetSymbols.insert(declaration);
+          retained = cast<runtime::BindingOp>(declaration);
         }
         copy->setAttr("binding",
                       FlatSymbolRefAttr::get(retained.getSymNameAttr()));
       }
     }
     auto &end = source.back();
-    if (!charge(&end) ||
-        (numerical ? !isa<func::ReturnOp>(end) : !isa<local::ReturnOp>(end)))
+    if (!charge(&end) || !isa<func::ReturnOp>(end))
       return failure();
     SmallVector<Value> outputs;
     for (Value operand : end.getOperands()) {
@@ -178,31 +176,155 @@ class NumericalBodyReader {
         return failure();
       outputs.push_back(actual);
     }
-    if (!numerical) {
-      for (Value argument : source.getArguments())
-        result.callbackValues[argument] = values.lookup(argument);
-      for (auto &op : source.without_terminator())
-        for (Value value : op.getResults())
-          result.callbackValues[value] = values.lookup(value);
-    }
     return outputs;
   }
 
-public:
-  NumericalBodyReader(ComputationBody &result, ComputationWork &work,
-                      ComputationDiagnostic &diagnostic)
-      : result(result), work(work), diagnostic(diagnostic),
-        builder(result.helper.getContext()) {}
-  LogicalResult read(local::FuncOp source) {
-    auto *body = result.helper.addEntryBlock();
-    auto outputs =
-        copy(source.getBody().front(), body->getArguments(), *body, false);
-    if (failed(outputs))
+  SmallVector<Value> opaque(Operation *source, ValueRange inputs,
+                            ValueRange outputs, Block &target) {
+    OpBuilder::InsertionGuard restore(builder);
+    builder.setInsertionPointToEnd(result.storage->getBody());
+    auto declaration = func::FuncOp::create(
+        source->getLoc(), "_source_operation",
+        builder.getFunctionType(inputs.getTypes(), outputs.getTypes()));
+    declaration.setPrivate();
+    targetSymbols.insert(declaration);
+    builder.setInsertionPointToEnd(&target);
+    auto call =
+        func::CallOp::create(builder, source->getLoc(), declaration, inputs);
+    result.sources[call] = source;
+    return SmallVector<Value>(call.getResults());
+  }
+
+  // This is optional structural storage, never executable lowering. Only
+  // primitives with an admitted mathematical counterpart receive a law;
+  // other value-producing applications retain opaque source observations.
+  // Every operation is visited. Stops and ordered control decline the view.
+  FailureOr<SmallVector<Value>>
+  copyScoped(func::FuncOp source, ValueRange arguments, Block &target) {
+    if (!scopedSource || active.size() >= 64 || !active.insert(source).second)
       return failure();
-    builder.setInsertionPointToEnd(body);
-    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
-    result.sources[end] = &source.getBody().front().back();
-    for (auto &op : llvm::make_early_inc_range(body->without_terminator())) {
+    auto leave = llvm::scope_exit([&] { active.erase(source); });
+    auto found = scopedSource->bodies.find(source.getSymName().str());
+    if (found == scopedSource->bodies.end() || found->second.empty() ||
+        source.getNumArguments() != arguments.size() + 1 || !charge(source))
+      return failure();
+    IRMapping values;
+    for (auto [formal, actual] :
+         zip(source.getArguments().drop_front(), arguments)) {
+      if (formal.getType() != actual.getType())
+        return failure();
+      values.map(formal, actual);
+    }
+    for (const auto &step : found->second) {
+      auto *op = step.operation;
+      if (op->getParentOp() != source || !charge(op) || !step.regions.empty())
+        return failure();
+      SmallVector<Value> inputs;
+      for (Value input : step.inputs) {
+        auto actual = values.lookupOrNull(input);
+        if (!actual)
+          return failure();
+        inputs.push_back(actual);
+      }
+      if (isa<exec::ReturnOp>(op)) {
+        if (&step != &found->second.back())
+          return failure();
+        for (Block &block : source.getBody())
+          for (Value value : block.getArguments())
+            if (auto mapped = values.lookupOrNull(value))
+              result.callbackValues[value] = mapped;
+        return inputs;
+      }
+      func::FuncOp callee;
+      if (auto call = dyn_cast<func::CallOp>(op))
+        callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr());
+      else if (auto call = dyn_cast<exec::ComputeOp>(op)) {
+        result.numericalCalls.push_back(op);
+        callee = call.resolveCallee(symbols);
+      }
+      if (isa<func::CallOp, exec::ComputeOp>(op)) {
+        if (!callee || callee.empty())
+          return failure();
+        auto outputs = copy(callee.front(), inputs, target);
+        if (failed(outputs) || outputs->size() != step.outputs.size() ||
+            ValueRange(*outputs).getTypes() !=
+                ValueRange(step.outputs).getTypes())
+          return failure();
+        values.map(step.outputs, *outputs);
+        continue;
+      }
+      if (isComputation(op)) {
+        auto projected = opaque(op, inputs, step.outputs, target);
+        values.map(step.outputs, projected);
+        continue;
+      }
+      auto apply = dyn_cast<exec::ApplyOp>(op);
+      if (!apply || step.outputs.size() != 1)
+        return failure();
+      auto binding = symbols.lookupNearestSymbolFrom<runtime::BindingOp>(
+          apply, apply.getBindingAttr());
+      auto decoded =
+          binding ? protocol::readBinding(binding)
+                  : llvm::Expected<protocol::OperationBinding>(
+                        llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                                "missing source binding"));
+      if (!decoded) {
+        llvm::consumeError(decoded.takeError());
+        return failure();
+      }
+      SmallVector<std::string> parameters;
+      for (Attribute attr : apply.getParameters()) {
+        auto text = dyn_cast<StringAttr>(attr);
+        if (!text)
+          return failure();
+        parameters.push_back(text.getValue().str());
+      }
+      if (!semantics(op)) {
+        // Retain typed dataflow and source identity without assigning a total
+        // law to a checked or effectful operation. The uninterpreted call has
+        // no mathematical facet, so equation recognition cannot erase it.
+        values.map(step.outputs, opaque(op, inputs, step.outputs, target));
+        continue;
+      }
+      StringRef contract = decoded->application.contract;
+      StringRef name =
+          contract == "field.constant"
+              ? algebra::ConstantFieldOp::getOperationName()
+          : contract == "field.add" ? algebra::FieldAddOp::getOperationName()
+          : contract == "field.sub"
+              ? algebra::SubtractFieldOp::getOperationName()
+          : contract == "field.mul"
+              ? algebra::FieldMultiplyOp::getOperationName()
+          : contract == "curve.add" ? algebra::GroupAddOp::getOperationName()
+          : contract == "curve.scale"
+              ? algebra::GroupScaleOp::getOperationName()
+          : contract == "vector.get" ? data::BoundedAtOp::getOperationName()
+          : contract == "matrix.get"
+              ? data::BoundedMatrixAtOp::getOperationName()
+              : StringRef();
+      if (name.empty() || (contract == "field.constant" ? parameters.size() != 1
+                                                        : !parameters.empty()))
+        return failure();
+      builder.setInsertionPointToEnd(&target);
+      OperationState state(op->getLoc(), name);
+      state.addOperands(inputs);
+      state.addTypes(ValueRange(step.outputs).getTypes());
+      if (contract == "field.constant")
+        state.addAttribute("value", builder.getStringAttr(parameters.front()));
+      auto *projected = builder.create(state);
+      result.sources[projected] = op;
+      values.map(step.outputs, projected->getResults());
+    }
+    return failure();
+  }
+
+  // Exact projection substitution can leave an unused total pack. Remove
+  // only that descriptor from the optional view, retaining every scalar
+  // producer and original source occurrence. Executable callbacks and the
+  // independent semantic reader still use the unchanged source.
+  LogicalResult discardUnusedPacks(Block &body) {
+    for (auto &op : llvm::make_early_inc_range(body.without_terminator())) {
       if (!charge(&op))
         return failure();
       if (!isa<algebra::ArrayFromElementsOp>(op) || !op.use_empty())
@@ -220,44 +342,93 @@ public:
     }
     return success();
   }
+
+public:
+  NumericalBodyReader(ComputationBody &result, ComputationWork &work,
+                      ComputationDiagnostic &diagnostic,
+                      const protocol::SourceExecutionClosure *source)
+      : result(result), work(work), diagnostic(diagnostic),
+        builder(result.helper.getContext()), targetSymbols(*result.storage),
+        scopedSource(source) {}
+  LogicalResult read(func::FuncOp source) {
+    auto *body = result.helper.addEntryBlock();
+    auto outputs = copyScoped(source, body->getArguments(), *body);
+    if (failed(outputs))
+      return failure();
+    builder.setInsertionPointToEnd(body);
+    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
+    result.sources[end] =
+        scopedSource->bodies.at(source.getSymName().str()).back().operation;
+    return discardUnusedPacks(*body);
+  }
 };
 
 std::shared_ptr<ComputationBody>
 readNumericalBody(CallbackView &callback, ComputationWork &work,
-                  ComputationDiagnostic &diagnostic) {
+                  ComputationDiagnostic &diagnostic,
+                  const protocol::SourceExecutionClosure *source) {
   // The original ABI has already been checked. This standard function is only
   // owned SSA storage; it does not change the partial callback's contract.
-  auto helper = dyn_cast<local::FuncOp>(callback.symbol);
-  if (!helper || callback.exit != CallbackExit::Return)
+  auto *helper = callback.abi.symbol;
+  if (!callback.abi.scope || !source || !isa<func::FuncOp>(helper) ||
+      callback.exit != CallbackExit::Return)
     return {};
   auto result = std::make_shared<ComputationBody>();
-  result->storage = mlir::ModuleOp::create(helper.getLoc());
-  result->helper = func::FuncOp::create(helper.getLoc(), helper.getSymName(),
-                                        callback.signature);
+  result->storage = mlir::ModuleOp::create(helper->getLoc());
+  auto signature = protocol::scopedDataSignature(cast<func::FuncOp>(helper));
+  if (!signature)
+    return {};
+  result->helper = func::FuncOp::create(
+      helper->getLoc(), SymbolTable::getSymbolName(helper).getValue(),
+      signature);
   result->helper.setPrivate();
-  if (auto premises = helper->getAttr("data.preconditions"))
-    result->helper->setAttr("data.preconditions", premises);
+  if (auto premises = helper->getAttrOfType<ArrayAttr>("data.preconditions")) {
+    SmallVector<Attribute> translated;
+    for (Attribute premise : premises) {
+      if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
+                                  &diagnostic.outcome))
+        return {};
+      if (auto bound = dyn_cast<data::IndexBoundAttr>(premise)) {
+        if (!bound.getIndexArg() || !bound.getContainerArg())
+          return {};
+        translated.push_back(data::IndexBoundAttr::get(
+            helper->getContext(), bound.getIndexArg() - 1,
+            bound.getContainerArg() - 1, bound.getAxis()));
+      } else if (auto equal = dyn_cast<data::EqualExtentAttr>(premise)) {
+        if (!equal.getLeftArg() || !equal.getRightArg())
+          return {};
+        translated.push_back(data::EqualExtentAttr::get(
+            helper->getContext(), equal.getLeftArg() - 1, equal.getLeftAxis(),
+            equal.getRightArg() - 1, equal.getRightAxis()));
+      } else
+        return {};
+    }
+    result->helper->setAttr("data.preconditions",
+                            ArrayAttr::get(helper->getContext(), translated));
+  }
   result->storage->getBody()->push_back(result->helper);
-  if (failed(NumericalBodyReader(*result, work, diagnostic).read(helper)))
+  NumericalBodyReader reader(*result, work, diagnostic, source);
+  if (failed(reader.read(cast<func::FuncOp>(helper))))
     return {};
   auto &body = result->helper.front();
   auto *terminator = &body.back();
   ValueRange arguments = body.getArguments();
-  if (arguments.size() != callback.body->getNumArguments() ||
+  if (arguments.size() + 1 != callback.abi.entry->getNumArguments() ||
       !isa<func::ReturnOp>(terminator) ||
       terminator->getNumOperands() != callback.returned.size())
     return {};
   unsigned position = 0;
   for (ValueRange segment :
-       {callback.formals.state, callback.formals.items, callback.formals.domain,
-        callback.formals.captures})
+       {callback.abi.formals.state, callback.abi.formals.items,
+        callback.abi.formals.domain, callback.abi.formals.captures})
     for (Value original : segment) {
       if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
                                   &diagnostic.outcome))
         return {};
       auto formal = dyn_cast<BlockArgument>(original);
-      if (!formal || formal.getOwner() != callback.body ||
-          formal.getArgNumber() != position || position >= arguments.size() ||
+      if (!formal || formal.getOwner() != callback.abi.entry ||
+          formal.getArgNumber() != position + 1 ||
+          position >= arguments.size() ||
           original.getType() != arguments[position].getType() ||
           result->callbackValues.lookup(original) != arguments[position])
         return {};
@@ -275,9 +446,9 @@ readNumericalBody(CallbackView &callback, ComputationWork &work,
   }
   // Preserve symbol/signature/role/exit as observations of the source callback.
   // Only body-relative references move to the checked positional SSA view.
-  auto formals = callback.formals;
-  callback.body = &body;
-  callback.formals = {
+  auto formals = callback.abi.formals;
+  callback.abi.entry = &body;
+  callback.abi.formals = {
       arguments.take_front(formals.state.size()),
       arguments.slice(formals.state.size(), formals.items.size()),
       arguments.slice(formals.state.size() + formals.items.size(),
@@ -615,29 +786,36 @@ public:
       return std::nullopt;
     }
     if (!c.helper || c.helper->getNumRegions() != 1 ||
-        !c.helper->getRegion(0).hasOneBlock() ||
+        (!c.scoped && !c.helper->getRegion(0).hasOneBlock()) ||
         !charge(1 + c.signature.getNumInputs() + c.signature.getNumResults() +
                 c.helper->getRegion(0).front().getNumArguments()))
       return std::nullopt;
-    auto callback =
-        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+    auto role = c.collect ? CallbackRole::Body : CallbackRole::Step;
+    FailureOr<CallbackView> callback = failure();
+    if (c.scoped && c.scopedSource) {
+      auto abi = readCallbackABI(c, role);
+      auto found = c.scopedSource->bodies.find(
+          SymbolTable::getSymbolName(c.helper).getValue().str());
+      if (succeeded(abi) && found != c.scopedSource->bodies.end() &&
+          !found->second.empty()) {
+        auto *end = found->second.back().operation;
+        if (isa<exec::ReturnOp>(end))
+          callback =
+              CallbackView{*abi, end, CallbackExit::Return, end->getOperands()};
+      }
+    } else
+      callback = readCallback(c, role);
     if (failed(callback))
       return std::nullopt;
+    SmallVector<Value> originalReturned(callback->returned);
     std::shared_ptr<ComputationBody> numericalBody;
-    if (auto helper = dyn_cast<local::FuncOp>(c.helper)) {
-      bool calls = false;
-      for (auto &op : helper.getBody().front().without_terminator()) {
-        if (!charge())
-          return std::nullopt;
-        calls |= isa<kernel::CallOp, func::CallOp>(op);
-      }
-      if (calls) {
-        numericalBody = readNumericalBody(*callback, work, diagnostic);
-        if (!numericalBody)
-          return std::nullopt;
-      }
+    if (c.scoped) {
+      numericalBody =
+          readNumericalBody(*callback, work, diagnostic, c.scopedSource);
+      if (!numericalBody)
+        return std::nullopt;
     }
-    auto &body = *callback->body;
+    auto &body = *callback->abi.entry;
     ComputationView result;
     result.computation = c;
     result.numericalBody = std::move(numericalBody);
@@ -697,7 +875,7 @@ public:
                              .size();
         for (unsigned i = 0; i < count; ++i) {
           if (!charge(1 + pendingAxis.path.size()) ||
-              result.items.size() >= callback->formals.items.size())
+              result.items.size() >= callback->abi.formals.items.size())
             return std::nullopt;
           Axis axis;
           axis.identity = {result.occurrencePath, iteration.operation,
@@ -709,29 +887,54 @@ public:
                                      ? i
                                      : extentAxis(iteration.operation);
           }
-          result.items.push_back({position,
-                                  callback->formals.items[result.items.size()],
-                                  static_cast<unsigned>(result.axes.size())});
+          result.items.push_back(
+              {position, callback->abi.formals.items[result.items.size()],
+               static_cast<unsigned>(result.axes.size())});
           result.axes.push_back(std::move(axis));
         }
       }
     }
-    if (result.items.size() != callback->formals.items.size())
+    if (result.items.size() != callback->abi.formals.items.size())
       return std::nullopt;
+    ValueRange actualOperands =
+        occurrence ? occurrence->getOperands() : ValueRange{};
+    ValueRange actualResults =
+        occurrence ? occurrence->getResults() : ValueRange{};
+    if (c.scoped && occurrence == sourceOccurrence) {
+      auto function = occurrence
+                          ? dyn_cast<func::FuncOp>(occurrence->getParentOp())
+                          : func::FuncOp();
+      if (!function || !c.scopedSource)
+        return std::nullopt;
+      auto found = c.scopedSource->bodies.find(function.getSymName().str());
+      if (found == c.scopedSource->bodies.end())
+        return std::nullopt;
+      const protocol::SourceExecutionStep *invocation = nullptr;
+      for (const auto &step : found->second) {
+        if (!charge())
+          return std::nullopt;
+        if (step.operation == occurrence) {
+          invocation = &step;
+          break;
+        }
+      }
+      if (!invocation)
+        return std::nullopt;
+      actualOperands = invocation->inputs;
+      actualResults = invocation->outputs;
+    }
     auto actual = [&](unsigned input) -> Value {
-      return occurrence && input < occurrence->getNumOperands()
-                 ? occurrence->getOperand(input)
-                 : Value();
+      return input < actualOperands.size() ? actualOperands[input] : Value();
     };
     // Reorder checked callback formals into the entry ABI. Positions remain
     // distinct even when an occurrence passes one actual more than once.
     SmallVector<Value> entryFormals;
-    append_range(entryFormals, callback->formals.domain);
-    append_range(entryFormals, callback->formals.state);
-    append_range(entryFormals, callback->formals.captures);
+    append_range(entryFormals, callback->abi.formals.domain);
+    append_range(entryFormals, callback->abi.formals.state);
+    append_range(entryFormals, callback->abi.formals.captures);
     auto entry = partitionEntry(c, entryFormals);
-    if (failed(entry) || (occurrence && !isDeclaration(occurrence) &&
-                          failed(partitionEntry(c, occurrence->getOperands()))))
+    if (failed(entry) ||
+        (occurrence && failed(partitionEntry(c, actualOperands))))
       return std::nullopt;
     for (auto [input, formal] : enumerate(entryFormals)) {
       bool state = input >= entry->domain.size() &&
@@ -772,7 +975,7 @@ public:
         payload.push_back(&op);
         Operation *source = result.sourceOperation(&op);
         Operation *definition = source;
-        if (isa<local::ApplyOp, func::CallOp>(op)) {
+        if (!isComputation(source) && isa<func::CallOp>(op)) {
           auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
           definition = reference
                            ? symbols.lookupNearestSymbolFrom(source, reference)
@@ -783,6 +986,8 @@ public:
         Computation child;
         if (failed(describe(definition, child, nullptr, &symbols)))
           return false;
+        child.scopedSource = c.scopedSource;
+        child.fixedBindings = c.fixedBindings;
         auto nested =
             read(child, &op, result.occurrencePath, environment, source);
         if (!nested)
@@ -797,26 +1002,27 @@ public:
       return true;
     };
     if (c.predicate) {
-      if (!charge(1 + callback->signature.getNumInputs()))
+      if (!charge(1 + callback->abi.signature.getNumInputs()))
         return std::nullopt;
       auto predicate = readCallback(c, CallbackRole::Predicate);
       if (failed(predicate))
         return std::nullopt;
-      auto environment = bindCallback(*predicate, {{},
-                                                   callback->formals.items,
-                                                   callback->formals.domain,
-                                                   callback->formals.captures});
+      auto environment =
+          bindCallback(predicate->abi, {{},
+                                        callback->abi.formals.items,
+                                        callback->abi.formals.domain,
+                                        callback->abi.formals.captures});
       if (failed(environment))
         return std::nullopt;
       result.predicateTerminator = predicate->terminator;
       llvm::DenseMap<Value, Value> predicateBindings;
       for (auto [formal, source] :
-           zip(predicate->body->getArguments(), environment->actuals)) {
+           zip(predicate->abi.entry->getArguments(), environment->actuals)) {
         result.predicateArguments.push_back({formal, source});
         Value resolved = bindings.lookup(source);
         predicateBindings[formal] = resolved ? resolved : source;
       }
-      if (!readPayload(*predicate->body, result.predicatePayload,
+      if (!readPayload(*predicate->abi.entry, result.predicatePayload,
                        predicateBindings))
         return std::nullopt;
       append_range(result.predicateResults, predicate->returned);
@@ -827,9 +1033,7 @@ public:
     for (auto [i, yielded] : enumerate(result.results))
       result.resultMappings.push_back(
           {static_cast<unsigned>(i), yielded,
-           occurrence && i < occurrence->getNumResults()
-               ? occurrence->getResult(i)
-               : Value(),
+           i < actualResults.size() ? actualResults[i] : Value(),
            !c.collect && i < result.seeds.size() ? result.seeds[i].actual
                                                  : Value(),
            !c.collect ? std::optional<unsigned>(result.seeds[i].input)
@@ -837,7 +1041,7 @@ public:
            c.signature.getResult(i),
            c.collect && !c.predicate ? std::optional<unsigned>(result.root)
                                      : std::nullopt,
-           c.helper->getRegion(0).front().back().getOperand(i)});
+           originalReturned[i]});
     if (result.results.size() == 1)
       result.result = result.results.front();
     AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence,

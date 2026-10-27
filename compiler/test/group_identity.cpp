@@ -1,14 +1,16 @@
+#include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Kernel.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 using namespace mlir;
@@ -132,62 +134,59 @@ int main() {
   auto lowered = OwningOpRef<ModuleOp>(cast<ModuleOp>((*projected)->clone()));
   run(*lowered, protocol::createLowerMathPass());
   auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
-  run(*lowered, kernel::createLowerKernelsPass());
+  auto plan = take(target::proposePhysical(*logical));
+  auto checked = take(target::validatePhysical(*logical, plan));
+  lowered = take(checked.cloneSelectedSubject(*logical));
   cases.run("independent recipe accepts exact identity", [&] {
     require(succeeded(mathematical::verifyProjectionPreserved(*projected,
                                                               *logical)) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                succeeded(
+                    mathematical::verifyNumericalLowering(*logical, *lowered)),
             "identity recipe refused");
   });
   for (bool generator : {false, true})
-    cases.run(
-        generator ? "generator cannot realize identity"
-                  : "another group cannot realize identity",
-        [&] {
-          auto candidate =
-              OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
-          local::OperationBindingOp binding;
-          algebra::CurveIdentityOp operation;
-          candidate->walk([&](local::OperationBindingOp op) {
-            if (op.getContract() == "curve.identity")
-              binding = op;
-          });
-          candidate->walk([&](algebra::CurveIdentityOp op) { operation = op; });
-          require(binding && operation, "missing native identity recipe");
-          if (generator) {
-            binding->setAttr("contract",
-                             StringAttr::get(&context, "curve.generator"));
-            OpBuilder builder(operation);
-            OperationState state(operation.getLoc(),
-                                 "algebra.exec.group_generator");
-            state.addTypes(operation->getResultTypes());
-            state.addAttributes(operation->getAttrs());
-            auto *replacement = builder.create(state);
-            operation->replaceAllUsesWith(replacement);
-            operation.erase();
-          } else {
-            binding->setAttr(
-                "arguments",
-                ArrayAttr::get(&context,
-                               {StringAttr::get(&context, "bn254.g2")}));
-          }
-          bool diagnostic = false;
-          ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
-            diagnostic |= namesIdentifier(
-                d.str(), generator ? "kernel-lowering-correspondence"
-                                   : "binding-operation-signature");
-            return success();
-          });
-          if (generator) {
-            require(succeeded(verify(*candidate)),
-                    "generator mutation must retain formation");
-            require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
-                    "generator realized identity");
-          } else {
-            require(failed(verify(*candidate)),
-                    "wrong nominal group escaped signature admission");
-          }
-          require(diagnostic, "wrong mutation diagnostic");
-        });
+    cases.run(generator ? "generator cannot realize identity"
+                        : "another group cannot realize identity",
+              [&] {
+                auto candidate =
+                    OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
+                runtime::BindingOp binding;
+                candidate->walk([&](runtime::BindingOp op) {
+                  if (op.getContract() == "curve.identity")
+                    binding = op;
+                });
+                auto operation =
+                    scopedFinite::application(*candidate, "curve.identity");
+                require(binding && operation, "missing native identity recipe");
+                if (generator) {
+                  binding->setAttr(
+                      "contract", StringAttr::get(&context, "curve.generator"));
+                } else {
+                  binding->setAttr(
+                      "arguments",
+                      ArrayAttr::get(&context,
+                                     {StringAttr::get(&context, "bn254.g2")}));
+                }
+                bool diagnostic = false;
+                std::string observed;
+                ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
+                  observed += d.str();
+                  diagnostic |= namesIdentifier(
+                      d.str(), generator ? "numerical-lowering-correspondence"
+                                         : "execution-source-closure");
+                  return success();
+                });
+                if (generator) {
+                  require(succeeded(verify(*candidate)),
+                          "generator mutation must retain formation");
+                  require(failed(mathematical::verifyNumericalLowering(
+                              *logical, *candidate)),
+                          "generator realized identity");
+                } else {
+                  require(failed(verify(*candidate)),
+                          "wrong nominal group escaped signature admission");
+                }
+                require(diagnostic, "wrong mutation diagnostic: " + observed);
+              });
   return cases.result();
 }

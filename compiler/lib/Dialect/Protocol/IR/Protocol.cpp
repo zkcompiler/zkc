@@ -6,9 +6,11 @@
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -136,7 +138,7 @@ LogicalResult zkc::protocol_ir::ProtocolLoopOp::verifyRegions() {
       getParameter() || !getCount().empty())
     return diagnostics::emit(emitOpError(), "interactive-loop-count");
   Type type = getInputs().front().getType();
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     type = physical.getLogical();
   if (!type.isUnsignedInteger(64))
     return diagnostics::emit(emitOpError(), "interactive-loop-count");
@@ -159,10 +161,10 @@ LogicalResult zkc::protocol_ir::ProtocolLoopOp::verifyRegions() {
 LogicalResult
 zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
   auto *callee = tables.lookupNearestSymbolFrom(*this, getCalleeAttr());
-  if (!callee || !isa<zkc::local::FuncOp, zkc::poly::RealizeOp>(callee))
+  if (!callee || !isa<func::FuncOp, zkc::poly::RealizeOp>(callee))
     return diagnostics::emit(
         emitOpError(), "interactive-symbol-kind",
-        "expected a local definition or checked polynomial realization");
+        "expected scoped source execution or a checked local realization");
   if (auto caller =
           (*this)->getParentOfType<zkc::protocol_ir::MathematicalOp>()) {
     llvm::StringSet<> roles;
@@ -170,9 +172,31 @@ zkc::protocol_ir::LocalCallOp::verifySymbolUses(SymbolTableCollection &tables) {
       return failure();
     if (!getRoleAttr() || !roles.contains(getRoleAttr().getValue()))
       return diagnostics::emit(emitOpError(), "interactive-local-role");
+  } else if (auto participant =
+                 (*this)->getParentOfType<protocol_ir::ParticipantOp>()) {
+    if (getRoleAttr() != participant.getRoleAttr())
+      return diagnostics::emit(emitOpError(), "interactive-local-role",
+                               "call role must match its participant");
   } else {
     return diagnostics::emit(emitOpError(), "interactive-local-role",
-                             "expected a common protocol owner");
+                             "expected a protocol or participant owner");
+  }
+  if (isa<func::FuncOp>(callee)) {
+    auto attribute = callee->getAttrOfType<TypeAttr>("function_type");
+    auto type = attribute ? dyn_cast<FunctionType>(attribute.getValue())
+                          : FunctionType();
+    auto outcome = type && type.getNumResults() == 1
+                       ? dyn_cast<exec::OutcomeType>(type.getResult(0))
+                       : exec::OutcomeType();
+    if (!type || !type.getNumInputs() ||
+        !isa<runtime::ScopeType>(type.getInput(0)) || !outcome ||
+        callee->hasAttr("runtime.region") ||
+        getOperandTypes() != TypeRange(type.getInputs().drop_front()) ||
+        getResultTypes() != TypeRange(outcome.getPayload()))
+      return diagnostics::emit(
+          emitOpError(), "interactive-call-type",
+          "scoped calls expose only their logical data ports");
+    return success();
   }
   return callSignature(*this, callee);
 }
@@ -224,7 +248,7 @@ LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
     return diagnostics::emit(emitOpError(), "interactive-return-type", detail);
   };
   Type condition = getCondition().getType();
-  if (auto wrapper = dyn_cast<plan::DataType>(condition))
+  if (auto wrapper = dyn_cast<runtime::RepresentedType>(condition))
     condition = wrapper.getLogical();
   if (!condition.isSignlessInteger(1))
     return reject("conditional completion requires a Boolean condition");
@@ -261,7 +285,7 @@ LogicalResult zkc::protocol_ir::FinishIfOp::verify() {
   SmallVector<Type> affine;
   for (Type type : expected) {
     auto logical = type;
-    if (auto wrapper = dyn_cast<plan::DataType>(logical))
+    if (auto wrapper = dyn_cast<runtime::RepresentedType>(logical))
       logical = wrapper.getLogical();
     auto policy = policies.get(logical);
     if (!policy)

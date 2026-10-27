@@ -20,10 +20,6 @@ using ComposedHelperReader =
         mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
         mlir::Value collected, mlir::Value position, mlir::Value element)>;
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
-realizeCollectFold(const CollectFold &, mlir::ValueRange producerInputs,
-                   mlir::ValueRange consumerInputs, mlir::OpBuilder &,
-                   mathematical::RealizationWork &);
-mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 verifyCollectFold(const CollectFold &, mlir::ValueRange producerInputs,
                   mlir::ValueRange consumerInputs, mlir::Operation *&,
                   HelperReader, ComposedHelperReader, VerificationLimits,

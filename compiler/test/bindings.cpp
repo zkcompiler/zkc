@@ -4,6 +4,7 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "llvm/ADT/StringSet.h"
@@ -58,8 +59,13 @@ int main() {
   for (const auto &kernel : operationShapes()) {
     require(contracts.insert(kernel.key).second, "unique installed contract");
     auto operation = boundOperationName(kernel.key);
-    require(!operation.empty(), kernel.key);
-    require(context.isOperationRegistered(operation), operation);
+    bool scopedOnly = kernel.key == "resource_unit.create" ||
+                      kernel.key == "resource_unit.pass" ||
+                      kernel.key == "resource_unit.consume" ||
+                      kernel.key == "control.require";
+    require(operation.empty() == scopedOnly, kernel.key);
+    if (!scopedOnly)
+      require(context.isOperationRegistered(operation), operation);
   }
   require(boundOperationName("uninstalled.contract").empty(),
           "unknown contracts have no IR mapping");
@@ -67,13 +73,47 @@ int main() {
           "unknown observation types have no IR mapping");
   require(boundOperationName("table.relayout").empty(),
           "physical adapters do not acquire logical operations");
-  mlir::OperationState state(
-      mlir::UnknownLoc::get(&context),
-      zkc::local::OperationBindingOp::getOperationName());
+  mlir::OperationState state(mlir::UnknownLoc::get(&context),
+                             zkc::runtime::BindingOp::getOperationName());
   auto *detached = mlir::Operation::create(state);
   refuse(readBinding(detached), "binding-declaration-context");
   detached->destroy();
   refuse(readBinding(nullptr), "binding-declaration-context");
+  {
+    // A physical-only declaration is well formed in a stage-neutral module,
+    // but does not become admissible in a logical Protocol profile.
+    mlir::OwningOpRef<mlir::ModuleOp> module(
+        mlir::ModuleOp::create(mlir::UnknownLoc::get(&context)));
+    mlir::OpBuilder builder(module->getBody(), module->getBody()->end());
+    auto binding = runtime::BindingOp::create(
+        builder, module->getLoc(), "convert", "representation.convert",
+        builder.getStrArrayAttr({"field:bls12-381.fr"}),
+        "native/representation.convert",
+        builder.getStrArrayAttr(
+            {physical.spelling(), "field:bls12-381.fr@blst/fr"}));
+    require(accept(readBinding(binding)).application.physicalArguments.size() ==
+                    2 &&
+                mlir::succeeded(mlir::verify(*module)),
+            "builtin module refused a physical declaration");
+    mlir::OperationState rootState(module->getLoc(), "protocol.module");
+    rootState.addAttribute(
+        "profile",
+        protocol_ir::ProfileAttr::get(&context, protocol_ir::Profile::Exec));
+    rootState.addRegion();
+    auto *root = builder.create(rootState);
+    auto *body = builder.createBlock(&root->getRegion(0));
+    binding->moveBefore(body, body->end());
+    refuse(readBinding(binding), "binding-conversion");
+    root->setAttr("profile", protocol_ir::ProfileAttr::get(
+                                 &context, protocol_ir::Profile::Physical));
+    require(bool(readBinding(binding)),
+            "physical Protocol profile refused a physical declaration");
+    binding.setPhysicalArgumentsAttr(
+        builder.getStrArrayAttr({physical.spelling(), physical.spelling()}));
+    refuse(readBinding(binding), "binding-conversion");
+    binding->moveBefore(module->getBody(), module->getBody()->begin());
+    refuse(readBinding(binding), "binding-conversion");
+  }
   {
     // A numerical schedule resolves only within its own lexical symbol table.
     // A surrounding declaration cannot silently authorize a missing binding.
@@ -82,9 +122,9 @@ int main() {
     mlir::OpBuilder builder(outer->getBody(), outer->getBody()->end());
     auto loc = outer->getLoc();
     auto declare = [&] {
-      local::OperationBindingOp::create(builder, loc, "combine", "bool.and",
-                                        builder.getArrayAttr({}), "",
-                                        mlir::ArrayAttr{});
+      runtime::BindingOp::create(builder, loc, "combine", "bool.and",
+                                 builder.getArrayAttr({}), "",
+                                 mlir::ArrayAttr{});
     };
     declare();
     auto inner = mlir::ModuleOp::create(loc, "schedule");

@@ -19,16 +19,14 @@ ZKC_MATH_OPERATION(protocol_ir::MathematicalReturnOp, Control, Context::Protocol
 ZKC_MATH_OPERATION(protocol_ir::RestrictRolesOp, Control, Context::Protocol, "roles")
 ZKC_MATH_OPERATION(protocol_ir::StatementOp, Declaration, Context::Protocol, "relation", "selectors", "acceptance", "target")
 ZKC_MATH_OPERATION(protocol_ir::ExchangeOp, Action, Context::Protocol, "site", "sender", "receiver")
-ZKC_MATH_OPERATION(protocol_ir::GuardOp, Action, Context::Protocol, "site", "owner")
+ZKC_MATH_OPERATION(protocol_ir::GuardOp, Action, Context::Protocol | Context::Participant, "site", "owner")
 ZKC_MATH_OPERATION(protocol_ir::FinishIfOp, Action, Context::Protocol | Context::Participant, "site", "owner")
 ZKC_MATH_OPERATION(protocol_ir::QueryOp, Action, Context::Protocol, "method", "owner", "site")
-ZKC_MATH_OPERATION(protocol_ir::LocalCallOp, Action, Context::Protocol, "callee", "role", "site")
-ZKC_MATH_OPERATION(local::CallOp, Action, Context::Participant, "callee", "site")
+ZKC_MATH_OPERATION(protocol_ir::LocalCallOp, Action, Context::Protocol | Context::Participant, "callee", "role", "site")
 
 ZKC_MATH_OPERATION(protocol_ir::EmitOp, Action, Context::Participant, "site", "schema", "peer")
 ZKC_MATH_OPERATION(protocol_ir::AwaitOp, Action, Context::Participant, "site", "schema", "peer")
 ZKC_MATH_OPERATION(protocol_ir::ParticipantQueryOp, Action, Context::Participant, "site", "port", "method")
-ZKC_MATH_OPERATION(local::GuardOp, Action, Context::Participant, "site")
 ZKC_MATH_OPERATION(protocol_ir::FinishOp, Control, Context::Participant)
 
 ZKC_MATH_OPERATION(arith::ConstantOp, Total, Context::Protocol | Context::Participant | Context::Helper, "value")

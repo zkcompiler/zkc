@@ -6,6 +6,7 @@
 //! and transforms have explicit, separate contracts; polynomial admission never
 //! performs implicit reduction or interprets Montgomery representations.
 
+pub mod rns;
 pub mod transform;
 
 /// Invalid mathematical operands or caller-owned destination.
@@ -20,6 +21,8 @@ pub enum Error {
     TransformProfile,
     TransformRoot,
     TransformBasis,
+    DigitBound,
+    RnsCapacity,
 }
 impl Error {
     pub const fn code(self) -> &'static str {
@@ -33,6 +36,8 @@ impl Error {
             Self::TransformProfile => "quotient-transform-profile",
             Self::TransformRoot => "quotient-transform-root",
             Self::TransformBasis => "quotient-transform-basis",
+            Self::DigitBound => "quotient-digit-bound",
+            Self::RnsCapacity => "quotient-rns-capacity",
         }
     }
 }

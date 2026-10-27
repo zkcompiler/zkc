@@ -127,6 +127,19 @@ pub(crate) fn size(n: usize, width: usize) -> Result<usize> {
         .and_then(|s| s.checked_add(256))
         .ok_or_else(|| exhausted("size-overflow"))
 }
+/// Complete managed coordinate capacity and concrete prepared-object payload.
+/// Account for the actual universal slot and prepared object in addition to
+/// the common allowance for Arc counters and wrappers;
+/// allocator bookkeeping is outside the numerical managed-storage contract.
+pub(crate) fn quotient_matrix_bytes(capacity: usize) -> Result<usize> {
+    size(capacity, std::mem::size_of::<u64>())?
+        .checked_add(std::mem::size_of::<
+            zkc_kernels::polynomial::quotient::rns::PreparedMatrix,
+        >())
+        .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Value>()))
+        .ok_or_else(|| exhausted("size-overflow"))
+}
+
 // Keep the public typed sum and test coverage inventory in one declaration.
 macro_rules! value_inventory {
     ($( $(#[$meta:meta])* $variant:ident ( $($payload:ty),+ $(,)? ), )*) => {
@@ -196,6 +209,8 @@ value_inventory! {
     Indices(crate::Buffer<u64>),
     Bytes(Arc<[u8]>),
     Shake128State(Arc<crate::hash::Shake128State>),
+    /// Exact prepared quotient matrix; immutable local storage with no wire constructor.
+    QuotientMatrix(Arc<zkc_kernels::polynomial::quotient::rns::PreparedMatrix>),
     Matrix(crate::matrix::SparseCoo<Scalar>),
     RistrettoMatrix(crate::matrix::SparseCoo<crate::RistrettoScalar>),
     KoalaBearMatrix(crate::matrix::SparseCoo<crate::KoalaBear>),
@@ -723,6 +738,11 @@ impl Value {
             Self::Index(_) => (Type::Index, Identity::None, Representation::Index),
             Self::Indices(_) => (Type::Indices, Identity::None, Representation::Indices),
             Self::Bytes(_) => (Type::Bytes, Identity::None, Representation::Bytes),
+            Self::QuotientMatrix(_) => (
+                Type::QuotientMatrix,
+                Identity::None,
+                Representation::QuotientMatrix,
+            ),
             Self::Shake128State(_) => (
                 Type::Shake128State,
                 Identity::None,
@@ -795,7 +815,7 @@ impl Value {
             Type::Bytes => wire_len,
             Type::Groups => wire_len / 48,
             Type::Proof => wire_len / 96,
-            Type::Shake128State => return Err(refused("nonserializable")),
+            Type::Shake128State | Type::QuotientMatrix => return Err(refused("nonserializable")),
             Type::Sequence
             | Type::FieldArray
             | Type::FixedVector
@@ -994,6 +1014,7 @@ impl Value {
             Self::Indices(v) => v.backing(bytes),
             Self::Bytes(v) => Backing::of(v, bytes),
             Self::Shake128State(v) => Backing::of(v, bytes),
+            Self::QuotientMatrix(v) => Backing::of(v, bytes),
             Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => v.backing(bytes),
             Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => v.backing(bytes),
             Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => v.backing(bytes),
@@ -1106,6 +1127,7 @@ impl Value {
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
+            | Self::QuotientMatrix(..)
             | Self::Shake128State(..)
             | Self::Matrix(..)
             | Self::RistrettoMatrix(..)
@@ -1398,6 +1420,7 @@ impl RuntimeValue for Value {
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
+            | Self::QuotientMatrix(..)
             | Self::Shake128State(..)
             | Self::Matrix(..)
             | Self::RistrettoMatrix(..)
@@ -1579,6 +1602,7 @@ impl RuntimeValue for Value {
             Self::Indices(v) => size(v.storage_capacity(), 8),
             Self::Bytes(v) => size(v.len(), 1),
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
+            Self::QuotientMatrix(v) => quotient_matrix_bytes(v.storage_capacity()),
             Self::Matrix(m) => m.retained_bytes(),
             Self::RistrettoMatrix(m) => m.retained_bytes(),
             Self::KoalaBearVector(..)
@@ -1731,6 +1755,7 @@ fn payload_bytes(ty: Type, elements: usize) -> Result<usize> {
         Type::Indices => size(elements, 8),
         Type::Bytes => size(elements, 1),
         Type::Shake128State => Ok(crate::hash::Shake128State::RETAINED_BYTES),
+        Type::QuotientMatrix => Err(refused("nonserializable")),
         Type::Groups | Type::VerifierKey => size(elements, 128),
         Type::Proof => size(elements, 192),
         Type::Sequence

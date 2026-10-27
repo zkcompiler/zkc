@@ -57,7 +57,35 @@ theorem occurrence0_routes (handle index : Nat) :
     simp only [OccurrenceResolution.matchesOccurrence, occurrence0_low_valid, occurrence0_high_valid, occurrence0_draw_valid, occurrence0_delivery_valid]
     simp [occurrence0_decimal, Occurrence.low, Occurrence.high, Occurrence.draw, Occurrence.delivery, Occurrence.message, Occurrence.steps, Occurrence.protocol, SourceOccurrences.repeatSites, Template.origin, Domain.templateOrigin, Template.repeats, Template.qualify, Template.applicationPrefix, context, ProtocolContext.enter, qualifyProtocolSite, roleSubstitution, SumcheckVerifierLaws.lowSite, SumcheckVerifierLaws.highSite, SumcheckVerifierLaws.challengeSite, SumcheckVerifierLaws.deliverySite, Context.message, Context.query, Context.role, Context.service, Context.request, Context.contract, Context.replacement?, Origin.message, Origin.query, Domain.atCoordinates, decimal, decimalDigit, Request.draw, Occurrence.round_label, Occurrence.challenge_label, Occurrence.delivery_label]
 
-theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program := by bind_structured_bodies
+abbrev collectBindings : MultilinearCollectBodies.Bindings :=
+  ⟨"_finite_admission_0", "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain", "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body", "_mathematical_admission_1"⟩
+
+abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+
+theorem first_bodies : MapFirstContracts.Bodies program.payload.definitions collectBindings := by
+  bind_structured_bodies
+
+theorem prefix_bodies : MapPrefixContracts.Bodies program.payload.definitions prefixBindings := by
+  bind_structured_bodies
+
+theorem producer_bodies : SumcheckUnitContracts.Bodies program.payload.definitions where
+  first := ⟨collectBindings, first_bodies⟩
+  sums := by bind_structured_bodies
+  empty := by bind_structured_bodies
+  append := by bind_structured_bodies
+  values := by bind_structured_bodies
+  width := by bind_structured_bodies
+  «variables» := by bind_structured_bodies
+
+theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies program.payload.definitions :=
+  ⟨prefixBindings, { first := ⟨collectBindings, first_bodies⟩
+                     restriction := prefix_bodies
+                     check := by bind_structured_bodies
+                     checkTable := by bind_structured_bodies }⟩
+
+theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program :=
+  ⟨producer_bodies, terminal_bodies⟩
 theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=
   ⟨helper_bodies.sumcheck.empty, helper_bodies.sumcheck.append, helper_bodies.sumcheck.width, helper_bodies.sumcheck.«variables», helper_bodies.sumcheck.values⟩
 

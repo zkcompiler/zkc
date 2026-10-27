@@ -417,3 +417,12 @@ identity as a formal Poly value. `project` totally reduces arbitrary coefficient
 `coefficients` exposes canonical storage after mathematical arithmetic. It has
 no native wire type. This differs from the checked `quotient::Polynomial<Q,N>`
 constructor, which rejects a noncanonical representation at a reached source guard.
+
+### Prepared quotient matrices
+
+[`zkc::quotient_matrix`](primitives/polynomial/quotient_matrix.zkc) exposes an
+immutable local `PreparedMatrix`, `prepare`, and `multiply`. Rows contain
+negacyclic polynomials in coefficient order. Actual signed digits must fit the
+declared bound. Compute-prime transforms retain the original protocol modulus
+and exact reconstruction capacity; the prepared value has no wire codec. See
+the [operation contract](../../docs/spec/domains/quotient-matrices.md).

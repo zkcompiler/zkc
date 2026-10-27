@@ -3,7 +3,6 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Interfaces/Mathematical.h"

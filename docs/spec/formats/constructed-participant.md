@@ -102,7 +102,7 @@ attribute dictionary in its sorted order as `[name, value]` pairs; a value is
 decimal]` (unsigned for unsigned integer types, otherwise signed),
 `["strings", [text, ...]]`, or `["text", printed]` for any other attribute kind.
 `binding` is `[]` without an operation binding, otherwise the referenced
-`local.binding` declaration as `[contract, [argument, ...], implementation]`.
+`runtime.binding` declaration as `[contract, [argument, ...], implementation]`.
 `operands` are references and `result-types` are printed MLIR types. `regions`
 is empty except for `protocol.loop`, whose single region is
 `[argument-types, instructions, yielded]`: the printed types of its block
@@ -114,17 +114,34 @@ attribute counts the carried values. The captured values are the original
 repeat's captures followed, for a loop that carries the transcript, by the
 induction indices of its enclosing loops.
 
-Exported operations are regionless operations of the `algebra`, `arith`,
-`crypto` and `data` dialects, `protocol.receive`, `protocol.send`,
-`protocol.service_query`, `local.bool_constant`, `local.guard`,
-`protocol.loop` and `local.call`. A `local.call` to a helper of the original
-source module remains a call; its callee names that helper. A `local.call` to a
-helper the construction inserted is expanded in place: its formals denote the
-actual operands and its results denote the operands of the helper's final
-`local.return`, so such a helper appears only through the operations it
-executes. The participant's final `protocol.finish` operands become `returned`.
-Any other operation, any other region, a successor or a missing reference
-refuses the export with a `constructed-participant-*` diagnostic.
+Participant operations retain the regionless mathematical operations of the
+`algebra`, `arith`, `crypto` and `data` dialects, `protocol.receive`,
+`protocol.send`, `protocol.service_query`, `protocol.guard`
+and `protocol.loop`. A guard has exactly `site` and `owner` string attributes;
+the native participant profile requires that owner to match the enclosing
+participant role. The renderer checks its Boolean input and emits the guard
+observation. Its body remains subject to fixed-artifact admission.
+`protocol.local_call` invokes an ordinary scoped
+`func.func`. Calls to original source helpers retain their operation name and
+callee. Construction-inserted helpers are expanded at their actual operands;
+borrowed `func.call` invocations inside them either retain an original helper's
+identity or expand another generated helper.
+
+Helper expansion reads the admitted source execution closure. Its data
+signature excludes the borrowed scope and unpacks the outcome payload. The
+exported `exec.apply` and `exec.boolean` instructions retain their actual name
+and attributes, with the data inputs and successful payload results recovered
+from the checked CFG. Calls use the same data projection. The scope, outcome
+packaging, continuation and stop-propagation edges are checked by native
+execution admission; they are not instructions of this logical participant
+carrier. A generated helper's `exec.return` payload supplies the call's result
+references. A participant's `protocol.finish` supplies `returned`.
+
+This reader does not flatten arbitrary generated control flow. Nested control
+inside a generated helper, other unsupported operations, successors outside
+the admitted helper view, or missing references refuse with a
+`constructed-participant-*` diagnostic. In particular, native admission of a
+conditional codec helper does not imply support in this formal export.
 
 Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
 2048 exported instructions in total and 1 MiB of printed JSON per participant.
@@ -137,14 +154,14 @@ repository's pre-stabilization version policy.
 ## Boundary
 
 The export reads the checked candidate; it does not establish that the printed
-record denotes that candidate. Its refusals are
-defensive: a candidate that passes the native check uses only exported forms. A
-consumer interprets operation names, bindings and attributes explicitly, and
+record denotes that candidate. Native admission and the export's supported
+profile are separate checks. A consumer interprets operation names, bindings and attributes explicitly, and
 refuses what it does not recognize. A retained call is interpreted by the
 original source's helper of the same name and checked signature. That the
 candidate's helper of that name computes the same function belongs to the
-native construction, whose check reconstructs the whole candidate from the
-source; the export does not establish it. The [formal
+native construction and its independent postcondition; the export does not
+establish it. The logical carrier also does not prove preservation of native
+scope, resource accounting, failure timing or cleanup. The [formal
 bridge](../../../lean/bridges/construction/README.md) regenerates its retained
 data from this export and checks the exact bytes.
 

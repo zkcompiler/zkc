@@ -1,8 +1,10 @@
 #include "../lib/Transforms/ComputationSelection.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/ComputationFixture.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <fstream>
 #include <sstream>
 
@@ -19,48 +21,6 @@ std::string fixture(StringRef name) {
   out << input.rdbuf();
   return out.str();
 }
-finite::Computation computation(ModuleOp module) {
-  Operation *found = nullptr;
-  module.walk([&](Operation *op) {
-    if (finite::isComputation(op))
-      found = op;
-  });
-  finite::Computation result;
-  require(found && succeeded(finite::describe(found, result)),
-          "missing computation");
-  return result;
-}
-const char *indexed = R"mlir(
-!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- "local.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
-   %x = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %y = "data.domain_indices"(%ys) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %d = "data.domain_zip"(%x,%y) : (!data.domain<ui64>,!data.domain<ui64>)->!data.domain<ui64,ui64>
-   "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!V,!V)->!data.domain<ui64,ui64>} : ()->()
- local.func private @step(%s:!F,%i:ui64,%j:ui64,%xs:!V,%ys:!V)->!F attributes {logical_origin=["step",[]]} {
-   %x = "algebra.exec.vector_get"(%xs,%i) {binding=@get,parameters=[],site="x"} : (!V,ui64)->!F
-   %y = "algebra.exec.vector_get"(%ys,%i) {binding=@get,parameters=[],site="y"} : (!V,ui64)->!F
-   %p = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,parameters=[],site="p"} : (!F,!F)->!F
-   %r = "algebra.exec.field_add"(%p,%s) {binding=@add,parameters=[],site="r"} : (!F,!F)->!F
-   local.return %r : !F
- }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!V,!F)->!F,domain=@items,step=@step} : ()->()
- local.func @work(%xs:!V,%ys:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @fold(%xs,%ys,%seed) {site="fold"} : (!V,!V,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({ ^entry(%xs:!V,%ys:!V,%seed:!F):
-   %r = "protocol.local_call"(%xs,%ys,%seed) {callee=@work,role="P",site="work"} : (!V,!V,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
-)mlir";
 const char *capturedReduction = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
@@ -91,7 +51,7 @@ int main() {
     auto source =
         parseSourceString<ModuleOp>(fixture("total-predicate"), &context);
     require(bool(source) && succeeded(verify(*source)), "fixture refused");
-    auto c = computation(*source);
+    auto c = readComputation(*source);
     finite::ComputationWork measured;
     auto initial = measured.equations;
     auto unsupported = selectComputation(c, {}, measured);
@@ -121,7 +81,8 @@ int main() {
   cases.run("actual matching exhaustion clears tentative matches", [&] {
     auto source = parseSourceString<ModuleOp>(fixture("dot"), &context);
     require(bool(source), "fixture refused");
-    auto view = finite::analyzeComputation(computation(*source));
+    auto computation = readComputation(*source);
+    auto view = finite::analyzeComputation(computation);
     require(bool(view), "view missing");
     finite::ComputationWork measured;
     uint64_t initial = measured.equations;
@@ -145,7 +106,8 @@ int main() {
   cases.run("nested exact-zero unsupported and exhaustion", [&] {
     auto source = parseSourceString<ModuleOp>(fixture("sum"), &context);
     require(bool(source), "fixture refused");
-    auto view = finite::analyzeComputation(computation(*source));
+    auto computation = readComputation(*source);
+    auto view = finite::analyzeComputation(computation);
     require(bool(view), "view missing");
     finite::ComputationWork work;
     work.equations = 1;
@@ -163,7 +125,7 @@ int main() {
       "missing evidence remains a successful partial structural view", [&] {
         auto source = parseSourceString<ModuleOp>(capturedReduction, &context);
         require(bool(source) && succeeded(verify(*source)), "control refused");
-        auto c = computation(*source);
+        auto c = readComputation(*source);
         finite::ComputationWork work;
         finite::ComputationDiagnostic diagnostic;
         auto view = finite::analyzeComputation(c, work, &diagnostic);
@@ -197,10 +159,11 @@ int main() {
   cases.run(
       "an unrelated failed extent probe does not poison a supported equation",
       [&] {
-        auto source = parseSourceString<ModuleOp>(indexed, &context);
+        auto source =
+            parseSourceString<ModuleOp>(fixture("indexed-zip-dot"), &context);
         require(bool(source) && succeeded(verify(*source)),
                 "indexed control refused");
-        auto c = computation(*source);
+        auto c = readComputation(*source);
         finite::ComputationWork work;
         work.evidence = 0;
         auto selection = selectComputation(c, {}, work);
@@ -218,7 +181,7 @@ int main() {
         require(bool(source), "fixture refused");
         finite::ComputationWork work;
         work.structural = 0;
-        auto result = selectComputation(computation(*source), {}, work);
+        auto result = selectComputation(readComputation(*source), {}, work);
         require(!result.view &&
                     result.outcome() == OptimizationStatus::Capacity &&
                     result.diagnostic.outcome.capacity->owner ==
@@ -231,7 +194,7 @@ int main() {
       "disabled restricted and absent recipes retain distinct outcomes", [&] {
         auto source = parseSourceString<ModuleOp>(fixture("sum"), &context);
         require(bool(source), "fixture refused");
-        auto c = computation(*source);
+        auto c = readComputation(*source);
         MathematicalRecipes absent{{}, {}, {}};
         require(selectComputation(c, {}, absent).outcome() ==
                     OptimizationStatus::MissingRecipe,
@@ -241,12 +204,12 @@ int main() {
                     disabled.equations.reduction,
                 "policy disablement erased recognition");
         auto &op = c.helper->getRegion(0).front().front();
-        auto binding =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, op.getAttrOfType<FlatSymbolRefAttr>("binding"));
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            &op, op.getAttrOfType<FlatSymbolRefAttr>("binding"));
         require(bool(binding), "missing binding");
         binding.setImplementation("arkworks/field.add");
         require(succeeded(verify(*source)), "supported pin refused");
+        c = readComputation(*source);
         auto restricted = selectComputation(c, {});
         require(restricted.equations.reduction &&
                     restricted.outcome() ==
@@ -257,7 +220,7 @@ int main() {
     auto source =
         parseSourceString<ModuleOp>(fixture("nested-total"), &context);
     require(bool(source), "fixture refused");
-    auto c = computation(*source);
+    auto c = readComputation(*source);
     auto &body = c.helper->getRegion(0).front();
     OpBuilder builder(&body.back());
     builder.clone(body.front());

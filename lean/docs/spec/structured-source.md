@@ -280,7 +280,22 @@ products interpret as heterogeneous products of their ordered component types.
 total and use that same representation in the uniform and per-domain models.
 `Collection` selects a field vector or sequence for a finite domain. Elements
 and indices preserve exact container identity, order and the u64 length check.
-Only field-vector bounded reads are currently admitted.
+`DomainBody` retains a typed SSA sequence of constructors and the returned
+reference. Data argument variables and previously admitted domain variables use
+separate contexts. Zip and product concatenate heterogeneous item tuples without
+creating a nominal product identity. Range and every unused constructor retain
+their checks. `DomainSpec.bounds` derives item/container provenance from that
+syntax; the wire cannot assert it. Only field-vector bounded reads are currently
+admitted.
+
+Folds and collections share this domain admission. Collection bodies and optional
+predicates receive the complete item/domain/capture tuple. Collection uses a
+private reversed accumulator and restores source order once. Generic process
+interpretation and helper-table framing preserve callback effects and stopped
+prefixes. These laws do not establish native capacity or provider correspondence.
+The bounded executable tool checks domain traversal and collection size before
+concrete evaluation. Uncertain product radices and uncertain sequence result
+shapes may be refused by tool policy without restricting the logical semantics.
 The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
 `Module F G` and decidable equality laws. Group scaling is scalar action with
 group operand first in the source. No arbitrary group is silently equated to
@@ -399,39 +414,41 @@ helpers. There is no separate carrier, process executor or whole-protocol intrin
 Its helper inventory is empty; general framing, effect interpretation, linking,
 all-present adequacy, inlining and closed projection apply to it unchanged.
 
-An exec descriptor is `["exec", exact-native-operation, binding-name, parameters]`.
-Admission independently resolves the exact operation/contract pair below,
-nominal arguments, full ordered ports and parameters. Exec is Local-only,
+An exec descriptor is `["exec", "exec.apply", binding-name, parameters]`.
+Admission requires that exact native operation and resolves the primitive from
+the referenced binding's contract, nominal arguments, full ordered data ports
+and parameters. Native scope/outcome plumbing belongs to the checked export
+boundary; the formal ports are data operands and successful payload results. Exec is Local-only,
 region-free and requires a nonempty unique source site. Index constant takes
 one canonical u64 decimal string; every other primitive takes no parameters.
 No leading zero except `"0"`, sign, whitespace, non-ASCII digit, field reduction
 or wrapping is accepted. Values through `18446744073709551615` are admitted.
 
 Here `I` is index, `B` Boolean, `F` the binding's root field identity, and `V`
-its ordered vector. Every native operation has literal prefix `algebra.exec.`;
-the suffixes in the table are exhaustive. Index contracts have no domain
+its ordered vector. All rows use the same native `exec.apply` operation;
+retired per-primitive names are refused. Index contracts have no domain
 arguments; vector and field contracts have exactly one argument, a field row
 of the [domain catalogue](#domain-catalogue) with `Field`, or with `CommRing`
 for `vector.equal`.
 
-| Native suffix | Binding contract | Inputs | Outputs |
-|---|---|---|---|
-| `index_constant` | `index.constant` | none | I |
-| `index_equal` | `index.equal` | I, I | B |
-| `index_less` | `index.less` | I, I | B |
-| `index_add` | `index.add` | I, I | I |
-| `index_mul` | `index.mul` | I, I | I |
-| `index_sub` | `index.sub` | I, I | I |
-| `index_div` | `index.div` | I, I | I |
-| `index_mod` | `index.mod` | I, I | I |
-| `vector_empty` | `vector.empty` | none | V |
-| `vector_length` | `vector.length` | V | I |
-| `vector_sum` | `vector.sum` | V | F |
-| `vector_split` | `vector.split` | V | V, V |
-| `vector_append` | `vector.append` | V, F | V |
-| `vector_equal` | `vector.equal` | V, V | B |
-| `field_equal` | `field.equal` | F, F | B |
-| `field_embed` | `field.embed` | field:base | field:extension |
+| Binding contract | Inputs | Outputs |
+|---|---|---|
+| `index.constant` | none | I |
+| `index.equal` | I, I | B |
+| `index.less` | I, I | B |
+| `index.add` | I, I | I |
+| `index.mul` | I, I | I |
+| `index.sub` | I, I | I |
+| `index.div` | I, I | I |
+| `index.mod` | I, I | I |
+| `vector.empty` | none | V |
+| `vector.length` | V | I |
+| `vector.sum` | V | F |
+| `vector.split` | V | V, V |
+| `vector.append` | V, F | V |
+| `vector.equal` | V, V | B |
+| `field.equal` | F, F | B |
+| `field.embed` | field:base | field:extension |
 
 For `field.embed`, the sole binding argument is the extension identity. Its
 `BaseField` member selects the base, and `Catalogue.requireEmbedding` validates
@@ -439,7 +456,7 @@ the pair, including for unused bindings. The Local `exec` descriptor lowers to
 `Op.fieldEmbed`, preserving the source observation site through the usual
 lowering. No additional primitive interpreter or wire record is introduced.
 `Construction.Calculation.fieldEmbed` maps to this same operation; constructed
-participant rendering recognizes the exact `algebra.exec.field_embed` binding
+participant rendering recognizes `exec.apply` with the `field.embed` contract
 and ordered base/extension ports. Its implementation field must be the empty
 string: an explicit implementation or a malformed field refuses the export,
 rather than being erased into the mathematical embedding.
@@ -495,8 +512,8 @@ calls remain subject to admission, closure depth and cycle checks.
 
 Reference permission depends on the original retained variant, before deriving
 a semantic Local helper. A Math `call` targets a private defined Math function.
-Local `apply` may target an ordinary Local function, finite declaration,
-realization or map. Protocol `local.call` targets an ordinary Local function
+Local `apply` may target an ordinary Local function, fold or collection declaration,
+realization or map. Protocol `local_call` targets an ordinary Local function
 only. Finite callbacks remain private ordinary functions of the required kind;
 derived preparation helpers do not gain callback permission. A preparation's
 helper must be an exact private Math reference. Selected entries remain

@@ -38,6 +38,27 @@ def primitiveJson : Primitive → Json
   | .indexSub => toJson ["index.sub"] | .indexDiv => toJson ["index.div"]
   | .indexMod => toJson ["index.mod"]
 
+def domainNodeJson {inputs : List Ty} {context : List (List Ty)} {items : List Ty} :
+    DomainNode inputs context items → Json
+  | .elements _ container => toJson [toJson "elements", toJson container.index]
+  | .indices _ container => toJson [toJson "indices", toJson container.index, toJson (0 : Nat)]
+  | .range lower upper => toJson [toJson "range", toJson lower.index, toJson upper.index]
+  | .zip _ operands => toJson [toJson "zip", toJson operands.indices]
+  | .product _ operands => toJson [toJson "product", toJson operands.indices]
+
+def domainBodyJson {inputs : List Ty} : {context : List (List Ty)} → {items : List Ty} →
+    DomainBody inputs context items → List Json × Nat
+  | _, _, .ret value => ([], value.index)
+  | _, _, .letNode node next =>
+      let (nodes, result) := domainBodyJson next
+      (domainNodeJson node :: nodes, result)
+
+def domainJson (domain : DomainSpec) : Json :=
+  let (constructors, result) := domainBodyJson domain.body
+  Json.mkObj [("name", toJson domain.name), ("inputs", toJson (domain.inputs.map wireType)),
+    ("items", toJson (domain.items.map wireType)), ("constructors", toJson constructors),
+    ("result", toJson result)]
+
 def opJson (op : Op) : Json := Json.mkObj [
   ("constructor", toJson (match op with
     | .exec _ => "exec" | .indexConstant _ => "indexConstant" | .indexEqual => "indexEqual"
@@ -53,7 +74,7 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .booleanEqual => "booleanEqual" | .booleanNotEqual => "booleanNotEqual"
     | .makeProduct .. => "makeProduct" | .getProduct .. => "getProduct"
     | .select _ => "select" | .boundedAt _ => "boundedAt" | .invoke _ => "invoke"
-    | .fold _ => "fold" | .map _ => "map" | .branch .. => "branch"
+    | .fold _ => "fold" | .collect _ => "collect" | .map _ => "map" | .branch .. => "branch"
     | .loop .. => "loop" | .loopCondition .. => "loopCondition"
     | .guard => "guard" | .mark _ => "mark")),
   ("arguments", toJson (op.arguments.map wireType)),
@@ -64,12 +85,13 @@ def opJson (op : Op) : Json := Json.mkObj [
     | .indexConstant n | .fieldConstant _ n => toJson [toString n]
     | .booleanConstant b => toJson b
     | .mark site => toJson site
-    | .fold spec => Json.mkObj [("domain", toJson spec.domain.name),
+    | .fold spec => Json.mkObj [("domain", domainJson spec.domain),
         ("step", toJson spec.step), ("predicate", toJson spec.predicate),
-        ("domain_inputs", toJson (spec.domain.inputs.map wireType)),
-        ("domain_collection", wireType spec.domain.collection.type),
-        ("container", toJson spec.domain.container.index), ("indices", toJson spec.domain.indices),
         ("state", toJson (spec.state.map wireType)), ("captures", toJson (spec.captures.map wireType)),
+        ("kind", toJson (if spec.kind == .math then "math" else "local"))]
+    | .collect spec => Json.mkObj [("domain", domainJson spec.domain),
+        ("body", toJson spec.body), ("predicate", toJson spec.predicate),
+        ("collection", wireType spec.collection.type), ("captures", toJson (spec.captures.map wireType)),
         ("kind", toJson (if spec.kind == .math then "math" else "local"))]
     | .map spec => Json.mkObj [("helper", toJson spec.helperName), ("field", toJson spec.field), ("rowwise", toJson spec.rowwise)]
     | _ => .null)]

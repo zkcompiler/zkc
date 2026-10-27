@@ -5,26 +5,30 @@ public import ZkcExamples.Structured.MapProjectionContracts
 public import ZkcExamples.Structured.MapPrefixLaws
 
 @[expose] public section
+
+set_option backward.isDefEq.respectTransparency false
 namespace ZkcExamples.Structured.MapPrefixContracts
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixLaws MapPrefixBodies
 open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 
 /-- The additional exact associations needed only by Prefix clients. -/
-structure Bodies (definitions : List CheckedDefinition) : Prop where
+structure Bodies (definitions : List CheckedDefinition)
+    (bindings : MultilinearPrefixBodies.Bindings := MapPrefixBodies.bindings) : Prop where
   step : BodyIn definitions stepHelper stepBody
   foldStep : BodyIn definitions foldStepHelper foldStepBody
-  fold : BodyIn definitions foldHelper foldBody
-  foldWrapper : BodyIn definitions foldWrapperHelper foldWrapperBody
+  fold : BodyIn definitions (MultilinearPrefixBodies.foldHelper bindings.fold) foldBody
+  foldWrapper : BodyIn definitions foldWrapperHelper (MultilinearPrefixBodies.foldWrapperBody bindings.fold)
   prefixBody : BodyIn definitions prefixHelper MapPrefixBodies.prefixBody
   values : BodyIn definitions valuesHelper valuesBody
-  valuesRealization : BodyIn definitions valuesRealizationHelper valuesRealizationBody
+  valuesRealization : BodyIn definitions (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) valuesRealizationBody
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
 /-- Each premise already has a source-body proof in the completed map package.
 Instantiation in a different source table must recheck its entire raw body and ABI. -/
-structure Laws (table : Meanings F G) : Prop where
+structure Laws (table : Meanings F G)
+    (bindings : MultilinearPrefixBodies.Bindings := MapPrefixBodies.bindings) : Prop where
   halves : HalvesLaw table
   shape : ∀ (xs : List F) (dimension columns : Nat),
     xs.length < indexLimit → dimension < indexLimit → columns < indexLimit →
@@ -41,11 +45,11 @@ structure Laws (table : Meanings F G) : Prop where
         .done (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)
       else .halt .reject
   values : ∀ (xs : List F) (dimension columns : Nat),
-    invoke table valuesRealizationHelper (inputs xs dimension columns) = .done (.cons xs .nil)
+    invoke table (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) (inputs xs dimension columns) = .done (.cons xs .nil)
 
 
-variable {definitions : List CheckedDefinition}
-    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions)
+variable {definitions : List CheckedDefinition} {bindings : MultilinearPrefixBodies.Bindings}
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions bindings)
 include linked bodies
 
 theorem step_equation (xs : List F) (dimension columns : Nat) (r : F) :
@@ -90,7 +94,7 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
   rw [prefix_finite_body linked bodies, fold_body]
   change Evaluation.denoteFold (closedMeanings (F := F) (G := G) definitions) foldSpec
     ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
-  rw [Evaluation.denoteFold_pack, Finite.execute, domain_admit, ite_eq_right invalid]
+  rw [Evaluation.denoteFold_pack, domain_admit, ite_eq_right invalid]
   rfl
 
 theorem values_equation (xs : List F) (dimension columns : Nat) :
@@ -99,14 +103,15 @@ theorem values_equation (xs : List F) (dimension columns : Nat) :
   MapProjectionContracts.values_equation linked bodies.values xs dimension columns
 
 theorem valuesRealization_equation (xs : List F) (dimension columns : Nat) :
-    invoke (closedMeanings (F := F) (G := G) definitions) valuesRealizationHelper (inputs xs dimension columns) =
+    invoke (closedMeanings (F := F) (G := G) definitions) (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) (inputs xs dimension columns) =
       .done (.cons xs .nil) :=
   MapProjectionContracts.valuesRealization_equation linked bodies.values bodies.valuesRealization
     xs dimension columns
 
 /-- First and Prefix associations refer to this list; no other table is equated to it. -/
-theorem laws_of_bodies (firstBodies : MapFirstContracts.Bodies definitions) :
-    Laws (closedMeanings (F := F) (G := G) definitions) := by
+theorem laws_of_bodies {collectBindings : MultilinearCollectBodies.Bindings}
+    (firstBodies : MapFirstContracts.Bodies definitions collectBindings) :
+    Laws (closedMeanings (F := F) (G := G) definitions) bindings := by
   have first := MapFirstContracts.laws_of_bodies (F := F) (G := G) linked firstBodies
   refine ⟨first.halves, first.shape, first.tableLaw, ?_, valuesRealization_equation linked bodies⟩
   intro xs dimension columns point shape vectorBound pointBound

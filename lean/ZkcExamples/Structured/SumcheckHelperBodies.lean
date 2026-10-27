@@ -39,7 +39,7 @@ def sumsBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.field "
   .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
   .ret (.cons (.there .here) (.cons .here .nil))
 
-def checkTableBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
+def checkTableBody (bindings : MultilinearPrefixBodies.Bindings := MapPrefixBodies.bindings) : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
   .letOp (.mark "s2") .nil .nil <|
@@ -49,7 +49,7 @@ def checkTableBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.
   .letOp (.mark "s6") .nil .nil <|
   .letOp (.invoke prefixHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
   .letOp (.mark "s8") .nil .nil <|
-  .letOp (.invoke valuesRealizationHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.invoke (MultilinearPrefixBodies.valuesRealizationHelper bindings.values)) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "s9") .nil .nil <|
   .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons .here .nil) .nil <|
   .letOp (.mark "s11") .nil .nil <|

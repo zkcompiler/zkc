@@ -2,9 +2,11 @@ module
 
 public import ZkcExamples.Structured.MapFirstLaws
 public import Zkc.Source.Structured.Linking
-public import Zkc.Source.Structured.MapLaws
+public import ZkcExamples.Structured.MultilinearCollectLaws
 
 @[expose] public section
+
+set_option backward.isDefEq.respectTransparency false
 
 namespace ZkcExamples.Structured
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapFirstBodies
@@ -15,18 +17,24 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 namespace MapFirstContracts
 
 /-- Only dependencies shared by the actual First clients are required. -/
-structure Bodies (definitions : List CheckedDefinition) : Prop where
+structure Bodies (definitions : List CheckedDefinition)
+    (bindings : MultilinearCollectBodies.Bindings := MapFirstBodies.bindings) : Prop where
   less : BodyIn definitions lessHelper lessBody
   rows : BodyIn definitions rowsHelper rowsBody
   shape : BodyIn definitions shapeHelper shapeBody
   table : BodyIn definitions tableHelper tableBody
   halves : BodyIn definitions halvesHelper halvesBody
   interpolate : BodyIn definitions interpolateHelper interpolateBody
-  map : BodyIn definitions mapHelper mapBody
-  first : BodyIn definitions firstHelper firstBody
+  interpolation : BodyIn definitions (MultilinearCollectBodies.interpolateRealizationHelper bindings)
+    (MultilinearCollectBodies.interpolateRealizationBody bindings)
+  callback : BodyIn definitions (MultilinearCollectBodies.mapCallbackHelper bindings)
+    (MultilinearCollectBodies.mapCallbackBody bindings)
+  map : BodyIn definitions (MultilinearCollectBodies.mapHelper bindings)
+    (MultilinearCollectBodies.mapBody bindings)
+  first : BodyIn definitions firstHelper (MultilinearCollectBodies.firstBody bindings)
 
-variable {definitions : List CheckedDefinition}
-    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions)
+variable {definitions : List CheckedDefinition} {bindings : MultilinearCollectBodies.Bindings}
+    (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions bindings)
 include linked bodies
 
 /-- Actual membership plus raw-body equality discharges the comparison premise. -/
@@ -84,18 +92,32 @@ theorem interpolate_equation (low high r : F) :
   rw [MapSourceExpansions.first_interpolate]
   rfl
 
-/-- Complete actual table discharges the generic map helper premise. -/
-theorem map_law : MapLaw (closedMeanings (F := F) (G := G) definitions) := by
+/-- The source's scalar computation is associated before its callback is used. -/
+theorem interpolation_equation (lo hi r : F) :
+    invoke (closedMeanings (F := F) (G := G) definitions)
+      (MultilinearCollectBodies.interpolateRealizationHelper bindings)
+      (.cons lo (.cons hi (.cons r .nil))) =
+      .done (.cons (lo + (hi - lo) * r) .nil) := by
+  rw [bodies.interpolation.invoke linked, MultilinearCollectLaws.realization_body,
+    interpolate_equation linked bodies]
+  rfl
+
+/-- The complete callback tuple and actual computation both remain explicit. -/
+theorem callback_equation (lo hi r : F) (low high : List F) :
+    invoke (closedMeanings (F := F) (G := G) definitions)
+      (MultilinearCollectBodies.mapCallbackHelper bindings)
+      (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) =
+      .done (.cons (lo + (hi - lo) * r) .nil) := by
+  rw [bodies.callback.invoke linked, MultilinearCollectLaws.callback_body,
+    interpolation_equation linked bodies]
+  rfl
+
+/-- Complete actual table discharges the generic collection callback premise. -/
+theorem map_law : MapLaw (closedMeanings (F := F) (G := G) definitions) bindings := by
   intro low high r sameLength small
-  refine (bodies.map.invoke linked (.cons low (.cons high (.cons r .nil)))).trans ?_
-  rw [MapSourceExpansions.first_map]
-  have mapped := Evaluation.denoteMap_twoRows_broadcast (closedMeanings (F := F) (G := G) definitions)
-    MapFirstBodies.mapSpec.helperName MapFirstBodies.mapSpec.field low high r small sameLength.symm
-    (fun lo hi => lo + (hi - lo) * r) (fun lo hi => interpolate_equation linked bodies lo hi r)
-  exact (congrArg (fun process : Closed (Values (assignment F G) [vector]) =>
-    process.bind fun result =>
-      (.done (.cons (result.get .here) .nil) : Closed (Values (assignment F G) [vector])))
-    mapped).trans (by rfl)
+  exact (bodies.map.invoke linked (.cons low (.cons high (.cons r .nil)))).trans
+    (MultilinearCollectLaws.map_body _ bindings low high r small sameLength
+      (fun lo hi => callback_equation linked bodies lo hi r low high))
 
 /-- Checked body lookup is repeated for this complete Payload. -/
 theorem first_equation (xs : List F) (dimension columns : Nat) (r : F)

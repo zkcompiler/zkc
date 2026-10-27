@@ -128,33 +128,33 @@ role substitution and effect contract; they are not pure helper calls.
 
 ## Executable local calls and type use
 
-A private `func.func` helper is transparent total computation. An executable
-`local.func` is an ordered local program that may stop, consume capabilities or
-fail under work and storage limits. `protocol.local_call` invokes one such
+A private `func.func` with plain mathematical ports is transparent total
+computation. A scoped function with an explicit scope input and outcome result
+is ordered execution that may stop, consume capabilities or fail under work
+and storage limits; its actual CFG is checked by the
+[scoped execution profile](execution.md#source-scoped-helper-profile).
+`protocol.local_call` invokes one such
 function at one owner, with exact available operands and owner-only results on
-normal return. It projects to a role-free `local.call` at that owner. Calls
+normal return. Projection retains `protocol.local_call` at that owner's
+participant and checks its role against the enclosing participant. This action
+owns the runtime invocation boundary; an ordinary scoped `func.call` inside a
+helper instead borrows the active scope. Calls
 remain observable work even with unused or zero results. They are not pure,
 inlined as mathematical helpers, merged, or moved across action cuts.
+Preparation and projection retain every immediate function and domain
+definition, including dormant ones. The preservation checker compares actual
+bodies, attributes and bindings, independently of the participant call list.
+Plain mathematical definitions can be consumed later by the checked numerical
+realization boundary; scoped execution cannot be silently erased there.
 
-The protocol profile can declare an executable realization of a total helper:
-
-```mlir
-local.realize @evaluate = @mathematical_helper : (T...) -> (U...)
-```
-
-The helper is private, defined, acyclic and admitted by the same whole-module
-mathematical checker. Its exact signature must contain only executable total
-data; formal polynomials and capabilities cannot cross this boundary. A local
-body invokes the declaration with `local.apply`. The declaration is a preparation
-request, carries no body or runtime provider, and is forbidden in participant
-and executable profiles. Ordinary portable source admission has no external
-signature permission for such an application.
-
-Preparation forms an owned [Kernel unit](kernel.md) and a `local.func`
-wrapper with the realization's original symbol and signature. The wrapper's
-logical origin names the pure helper. The complete helper/domain closure and
-actual wrapper data flow are checked against the original request and frozen
-through projection. Relation formulas remain specification-only declarations.
+Scoped source execution invokes total mathematics through `exec.compute`, with
+an owned [numerical unit](computation.md). Its helper is defined, acyclic and admitted
+by the whole-module mathematical checker. Only executable data crosses the call
+boundary; formal polynomials and capabilities remain inside their owning
+abstractions. The complete helper/domain closure and actual call data flow are
+checked against the original source and frozen through preparation and
+projection. Numerical selection occurs after demand placement. Relation formulas
+remain specification-only declarations.
 
 Numerical realization uses checked helper normalization, polynomial observation
 checks and execution recipes under bounded work. An independent read-only
@@ -178,68 +178,69 @@ with other realized total calculations.
 
 ### Checked pointwise maps
 
-The protocol profile also declares a checked [pointwise map](../domains/vectors.md#pointwise-maps)
-of a total helper:
+A pointwise map uses the general [scoped collection request](execution.md#ordered-finite-requests).
+A private `data.domain` reads the marked vector arguments and combines their
+elements with strict zip. Its private scoped callback takes the current items
+and the complete original captures, then invokes the scalar mathematics through
+`exec.compute`. The outer request has the form:
 
 ```mlir
-!F = !algebra.field<"F">
-!V = !algebra.field_vector<"F">
-algebra.map_realize @rows = @scalar_helper [true, false] : (!V, !F) -> !V
+%attempt = "exec.collect"(%scope, %rows, %scalar)
+  {domain=@items, body=@row, site="map"}
+  : (!runtime.scope, !V, !F) -> !exec.outcome<(!V)>
 ```
 
-Algebra owns the declaration and its validation. The helper is private, defined
-and has the exact signature `(F, ..., F) -> F` for one installed field `F`.
-`rowwise[i]` marks a vector input; other inputs are scalar captures. At least one
-input is rowwise and the result is a vector of `F`. `local.apply` invokes the
-declaration through the preparation-callable interface. The interface grants no
-purity or execution authority.
+The surrounding function dispatches the outcome before using its vector payload.
+There is no separate map-declaration or row-mask owner in this source path.
+The [source `map` syntax](../language/definitions.md#checked-pointwise-maps)
+requires one installed field across the scalar helper's input and result ports,
+at least one marked vector and exact argument binding. General collection IR
+admits other typed domains and callbacks; the source syntax's field restriction
+is not a restriction on that IR.
 
-Formation admits every operation in the complete scalar helper closure, including
-unused work. Supported formulas contain field constants, addition, subtraction,
-multiplication and calls with exact field ports. Invalid signatures, helpers and
-formulas report `algebra-map-signature`, `algebra-map-helper` and
-`algebra-map-formula`. Expansion consumes shared helper operation/slot budgets;
-the expanded formula also obeys [Ring limits](limits.md).
+Formation reads the complete actual domain and callback signatures. Every
+retained `exec.compute` request admits its mathematical helper closure, including
+unused operations, under the shared mathematical analysis bounds. Typed
+mathematics outside the field-ring fragment is permitted. Ring extraction is an
+optional bulk optimization, and its depth or expression capacity does not
+invalidate an otherwise admitted callback.
 
-Preparation expands ordinary Local helpers while retaining map calls, declarations
-and their exact scalar helper closure. Projection preserves this subject. Internal
-logical Exec admission accepts only this closed map form of `local.apply`;
-physical admission and executable publication refuse residual maps and helpers,
-including unused definitions. The standalone checked map-realization API remains
-available for callers that explicitly request early realization.
+Preparation retains an immutable source subject until its candidate passes
+independent checking. Complete domain admission precedes every callback or bulk
+payload. For the strict-zip map domain, all vector lengths are measured in input
+order, followed by equality checks against the first length and ordered
+`control.require` calls. Unused columns retain their checks. A shape mismatch is
+`rejected:require`; an unused map result still checks shapes. Argument evaluation
+and surrounding ordered operations retain their original positions.
 
-Late realization first measures the initial rowwise input, then checks every
-later rowwise input in declaration order with `vector.length`, `index.equal` and
-`control.require`. Unused inputs retain these checks. A mismatch is
-`rejected:require`; an unused result still checks shapes. Scalar arguments and
-other surrounding ordered operations retain their original evaluation positions.
+Selection can use:
 
-The admitted formula has two executable realizations:
+- A [native expression call](../runtime/numerical.md#pointwise-expressions),
+  borrowing exact typed columns and scalar captures and constructing one output.
+- A vector realization using installed `field.*`, `vector.add/sub/mul/scale` and
+  `vector.fill` operations. Scalar subexpressions are evaluated once and
+  admitted equal subexpressions may share storage.
+- Required ordered collection, invoking the actual scoped callback for each row,
+  when optional recognition, construction or comparison cannot select a bulk form.
 
-- A [native expression call](../runtime/numerical.md#pointwise-expressions) borrows exact
-  typed columns and scalar captures and constructs one private output.
-- A vector realization uses installed `field.*`, `vector.add/sub/mul/scale` and
-  `vector.fill` operations. It evaluates scalar subexpressions once and shares
-  admitted equal subexpressions. Intermediate vectors follow ordinary Local
-  storage and optional checked release rules.
+An admitted identity formula can return its original column after the complete
+guard prefix. Empty aligned inputs succeed. Formula extraction admits all
+reached mathematics before omitting unused total arithmetic; it cannot remove or
+move an ordered guard. Optional work is shared across occurrences and retries.
+Its exhaustion cannot spend or reset the separate required construction and
+checking reserves. Required capacity refuses publication without changing the
+source. Retained and generated callbacks both count toward actual candidate
+admission; source admission alone does not promise that every candidate fits.
 
-An identity map can return its original column after the complete guard prefix.
-Empty aligned inputs succeed. Formula extraction admits the entire source before
-removing unused total arithmetic; it never removes or moves an ordered guard.
-
-The independent reader interprets the original scalar closure and the actual
-candidate. It checks nominal fields, literals, scalar/row positions, expression
-bodies, broadcasts, guards, sites, aliases, result uses and surrounding code.
-It does not consume the producer's classifications or emission plan. The relation
-covers equal values and ordered shape refusals under sufficient resources;
-allocation charges and exact resource exhaustion may differ between realizations.
-
-Local expansion uses `canonical-expanded-locals/0`. Sites encode ordered
-call-site/callee paths; encodings longer than 128 bytes use `lc_h_` plus SHA-256,
-with full paths retained in provenance. Expansion and its checker separately
-charge a cumulative 16 MiB origin-byte allowance. Retained calls keep those
-identities through late lowering. Partial operations remain in Local control;
-a preceding guard does not grant a totality law.
+The independent reader interprets the original domain and callback against the
+actual scoped candidate. It checks nominal fields, literals, scalar/row positions,
+expression bodies, broadcasts, guards, sites, result uses, retained declarations
+and surrounding code. Producer classifications or emission plans supply no
+checking evidence. The relation covers equal values and ordered shape refusals
+under sufficient resources; allocation charges and exact exhaustion may differ.
+Occurrence names follow the input-relative scoped helper convention
+in [execution IR](execution.md). Executable publication refuses unresolved
+collection and computation requests, including dormant ones.
 
 ### Optional vector reduction fusion
 
@@ -248,14 +249,24 @@ selection, simplification and storage release. The same
 `MathematicalSelectionPolicy` is carried through preparation and projection to
 late realization. Retaining a map does not itself authorize fusion.
 
-An eligible pair is an adjacent map call and a single-use `vector.sum` in the
-same block, with exact field identity, no operation attributes and no fixed
-reducer implementation. Late selection can use:
+An eligible pair is a scoped `exec.collect` followed by an `exec.apply` of the
+native `vector.sum` contract, with the collected vector used only by that sum.
+Adjacency is in the admitted ordered execution steps: the required outcome
+dispatch blocks are administrative control flow. The exact field identity and
+empty parameter list must agree, and neither an explicit binding selection nor
+a fixed reducer implementation permits replacement. Late selection can use:
 
 - `vector.dot` when the admitted live formula is exactly the product of two
   row slots, including equal slots;
 - `numerical.sum` for a supported pointwise field formula;
-- a native or vector map followed by the original sum if fusion is unavailable.
+- a native or vector map followed by the original sum if fusion is unavailable
+  and finite bulk selection is enabled;
+- ordered collection followed by the original sum as the required endpoint.
+
+The fusion policy independently permits the dot and summed-expression choices.
+It does not enable ordinary bulk collection lowering. An unavailable provider
+advances only the implicated occurrence through its permitted alternatives.
+Discarded construction and optional recognition/comparison work stay charged.
 
 Every choice preserves the complete original ordered shape-check prefix,
 including unused rows, and the surrounding argument evaluations. Fixed bindings,
@@ -264,8 +275,10 @@ acquire replacement permission. Other reducers retain their original calls.
 
 The [checked physical plan](../../compiler/representation.md#checked-physical-decisions)
 selects feasible alternatives per occurrence before publication. Its independent
-reader checks the original source against the actual selected Local body;
-physical ports, implementations, conversions and final program capacity are
+reader interprets the original domain and callback against the actual selected
+scoped body, without accepting the producer's equation or recipe as evidence.
+It checks all domain admission before comparing the scalar sum and preserves
+the final reducer's occurrence and source location. Physical ports, implementations, conversions and final program capacity are
 checked separately. A reached runtime failure never triggers another realization.
 
 ### Admitted type uses
@@ -321,7 +334,7 @@ Original declarations own source contracts. `relation.declare` optionally has
 a flat symbol reference `formula`; the kind `zkc.language.formula/0` requires it
 in the `protocol` profile. It resolves in the same unit to a defined Math
 `func.func` with exactly the declaration's complete input/output ABI. Other
-kinds have no formula link. A Local helper is not Math, and a generated symbol
+kinds have no formula link. A scoped executable helper is not total Math, and a generated symbol
 spelling is not a binding rule. Ordinary MLIR symbol replacement updates these
 references. This is a structural association, not a proof of the formula's
 adequacy or totality.
@@ -343,9 +356,10 @@ Contracts do not add statement operations, guards or witness equalities.
 Application expansion retains the declaration inventory and its symbol
 references; it does not attach callee entry indices to caller instructions.
 Participant projection deliberately erases declaration contracts and formula
-links, and the statement's selected-target reference, because that artifact does
-not retain the original declaration inventory or Math closure. It retains the
-existing statement identity/ABI projection. No certificate for the
+links, and the statement's selected-target reference. The artifact retains
+helper bodies and domains for execution preparation, but does not retain the
+original protocol contract subject. It retains the existing statement
+identity/ABI projection. No certificate for the
 original contracts is transported through these transforms by this metadata.
 
 `protocol.statement` references a non-callable `relation.declare` symbol and
@@ -440,9 +454,10 @@ candidate against its frozen input, so deleting the record cannot turn a
 projected result into an unrelated supplied program. Generated calculation
 origins distinguish generated calculation sites from retained source action occurrences.
 Retained interfaces are immutable through lowering and physical selection. A
-guard's retained target remains `local.guard`, describing the original projection.
+guard's retained target remains `protocol.guard`, describing the original projection.
+Projection retains its `owner`, which must match the selected participant role.
 The checked profile derives whether its current implementation must be that guard
-or a generated `local.call`; lowering does not rewrite source facts. Only the
+or a generated `protocol.local_call`; lowering does not rewrite source facts. Only the
 separate generated-calculation list is added during lowering.
 
 The enclosing protocol module owns full metadata/profile verification. The
@@ -471,7 +486,7 @@ closed admission. Executable local bodies are outside that optimization scope.
 
 `zkc-project-protocol` produces `participant`. It clones demanded total
 expressions into each role, preserves all advertised ports, and creates
-`protocol.send`, `protocol.receive`, service queries, authored `local.call`, and `local.guard`
+`protocol.send`, `protocol.receive`, service queries, authored `protocol.local_call`, and `protocol.guard`
 occurrences. It creates no new executable calculation functions or bindings.
 Receive results are actual environment replies. The sender's exchange result
 aliases its sent component; that fact grants no equality at the receiver.
@@ -482,17 +497,20 @@ after role projection while preserving the original interface and ordered
 actions. Every resulting candidate must pass closed admission and the frozen
 interface postcondition.
 
-`zkc-lower-math` separately produces `exec` with logical Kernel units. For every local
+`zkc-lower-math` first applies independently checked scoped helper substitution.
+It then produces `exec` with retained mathematical computation units. For every local
 action or finish cut, it finds total dependencies not previously computed and
 schedules them in dependency order with source-order tie breaking. Work starts
 at its first consumer, so an earlier guard cannot trigger unrelated later
 calculations. A value needed at several cuts is computed once and passed as a
-participant SSA result to later calls. Each generated `local.func` has one invocation and takes and
-returns only total mathematical data. Unused result ports are removed after
+participant SSA result to later calls. Each generated scoped `func.func` has one
+`protocol.local_call` invocation and exposes only total mathematical data at that
+participant boundary. Unused result ports are removed after
 original participant expressions have been erased; this does not remove executable
 work inside the generated function. A guard ends its calculation segment
-with `local.if`: true continues through `local.yield`; false executes
-`local.stop` with explicit reason `reject`. The function can have no results.
+with `exec.test` and checked Func/CF branches: true continues through a charged
+`exec.complete`; false executes `exec.reject` with explicit reason `reject`.
+The scoped function may have an empty outcome payload.
 The false arm stops that participant before its next action. A failure to read the
 Boolean representation remains a backend failure.
 
@@ -508,20 +526,24 @@ Boolean kernels; selection uses local conditional control with already evaluated
 data captures. A literal uses the
 [native participant instruction](../formats/program.md).
 
-Each total calculation becomes an owned numerical entry invoked from its Local
-wrapper. The guard remains outside that unit. Verification checks this logical
-`exec` candidate before publication. `zkc-lower-kernels` subsequently applies
-checked recipes at each Local invocation and removes every numerical unit;
-physical selection invokes this edge before constructing its plan.
+Each total calculation becomes an owned numerical entry invoked by typed
+`exec.compute` from its scoped wrapper. The guard remains outside that unit.
+Root packaging uses `exec.returned`; native participant completion belongs to
+the subsequent checked executable realization. All original mathematical,
+scoped and domain definitions survive this preparation edge. Verification
+checks the logical candidate before publication. Numerical realization must
+consume every request before physical publication; the current migration
+coverage is recorded in [implementation status](../../status.md).
 
 The Transforms component then compares the verified `exec` candidate against its
 frozen `participant` input. This closed postcondition independently walks source
 dependencies at each first demand and matches the actual numerical body in source
-order. Kernel realization separately checks the generated executable recipes. It checks exact resolved contracts and their domain arguments, captures,
+order. Numerical realization separately checks the generated executable recipes. It checks exact resolved contracts and their domain arguments, captures,
 returned values, guard conditions and rejection, and ordered action operands.
 Entry arguments and actual receive/call/query results are distinct SSA anchors.
 Every generated calculation is a fresh symbol with one invocation and its own
-logical origin. Only these functions, their numerical units and accounted recipe bindings may be
+logical origin. Only these functions, their closed control bodies, their numerical
+units and accounted recipe bindings may be
 added to the frozen symbol table. Extra work, recomputation and
 work moved across an earlier cut refuse. The traversal uses explicit worklists
 and a shared limit of one million operation/operand comparison units for the

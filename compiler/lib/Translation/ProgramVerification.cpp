@@ -1,6 +1,8 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -114,8 +116,7 @@ class ArtifactCorrespondence {
     return true;
   }
   bool body(Block &block, const program::Body &instructions,
-            Environment environment, unsigned depth = 0,
-            std::optional<unsigned> yieldWidth = {}) {
+            Environment environment, unsigned depth = 0) {
     if (depth > 64 || block.getOperations().size() != instructions.size())
       return false;
     for (auto pair : zip(block, instructions)) {
@@ -130,22 +131,10 @@ class ArtifactCorrespondence {
       auto outputs = [&](ArrayRef<std::string> names) {
         return environment.outputs(op.getResults(), names);
       };
-      if (auto r = record.get<program::Operation>()) {
-        auto application = dyn_cast<plan::ApplyOp>(op);
-        if (!application || symbol(&op, "binding") != r->callee ||
-            !strings(op.getAttrOfType<ArrayAttr>("parameters"),
-                     r->attributes) ||
-            !inputs(r->inputs) || !outputs(r->outputs))
-          return false;
-        auto declaration =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, application.getBindingAttr());
-        if (!declaration ||
-            application.getImplementation() != declaration.getImplementation())
-          return false;
-      } else if (auto r = record.get<program::LocalCall>()) {
-        if (!isa<local::CallOp>(op) || symbol(&op, "callee") != r->callee ||
-            !inputs(r->inputs) || !outputs(r->outputs))
+      if (auto r = record.get<program::LocalCall>()) {
+        if (!isa<protocol_ir::LocalCallOp>(op) ||
+            symbol(&op, "callee") != r->callee || !inputs(r->inputs) ||
+            !outputs(r->outputs))
           return false;
       } else if (auto r = record.get<program::Send>()) {
         if (!isa<protocol_ir::EmitOp>(op) || text(&op, "schema") != r->schema ||
@@ -161,29 +150,11 @@ class ArtifactCorrespondence {
             text(&op, "port") != r->port || text(&op, "method") != r->method ||
             !inputs(r->inputs) || !outputs(r->outputs))
           return false;
-      } else if (auto r = record.get<program::BooleanConstant>()) {
-        auto literal = dyn_cast<plan::BoolConstantOp>(op);
-        if (!literal || literal.getValue() != r->value || !outputs({r->output}))
-          return false;
       } else if (auto r = record.get<program::Return>()) {
-        if (!isa<local::ReturnOp, protocol_ir::FinishOp>(op) ||
-            !inputs(r->values))
+        if (!isa<protocol_ir::FinishOp>(op) || !inputs(r->values))
           return false;
       } else if (auto r = record.get<program::Yield>()) {
-        if (!isa<local::LocalYieldOp, local::LocalConditionOp,
-                 protocol_ir::ProtocolYieldOp>(op))
-          return false;
-        // Local for captures are immutable explicit forwarding operands in
-        // MLIR, implicit in the artifact. Formation checks exact forwarding.
-        unsigned width = yieldWidth.value_or(op.getNumOperands());
-        if (width > op.getNumOperands() ||
-            !environment.inputs(op.getOperands().take_front(width), r->values))
-          return false;
-      } else if (auto r = record.get<program::Release>()) {
-        if (!isa<plan::ReleaseOp>(op) || !inputs(r->values))
-          return false;
-      } else if (auto r = record.get<program::Stop>()) {
-        if (!isa<local::StopOp>(op) || text(&op, "reason") != r->reason)
+        if (!isa<protocol_ir::ProtocolYieldOp>(op) || !inputs(r->values))
           return false;
       } else if (auto r = record.get<program::ReturnIf>()) {
         if (!isa<protocol_ir::FinishIfOp>(op) ||
@@ -191,82 +162,6 @@ class ArtifactCorrespondence {
                                 {r->condition}) ||
             !environment.inputs(op.getOperands().drop_front(), r->values) ||
             !outputs(r->continuations))
-          return false;
-      } else if (auto r = record.get<program::VariantConstruct>()) {
-        if (!isa<local::VariantInjectOp>(op) ||
-            text(&op, "alternative") != r->alternative ||
-            !type(op.getResult(0).getType(), r->type) || !inputs(r->payload) ||
-            !outputs({r->output}))
-          return false;
-      } else if (auto r = record.get<program::Conditional>()) {
-        if (!isa<local::LocalIfOp>(op) ||
-            !environment.inputs(op.getOperands().take_front(),
-                                {r->condition}) ||
-            !environment.inputs(op.getOperands().drop_front(), r->captures))
-          return false;
-        const program::Body *arms[] = {&r->thenBody, &r->elseBody};
-        for (unsigned i = 0; i < 2; ++i) {
-          Environment inner;
-          auto &region = op.getRegion(i).front();
-          if (!captures(region.getArguments(), r->captures, inner) ||
-              !body(region, *arms[i], std::move(inner), depth + 1))
-            return false;
-        }
-        if (!outputs(r->outputs))
-          return false;
-      } else if (auto r = record.get<program::Match>()) {
-        auto match = dyn_cast<local::LocalMatchOp>(op);
-        if (!match || r->arms.size() != op.getNumRegions() ||
-            !environment.inputs(op.getOperands().take_front(), {r->input}) ||
-            !environment.inputs(op.getOperands().drop_front(), r->captures))
-          return false;
-        for (auto [i, arm] : enumerate(r->arms)) {
-          if (cast<StringAttr>(match.getAlternatives()[i]).getValue() !=
-              arm.alternative)
-            return false;
-          auto &region = op.getRegion(i).front();
-          if (region.getNumArguments() !=
-              arm.payload.size() + r->captures.size())
-            return false;
-          Environment inner;
-          if (!inner.outputs(
-                  region.getArguments().take_front(arm.payload.size()),
-                  arm.payload) ||
-              !captures(region.getArguments().drop_front(arm.payload.size()),
-                        r->captures, inner) ||
-              !body(region, arm.body, std::move(inner), depth + 1))
-            return false;
-        }
-        if (!outputs(r->outputs))
-          return false;
-      } else if (auto r = record.get<program::For>()) {
-        if (!isa<local::LocalForOp>(op) ||
-            r->carried.size() != op.getNumResults() ||
-            !environment.inputs(op.getOperands().take_front(2),
-                                {r->lower, r->upper}))
-          return false;
-        auto &region = op.getRegion(0).front();
-        bool conditional = isa<local::LocalConditionOp>(region.back());
-        if (r->conditional != conditional ||
-            region.getNumArguments() !=
-                1 + r->carried.size() + r->captures.size())
-          return false;
-        Environment inner;
-        if (!inner.bind(region.getArgument(0), r->induction))
-          return false;
-        for (auto [i, carried] : enumerate(r->carried))
-          if (!environment.inputs(op.getOperands().slice(2 + i, 1),
-                                  {carried.second}) ||
-              !inner.bind(region.getArgument(1 + i), carried.first))
-            return false;
-        unsigned start = 2 + r->carried.size();
-        if (!environment.inputs(op.getOperands().drop_front(start),
-                                r->captures) ||
-            !captures(region.getArguments().drop_front(start - 1), r->captures,
-                      inner) ||
-            !body(region, r->body, std::move(inner), depth + 1,
-                  op.getNumResults() + unsigned(conditional)) ||
-            !outputs(r->outputs))
           return false;
       } else if (auto r = record.get<program::Loop>()) {
         auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(op);
@@ -315,7 +210,7 @@ public:
                    text(&op, "sym_name").str();
       if (!charge())
         return false;
-      if (auto b = dyn_cast<local::OperationBindingOp>(op)) {
+      if (auto b = dyn_cast<runtime::BindingOp>(op)) {
         if (binding == program.bindings.size())
           return false;
         const auto &expected = program.bindings[binding++];
@@ -328,25 +223,15 @@ public:
                             expected.application.physicalArguments)
                  : !expected.application.physicalArguments.empty()))
           return false;
-      } else if (auto fn = dyn_cast<local::FuncOp>(op)) {
-        if (function == program.functions.size())
-          return false;
-        const auto &expected = program.functions[function++];
-        if (fn.getSymName() != expected.name || !fn.getBody().hasOneBlock() ||
-            !expected.origin)
-          return false;
-        auto origin = fn->getAttrOfType<ArrayAttr>("logical_origin");
-        if (!origin || origin.size() != 2 ||
-            cast<StringAttr>(origin[0]).getValue() !=
-                expected.origin->definition ||
-            !pairs(cast<ArrayAttr>(origin[1]), expected.origin->arguments))
-          return false;
-        Environment environment;
-        auto &block = fn.getBody().front();
-        if (!signature(block, fn.getFunctionType(), expected.arguments,
-                       expected.results, environment) ||
-            !body(block, expected.body, std::move(environment)))
-          return false;
+      } else if (auto fn = dyn_cast<func::FuncOp>(op)) {
+        // The independent scoped execution comparator below checks every
+        // actual body, binding, origin, and closed-region reference. This
+        // traversal owns participant transport and declaration ordering.
+        if (!fn->hasAttr("runtime.region")) {
+          if (function == program.functions.size() ||
+              fn.getSymName() != program.functions[function++].name)
+            return false;
+        }
       } else if (auto p = dyn_cast<protocol_ir::ParticipantOp>(op)) {
         if (participant == program.participants.size())
           return false;
@@ -409,6 +294,9 @@ Expected<program::Participants> verifyProgramArtifact(Operation *subject,
     return decoded.takeError();
   auto *program = &*decoded;
   if (auto e = admit(*program))
+    return e;
+  if (auto e = verifyExecutionDefinitions(
+          module, {program->bindings, program->functions}, true))
     return e;
   ArtifactCorrespondence checker;
   if (!checker.check(module, *program))

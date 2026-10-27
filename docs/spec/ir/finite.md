@@ -2,7 +2,7 @@
 
 Finite computation retains an ordered domain and statically referenced helpers
 in the existing [mathematical profiles](protocols.md). Its executable counterpart
-uses [Local control](control.md). A preparation descriptor is not a native value
+uses [scoped control](control.md). A preparation descriptor is not a native value
 or an executable callback.
 
 Shape and bound premises use the [shared mathematical fact
@@ -70,7 +70,7 @@ computations; equality of the enumerated items alone is insufficient.
 
 Cardinalities are natural numbers. Executable arithmetic must check representable
 sizes and resource limits before multiplication can overflow. No wrapping count
-or truncated zip is a valid realization. The current flattened Local recipe
+or truncated zip is a valid realization. The current flattened scoped recipe
 applies the existing executable loop-bound admission to each product factor and
 intermediate cardinality before multiplication. Range bounds receive that same
 admission even for reversed or empty ranges. These resource checks can refuse
@@ -89,8 +89,8 @@ when they have no result dependencies.
 |---|---|---|
 | `algebra.finite_fold` | `(A..., S..., C...) -> S...` | `step` |
 | `algebra.finite_collect` | `(A..., C...) -> R` | `body` |
-| `local.finite_fold` declaration | Same fold signature | `step` |
-| `local.finite_collect` declaration | Same collect signature | `body` |
+| `exec.fold` occurrence | `(scope, A..., S..., C...) -> outcome(S...)` | `step` |
+| `exec.collect` occurrence | `(scope, A..., C...) -> outcome(R)` | `body` |
 
 Every computation has a static `domain` reference and an optional `predicate`.
 Helpers use exactly these signatures:
@@ -101,28 +101,43 @@ step(S..., I..., A..., C...) -> S...
 body(I..., A..., C...) -> B
 ```
 
-Algebra references defined private Math helpers. Local references defined
-private Local helpers; a Math helper can be explicitly realized and called from
-a Local wrapper. Local finite declarations implement the preparation callable
-interface and are invoked through `local.apply`. An owned protocol occurrence
-calls an ordinary Local wrapper through `protocol.local_call`.
+Algebra references defined private total `func.func` helpers. An ordered
+occurrence belongs to a scoped `func.func` body; an owned protocol occurrence
+enters that body through `protocol.local_call`. There is no declaration wrapper
+or second callable ABI for finite computations.
+
+The scoped Exec forms reference actual private Func callbacks that prepend a
+borrowed scope and return one explicit outcome around the data results above.
+They retain actual invocation operands and support CFG callback ABI inspection,
+without treating the body as a total mathematical expression. See
+[ordered finite requests](execution.md#ordered-finite-requests) for formation,
+premises and the source-to-executable boundary.
 
 The canonical operand partition does not reorder the operations that produced
-those operands. Domain arguments and invariant captures permit Copy/Drop. Local
+those operands. Domain arguments and invariant captures permit Copy/Drop. Scoped
 fold state follows ordinary carried-state ownership: every continuing transition
 preserves the exact affine root in its corresponding state slot, and zero trips
 return the original state. Total Algebra inputs, items, captures and results obey
-the total-data policy. Declaration-specific Local admission does not weaken the
-existing total `local.realize` or `algebra.map_realize` signatures.
+the total-data policy. An ordered signature does not turn a callback into total
+mathematics; `exec.compute` independently requires a checked mathematical closure.
+
+Callback port inspection retains the actual definition, entry arguments and
+ordered state/item/domain/capture partitions. It does not assert that a callback
+has one return expression, establish totality, or admit its body. Expression
+analysis separately requires a checked single-block return or stop view. A CFG
+can have an inspectable entry ABI without an expression view; same-numbered
+successor arguments are not entry formals. Both views are borrowed observations
+of the current subject and must be rebuilt after mutation.
 
 Collection results are field vectors, group vectors, indices, immutable sequences,
 or fixed field arrays with a proven exact cardinality. Filtering cannot justify
 an exact fixed result size without additional evidence.
 
-A Local fixed result is checked on its declaration's formal inputs. It cannot
-use a range literal or dynamic-container count known only at one application.
-Native static field-array extents survive this boundary; a source array lowered
-to a dynamic Sequence does not carry its source length as a declaration fact.
+A fixed collection result requires exact unfiltered cardinality derived from
+that occurrence's actual domain arguments. Helper premises remain local to
+their declared formals and must be discharged at every call. Static field-array
+extents can survive this boundary; lowering a source array to a dynamic sequence
+does not itself grant that sequence a type-level extent.
 
 ## Ordered evaluation
 
@@ -139,9 +154,9 @@ streamed: a later map failure must precede a reducer failure that would have
 occurred on the first item.
 
 For total numerical computations, the explicit
-[collect–fold realization](kernel.md#collectfold-composition) can eliminate a
+[collect–fold realization](computation.md#collectfold-composition) can eliminate a
 private field vector or field sequence when both callbacks and every collection use meet its
-checked composition rules. Partial Local computations retain the order above.
+checked composition rules. Partial scoped computations retain the order above.
 
 ## Total bounds and formation
 
@@ -164,11 +179,11 @@ include exact domain indices/coordinates, valid constants for fixed arrays,
 forwarding, and verified equal extents. Equal extents transfer a bound, not element
 identity. Bounds from `indices(xs)` do not authorize a distinct `ys`, an appended
 successor, or a shifted index without further evidence. Dynamic total zip likewise
-requires an equal-extent derivation; a Local runtime guard is not a Math proof.
+requires an equal-extent derivation; an ordered runtime guard is not a Math proof.
 
 A finite callback's bound may refer to a captured container when a total
 consumer proves its selected extent equals that of the domain container.
-Local consumers retain exact domain-argument bounds; captures or carried state
+Scoped consumers retain exact domain-argument bounds; captures or carried state
 do not acquire assumptions from type equality alone.
 
 Extent analysis also recognizes an exact immutable `data.sequence_empty` /
@@ -204,16 +219,16 @@ operand dependencies until a checked decomposition supports narrower cloning.
 ## Realization and checking
 
 Total finite expressions and their actual helper/domain dependencies may remain
-inside [logical Kernel units](kernel.md). Their canonical and bulk recipes are
-selected during checked Kernel realization. Ordered Local finite declarations
-retain their existing partial-control contract and preparation path.
+inside [logical computation units](computation.md). Their canonical and bulk recipes are
+selected during checked numerical realization. Ordered `exec.fold` and
+`exec.collect` retain their partial-control contract through scoped preparation.
 
 Finite structure remains available through ordinary helper expansion. Recognizers
 inspect helper bodies and native contract identities. A recognition miss uses
-Local loops, branches and checked collection access; it cannot make a well-formed
-Local expression illegal. Sum/product, dot, MSM and selected matrix contractions
+scoped loops, branches and checked collection access; it cannot make a well-formed
+ordered expression illegal. Sum/product, dot, MSM and selected matrix contractions
 retain every original domain admission check, including ignored zip factors.
-Sparse-zero elision requires a mathematical contraction, not an arbitrary Local
+Sparse-zero elision requires a mathematical contraction, not an arbitrary ordered
 callback with per-cell failures.
 
 The selector consumes a read-only computation view of actual typed domain,
@@ -296,43 +311,38 @@ Optional lane realization distinguishes a supported candidate, an unsupported
 formula, and exhausted strategy capacity. The latter two outcomes emit no payload
 or bindings and retain the checked ordered loop, including all domain admission.
 In particular, exceeding Ring depth 1,024 does not make an otherwise admitted
-Local collection invalid. Construction or correspondence errors are mandatory
-failures; they cannot authorize publishing an unchecked candidate. Explicit map
-realization, which requires its bulk implementation, reports a diagnostic when
-that implementation is unavailable.
+ordered collection invalid. Construction or correspondence errors are mandatory
+failures; they cannot authorize publishing an unchecked candidate. A source
+pointwise map is an actual finite collection with checked ordered alternatives;
+it is not a separate declaration requiring one bulk implementation.
 
-One Local preparation invocation shares realization work across helper, finite
-and map realization: 1,000,000 optional lane work units, 100,000 expanded helper
-operations, 1,000,000 helper operand/result slots, 100,000 polynomial expansion
-units and 100,000 total finite expressions.
+One scoped preparation invocation shares realization work across helper,
+finite and mathematical computation realization: 1,000,000 optional lane work
+units, 100,000 expanded helper operations, 1,000,000 helper operand/result slots,
+100,000 polynomial expansion units and 100,000 total finite expressions.
 Lane work reserves eight units per operation, block argument and operand/result
-slot before building or emitting its formula. These are compiler implementation limits,
-separate from runtime resources and Ring's own admission bounds. Standalone
-transform invocations start a fresh stage scope; an enclosing caller can supply
-the shared context. Required helper expansion reports a capacity refusal.
-Bound/extent queries made by the independent payload reader consume its enclosing
-comparison budget rather than obtaining a fresh allowance for every query.
-Required maps consume the shared helper-copy allowance, independently of optional
-lane work. The staged ordinary-call expander retains its own cumulative
-occurrence and work accounting. Diagnostic stage observations never reset either
-context. A private candidate publishes only after its source/candidate reader
-accepts; failure leaves the source and externally published occurrence state
-unchanged.
+slot before building or emitting its formula. These compiler limits are separate
+from runtime resources and Ring's own admission bounds. Required helper expansion
+reports a capacity refusal. Bound/extent queries made by the independent payload
+reader consume its enclosing comparison budget rather than obtaining a fresh
+allowance for every query. The ordinary-call expander separately charges its
+cumulative occurrence and work accounting. A private candidate publishes only
+after its source/candidate reader accepts; failure leaves the source and
+externally published occurrence state unchanged.
 
-Each finite declaration or total-expression check has a separate required-reader
-allowance of 100,000 work units. Optional exact payload comparison receives at
-most 100,000 units, capped by the required reader's remaining allowance without
-spending it. A successful comparison may consume its final unit. Work or
-representation exhaustion is distinguished from a correspondence mismatch.
-On optional comparison exhaustion, standalone Local declaration realization
-retries its whole module with finite bulk selection disabled. Late Kernel
-selection advances only the independently identified occurrence, retaining
-other choices. Numerical selection shares 1,000,000 required-reader units and
-1,000,000 optional-comparison units across its checks and attempts; each nested
-check also keeps its own bound. It never replenishes spent recognition or
-checking work.
+Each finite-expression check has a separate required-reader allowance of 100,000
+work units. Optional exact payload comparison receives at most 100,000 units,
+capped by the required reader's remaining allowance without spending it. A
+successful comparison may consume its final unit. Work or representation
+exhaustion is distinguished from a correspondence mismatch. Scoped standalone
+preparation may discard the optional proposal and retry ordered execution;
+within a numerical transaction the selector advances only the independently
+identified occurrence. Other choices remain intact. Numerical selection shares
+1,000,000 required-reader units and 1,000,000 optional-comparison units across
+checks and attempts; nested checks also keep their own bound. No retry replenishes
+spent recognition or checking work.
 
-Rejected Kernel construction transfers its actual copy, site and expansion
+Discarded numerical construction transfers actual copy, site and expansion
 charges to separate cumulative reserves before restoring the selected
 construction allowance. The expansion reserve is 16,777,216 units, counting
 helper operations, helper slots, polynomial work and finite expressions. The
@@ -371,7 +381,7 @@ interpretation.
 This nested strategy covers the explicit outer matrix-index collection and
 inner dot fold described in the [nested matrix collection contract](nested-matrix-collections.md).
 Its conditional emitter and independent structural reader implement that
-bounded equation, not an equivalence rule for arbitrary nested Local loops.
+bounded equation, not an equivalence rule for arbitrary nested scoped loops.
 Bulk and loop realizations can consume different resources. Their value and
 non-resource failure contract assumes sufficient resources; it does not require
 identical exhaustion. Capacity checks must measure representative inputs, including

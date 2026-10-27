@@ -55,13 +55,17 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
     candidate[3][1][6][0][5][2][5][1][3][1] = public;
     refused(envelope, &candidate, "native-proof-observation-payload");
     let mut candidate = original.clone();
+    // Follow the checked observation call, independent of generated ordinals.
+    let observation_helper = candidate[3][1][6][0][5][2][5][1][2].clone();
     let helper = candidate[2]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|f| f[1] == "_transcript_1")
+        .find(|f| f[1] == observation_helper)
         .unwrap();
-    helper[4][1][4][1] = helper[2][1][0].clone();
+    let inner_coordinate = helper[2].as_array().unwrap().last().unwrap()[0].clone();
+    assert_ne!(helper[4][1][4][1], inner_coordinate);
+    helper[4][1][4][1] = inner_coordinate;
     refused(envelope, &candidate, "native-proof-helper-coordinates");
     let mut candidate = original.clone();
     let body = &mut candidate[3][1][6][0][5][2][5];
@@ -84,6 +88,7 @@ pub fn nested(envelope: &Json, input: &Json, proof: &[u8]) {
                 .map(str::to_owned)
         })
         .collect();
+    assert!(!names.is_empty(), "must rename actual transcript helpers");
     for name in names {
         replace(&mut candidate, &name, &format!("renamed{name}"));
     }

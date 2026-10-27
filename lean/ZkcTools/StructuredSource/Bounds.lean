@@ -379,6 +379,93 @@ def mapShape : List Interval → Analysis (Option Interval)
       if n.lower ≥ indexLimit then return none
       mapShapeRemaining ⟨n.lower, min n.upper (indexLimit - 1)⟩ rest
 
+/-- Domain construction computes cardinality before exposing item selection.
+Items are generated on demand, so a product never allocates an unchecked list. -/
+structure DomainBound where
+  length : Interval
+  item : Nat → Analysis Env
+
+abbrev DomainContext (context : List (List Ty)) := Values (fun _ => DomainBound) context
+
+def domainOperands {context : List (List Ty)} (environment : DomainContext context) :
+    {items : List (List Ty)} → Operands context items → Analysis (List DomainBound)
+  | [], .nil => pure []
+  | _ :: _, .cons operand rest => do
+      tick (operand.index + 1)
+      return environment.get operand :: (← domainOperands environment rest)
+
+def zipItem : List DomainBound → Nat → Analysis Env
+  | [], _ => pure []
+  | domain :: rest, index => do
+      let head ← domain.item index
+      prepend head (← zipItem rest index)
+
+/-- Exact radices avoid asserting a positional correspondence from intervals.
+Uncertain products are refused by this tool, not by the logical language. -/
+def productBound : List DomainBound → Analysis DomainBound
+  | [] => pure ⟨exact 1, fun _ => pure []⟩
+  | domain :: rest => do
+      visit
+      if domain.length.lower != domain.length.upper then throw .unknown
+      let tail ← productBound rest
+      let count := domain.length.upper * tail.length.upper
+      if count > workLimit then throw .work
+      pure ⟨exact count, fun index => do
+        let head ← domain.item (index / tail.length.upper)
+        prepend head (← tail.item (index % tail.length.upper))⟩
+
+def collectionBound (arguments : Env) (container : Nat) (indices : Bool) :
+    Analysis (Option DomainBound) := do
+  let value ← argument arguments container
+  let n ← asLength value
+  vectorWork n
+  if n.lower ≥ indexLimit then return none
+  pure (some ⟨n, fun index => do
+    visit
+    if indices then return [.index (exact index)]
+    match value with
+    | .vector _ => pure [.atom]
+    | .sequence elements => return [← argument elements index]
+    | _ => throw .unknown⟩)
+
+def domainNode (arguments : Env) {context : List (List Ty)}
+    (environment : DomainContext context) {inputs : List Ty} : {items : List Ty} →
+    DomainNode inputs context items → Analysis (Option DomainBound)
+  | _, .elements _ container => do visit; collectionBound arguments container.index false
+  | _, .indices _ container => do visit; collectionBound arguments container.index true
+  | _, .range lower upper => do
+      visit
+      let .index lo ← argument arguments lower.index | throw .unknown
+      let .index hi ← argument arguments upper.index | throw .unknown
+      if lo.lower ≥ indexLimit || hi.lower ≥ indexLimit then return none
+      let n := Interval.mk (hi.lower - lo.upper) (hi.upper - lo.lower)
+      charge (2 * n.upper)
+      pure (some ⟨n, fun index => do
+        visit
+        pure [.index ⟨lo.lower + index, min (hi.upper - 1) (lo.upper + index)⟩]⟩)
+  | _, .zip types operands => do
+      visit
+      let domains ← domainOperands environment operands
+      let some n ← mapShape (domains.map (·.length)) | return none
+      chargeRepeated (1 + types.flatten.length) n.upper
+      pure (some ⟨n, zipItem domains⟩)
+  | _, .product types operands => do
+      visit
+      let domains ← domainOperands environment operands
+      let product ← productBound domains
+      chargeRepeated (1 + types.flatten.length) product.length.upper
+      return some product
+
+def domainBody (arguments : Env) {inputs : List Ty} :
+    {context : List (List Ty)} → {items : List Ty} →
+    DomainBody inputs context items → DomainContext context → Analysis (Option DomainBound)
+  | _, _, .ret value, environment => do
+      tick (value.index + 1)
+      return some (environment.get value)
+  | _, _, .letNode node next, environment => do
+      let some domain ← domainNode arguments environment node | return none
+      domainBody arguments next (.cons domain environment)
+
 /-- Calls specialize checked acyclic bodies to their arguments. The analysis
 meter is checked at every recursive entry, independently of estimated work. -/
 partial def operation (definitions : Helpers) (op : Op) (args : Env)
@@ -478,17 +565,11 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
         let rest := args.drop spec.domain.inputs.length
         let initial := rest.take spec.state.length
         let captures := rest.drop spec.state.length
-        let container ← argument domainArgs spec.domain.container.index
-        let n ← asLength container
-        vectorWork n
-        charge (2 * n.upper)
+        let some domain ← domainBody domainArgs spec.domain.body .nil | return none
+        charge (2 * domain.length.upper)
         let result ← iterate (fun index current => do
-          let item ← if spec.domain.indices then pure (Value.index (exact index))
-            else match container with
-              | .vector _ => pure .atom
-              | .sequence elements => argument elements index
-              | _ => throw .unknown
-          let callbackArgs := item :: (← prepend domainArgs captures)
+          let item ← domain.item index
+          let callbackArgs ← prepend item (← prepend domainArgs captures)
           if !spec.predicate.isEmpty then
             let predicate ← operation definitions (.invoke spec.predicateHelper) callbackArgs .nil
             match predicate with
@@ -496,8 +577,41 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
             | some [.boolean _] => pure ()
             | _ => throw .unknown
           operation definitions (.invoke spec.stepHelper) (← prepend current callbackArgs) .nil)
-          n.upper 0 initial
+          domain.length.upper 0 initial
         return some result
+    | .collect spec, _, .nil =>
+        let domainArgs := args.take spec.domain.inputs.length
+        let captures := args.drop spec.domain.inputs.length
+        let some domain ← domainBody domainArgs spec.domain.body .nil | return none
+        if domain.length.upper > vectorLimit then throw .value
+        chargeRepeated (3 + spec.domain.items.length + args.length) domain.length.upper
+        let mut collected : Env := []
+        let mut count : Nat := 0
+        let mut uncertain := domain.length.lower != domain.length.upper
+        for index in [:domain.length.upper] do
+          visit
+          let callbackArgs ← prepend (← domain.item index) (← prepend domainArgs captures)
+          let enabled ← if spec.predicate.isEmpty then pure (some true) else do
+            let result ← operation definitions (.invoke spec.predicateHelper) callbackArgs .nil
+            match result with
+            | some [.boolean value] => pure value
+            | none => pure (some false)
+            | _ => throw .unknown
+          if enabled != some false then
+            let result ← operation definitions (.invoke spec.bodyHelper) callbackArgs .nil
+            match result with
+            | none => pure ()
+            | some [value] =>
+                count := count + 1
+                uncertain := uncertain || enabled.isNone
+                collected := value :: collected
+            | _ => throw .unknown
+        match spec.collection with
+        | .vector _ => return some [← length ⟨if uncertain then 0 else count, count⟩]
+        | .sequence _ =>
+            if uncertain then throw .unknown
+            charge collected.length
+            return some [.sequence collected.reverse]
     | .fieldEmbed .., _, .nil | .fieldConstant .., _, .nil | .fieldAdd .., _, .nil
     | .fieldSubtract .., _, .nil | .fieldMultiply .., _, .nil
     | .groupIdentity .., _, .nil | .groupAdd .., _, .nil | .groupScale .., _, .nil =>

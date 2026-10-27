@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Execution.h"
@@ -105,11 +106,12 @@ void queryAuthority(MLIRContext &context) {
 void unverifiedCompletion(MLIRContext &context) {
   auto source = parseSourceString<ModuleOp>(R"mlir(module {
     "protocol.module"() ({
-      local.func @identity(%x: i1) -> i1 attributes {logical_origin=["identity",[]]} {
-        local.return %x : i1
+      func.func @identity(%scope: !runtime.scope, %x: i1) -> !exec.outcome<(i1)> attributes {no_inline,runtime.origin=["identity",[]]} {
+        %r = "exec.returned"(%x) : (i1)->!exec.outcome<(i1)>
+        func.return %r : !exec.outcome<(i1)>
       }
       "protocol.participant"() ({ ^entry(%x: i1):
-        %ready = local.call @identity(%x) {site="ready"} : (i1) -> i1
+        %ready = "protocol.local_call"(%x) {callee=@identity,role="P",site="ready"} : (i1) -> i1
         "protocol.finish_if"(%ready,%x) {owner="P",site="done"} : (i1,i1) -> ()
         "protocol.finish"(%x) : (i1) -> ()
       }) {sym_name="p",function_type=(i1)->i1,instance="main",role="P"} : () -> ()
@@ -118,6 +120,9 @@ void unverifiedCompletion(MLIRContext &context) {
   })mlir",
                                             &context);
   require(bool(source), "completion reader fixture refused");
+  // Public executable extraction reads the selected native profile; source
+  // helper returns become charged native completions at physical selection.
+  run(*source, protocol::createSelectPhysicalPass());
   auto valid = protocol::readExecutionModel(source->getOperation());
   require(bool(valid), "public reader refused ordered completion");
   // Keep operation invariants valid while violating dominance. The public
@@ -226,12 +231,14 @@ void suppliedMaterialization(MLIRContext &context) {
 void changeLocalOperand(ModuleOp module) {
   unsigned mutations = 0;
   module.walk([&](Operation *op) {
-    if (mutations || !(op->getParentOfType<local::FuncOp>() ||
-                       op->getParentOfType<mlir::ModuleOp>()))
+    if (mutations || !op->getParentOfType<func::FuncOp>())
       return;
-    if (op->getNumOperands() == 2 && op->getOperand(0) != op->getOperand(1) &&
-        op->getOperand(0).getType() == op->getOperand(1).getType()) {
-      op->setOperand(0, op->getOperand(1));
+    unsigned offset = isa<exec::ApplyOp>(op) ? 1 : 0;
+    if (op->getNumOperands() == offset + 2 &&
+        op->getOperand(offset) != op->getOperand(offset + 1) &&
+        op->getOperand(offset).getType() ==
+            op->getOperand(offset + 1).getType()) {
+      op->setOperand(offset, op->getOperand(offset + 1));
       ++mutations;
     }
   });
@@ -358,8 +365,8 @@ void scheduling(MLIRContext &context) {
     if (op.getRole() == "P")
       sender = op;
   });
-  SmallVector<local::CallOp> calls(
-      sender.getBody().front().getOps<local::CallOp>());
+  SmallVector<protocol_ir::LocalCallOp> calls(
+      sender.getBody().front().getOps<protocol_ir::LocalCallOp>());
   require(calls.size() == 3 && calls[0].getSite() == "gate" &&
               calls[0].getNumResults() == 0,
           "guard did not remain before later work");
@@ -378,8 +385,8 @@ void scheduling(MLIRContext &context) {
   mutated->walk([&](protocol_ir::ParticipantOp op) {
     if (op.getRole() != "P")
       return;
-    SmallVector<local::CallOp> local(
-        op.getBody().front().getOps<local::CallOp>());
+    SmallVector<protocol_ir::LocalCallOp> local(
+        op.getBody().front().getOps<protocol_ir::LocalCallOp>());
     local[1]->moveBefore(local[0]);
   });
   require(succeeded(verify(*mutated)),
@@ -435,12 +442,23 @@ void scheduling(MLIRContext &context) {
   run(*physical, protocol::createSelectPhysicalPass({}, false, true));
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),
           "storage-release pipeline changed participant control data flow");
-  // Generic transformations must retain a zero-result stopping invocation.
-  run(*bound, createCanonicalizerPass());
+  // Canonicalize the participant schedule, where the stopping call is opaque.
+  // Its scoped callee has a checked CFG profile; unrestricted CF rewrites do
+  // not preserve that profile merely because they preserve SSA formation.
+  {
+    PassManager manager(&context);
+    manager.nest<protocol_ir::ProtocolModuleOp>()
+        .nest<protocol_ir::ParticipantOp>()
+        .addPass(createCanonicalizerPass());
+    require(succeeded(manager.run(*bound)),
+            "participant canonicalization lost the execution profile");
+  }
   run(*bound, createCSEPass());
   run(*bound, createSymbolDCEPass());
   unsigned guards = 0;
-  bound->walk([&](local::CallOp call) { guards += call.getSite() == "gate"; });
+  bound->walk([&](protocol_ir::LocalCallOp call) {
+    guards += call.getSite() == "gate";
+  });
   require(guards == 1, "generic transforms erased the zero-result guard");
 }
 } // namespace
@@ -462,6 +480,10 @@ int main() {
   require(
       succeeded(mathematical::verifyProjectionPreserved(*common, *projected)),
       "projection lost original interface");
+  auto wrongOwner = copy(*projected);
+  wrongOwner->walk([&](protocol_ir::GuardOp op) { op.setOwner("outsider"); });
+  require(failed(mathematical::verifyProjectionPreserved(*common, *wrongOwner)),
+          "guard owner mutation passed projection correspondence");
   auto root = unit(*projected);
   auto relation = *root.getBody().front().getOps<relation::DeclareOp>().begin();
   rename(root, relation, "renamed_predicate");
@@ -536,11 +558,14 @@ int main() {
     if (op.getRole() != "V")
       return;
     OpBuilder builder(&op.getBody().front().back());
-    auto guard = *op.getBody().front().getOps<local::GuardOp>().begin();
-    local::GuardOp::create(builder, op.getLoc(), guard.getCondition(),
-                           "unrecorded");
+    auto guard = *op.getBody().front().getOps<protocol_ir::GuardOp>().begin();
+    protocol_ir::GuardOp::create(builder, op.getLoc(), guard.getCondition(),
+                                 "unrecorded", op.getRole());
   });
   require(failed(verify(*malformed)), "unrecorded participant action admitted");
+  malformed = copy(*projected);
+  malformed->walk([&](protocol_ir::GuardOp op) { op.setOwner("outsider"); });
+  require(failed(verify(*malformed)), "guard for another participant admitted");
   malformed = copy(*projected);
   malformed->walk([&](protocol_ir::ProtocolEntryOp op) {
     op->setAttr("trusted", UnitAttr::get(&context));
@@ -551,7 +576,7 @@ int main() {
     op->setAttr("trusted", UnitAttr::get(&context));
   });
   require(failed(verify(*malformed)), "unknown relation annotation admitted");
-  malformed = copy(*bound);
+  malformed = copy(*physical);
   malformed->walk([&](protocol_ir::ProjectionOp op) {
     op.setCalculationsAttr(ArrayAttr::get(&context, {}));
   });

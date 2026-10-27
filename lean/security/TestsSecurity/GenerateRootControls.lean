@@ -1,6 +1,7 @@
 import ZkcSecurity.Generation.Roots.Catalogue
 import ZkcSecurity.Generation.SigmaCompleteness
 import ZkcSecurity.Generation.SubjectABI
+import ZkcSecurity.Generation.SumcheckSourceHelpers
 
 /-! Controls for generation refusals; no root configuration is owned by tests. -/
 namespace TestsSecurity.GenerateRootControls
@@ -76,6 +77,20 @@ run_cmd do
     unless aliases.map sourceAliasName == permuted.map sourceAliasName do
       Lean.throwError "source alias names depend on helper positions"
     let .ok program := check root.snapshot | Lean.throwError "valid protocol source refused"
+    let definitions := program.payload.definitions
+    let .ok bodyBindings := ZkcSecurity.Generation.SumcheckSourceHelpers.source definitions "definitions"
+      | Lean.throwError "valid source helper graph refused"
+    let .ok reorderedBindings := ZkcSecurity.Generation.SumcheckSourceHelpers.source definitions.reverse "definitions"
+      | Lean.throwError "reordered source helper graph refused"
+    unless bodyBindings == reorderedBindings do
+      Lean.throwError "helper binding candidates depend on declaration ordinals"
+    let firstHelper := ZkcExamples.Structured.MapFirstBodies.firstHelper
+    let [firstBody] := definitions.filter (·.helper == firstHelper)
+      | Lean.throwError "missing first helper control"
+    let missing := definitions.filter (·.helper != firstHelper)
+    for malformed in [missing, definitions ++ [firstBody]] do
+      refuses ("sumcheck-helper-association-" ++ firstHelper.name)
+        (ZkcSecurity.Generation.SumcheckSourceHelpers.analyze malformed)
     let protocols := aliases.filter fun candidate => match candidate.origin with
       | .protocol _ => true
       | .local .. => false

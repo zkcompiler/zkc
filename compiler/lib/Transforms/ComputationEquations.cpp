@@ -1,7 +1,6 @@
 #include "ComputationEquations.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <limits>
@@ -394,8 +393,7 @@ std::optional<Elementwise> analyzeLanes(
     ArrayRef<ComputationDiagnostic> accessDeclines = {}, Value yielded = {},
     Value state = {}, ValueRange additionalYields = {}) {
   if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
-      !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
-      body.back().getNumOperands() != 1 ||
+      !isa<func::ReturnOp>(body.back()) || body.back().getNumOperands() != 1 ||
       body.back().getOperand(0).getType() != field)
     return std::nullopt;
   if (!payload.work.take(body.getNumArguments() + laneArguments.size() + 1 +
@@ -601,8 +599,7 @@ matchLaneFormula(Block &body, Type field, ValueRange laneArguments,
   ComputationWork remaining;
   remaining.equations = std::numeric_limits<uint64_t>::max();
   EquationWork work{remaining};
-  PayloadAnalysis payload(operations, body.back().getOperands(),
-                          isa<local::FuncOp>(body.getParentOp()), work);
+  PayloadAnalysis payload(operations, body.back().getOperands(), false, work);
   llvm::DenseMap<Value, Value> lookups;
   for (Operation *op : operations) {
     auto *facet = payload.contracts.lookup(op);
@@ -712,11 +709,11 @@ matchNestedContraction(const ComputationView &structure,
   EquationWork work{remaining, false, &observed};
   if (!work.take())
     return std::nullopt;
-  if (!isa<local::FiniteCollectOp>(structure.computation.operation))
+  if (!structure.computation.collect)
     return std::nullopt;
   NestedContraction selected;
   selected.outer = structure.computation;
-  if (selected.outer.predicate || !isa<local::FuncOp>(selected.outer.helper))
+  if (selected.outer.predicate)
     return std::nullopt;
   const auto *view = &structure;
   if (view->nested.size() != 1 || view->iteration.size() != 1 ||
@@ -730,12 +727,10 @@ matchNestedContraction(const ComputationView &structure,
   if (!equations.reduction && !equations.pointwiseReduction &&
       !equations.bilinear && !equations.elementwise)
     observed = childDiagnostic;
-  auto call = dyn_cast_or_null<local::ApplyOp>(child.occurrence);
+  auto *call = child.occurrence;
   if (!matrix || !call || child.computation.collect ||
       child.computation.predicate || child.computation.states != 1 ||
-      !isa<local::FiniteFoldOp>(child.computation.operation) ||
-      !isa<local::FuncOp>(child.computation.helper) || !equations.reduction ||
-      equations.reduction->inputs.size() != 2 ||
+      !equations.reduction || equations.reduction->inputs.size() != 2 ||
       !equations.reduction->matrixOperand ||
       !equations.reduction->selectedIndex)
     return std::nullopt;
@@ -790,6 +785,9 @@ matchNestedContraction(const ComputationView &structure,
   // Reuse the inner reduction equation through the actual environment. Extra
   // scalar instructions may establish neutral identities; they must all be
   // live and total. Indexed accesses are outside this nested reader's slice.
+  PayloadAnalysis innerPayload(child.payload, child.results, true, work);
+  if (!innerPayload.supported)
+    return std::nullopt;
   for (Operation *op : child.payload) {
     if (!work.take())
       return std::nullopt;
@@ -827,7 +825,7 @@ matchNestedContraction(const ComputationView &structure,
   for (const auto &axis : view->axes)
     selected.witness.freeAxes.push_back(axis.identity);
   selected.inner = child.computation;
-  selected.call = view->sourceOperation(call.getOperation());
+  selected.call = view->sourceOperation(call);
   selected.matrix = *matrix;
   selected.vector = *vector;
   selected.axis = axis;

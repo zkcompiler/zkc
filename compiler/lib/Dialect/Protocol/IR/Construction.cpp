@@ -4,7 +4,8 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
@@ -101,19 +102,20 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
   if (plan.root == ConstructionPlan::Root::Local) {
     if (!plan.initializer)
       return fail("local root requires a factory");
-    auto factory = symbols.lookupNearestSymbolFrom<local::FuncOp>(
-        record, plan.initializer);
-    if (!factory || failed(factory->getName().verifyInvariants(factory)) ||
-        !factory.getFunctionType().getInputs().empty() ||
-        !equal(factory.getResultTypes(), plan.state) || !plan.suite.empty() ||
+    auto factory =
+        symbols.lookupNearestSymbolFrom<func::FuncOp>(record, plan.initializer);
+    auto signature = scopedDataSignature(factory);
+    if (!signature || failed(factory->getName().verifyInvariants(factory)) ||
+        !signature.getInputs().empty() ||
+        !equal(signature.getResults(), plan.state) || !plan.suite.empty() ||
         plan.nativeBase)
       return fail("local root requires a matching zero-argument factory");
   } else {
     if (plan.initializer || nativeChallengeField(plan.suite).empty() ||
         plan.state.size() != 1 ||
         plan.state.front() !=
-            local::CapabilityType::get(record.getContext(),
-                                       "transcript:" + plan.suite))
+            runtime::CapabilityType::get(record.getContext(),
+                                         "transcript:" + plan.suite))
       return fail("host root requires the selected managed transcript state");
   }
   auto bytes = decodeBoundType(record.getContext(), {"bytes", {}, {}});
@@ -142,11 +144,12 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
   auto functionMatches = [&](FlatSymbolRefAttr reference, TypeRange inputs,
                              TypeRange outputs) {
     auto function =
-        symbols.lookupNearestSymbolFrom<local::FuncOp>(record, reference);
-    return function &&
+        symbols.lookupNearestSymbolFrom<func::FuncOp>(record, reference);
+    auto signature = scopedDataSignature(function);
+    return signature &&
            succeeded(function->getName().verifyInvariants(function)) &&
-           equal(function.getArgumentTypes(), inputs) &&
-           equal(function.getResultTypes(), outputs);
+           equal(signature.getInputs(), inputs) &&
+           equal(signature.getResults(), outputs);
   };
   if (auto selected = record.getCodecAttr()) {
     ConstructionCodec codec;
@@ -288,13 +291,14 @@ readConstructionPlan(protocol_ir::ConstructionOp record,
       }
     }
     auto function =
-        symbols.lookupNearestSymbolFrom<local::FuncOp>(record, handler);
-    if (!function || failed(function->getName().verifyInvariants(function)))
-      return fail("construction handler must be an ordinary Local function");
+        symbols.lookupNearestSymbolFrom<func::FuncOp>(record, handler);
+    auto signature = scopedDataSignature(function);
+    if (!signature || failed(function->getName().verifyInvariants(function)))
+      return fail("construction handler must be an ordinary scoped function");
     // UniformIndex also receives the explicit request bound. Occurrence
     // admission checks this argument against the actual query request.
     if (selection.kind == ConstructionRule::Kind::Query &&
-        function.getFunctionType().getNumInputs() == parameters.size() + 1)
+        signature.getNumInputs() == parameters.size() + 1)
       parameters.push_back(index);
     if (!functionMatches(handler, parameters, results))
       return fail("construction handler signature differs from its rule");

@@ -77,6 +77,10 @@ abbrev sourceHelper26 : CheckedDefinition := payload.definitions.get ⟨26, by d
 theorem sourceHelper26_body : sourceHelper26.body = ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.helper26Body := by kernel_rfl
 abbrev sourceHelper27 : CheckedDefinition := payload.definitions.get ⟨27, by decide +kernel⟩
 theorem sourceHelper27_body : sourceHelper27.body = ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.helper27Body := by kernel_rfl
+abbrev sourceHelper28 : CheckedDefinition := payload.definitions.get ⟨28, by decide +kernel⟩
+theorem sourceHelper28_body : sourceHelper28.body = ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.helper28Body := by kernel_rfl
+abbrev sourceHelper29 : CheckedDefinition := payload.definitions.get ⟨29, by decide +kernel⟩
+theorem sourceHelper29_body : sourceHelper29.body = ZkcExamples.Structured.Generated.Bindings.SmallSumcheckInputs.helper29Body := by kernel_rfl
 abbrev sourceProtocol0 : CheckedProtocol := payload.protocols.get ⟨0, by decide +kernel⟩
 theorem sourceProtocol0_member : sourceProtocol0 ∈ payload.protocols := List.get_mem _ _
 def maximum0 : Nat := 2
@@ -124,7 +128,7 @@ abbrev step0Realized (input1 : (Option F)) (input2 : (Option Nat)) (input3 : (Op
   (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_726564756365" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons (input1) (.cons (input2) (.cons (input3) .nil)))))))
 
 abbrev step1 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input0 : (Option (List F))) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (Participant.owned 1 1 (invoke tables.closed sourceHelper27.helper) (.cons (input0) (.cons ((out0).get (.there (.there (.there (.there .here))))) (.cons ((out0).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper29.helper) (.cons (input0) (.cons ((out0).get (.there (.there (.there (.there .here))))) (.cons ((out0).get (.there (.there (.there (.there (.there .here)))))) .nil))))
 def callContext0 : ProtocolContext := (ProtocolContext.enter {} "label_726564756365" [0, 1])
 theorem callContext0_roles : (callContext0).roles 0 ≠ (callContext0).roles 1 := by decide
 

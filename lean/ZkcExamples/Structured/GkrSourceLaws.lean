@@ -4,7 +4,8 @@ public import ZkcExamples.Structured.GkrSourceViews
 public import ZkcExamples.Structured.MapPrefixContracts
 public import ZkcExamples.Structured.SumcheckHelperLaws
 public import ZkcExamples.Structured.MapSourceExpansions
-public import Zkc.Source.Structured.MapLaws
+public import Zkc.Source.Structured.CollectLaws
+public import Zkc.Source.Structured.BodyBindings
 public import Zkc.Construction.Structured
 public import Zkc.Polynomial.Multilinear.ListRestriction
 public import Zkc.Polynomial.Multilinear.Line
@@ -34,35 +35,67 @@ open MapPrefixBodies GkrSourceViews
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 
 
+abbrev collectBindings : MultilinearCollectBodies.Bindings :=
+  ⟨"_finite_admission_1",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body",
+    "_mathematical_admission_2"⟩
+
+abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_3", "_mathematical_admission_0"⟩
+
+abbrev lineBindings : MultilinearCollectBodies.Bindings :=
+  ⟨"_finite_admission_28",
+    "zkl_map_c146dd3d9114244d244e3c5f1750c58c167183b76600905d92674f3b3e023a6f_domain",
+    "zkl_map_c146dd3d9114244d244e3c5f1750c58c167183b76600905d92674f3b3e023a6f_body",
+    "_mathematical_admission_14"⟩
+
 set_option maxRecDepth 20000 in
 structured_associations GkrSourceViews
-  [empty := SumcheckHelperBodies.empty, append := SumcheckHelperBodies.append,
-    helper2 := MapFirstBodies.less, helper3 := MapFirstBodies.rows,
-    helper4 := MapFirstBodies.shape, helper5 := MapFirstBodies.table,
-    helper6 := MapFirstBodies.halves, helper7 := MapFirstBodies.interpolate,
-    helper8 := MapFirstBodies.map, helper9 := MapFirstBodies.first,
-    helper10 := MapPrefixBodies.step, helper11 := MapPrefixBodies.foldStep,
-    helper12 := MapPrefixBodies.fold, helper13 := MapPrefixBodies.foldWrapper,
-    helper14 := MapPrefixBodies.prefix, helper15 := MapFirstBodies.values,
-    helper16 := MapFirstBodies.valuesRealization,
-    evaluate := GkrSourceBodies.evaluate, helper18 := GkrSourceBodies.helper18,
-    selectBlock := GkrSourceBodies.selectBlock, helper42 := GkrSourceBodies.helper42,
-    helper43 := GkrSourceBodies.helper43, sum := GkrSourceBodies.sum,
-    evaluateWiring := GkrSourceBodies.evaluateWiring, helper73 := GkrSourceBodies.helper73,
-    helper74 := GkrSourceBodies.helper74, helper75 := GkrSourceBodies.helper75,
-    helper76 := GkrSourceBodies.helper76, helper77 := GkrSourceBodies.helper77,
-    helper78 := GkrSourceBodies.helper78, helper79 := GkrSourceBodies.helper79,
+  [empty := GkrSourceBodies.empty,
+    append := GkrSourceBodies.append,
+    helper2 := GkrSourceBodies.helper2,
+    helper3 := GkrSourceBodies.helper3,
+    helper4 := GkrSourceBodies.helper4,
+    helper5 := GkrSourceBodies.helper5,
+    helper6 := GkrSourceBodies.helper6,
+    helper7 := GkrSourceBodies.helper7,
+    helper8 := GkrSourceBodies.helper8,
+    helper9 := GkrSourceBodies.helper9,
+    helper10 := GkrSourceBodies.helper10,
+    helper11 := GkrSourceBodies.helper11,
+    helper12 := GkrSourceBodies.helper12,
+    helper13 := GkrSourceBodies.helper13,
+    helper14 := GkrSourceBodies.helper14,
+    helper15 := GkrSourceBodies.helper15,
+    helper16 := GkrSourceBodies.helper16,
+    evaluate := GkrSourceBodies.evaluate,
+    helper18 := GkrSourceBodies.helper18,
+    selectBlock := GkrSourceBodies.selectBlock,
+    helper42 := GkrSourceBodies.helper42,
+    helper43 := GkrSourceBodies.helper43,
+    sum := GkrSourceBodies.sum,
+    evaluateWiring := GkrSourceBodies.evaluateWiring,
+    helper73 := GkrSourceBodies.helper73,
+    helper74 := GkrSourceBodies.helper74,
+    helper75 := GkrSourceBodies.helper75,
+    helper76 := GkrSourceBodies.helper76,
+    helper77 := GkrSourceBodies.helper77,
+    helper78 := GkrSourceBodies.helper78,
+    helper79 := GkrSourceBodies.helper79,
     helper80 := GkrSourceBodies.helper80,
     evaluateCoefficients := GkrSourceBodies.evaluateCoefficients,
-    linePoint := GkrSourceBodies.linePoint]
+    linePoint := GkrSourceBodies.linePoint,
+    interpolateRealization := GkrSourceBodies.interpolateRealization,
+    interpolateCallback := GkrSourceBodies.interpolateCallback,
+    lineInterpolationRealization := GkrSourceBodies.lineInterpolationRealization,
+    lineCallback := GkrSourceBodies.lineCallback]
 
-theorem first_bodies : MapFirstContracts.Bodies unit.definitions :=
-  ⟨helper2_association, helper3_association, helper4_association, helper5_association,
-    helper6_association, helper7_association, helper8_association, helper9_association⟩
+theorem first_bodies : MapFirstContracts.Bodies unit.definitions collectBindings := by
+  bind_structured_bodies
 
-theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions :=
-  ⟨helper10_association, helper11_association, helper12_association, helper13_association,
-    helper14_association, helper15_association, helper16_association⟩
+theorem prefix_bodies : MapPrefixContracts.Bodies unit.definitions prefixBindings := by
+  bind_structured_bodies
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -70,7 +103,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 /-- The closed meanings of the admitted unit's helpers. -/
 abbrev helpers : Meanings F G := closedMeanings unit.definitions
 
-theorem prefix_laws : MapPrefixContracts.Laws (helpers (F := F) (G := G)) :=
+theorem prefix_laws : MapPrefixContracts.Laws (helpers (F := F) (G := G)) prefixBindings :=
   MapPrefixContracts.laws_of_bodies unit.linked prefix_bodies first_bodies
 
 /-! ## Vectors -/
@@ -103,7 +136,7 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
     GkrSourceBodies.evaluateBody.denote (meaning F G table) (Values.cons xs (.cons point .nil)).get =
       (invoke table tableHelper (inputs xs point.length 1)).bind fun constructed =>
       (invoke table prefixHelper (constructed.append (.cons point .nil))).bind fun residual =>
-      (invoke table valuesRealizationHelper residual).bind fun values =>
+      (invoke table (MultilinearPrefixBodies.valuesRealizationHelper prefixBindings.values) residual).bind fun values =>
       .done (.cons (values.get .here).sum .nil) := by
   simp only [GkrSourceBodies.evaluateBody, inputs, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
@@ -130,7 +163,7 @@ theorem evaluate_expansion (table : Meanings F G) (xs point : List F)
             cases rest with
             | cons w rest => cases rest; rfl
 
-theorem evaluate_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
+theorem evaluate_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table prefixBindings)
     (xs point : List F) (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
     GkrSourceBodies.evaluateBody.denote (meaning F G table) (Values.cons xs (.cons point .nil)).get =
       if HasShape xs point.length 1 then .done (.cons (restrictPrefixValues xs point).sum .nil)
@@ -191,7 +224,7 @@ theorem evaluateWiring_expansion (table : Meanings F G) (xs gate left right : Li
       (invoke table prefixHelper (constructed.append (.cons gate .nil))).bind fun first =>
       (invoke table prefixHelper (first.append (.cons left .nil))).bind fun second =>
       (invoke table prefixHelper (second.append (.cons right .nil))).bind fun third =>
-      (invoke table valuesRealizationHelper third).bind fun values =>
+      (invoke table (MultilinearPrefixBodies.valuesRealizationHelper prefixBindings.values) third).bind fun values =>
       .done (.cons (values.get .here).sum .nil) := by
   simp only [GkrSourceBodies.evaluateWiringBody, inputs, Region.denote, meaning,
     Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
@@ -328,26 +361,34 @@ theorem interpolate_equation (low high r : F) :
   rw [helper42_body_eq, MapSourceExpansions.first_interpolate]
   rfl
 
-theorem map_body (table : Meanings F G) (start finish : List F) (t : F) :
-    GkrSourceBodies.helper43Body.denote (meaning F G table)
-        (Values.cons start (.cons finish (.cons t .nil))).get =
-      (Evaluation.denoteMap table ⟨GkrSourceBodies.helper42Helper.name, "bls12-381.fr", [true, true, false]⟩
-        (.cons start (.cons finish (.cons t .nil))) :
-          PIR.Process closedInterface (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result =>
-      .done (.cons (result.get .here) .nil) := by
+theorem line_realization_body (table : Meanings F G) (low high r : F) :
+    GkrSourceBodies.lineInterpolationRealizationBody.denote (meaning F G table)
+      (Values.cons low (.cons high (.cons r .nil))).get =
+      (invoke table GkrSourceBodies.helper42Helper (.cons low (.cons high (.cons r .nil)))).bind
+        fun result => .done (.cons (result.get .here) .nil) := by
   derive_process
+
+theorem line_callback_equation (low high : List F) (lo hi r : F) :
+    invoke (helpers (G := G)) (MultilinearCollectBodies.mapCallbackHelper lineBindings)
+      (.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))) =
+      .done (.cons (lo + (hi - lo) * r) .nil) := by
+  rw [lineCallback_association.invoke unit.linked]
+  change (MultilinearCollectBodies.mapCallbackBody lineBindings).denote (meaning F G helpers)
+    (Values.cons lo (.cons hi (.cons low (.cons high (.cons r .nil))))).get = _
+  rw [MultilinearCollectLaws.callback_body]
+  rw [lineInterpolationRealization_association.invoke unit.linked,
+    line_realization_body, interpolate_equation]
+  rfl
 
 theorem map_equation (start finish : List F) (t : F) (sameLength : finish.length = start.length)
     (small : start.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper43Helper (.cons start (.cons finish (.cons t .nil))) =
       .done (.cons (linePoints start finish t) .nil) := by
-  refine (helper43_association.invoke unit.linked (.cons start (.cons finish (.cons t .nil)))).trans ?_
-  rw [map_body]
-  have mapped := Evaluation.denoteMap_twoRows_broadcast (helpers (F := F) (G := G))
-    GkrSourceBodies.helper42Helper.name "bls12-381.fr" start finish t small sameLength
-    (fun low high => low + (high - low) * t) (fun low high => interpolate_equation low high t)
-  rw [mapped]
-  rfl
+  rw [helper43_association.invoke unit.linked]
+  change (MultilinearCollectBodies.mapBody lineBindings).denote (meaning F G helpers)
+    (Values.cons start (.cons finish (.cons t .nil))).get = _
+  exact MultilinearCollectLaws.map_body helpers lineBindings start finish t small sameLength.symm
+    (fun lo hi => line_callback_equation start finish lo hi t)
 
 theorem linePoint_body (table : Meanings F G) (start finish : List F) (t : F) :
     GkrSourceBodies.linePointBody.denote (meaning F G table)
@@ -369,8 +410,8 @@ theorem linePoint_equation (start finish : List F) (t : F) (sameLength : finish.
 /-- The fold of `evaluate_coefficients` over the coefficient vector, with the
 state `(accumulated, power)` and the point as its capture. -/
 abbrev powerFold : FoldSpec :=
-  ⟨⟨"finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain",
-    [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩,
+  ⟨DomainSpec.elements "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_domain"
+    [.vector "bls12-381.fr"] (.vector "bls12-381.fr") .here,
     [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"],
     "finite_zkl_247e1b3b5a6ce35694e95bcda98d3515aa558355e01cc2e1d2878fc90608735d_s0_body", "", .local⟩
 
@@ -493,6 +534,7 @@ theorem powerReference_fold (point : F) (coefficients : List F) (accumulated pow
   | nil => rfl
   | cons coefficient rest ih => exact ih _ _
 
+set_option backward.isDefEq.respectTransparency false in
 theorem fold_equation (coefficients : List F) (accumulated power point : F)
     (small : coefficients.length < indexLimit) :
     invoke (helpers (G := G)) GkrSourceBodies.helper79Helper
@@ -500,8 +542,9 @@ theorem fold_equation (coefficients : List F) (accumulated power point : F)
       .done (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).1
         (.cons (coefficients.foldl (powerTransition point) (accumulated, power)).2 .nil)) := by
   rw [helper79_association.invoke unit.linked, helper79_body]
-  have folded := Evaluation.denoteFold_reference (helpers (F := F) (G := G)) powerFold
+  have folded := Evaluation.denoteFold_reference_map (helpers (F := F) (G := G)) powerFold
     (.cons coefficients .nil) (.cons accumulated (.cons power .nil)) (.cons point .nil) coefficients
+    (fun coefficient => .cons coefficient .nil)
     (Evaluation.elements_admit _ _ _ _ _ small) (powerReference point) (fun _ => True) trivial
     (by
       intro state coefficient _ _

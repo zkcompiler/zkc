@@ -1,5 +1,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/raw_ostream.h"
@@ -127,13 +128,13 @@ int main() {
               codes[0].code == "invalid-original-rank",
           "type verifier exposes a structured refusal");
 
-  OperationState state(location, zkc::local::StopOp::getOperationName());
+  OperationState state(location, zkc::exec::StopOp::getOperationName());
   auto *operation = Operation::create(state);
   zkc::diagnostics::emit(operation->emitOpError(), "local", "detail context");
   operation->destroy();
   require(codes.size() == 1 && codes[0].code == "local" &&
               codes[0].detail == "detail context" &&
-              text == "'local.stop' op local: detail context",
+              text == "'exec.stop' op local: detail context",
           "operation prefix and complete detail preserved");
 
   // Native entry symbol verification preserves the missing target in detail.

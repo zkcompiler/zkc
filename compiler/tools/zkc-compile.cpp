@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
                {"observations", true},
                {"structured_diagnostics", true},
                {"phases", llvm::json::Array{"entry", "protocol", "participant",
-                                            "exec", "physical"}},
+                                            "exec", "execution", "physical"}},
                {"settings",
                 llvm::json::Array{"simplify", "release-storage", "finite-bulk",
                                   "fuse-vector-reductions", "fuse-collect-fold",

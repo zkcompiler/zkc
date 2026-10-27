@@ -52,7 +52,7 @@ def sourceBindings (program : Program) (binding : Binding) (output : Output) : E
     "variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]\n\n" ++
     "abbrev program := " ++ B ++ ".program\nabbrev payload := program.payload\nabbrev routing := " ++ B ++ ".routing\n" ++
     "abbrev context := " ++ B ++ ".context\n" ++
-    "theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions := by bind_structured_bodies\n\n"
+    "theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions :=\n  " ++ B ++ ".helper_bodies.terminal\n\n"
   text := text ++ "theorem source_root_association : " ++ O ++ ".root.signature = " ++ B ++ ".program.payload.entry.signature := by kernel_rfl\n\n"
   let contexts := listText (binding.calls.map fun call => O ++ "." ++ call.call.name.replace "step" "callContext")
   let occurrences := listText (binding.calls.map fun call => B ++ ".occurrence" ++ toString call.occurrence ++ ".protocol")

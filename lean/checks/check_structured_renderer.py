@@ -237,7 +237,7 @@ example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
     binding_rows = [["binding", "max_index", "index.constant", [], ""],
                     ["binding", "sum", "vector.sum", [field[1]], ""]]
     limit = ["function", "limit", "local", "private", [], [["index"]], [], [], ["limit", []],
-             ["block", [[["exec", "algebra.exec.index_constant", "max_index", [maximum]],
+             ["block", [[["exec", "exec.apply", "max_index", [maximum]],
                          [], [["index"]], [], "maximum"]], ["return", [0]]]]
     entry = ["function", "main", "protocol", "public", [], [["bool"]],
              ["protocol", ["P"], [], [["P"]]], [], ["main", []],
@@ -261,7 +261,7 @@ example : (RenderedPrimitives.snapshot.definitions[0]?.bind fun definition =>
       instructions[0]?.bind fun (.instruction descriptor _ _ _ _) => match descriptor with
         | .exec operation binding parameters => some (operation, binding, parameters)
         | _ => none
-    | _ => none) = some ("algebra.exec.index_constant", "max_index", ["18446744073709551615"]) := by
+    | _ => none) = some ("exec.apply", "max_index", ["18446744073709551615"]) := by
   decide +kernel
 example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true := by
   decide +kernel

@@ -123,6 +123,34 @@ entry fn Main(x:bool)->bool{return dispose(x);}
         assert value is bit
 
 
+def test_host_calculation_can_execute_a_stopped_local_helper(toolchain, journal, directory):
+    source = '''module example;
+fn checked(value:bool)->bool{
+  return if value {value} else {stop "abort";};
+}
+entry fn Main(value:bool,call:bool)->bool{
+  return if call {checked(value)} else {value};
+}
+'''
+    package, pin = compile_function(toolchain, journal, directory, source)
+    skipped, value = execute(toolchain, journal, directory, package, pin, 'skipped',
+                             {'value': False, 'call': False})
+    assert value is False and skipped['execution']['calls'] == []
+    returned, value = execute(toolchain, journal, directory, package, pin, 'returned',
+                              {'value': True, 'call': True})
+    assert value is True
+    calls = returned['execution']['calls']
+    assert len(calls) == 1 and calls[0]['operation'] == 'numeric' and calls[0]['completed']
+    failed, value = execute(toolchain, journal, directory, package, pin, 'stopped',
+                            {'value': False, 'call': True},
+                            refuses='entry-host-numeric-stopped')
+    assert value is None and not failed['execution']['completed']
+    calls = failed['execution']['calls']
+    assert len(calls) == 1 and calls[0]['operation'] == 'numeric' and not calls[0]['completed']
+    assert calls[0]['native']['stop'] is not None
+    assert 'abort' in json.dumps(calls[0]['native']['stop'])
+
+
 def test_opaque_owner_factory_and_numerical_pass_through_execute(toolchain, journal, directory):
     source = '''module example;
 module Vault{

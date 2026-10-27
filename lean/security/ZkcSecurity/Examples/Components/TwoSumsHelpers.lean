@@ -4,8 +4,8 @@ public import ZkcExamples.Structured.Generated.Mathematics.TwoSums
 public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
 public import Zkc.Source.Structured.BodyBindings
-public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
+public import ZkcExamples.Structured.OriginalSumcheckTerminal
 
 @[expose] public section
 
@@ -23,14 +23,14 @@ open PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
 
 /-- Install the reusable mathematical body templates against this actual unit.
 The tactic searches full signatures and bodies; no helper-number table is supplied. -/
-theorem source_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies TwoSumsInputs.imported.program := by
-  bind_structured_bodies
+theorem source_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies TwoSumsInputs.imported.program :=
+  ⟨OriginalSumcheckInstances.Two.producer_bodies, OriginalSumcheckInstances.Two.terminal_bodies⟩
 
-theorem first_bodies : MapFirstContracts.Bodies TwoSumsInputs.unit.definitions :=
-  source_bodies.sumcheck.first
+theorem first_bodies : MapFirstContracts.Bodies TwoSumsInputs.unit.definitions
+    OriginalSumcheckInstances.Two.collectBindings := OriginalSumcheckInstances.Two.first_bodies
 
-theorem prefix_bodies : MapPrefixContracts.Bodies TwoSumsInputs.unit.definitions :=
-  source_bodies.prefixBodies
+theorem prefix_bodies : MapPrefixContracts.Bodies TwoSumsInputs.unit.definitions
+    OriginalSumcheckInstances.Two.prefixBindings := OriginalSumcheckInstances.Two.prefix_bodies
 
 theorem helper_bodies : SumcheckUnitContracts.Bodies TwoSumsInputs.unit.definitions :=
   source_bodies.sumcheck
@@ -40,7 +40,8 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 
 noncomputable abbrev helperMeanings : Meanings F G := closedMeanings imported.program.payload.definitions
 
-theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G)) :=
+theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G))
+    OriginalSumcheckInstances.Two.prefixBindings :=
   MapPrefixContracts.laws_of_bodies TwoSumsInputs.unit.linked prefix_bodies first_bodies
 
 /-- The actual producer endpoint helper, including raw-shape and index stops. -/
@@ -65,7 +66,8 @@ theorem check_equation (raw point : List F) (claim : F)
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim))) :=
   (source_bodies.check.invoke TwoSumsInputs.unit.linked (checkInputs raw point claim)).trans
     (check_generic_body _ prefix_laws
-      (fun raw point claim => source_bodies.checkTable.invoke TwoSumsInputs.unit.linked
+      (fun raw point claim => (by bind_structured_bodies : BodyIn TwoSumsInputs.unit.definitions
+        checkTableHelper (checkTableBody OriginalSumcheckInstances.Two.prefixBindings)).invoke TwoSumsInputs.unit.linked
         (checkInputs raw point claim)) raw point claim rawBound pointBound)
 
 /-- The actual final math function is conjunction, for arbitrary inputs. -/

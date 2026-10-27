@@ -34,7 +34,7 @@ def mutateRepeat (mutation : Mutation) : Instruction → Instruction
   | instruction => instruction
 
 /-- Select the append primitive structurally, never by a helper's name. -/
-def mutateFunction (mutation : Mutation) (function : Zkc.Source.Structured.Function) :
+def mutateFunction (bindings : List Binding) (mutation : Mutation) (function : Zkc.Source.Structured.Function) :
     Zkc.Source.Structured.Function :=
   let .block instructions terminator := function.body
   if function.kind == .protocol then
@@ -43,16 +43,18 @@ def mutateFunction (mutation : Mutation) (function : Zkc.Source.Structured.Funct
           then .ret [3, 0, 1, 2, 3, 5] else terminator)) }
   else if mutation == .append then
     match instructions with
-    | [.instruction (.exec "algebra.exec.vector_append" binding []) [0, 1] results [] site] =>
+    | [.instruction (.exec "exec.apply" binding []) [0, 1] results [] site] =>
+        if bindings.any (fun b => b.name == binding && b.contract == "vector.append") then
         { function with body := (.block
-            [.instruction (.exec "algebra.exec.vector_append" binding []) [0, 1] results [] site]
+            [.instruction (.exec "exec.apply" binding []) [0, 1] results [] site]
             (.ret [1])) }
+        else function
     | _ => function
   else function
 
 def mutate (mutation : Mutation) (snapshot : Snapshot) : Snapshot :=
   { snapshot with definitions := snapshot.definitions.map fun
-      | .function function => .function (mutateFunction mutation function)
+      | .function function => .function (mutateFunction snapshot.bindings mutation function)
       | definition => definition }
 
 /- A syntax projection sufficient to refute equality of complete raw trees.

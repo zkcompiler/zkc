@@ -225,6 +225,8 @@ constexpr ContractRow contractRows[] = {
     {"quotient.add", Native, Compatibility::Independent},
     {"quotient.subtract", Native, Compatibility::Independent},
     {"quotient.multiply", Native, Compatibility::Independent},
+    {"quotient.prepare_matrix", Native, Compatibility::Independent},
+    {"quotient.matvec", Native, Compatibility::Independent},
     {"quotient.norm_within", Native, Compatibility::Independent},
     {"quotient.project", Native, Compatibility::Independent},
     {"quotient.ntt", Native, Compatibility::Independent},

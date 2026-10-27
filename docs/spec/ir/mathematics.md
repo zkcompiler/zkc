@@ -194,8 +194,8 @@ units per participant block and depth 128. It validates required bounds before r
 operations. The native compiler enables it only with `fixPolynomialFactors`
 or CLI `--fix-polynomial-factors`.
 
-`zkc-lower-math` forms owned [Kernel units](kernel.md) under the demand-based
-Local outlining contract. Checked Kernel realization supplies executable recipes.
+`zkc-lower-math` forms owned [Computation units](computation.md) under the demand-based
+scoped outlining contract. Checked numerical realization supplies executable recipes.
 Static extraction becomes `field_array.at<F,N>` with its index attribute;
 packing uses existing vector construction followed by
 `field_array.from_vector<F,N>`. The latter checks exact length.

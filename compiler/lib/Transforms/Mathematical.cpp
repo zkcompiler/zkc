@@ -4,8 +4,11 @@
 #include "PreparedProtocol.h"
 #include "ProtocolApplications.h"
 #include "RealizationTrace.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/IRMapping.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/CSE.h"
@@ -22,13 +25,11 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
-#include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
-#include "zkc/Transforms/NestedContractions.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
@@ -194,13 +195,13 @@ class Projector {
             operation = protocol_ir::ConstructionStartOp::getOperationName();
         } else if (isa<zkc::protocol_ir::LocalCallOp>(op)) {
           if (op.getAttr("role") == role)
-            operation = zkc::local::CallOp::getOperationName();
+            operation = zkc::protocol_ir::LocalCallOp::getOperationName();
         } else if (op.getAttr("owner") == role) {
           operation =
               isa<protocol_ir::FinishIfOp>(op)
                   ? protocol_ir::FinishIfOp::getOperationName()
               : isa<zkc::protocol_ir::GuardOp>(op)
-                  ? zkc::local::GuardOp::getOperationName()
+                  ? zkc::protocol_ir::GuardOp::getOperationName()
                   : zkc::protocol_ir::ParticipantQueryOp::getOperationName();
         }
         if (!operation.empty())
@@ -447,9 +448,9 @@ class Projector {
           }
           arguments.push_back(mapping.lookup(input));
         }
-        auto invocation = zkc::local::CallOp::create(
+        auto invocation = zkc::protocol_ir::LocalCallOp::create(
             builder, op.getLoc(), call.getResultTypes(), arguments,
-            call.getCalleeAttr(), call.getSiteAttr());
+            call.getCalleeAttr(), call.getSiteAttr(), call.getRoleAttr());
         for (auto [old, value] :
              zip(call.getResults(), invocation.getResults()))
           mapping.map(old, value);
@@ -495,9 +496,9 @@ class Projector {
       } else if (auto guard = dyn_cast<zkc::protocol_ir::GuardOp>(op)) {
         if (guard.getOwnerAttr() != roleName)
           continue;
-        zkc::local::GuardOp::create(builder, op.getLoc(),
-                                    mapping.lookup(guard.getCondition()),
-                                    guard.getSite());
+        zkc::protocol_ir::GuardOp::create(builder, op.getLoc(),
+                                          mapping.lookup(guard.getCondition()),
+                                          guard.getSite(), guard.getOwner());
       } else if (isa<zkc::protocol_ir::MathematicalReturnOp,
                      zkc::protocol_ir::ProtocolYieldOp>(op)) {
         SmallVector<Value> returned;
@@ -612,21 +613,12 @@ public:
     declarations = new Block();
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
-    bool hasFinite = false;
-    for (auto program :
-         common.getBody().front().getOps<protocol_ir::MathematicalOp>())
-      program.walk(
-          [&](Operation *op) { hasFinite |= finite::isComputation(op); });
-    llvm::DenseSet<Operation *> mapHelpers;
-    if (failed(algebra::collectMapHelpers(common, mapHelpers)))
-      return {};
     for (auto &op : common.getBody().front()) {
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
-      if (mapHelpers.contains(&op) || isa<algebra::MapRealizeOp>(op) ||
-          (hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
-          isa<zkc::relation::DeclareOp, mlir::ModuleOp, zkc::local::FuncOp,
-              zkc::local::OperationBindingOp>(op)) {
+      if (isa<data::DomainOp, func::FuncOp>(op) ||
+          isa<zkc::relation::DeclareOp, mlir::ModuleOp,
+              zkc::runtime::BindingOp>(op)) {
         auto *copy = builder.clone(op);
         // Participant projection does not retain the original Math closure or
         // transport declaration contracts. Its statement manifest keeps only
@@ -867,8 +859,7 @@ uint64_t operationCount(ModuleOp module) {
   module.walk([&](Operation *) { ++count; });
   return count;
 }
-// Keep RetainMaps through Finish inside one invocation: the occurrence record
-// and cumulative expansion budget are not recomputable pass analyses.
+// Observe preparation stages without changing their shared work or ownership.
 LogicalResult runRealizationStage(ModuleOp module, StringRef name,
                                   RealizationTrace *trace,
                                   llvm::function_ref<LogicalResult()> action) {
@@ -905,17 +896,16 @@ LogicalResult runRealizationStage(ModuleOp module, StringRef name,
   return result;
 }
 } // namespace
-OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
-                                             MathematicalSelectionPolicy policy,
-                                             RealizationTrace *trace) {
+namespace {
+// Source preparation keeps scoped definitions and finite requests intact.
+// Numerical selection and helper substitution on executable occurrences have
+// their own checked services after participant demand placement.
+OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
+                                    MathematicalSelectionPolicy policy,
+                                    ArrayRef<ApplicationStart> starts = {},
+                                    RealizationTrace *trace = nullptr) {
   RealizationWork work;
-  return rewriteLocalAlgorithms(source, policy, trace, work);
-}
-OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
-                                             MathematicalSelectionPolicy policy,
-                                             RealizationTrace *trace,
-                                             RealizationWork &work) {
-  RealizationScope scope(trace, "local-algorithms", source, policy, &work);
+  RealizationScope scope(trace, "prepare-source", source, policy, &work);
   if (failed(verify(source)))
     return {};
   if (!llvm::hasSingleElement(*source.getBody())) {
@@ -934,43 +924,6 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
   }
   scope.propose(policy);
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  // Retain effective family restrictions with each request. Later selection
-  // may narrow them, but cannot revive a family disabled during preparation.
-  auto candidateUnit =
-      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-  for (auto map :
-       candidateUnit.getBody().front().getOps<algebra::MapRealizeOp>()) {
-    auto previous = map->getAttrOfType<ArrayAttr>("policy");
-    SmallVector<Attribute> flags;
-    for (auto [index, enabled] : llvm::enumerate(
-             ArrayRef<bool>{policy.finiteBulk, policy.vectorReductionFusion,
-                            policy.collectFoldFusion}))
-      flags.push_back(BoolAttr::get(
-          source.getContext(),
-          enabled &&
-              (!previous || cast<BoolAttr>(previous[index]).getValue())));
-    map->setAttr("policy", ArrayAttr::get(source.getContext(), flags));
-  }
-  if (trace) {
-    trace->initialWork = work;
-    std::string configuration;
-    llvm::raw_string_ostream out(configuration);
-    out << "finite-bulk=" << policy.finiteBulk
-        << ", vector-reduction-fusion=" << policy.vectorReductionFusion
-        << ", collect-fold-fusion=" << policy.collectFoldFusion
-        << ", lane-work=" << work.lanes
-        << ", helper-operations=" << work.helperOperations
-        << ", helper-slots=" << work.helperSlots
-        << ", polynomial-work=" << work.polynomial
-        << ", finite-expressions=" << work.finiteExpressions
-        << ", structural-work=" << work.matching.structural
-        << ", equation-work=" << work.matching.equations
-        << ", evidence-work=" << work.matching.evidence;
-    if (trace->remarks)
-      candidate->emitRemark() << "mathematical preparation: " << configuration;
-    if (trace->ir)
-      *trace->ir << "// Mathematical preparation: " << configuration << "\n";
-  }
   auto stage = [&](StringRef name, llvm::function_ref<LogicalResult()> action) {
     auto result = runRealizationStage(*candidate, name, trace, action);
     if (trace)
@@ -978,110 +931,52 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
     return result;
   };
   if (failed(stage("polynomial-recipes",
-                   [&] { return expandPolynomialRecipes(*candidate); })) ||
-      failed(stage("math-realizations", [&] {
-        return expandMathRealizations(*candidate, policy, &work, trace);
-      })))
-    return {};
-  // Services publish independently checked edges. Retain structure through
-  // nested/ordinary finite selection, using the same expansion
-  // state for both phases. Observability does not split this transaction.
-  bool retain = policy.vectorReductionFusion;
-  candidate->walk([&](Operation *op) {
-    retain |= finite::isDeclaration(op) || isa<algebra::MapRealizeOp>(op);
-  });
-  protocol::AlgorithmExpansionState expansion;
-  if (retain) {
-    if (failed(stage("retain-computations",
-                     [&] {
-                       return protocol::expandAlgorithms(
-                           *candidate,
-                           protocol::AlgorithmExpansionPhase::RetainMaps,
-                           expansion, nullptr, trace);
-                     })) ||
-        failed(stage("nested-contractions",
-                     [&] {
-                       return nested::rewriteFiniteCollections(
-                           *candidate, expansion, policy, &work, trace);
-                     })) ||
-        failed(stage("finite-realizations", [&] {
-          return finite::realizeLocals(*candidate, policy, &work, trace);
-        })))
-      return {};
-  }
-  // Maps and adjacent reductions remain exact until physical feasibility is
-  // known. Ordinary algorithms still finish; only admitted map requests remain.
-  if (failed(stage("finish-expansion", [&] {
-        return retain
-                   ? protocol::expandAlgorithms(
-                         *candidate, protocol::AlgorithmExpansionPhase::Finish,
-                         expansion, nullptr, trace)
-                   : protocol::expandAlgorithms(*candidate, nullptr, trace);
-      })))
-    return {};
-  if (!policy.vectorReductionFusion)
-    scope.selection(
-        source, DecisionFamily::VectorReduction, RealizationChoice::Ordered,
-        {OptimizationStatus::PolicyDisabled, OptimizationReason::Policy});
-  scope.publish(PublicationBoundary::ReturnedCandidate);
-  return candidate;
-}
-
-namespace {
-// Admit and realize Local algorithms before generic total simplification. The
-// accepted Local definitions are frozen for preparation and projection checks.
-OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
-                                    MathematicalSelectionPolicy policy,
-                                    ArrayRef<ApplicationStart> starts = {},
-                                    RealizationTrace *trace = nullptr) {
-  RealizationScope scope(trace, "prepare-source", source, policy);
-  scope.propose(policy);
-  auto candidate = rewriteLocalAlgorithms(source, policy, trace);
-  if (!candidate)
+                   [&] { return expandPolynomialRecipes(*candidate); })))
     return {};
   auto unit =
-      cast<zkc::protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   OwningOpRef<protocol_ir::ProtocolModuleOp> beforeApplications(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  if (failed(expandApplications(unit, starts)) || failed(verify(*candidate)) ||
-      failed(verifyPreparedValues(*beforeApplications, unit, starts)))
+  if (failed(stage("protocol-applications", [&] {
+        if (failed(expandApplications(unit, starts)) ||
+            failed(verify(*candidate)))
+          return failure();
+        return verifyPreparedValues(*beforeApplications, unit, starts);
+      })))
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  // Freeze local application expansion and the complete owned numerical
-  // closures before participant rewriting. Kernel lowering checks their
-  // executable realization separately, after placement.
-  OwningOpRef<ModuleOp> frozenLocals(ModuleOp::create(unit.getLoc()));
-  OpBuilder snapshotBuilder(frozenLocals->getBodyRegion());
-  llvm::DenseSet<Operation *> mapHelpers;
-  if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
-    return {};
+  // Freeze scoped definitions and owned numerical closures before participant
+  // rewriting. Their executable realization is checked after placement.
+  OwningOpRef<ModuleOp> frozenDefinitions(ModuleOp::create(unit.getLoc()));
+  OpBuilder snapshotBuilder(frozenDefinitions->getBodyRegion());
   for (auto &op : unit.getBody().front())
-    if (mapHelpers.contains(&op) ||
-        isa<algebra::MapRealizeOp, mlir::ModuleOp, zkc::local::FuncOp,
-            zkc::local::OperationBindingOp>(op))
+    if (isa<data::DomainOp, func::FuncOp, mlir::ModuleOp,
+            zkc::runtime::BindingOp>(op))
       snapshotBuilder.clone(op);
-  unsigned remainingHelpers = realizedHelperOperationLimit;
-  uint64_t helperIndices = 1000000;
   SymbolTableCollection helperSymbols;
-  for (auto program :
-       unit.getBody().front().getOps<zkc::protocol_ir::MathematicalOp>()) {
-    OptimizationOutcome outcome;
-    if (failed(inlineHelpers(program, remainingHelpers, helperIndices,
-                             helperSymbols, nullptr, nullptr, &outcome))) {
-      scope.failure(
-          RequiredFailure{"preparation helper expansion", outcome.capacity});
-      return {};
-    }
-    if (simplify ? failed(simplifyCalculations(program))
-                 : failed(verifyNestedDegrees(program)))
-      return {};
-  }
-  // Upstream folders/patterns are not profile admission. Refuse a candidate
-  // that leaves the closed vocabulary instead of weakening that vocabulary.
-  if (failed(verify(*candidate)) ||
-      failed(verifyProtocolPreparationPreserved(*expanded, unit)) ||
-      failed(verifyAuthoredLocalsPreserved(*frozenLocals, unit)))
+  if (failed(stage("participant-mathematics", [&] {
+        for (auto program :
+             unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+          OptimizationOutcome outcome;
+          if (failed(inlineHelpers(program, work.helperOperations,
+                                   work.helperSlots, helperSymbols, nullptr,
+                                   nullptr, &outcome))) {
+            scope.failure(RequiredFailure{"preparation helper expansion",
+                                          outcome.capacity});
+            return failure();
+          }
+          if (simplify ? failed(simplifyCalculations(program))
+                       : failed(verifyNestedDegrees(program)))
+            return failure();
+        }
+        // Upstream folders are not profile admission. Independently compare
+        // participant substitutions and every retained definition.
+        if (failed(verify(*candidate)) ||
+            failed(verifyProtocolPreparationPreserved(*expanded, unit)))
+          return failure();
+        return verifyAuthoredLocalsPreserved(*frozenDefinitions, unit);
+      })))
     return {};
   scope.publish(PublicationBoundary::ReturnedCandidate);
   return candidate;
@@ -1144,11 +1039,11 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
            "their callers";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    // Preparation can form numerical units and realize partial Local work even
-    // when the source has no Algebra operations or types.
-    registry
-        .insert<local::LocalDialect, kernel::KernelDialect, exec::ExecDialect,
-                algebra::AlgebraDialect, func::FuncDialect>();
+    // Polynomial recipes can introduce scoped execution even when the input
+    // has no executable operations. Numerical selection belongs to lowering.
+    registry.insert<runtime::RuntimeDialect, exec::ExecDialect,
+                    algebra::AlgebraDialect, func::FuncDialect,
+                    cf::ControlFlowDialect, arith::ArithDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1239,9 +1134,10 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
            "programs";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry.insert<zkc::protocol_ir::ProtocolDialect, zkc::local::LocalDialect,
-                    zkc::kernel::KernelDialect, exec::ExecDialect,
-                    zkc::algebra::AlgebraDialect, func::FuncDialect>();
+    registry.insert<runtime::RuntimeDialect, zkc::protocol_ir::ProtocolDialect,
+                    exec::ExecDialect, zkc::algebra::AlgebraDialect,
+                    func::FuncDialect, cf::ControlFlowDialect,
+                    arith::ArithDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1278,6 +1174,49 @@ PreparedProtocol::prepare(ModuleOp source, MathematicalSelectionPolicy policy,
 OwningOpRef<ModuleOp> PreparedProtocol::snapshot() const {
   return module ? OwningOpRef<ModuleOp>(cast<ModuleOp>(module.get()->clone()))
                 : OwningOpRef<ModuleOp>();
+}
+
+OwningOpRef<ModuleOp> PreparedProtocol::execute() && {
+  auto prepared = std::move(module);
+  if (!prepared)
+    return {};
+  auto owner =
+      cast<protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
+  // A numerical Host fragment has no protocol, participant, statement,
+  // projection, relation, construction or deployment declarations. Refuse a
+  // role-bearing source rather than silently discarding its obligations.
+  if (owner.getProfile() != protocol_ir::Profile::Protocol ||
+      owner->getAttrs().size() != 1 ||
+      any_of(owner.getBody().front(), [](Operation &op) {
+        return !isa<func::FuncOp, data::DomainOp, runtime::BindingOp>(op);
+      })) {
+    (void)diagnostics::emit(owner.emitOpError(), "numerical-execution-profile",
+                            "expected role-free numerical declarations");
+    return {};
+  }
+  auto expanded = protocol::expandScopedHelpers(*prepared);
+  if (!expanded)
+    return {};
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*expanded)->clone()));
+  auto before =
+      cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front());
+  auto after =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  after.setProfile(protocol_ir::Profile::Exec);
+  // The only new edge is profile selection. Compare every actual declaration
+  // in order; helper substitution was checked against the prepared source.
+  if (failed(verify(*candidate)) ||
+      expanded->getOperation()->getAttrDictionary() !=
+          candidate->getOperation()->getAttrDictionary() ||
+      before.getBody().front().getOperations().size() !=
+          after.getBody().front().getOperations().size())
+    return {};
+  for (auto [original, actual] :
+       zip(before.getBody().front(), after.getBody().front()))
+    if (!OperationEquivalence::isEquivalentTo(
+            &original, &actual, OperationEquivalence::IgnoreLocations))
+      return {};
+  return candidate;
 }
 
 OwningOpRef<ModuleOp> PreparedProtocol::project(bool simplify) && {

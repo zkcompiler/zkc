@@ -72,17 +72,63 @@ for fixture in ['attempt-abandonment', 'attempt-abandonment-silent']:
 
 for i, suite in enumerate(SUITES):
     with case(f'long discarded prefix and shorter completion suite {i}'):
-        helper = ''' "local.binding"() {sym_name="index",contract="index.constant",arguments=[],implementation=""} : ()->()
- local.func @count(%retry:i1)->ui64 attributes {logical_origin=["count",[]]} {
-   %n = "local.if"(%retry) ({
-     %two = "algebra.exec.index_constant"() {binding=@index,parameters=["2"],site="two"} : ()->ui64
-     "local.yield"(%two) : (ui64)->()
-   }, {
-     %one = "algebra.exec.index_constant"() {binding=@index,parameters=["1"],site="one"} : ()->ui64
-     "local.yield"(%one) : (ui64)->()
-   }) {site="count"} : (i1)->ui64
-   local.return %n : ui64
- }
+        helper = '''    "runtime.binding"() <{arguments = [], contract = "index.constant", implementation = "", sym_name = "index"}> : () -> ()
+    func.func @count(%arg0: !runtime.scope, %arg1: i1) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["count", []]} {
+      %0 = "exec.test"(%arg0, %arg1) <{site = "count"}> : (!runtime.scope, i1) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      cf.cond_br %1, ^bb3, ^bb4
+    ^bb2(%2: !exec.stop):  // 7 preds: ^bb0, ^bb3, ^bb4, ^bb6, ^bb7, ^bb9, ^bb10
+      %3 = "exec.failed"(%2) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %3 : !exec.outcome<(ui64)>
+    ^bb3:  // pred: ^bb1
+      %4 = "runtime.enter_scope"(%arg0) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 0>, selection = "then", site = "count"}> : (!runtime.scope) -> !exec.outcome<(!runtime.scope)>
+      "exec.dispatch"(%4)[^bb6, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
+    ^bb4:  // pred: ^bb1
+      %5 = "runtime.enter_scope"(%arg0) <{kind = "conditional", operandSegmentSizes = array<i32: 1, 0, 0>, selection = "else", site = "count"}> : (!runtime.scope) -> !exec.outcome<(!runtime.scope)>
+      "exec.dispatch"(%5)[^bb9, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
+    ^bb5(%6: ui64):  // 2 preds: ^bb8, ^bb11
+      %7 = "exec.returned"(%6) : (ui64) -> !exec.outcome<(ui64)>
+      return %7 : !exec.outcome<(ui64)>
+    ^bb6(%8: !runtime.scope):  // pred: ^bb3
+      %9 = call @count_arm_0(%8) : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %10 = "runtime.exit_scope"(%8, %9) : (!runtime.scope, !exec.outcome<(ui64)>) -> !exec.outcome<(!runtime.transfer<(ui64)>)>
+      "exec.dispatch"(%10)[^bb7, ^bb2] : (!exec.outcome<(!runtime.transfer<(ui64)>)>) -> ()
+    ^bb7(%11: !runtime.transfer<(ui64)>):  // pred: ^bb6
+      %12 = "runtime.accept_transfer"(%arg0, %11) : (!runtime.scope, !runtime.transfer<(ui64)>) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%12)[^bb8, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb8(%13: ui64):  // pred: ^bb7
+      cf.br ^bb5(%13 : ui64)
+    ^bb9(%14: !runtime.scope):  // pred: ^bb4
+      %15 = call @count_arm_1(%14) : (!runtime.scope) -> !exec.outcome<(ui64)>
+      %16 = "runtime.exit_scope"(%14, %15) : (!runtime.scope, !exec.outcome<(ui64)>) -> !exec.outcome<(!runtime.transfer<(ui64)>)>
+      "exec.dispatch"(%16)[^bb10, ^bb2] : (!exec.outcome<(!runtime.transfer<(ui64)>)>) -> ()
+    ^bb10(%17: !runtime.transfer<(ui64)>):  // pred: ^bb9
+      %18 = "runtime.accept_transfer"(%arg0, %17) : (!runtime.scope, !runtime.transfer<(ui64)>) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%18)[^bb11, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb11(%19: ui64):  // pred: ^bb10
+      cf.br ^bb5(%19 : ui64)
+    }
+    func.func private @count_arm_0(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["2"], site = "two"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb1(%1: ui64):  // pred: ^bb0
+      %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>
+      return %2 : !exec.outcome<(ui64)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %4 : !exec.outcome<(ui64)>
+    }
+    func.func private @count_arm_1(%arg0: !runtime.scope) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.region} {
+      %0 = "exec.apply"(%arg0) <{binding = @index, parameters = ["1"], site = "one"}> : (!runtime.scope) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb1(%1: ui64):  // pred: ^bb0
+      %2 = "exec.complete"(%arg0, %1) : (!runtime.scope, ui64) -> !exec.outcome<(ui64)>
+      return %2 : !exec.outcome<(ui64)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %4 : !exec.outcome<(ui64)>
+    }
 '''
         source = fold.replace(' "protocol.func"', helper + ' "protocol.func"', 1)
         source = source.replace('%n = "data.index"() {value="2"} : ()->ui64',

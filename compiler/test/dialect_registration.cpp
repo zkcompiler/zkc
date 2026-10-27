@@ -31,8 +31,20 @@ int main() {
   require(!native.getLoadedDialect("table"));
   require(!native.isOperationRegistered("protocol.exec_func"));
   check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
-  check<zkc::local::LocalDialect>(native, "local");
-  check<zkc::plan::PlanDialect>(native, "plan");
+  for (auto name : {"local", "kernel", "plan"}) {
+    require(!nativeRegistry.getDialectAllocator(name));
+    require(!native.getLoadedDialect(name));
+  }
+  for (auto name :
+       {"local.func", "local.apply", "kernel.call", "algebra.map_realize"})
+    require(!native.isOperationRegistered(name));
+  require(!nativeRegistry.getDialectAllocator("plan"));
+  require(!native.getLoadedDialect("plan"));
+  for (auto name : {"plan.apply", "plan.bool_constant", "plan.release"})
+    require(!native.isOperationRegistered(name));
+  check<zkc::runtime::RuntimeDialect>(native, "runtime");
+  require(native.isOperationRegistered("runtime.binding"));
+  require(!native.isOperationRegistered("local.binding"));
 
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
@@ -43,12 +55,12 @@ int main() {
   context.loadAllAvailableDialects();
   require(zkc::hasProtocolDialects(context));
   check<zkc::protocol_ir::ProtocolDialect>(context, "protocol");
-  check<zkc::local::LocalDialect>(context, "local");
+  require(!context.getLoadedDialect("local"));
   check<zkc::crypto::CryptoDialect>(context, "crypto");
   require(!registry.getDialectAllocator("table"));
   check<zkc::algebra::AlgebraDialect>(context, "algebra");
   check<zkc::poly::PolynomialDialect>(context, "poly");
-  check<zkc::plan::PlanDialect>(context, "plan");
+  require(!registry.getDialectAllocator("plan"));
   check<zkc::commitment::CommitmentDialect>(context, "commitment");
   require(!registry.getDialectAllocator("pcs"));
   require(!registry.getDialectAllocator("oracle"));

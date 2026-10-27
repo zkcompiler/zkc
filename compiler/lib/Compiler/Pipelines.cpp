@@ -37,8 +37,8 @@ void registerCompilerPipelines() {
         pm.addPass(protocol::createProjectProtocolPass(true, policy));
         if (!options.projectOnly) {
           pm.addPass(protocol::createLowerMathPass(policy));
-          pm.addPass(protocol::createSelectPhysicalPass({}, options.linear,
-                                                        options.release));
+          pm.addPass(protocol::createSelectPhysicalPass(
+              {}, options.linear, options.release, nullptr, {}, policy));
         }
       });
 }

@@ -51,7 +51,7 @@ theorem operationOn_inverse_congr (model : DomainModel)
     exact congrArg primitiveOutcome
       (congrFun (congrFun (Primitive.evaluateOn_inverse_congr model.toFieldModel inverse) primitive) args)
   | invoke helper => rcases bodies with _ | _; rfl
-  | fold spec => rcases bodies with _ | _; rfl
+  | fold spec | collect spec => rcases bodies with _ | _; rfl
   | map spec => rcases bodies with _ | _; rfl
   | branch captures outputs =>
     rcases bodies with _ | ⟨yes, _ | ⟨no, _ | _⟩⟩

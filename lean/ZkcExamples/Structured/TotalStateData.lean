@@ -14,7 +14,7 @@ open Zkc.Source.Structured
 def snapshot : Snapshot where
   source := "sha256:9d1f6b98ff434eb2795ce018b05f8fd261ac84a65a1ad46e568f97cf04b6d12b"
   entry := "main"
-  domains := [⟨"items", [.vector "bls12-381.fr"], .indices 0 0⟩]
+  domains := [⟨"items", [.vector "bls12-381.fr"], [.indices 0 0], 0⟩]
   relations := []
   bindings := []
   definitions := [.function ⟨"step", .math, .privateDef, [.field "bls12-381.fr", .field "bls12-381.fr", .index, .vector "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"], none, [⟨2, 3, 0⟩], none, (.block [.instruction (.boundedAt "bls12-381.fr") [3, 2] [.field "bls12-381.fr"] [] ""] (.ret [2, 0]))⟩, .function ⟨"main", .protocol, .publicDef, [.vector "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"], some ⟨["P"], [["P"], ["P"], ["P"]], [["P"], ["P"]]⟩, [], some (.protocol ⟨"main", []⟩), (.block [.instruction (.fold "items" "step" "") [0, 1, 2] [.field "bls12-381.fr", .field "bls12-381.fr"] [] ""] (.ret [0, 1]))⟩]

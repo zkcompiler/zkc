@@ -48,7 +48,7 @@ abbrev valuesHelper : Helper :=
     .math, [vector, .index, .index], [vector]⟩
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"finite_" ++ totalHelper.name ++ "_s1_domain", [vector], (.vector "bls12-381.fr"), .here, false⟩,
+  ⟨DomainSpec.elements ("finite_" ++ totalHelper.name ++ "_s1_domain") [vector] (.vector "bls12-381.fr") .here,
     [scalar], [], "finite_" ++ totalHelper.name ++ "_s1_body", "", .math⟩
 
 def addBody : Region dialect addHelper.inputs addHelper.outputs :=
@@ -153,13 +153,12 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
   simp only [totalBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
     Operands.eval, Values.get, Regions.denote,
     PIR.Process.bind, Environment.prepend, Environment.push, Nat.cast_zero]
-  have admitted : (foldSpec.domain.denote (Values.cons xs
-      (Values.nil : Values (assignment F G) []))).admit = .returned xs := by
-    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
-      (.elements xs)).admit = _
-    simp [Finite.Domain.admit, bounded]
-  have folded := Evaluation.denoteFold_reference (closedMeanings (F := F) (G := G) definitions) foldSpec
-    (.cons xs .nil) (.cons (0 : F) .nil) .nil xs admitted
+  have admitted : foldSpec.domain.admit (Values.cons xs
+      (Values.nil : Values (assignment F G) [])) =
+      .returned (xs.map fun item => .cons item .nil) := by
+    simp [foldSpec, DomainSpec.admit_elements, Collection.values, Values.get, bounded]
+  have folded := Evaluation.denoteFold_reference_map (closedMeanings (F := F) (G := G) definitions) foldSpec
+    (.cons xs .nil) (.cons (0 : F) .nil) .nil xs (fun item => .cons item .nil) admitted
     (fun (state : Values (assignment F G) [scalar]) (x : F) => Values.cons (state.get .here + x) .nil) (fun _ => True) trivial (by
       intro state x _ _
       cases state with | cons a rest => ?_

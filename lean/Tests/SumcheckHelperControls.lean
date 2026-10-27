@@ -126,20 +126,22 @@ theorem changed_dependency_lookup (low high r : ℤ) :
     interpolateSwappedDefinition (.cons low (.cons high (.cons r .nil)))).trans ?_
   rfl
 
+/-- Rebuild the actual transitive closure after changing its scalar dependency.
+Reinstalling only the collection would retain the old callback closure. -/
+def changedInterpolation : Meanings ℤ ℤ :=
+  Evaluation.extendMeanings SiteObservations.closed dependencyTable
+    MapPrefixViews.interpolateRealizationDefinition
+
+def changedCallback : Meanings ℤ ℤ :=
+  Evaluation.extendMeanings SiteObservations.closed changedInterpolation
+    MapPrefixViews.mapCallbackDefinition
+
 set_option backward.isDefEq.respectTransparency false in
-/-- The unchanged actual map body now captures the changed same-name dependency. -/
+/-- Unchanged computation, callback and collection bodies capture the altered
+same-name scalar dependency in their actual topological installation order. -/
 theorem changed_dependency_changes_map :
-    invoke (Evaluation.extendMeanings SiteObservations.closed dependencyTable MapPrefixViews.mapDefinition)
+    invoke (Evaluation.extendMeanings SiteObservations.closed changedCallback MapPrefixViews.mapDefinition)
       mapHelper (.cons [1] (.cons [3] (.cons (2 : ℤ) .nil))) = .done (.cons [-1] .nil) := by
-  refine (Evaluation.invoke_extended (F := ℤ) (G := ℤ) SiteObservations.closed dependencyTable
-    MapPrefixViews.mapDefinition (.cons [1] (.cons [3] (.cons 2 .nil)))).trans ?_
-  change mapBody.denote (meaning ℤ ℤ dependencyTable) _ = _
-  rw [MapSourceExpansions.first_map]
-  have mapped := Evaluation.denoteMap_twoRows_broadcast dependencyTable
-    MapFirstBodies.mapSpec.helperName MapFirstBodies.mapSpec.field [1] [3] 2
-    (by decide +kernel) rfl (fun lo hi => hi + (lo - hi) * 2)
-    (fun lo hi => changed_dependency_lookup lo hi 2)
-  rw [mapped]
   rfl
 
 theorem original_dependency_map :

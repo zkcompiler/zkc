@@ -22,7 +22,7 @@ theorem foldTransitionOn_interpret (operations : PIR.OperationInterpretation I J
     (tables : HelperTable.Interprets operations left right) (spec : FoldSpec)
     (arguments : Values model.Value spec.domain.inputs)
     (captures : Values model.Value spec.captures)
-    (state : Values model.Value spec.state) (item : model.Value spec.domain.item) :
+    (state : Values model.Value spec.state) (item : Values model.Value spec.domain.items) :
     (foldTransitionOn left spec arguments captures state item).interpret operations =
       foldTransitionOn right spec arguments captures state item := by
   unfold foldTransitionOn
@@ -30,9 +30,9 @@ theorem foldTransitionOn_interpret (operations : PIR.OperationInterpretation I J
   rw [PIR.Process.interpret_bind]
   have enabled :
       ((if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
-        else invoke left spec.predicateHelper (.cons item (arguments.append captures))).interpret operations) =
+        else invoke left spec.predicateHelper (item.append (arguments.append captures))).interpret operations) =
       (if spec.predicate.isEmpty then PIR.Process.done (Values.cons true Values.nil)
-        else invoke right spec.predicateHelper (.cons item (arguments.append captures))) := by
+        else invoke right spec.predicateHelper (item.append (arguments.append captures))) := by
     dsimp only [FoldSpec.predicateHelper]
     by_cases present : spec.predicate.isEmpty = true
     · rw [ite_eq_left present, ite_eq_left present]; rfl
@@ -50,7 +50,7 @@ theorem denoteFoldOn_interpret (operations : PIR.OperationInterpretation I J)
     (tables : HelperTable.Interprets operations left right) (spec : FoldSpec)
     (args : Values model.Value spec.arguments) :
     (denoteFoldOn left spec args).interpret operations = denoteFoldOn right spec args := by
-  simp only [denoteFoldOn, Finite.interpret_execute, foldTransitionOn_interpret operations tables]
+  simp only [denoteFoldOn, Finite.interpret_admitThen, Finite.interpret_fold, foldTransitionOn_interpret operations tables]
 
 theorem mapRowOn_interpret (operations : PIR.OperationInterpretation I J)
     {left : MeaningsOn model.toCarriers I} {right : MeaningsOn model.toCarriers J}
@@ -157,6 +157,7 @@ theorem operationOn_interpret (operations : PIR.OperationInterpretation I J)
     cases primitive.evaluateOn model.toFieldModel args <;> rfl
   | invoke helper => cases bodies; exact tables helper args
   | fold spec => cases bodies; exact denoteFoldOn_interpret operations tables spec args
+  | collect spec => cases bodies; exact denoteCollect_interpret operations tables spec args
   | map spec => cases bodies; exact denoteMapOn_interpret operations tables spec args
   | branch =>
     cases args with

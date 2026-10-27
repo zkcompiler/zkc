@@ -11,8 +11,20 @@ proves admission of the complete original snapshot. -/
 namespace ZkcExamples.Structured.SumcheckReduceBodies
 open Zkc.Source Zkc.Source.Structured
 
-abbrev mapHelper := MapFirstBodies.mapHelper
-abbrev mapBody := MapFirstBodies.mapBody
+abbrev collectBindings : MultilinearCollectBodies.Bindings where
+  collection := "_finite_admission_0"
+  domain := "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain"
+  callback := "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body"
+  computation := "_mathematical_admission_1"
+
+abbrev interpolateRealizationHelper := MultilinearCollectBodies.interpolateRealizationHelper collectBindings
+abbrev interpolateRealizationBody := MultilinearCollectBodies.interpolateRealizationBody collectBindings
+abbrev mapCallbackHelper := MultilinearCollectBodies.mapCallbackHelper collectBindings
+abbrev mapCallbackBody := MultilinearCollectBodies.mapCallbackBody collectBindings
+
+abbrev mapHelper := MultilinearCollectBodies.mapHelper collectBindings
+abbrev mapBody := MultilinearCollectBodies.mapBody collectBindings
+abbrev mapSpec := MultilinearCollectBodies.collectSpec collectBindings
 
 abbrev tableHelper := MapFirstBodies.tableHelper
 abbrev tableBody := MapFirstBodies.tableBody
@@ -42,7 +54,7 @@ abbrev halvesHelper := MapFirstBodies.halvesHelper
 abbrev halvesBody := MapFirstBodies.halvesBody
 
 abbrev firstHelper := MapFirstBodies.firstHelper
-abbrev firstBody := MapFirstBodies.firstBody
+abbrev firstBody := MultilinearCollectBodies.firstBody collectBindings
 
 abbrev interpolateHelper := MapFirstBodies.interpolateHelper
 abbrev interpolateBody := MapFirstBodies.interpolateBody

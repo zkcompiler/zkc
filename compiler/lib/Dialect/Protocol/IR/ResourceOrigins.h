@@ -3,6 +3,7 @@
 
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Program/ResourceOrigins.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -23,16 +24,18 @@ class ResourceOrigins {
   llvm::DenseSet<mlir::Operation *> active;
   uint64_t remaining;
   unsigned depthLimit;
+  // Scoped helper facts are derived once from the actual admitted closure.
+  // The owned snapshot cannot be invalidated by a later IR mutation; this
+  // object itself is used only while the enclosing IR remains immutable.
+  std::unique_ptr<program::ResourceOriginAnalysis> execution;
+  mlir::Operation *executionOwner = nullptr;
 
   mlir::LogicalResult charge(mlir::Operation *op, uint64_t amount);
   mlir::LogicalResult limit(mlir::Operation *op, llvm::StringRef detail);
   bool affine(mlir::Value value);
-  mlir::LogicalResult block(mlir::Block &body, bool local, unsigned depth,
-                            Summary &result);
+  mlir::LogicalResult block(mlir::Block &body, unsigned depth, Summary &result);
   mlir::LogicalResult call(mlir::Operation *op, unsigned depth,
                            const Summary *&result);
-  mlir::LogicalResult control(mlir::Operation *op, unsigned depth,
-                              Environment &environment, Summary &result);
   mlir::LogicalResult successors(mlir::Operation *op, Environment &environment);
 
 public:
@@ -42,7 +45,6 @@ public:
                   unsigned depth = 64)
       : symbols(symbols), types(types), remaining(work), depthLimit(depth) {}
   mlir::LogicalResult verify(protocol_ir::RepeatOp repeat);
-  mlir::LogicalResult verifyFinite(mlir::Operation *declaration);
 };
 } // namespace zkc::mathematical
 #endif

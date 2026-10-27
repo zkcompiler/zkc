@@ -66,11 +66,9 @@ LogicalResult verifyComputationUnit(mlir::ModuleOp unit) {
       return refuse(
           &declaration, "computation-formation",
           "unit admits only standard functions and data.domain dependencies");
-  if (auto raw = entry->getAttr("data.preconditions")) {
-    auto assumptions = dyn_cast<ArrayAttr>(raw);
-    if (!assumptions || !assumptions.empty())
-      return refuse(entry, "computation-entry", "entry must be unconditional");
-  }
+  // Public selects the entry of this isolated mathematical closure. Its
+  // explicit premises remain part of the function contract and are discharged
+  // at each actual scoped invocation, just as for a private helper.
   NativeTypePolicies types(unit);
   auto port = [&](Type type) {
     auto policy = types.get(type);

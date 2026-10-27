@@ -9,13 +9,12 @@ using namespace llvm;
 namespace zkc::mathematical {
 RecipeConstructionWork::RecipeConstructionWork(const RealizationWork &work)
     : helpers(work.helperOperations), expressions(work.finiteExpressions),
-      slots(work.helperSlots), polynomial(work.polynomial),
-      requiredMaps(work.requiredMapConstruction) {}
+      slots(work.helperSlots), polynomial(work.polynomial) {}
 bool RecipeConstructionWork::canDiscard(const RealizationWork &work) const {
   // Reserve the upper bound without overflowing caller-controlled quotas.
   uint64_t remaining = work.discardedRecipeExpansion;
-  for (uint64_t amount : {uint64_t(helpers), uint64_t(expressions), slots,
-                          polynomial, requiredMaps}) {
+  for (uint64_t amount :
+       {uint64_t(helpers), uint64_t(expressions), slots, polynomial}) {
     if (amount > remaining)
       return false;
     remaining -= amount;
@@ -25,14 +24,12 @@ bool RecipeConstructionWork::canDiscard(const RealizationWork &work) const {
 bool RecipeConstructionWork::discard(RealizationWork &work) const {
   assert(work.helperOperations <= helpers &&
          work.finiteExpressions <= expressions && work.helperSlots <= slots &&
-         work.polynomial <= polynomial &&
-         work.requiredMapConstruction <= requiredMaps);
+         work.polynomial <= polynomial);
   uint64_t remaining = work.discardedRecipeExpansion;
   for (uint64_t amount :
        {uint64_t(helpers - work.helperOperations),
         uint64_t(expressions - work.finiteExpressions),
-        slots - work.helperSlots, polynomial - work.polynomial,
-        requiredMaps - work.requiredMapConstruction}) {
+        slots - work.helperSlots, polynomial - work.polynomial}) {
     if (amount > remaining)
       return false;
     remaining -= amount;
@@ -42,8 +39,13 @@ bool RecipeConstructionWork::discard(RealizationWork &work) const {
   work.finiteExpressions = expressions;
   work.helperSlots = slots;
   work.polynomial = polynomial;
-  work.requiredMapConstruction = requiredMaps;
   return true;
+}
+
+void NumericalSelection::beginAttempt() {
+  origins.clear();
+  for (auto &occurrence : occurrences)
+    occurrence.active = false;
 }
 
 RealizationSubject
@@ -63,9 +65,10 @@ NumericalSelection::discover(const RealizationSubject &subject,
   auto found = coordinates.find({invocation, subject});
   if (found != coordinates.end()) {
     auto &occurrence = occurrences[found->second];
+    occurrence.active = true;
     // Replacement permission can only become more restrictive.
     occurrence.replaceable &= replaceable;
-    if (!canSpeculate())
+    if (!occurrence.replaceable || !canSpeculate())
       occurrence.alternative = NumericalAlternative::Ordered;
     return found->second;
   }
@@ -109,8 +112,10 @@ MathematicalSelectionPolicy
 NumericalSelection::policy(NumericalOccurrence id,
                            MathematicalSelectionPolicy effective) const {
   auto choice = alternative(id);
-  if (choice == NumericalAlternative::Ordered)
+  if (choice == NumericalAlternative::Ordered) {
     effective.finiteBulk = false;
+    effective.vectorReductionFusion = false;
+  }
   if (choice == NumericalAlternative::Vector)
     effective.numericalExpressions = NumericalExpressionMode::VectorOnly;
   return effective;
@@ -124,18 +129,26 @@ void NumericalSelection::select(NumericalOccurrence id,
   if (!selected.view || status == OptimizationStatus::Capacity ||
       status == OptimizationStatus::PolicyDisabled ||
       status == OptimizationStatus::ReplacementRestricted ||
-      !canReplacePayload(*selected.view)) {
+      !(selected.nested ? canReplaceNestedContraction(*selected.view)
+                        : canReplacePayload(*selected.view))) {
     occurrence.replaceable = false;
     occurrence.alternative = NumericalAlternative::Ordered;
+    selected.kind = RealizationKind::Ordered;
+    selected.sumCollection = false;
     return;
   }
   bool formula = selected.equations.pointwiseReduction.has_value() ||
                  selected.equations.elementwise.has_value();
-  occurrence.legal = {selected.kind == RealizationKind::Bilinear ||
-                          selected.kind == RealizationKind::Reduction,
-                      formula && occurrence.expressionMode ==
-                                     NumericalExpressionMode::PreferNative,
-                      false, formula, true};
+  occurrence.legal = {
+      selected.kind == RealizationKind::Bilinear ||
+          selected.kind == RealizationKind::NestedContraction ||
+          selected.kind == RealizationKind::Reduction ||
+          selected.kind == RealizationKind::CollectionSum,
+      formula && (selected.allowCollectionMap || selected.sumCollection) &&
+          occurrence.expressionMode == NumericalExpressionMode::PreferNative,
+      formula && selected.sumCollection && selected.allowCollectionMap &&
+          occurrence.expressionMode == NumericalExpressionMode::PreferNative,
+      formula && selected.allowCollectionMap, true};
   auto index = static_cast<unsigned>(occurrence.alternative);
   while (!occurrence.legal[index])
     ++index;
@@ -143,8 +156,10 @@ void NumericalSelection::select(NumericalOccurrence id,
   auto choice = occurrence.alternative;
   if (choice == NumericalAlternative::Specialized)
     return;
+  selected.sumCollection &= choice == NumericalAlternative::Expression;
   selected.kind = RealizationKind::Ordered;
   selected.reduction.reset();
+  selected.collectionSum.reset();
   selected.matrix = nullptr;
   selected.pointwiseReduction = nullptr;
   if (choice == NumericalAlternative::Ordered)
@@ -168,7 +183,8 @@ NumericalSelection::advance(ArrayRef<NumericalOccurrence> implicated) {
     auto next = static_cast<unsigned>(occurrence.alternative) + 1;
     while (next < occurrence.legal.size() && !occurrence.legal[next])
       ++next;
-    if (!occurrence.replaceable || next == occurrence.legal.size())
+    if (!occurrence.active || !occurrence.replaceable ||
+        next == occurrence.legal.size())
       continue;
     if (!chargeCatalog())
       return error("finite-analysis-limit");
@@ -177,9 +193,9 @@ NumericalSelection::advance(ArrayRef<NumericalOccurrence> implicated) {
   }
   return false;
 }
-Expected<bool>
-NumericalSelection::advanceSubject(const RealizationSubject &subject,
-                                   std::optional<size_t> invocation) {
+Expected<bool> NumericalSelection::advanceSubject(
+    const RealizationSubject &subject,
+    std::optional<RealizationSubject> invocation) {
   SmallVector<NumericalOccurrence> owners;
   for (auto [id, occurrence] : enumerate(occurrences))
     if (occurrence.subject == subject &&
@@ -201,10 +217,10 @@ Expected<bool> NumericalSelection::advanceInvocation() {
   return advance(owners);
 }
 bool NumericalSelection::hasAlternatives(
-    std::optional<size_t> coordinate) const {
+    std::optional<RealizationSubject> coordinate) const {
   return any_of(occurrences, [&](const auto &occurrence) {
-    if (!occurrence.replaceable ||
-        (coordinate && occurrence.invocation != *coordinate))
+    if (!occurrence.active || !occurrence.replaceable ||
+        (coordinate && !(occurrence.invocation == *coordinate)))
       return false;
     auto first = static_cast<unsigned>(occurrence.alternative);
     return any_of(ArrayRef<bool>(occurrence.legal).drop_front(first + 1),

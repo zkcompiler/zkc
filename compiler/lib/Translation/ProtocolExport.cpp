@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Protocol.h"
@@ -8,7 +9,8 @@
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
-Expected<program::Participants> exportProgram(Operation *root) {
+namespace {
+Error verifyExportSubject(Operation *root) {
   if (!root)
     return error("interactive-malformed-ir");
   Error refusals = Error::success();
@@ -23,15 +25,34 @@ Expected<program::Participants> exportProgram(Operation *root) {
       });
   if (failed(verify(root))) {
     if (refusals)
-      return std::move(refusals);
+      return refusals;
     return error("interactive-malformed-ir");
   }
   if (refusals)
-    return std::move(refusals);
+    return refusals;
+  return Error::success();
+}
+} // namespace
+Expected<program::Participants> exportProgram(Operation *root) {
+  if (auto refusal = verifyExportSubject(root))
+    return refusal;
   return readExecutionModel(root);
 }
 Expected<json::Value> exportModule(Operation *root) {
-  auto value = exportProgram(root);
+  if (auto refusal = verifyExportSubject(root))
+    return refusal;
+  auto *subject = root;
+  if (auto module = dyn_cast<ModuleOp>(root)) {
+    if (!llvm::hasSingleElement(*module.getBody()))
+      return error("interactive-module-count");
+    subject = &module.getBody()->front();
+  }
+  // Bytes publish a physical program. A valid logical scoped body may still
+  // have source return boundaries, so check its phase before native decoding.
+  if (auto unit = dyn_cast<protocol_ir::ProtocolModuleOp>(subject))
+    if (unit.getProfile() != protocol_ir::Profile::Physical)
+      return error("native-physical-required");
+  auto value = readExecutionModel(root);
   if (!value)
     return value.takeError();
   if (value->stage != program::Participants::Stage::Physical)

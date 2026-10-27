@@ -67,12 +67,16 @@ structure Bound where
 inductive DomainConstructor where
   | elements (container : Nat)
   | indices (container axis : Nat)
+  | range (lower upper : Nat)
+  | zip (operands : List Nat)
+  | product (operands : List Nat)
   deriving DecidableEq, Repr
 
 structure Domain where
   name : String
   inputs : List Ty
-  constructor : DomainConstructor
+  constructors : List DomainConstructor
+  result : Nat
   deriving DecidableEq, Repr
 
 /-- Non-callable primitive declaration, retained even when unused. -/
@@ -193,6 +197,16 @@ structure FiniteDeclaration where
   predicate : String
   deriving Repr
 
+structure CollectDeclaration where
+  name : String
+  visibility : Visibility
+  inputs : List Ty
+  outputs : List Ty
+  domain : String
+  body : String
+  predicate : String
+  deriving Repr
+
 /-- Retained preparation metadata; the shared SSA body is derived at admission. -/
 structure RealizationDeclaration where
   name : String
@@ -212,6 +226,7 @@ structure MapDeclaration where
 inductive Definition where
   | function (value : Function)
   | finite (value : FiniteDeclaration)
+  | collect (value : CollectDeclaration)
   | realization (value : RealizationDeclaration)
   | map (value : MapDeclaration)
   deriving Repr
@@ -277,27 +292,31 @@ structure Snapshot where
 def Definition.name : Definition → String
   | .function f => f.name
   | .finite f => f.name
+  | .collect f => f.name
   | .realization f => f.name
   | .map f => f.name
 def Definition.inputs : Definition → List Ty
   | .function f => f.inputs
   | .finite f => f.inputs
+  | .collect f => f.inputs
   | .realization f => f.inputs
   | .map f => f.inputs
 def Definition.outputs : Definition → List Ty
   | .function f => f.outputs
   | .finite f => f.outputs
+  | .collect f => f.outputs
   | .realization f => f.outputs
   | .map f => f.outputs
 def Definition.kind : Definition → Kind
   | .function f => f.kind
-  | .finite _ | .realization _ | .map _ => .local
+  | .finite _ | .collect _ | .realization _ | .map _ => .local
 def Definition.visibility : Definition → Visibility
   | .function f => f.visibility
   | .finite f => f.visibility
+  | .collect f => f.visibility
   | .realization _ | .map _ => .publicDef
 def Definition.preconditions : Definition → List Bound
   | .function f => f.preconditions
-  | .finite _ | .realization _ | .map _ => []
+  | .finite _ | .collect _ | .realization _ | .map _ => []
 
 end Zkc.Source.Structured

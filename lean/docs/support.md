@@ -387,6 +387,16 @@ lemmas. All value equations use the structured interpreter and actual helper tab
 | `MapConstant` | Exactly one constant `7` per row, including zero rows, full shape stops and strict owned presence | Unused row shapes and the unused scalar remain required; the nonowner skips the Local call |
 | `RealizationValues` | Actual vector projection through the retained realization and unchanged Local values wrapper, preceded by table validation in the full source | The projection/realization itself needs no vector-size or index premise; source validation and optional/owned boundaries remain explicit |
 
+The constant and linear-combination clients follow the actual scoped collection,
+its complete callback tuple and the separately admitted scalar realization.
+Their observed equations retain both outer marks and one `body` mark per reached
+row. Participant results erase those marks through the existing interpretation.
+`CollectLaws.denoteCollect_process` relates an unfiltered collection to ordered
+monadic traversal without assuming pure or total callbacks. The combination
+client also proves that a mismatch in the first two rows stops before inspecting
+the later unused row, with no size premise on that later row. These equations
+concern the independent process model; they do not prove native correspondence.
+
 First's shape theorem preserves arbitrary flattened column widths. For one
 column, its result decodes to `Multilinear.fixFirst` on the leading Boolean
 coordinate. For one column, Prefix's result decodes to `fixPrefix` in the supplied point order,
@@ -422,11 +432,19 @@ The same Linking owner provides `BodyIn`, its invocation theorem and the
 
 `MapFirstContracts` and `MapPrefixContracts` package exact associations in small
 propositions and derive the library laws once per client's own table. First needs
-only its shared arithmetic/shape/map closure. Prefix additionally retains the full
+its shared arithmetic and shape closure together with the actual collection,
+callback and scalar realization. Private binding names are explicit parameters
+of the exact body associations, so a client checks its own exported computations.
+The collection admits both rows before invoking callbacks and retains both full
+rows and the broadcast argument in their ABI. Prefix additionally retains the full
 finite callback ABI, including the captured point, arbitrary column widths,
 ordered restriction, initial point-length admission and reached zero-dimension
 rejection. `MapContractInstances` instantiates these constructors independently
-for the complete First and Prefix sources.
+for the complete First and Prefix sources. The reduction and terminal
+Sumcheck sources independently instantiate their own collection and computation
+bindings. Terminal contracts package the prefix fold and values projection with
+the exact checker body that invokes them; exported private names do not become
+parameters of the protocol-level mathematical statement.
 
 `SumcheckHelperLaws` gives exact body equations for ordered half sums, checkTable
 and public check. Sums checks dimension representation and positive/even splitting;
@@ -1288,7 +1306,9 @@ compiled theorems and holds the Lean controls:
 
 With the subject pipeline's evidence, the assurance reports of schnorr,
 chaum-pedersen, schnorr-and, okamoto-proof, guess and sumcheck are
-`established`. The composed Sumcheck and GKR Entries retain no target clause. Every
+`established`. Composed Sumcheck instead uses the generated `TwoSums` root and
+its retained `public_sums` target, as described above. The GKR Entry has no
+retained target clause for this claim-selection path. Every
 declaration's axioms are within `propext`, `Classical.choice` and `Quot.sound`.
 
 ## Construction obligation counterexamples

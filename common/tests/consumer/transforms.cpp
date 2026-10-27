@@ -2,6 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -73,12 +74,12 @@ int main() {
   if (scope.getProfile() != zkc::protocol_ir::Profile::Physical)
     return 2;
   unsigned literals = 0;
-  module->walk([&](zkc::plan::BoolConstantOp) { ++literals; });
+  module->walk([&](zkc::exec::BooleanOp) { ++literals; });
   if (literals != 1)
     return 3;
   mlir::OwningOpRef<mlir::ModuleOp> changed(
       mlir::cast<mlir::ModuleOp>(module->clone()));
-  changed->walk([&](zkc::plan::BoolConstantOp value) {
+  changed->walk([&](zkc::exec::BooleanOp value) {
     value->setAttr("value", builder.getBoolAttr(false));
   });
   if (failed(mlir::verify(*changed)))

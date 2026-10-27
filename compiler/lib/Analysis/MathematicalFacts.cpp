@@ -5,7 +5,8 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -25,7 +26,7 @@ Operation *owner(Value value) {
 }
 Operation *formationOwner(Value value) {
   for (auto *op = owner(value); op; op = op->getParentOp())
-    if (isa<func::FuncOp, local::FuncOp>(op))
+    if (isa<func::FuncOp>(op))
       return op;
   return nullptr;
 }
@@ -84,10 +85,9 @@ struct MathematicalFactAnalysis::Impl {
       return found->second.body ? &found->second : nullptr;
     }
     Helper result;
-    if (isa<func::FuncOp, local::FuncOp>(op) &&
-        op->getRegion(0).hasOneBlock()) {
+    if (isa<func::FuncOp>(op) && op->getRegion(0).hasOneBlock()) {
       auto &body = op->getRegion(0).front();
-      if (!body.empty() && isa<func::ReturnOp, local::ReturnOp>(body.back())) {
+      if (!body.empty() && isa<func::ReturnOp>(body.back())) {
         // Read the body, not a serialized summary claim. Return expressions
         // are interpreted below, with a fresh explicit call environment.
         if (!work.charge(body.back().getNumOperands()))
@@ -142,7 +142,7 @@ struct MathematicalFactAnalysis::Impl {
           return input;
         }
         auto *call = value.getDefiningOp();
-        if (!isa_and_nonnull<func::CallOp, local::ApplyOp>(call)) {
+        if (!isa_and_nonnull<func::CallOp>(call)) {
           inputs.try_emplace(key, std::nullopt);
           return std::nullopt;
         }
@@ -169,7 +169,7 @@ struct MathematicalFactAnalysis::Impl {
       };
       for (; enter(work, depth); ++depth) {
         auto *call = value.getDefiningOp();
-        if (!isa_and_nonnull<func::CallOp, local::ApplyOp>(call))
+        if (!isa_and_nonnull<func::CallOp>(call))
           return finish();
         auto input = forwardedInput(resolve(call, "callee"),
                                     cast<OpResult>(value).getResultNumber(),
@@ -204,8 +204,38 @@ struct MathematicalFactAnalysis::Impl {
         if (!index.getValue().getAsInteger(10, n))
           return {Status::Proven, n};
       }
+      // A returned payload of the exact index.constant invocation retains its
+      // value. This observes a successful result, not a reached guard or an
+      // assumption about arbitrary CFG block arguments. Multiple predecessors
+      // and control joins deliberately supply no constant evidence.
+      if (auto argument = dyn_cast<BlockArgument>(value);
+          argument && argument.getArgNumber() == 0 &&
+          argument.getOwner()->getNumArguments() == 1 && contains(value)) {
+        auto *block = argument.getOwner();
+        auto *predecessor = block->getSinglePredecessor();
+        auto dispatch = predecessor && !predecessor->empty()
+                            ? dyn_cast<exec::DispatchOp>(predecessor->back())
+                            : exec::DispatchOp();
+        auto apply = dispatch && dispatch.getReturned() == block
+                         ? dispatch.getOutcome().getDefiningOp<exec::ApplyOp>()
+                         : exec::ApplyOp();
+        if (apply && apply.getInputs().empty() &&
+            apply.getParameters().size() == 1 && work.charge()) {
+          auto binding =
+              dyn_cast_or_null<runtime::BindingOp>(resolve(apply, "binding"));
+          auto outcome = cast<exec::OutcomeType>(apply.getOutcome().getType());
+          auto parameter = dyn_cast<StringAttr>(apply.getParameters()[0]);
+          uint64_t n;
+          if (binding && binding.getContract() == "index.constant" &&
+              binding.getArguments().empty() &&
+              outcome.getPayload().size() == 1 &&
+              outcome.getPayload()[0] == value.getType() && parameter &&
+              !parameter.getValue().getAsInteger(10, n))
+            return {Status::Proven, n};
+        }
+      }
       auto *call = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(call)) {
+      if (isa_and_nonnull<func::CallOp>(call)) {
         auto *view = helper(resolve(call, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -278,7 +308,7 @@ struct MathematicalFactAnalysis::Impl {
                           exact(appended));
       }
       auto *op = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(op)) {
+      if (isa_and_nonnull<func::CallOp>(op)) {
         auto *view = helper(resolve(op, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -327,7 +357,7 @@ struct MathematicalFactAnalysis::Impl {
         value = *forwarded.value;
       }
       auto *op = value.getDefiningOp();
-      if (isa_and_nonnull<func::CallOp, local::ApplyOp>(op)) {
+      if (isa_and_nonnull<func::CallOp>(op)) {
         auto *view = helper(resolve(op, "callee"), work);
         unsigned result = cast<OpResult>(value).getResultNumber();
         if (view && result < view->returned.size()) {
@@ -427,14 +457,16 @@ struct MathematicalFactAnalysis::Impl {
       return result;
     }
     void formation(Operation *owner) {
-      if (!owner || !analysis.contains(owner) ||
-          !isa<func::FuncOp, local::FuncOp>(owner) ||
-          !owner->getRegion(0).hasOneBlock())
+      if (!owner || !analysis.contains(owner) || !isa<func::FuncOp>(owner) ||
+          owner->getNumRegions() != 1 || owner->getRegion(0).empty())
         return;
       auto attrs = owner->getAttrOfType<ArrayAttr>("data.preconditions");
       if (!attrs)
         return;
       auto &body = owner->getRegion(0).front();
+      // Formation premises name the original function entry arguments. They
+      // remain valid in a CFG body, but do not identify successor arguments or
+      // establish facts from a reached guard or a successful outcome edge.
       auto arg = [&](unsigned i) -> Value {
         return i < body.getNumArguments() ? body.getArgument(i) : Value();
       };

@@ -25,7 +25,7 @@ int main() {
     auto entry = example();
     auto original = take(prepareOriginal(entry));
     require(original.bytes().contains("protocol.local_call") &&
-                original.bytes().contains("local.apply"),
+                original.bytes().contains("runtime.site"),
             "ordinary call boundaries missing");
     require(!original.bytes().contains("scoped.invoke") &&
                 !original.bytes().contains("closure"),
@@ -44,11 +44,13 @@ int main() {
     require(bool(module), "original did not parse");
     bool changed = false;
     module->walk([&](mlir::Operation *op) {
-      if (changed || op->getName().getStringRef() != "local.apply")
+      if (changed || op->getName().getStringRef() != "func.call" ||
+          !op->hasAttr("runtime.site"))
         return;
-      for (unsigned i = 0; i < op->getNumOperands(); ++i)
+      for (unsigned i = 1; i < op->getNumOperands(); ++i)
         for (unsigned j = i + 1; j < op->getNumOperands(); ++j)
-          if (op->getOperand(i).getType() == op->getOperand(j).getType()) {
+          if (op->getOperand(i) != op->getOperand(j) &&
+              op->getOperand(i).getType() == op->getOperand(j).getType()) {
             auto value = op->getOperand(i);
             op->setOperand(i, op->getOperand(j));
             op->setOperand(j, value);
@@ -79,7 +81,7 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,n:index@P)->(r:Fr@P){return outer(x
         auto entry = take(zkc::test::closeProtocolDeployment(
             take(analyze(captured).checkedProject()), "sample::Demo"));
         auto original = take(prepareOriginal(entry));
-        require(original.bytes().contains("local.for"),
+        require(original.bytes().contains("exec.range"),
                 "loop was erased from original IR");
         take(compileEntry(original));
         take(compileEntry(original, {false, false}));
@@ -111,9 +113,8 @@ protocol Run roles(P)(xs:Vector<Fr>@P,x:Fr@P,offset:Fr@P)->(r:Fr@P){return fold(
               take(analyze(captured).checkedProject()), "sample::Demo"));
           auto original = take(prepareOriginal(entry));
           require(original.bytes().contains("data.domain_elements") &&
-                      original.bytes().contains(mathematical
-                                                    ? "algebra.finite_fold"
-                                                    : "local.finite_fold"),
+                      original.bytes().contains(
+                          mathematical ? "algebra.finite_fold" : "exec.fold"),
                   "finite structure missing from source original");
           take(compileEntry(original));
           take(compileEntry(original, {false, false}));
@@ -131,8 +132,8 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(r:Sequence<Row>@P){return collect(el
     auto entry = take(zkc::test::closeProtocolDeployment(
         take(analyze(captured).checkedProject()), "sample::Demo"));
     auto original = take(prepareOriginal(entry));
-    require(original.bytes().contains("local.finite_collect") &&
-                original.bytes().contains("local.match"),
+    require(original.bytes().contains("exec.collect") &&
+                original.bytes().contains("exec.match"),
             "packed sequence item adapter missing");
     take(compileEntry(original));
     take(compileEntry(original, {false, false}));
@@ -184,36 +185,34 @@ protocol Run roles(P)(xs:[Row;)" +
                   if (changed)
                     return;
                   auto name = op->getName().getStringRef();
-                  if (!mutation && name == "local.realize") {
-                    auto helper =
-                        op->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-                    if (helper && helper.getValue().contains("_array_")) {
-                      op->setAttr("helper", mlir::FlatSymbolRefAttr::get(
-                                                &context, "wrong_array"));
-                      changed = true;
-                    }
-                  } else if (mutation && name == "local.apply") {
+                  if (name == "exec.compute") {
                     auto callee =
                         op->getAttrOfType<mlir::FlatSymbolRefAttr>("callee");
                     if (!callee || !callee.getValue().contains("_array_"))
                       return;
-                    if (mutation == 1)
+                    if (mutation == 0)
+                      op->setAttr("callee", mlir::FlatSymbolRefAttr::get(
+                                                &context, "wrong_array"));
+                    else if (mutation == 1)
                       op->setAttr(
                           "callee",
                           mlir::FlatSymbolRefAttr::get(
-                              &context, callee.getValue().drop_back(8)));
+                              &context,
+                              op->getParentOp()
+                                  ->getAttrOfType<mlir::StringAttr>("sym_name")
+                                  .getValue()));
                     else if (mutation == 2)
                       op->setAttr("site", mlir::StringAttr::get(
                                               &context, "wrong_array_site"));
                     else {
-                      auto first = op->getOperand(0);
-                      op->setOperand(0, op->getOperand(2));
-                      op->setOperand(2, first);
+                      auto first = op->getOperand(1);
+                      op->setOperand(1, op->getOperand(3));
+                      op->setOperand(3, first);
                     }
                     changed = true;
                   }
                 });
-                require(changed, "array local mutation target missing");
+                require(changed, "array computation mutation target missing");
                 auto refused = compareOriginal(entry, *altered);
                 require(!refused, "corrupted array adapter accepted");
                 auto diagnostic = toString(refused.takeError());
@@ -362,13 +361,12 @@ protocol Run roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P,offset:Fr@P)->(r:Fr@P){ret
           module->walk([&](mlir::Operation *op) {
             if (changed)
               return;
-            if (mutation == 0 &&
-                op->getName().getStringRef() == "local.apply" &&
-                op->getAttrOfType<mlir::StringAttr>("site").getValue() ==
-                    "body") {
-              auto value = op->getOperand(0);
-              op->setOperand(0, op->getOperand(1));
-              op->setOperand(1, value);
+            if (mutation == 0 && op->getName().getStringRef() == "func.call" &&
+                op->getAttrOfType<mlir::StringAttr>("runtime.site") ==
+                    mlir::StringAttr::get(&context, "body")) {
+              auto value = op->getOperand(1);
+              op->setOperand(1, op->getOperand(2));
+              op->setOperand(2, value);
               changed = true;
             } else if (mutation == 1 &&
                        op->getName().getStringRef() == "data.domain_yield") {

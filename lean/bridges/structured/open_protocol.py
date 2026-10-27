@@ -101,8 +101,13 @@ def component_cases(suite):
     suite.case("alternate-roster", lambda: suite.compare_open(
         alternate, "auditor", "Auditor", ["37"], [], returned(["37"])))
 
-    helper = '''local.func private @halt(%x:!F,%y:!F) attributes {logical_origin=["halt",[]]} {
-      "local.stop"() {reason="abort",site="halted"} : ()->()
+    helper = '''func.func private @halt(%scope:!runtime.scope,%x:!F,%y:!F)
+        ->!exec.outcome<> attributes {no_inline,runtime.origin=["halt",[]]} {
+      %stop = "exec.reject"(%scope) {reason="abort",site="halted"} : (!runtime.scope)->!exec.stop
+      cf.br ^failed(%stop : !exec.stop)
+    ^failed(%cause:!exec.stop):
+      %result = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
+      func.return %result : !exec.outcome<>
     }'''
     local = source.replace("  func.func private @first", helper + "\n  func.func private @first", 1)
     local = local.replace("%a = func.call @nested",

@@ -18,7 +18,7 @@ unit's table. -/
 
 /-- Associations of a unit's actual declarations with the shared helper bodies. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
-  first : MapFirstContracts.Bodies definitions
+  first : ∃ bindings, MapFirstContracts.Bodies definitions bindings
   sums : BodyIn definitions sumsHelper sumsBody
   empty : BodyIn definitions emptyHelper emptyBody
   append : BodyIn definitions appendHelper appendBody
@@ -34,13 +34,15 @@ variable {definitions : List CheckedDefinition} (linked : DeclarationsLinked [] 
 include linked bodies
 
 theorem first_laws : MapFirstContracts.Laws (closedMeanings (F := F) (G := G) definitions) :=
-  MapFirstContracts.laws_of_bodies linked bodies.first
+  bodies.first.elim fun _ associations => MapFirstContracts.laws_of_bodies linked associations
 
 theorem halves_body : HalvesBodyLaw (closedMeanings (F := F) (G := G) definitions) :=
-  fun xs dimension columns => bodies.first.halves.invoke linked (inputs xs dimension columns)
+  bodies.first.elim fun _ associations =>
+    fun xs dimension columns => associations.halves.invoke linked (inputs xs dimension columns)
 
 theorem shape_body : ShapeBodyLaw (closedMeanings (F := F) (G := G) definitions) :=
-  fun xs dimension columns => bodies.first.shape.invoke linked (inputs xs dimension columns)
+  bodies.first.elim fun _ associations =>
+    fun xs dimension columns => associations.shape.invoke linked (inputs xs dimension columns)
 
 /-- Full raw-input contract, with no width or vector-length admission invented. -/
 theorem sums_all (xs : List F) (dimension columns : Nat) :

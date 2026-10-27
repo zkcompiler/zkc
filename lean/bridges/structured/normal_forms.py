@@ -1971,7 +1971,7 @@ class Module:
                 text = (ROOT / module).read_text(encoding="utf-8")
                 namespace = re.search(r"^namespace (\S+)", text, re.MULTILINE).group(1)
                 prefix = namespace.removeprefix(parent) if namespace.startswith(parent) else namespace
-                for local, raw in re.findall(r"abbrev (\w+) : Helper :=\s*⟨\"([^\"]+)\"", text):
+                for local, raw in re.findall(r"abbrev (\w+) : Helper :=\s*\(?⟨\"([^\"]+)\"", text):
                     names.setdefault(raw, f"{prefix}.{local}")
             names.update(self.request.get("helpers", {}))
             self.helper_names = names
@@ -1988,7 +1988,7 @@ class Module:
                 prefix = namespace.removeprefix(parent) if namespace.startswith(parent) else namespace
                 for local, raw in re.findall(r"def (\w+) : ProtocolSignature where\s+name := \"([^\"]+)\"", text):
                     names.setdefault(raw, f"{prefix}.{local}")
-                for local, raw in re.findall(r"def (\w+) : ProtocolSignature :=\s*⟨\"([^\"]+)\"", text):
+                for local, raw in re.findall(r"def (\w+) : ProtocolSignature :=\s*\(?⟨\"([^\"]+)\"", text):
                     names.setdefault(raw, f"{prefix}.{local}")
             names.update(self.request.get("signatures", {}))
             self.signature_names = names

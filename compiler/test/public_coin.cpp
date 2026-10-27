@@ -32,29 +32,64 @@ constexpr StringLiteral policyFixture = R"mlir(
 !V = !algebra.field_vector<"bls12-381.fr">
 !S = !protocol.service_ref<"random.bls12-381.fr/0">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
  "data.domain"() ({^entry(%xs:!V):
    %items = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
    "data.domain_yield"(%items) : (!data.domain<!F>)->()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @step(%state:!F,%item:!F,%xs:!V)->!F attributes {logical_origin=["step",[]]} {
-   %next = "algebra.exec.field_add"(%state,%item) {binding=@add,parameters=[],site="add"} : (!F,!F)->!F
-   local.return %next : !F
- }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!F)->!F,domain=@items,step=@step} : ()->()
- func.func private @product(%a:!F,%b:!F)->!F {
+func.func private @step(%scope:!runtime.scope,%a0:!F,%a1:!F,%a2:!V)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["step",[]]} {
+%next_attempt = "exec.apply"(%scope,%a0,%a1) {binding=@add,parameters=[],site="add"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%next_attempt)[^next,^failed] : (!exec.outcome<(!F)>)->()
+^next(%next:!F):
+
+%done = "exec.returned"(%next) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
+^failed(%reason:!exec.stop):
+%failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+func.return %failure : !exec.outcome<(!F)>
+}
+func.func private @product(%a:!F,%b:!F)->!F {
    %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
    return %p : !F
  }
- algebra.map_realize @mapped = @product [true,true] : (!V,!V)->!V
- local.func @work(%a:!V,%b:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
-   %fold = local.apply @fold(%a,%seed) {site="fold"} : (!V,!F)->!F
-   %mapped = local.apply @mapped(%a,%b) {site="map"} : (!V,!V)->!V
-   %sum = "algebra.exec.vector_sum"(%mapped) {binding=@sum,parameters=[],site="sum"} : (!V)->!F
-   %result = "algebra.exec.field_add"(%fold,%sum) {binding=@add,parameters=[],site="result"} : (!F,!F)->!F
-   local.return %result : !F
- }
+ "data.domain"() ({^entry(%a:!V,%b:!V):
+   %a_items = "data.domain_elements"(%a) : (!V)->!data.domain<!F>
+   %b_items = "data.domain_elements"(%b) : (!V)->!data.domain<!F>
+   %pairs = "data.domain_zip"(%a_items,%b_items) : (!data.domain<!F>,!data.domain<!F>)->!data.domain<!F,!F>
+   "data.domain_yield"(%pairs) : (!data.domain<!F,!F>)->()
+ }) {sym_name="pairs",sym_visibility="private",function_type=(!V,!V)->!data.domain<!F,!F>} : ()->()
+func.func private @mapped_row(%scope:!runtime.scope,%a0:!F,%a1:!F,%a2:!V,%a3:!V)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["mapped_row",[]]} {
+%product_attempt = "exec.compute"(%scope,%a0,%a1) {callee=@product,site="product"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%product_attempt)[^product,^failed] : (!exec.outcome<(!F)>)->()
+^product(%value:!F):
+
+%done = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
+^failed(%reason:!exec.stop):
+%failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+func.return %failure : !exec.outcome<(!F)>
+}
+func.func @work(%scope:!runtime.scope,%a0:!V,%a1:!V,%a2:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+%fold_attempt = "exec.fold"(%scope,%a0,%a2) {domain=@items,step=@step,site="fold"} : (!runtime.scope,!V,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%fold_attempt)[^fold,^failed] : (!exec.outcome<(!F)>)->()
+^fold(%fold:!F):
+%map_attempt = "exec.collect"(%scope,%a0,%a1) {domain=@pairs,body=@mapped_row,site="map"} : (!runtime.scope,!V,!V)->!exec.outcome<(!V)>
+"exec.dispatch"(%map_attempt)[^map,^failed] : (!exec.outcome<(!V)>)->()
+^map(%mapped:!V):
+%sum_attempt = "exec.apply"(%scope,%mapped) {binding=@sum,parameters=[],site="sum"} : (!runtime.scope,!V)->!exec.outcome<(!F)>
+"exec.dispatch"(%sum_attempt)[^sum,^failed] : (!exec.outcome<(!F)>)->()
+^sum(%sum:!F):
+%result_attempt = "exec.apply"(%scope,%fold,%sum) {binding=@add,parameters=[],site="result"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+"exec.dispatch"(%result_attempt)[^result,^failed] : (!exec.outcome<(!F)>)->()
+^result(%result:!F):
+
+%done = "exec.returned"(%result) : (!F)->!exec.outcome<(!F)>
+func.return %done : !exec.outcome<(!F)>
+^failed(%reason:!exec.stop):
+%failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!F)>
+func.return %failure : !exec.outcome<(!F)>
+}
  "protocol.func"() ({^entry(%service:!S,%a:!V,%b:!V,%seed:!F):
    %local = "protocol.local_call"(%a,%b,%seed) {callee=@work,role="P",site="work"} : (!V,!V,!F)->!F
    %q = "protocol.query"(%service) {owner="V",method="draw",site="draw"} : (!S)->!F
@@ -357,7 +392,7 @@ int main() {
   mlir::DialectRegistry registry;
   RunOptions options;
   options.publicCoinRequirement = requirement.str();
-  std::set<std::string> preparedHashes[2];
+  std::set<std::string> preparedHashes[2], bundleHashes[2];
   for (bool fuse : {false, true})
     for (bool finite : {false, true})
       for (bool collect : {false, true}) {
@@ -365,9 +400,10 @@ int main() {
         auto selected = analyze(policyFixture, options.mathematicalSelection);
         auto result =
             compileRun(policyFixture, "public-coin.mlir", options, registry);
-        require(bool(result) && result->publicCoin && !result->correspondence,
+        auto compiledResult = test::take(std::move(result));
+        require(compiledResult.publicCoin && !compiledResult.correspondence,
                 "checked invocation");
-        auto compiled = json::parse(*result->publicCoin);
+        auto compiled = json::parse(*compiledResult.publicCoin);
         require(bool(compiled) &&
                     *compiled->getAsObject()->get("view") == selected,
                 "same unsimplified view");
@@ -376,6 +412,8 @@ int main() {
                     view.getBoolean("fuse_vector_reductions") == fuse &&
                     view.getBoolean("fuse_collect_fold") == collect,
                 "public-coin view lost preparation choice");
+        bundleHashes[collect].insert(
+            compiled->getAsObject()->getString("bundle_sha256")->str());
         preparedHashes[collect].insert(
             view.getString("prepared_ir_sha256")->str());
         require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
@@ -391,9 +429,14 @@ int main() {
                     passes->front().getAsString() == "zkc-prepare-protocol",
                 "compiled view omitted preparation before projection");
       }
-  require(preparedHashes[0].size() == 4 && preparedHashes[1].size() == 4,
-          "fixture must distinguish finite/vector preparation policies under "
-          "each collect-fold choice");
+  require(preparedHashes[0].size() == 1 &&
+              preparedHashes[0] == preparedHashes[1],
+          "scoped source preparation must retain the same unsimplified body");
+  require(bundleHashes[0].size() == 4 && bundleHashes[1].size() == 4,
+          "fixture must distinguish finite/vector selection in emitted "
+          "bundles under each collect-fold choice: " +
+              std::to_string(bundleHashes[0].size()) + ", " +
+              std::to_string(bundleHashes[1].size()));
   for (bool simplify : {false, true})
     for (bool fix : {false, true}) {
       options.simplify = simplify;

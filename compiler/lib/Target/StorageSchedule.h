@@ -11,9 +11,11 @@
 namespace zkc::target {
 struct OperationDecision;
 
-/// Coordinates in the retained selected Local subject, never the Kernel input.
-/// A block argument uses its owning operation and flattened region/block index.
-/// A conversion result uses its consumer and conversion occurrence index.
+/// Coordinates in the retained selected executable subject. Payload outputs
+/// use the semantic instruction even when the actual SSA value is a CFG block
+/// argument. Body arguments use their owning function or protocol operation
+/// and logical body index, excluding scope. Conversion results use their
+/// consumer and conversion occurrence index.
 struct StorageValue {
   enum Kind : unsigned {
     OperationResult,
@@ -34,7 +36,7 @@ struct StorageValue {
 struct StoragePoint {
   enum Kind : unsigned { BlockEntry, AfterConversion, AfterOperation } kind;
   size_t operation;
-  // Flattened block index or conversion index; zero for AfterOperation.
+  // Logical body index or conversion index; zero for AfterOperation.
   unsigned index = 0;
   auto key() const { return std::make_tuple(kind, operation, index); }
   bool operator==(const StoragePoint &other) const {
@@ -52,7 +54,7 @@ struct StorageRelease {
   }
 };
 
-/// These functions borrow actual Local blocks and physical ports/conversions;
+/// These functions borrow actual scoped bodies and physical ports/conversions;
 /// they do not own another program model. Lifetime validation requires the
 /// caller to validate supplied port/conversion decisions first.
 /// Empty ports mean the source is already physical (the standalone transform).

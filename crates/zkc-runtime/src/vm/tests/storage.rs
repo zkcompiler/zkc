@@ -22,6 +22,7 @@ struct Stored {
     backing: Arc<Allocation>,
     charge: usize,
     index: Option<u64>,
+    boolean: Option<bool>,
     /// Report `backing` as shared storage instead of binding-owned storage.
     shared: bool,
     /// A view retains its entire parent allocation.
@@ -123,12 +124,24 @@ impl Stored {
             backing,
             charge,
             index: None,
+            boolean: None,
             shared,
             parent: None,
         }
     }
 }
 impl Value for Stored {
+    fn control_bool(&self) -> Result<bool, BackendError> {
+        self.boolean
+            .ok_or_else(|| BackendError::new("local-control-bool"))
+    }
+    fn from_control_bool(boolean: bool) -> Result<Self, BackendError> {
+        Ok(Self {
+            boolean: Some(boolean),
+            index: None,
+            ..Self::from_control_index(0)?
+        })
+    }
     fn control_index(&self) -> Result<u64, BackendError> {
         self.index
             .ok_or_else(|| BackendError::new("expected-index"))
@@ -148,6 +161,9 @@ impl Value for Stored {
         })
     }
     fn physical_type(&self) -> PhysicalType {
+        if self.boolean.is_some() {
+            return PhysicalType::default_for(LogicalType::parse("bool").unwrap()).unwrap();
+        }
         if self.index.is_some() {
             return PhysicalType::default_for(LogicalType::parse("index").unwrap()).unwrap();
         }
@@ -173,6 +189,143 @@ impl Value for Stored {
     }
     fn validation_backing(&self) -> Option<Backing> {
         self.shared.then(|| Backing::of(&self.backing, self.charge))
+    }
+}
+
+#[test]
+fn conditional_loop_carry_has_bounded_overlap_and_one_final_parent_binding() {
+    let ports = json!([
+        ["lo", "index@native.index/0"],
+        ["hi", "index@native.index/0"],
+        ["again", "bool@native.bool/0"],
+        ["seed", "field:bls12-381.fr@arkworks.fr/0"]
+    ]);
+    let program = one(
+        json!([[
+            "function",
+            "carry",
+            ports,
+            ["field:bls12-381.fr@arkworks.fr/0"],
+            [
+                [
+                    "for_while",
+                    "steps",
+                    "i",
+                    "lo",
+                    "hi",
+                    [["acc", "seed"]],
+                    ["again"],
+                    [
+                        ["op", "next", "field.add", [], ["acc", "acc"], ["new"]],
+                        ["yield", ["again", "new"]]
+                    ],
+                    ["result"]
+                ],
+                ["return", ["result"]]
+            ]
+        ]]),
+        ports,
+        json!(["field:bls12-381.fr@arkworks.fr/0"]),
+        json!([
+            [
+                "local",
+                "run",
+                "carry",
+                ["lo", "hi", "again", "seed"],
+                ["result"]
+            ],
+            ["return", ["result"]]
+        ]),
+    );
+    let program = Program::decode(
+        &bytes(&program),
+        &crate::vm::Contracts::standard(crate::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
+
+    // Seed remains externally aliased. One new carry costs 32 bytes; later
+    // iterations overlap seed, old carry, and new carry, but never all past
+    // carries. Scaffolding scalars have zero charge in this test backend.
+    for (iterations, again, trips) in [(0, false, 0), (3, false, 1), (3, true, 3)] {
+        let required_live = if trips == 0 {
+            32
+        } else if trips == 1 {
+            64
+        } else {
+            96
+        };
+        let required_total = 32 * (trips + 1);
+        for live in [required_live - 1, required_live] {
+            for total in [required_total - 1, required_total] {
+                // Root input admission is a separate test surface.
+                if live < 32 || total < 32 {
+                    continue;
+                }
+                let drops = Arc::new(AtomicUsize::new(0));
+                let seed = Stored::new(
+                    Arc::new(Allocation {
+                        payload: vec![9; 32],
+                        drops: drops.clone(),
+                    }),
+                    32,
+                    true,
+                );
+                let mut runner = Runner::new_with_value_budget(
+                    &program,
+                    "main",
+                    "P",
+                    "carry-test",
+                    StorageBackend::shared(32, 32),
+                    vec![
+                        Stored::from_control_index(0).unwrap(),
+                        Stored::from_control_index(iterations).unwrap(),
+                        Stored::from_control_bool(again).unwrap(),
+                        seed.clone(),
+                    ],
+                    ValueBudget {
+                        live_bytes: live,
+                        total_bytes: total,
+                    },
+                )
+                .unwrap();
+                let result = loop {
+                    match runner.poll() {
+                        Action::Local(action) => runner.execute_local(&action.cut).unwrap(),
+                        Action::Returned(values) => break Ok(values),
+                        Action::Stopped(stop) => break Err(stop),
+                        other => panic!("unexpected {other:?}"),
+                    }
+                };
+                let expected = live == required_live && total == required_total;
+                assert_eq!(
+                    result.is_ok(),
+                    expected,
+                    "live={live} total={total} {result:?}"
+                );
+                let usage = runner.usage();
+                assert_eq!(usage.live_values, usize::from(expected));
+                assert_eq!(usage.live_value_bytes, if expected { 32 } else { 0 });
+                assert!(usage.total_value_bytes <= total);
+                if expected {
+                    assert_eq!(usage.total_value_bytes, required_total);
+                    assert_eq!(usage.iterations, trips as u64);
+                } else {
+                    assert!(matches!(&result, Err(stop)
+                        if matches!(&stop.kind, StopKind::Backend(e) if e.code == "output-budget")));
+                }
+                let backend = runner.into_backend();
+                if expected && trips > 0 {
+                    assert_eq!(backend.allocations, trips);
+                    assert_eq!(backend.drops.load(Ordering::SeqCst), trips - 1);
+                }
+                drop(result);
+                assert!(backend.all_freed());
+                assert_eq!(seed.backing.payload, vec![9; 32]);
+                assert_eq!(drops.load(Ordering::SeqCst), 0);
+                drop(seed);
+                assert_eq!(drops.load(Ordering::SeqCst), 1);
+            }
+        }
     }
 }
 #[derive(Debug)]

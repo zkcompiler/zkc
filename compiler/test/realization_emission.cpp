@@ -4,7 +4,10 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 
 using namespace mlir;
 using namespace zkc;
@@ -33,18 +36,45 @@ std::string spelling(Operation *op) {
   return result;
 }
 
-local::FuncOp function(OpBuilder &builder, protocol_ir::ProtocolModuleOp unit,
-                       StringRef name, TypeRange inputs, Type output) {
+func::FuncOp function(OpBuilder &builder, protocol_ir::ProtocolModuleOp unit,
+                      StringRef name, TypeRange inputs, Type output) {
   builder.setInsertionPointToEnd(&unit.getBody().front());
-  auto result =
-      local::FuncOp::create(builder, unit.getLoc(), name,
-                            builder.getFunctionType(inputs, TypeRange{output}));
-  result->setAttr("logical_origin",
+  SmallVector<Type> arguments{runtime::ScopeType::get(builder.getContext())};
+  llvm::append_range(arguments, inputs);
+  auto result = func::FuncOp::create(
+      builder, unit.getLoc(), name,
+      builder.getFunctionType(
+          arguments, {exec::OutcomeType::get(builder.getContext(), {output})}));
+  result.setNoInline(true);
+  result->setAttr("runtime.origin",
                   builder.getArrayAttr(
                       {builder.getStringAttr(name), builder.getArrayAttr({})}));
-  auto *entry = result.addEntryBlock();
-  builder.setInsertionPointToEnd(entry);
+  builder.setInsertionPointToEnd(result.addEntryBlock());
   return result;
+}
+struct Emitted {
+  Operation *operation;
+  Value value;
+};
+Emitted emit(RealizationEmitter &emitter, exec::ScopedExecutionBuilder &control,
+             OpBuilder &builder, StringRef site,
+             const protocol::BindingApplication &application, ValueRange inputs,
+             Type output, ArrayRef<std::string> parameters = {}) {
+  auto reference = emitter.binding(builder, control.getLocation(), application);
+  SmallVector<Attribute> encoded;
+  for (const auto &parameter : parameters)
+    encoded.push_back(builder.getStringAttr(parameter));
+  auto *block = builder.getInsertionBlock();
+  auto values = control.invoke(
+      "exec.apply", {output}, control.scoped(inputs),
+      {builder.getNamedAttr("binding", reference),
+       builder.getNamedAttr("site", builder.getStringAttr(site)),
+       builder.getNamedAttr("parameters", builder.getArrayAttr(encoded))});
+  auto *operation = block->getTerminator()->getPrevNode();
+  require(operation && isa<exec::ApplyOp>(operation) &&
+              succeeded(verify(operation)),
+          "scoped invocation failed resolved signature validation");
+  return {operation, values.front()};
 }
 
 void checkPorts(const protocol::BindingApplication &application,
@@ -149,7 +179,8 @@ int main() {
           auto helper = function(
               builder, unit, "collection",
               {family.type, family.element, index, index, storage}, index);
-          auto args = helper.getArguments();
+          auto args = helper.getArguments().drop_front();
+          exec::ScopedExecutionBuilder control(builder, helper);
           unsigned site = 0;
           auto emit = [&](const std::optional<protocol::BindingApplication>
                               &application,
@@ -159,13 +190,10 @@ int main() {
                         application->implementation.empty(),
                     "unexpected collection realization contract");
             checkPorts(*application, inputs.getTypes(), output);
-            auto *op = emitter.emit(builder, helper.getLoc(),
-                                    "collection_" + std::to_string(site++),
-                                    *application, inputs, TypeRange{output},
-                                    parameters);
-            require(succeeded(protocol::verifyBoundOperation(op, false)),
-                    "emitted operation failed resolved contract check");
-            return op->getResult(0);
+            return ::emit(emitter, control, builder,
+                          "collection_" + std::to_string(site++), *application,
+                          inputs, output, parameters)
+                .value;
           };
           if (family.extent) {
             require(!recipe->length, "array length must stay intrinsic");
@@ -196,7 +224,7 @@ int main() {
             require(!recipe->empty && !recipe->append && !recipe->wrap,
                     "matrix gained a collection construction recipe");
           }
-          local::ReturnOp::create(builder, helper.getLoc(), args[2]);
+          control.returned(args[2]);
           require(succeeded(verify(*candidate)),
                   "collection emission failed candidate admission");
         });
@@ -214,14 +242,14 @@ int main() {
           cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front());
       OpBuilder builder(&context);
       builder.setInsertionPointToStart(&sourceUnit.getBody().front());
-      auto pinned = local::OperationBindingOp::create(
+      auto pinned = runtime::BindingOp::create(
           builder, sourceUnit.getLoc(), prefix.str() + "0", "field.add",
           builder.getArrayAttr({builder.getStringAttr(field.getDomain())}),
           "arkworks/field.add", mlir::ArrayAttr{});
       auto authored = function(builder, sourceUnit, prefix.str() + "1",
                                {field, field}, field);
-      local::ReturnOp::create(builder, authored.getLoc(),
-                              authored.getArgument(0));
+      exec::ScopedExecutionBuilder authoredBody(builder, authored);
+      authoredBody.returned(authored.getArgument(1));
       auto before = spelling(*original);
       auto pinnedBefore = spelling(pinned);
       OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(original->clone()));
@@ -230,21 +258,24 @@ int main() {
       RealizationEmitter emitter(unit, prefix);
       // Other producer work may add symbols after emitter construction.
       builder.setInsertionPointToStart(&unit.getBody().front());
-      local::OperationBindingOp::create(
-          builder, unit.getLoc(), prefix.str() + "2", "index.constant",
-          builder.getArrayAttr({}), "", mlir::ArrayAttr{});
-      auto helper = cast<local::FuncOp>(
+      runtime::BindingOp::create(builder, unit.getLoc(), prefix.str() + "2",
+                                 "index.constant", builder.getArrayAttr({}), "",
+                                 mlir::ArrayAttr{});
+      auto helper = cast<func::FuncOp>(
           SymbolTable::lookupSymbolIn(unit, prefix.str() + "1"));
-      builder.setInsertionPoint(helper.getBody().front().getTerminator());
+      helper.front().back().erase();
+      helper.front().back().erase();
+      builder.setInsertionPointToEnd(&helper.front());
+      exec::ScopedExecutionBuilder control(builder, helper);
       protocol::BindingApplication application{
           "field.add", {field.getDomain().str()}, ""};
       auto emit = [&](StringRef site) {
-        auto *op = emitter.emit(builder, helper.getLoc(), site, application,
-                                helper.getArguments(), TypeRange{field});
-        require(op->getBlock() == &helper.getBody().front() &&
-                    op->getAttrOfType<StringAttr>("site").getValue() == site &&
-                    succeeded(protocol::verifyBoundOperation(op, false)),
-                "emitter lost insertion point, site or resolved signature");
+        auto value = ::emit(emitter, control, builder, site, application,
+                            helper.getArguments().drop_front(), field);
+        auto *op = value.operation;
+        require(op->getParentOp() == helper &&
+                    op->getAttrOfType<StringAttr>("site").getValue() == site,
+                "emitter lost function or occurrence identity");
         return take(protocol::operationBinding(op));
       };
       auto first = emit("authored_finite_0");
@@ -264,6 +295,7 @@ int main() {
                   spelling(SymbolTable::lookupSymbolIn(
                       unit, prefix.str() + "0")) == pinnedBefore,
               "producer mutated the source or its retained named pin");
+      control.returned(helper.getArgument(1));
       require(succeeded(verify(*candidate)),
               "binding emission failed candidate admission");
     });
@@ -276,29 +308,28 @@ int main() {
         OpBuilder builder(&context);
         RealizationEmitter emitter(unit, "_constant_binding_");
         auto helper = function(builder, unit, "constants", {}, field);
+        exec::ScopedExecutionBuilder control(builder, helper);
         auto other = algebra::FieldType::get(&context, "bn254.fr");
         auto emit = [&](algebra::FieldType type, StringRef parameter,
                         StringRef site) {
-          auto *op =
-              emitter.emit(builder, helper.getLoc(), site,
-                           {"field.constant", {type.getDomain().str()}, ""}, {},
-                           TypeRange{type}, {parameter.str()});
-          require(
-              succeeded(protocol::verifyBoundOperation(op, false)),
-              "constant failed declaration signature or parameter validation");
-          return op;
+          return ::emit(emitter, control, builder, site,
+                        {"field.constant", {type.getDomain().str()}, ""}, {},
+                        type, {parameter.str()});
         };
-        auto *one = emit(field, "1", "one");
-        auto *two = emit(field, "2", "two");
-        auto *differentField = emit(other, "1", "other_field");
-        auto first = take(protocol::operationBinding(one));
+        auto one = emit(field, "1", "one");
+        auto two = emit(field, "2", "two");
+        auto differentField = emit(other, "1", "other_field");
+        auto first = take(protocol::operationBinding(one.operation));
         require(
-            first.name == take(protocol::operationBinding(two)).name &&
+            first.name ==
+                    take(protocol::operationBinding(two.operation)).name &&
                 first.name !=
-                    take(protocol::operationBinding(differentField)).name &&
-                one->getAttr("parameters") != two->getAttr("parameters"),
+                    take(protocol::operationBinding(differentField.operation))
+                        .name &&
+                one.operation->getAttr("parameters") !=
+                    two.operation->getAttr("parameters"),
             "deduplication changed a static domain or occurrence parameters");
-        local::ReturnOp::create(builder, helper.getLoc(), one->getResult(0));
+        control.returned(one.value);
         require(succeeded(verify(*candidate)),
                 "constant candidate failed admission");
       });

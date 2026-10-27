@@ -50,7 +50,7 @@ theorem accepted : refusal (checkLowering installed constructed actual) = none :
 /-- The mutation helpers alone preserve acceptance. -/
 theorem unchanged_accepted :
     refusal (checkLowering installed constructed
-      (withStep actual "_calculation_2" 2 (.operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v24", "v26"] ["v27"])))
+      (withStep actual "_calculation_2" 2 (.operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v12", "v14"] ["v15"])))
       = none := by
   decide +kernel
 
@@ -59,7 +59,7 @@ theorem unchanged_accepted :
 /-- The final addition takes its operands in the other order. The sum is a pure
 term, so the rule finds the difference where the decision it feeds is returned. -/
 def additionSwapped : Validator :=
-  withStep actual "_calculation_2" 2 (.operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v26", "v24"] ["v27"])
+  withStep actual "_calculation_2" 2 (.operation "lc_11_computation_6_kernel_1_2" "_numerical_binding_4" [] ["v14", "v12"] ["v15"])
 
 theorem additionSwapped_refused :
     refusal (checkLowering installed constructed additionSwapped) = some (.returned 0) := by
@@ -68,14 +68,14 @@ theorem additionSwapped_refused :
 /-- The final comparison compares one side with itself: the returned decision
 denotes another term. -/
 def comparisonTrivial : Validator :=
-  withStep actual "_calculation_2" 3 (.operation "lc_6_kernel_6_kernel_1_3" "_kernel_binding_3" [] ["v25", "v25"] ["v28"])
+  withStep actual "_calculation_2" 3 (.operation "lc_11_computation_6_kernel_1_3" "_numerical_binding_3" [] ["v13", "v13"] ["v16"])
 
 theorem comparisonTrivial_refused :
     refusal (checkLowering installed constructed comparisonTrivial) = some (.returned 0) := by
   decide +kernel
 
 /-- The participant returns its decision and transcript in the other order. -/
-def resultsSwapped : Validator := withAction actual 7 (.ret ["v38", "v39"])
+def resultsSwapped : Validator := withAction actual 7 (.ret ["v21", "v22"])
 
 theorem resultsSwapped_refused :
     refusal (checkLowering installed constructed resultsSwapped) = some (.returned 0) := by
@@ -86,7 +86,7 @@ theorem resultsSwapped_refused :
 /-- The first observation absorbs the base instead of the received commitment:
 the second anchor's second operand denotes another term. -/
 def baseObserved : Validator :=
-  withAction actual 1 (.call "_transcript_12" "_transcript_1" ["v31", "v29"] ["v33"])
+  withAction actual 1 (.call "_transcript_12" "_transcript_0" ["v14", "v12"] ["v16"])
 
 theorem baseObserved_refused :
     refusal (checkLowering installed constructed baseObserved) = some (.anchorOperand 1 1) := by
@@ -95,19 +95,19 @@ theorem baseObserved_refused :
 /-- The delivery is observed on the transcript state from before the challenge:
 a consumed transcript unit is used again. -/
 def staleTranscript : Validator :=
-  withAction actual 3 (.call "_transcript_14" "_transcript_6" ["v33", "v34"] ["v36"])
+  withAction actual 3 (.call "_transcript_14" "_transcript_5" ["v16", "v17"] ["v19"])
 
 theorem staleTranscript_refused :
-    refusal (checkLowering installed constructed staleTranscript) = some (.operation "transition") := by
+    refusal (checkLowering installed constructed staleTranscript) = some (.operation "lc_10_transition") := by
   decide +kernel
 
 /-! ## Installation mutations -/
 
 /-- An implementation outside the installed vocabulary. -/
-def uninstalled : Validator := withImplementation actual "_kernel_binding_4" "fast/curve.add"
+def uninstalled : Validator := withImplementation actual "_numerical_binding_4" "fast/curve.add"
 
 theorem uninstalled_refused :
-    refusal (checkLowering installed constructed uninstalled) = some (.binding "_kernel_binding_4") := by
+    refusal (checkLowering installed constructed uninstalled) = some (.binding "_numerical_binding_4") := by
   decide +kernel
 
 /-- Physical specialization is part of the installed binding's identity. -/
@@ -118,49 +118,49 @@ def withPhysicalArguments (validator : Validator) (symbol : String)
 
 theorem missingSpecialization_refused :
     refusal (checkLowering installed constructed
-      (withPhysicalArguments actual "_transcript_0" [])) = some (.binding "_transcript_0") := by
+      (withPhysicalArguments actual "_transcript_2" [])) = some (.binding "_transcript_2") := by
   decide +kernel
 
 theorem wrongSpecialization_refused :
     refusal (checkLowering installed constructed
-      (withPhysicalArguments actual "_transcript_0"
-        [⟨.data (.group "bls12-381.g1"), "other.g1/0"⟩])) = some (.binding "_transcript_0") := by
+      (withPhysicalArguments actual "_transcript_2"
+        [⟨.data (.group "bls12-381.g1"), "other.g1/0"⟩])) = some (.binding "_transcript_2") := by
   decide +kernel
 
 theorem additionalSpecialization_refused :
     refusal (checkLowering installed constructed
-      (withPhysicalArguments actual "_kernel_binding_4"
-        [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩])) = some (.binding "_kernel_binding_4") := by
+      (withPhysicalArguments actual "_numerical_binding_4"
+        [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩])) = some (.binding "_numerical_binding_4") := by
   decide +kernel
 
 /-- Retain the actual operation and implementation, but substitute its payload layout. -/
 def foreignPayloadLayout : Validator :=
   { actual with bindings := actual.bindings.map fun binding =>
-      if binding.symbol = "_transcript_0" then
+      if binding.symbol = "_transcript_2" then
         { binding with physicalArguments :=
           [⟨.data (.group "bls12-381.g1"), "foreign.g1/0"⟩] }
       else binding }
 
 theorem foreignPayloadLayout_refused :
     refusal (checkLowering installed constructed foreignPayloadLayout) =
-      some (.binding "_transcript_0") := by decide +kernel
+      some (.binding "_transcript_2") := by decide +kernel
 
 /-- The field layout is installed for field absorption, not group absorption. -/
 def crossedPayloadLayout : Validator :=
   { actual with bindings := actual.bindings.map fun binding =>
-      if binding.symbol = "_transcript_0" then
+      if binding.symbol = "_transcript_2" then
         { binding with physicalArguments :=
           [⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩] }
       else binding }
 
 theorem crossedPayloadLayout_refused :
     refusal (checkLowering installed constructed crossedPayloadLayout) =
-      some (.binding "_transcript_0") := by decide +kernel
+      some (.binding "_transcript_2") := by decide +kernel
 
 /-- The commitment is received at a representation the vocabulary does not admit. -/
 def uncheckedRepresentation : Validator :=
   withAction actual 0 (.receive "label_636f6d6d69746d656e74_0" "label_636f6d6d69746d656e74_0"
-    "role00000000" "v32" ⟨.data (.group "bls12-381.g1"), "unchecked.g1/0"⟩)
+    "role00000000" "v15" ⟨.data (.group "bls12-381.g1"), "unchecked.g1/0"⟩)
 
 theorem uncheckedRepresentation_refused :
     refusal (checkLowering installed constructed uncheckedRepresentation) = some .representation := by
@@ -178,7 +178,7 @@ def withSignature (validator : Validator) (symbol : String)
 Boolean. -/
 def formalRetyped : Validator :=
   withSignature actual "_calculation_2" fun function =>
-    { function with inputs := function.inputs.set 0 ("v20", ⟨.data .boolean, "native.bool/0"⟩) }
+    { function with inputs := function.inputs.set 0 ("v8", ⟨.data .boolean, "native.bool/0"⟩) }
 
 theorem formalRetyped_refused :
     refusal (checkLowering installed constructed formalRetyped) = some (.operation "calculation_0") := by
@@ -205,7 +205,7 @@ theorem functionDuplicated_refused :
 /-- A second binding under the addition's symbol. -/
 def bindingDuplicated : Validator :=
   { actual with bindings := actual.bindings ++
-      [⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "fast/curve.add", []⟩] }
+      [⟨"_numerical_binding_4", "curve.add", ["bls12-381.g1"], "fast/curve.add", []⟩] }
 
 theorem bindingDuplicated_refused :
     refusal (checkLowering installed constructed bindingDuplicated) = some (.duplicate "binding") := by
@@ -271,7 +271,7 @@ run (two transitions) and the stop is charged inside the challenge helper,
 as the runtime reports for this budget. -/
 theorem exhausted_after_challenge :
     (runAt 8 honest).result.outcome = .stopped .exhausted ∧
-      observed (runAt 8 honest) = (some (some "_transcript_13", some ("_transcript_13", "_transcript_4")), 8, 2, 1) := by
+      observed (runAt 8 honest) = (some (some "_transcript_13", some ("_transcript_13", "_transcript_3")), 8, 2, 1) := by
   decide +kernel
 
 /-- The canonical metered Domain execution at the actual checked reading. -/
@@ -340,12 +340,12 @@ frames out of order although entries and exits still balance; `execute_cleaned`
 excludes both. -/
 theorem cleanup_on_stop :
     (runAt 3 honest).events =
-      [.enter .participant, .enter (.call "_transcript_12" "_transcript_1"),
-        .leave (.call "_transcript_12" "_transcript_1") .stopped, .leave .participant .stopped] ∧
+      [.enter .participant, .enter (.call "_transcript_12" "_transcript_0"),
+        .leave (.call "_transcript_12" "_transcript_0") .stopped, .leave .participant .stopped] ∧
     (runAt 3 honest).retired = [[]] ∧ (runAt 3 honest).Cleaned ∧
     ¬ ({ runAt 3 honest with events := (runAt 3 honest).events.take 2 } : Run F G).Cleaned ∧
-    ¬ ({ runAt 3 honest with events := [.enter .participant, .enter (.call "_transcript_12" "_transcript_1"),
-        .leave .participant .stopped, .leave (.call "_transcript_12" "_transcript_1") .stopped] } :
+    ¬ ({ runAt 3 honest with events := [.enter .participant, .enter (.call "_transcript_12" "_transcript_0"),
+        .leave .participant .stopped, .leave (.call "_transcript_12" "_transcript_0") .stopped] } :
       Run F G).Cleaned := by
   decide +kernel
 

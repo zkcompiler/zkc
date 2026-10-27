@@ -107,17 +107,19 @@ participant or driver failure.
 
 ## Bounded local termination
 
-A `local.for` body may end in `local.condition` instead of `local.yield`. Its
-leading Boolean SSA operand means continue; the remaining operands are the same
-carried values and unchanged capture arguments as a yield. False returns the
-carried values without another iteration. True advances only while the finite
-upper bound permits. An empty range returns the initial values without running
-the body or testing a flag. Both bound and work limits remain enforced.
+A conditional scoped loop body completes with a leading Boolean followed by
+its carried values. False returns those values without another iteration. True
+advances only while the finite upper bound permits. An empty range returns the
+initial values without running the body or testing a flag. Both bound and work
+limits remain enforced.
 
-The Boolean is an explicit use, separate from forwarded region operands.
-`RegionBranchOpInterface` retains the existing loop entry/backedge/result
-mapping; `RegionBranchTerminatorOpInterface` excludes the leading condition.
-Affine carried roots retain the existing slot invariant on either edge.
+The closed body receives explicit induction, carried and capture arguments.
+`exec.complete` retains the completion charge and outcome. Scope exit transfers
+the Boolean and state together; `runtime.take_condition` then separates the
+condition from the carried transfer. Standard CF selects the next iteration or
+result edge. Affine carried roots retain their slot invariant on either edge.
+The checked numerical SCF schedule retains the same explicit outcomes before
+lowering to this profile; no source stop becomes a return from an SCF region.
 
 Only the program format encodes this body as:
 
@@ -127,8 +129,8 @@ Only the program format encodes this body as:
 
 The body's final serialized yield contains the Boolean followed by the carried
 values. A conditional body must end in this yield; a body ending in an
-unconditional stop uses ordinary `for` encoding. Captures are explicit MLIR
-forwarding operands and are omitted by the executable encoding.
+unconditional stop uses ordinary `for` encoding. Captures are explicit inputs to the closed body; its serialized yield contains
+only the condition and carried values.
 A false condition ends this local loop, not the local function or participant.
 This supports bounded searches without an unrelated body executing on every
 remaining iteration. It grants no unbounded loop or arbitrary jump.

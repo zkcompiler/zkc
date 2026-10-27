@@ -1,21 +1,28 @@
 #include "PhysicalPlan.h"
 #include "../Transforms/Kernel/Support.h"
-#include "../Transforms/NumericalLowering.h"
 #include "../Transforms/NumericalSelection.h"
+#include "../Transforms/ScopedPreparation.h"
 #include "AggregateLayouts.h"
+#include "ExecutionPorts.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Target/Selection.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <deque>
 #include <map>
 #include <set>
@@ -59,6 +66,9 @@ struct InputSnapshot {
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
   // Accessible only inside Target; callers can obtain independent clones.
+  // Actual selected finite preparation, retained for independent composition.
+  // Source/candidate mutation cannot turn a producer cache into evidence.
+  OwningOpRef<ModuleOp> finite;
   OwningOpRef<ModuleOp> numerical;
   Error check(ModuleOp module) const {
     // Compare only fresh live IR against opaque saved addresses. Never walk or
@@ -123,10 +133,8 @@ Expected<SmallVector<Type>> decodePorts(MLIRContext *context,
   return result;
 }
 Expected<FunctionType>
-selectedFunctionType(Operation *op,
+selectedFunctionType(Operation *op, FunctionType logical,
                      ArrayRef<FunctionPortSelection> selections) {
-  auto logical = cast<FunctionType>(
-      op->getAttrOfType<TypeAttr>("function_type").getValue());
   SmallVector<Type> inputs, outputs;
   std::set<std::pair<bool, unsigned>> seen;
   auto name = op->getAttrOfType<StringAttr>("sym_name");
@@ -196,11 +204,10 @@ bool sameLogical(const BindingApplication &a, const BindingApplication &b) {
   return a.contract == b.contract && a.arguments == b.arguments;
 }
 bool interfaceOperation(Operation *op) {
-  return isa<zkc::local::BoolConstantOp, zkc::local::ReturnOp,
-             zkc::local::StopOp, zkc::local::VariantInjectOp,
-             zkc::local::LocalMatchOp, zkc::local::LocalIfOp,
-             zkc::local::LocalForOp, zkc::local::LocalYieldOp,
-             zkc::local::LocalConditionOp>(op);
+  return isa<zkc::exec::BooleanOp, zkc::exec::ReturnOp, zkc::exec::CompleteOp,
+             zkc::exec::RejectOp, zkc::exec::VariantOp, zkc::exec::MatchOp,
+             zkc::exec::TestOp, zkc::exec::RangeOp,
+             zkc::runtime::ReleaseBindingsOp>(op);
 }
 using Indices = llvm::DenseMap<Operation *, OperationIndex>;
 Indices indexOperations(ArrayRef<Operation *> operations) {
@@ -211,21 +218,13 @@ Indices indexOperations(ArrayRef<Operation *> operations) {
 }
 // Resolve one actual SSA definition through its own recorded ports. This is
 // deliberately not a Type -> Type conversion map.
-Type valuePort(Value value, const PhysicalPlan &plan, const Indices &indices) {
-  if (auto result = dyn_cast<OpResult>(value))
-    return plan.operations[indices.lookup(result.getOwner())]
-        .outputs[result.getResultNumber()];
-  auto arg = cast<BlockArgument>(value);
-  auto *owner = arg.getOwner()->getParentOp();
-  size_t blockIndex = 0;
-  for (auto &region : owner->getRegions())
-    for (auto &block : region) {
-      if (&block == arg.getOwner())
-        return plan.operations[indices.lookup(owner)]
-            .blockArguments[blockIndex][arg.getArgNumber()];
-      ++blockIndex;
-    }
-  llvm_unreachable("block argument belongs to its parent");
+Type valuePort(Value value, const PhysicalPlan &plan, const Indices &indices,
+               const ExecutionPorts &flow) {
+  const auto &definition = flow.definition(value);
+  const auto &decision = plan.operations[indices.lookup(definition.owner)];
+  return definition.argument
+             ? decision.blockArguments[definition.block][definition.port]
+             : decision.outputs[definition.port];
 }
 std::string fresh(std::set<std::string> &used, StringRef prefix,
                   unsigned &next) {
@@ -429,6 +428,66 @@ chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
   return error("binding-no-conversion");
 }
 
+SmallVector<LinearContractionGroup> findExecutionContractions(
+    const ExecutionPorts &flow, ArrayRef<Operation *> operations,
+    const Indices &indices,
+    llvm::function_ref<const OperationContracts *(Operation *)> facts,
+    LinearContractionStats &stats) {
+  SmallVector<LinearContractionGroup> groups;
+  for (auto *op : operations) {
+    const auto *contract = facts(op);
+    if (!contract || !contract->diagonalMap || !flow.get(op).step)
+      continue;
+    ++stats.producers;
+    const auto &production = *contract->diagonalMap;
+    auto inputs = flow.inputs(op), outputs = flow.outputs(op);
+    if (production.result >= outputs.size() ||
+        production.factorsOperand >= inputs.size() ||
+        production.valuesOperand >= inputs.size() ||
+        production.factorsOperand == production.valuesOperand ||
+        inputs[production.valuesOperand].getType() !=
+            outputs[production.result].getType())
+      continue;
+    auto uses = flow.uses(outputs[production.result]);
+    if (uses.empty())
+      continue;
+    LinearContractionGroup group{op,
+                                 {production.factorsOperand,
+                                  production.valuesOperand, production.result},
+                                 {}};
+    bool compatible = true;
+    for (auto use : uses) {
+      const auto *consumer = facts(use.operation);
+      if (!consumer || !consumer->linearContraction ||
+          flow.enclosingBody(use.operation) != flow.enclosingBody(op) ||
+          indices.lookup(use.operation) <= indices.lookup(op)) {
+        compatible = false;
+        break;
+      }
+      const auto &roles = *consumer->linearContraction;
+      auto consumed = flow.inputs(use.operation);
+      if (use.operand != roles.valuesOperand ||
+          roles.coefficientsOperand >= consumed.size() ||
+          roles.coefficientsOperand == roles.valuesOperand ||
+          consumed[roles.coefficientsOperand].getType() !=
+              inputs[production.factorsOperand].getType()) {
+        compatible = false;
+        break;
+      }
+      group.uses.push_back(
+          {use.operation, {roles.coefficientsOperand, roles.valuesOperand}});
+    }
+    if (compatible) {
+      ++stats.eligibleProducers;
+      stats.eligiblePairs += group.uses.size();
+      llvm::sort(group.uses, [&](const auto &left, const auto &right) {
+        return indices.lookup(left.consumer) < indices.lookup(right.consumer);
+      });
+      groups.push_back(std::move(group));
+    }
+  }
+  return groups;
+}
 class Proposer {
   ModuleOp module;
   zkc::protocol_ir::ProtocolModuleOp root;
@@ -437,6 +496,8 @@ class Proposer {
   Indices indices;
   Location *failureLocation;
   PhysicalSelection &selection;
+  std::optional<ExecutionPorts> execution;
+  ExecutionPorts &flow() { return *execution; }
   ArrayRef<FunctionPortSelection> functionPorts;
   ArrayRef<ValueLayoutSelection> valueLayouts;
   SmallVector<BindingDecision> originals;
@@ -516,9 +577,10 @@ class Proposer {
     for (auto [index, op] : enumerate(operations)) {
       locate(failureLocation, op);
       const auto &d = plan.operations[index];
-      if (d.functionType && !op->getRegions().empty())
-        for (auto [value, type] : zip(op->getRegion(0).front().getArguments(),
-                                      d.functionType.getInputs()))
+      if (d.functionType && flow().callers(op).empty())
+        for (auto [value, type] :
+             zip(flow().body(flow().get(op).bodies[0]).arguments,
+                 d.functionType.getInputs()))
           if (auto e = pin(value, type, index))
             return e;
       if (d.binding) {
@@ -529,23 +591,23 @@ class Proposer {
         if (descriptor && descriptor->family == Family::Sequence &&
             app.physicalArguments.empty()) {
           if (app.contract == "sequence.append") {
-            if (auto e = equate(op->getOperand(0), op->getResult(0)))
+            if (auto e = equate(flow().inputs(op)[0], flow().outputs(op)[0]))
               return e;
-            auto container = layouts.get(op->getResult(0));
+            auto container = layouts.get(flow().outputs(op)[0]);
             if (!container)
               return container.takeError();
-            if (auto e = payload(op->getOperand(1),
+            if (auto e = payload(flow().inputs(op)[1],
                                  layouts.child(*container, 0), true))
               return e;
           } else if (app.contract == "sequence.at") {
-            auto container = layouts.get(op->getOperand(0));
+            auto container = layouts.get(flow().inputs(op)[0]);
             if (!container)
               return container.takeError();
-            if (auto e = payload(op->getResult(0), layouts.child(*container, 0),
-                                 false))
+            if (auto e = payload(flow().outputs(op)[0],
+                                 layouts.child(*container, 0), false))
               return e;
           } else if (app.contract != "sequence.empty") {
-            for (auto [value, type] : zip(op->getResults(), d.outputs))
+            for (auto [value, type] : zip(flow().outputs(op), d.outputs))
               if (auto e = pin(value, type, index))
                 return e;
           }
@@ -555,30 +617,30 @@ class Proposer {
           bool observation = descriptor &&
                              descriptor->family == Family::Observation &&
                              app.physicalArguments.empty();
-          for (auto [value, type] : zip(op->getOperands(), d.inputs))
+          for (auto [value, type] : zip(flow().inputs(op), d.inputs))
             if (aggregate(value.getType()) && !observation)
               if (auto e = pin(value, type, index))
                 return e;
-          for (auto [value, type] : zip(op->getResults(), d.outputs))
+          for (auto [value, type] : zip(flow().outputs(op), d.outputs))
             if (auto e = pin(value, type, index))
               return e;
         }
-      } else if (auto call = dyn_cast<zkc::local::CallOp>(op)) {
+      } else if (auto call = dyn_cast<zkc::protocol_ir::LocalCallOp>(op)) {
         auto *callee =
             SymbolTable::lookupNearestSymbolFrom(op, call.getCalleeAttr());
         auto type = plan.operations[indices.lookup(callee)].functionType;
-        for (auto [value, target] : zip(op->getOperands(), type.getInputs()))
+        for (auto [value, target] : zip(flow().inputs(op), type.getInputs()))
           if (aggregate(value.getType()))
             if (auto e = pin(value, target, index))
               return e;
-        for (auto [value, target] : zip(op->getResults(), type.getResults()))
+        for (auto [value, target] : zip(flow().outputs(op), type.getResults()))
           if (auto e = pin(value, target, index))
             return e;
-      } else if (isa<zkc::local::VariantInjectOp>(op)) {
-        auto container = layouts.get(op->getResult(0));
+      } else if (isa<zkc::exec::VariantOp>(op)) {
+        auto container = layouts.get(flow().outputs(op)[0]);
         if (!container)
           return container.takeError();
-        auto logical = encodeBoundType(op->getResult(0).getType(), false);
+        auto logical = encodeBoundType(flow().outputs(op)[0].getType(), false);
         if (!logical)
           return logical.takeError();
         auto descriptor = decodeVariant(logical->spelling());
@@ -591,21 +653,23 @@ class Proposer {
             break;
           offset += arm.payload.size();
         }
-        for (auto [i, value] : enumerate(op->getOperands()))
+        for (auto [i, value] : enumerate(flow().inputs(op)))
           if (auto e =
                   payload(value, layouts.child(*container, offset + i), true))
             return e;
-      } else if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
-                     zkc::local::LocalForOp>(op)) {
-        bool loop = isa<zkc::local::LocalForOp>(op);
-        bool match = isa<zkc::local::LocalMatchOp>(op);
+      } else if (isa<zkc::exec::TestOp, zkc::exec::MatchOp, zkc::exec::RangeOp>(
+                     op)) {
+        bool loop = isa<zkc::exec::RangeOp>(op);
+        bool match = isa<zkc::exec::MatchOp>(op);
         unsigned offset = loop ? 2 : 1;
         unsigned payloadOffset = 0;
-        for (auto &region : op->getRegions()) {
-          auto args = region.front().getArguments();
-          unsigned prefix = loop ? 1 : args.size() - (op->getNumOperands() - 1);
+        for (auto *entry : flow().get(op).bodies) {
+          const auto &body = flow().body(entry);
+          ArrayRef<Value> args = body.arguments;
+          unsigned prefix =
+              loop ? 1 : args.size() - (flow().inputs(op).size() - 1);
           if (match) {
-            auto container = layouts.get(op->getOperand(0));
+            auto container = layouts.get(flow().inputs(op)[0]);
             if (!container)
               return container.takeError();
             for (unsigned i = 0; i < prefix; ++i)
@@ -616,44 +680,35 @@ class Proposer {
           }
           for (auto [argument, captured] :
                zip(args.drop_front(prefix),
-                   op->getOperands().drop_front(offset)))
+                   flow().inputs(op).drop_front(offset)))
             if (auto e = equate(argument, captured))
               return e;
-          auto &end = region.front().back();
-          if (!isa<zkc::local::StopOp>(end)) {
-            unsigned skip = isa<zkc::local::LocalConditionOp>(end);
+          auto *end = body.instructions.back();
+          if (!isa<zkc::exec::RejectOp>(end)) {
+            unsigned skip = loop && flow().get(op).step->conditional;
             for (auto [result, yielded] :
-                 zip(op->getResults(), end.getOperands().drop_front(skip)))
+                 zip(flow().outputs(op), flow().inputs(end).drop_front(skip)))
               if (aggregate(result.getType()))
                 if (auto e = equate(result, yielded))
                   return e;
-            if (loop)
-              for (auto [captured, yielded] :
-                   zip(op->getOperands().drop_front(2 + op->getNumResults()),
-                       end.getOperands().drop_front(skip +
-                                                    op->getNumResults())))
-                if (aggregate(captured.getType()))
-                  if (auto e = equate(captured, yielded))
-                    return e;
           }
         }
         if (loop)
           for (auto [result, initial] :
-               zip(op->getResults(), op->getOperands().drop_front(2)))
+               zip(flow().outputs(op), flow().inputs(op).drop_front(2)))
             if (auto e = equate(result, initial))
               return e;
         if (!loop)
-          for (auto result : op->getResults())
+          for (auto [resultIndex, result] : enumerate(flow().outputs(op)))
             if (!aggregate(result.getType())) {
               auto target = layouts.get(result);
               if (!target)
                 return target.takeError();
               SmallVector<AggregateLayouts::Id> sources;
-              for (auto &region : op->getRegions()) {
-                auto &end = region.front().back();
-                if (!isa<zkc::local::StopOp>(end)) {
-                  auto source =
-                      layouts.get(end.getOperand(result.getResultNumber()));
+              for (auto *entry : flow().get(op).bodies) {
+                auto *end = flow().body(entry).instructions.back();
+                if (!isa<zkc::exec::RejectOp>(end)) {
+                  auto source = layouts.get(flow().inputs(end)[resultIndex]);
                   if (!source)
                     return source.takeError();
                   sources.push_back(*source);
@@ -662,15 +717,17 @@ class Proposer {
               if (auto e = layouts.join(*target, std::move(sources)))
                 return e;
             }
-      } else if (isa<zkc::local::ReturnOp, zkc::protocol_ir::FinishOp>(op)) {
+      } else if (isa<zkc::exec::ReturnOp, zkc::exec::CompleteOp,
+                     zkc::protocol_ir::FinishOp>(op)) {
         auto type =
             plan.operations[indices.lookup(op->getParentOp())].functionType;
-        for (auto [value, target] : zip(op->getOperands(), type.getResults()))
-          if (aggregate(value.getType()))
+        for (auto [value, target] : zip(flow().inputs(op), type.getResults()))
+          if (flow().callers(op->getParentOp()).empty() &&
+              aggregate(value.getType()))
             if (auto e = pin(value, target, index))
               return e;
       } else {
-        for (auto [value, type] : zip(op->getResults(), d.outputs))
+        for (auto [value, type] : zip(flow().outputs(op), d.outputs))
           if (auto e = pin(value, type, index))
             return e;
       }
@@ -681,22 +738,23 @@ class Proposer {
         return error("binding-duplicate-selection");
       Operation *found = nullptr;
       for (auto *op : operations) {
-        auto function = op->getParentOfType<zkc::local::FuncOp>();
+        auto function = op->getParentOfType<func::FuncOp>();
         auto site = op->getAttrOfType<StringAttr>("site");
-        if (function && function.getSymName() == seed.function && site &&
+        if (flow().get(op).step && function &&
+            function.getSymName() == seed.function && site &&
             site.getValue() == seed.site) {
           if (found)
             return error("binding-duplicate-selection");
           found = op;
         }
       }
-      if (!found || seed.result >= found->getNumResults())
+      if (!found || seed.result >= flow().outputs(found).size())
         return error("binding-unknown-selection");
       auto selected = parseBoundType(seed.physicalType, true);
       if (!selected)
         return selected.takeError();
       auto logical =
-          encodeBoundType(found->getResult(seed.result).getType(), false);
+          encodeBoundType(flow().outputs(found)[seed.result].getType(), false);
       if (!logical)
         return logical.takeError();
       if (!(erasePhysicalType(*selected) == *logical))
@@ -704,17 +762,17 @@ class Proposer {
       auto type = decodeBoundType(module.getContext(), *selected);
       if (!type)
         return error("binding-representation");
-      if (auto e =
-              pin(found->getResult(seed.result), type, indices.lookup(found)))
+      if (auto e = pin(flow().outputs(found)[seed.result], type,
+                       indices.lookup(found)))
         return e;
-      hints[found->getResult(seed.result)] = type;
+      hints[flow().outputs(found)[seed.result]] = type;
     }
     if (auto e = layouts.solve())
       return e;
     for (auto *op : operations)
-      for (auto result : op->getResults())
+      for (auto result : flow().outputs(op))
         if (aggregate(result.getType()) ||
-            isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp>(op)) {
+            isa<zkc::exec::TestOp, zkc::exec::MatchOp>(op)) {
           locate(failureLocation, op);
           auto id = layouts.get(result);
           if (!id)
@@ -746,31 +804,23 @@ class Proposer {
         pending.push_back(op);
     };
     auto notify = [&](Value value) {
-      for (auto *user : value.getUsers())
-        enqueue(user);
+      for (auto use : flow().uses(value))
+        enqueue(use.operation);
     };
     auto assign = [&](Value value, Type type) {
-      if (valuePort(value, plan, indices) == type)
+      if (valuePort(value, plan, indices, flow()) == type)
         return;
-      if (auto result = dyn_cast<OpResult>(value))
-        plan.operations[indices.lookup(result.getOwner())]
-            .outputs[result.getResultNumber()] = type;
-      else {
-        auto arg = cast<BlockArgument>(value);
-        auto *owner = arg.getOwner()->getParentOp();
-        size_t blockIndex = 0;
-        for (auto &region : owner->getRegions())
-          for (auto &block : region) {
-            if (&block == arg.getOwner())
-              plan.operations[indices.lookup(owner)]
-                  .blockArguments[blockIndex][arg.getArgNumber()] = type;
-            ++blockIndex;
-          }
-      }
+      const auto &definition = flow().definition(value);
+      auto &owner = plan.operations[indices.lookup(definition.owner)];
+      if (definition.argument)
+        owner.blockArguments[definition.block][definition.port] = type;
+      else
+        owner.outputs[definition.port] = type;
       notify(value);
     };
     auto aggregate = [&](Type type) {
-      auto logical = encodeBoundType(type, isa<zkc::plan::DataType>(type));
+      auto logical =
+          encodeBoundType(type, isa<zkc::runtime::RepresentedType>(type));
       if (!logical) {
         consumeError(logical.takeError());
         return false;
@@ -780,21 +830,36 @@ class Proposer {
     };
     for (auto [index, op] : enumerate(operations)) {
       auto &d = plan.operations[index];
-      for (auto &region : op->getRegions())
-        for (auto &block : region) {
-          SmallVector<Type> args;
-          for (auto type : block.getArgumentTypes())
-            args.push_back(initial(type));
-          d.blockArguments.push_back(std::move(args));
+      for (auto *entry : flow().get(op).bodies) {
+        const auto &body = flow().body(entry);
+        if (body.owner != op)
+          continue;
+        SmallVector<Type> args;
+        for (Value value : body.arguments)
+          args.push_back(initial(value.getType()));
+        d.blockArguments.push_back(std::move(args));
+      }
+      if (auto signature = flow().get(op).callable) {
+        if (flow().callers(op).empty()) {
+          auto selected = selectedFunctionType(op, signature, functionPorts);
+          if (!selected)
+            return selected.takeError();
+          d.functionType = *selected;
+        } else {
+          // A closed control body's ports follow its owning occurrence. An
+          // inactive variant payload can have no default representation; keep
+          // its provisional slot until the complete variant layout is solved.
+          SmallVector<Type> inputs, outputs;
+          for (auto type : signature.getInputs())
+            inputs.push_back(initial(type));
+          for (auto type : signature.getResults())
+            outputs.push_back(initial(type));
+          d.functionType =
+              FunctionType::get(module.getContext(), inputs, outputs);
         }
-      if (op->getAttrOfType<TypeAttr>("function_type")) {
-        auto selected = selectedFunctionType(op, functionPorts);
-        if (!selected)
-          return selected.takeError();
-        d.functionType = *selected;
         if (!d.blockArguments.empty())
-          d.blockArguments[0].assign(selected->getInputs().begin(),
-                                     selected->getInputs().end());
+          d.blockArguments[0].assign(d.functionType.getInputs().begin(),
+                                     d.functionType.getInputs().end());
       }
       if (d.binding) {
         applications[index] = plan.bindings[*d.binding].binding.application;
@@ -817,9 +882,9 @@ class Proposer {
           if (!deferred)
             return signature.takeError();
           consumeError(signature.takeError());
-          for (auto type : op->getResultTypes())
+          for (auto type : flow().outputs(op).getTypes())
             d.outputs.push_back(initial(type));
-          for (auto type : op->getOperandTypes())
+          for (auto type : flow().inputs(op).getTypes())
             d.inputs.push_back(initial(type));
         } else {
           auto inputs = decodePorts(module.getContext(), signature->inputs);
@@ -832,7 +897,7 @@ class Proposer {
           d.outputs = *outputs;
         }
       } else
-        for (auto type : op->getResultTypes())
+        for (auto type : flow().outputs(op).getTypes())
           d.outputs.push_back(initial(type));
       enqueue(op);
     }
@@ -847,12 +912,12 @@ class Proposer {
       locate(failureLocation, op);
       auto index = indices.lookup(op);
       auto &d = plan.operations[index];
-      if (auto call = dyn_cast<zkc::local::CallOp>(op)) {
+      if (auto call = dyn_cast<zkc::protocol_ir::LocalCallOp>(op)) {
         auto *callee =
             SymbolTable::lookupNearestSymbolFrom(op, call.getCalleeAttr());
         auto type = plan.operations[indices.lookup(callee)].functionType;
         d.inputs.assign(type.getInputs().begin(), type.getInputs().end());
-        for (auto [result, target] : zip(op->getResults(), type.getResults()))
+        for (auto [result, target] : zip(flow().outputs(op), type.getResults()))
           assign(result, target);
         continue;
       }
@@ -866,7 +931,8 @@ class Proposer {
               operationContracts(app.contract)->observation->payloadInput;
           if (app.physicalArguments.empty()) {
             auto selected = encodeBoundType(
-                valuePort(op->getOperand(payload), plan, indices), true);
+                valuePort(flow().inputs(op)[payload], plan, indices, flow()),
+                true);
             if (!selected) {
               consumeError(selected.takeError());
               continue;
@@ -883,7 +949,7 @@ class Proposer {
           if (!outputs)
             return outputs.takeError();
           d.inputs = *inputs;
-          for (auto [result, type] : zip(op->getResults(), *outputs))
+          for (auto [result, type] : zip(flow().outputs(op), *outputs))
             assign(result, type);
           applications[index] = std::move(app);
           if (plan.bindings[*d.binding]
@@ -912,7 +978,7 @@ class Proposer {
                 containerSchema = &port;
           if (!containerSchema)
             return error("binding-representation");
-          for (auto result : op->getResults())
+          for (auto result : flow().outputs(op))
             if (auto hint = hints.lookup(result)) {
               auto selected = encodeBoundType(hint, true);
               if (!selected)
@@ -930,8 +996,8 @@ class Proposer {
               }
             }
           // Actual container inputs determine access and append layouts.
-          for (auto operand : op->getOperands()) {
-            auto actual = valuePort(operand, plan, indices);
+          for (auto operand : flow().inputs(op)) {
+            auto actual = valuePort(operand, plan, indices, flow());
             auto bound = encodeBoundType(actual, true);
             if (!bound) {
               consumeError(bound.takeError());
@@ -949,7 +1015,7 @@ class Proposer {
                 container = type;
                 break;
               }
-          if (container && isa<zkc::plan::DataType>(container)) {
+          if (container && isa<zkc::runtime::RepresentedType>(container)) {
             auto selected = encodeBoundType(container, true);
             if (!selected)
               return selected.takeError();
@@ -958,7 +1024,7 @@ class Proposer {
           }
           auto signature = resolveBinding(app, true);
           if (!signature) {
-            if (!container || !isa<zkc::plan::DataType>(container)) {
+            if (!container || !isa<zkc::runtime::RepresentedType>(container)) {
               consumeError(signature.takeError());
               continue;
             }
@@ -971,7 +1037,7 @@ class Proposer {
           if (!outputs)
             return outputs.takeError();
           d.inputs = *inputs;
-          for (auto [result, type] : zip(op->getResults(), *outputs))
+          for (auto [result, type] : zip(flow().outputs(op), *outputs))
             assign(result, type);
           applications[index] = std::move(app);
           // Recompute unconstrained source families when their inputs change.
@@ -981,8 +1047,8 @@ class Proposer {
         }
         continue;
       }
-      if (isa<zkc::local::VariantInjectOp>(op)) {
-        auto logical = encodeBoundType(op->getResult(0).getType(), false);
+      if (isa<zkc::exec::VariantOp>(op)) {
+        auto logical = encodeBoundType(flow().outputs(op)[0].getType(), false);
         if (!logical)
           return logical.takeError();
         auto descriptor = decodeVariant(logical->spelling());
@@ -997,7 +1063,7 @@ class Proposer {
           start += descriptor->alternatives[active].payload.size();
         if (active == descriptor->alternatives.size())
           return error("variant-alternative");
-        Type selected = hints.lookup(op->getResult(0));
+        Type selected = hints.lookup(flow().outputs(op)[0]);
         if (!selected) {
           auto schemas = logicalChildren(*logical);
           if (!schemas)
@@ -1006,10 +1072,10 @@ class Proposer {
           bool ready = true;
           for (auto [i, schema] : enumerate(*schemas)) {
             Expected<BoundType> child =
-                i >= start && i < start + op->getNumOperands()
-                    ? encodeBoundType(
-                          valuePort(op->getOperand(i - start), plan, indices),
-                          true)
+                i >= start && i < start + flow().inputs(op).size()
+                    ? encodeBoundType(valuePort(flow().inputs(op)[i - start],
+                                                plan, indices, flow()),
+                                      true)
                     : defaultRepresentation(schema);
             if (!child) {
               consumeError(child.takeError());
@@ -1026,51 +1092,38 @@ class Proposer {
             return formed.takeError();
           selected = decodeBoundType(module.getContext(), *formed);
         }
-        assign(op->getResult(0), selected);
+        assign(flow().outputs(op)[0], selected);
         auto payload = variantPorts(selected, active);
         if (!payload)
           return payload.takeError();
         d.inputs = *payload;
-      } else if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
-                     zkc::local::LocalForOp>(op)) {
+      } else if (isa<zkc::exec::TestOp, zkc::exec::MatchOp, zkc::exec::RangeOp>(
+                     op)) {
         auto previousInputs = d.inputs;
         auto previousOutputs = d.outputs;
-        bool loop = isa<zkc::local::LocalForOp>(op),
-             match = isa<zkc::local::LocalMatchOp>(op);
-        if (match && !isa<zkc::plan::DataType>(
-                         valuePort(op->getOperand(0), plan, indices)))
+        bool loop = isa<zkc::exec::RangeOp>(op),
+             match = isa<zkc::exec::MatchOp>(op);
+        if (match && !isa<zkc::runtime::RepresentedType>(valuePort(
+                         flow().inputs(op)[0], plan, indices, flow())))
           continue;
         unsigned offset = loop ? 2 : 1;
         d.inputs.clear();
         for (unsigned i = 0; i < offset; ++i)
-          d.inputs.push_back(match ? valuePort(op->getOperand(i), plan, indices)
-                                   : initial(op->getOperand(i).getType()));
-        for (auto operand : op->getOperands().drop_front(offset))
-          d.inputs.push_back(valuePort(operand, plan, indices));
-        for (auto [regionIndex, region] : enumerate(op->getRegions())) {
-          SmallVector<Type> args;
-          if (loop)
-            args.push_back(d.inputs[0]);
-          if (match) {
-            auto payload = variantPorts(d.inputs[0], regionIndex);
-            if (!payload)
-              return payload.takeError();
-            args = *payload;
-          }
-          append_range(args, ArrayRef(d.inputs).drop_front(offset));
-          for (auto [arg, type] : zip(region.front().getArguments(), args))
-            assign(arg, type);
-        }
-        for (auto result : op->getResults()) {
-          Type selected = loop ? d.inputs[2 + result.getResultNumber()]
-                               : hints.lookup(result);
+          d.inputs.push_back(
+              match ? valuePort(flow().inputs(op)[i], plan, indices, flow())
+                    : initial(flow().inputs(op)[i].getType()));
+        for (auto operand : flow().inputs(op).drop_front(offset))
+          d.inputs.push_back(valuePort(operand, plan, indices, flow()));
+        for (auto [resultIndex, result] : enumerate(flow().outputs(op))) {
+          Type selected =
+              loop ? d.inputs[2 + resultIndex] : hints.lookup(result);
           if (!selected) {
-            for (auto &region : op->getRegions()) {
-              auto &end = region.front().back();
-              if (isa<zkc::local::StopOp>(end))
+            for (auto *entry : flow().get(op).bodies) {
+              auto *end = flow().body(entry).instructions.back();
+              if (isa<zkc::exec::RejectOp>(end))
                 continue;
-              auto type = valuePort(end.getOperand(result.getResultNumber()),
-                                    plan, indices);
+              auto type = valuePort(flow().inputs(end)[resultIndex], plan,
+                                    indices, flow());
               if (selected && selected != type) {
                 selected = initial(result.getType());
                 break;
@@ -1081,28 +1134,50 @@ class Proposer {
           if (selected)
             assign(result, selected);
         }
+        for (auto [regionIndex, entry] : enumerate(flow().get(op).bodies)) {
+          const auto &body = flow().body(entry);
+          SmallVector<Type> args;
+          if (loop)
+            args.push_back(d.inputs[0]);
+          if (match) {
+            auto payload = variantPorts(d.inputs[0], regionIndex);
+            if (!payload)
+              return payload.takeError();
+            args = *payload;
+          }
+          append_range(args, ArrayRef(d.inputs).drop_front(offset));
+          for (auto [arg, type] : zip(body.arguments, args))
+            assign(arg, type);
+          SmallVector<Type> results;
+          if (loop && flow().get(op).step->conditional)
+            results.push_back(
+                initial(flow().get(body.owner).callable.getResult(0)));
+          append_range(results, d.outputs);
+          auto &callee = plan.operations[indices.lookup(body.owner)];
+          auto signature =
+              FunctionType::get(module.getContext(), args, results);
+          if (callee.functionType != signature) {
+            callee.functionType = signature;
+            enqueue(body.instructions.back());
+          }
+        }
         if (d.inputs != previousInputs || d.outputs != previousOutputs)
-          for (auto &region : op->getRegions())
-            enqueue(&region.front().back());
-      } else if (isa<zkc::local::ReturnOp, zkc::protocol_ir::FinishOp>(op)) {
+          for (auto *entry : flow().get(op).bodies)
+            enqueue(flow().body(entry).instructions.back());
+      } else if (isa<zkc::exec::ReturnOp, zkc::exec::CompleteOp,
+                     zkc::protocol_ir::FinishOp>(op)) {
         Operation *function = op->getParentOp();
         auto type = plan.operations[indices.lookup(function)].functionType;
         d.inputs.assign(type.getResults().begin(), type.getResults().end());
-      } else if (isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
-                     op)) {
-        auto *parent = op->getParentOp();
-        const auto &p = plan.operations[indices.lookup(parent)];
+        for (auto *caller : flow().callers(function))
+          enqueue(caller);
+      } else if (isa<zkc::runtime::ReleaseBindingsOp>(op)) {
         d.inputs.clear();
-        if (isa<zkc::local::LocalConditionOp>(op))
-          d.inputs.push_back(initial(op->getOperand(0).getType()));
-        append_range(d.inputs, p.outputs);
-        if (isa<zkc::local::LocalForOp>(parent))
-          append_range(d.inputs, ArrayRef(p.blockArguments[0])
-                                     .drop_front(1 + parent->getNumResults()));
-        enqueue(parent);
+        for (auto value : flow().inputs(op))
+          d.inputs.push_back(valuePort(value, plan, indices, flow()));
       } else {
         d.inputs.clear();
-        for (auto type : op->getOperandTypes())
+        for (auto type : flow().inputs(op).getTypes())
           d.inputs.push_back(initial(type));
       }
     }
@@ -1262,6 +1337,10 @@ public:
 
   Error initialize(ArrayRef<std::pair<std::string, std::string>> requests,
                    bool contractions) {
+    auto admitted = ExecutionPorts::read(module);
+    if (!admitted)
+      return admitted.takeError();
+    execution = std::move(*admitted);
     for (auto [index, op] : enumerate(operations)) {
       if (!selection.numerical.chargeCatalog())
         return error("finite-analysis-limit");
@@ -1276,7 +1355,7 @@ public:
       locate(failureLocation, &op);
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
-      if (!isa<zkc::local::OperationBindingOp>(op))
+      if (!isa<zkc::runtime::BindingOp>(op))
         continue;
       auto binding = readBinding(&op);
       if (!binding)
@@ -1324,9 +1403,19 @@ public:
     if (!choices.empty())
       return error("binding-unknown-selection");
     if (contractions) {
+      auto facts = [&](Operation *op) -> const OperationContracts * {
+        auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+        if (!reference)
+          return nullptr;
+        auto found = names.find(reference.getValue().str());
+        return found == names.end()
+                   ? nullptr
+                   : operationContracts(
+                         originals[found->second].binding.application.contract);
+      };
       LinearContractionStats ignored;
-      for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
-        append_range(eligible, findLinearContractions(function, ignored));
+      eligible = findExecutionContractions(flow(), operations, indices, facts,
+                                           ignored);
     }
     return Error::success();
   }
@@ -1346,8 +1435,7 @@ public:
         if (found == names.end())
           return error("binding-reference");
         decision.binding = found->second;
-      } else if (op->getParentOfType<zkc::local::FuncOp>() &&
-                 !interfaceOperation(op))
+      } else if (flow().get(op).step && !interfaceOperation(op))
         return error("binding-reference");
       plan.operations.push_back(std::move(decision));
     }
@@ -1425,14 +1513,14 @@ public:
       return e;
     std::map<Operation *, std::set<std::string>> sites;
     for (auto *op : operations)
-      if (auto function = op->getParentOfType<zkc::local::FuncOp>())
+      if (auto function = op->getParentOfType<func::FuncOp>())
         if (auto site = op->getAttrOfType<StringAttr>("site"))
           sites[function].insert(site.getValue().str());
     for (auto [index, op] : enumerate(operations)) {
       locate(failureLocation, op);
       auto &decision = plan.operations[index];
-      for (auto [operand, value] : enumerate(op->getOperands())) {
-        Type from = valuePort(value, plan, indices);
+      for (auto [operand, value] : enumerate(flow().inputs(op))) {
+        Type from = valuePort(value, plan, indices, flow());
         Type to = decision.inputs[operand];
         if (from == to)
           continue;
@@ -1451,9 +1539,7 @@ public:
           failure.to = to;
           if (decision.binding)
             failure.bindings.push_back(*decision.binding);
-          Operation *producer = value.getDefiningOp();
-          if (!producer)
-            producer = cast<BlockArgument>(value).getOwner()->getParentOp();
+          Operation *producer = flow().definition(value).owner;
           auto producerIndex = indices.lookup(producer);
           failure.operations.push_back(producerIndex);
           if (plan.operations[producerIndex].binding)
@@ -1475,7 +1561,7 @@ public:
                                    false,
                                    index});
         }
-        auto function = op->getParentOfType<zkc::local::FuncOp>();
+        auto function = op->getParentOfType<func::FuncOp>();
         if (!function)
           return error("binding-no-conversion");
         decision.conversions.push_back(
@@ -1492,6 +1578,7 @@ Expected<PhysicalPlan>
 proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                 ArrayRef<std::pair<std::string, std::string>> selections,
                 PhysicalPlanOptions options, Location *failureLocation) {
+  llvm::TimeTraceScope timing("zkc.physical-proposal");
   locate(failureLocation, module);
   if (failed(verify(module)) || module.getBody()->empty() ||
       !isa<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front()))
@@ -1507,8 +1594,9 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!requests.emplace(name, implementation).second)
       return error("binding-duplicate-selection");
   std::map<std::string, std::string> originalPins;
+  llvm::DenseSet<Operation *> fixedFiniteBindings;
   for (auto declaration :
-       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
+       root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
     auto binding = readBinding(declaration);
     if (!binding)
@@ -1520,6 +1608,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     auto fixed = selectImplementation(binding->application, found->second);
     if (!fixed)
       return fixed.takeError();
+    fixedFiniteBindings.insert(declaration);
     requests.erase(found);
   }
   if (!requests.empty())
@@ -1533,23 +1622,29 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                     options.numericalPolicy,
                     options.functionPorts,
                     options.valueLayouts,
+                    {},
                     {}});
   for (const auto &choice : options.functionPorts) {
     bool found = false;
     for (auto &op : root.getBody().front())
-      if (isa<zkc::local::FuncOp, zkc::protocol_ir::ParticipantOp>(op))
+      if ((isa<func::FuncOp>(op) &&
+           isScopedExecutionFunction(cast<func::FuncOp>(op)) &&
+           !op.hasAttr("runtime.region")) ||
+          isa<zkc::protocol_ir::ParticipantOp>(op))
         found |= op.getAttrOfType<StringAttr>("sym_name").getValue() ==
                  choice.function;
     if (!found)
       return error("binding-unknown-selection");
   }
-  bool hasKernels = false, hasMaps = false;
+  bool hasNumerical = false, hasFinite = false;
   root.walk([&](Operation *op) {
-    hasKernels |=
-        (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
-    hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
+    hasNumerical |= (mathematical::isComputationUnit(op) ||
+                     isa<exec::ComputeOp, data::DomainOp>(op) ||
+                     (isa<func::FuncOp>(op) &&
+                      !isScopedExecutionFunction(cast<func::FuncOp>(op))));
+    hasFinite |= isa<exec::FoldOp, exec::CollectOp>(op);
   });
-  bool hasNumerical = hasKernels || hasMaps;
+  hasNumerical |= hasFinite;
   PhysicalSelection selection;
   if (options.numericalWork)
     selection.numerical.work = *options.numericalWork;
@@ -1568,49 +1663,18 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       options.numericalWork->numericalOccurrence.reset();
     }
   });
-  OwningOpRef<ModuleOp> prepared;
-  mathematical::PreparedMaps maps;
-  if (hasNumerical) {
-    if (hasKernels)
-      prepared = kernel::prepareKernelLowering(
-          module, &selection.numerical.remainingCopy);
-    else {
-      if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
-        return error("kernel-lowering", "numerical source copy capacity");
-      prepared = cast<ModuleOp>(module->clone());
-    }
-    if (!prepared)
-      return error("kernel-lowering", "numerical source preparation");
-    // Checked mathematical normalization does not consult executable binding
-    // choices. Apply requests to its owned result before any replacement
-    // discovery, rather than cloning the complete source just to pin it.
-    auto preparedRoot =
-        cast<zkc::protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
-    for (auto declaration : preparedRoot.getBody()
-                                .front()
-                                .getOps<zkc::local::OperationBindingOp>())
-      for (const auto &[name, implementation] : selections)
-        if (declaration.getSymName() == name)
-          declaration.setImplementation(implementation);
-    // Preparation and source discovery run once. All candidate attempts clone
-    // this immutable closure; no view into a failed clone becomes source IR.
-    if (hasKernels &&
-        failed(kernel::discoverKernelCalls(*prepared, options.numericalPolicy,
-                                           selection.numerical)))
-      return error("kernel-lowering", "numerical occurrence discovery");
-    if (hasMaps &&
-        failed(mathematical::prepareRetainedMaps(
-            *prepared, maps, selection.numerical, options.numericalPolicy)))
-      return error("algebra-map-formula");
-  }
+  bool firstAttempt = true, requiredEndpoint = false;
   for (;;) {
     auto incomingCopy = selection.numerical.remainingCopy;
     auto incomingBytes = selection.numerical.remainingSiteBytes;
     selection.numerical.allowSpeculation(true);
     mathematical::RecipeConstructionWork construction(selection.numerical.work);
-    bool speculative = hasNumerical && selection.numerical.canSpeculate() &&
-                       selection.numerical.hasAlternatives() &&
-                       construction.canDiscard(selection.numerical.work);
+    bool speculative =
+        hasNumerical && !requiredEndpoint &&
+        selection.numerical.canSpeculate() &&
+        (selection.numerical.hasAlternatives() || firstAttempt) &&
+        construction.canDiscard(selection.numerical.work);
+    firstAttempt = false;
     selection.numerical.allowSpeculation(speculative);
     auto copyCeiling =
         speculative ? std::min(incomingCopy,
@@ -1629,7 +1693,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       selection.numerical.remainingCopy += incomingCopy - copyCeiling;
       selection.numerical.remainingSiteBytes += incomingBytes - byteCeiling;
     });
-    selection.numerical.origins.clear();
+    selection.numerical.beginAttempt();
     OwningOpRef<ModuleOp> candidate;
     auto clearOrigins =
         llvm::scope_exit([&] { selection.numerical.origins.clear(); });
@@ -1638,61 +1702,105 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     std::optional<mathematical::RealizationSubject> capacitySubject;
     mathematical::VerificationDecision numericalOutcome;
     bool constructionCapacity = false;
-    if (hasNumerical) {
-      if (!kernel::chargeCopy(*prepared, selection.numerical.remainingCopy)) {
-        if (!speculative)
-          return error("kernel-lowering", "numerical candidate copy capacity");
-        constructionCapacity = true;
-        refusal = error("finite-analysis-limit");
-      } else {
-        candidate = cast<ModuleOp>(prepared->getOperation()->clone());
-        selected = *candidate;
-        if (hasKernels &&
-            failed(kernel::materializeKernelCalls(
-                selected, options.numericalPolicy, nullptr, selection.numerical,
-                &numericalOutcome, speculative))) {
-          if (numericalOutcome.outcome ==
-              mathematical::VerificationObservation::OptionalCapacity) {
-            capacitySubject = numericalOutcome.subject;
-            constructionCapacity = speculative && numericalOutcome.capacity &&
-                                   (numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmExpansion ||
-                                    numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmOriginBytes);
-          } else
-            return error("kernel-lowering", numericalOutcome.detail);
-          refusal = error("finite-analysis-limit");
-        }
-        if (!refusal && hasMaps &&
-            failed(mathematical::materializeRetainedMaps(
-                selected, maps, selection.numerical, options.numericalPolicy,
-                numericalOutcome, speculative))) {
-          if (numericalOutcome.outcome ==
-              mathematical::VerificationObservation::OptionalCapacity) {
-            capacitySubject = numericalOutcome.subject;
-            constructionCapacity = speculative && numericalOutcome.capacity &&
-                                   (numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmExpansion ||
-                                    numericalOutcome.capacity->owner ==
-                                        WorkOwner::AlgorithmOriginBytes);
-          } else
-            return error("algebra-map-lowering", numericalOutcome.detail);
-          refusal = error("mathematical-analysis-limit");
-        }
-        auto candidateRoot = cast<zkc::protocol_ir::ProtocolModuleOp>(
-            selected.getBody()->front());
-        // Replacement saw fixed requests. Retained declarations keep their
-        // original attributes; physical choices carry the requested pins.
-        for (auto declaration : candidateRoot.getBody()
-                                    .front()
-                                    .getOps<zkc::local::OperationBindingOp>()) {
-          auto original = originalPins.find(declaration.getSymName().str());
-          if (original != originalPins.end())
-            declaration.setImplementation(original->second);
-        }
-        if (!refusal && failed(verify(selected)))
-          return error("binding-operation");
+    OwningOpRef<ModuleOp> prepared;
+    ModuleOp numericalSource = module;
+    OwningOpRef<ModuleOp> finite;
+    std::optional<CapacityCause> preparationCapacity;
+    mathematical::VerificationDecision preparationOutcome;
+    auto prepare = [&]() -> Error {
+      if (hasFinite) {
+        finite = protocol::prepareScopedFinite(
+            module, selection.numerical.work, selection.numerical.remainingCopy,
+            selection.numerical.remainingSiteBytes, preparationCapacity,
+            options.numericalPolicy, &fixedFiniteBindings, &selection.numerical,
+            &preparationOutcome);
+        if (!finite)
+          return error("kernel-lowering", "finite preparation refused");
+        numericalSource = *finite;
       }
+      if (hasNumerical) {
+        prepared = kernel::prepareKernelLowering(
+            numericalSource, &selection.numerical.remainingCopy,
+            &preparationCapacity, &selection.numerical);
+        if (!prepared)
+          return error("kernel-lowering", "numerical source preparation");
+        // Checked mathematical normalization does not consult executable
+        // binding choices. Apply requests to its owned result before any
+        // replacement discovery, rather than cloning the complete source just
+        // to pin it.
+        auto preparedRoot = cast<zkc::protocol_ir::ProtocolModuleOp>(
+            prepared->getBody()->front());
+        for (auto declaration :
+             preparedRoot.getBody().front().getOps<zkc::runtime::BindingOp>())
+          for (const auto &[name, implementation] : selections)
+            if (declaration.getSymName() == name)
+              declaration.setImplementation(implementation);
+        // Discover the current immutable prepared closure. Invocation
+        // identities remain stable when another finite recipe changes the call
+        // count.
+        if (failed(kernel::discoverKernelCalls(
+                *prepared, options.numericalPolicy, selection.numerical)))
+          return error("kernel-lowering", "numerical occurrence discovery");
+      }
+      return Error::success();
+    };
+    SmallVector<Diagnostic> preparationDiagnostics;
+    if (speculative) {
+      ScopedDiagnosticHandler quiet(module.getContext(), [&](Diagnostic &d) {
+        preparationDiagnostics.push_back(std::move(d));
+        return success();
+      });
+      refusal = prepare();
+    } else
+      refusal = prepare();
+    bool preparationCheckingCapacity =
+        preparationOutcome.outcome ==
+        mathematical::VerificationObservation::OptionalCapacity;
+    if (refusal && !preparationCapacity && !preparationCheckingCapacity) {
+      // Optional attempts stay quiet while ordered preparation can recover.
+      // A terminal failure must retain its diagnostic instead of replacing
+      // the cause with the enclosing preparation-stage error.
+      for (auto &diagnostic : preparationDiagnostics)
+        module.getContext()->getDiagEngine().emit(std::move(diagnostic));
+      return refusal;
+    }
+    if (refusal)
+      constructionCapacity = speculative;
+    if (!refusal && hasNumerical) {
+      // Preparation already owns a private checked candidate. Discovery stores
+      // owned formula bodies and transient occurrence associations; neither the
+      // caller's source nor an independent reader borrows this proposal. Move
+      // it into materialization without a second whole-context snapshot. The
+      // original numericalSource remains the correspondence authority.
+      candidate = std::move(prepared);
+      selected = *candidate;
+      if (failed(kernel::materializeKernelCalls(
+              selected, options.numericalPolicy, nullptr, selection.numerical,
+              &numericalOutcome, speculative))) {
+        if (numericalOutcome.outcome ==
+            mathematical::VerificationObservation::OptionalCapacity) {
+          capacitySubject = numericalOutcome.subject;
+          constructionCapacity = speculative && numericalOutcome.capacity &&
+                                 (numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmExpansion ||
+                                  numericalOutcome.capacity->owner ==
+                                      WorkOwner::AlgorithmOriginBytes);
+        } else
+          return error("kernel-lowering", numericalOutcome.detail);
+        refusal = error("finite-analysis-limit");
+      }
+      auto candidateRoot =
+          cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());
+      // Replacement saw fixed requests. Retained declarations keep their
+      // original attributes; physical choices carry the requested pins.
+      for (auto declaration :
+           candidateRoot.getBody().front().getOps<zkc::runtime::BindingOp>()) {
+        auto original = originalPins.find(declaration.getSymName().str());
+        if (original != originalPins.end())
+          declaration.setImplementation(original->second);
+      }
+      if (!refusal && failed(verify(selected)))
+        return error("binding-operation");
     }
     if (auto e = input->check(module))
       return e;
@@ -1746,7 +1854,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     }
     if (!refusal && hasNumerical &&
         failed(mathematical::verifyNumericalLowering(
-            module, selected, options.numericalPolicy, selections,
+            numericalSource, selected, options.numericalPolicy, selections,
             &selection.numerical.work, &numericalOutcome))) {
       if (numericalOutcome.outcome !=
           mathematical::VerificationObservation::OptionalCapacity)
@@ -1759,6 +1867,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       if (auto e = input->check(module))
         return e;
       selection.numerical.origins.clear();
+      input->finite = std::move(finite);
       input->numerical = std::move(candidate);
       plan.input = input;
       return plan;
@@ -1792,6 +1901,13 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     if (!advanced) {
       consumeError(std::move(refusal));
       return advanced.takeError();
+    }
+    if (!*advanced && constructionCapacity && speculative) {
+      // Construction can stop before discovery reaches any occurrence. The
+      // single required endpoint disables optional recipes and consumes the
+      // preserved ordinary reserve; it is not an unbounded repeated attempt.
+      requiredEndpoint = true;
+      *advanced = true;
     }
     if (!*advanced)
       return refusal;
@@ -1876,68 +1992,49 @@ Error checkInstalledPorts(TypeRange recorded, ArrayRef<BoundType> installed) {
 
 // This traversal checks all *actual* SSA operand uses. It neither calls the
 // opportunity finder nor enumerates uses supplied by a proposed group.
-Expected<SmallVector<OperationIndex>> checkAllUses(Operation *op,
-                                                   const PhysicalPlan &plan,
-                                                   const Indices &indices,
-                                                   Location *failureLocation) {
+Expected<SmallVector<OperationIndex>>
+checkAllUses(Operation *op, const PhysicalPlan &plan, const Indices &indices,
+             const ExecutionPorts &flow, Location *failureLocation) {
   locate(failureLocation, op);
-  auto function = op->getParentOfType<zkc::local::FuncOp>();
-  auto producer = dyn_cast<DiagonalProducerInterface>(op);
-  if (!function || function.isDeclaration() ||
-      !hasSingleElement(function.getBody()) ||
-      mayBeGraphRegion(*op->getParentRegion()) || !producer)
-    return error("binding-contraction");
-  auto production = producer.getDiagonalProducerRoles();
-  if (!production || production->result >= op->getNumResults() ||
-      production->factorsOperand >= op->getNumOperands() ||
-      production->valuesOperand >= op->getNumOperands() ||
-      production->factorsOperand == production->valuesOperand)
-    return error("binding-contraction");
   const auto &decision = plan.operations[indices.lookup(op)];
-  if (!decision.binding)
+  if (!flow.get(op).step || !decision.binding || !flow.enclosingBody(op))
     return error("binding-contraction");
   const auto &application =
       plan.bindings[*decision.binding].binding.application;
-  // Admission is independent of the catalog's candidate-name derivation.
-  // Resolve the full selected contract instance, then inspect its role ports.
   auto installed = resolveBinding(application, true);
   if (!installed)
     return installed.takeError();
   const auto *facts = operationContracts(application.contract);
-  if (!facts || !facts->diagonalMap ||
-      facts->diagonalMap->factorsOperand != production->factorsOperand ||
-      facts->diagonalMap->valuesOperand != production->valuesOperand ||
-      facts->diagonalMap->result != production->result)
+  if (!facts || !facts->diagonalMap)
     return error("binding-contraction");
-  // Complete recorded ports were checked before this traversal. Requiring
-  // the exact installed role and view port also excludes a dense contract
-  // masquerading as a contraction group with internally consistent ports.
-  const auto &view = installed->outputs[production->result];
-  if (!isDiagonalRepresentation(view.representation))
+  const auto &production = *facts->diagonalMap;
+  auto inputs = flow.inputs(op), outputs = flow.outputs(op);
+  if (production.result >= outputs.size() ||
+      production.factorsOperand >= inputs.size() ||
+      production.valuesOperand >= inputs.size() ||
+      production.factorsOperand == production.valuesOperand)
     return error("binding-contraction");
-  auto result = op->getResult(production->result);
-  if (result.use_empty() ||
-      op->getOperand(production->valuesOperand).getType() != result.getType())
+  const auto &view = installed->outputs[production.result];
+  auto result = outputs[production.result];
+  if (!isDiagonalRepresentation(view.representation) ||
+      flow.uses(result).empty() ||
+      inputs[production.valuesOperand].getType() != result.getType())
     return error("binding-contraction");
+  // The actual semantic body order, not administrative CFG block adjacency,
+  // controls lifetime. Every actual data use must occupy a contraction slot.
+  const auto &body = flow.body(flow.enclosingBody(op)).instructions;
+  auto producerPosition = llvm::find(body, op);
   SmallVector<OperationIndex> consumers;
-  for (OpOperand &use : result.getUses()) {
-    auto *user = use.getOwner();
+  for (auto use : flow.uses(result)) {
+    auto *user = use.operation;
     locate(failureLocation, user);
-    auto consumer = dyn_cast<DiagonalContractionInterface>(user);
-    if (!consumer || user->getBlock() != op->getBlock() ||
-        !op->isBeforeInBlock(user))
-      return error("binding-contraction");
-    auto contraction = consumer.getDiagonalContractionRoles();
-    if (!contraction || use.getOperandNumber() != contraction->valuesOperand ||
-        contraction->coefficientsOperand >= user->getNumOperands() ||
-        contraction->coefficientsOperand == contraction->valuesOperand ||
-        op->getOperand(production->factorsOperand).getType() !=
-            user->getOperand(contraction->coefficientsOperand).getType())
+    if (flow.enclosingBody(user) != flow.enclosingBody(op) ||
+        llvm::find(body, user) <= producerPosition)
       return error("binding-contraction");
     auto index = indices.lookup(user);
     const auto &selected = plan.operations[index];
-    if (!selected.binding || selected.inputs[use.getOperandNumber()] !=
-                                 decision.outputs[production->result])
+    if (!selected.binding ||
+        selected.inputs[use.operand] != decision.outputs[production.result])
       return error("binding-contraction");
     const auto &consumerApplication =
         plan.bindings[*selected.binding].binding.application;
@@ -1946,12 +2043,16 @@ Expected<SmallVector<OperationIndex>> checkAllUses(Operation *op,
       return consumerInstalled.takeError();
     const auto *consumerFacts =
         operationContracts(consumerApplication.contract);
-    if (!consumerFacts || !consumerFacts->linearContraction ||
-        consumerFacts->linearContraction->coefficientsOperand !=
-            contraction->coefficientsOperand ||
-        consumerFacts->linearContraction->valuesOperand !=
-            contraction->valuesOperand ||
-        !(consumerInstalled->inputs[contraction->valuesOperand] == view))
+    if (!consumerFacts || !consumerFacts->linearContraction)
+      return error("binding-contraction");
+    const auto &roles = *consumerFacts->linearContraction;
+    auto consumed = flow.inputs(user);
+    if (use.operand != roles.valuesOperand ||
+        roles.coefficientsOperand >= consumed.size() ||
+        roles.coefficientsOperand == roles.valuesOperand ||
+        consumed[roles.coefficientsOperand].getType() !=
+            inputs[production.factorsOperand].getType() ||
+        !(consumerInstalled->inputs[roles.valuesOperand] == view))
       return error("binding-contraction");
     consumers.push_back(index);
   }
@@ -1969,21 +2070,51 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     return error("binding-stale-selection");
   if (auto e = plan.input->check(module))
     return e;
-  // Check the original Kernel-bearing source independently against the exact
-  // retained Local payload, before checking any installed physical choices.
-  // This reader does not emit or select numerical recipes.
+  // Check the original numerical-bearing source independently against the exact
+  // retained executable payload, before checking any installed physical
+  // choices. This reader does not emit or select numerical recipes.
   if (failed(verify(module)))
     return error("binding-operation");
   ModuleOp selected = module;
+  ModuleOp numericalSource = module;
+  mathematical::RealizationWork numericalChecking;
+  if (plan.input->finite) {
+    llvm::DenseSet<Operation *> fixedFiniteBindings;
+    auto sourceOwner =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+    for (const auto &[name, implementation] : plan.input->selections) {
+      auto binding = dyn_cast_or_null<runtime::BindingOp>(
+          SymbolTable::lookupSymbolIn(sourceOwner, name));
+      if (!binding)
+        return error("binding-unknown-selection");
+      auto decoded = readBinding(binding);
+      if (!decoded)
+        return decoded.takeError();
+      auto fixed = selectImplementation(decoded->application, implementation);
+      if (!fixed)
+        return fixed.takeError();
+      fixedFiniteBindings.insert(binding);
+    }
+    if (failed(protocol::verifyScopedFinitePreparation(
+            module, *plan.input->finite, numericalChecking,
+            plan.input->numericalPolicy, nullptr, &fixedFiniteBindings)))
+      return error("numerical-lowering-correspondence",
+                   "finite preparation differs");
+    numericalSource = *plan.input->finite;
+  }
   if (plan.input->numerical) {
     selected = *plan.input->numerical;
     if (failed(mathematical::verifyNumericalLowering(
-            module, selected, plan.input->numericalPolicy,
-            plan.input->selections)))
+            numericalSource, selected, plan.input->numericalPolicy,
+            plan.input->selections, &numericalChecking)))
       return error("numerical-lowering-correspondence");
   }
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());
+  auto admitted = ExecutionPorts::read(selected);
+  if (!admitted)
+    return admitted.takeError();
+  const auto &flow = *admitted;
   auto operations = physicalPlanOperations(selected);
   auto indices = indexOperations(operations);
   if (plan.operations.size() != operations.size())
@@ -2001,13 +2132,13 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       return error("binding-duplicate-selection");
   std::set<std::string> symbols;
   for (auto &op : root.getBody().front())
-    if (!isa<zkc::local::OperationBindingOp>(op))
+    if (!isa<zkc::runtime::BindingOp>(op))
       if (auto name = op.getAttrOfType<StringAttr>("sym_name"))
         symbols.insert(name.getValue().str());
   std::map<std::string, BindingIndex> originals;
   size_t declarationIndex = 0;
   for (auto declaration :
-       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
+       root.getBody().front().getOps<zkc::runtime::BindingOp>()) {
     locate(failureLocation, declaration);
     if (declarationIndex >= plan.bindings.size())
       return error("binding-plan-coverage");
@@ -2070,33 +2201,42 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   for (auto [i, op] : enumerate(operations)) {
     locate(failureLocation, op);
     const auto &decision = plan.operations[i];
-    if (decision.inputs.size() != op->getNumOperands() ||
-        decision.outputs.size() != op->getNumResults())
+    if (decision.inputs.size() != flow.inputs(op).size() ||
+        decision.outputs.size() != flow.outputs(op).size())
       return error("binding-operation-signature");
     size_t blockIndex = 0;
-    for (auto &region : op->getRegions())
-      for (auto &block : region) {
-        if (blockIndex >= decision.blockArguments.size())
-          return error("binding-operation-signature");
-        bool residentRegion =
-            isa<zkc::local::FuncOp, zkc::protocol_ir::ParticipantOp,
-                zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
-                zkc::local::LocalForOp>(op);
-        auto check = residentRegion ? checkLogicalPorts : checkDefaultPorts;
-        if (auto e = check(block.getArgumentTypes(),
-                           decision.blockArguments[blockIndex++]))
-          return e;
-      }
+    for (auto *entry : flow.get(op).bodies) {
+      const auto &body = flow.body(entry);
+      if (body.owner != op)
+        continue;
+      if (blockIndex >= decision.blockArguments.size())
+        return error("binding-operation-signature");
+      if (auto e = checkLogicalPorts(ValueRange(body.arguments).getTypes(),
+                                     decision.blockArguments[blockIndex++]))
+        return e;
+    }
     if (blockIndex != decision.blockArguments.size())
       return error("binding-operation-signature");
-    if (auto signature = op->getAttrOfType<TypeAttr>("function_type")) {
-      auto expected = selectedFunctionType(op, plan.input->functionPorts);
-      if (!expected)
-        return expected.takeError();
-      if (!decision.functionType || decision.functionType != *expected)
+    if (auto signature = flow.get(op).callable) {
+      if (!decision.functionType)
         return error("binding-operation-signature");
-      if (!decision.blockArguments.empty() &&
-          TypeRange(decision.blockArguments[0]) != expected->getInputs())
+      if (auto e = checkLogicalPorts(signature.getInputs(),
+                                     decision.functionType.getInputs()))
+        return e;
+      if (auto e = checkLogicalPorts(signature.getResults(),
+                                     decision.functionType.getResults()))
+        return e;
+      if (flow.callers(op).empty()) {
+        auto expected =
+            selectedFunctionType(op, signature, plan.input->functionPorts);
+        if (!expected)
+          return expected.takeError();
+        if (decision.functionType != *expected)
+          return error("binding-operation-signature");
+      }
+      if (decision.blockArguments.size() != 1 ||
+          TypeRange(decision.blockArguments[0]) !=
+              decision.functionType.getInputs())
         return error("binding-operation-signature");
     } else if (decision.functionType)
       return error("binding-operation-signature");
@@ -2112,7 +2252,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       const auto &base = plan.bindings[original->second];
       // Exact contract AND arguments, not merely physical signature equality.
       // The source verifier also checks its ODS association and parameters.
-      if (failed(verifyBoundOperation(op, false)))
+      if (!isa<zkc::exec::ApplyOp>(op) && failed(verifyBoundOperation(op)))
         return error("binding-operation");
       if (!sameLogical(binding.binding.application, base.binding.application))
         return error("binding-operation");
@@ -2143,12 +2283,13 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       if (auto e = checkInstalledPorts(decision.outputs, installed->outputs))
         return e;
     } else {
-      if (decision.binding || (op->getParentOfType<zkc::local::FuncOp>() &&
-                               !interfaceOperation(op)))
+      if (decision.binding || (flow.get(op).step && !interfaceOperation(op)))
         return error("binding-plan-coverage");
-      if (auto e = checkLogicalPorts(op->getOperandTypes(), decision.inputs))
+      if (auto e =
+              checkLogicalPorts(flow.inputs(op).getTypes(), decision.inputs))
         return e;
-      if (auto e = checkLogicalPorts(op->getResultTypes(), decision.outputs))
+      if (auto e =
+              checkLogicalPorts(flow.outputs(op).getTypes(), decision.outputs))
         return e;
     }
   }
@@ -2157,7 +2298,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // This reader does not run forward propagation or select a join preference.
   for (auto [i, op] : enumerate(operations)) {
     const auto &d = plan.operations[i];
-    if (auto call = dyn_cast<zkc::local::CallOp>(op)) {
+    if (auto call = dyn_cast<zkc::protocol_ir::LocalCallOp>(op)) {
       auto *callee =
           SymbolTable::lookupNearestSymbolFrom(op, call.getCalleeAttr());
       auto type = plan.operations[indices.lookup(callee)].functionType;
@@ -2169,73 +2310,62 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       if (TypeRange(d.inputs) !=
           plan.operations[indices.lookup(function)].functionType.getResults())
         return error("binding-operation-signature");
-    } else if (isa<zkc::local::ReturnOp>(op)) {
-      auto function = op->getParentOfType<zkc::local::FuncOp>();
+    } else if (isa<zkc::exec::ReturnOp, zkc::exec::CompleteOp>(op)) {
+      auto function = op->getParentOfType<func::FuncOp>();
       if (TypeRange(d.inputs) !=
           plan.operations[indices.lookup(function)].functionType.getResults())
         return error("binding-operation-signature");
-    } else if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
-                   zkc::local::LocalForOp>(op)) {
-      bool loop = isa<zkc::local::LocalForOp>(op);
-      unsigned offset = loop ? 2 : 1;
-      for (unsigned operand = offset; operand < op->getNumOperands();
-           ++operand) {
-        auto from = valuePort(op->getOperand(operand), plan, indices);
-        auto required = from;
-        if (d.inputs[operand] != required)
-          return error("binding-operation-signature");
-      }
-      if (loop) {
-        if (ArrayRef(d.inputs).slice(2, op->getNumResults()) !=
-            ArrayRef(d.outputs))
-          return error("binding-operation-signature");
-        if (d.blockArguments.size() != 1 ||
-            ArrayRef(d.blockArguments[0]).drop_front() !=
-                ArrayRef(d.inputs).drop_front(2))
-          return error("binding-operation-signature");
-      } else {
-        for (auto [blockIndex, args] : enumerate(d.blockArguments)) {
-          unsigned captures = op->getNumOperands() - 1;
-          if (args.size() < captures || ArrayRef(args).take_back(captures) !=
-                                            ArrayRef(d.inputs).drop_front())
-            return error("binding-operation-signature");
-          if (isa<zkc::local::LocalIfOp>(op) && args.size() != captures)
-            return error("binding-operation-signature");
-          if (isa<zkc::local::LocalMatchOp>(op)) {
-            if (d.inputs[0] != valuePort(op->getOperand(0), plan, indices))
-              return error("binding-operation-signature");
-            auto payload = variantPorts(d.inputs[0], blockIndex);
-            if (!payload)
-              return payload.takeError();
-            if (ArrayRef(args).drop_back(captures) != ArrayRef(*payload))
-              return error("binding-operation-signature");
-          }
-        }
-      }
-      // Conditions and induction values keep their fixed native contract.
-      if (auto e = checkDefaultPorts(
-              TypeRange(op->getOperandTypes())
-                  .take_front(isa<zkc::local::LocalMatchOp>(op) ? 0 : offset),
-              ArrayRef(d.inputs).take_front(
-                  isa<zkc::local::LocalMatchOp>(op) ? 0 : offset)))
-        return e;
-      if (loop && d.blockArguments[0][0] != d.inputs[0])
-        return error("binding-operation-signature");
-    } else if (isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
+    } else if (isa<zkc::exec::TestOp, zkc::exec::MatchOp, zkc::exec::RangeOp>(
                    op)) {
-      auto *parent = op->getParentOp();
-      const auto &p = plan.operations[indices.lookup(parent)];
-      unsigned offset = isa<zkc::local::LocalConditionOp>(op) ? 1 : 0;
-      SmallVector<Type> expected;
-      if (offset)
-        expected.push_back(*defaultPort(op->getOperand(0).getType()));
-      append_range(expected, p.outputs);
-      if (isa<zkc::local::LocalForOp>(parent))
-        append_range(expected, ArrayRef(p.blockArguments[0])
-                                   .drop_front(1 + parent->getNumResults()));
-      if (d.inputs != expected)
+      bool loop = isa<zkc::exec::RangeOp>(op);
+      bool match = isa<zkc::exec::MatchOp>(op);
+      unsigned offset = loop ? 2 : 1;
+      // Captures and initial state forward without any new reached work.
+      for (unsigned operand = match ? 0 : offset;
+           operand < flow.inputs(op).size(); ++operand)
+        if (d.inputs[operand] !=
+            valuePort(flow.inputs(op)[operand], plan, indices, flow))
+          return error("binding-operation-signature");
+      if (loop && ArrayRef(d.inputs).slice(2, flow.outputs(op).size()) !=
+                      ArrayRef(d.outputs))
         return error("binding-operation-signature");
-    } else if (isa<zkc::local::VariantInjectOp>(op)) {
+      if (auto e = checkDefaultPorts(
+              TypeRange(flow.inputs(op).getTypes())
+                  .take_front(match ? 0 : offset),
+              ArrayRef(d.inputs).take_front(match ? 0 : offset)))
+        return e;
+      for (auto [bodyIndex, entry] : enumerate(flow.get(op).bodies)) {
+        const auto &body = flow.body(entry);
+        const auto &callee = plan.operations[indices.lookup(body.owner)];
+        SmallVector<Type> expected;
+        if (loop)
+          expected.push_back(d.inputs[0]);
+        if (match) {
+          auto payload = variantPorts(d.inputs[0], bodyIndex);
+          if (!payload)
+            return payload.takeError();
+          expected = *payload;
+        }
+        append_range(expected, ArrayRef(d.inputs).drop_front(offset));
+        if (TypeRange(expected) != callee.functionType.getInputs())
+          return error("binding-operation-signature");
+        expected.clear();
+        if (loop && flow.get(op).step->conditional) {
+          auto condition =
+              defaultPort(flow.get(body.owner).callable.getResult(0));
+          if (!condition)
+            return condition.takeError();
+          expected.push_back(*condition);
+        }
+        append_range(expected, d.outputs);
+        if (TypeRange(expected) != callee.functionType.getResults())
+          return error("binding-operation-signature");
+      }
+    } else if (isa<zkc::runtime::ReleaseBindingsOp>(op)) {
+      for (auto [operand, value] : enumerate(flow.inputs(op)))
+        if (d.inputs[operand] != valuePort(value, plan, indices, flow))
+          return error("binding-operation-signature");
+    } else if (isa<zkc::exec::VariantOp>(op)) {
       auto bound = encodeBoundType(d.outputs[0], true);
       if (!bound)
         return bound.takeError();
@@ -2254,9 +2384,9 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       if (d.inputs != *payload)
         return error("binding-operation-signature");
     } else if (!d.binding) {
-      if (auto e = checkDefaultPorts(op->getOperandTypes(), d.inputs))
+      if (auto e = checkDefaultPorts(flow.inputs(op).getTypes(), d.inputs))
         return e;
-      if (auto e = checkDefaultPorts(op->getResultTypes(), d.outputs))
+      if (auto e = checkDefaultPorts(flow.outputs(op).getTypes(), d.outputs))
         return e;
     }
   }
@@ -2267,9 +2397,10 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     if (!expected)
       return expected.takeError();
     for (auto [index, op] : enumerate(operations)) {
-      auto function = op->getParentOfType<zkc::local::FuncOp>();
+      auto function = op->getParentOfType<func::FuncOp>();
       auto site = op->getAttrOfType<StringAttr>("site");
-      if (function && function.getSymName() == seed.function && site &&
+      if (flow.get(op).step && function &&
+          function.getSymName() == seed.function && site &&
           site.getValue() == seed.site) {
         if (found || seed.result >= plan.operations[index].outputs.size())
           return error("binding-unknown-selection");
@@ -2290,7 +2421,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   // No sharing, hoisting, path search, or inferred purity is permitted here.
   std::map<Operation *, std::set<std::string>> sites;
   for (auto *op : operations)
-    if (auto function = op->getParentOfType<zkc::local::FuncOp>())
+    if (auto function = op->getParentOfType<func::FuncOp>())
       if (auto site = op->getAttrOfType<StringAttr>("site"))
         sites[function].insert(site.getValue().str());
   SmallVector<unsigned> references(plan.bindings.size(), 0);
@@ -2300,8 +2431,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     if (decision.binding)
       ++references[*decision.binding];
     size_t crossing = 0;
-    for (auto [operand, value] : enumerate(op->getOperands())) {
-      auto from = valuePort(value, plan, indices);
+    for (auto [operand, value] : enumerate(flow.inputs(op))) {
+      auto from = valuePort(value, plan, indices, flow);
       auto to = decision.inputs[operand];
       if (from == to)
         continue;
@@ -2328,7 +2459,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
             return sameApplication(candidate, binding.binding.application);
           }))
         return error("binding-no-conversion");
-      auto function = op->getParentOfType<zkc::local::FuncOp>();
+      auto function = op->getParentOfType<func::FuncOp>();
       StringRef site = conversion.site;
       const bool validSite =
           !site.empty() && site.size() <= 512 &&
@@ -2357,7 +2488,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
         group.consumers.empty())
       return error("binding-contraction");
     previous = group.producer;
-    auto actual = checkAllUses(operations[group.producer], plan, indices,
+    auto actual = checkAllUses(operations[group.producer], plan, indices, flow,
                                failureLocation);
     if (!actual)
       return actual.takeError();
@@ -2388,9 +2519,9 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     // Explicit diagonal implementations also require all-uses preflight; they
     // do not have to be automatic, freshly cloned contraction groups.
     for (auto type : decision.outputs)
-      if (auto physical = dyn_cast<zkc::plan::DataType>(type))
+      if (auto physical = dyn_cast<zkc::runtime::RepresentedType>(type))
         if (isDiagonalRepresentation(physical.getRepresentation())) {
-          auto uses = checkAllUses(op, plan, indices, failureLocation);
+          auto uses = checkAllUses(op, plan, indices, flow, failureLocation);
           if (!uses)
             return uses.takeError();
         }
@@ -2398,11 +2529,21 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   for (auto [i, binding] : enumerate(plan.bindings))
     if (binding.purpose != BindingPurpose::Original && references[i] == 0)
       return error("binding-plan-coverage");
-  // Statistics use the existing opportunity analysis, never as the validator's
-  // all-uses or group-completeness oracle above.
+  // Opportunity statistics are separate from admission and installed choices.
   if (plan.input->linearContractions)
-    for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
-      (void)findLinearContractions(function, stats);
+    (void)findExecutionContractions(
+        flow, operations, indices,
+        [&](Operation *op) -> const OperationContracts * {
+          auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+          if (!reference)
+            return nullptr;
+          auto original = originals.find(reference.getValue().str());
+          return original == originals.end()
+                     ? nullptr
+                     : operationContracts(plan.bindings[original->second]
+                                              .binding.application.contract);
+        },
+        stats);
   if (auto e = validateStorage(selected, plan.operations, plan.releases,
                                failureLocation))
     return e;

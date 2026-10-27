@@ -14,7 +14,16 @@ module { "protocol.module"() ({
    %value = "poly.evaluate"(%work#1,%x) : (!P,!F)->!F
    func.return %work#0,%value,%work#2 : !F,!F,!F
  }
- local.realize @realized = @calculate : (!F,!F,!F)->(!F,!F,!F)
+ func.func @realized(%scope:!runtime.scope,%a0:!F,%a1:!F,%a2:!F)->!exec.outcome<(!F,!F,!F)> attributes {no_inline,runtime.origin=["realized",[]]} {
+   %call = "exec.compute"(%scope,%a0,%a1,%a2) {callee=@calculate,site="kernel"} : (!runtime.scope,!F,!F,!F)->!exec.outcome<(!F,!F,!F)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F,!F,!F)>)->()
+ ^done(%r0:!F,%r1:!F,%r2:!F):
+   %result = "exec.returned"(%r0,%r1,%r2) : (!F,!F,!F)->!exec.outcome<(!F,!F,!F)>
+   func.return %result : !exec.outcome<(!F,!F,!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F,!F,!F)>
+   func.return %failure : !exec.outcome<(!F,!F,!F)>
+ }
  "protocol.func"() ({ "protocol.return"() : ()->() })
  {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }

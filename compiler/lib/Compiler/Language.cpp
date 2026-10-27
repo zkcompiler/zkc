@@ -60,27 +60,10 @@ public:
             number, unsigned(span.begin - *(line - 1) + 1)};
   }
 };
-// Source `map` expressions applying `helper` with the given row mask.
-void mapApplications(const ClosedEntry &entry, const Body &body,
-                     StringRef helper, const std::vector<bool> &rowwise,
-                     std::vector<Span> &spans) {
-  for (const auto &op : body.operations) {
-    if (const auto *bulk = std::get_if<BulkApplication>(&op.action)) {
-      if (entry.declarations()[bulk->callee.index].symbol == helper &&
-          bulk->mapped == rowwise)
-        spans.push_back(op.span);
-    } else if (const auto *control = std::get_if<LocalControl>(&op.action)) {
-      for (const auto &region : control->regions)
-        if (region)
-          mapApplications(entry, *region, helper, rowwise, spans);
-    }
-  }
-}
 void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
                        std::vector<DiagnosticLocation> &locations,
                        std::string &diagnostics) {
   std::set<std::string> declarations;
-  std::set<std::pair<std::string, std::vector<bool>>> maps;
   std::set<std::pair<unsigned, unsigned>> coordinates;
   for (const auto &location : locations)
     if (location.filename == filename)
@@ -90,19 +73,6 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
     auto loc = mlir::dyn_cast<mlir::FileLineColLoc>(op->getLoc());
     if (!loc || !coordinates.count({loc.getLine(), loc.getColumn()}))
       return;
-    // A map declaration has no source declaration of its own; it stands for
-    // its helper and the source maps that apply it with the same rows.
-    if (op->getName().getStringRef() == "algebra.map_realize") {
-      auto helper = op->getAttrOfType<mlir::FlatSymbolRefAttr>("helper");
-      auto rowwise = op->getAttrOfType<mlir::DenseBoolArrayAttr>("rowwise");
-      if (helper && rowwise) {
-        declarations.insert(helper.getValue().str());
-        maps.emplace(helper.getValue().str(),
-                     std::vector<bool>(rowwise.asArrayRef().begin(),
-                                       rowwise.asArrayRef().end()));
-        return;
-      }
-    }
     for (auto *parent = op; parent; parent = parent->getParentOp()) {
       auto symbol = parent->getAttrOfType<mlir::StringAttr>("sym_name");
       if (symbol) {
@@ -116,17 +86,6 @@ void attachDeclaration(const ClosedEntry &entry, mlir::ModuleOp module,
         declarations.erase(decl.symbol)) {
       diagnostics += "related source declaration: " + decl.qualifiedName + "\n";
       locations.push_back(source.location(decl.span));
-    }
-  for (const auto &[helper, rowwise] : maps)
-    for (const auto &decl : entry.declarations()) {
-      if (decl.kind != Declaration::Kind::Local || !decl.body)
-        continue;
-      std::vector<Span> spans;
-      mapApplications(entry, *decl.body, helper, rowwise, spans);
-      for (const auto &span : spans) {
-        diagnostics += "related source map: " + decl.qualifiedName + "\n";
-        locations.push_back(source.location(span));
-      }
     }
 }
 
@@ -252,9 +211,7 @@ Expected<CheckedOriginal> CheckedOriginal::admit(const ClosedEntry &entry,
     return located(compared.takeError());
   uint64_t remaining = limits.work;
   auto checkMathematics = [&](mlir::ModuleOp subject) -> Error {
-    if (auto e = mathematical::checkFormulaDefinitions(subject, remaining))
-      return e;
-    return mathematical::checkMapFormulas(subject, remaining);
+    return mathematical::checkFormulaDefinitions(subject, remaining);
   };
   if (entry.entry().kind == Declaration::Kind::EntryFunction) {
     for (auto numeric : module->getOps<mlir::ModuleOp>()) {

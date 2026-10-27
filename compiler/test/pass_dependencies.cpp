@@ -4,8 +4,10 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Analysis/ComputationUnit.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Operations.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 
@@ -52,6 +54,18 @@ unsigned count(ModuleOp module, StringRef name) {
   return result;
 }
 
+unsigned boundCount(ModuleOp module, StringRef contract,
+                    bool physical = false) {
+  unsigned result = 0;
+  module.walk([&](exec::ApplyOp op) {
+    auto binding = dyn_cast_or_null<runtime::BindingOp>(
+        SymbolTable::lookupNearestSymbolFrom(op, op.getBindingAttr()));
+    result += binding && binding.getContract() == contract &&
+              (!physical || !binding.getImplementation().empty());
+  });
+  return result;
+}
+
 unsigned computationCount(ModuleOp module) {
   unsigned result = 0;
   module.walk(
@@ -63,7 +77,7 @@ template <typename... InputDialects> std::string project(StringRef source) {
   std::string result;
   withSource<InputDialects...>(source, [&](ModuleOp module, MLIRContext &) {
     runChecked(module, protocol::createProjectProtocolPass(false),
-               {"local", "algebra"});
+               {"exec", "algebra", "runtime", "func", "cf", "arith"});
     llvm::raw_string_ostream stream(result);
     module.print(stream);
   });
@@ -77,16 +91,22 @@ module { "protocol.module"() ({
     "data.domain_yield"(%d) : (!data.domain<ui64>) -> ()
   }) {sym_name="items", sym_visibility="private",
       function_type=(ui64, ui64) -> !data.domain<ui64>} : () -> ()
-  local.func private @step(%state: i1, %item: ui64, %lo: ui64, %hi: ui64) -> i1
-      attributes {logical_origin=["step", []]} {
-    local.return %state : i1
+  func.func private @step(%scope: !runtime.scope, %state: i1, %item: ui64, %lo: ui64, %hi: ui64) -> !exec.outcome<(i1)>
+      attributes {no_inline, runtime.origin=["step", []]} {
+    %r = "exec.returned"(%state) : (i1) -> !exec.outcome<(i1)>
+    return %r : !exec.outcome<(i1)>
   }
-  "local.finite_fold"() {sym_name="fold", function_type=(ui64, ui64, i1) -> i1,
-                        domain=@items, step=@step} : () -> ()
-  local.func @work(%lo: ui64, %hi: ui64, %init: i1) -> i1
-      attributes {logical_origin=["work", []]} {
-    %r = local.apply @fold(%lo, %hi, %init) {site="fold"} : (ui64, ui64, i1) -> i1
-    local.return %r : i1
+  func.func @work(%scope: !runtime.scope, %lo: ui64, %hi: ui64, %init: i1) -> !exec.outcome<(i1)>
+      attributes {no_inline, runtime.origin=["work", []]} {
+    %r = "exec.fold"(%scope, %lo, %hi, %init) {domain=@items, step=@step, site="fold"}
+        : (!runtime.scope, ui64, ui64, i1) -> !exec.outcome<(i1)>
+    "exec.dispatch"(%r)[^returned, ^stopped] : (!exec.outcome<(i1)>) -> ()
+  ^returned(%value: i1):
+    %done = "exec.returned"(%value) : (i1) -> !exec.outcome<(i1)>
+    return %done : !exec.outcome<(i1)>
+  ^stopped(%stop: !exec.stop):
+    %failed = "exec.failed"(%stop) : (!exec.stop) -> !exec.outcome<(i1)>
+    return %failed : !exec.outcome<(i1)>
   }
   "protocol.func"() ({ ^entry(%init: i1):
     %zero = "data.index"() {value="0"} : () -> ui64
@@ -122,12 +142,22 @@ module { "protocol.module"() ({
 
 constexpr StringLiteral algorithms = R"mlir(
 module { "protocol.module"() ({
-  local.func private @identity(%a: i1) -> i1 attributes {logical_origin=["identity", []]} {
-    local.return %a : i1
+  func.func private @identity(%scope: !runtime.scope, %a: i1) -> !exec.outcome<(i1)>
+      attributes {no_inline, runtime.origin=["identity", []]} {
+    %r = "exec.returned"(%a) : (i1) -> !exec.outcome<(i1)>
+    return %r : !exec.outcome<(i1)>
   }
-  local.func @work(%a: i1) -> i1 attributes {logical_origin=["work", []]} {
-    %r = local.apply @identity(%a) {site="identity"} : (i1) -> i1
-    local.return %r : i1
+  func.func @work(%scope: !runtime.scope, %a: i1) -> !exec.outcome<(i1)>
+      attributes {no_inline, runtime.origin=["work", []]} {
+    %r = func.call @identity(%scope, %a) {runtime.site="identity"}
+        : (!runtime.scope, i1) -> !exec.outcome<(i1)>
+    "exec.dispatch"(%r)[^returned, ^stopped] : (!exec.outcome<(i1)>) -> ()
+  ^returned(%value: i1):
+    %done = "exec.returned"(%value) : (i1) -> !exec.outcome<(i1)>
+    return %done : !exec.outcome<(i1)>
+  ^stopped(%stop: !exec.stop):
+    %failed = "exec.failed"(%stop) : (!exec.stop) -> !exec.outcome<(i1)>
+    return %failed : !exec.outcome<(i1)>
   }
   "protocol.func"() ({ ^entry(%a: i1):
     %r = "protocol.local_call"(%a) {callee=@work, role="P", site="work"} : (i1) -> i1
@@ -184,70 +214,65 @@ int main() {
         projection ? "project a range fold without input algebra"
                    : "prepare a range fold without input algebra",
         [&] {
-          withSource<data::DataDialect, local::LocalDialect>(
+          withSource<data::DataDialect, runtime::RuntimeDialect,
+                     exec::ExecDialect, func::FuncDialect>(
               rangeFold, [&](ModuleOp module, MLIRContext &context) {
-                require(!context.getLoadedDialect<algebra::AlgebraDialect>() &&
-                            !context.getLoadedDialect<func::FuncDialect>(),
-                        "range fixture unexpectedly loaded algebra or func");
+                require(!context.getLoadedDialect<algebra::AlgebraDialect>(),
+                        "range fixture unexpectedly loaded algebra");
                 auto pass = projection
                                 ? protocol::createProjectProtocolPass(false)
                                 : protocol::createPrepareProtocolPass(false);
-                runChecked(module, std::move(pass), {"local", "algebra"});
-                require(
-                    context.getLoadedDialect<algebra::AlgebraDialect>() &&
-                        count(module, "algebra.exec.index_constant") &&
-                        count(module, "algebra.exec.index_less") &&
-                        count(module, "local.for") &&
-                        !count(module, "local.finite_fold") &&
-                        !count(module, "local.apply"),
-                    "range fold was not expanded to registered execution ops");
+                runChecked(
+                    module, std::move(pass),
+                    {"exec", "algebra", "runtime", "func", "cf", "arith"});
+                require(count(module, "exec.fold") &&
+                            count(module, "data.domain"),
+                        "source preparation erased the finite request");
+                if (!projection)
+                  runChecked(module, protocol::createProjectProtocolPass(false),
+                             {"exec", "runtime", "func", "cf", "arith"});
+                runChecked(module, protocol::createLowerMathPass(),
+                           {"exec", "runtime", "func", "cf", "arith"});
+                runChecked(module, protocol::createSelectPhysicalPass(),
+                           {"exec", "runtime", "func", "cf", "arith"});
+                require(count(module, "exec.range") &&
+                            count(module, "cf.cond_br") &&
+                            !count(module, "exec.fold") &&
+                            !count(module, "data.domain"),
+                        "physical selection did not realize the ordered range");
               });
         });
-  cases.run("lower booleans with no input local or algebra dialect", [&] {
+  cases.run("lower booleans with no input execution dialects", [&] {
     auto participant = project<arith::ArithDialect>(booleans);
-    // Reparse in a fresh context so projection's dependencies cannot mask the
+    // A fresh context prevents projection's dependencies from masking the
     // standalone lowering pass's registration obligations.
     withSource<arith::ArithDialect>(participant, [&](ModuleOp module,
                                                      MLIRContext &context) {
-      require(!context.getLoadedDialect<local::LocalDialect>() &&
-                  !context.getLoadedDialect<algebra::AlgebraDialect>(),
+      require(!context.getLoadedDialect<exec::ExecDialect>() &&
+                  !context.getLoadedDialect<runtime::RuntimeDialect>(),
               "participant fixture unexpectedly loaded execution dialects");
       runChecked(module, protocol::createLowerMathPass(),
-                 {"local", "exec", "kernel", "func"});
-      require(computationCount(module) && count(module, "kernel.call") &&
-                  count(module, "arith.andi") &&
-                  !count(module, "algebra.exec.bool_and"),
+                 {"exec", "runtime", "func", "cf", "arith"});
+      require(computationCount(module) && count(module, "exec.compute") &&
+                  count(module, "arith.andi") && !count(module, "exec.apply"),
               "logical formation executed Boolean recipes early");
       std::string logical;
       llvm::raw_string_ostream(logical) << module;
-      withSource<arith::ArithDialect, local::LocalDialect,
-                 kernel::KernelDialect, func::FuncDialect>(
-          logical, [&](ModuleOp candidate, MLIRContext &fresh) {
-            require(!fresh.getLoadedDialect<algebra::AlgebraDialect>(),
-                    "Kernel fixture unexpectedly loaded recipe dialect");
-            runChecked(candidate, kernel::createLowerKernelsPass(),
-                       {"algebra"});
-            require(count(candidate, "algebra.exec.bool_and") &&
-                        !computationCount(candidate) &&
-                        !count(candidate, "kernel.call") &&
-                        !count(candidate, "arith.andi"),
-                    "standalone Kernel pass did not execute Boolean recipes");
-          });
-      withSource<arith::ArithDialect, local::LocalDialect,
-                 kernel::KernelDialect, func::FuncDialect>(
-          logical, [&](ModuleOp candidate, MLIRContext &fresh) {
-            require(!fresh.getLoadedDialect<algebra::AlgebraDialect>() &&
-                        !fresh.getLoadedDialect<plan::PlanDialect>(),
-                    "Kernel fixture unexpectedly loaded physical dialects");
-            runChecked(candidate, protocol::createSelectPhysicalPass(),
-                       {"algebra", "plan"});
-            require(count(candidate, "plan.apply") == 1 &&
-                        !count(candidate, "algebra.exec.bool_and") &&
-                        !computationCount(candidate) &&
-                        !count(candidate, "kernel.call"),
-                    "physical pass did not realize its logical Kernel input");
-          });
-      require(count(module, "local.func") && count(module, "kernel.call") &&
+      for (bool physical : {false, true})
+        withSource<arith::ArithDialect, exec::ExecDialect,
+                   runtime::RuntimeDialect, func::FuncDialect>(
+            logical, [&](ModuleOp candidate, MLIRContext &) {
+              auto pass = physical ? protocol::createSelectPhysicalPass()
+                                   : kernel::createLowerKernelsPass();
+              runChecked(candidate, std::move(pass),
+                         {"exec", "runtime", "func", "cf", "arith"});
+              require(boundCount(candidate, "bool.and", physical) == 1 &&
+                          !computationCount(candidate) &&
+                          !count(candidate, "exec.compute") &&
+                          !count(candidate, "arith.andi"),
+                      "standalone pass did not realize the Boolean contract");
+            });
+      require(computationCount(module) && count(module, "exec.compute") &&
                   count(module, "arith.andi"),
               "Boolean logical closure was not retained");
     });
@@ -257,32 +282,34 @@ int main() {
     withSource<data::DataDialect>(
         participant, [&](ModuleOp module, MLIRContext &context) {
           require(context.getLoadedDialect<data::DataDialect>() &&
-                      !context.getLoadedDialect<local::LocalDialect>(),
-                  "sequence fixture does not isolate data from local");
+                      !context.getLoadedDialect<exec::ExecDialect>(),
+                  "sequence fixture does not isolate data from execution");
           runChecked(module, protocol::createLowerMathPass(),
-                     {"local", "exec", "kernel", "func", "data"});
-          require(count(module, "kernel.call") &&
+                     {"exec", "runtime", "func", "cf", "arith", "data"});
+          require(count(module, "exec.compute") &&
                       count(module, "data.sequence_append") &&
-                      !count(module, "data.exec.sequence_append"),
+                      !count(module, "exec.apply"),
                   "sequence recipes ran during formation");
           runChecked(module, kernel::createLowerKernelsPass(),
-                     {"local", "algebra", "data"});
-          require(count(module, "data.exec.sequence_empty") &&
-                      count(module, "data.exec.sequence_append") &&
+                     {"exec", "runtime", "func", "cf", "arith", "data"});
+          require(boundCount(module, "sequence.empty") &&
+                      boundCount(module, "sequence.append") &&
                       !count(module, "data.sequence_append"),
                   "sequence recipes did not execute");
         });
   });
-  cases.run("algorithm expansion creates only input dialect entities", [&] {
-    withSource<local::LocalDialect>(algorithms, [&](ModuleOp module,
-                                                    MLIRContext &context) {
-      require(count(module, "local.apply"), "missing algorithm call");
-      runChecked(module, protocol::createExpandAlgorithmsPass(), {"local"});
-      require(!count(module, "local.apply") && count(module, "local.return") &&
-                  !context.getLoadedDialect<algebra::AlgebraDialect>() &&
-                  !context.getLoadedDialect<func::FuncDialect>(),
-              "algorithm expansion did not remain in its input dialects");
-    });
+  cases.run("demand lowering expands scoped ordinary helpers", [&] {
+    auto participant =
+        project<exec::ExecDialect, runtime::RuntimeDialect, func::FuncDialect>(
+            algorithms);
+    withSource<exec::ExecDialect, runtime::RuntimeDialect, func::FuncDialect>(
+        participant, [&](ModuleOp module, MLIRContext &) {
+          require(count(module, "func.call"), "missing ordinary helper call");
+          runChecked(module, protocol::createLowerMathPass(),
+                     {"exec", "runtime", "func", "cf", "arith"});
+          require(!count(module, "func.call") && count(module, "exec.returned"),
+                  "scoped helper call was not expanded");
+        });
   });
   cases.run("finite recipes use data and func already present in input", [&] {
     auto participant =
@@ -292,22 +319,22 @@ int main() {
         participant, [&](ModuleOp module, MLIRContext &context) {
           require(context.getLoadedDialect<data::DataDialect>() &&
                       context.getLoadedDialect<func::FuncDialect>() &&
-                      !context.getLoadedDialect<local::LocalDialect>() &&
+                      !context.getLoadedDialect<exec::ExecDialect>() &&
                       count(module, "func.func"),
-                  "finite fixture lost its source helper or loaded local");
+                  "finite fixture lost its source helper or loaded execution");
           runChecked(module, protocol::createLowerMathPass(),
-                     {"local", "exec", "kernel", "data", "func"});
-          require(count(module, "kernel.call") &&
+                     {"exec", "runtime", "func", "cf", "arith", "data"});
+          require(count(module, "exec.compute") &&
                       count(module, "algebra.finite_collect") &&
                       count(module, "data.domain") &&
-                      !count(module, "local.for"),
+                      !count(module, "exec.range"),
                   "finite raw closure was not retained");
           runChecked(module, kernel::createLowerKernelsPass(),
-                     {"local", "algebra", "data", "func"});
-          require(count(module, "local.for") &&
-                      count(module, "algebra.exec.field_array_from_vector") &&
+                     {"exec", "runtime", "func", "cf", "arith", "data"});
+          require(count(module, "exec.range") && count(module, "cf.cond_br") &&
+                      boundCount(module, "field_array.from_vector") &&
                       !count(module, "algebra.finite_collect") &&
-                      !count(module, "func.func") &&
+                      !computationCount(module) &&
                       !count(module, "data.domain"),
                   "finite recipe did not lower and consume its source helper");
         });

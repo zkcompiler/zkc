@@ -176,14 +176,20 @@ def block : Nat → Json → Except String Block
       return .block instructions (← terminator terminal)
     | _ => throw "structured-block"
 
+def domainConstructor (json : Json) : Except String DomainConstructor := do
+  match ← array json with
+  | [.str "elements", container] => return .elements (← natural container)
+  | [.str "indices", container, axis] => return .indices (← natural container) (← natural axis 0)
+  | [.str "range", lower, upper] => return .range (← natural lower) (← natural upper)
+  | [.str "zip", operands] => return .zip (← refs operands)
+  | [.str "product", operands] => return .product (← refs operands)
+  | _ => throw "structured-domain-constructor"
+
 def domain (json : Json) : Except String Domain := do
   match ← array json with
-  | [.str "domain", name, inputs, constructor] =>
-    let constructor ← match ← array constructor with
-      | [.str "elements", container] => pure (.elements (← natural container))
-      | [.str "indices", container, axis] => pure (.indices (← natural container) (← natural axis 0))
-      | _ => throw "structured-domain-constructor"
-    return ⟨← string name, ← types inputs, constructor⟩
+  | [.str "domain", name, inputs, constructors, result] =>
+    return ⟨← string name, ← types inputs,
+      ← (← array constructors 4096).mapM domainConstructor, ← natural result⟩
   | _ => throw "structured-domain"
 
 def kind : Json → Except String Kind
@@ -282,6 +288,9 @@ def definition (json : Json) : Except String Definition := do
       ← string domain, ← string step, ← string predicate true⟩
   | [.str "realize", name, inputs, outputs, helper] =>
     return .realization ⟨← string name, ← types inputs, ← types outputs, ← string helper⟩
+  | [.str "collect", name, visible, inputs, outputs, domain, body, predicate] =>
+    return .collect ⟨← string name, ← visibility visible, ← types inputs, ← types outputs,
+      ← string domain, ← string body, ← string predicate true⟩
   | [.str "map", name, inputs, outputs, helper, rowwise] =>
     return .map ⟨← string name, ← types inputs, ← types outputs, ← string helper, ← booleans rowwise⟩
   | _ => throw "structured-definition"

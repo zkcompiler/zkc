@@ -1,10 +1,13 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/AggregateLayouts.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/AsmParser/AsmParser.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -43,19 +46,24 @@ void accept(Error error) {
   if (error)
     throw std::runtime_error(toString(std::move(error)));
 }
+std::string encodedSite(StringRef name);
 OperationDecision &at(PhysicalPlan &plan, ModuleOp module, StringRef site) {
   auto operations = physicalPlanOperations(module);
   for (auto &decision : plan.operations)
     if (auto name =
             operations[decision.operation]->getAttrOfType<StringAttr>("site"))
-      if (name.getValue() == site)
+      if (name.getValue() ==
+          (operations[decision.operation]->getParentOfType<func::FuncOp>()
+               ? encodedSite(site)
+               : site.str()))
         return decision;
   throw std::runtime_error("missing site " + site.str());
 }
 void abi(PhysicalPlanOptions &options, ModuleOp module, bool output,
          unsigned index, StringRef physical) {
-  for (auto *op : physicalPlanOperations(module))
-    if (isa<local::FuncOp, protocol_ir::ParticipantOp>(op))
+  auto flow = take(ExecutionPorts::read(module));
+  for (auto *op : flow.operations())
+    if (flow.get(op).callable && !op->hasAttr("runtime.region"))
       options.functionPorts.push_back(
           {op->getAttrOfType<StringAttr>("sym_name").getValue().str(), output,
            index, physical.str()});
@@ -79,180 +87,480 @@ void publish(ModuleOp module, const CheckedPhysicalPlan &checked,
     refuses(program::decode(old), "binding-declaration");
   }
   module.walk([&](Operation *op) {
-    require(!isa<UnrealizedConversionCastOp, local::ApplyOp>(op),
+    require(!isa<UnrealizedConversionCastOp>(op) &&
+                op->getName().getDialectNamespace() != "local" &&
+                op->getName().getDialectNamespace() != "plan",
             "unresolved publication");
   });
+}
+namespace sc = scopedComputation;
+namespace sf = scopedFinite;
+std::string encodedSite(StringRef name) {
+  return "lc_" + std::to_string(name.size()) + "_" + name.str();
+}
+Operation *semanticOperation(ModuleOp module, StringRef name) {
+  auto flow = take(ExecutionPorts::read(module));
+  for (auto *op : flow.operations())
+    if (flow.get(op).step)
+      if (auto site = op->getAttrOfType<StringAttr>("site"))
+        if (site.getValue() == encodedSite(name))
+          return op;
+  throw std::runtime_error("missing semantic site " + name.str());
+}
+void layout(PhysicalPlanOptions &options, ModuleOp module, StringRef site,
+            StringRef physical) {
+  auto *operation = semanticOperation(module, site);
+  options.valueLayouts.push_back(
+      {operation->getParentOfType<func::FuncOp>().getSymName().str(),
+       operation->getAttrOfType<StringAttr>("site").getValue().str(), 0,
+       physical.str()});
+}
+OperationDecision &bodyDecision(PhysicalPlan &plan, ModuleOp module,
+                                StringRef name, unsigned index = 0) {
+  auto flow = take(ExecutionPorts::read(module));
+  auto *operation = semanticOperation(module, name);
+  const auto &bodies = flow.get(operation).bodies;
+  require(index < bodies.size(), "missing scoped control body");
+  auto *owner = flow.body(bodies[index]).owner;
+  auto operations = physicalPlanOperations(module);
+  for (auto &decision : plan.operations)
+    if (operations[decision.operation] == owner) {
+      require(decision.blockArguments.size() == 1,
+              "missing outlined data argument ports");
+      return decision;
+    }
+  throw std::runtime_error("missing outlined body decision");
+}
+void reachedConversion(ModuleOp module, StringRef name, StringRef guardSite,
+                       bool stoppedArm = false) {
+  auto flow = take(ExecutionPorts::read(module));
+  auto *control = semanticOperation(module, name);
+  const auto &bodies = flow.get(control).bodies;
+  require(!bodies.empty(), "missing selected control body");
+  bool guard = false, converted = false;
+  for (auto *operation : flow.body(bodies.front()).instructions)
+    if (auto apply = dyn_cast<exec::ApplyOp>(operation)) {
+      guard |= apply.getSite() == encodedSite(guardSite);
+      auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+          apply, apply.getBindingAttr());
+      if (binding.getContract() == "representation.convert") {
+        require(guard, "leaf conversion moved before the guard");
+        converted = true;
+      }
+    }
+  require(converted, "leaf conversion escaped its control body");
+  if (stoppedArm) {
+    require(bodies.size() == 2, "missing stopped arm");
+    const auto &instructions = flow.body(bodies[1]).instructions;
+    require(instructions.size() == 1 &&
+                isa<exec::RejectOp>(instructions.front()),
+            "conversion was inserted in the stopped arm");
+  }
+}
+// Author the actual source CFG after parsing its type aliases and declarations.
+// The temporary rejecting body supplies a well-formed signature, not old IR.
+std::string
+authoredSource(MLIRContext &context, StringRef aliases, StringRef declarations,
+               StringRef arguments, StringRef inputs, StringRef types,
+               StringRef result, unsigned arity,
+               llvm::function_ref<void(OpBuilder &, func::FuncOp,
+                                       exec::ScopedExecutionBuilder &)>
+                   body) {
+  auto text =
+      aliases.str() +
+      scopedFixture(
+          declarations, arguments, inputs, types, result,
+          R"(%why = "exec.reject"(%scope) {reason="reject",site="placeholder"} : (!runtime.scope)->!exec.stop
+cf.br ^failed(%why : !exec.stop)
+)",
+          arity);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "aggregate source signature");
+  auto work = sf::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  body(builder, work, control);
+  require(succeeded(verify(*module)), "aggregate source formation");
+  std::string printed;
+  raw_string_ostream stream(printed);
+  module->print(stream);
+  return printed;
 }
 std::string sequenceSource() {
   return R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !T = !data.sequence<!data.sequence<!algebra.field<"bls12-381.fr">>>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="outer",contract="sequence.empty",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="pack",contract="sequence.append",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.append"} : ()->()
+)" + scopedFixture(R"(
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="outer",contract="sequence.empty",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="pack",contract="sequence.append",arguments=["sequence<field:bls12-381.fr>"],implementation="native/sequence.append"} : ()->()
 )",
-                         "%x:!F", "%x", "!F", "!T", R"(
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%values = "data.exec.sequence_append"(%s,%x) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-%t = "data.exec.sequence_empty"() {binding=@outer,site="outer",parameters=[]} : ()->!T
-%out = "data.exec.sequence_append"(%t,%values) {binding=@pack,site="pack",parameters=[]} : (!T,!S)->!T
-local.return %out : !T
-)",
-                         1);
+                   "%x:!F", "%x", "!F", "!T",
+                   scopedApply("empty", "empty", "", "", "%s", "!S") +
+                       scopedApply("append", "append", "%s,%x", "!S,!F",
+                                   "%values", "!S") +
+                       scopedApply("outer", "outer", "", "", "%t", "!T") +
+                       scopedApply("pack", "pack", "%t,%values", "!T,!S",
+                                   "%out", "!T") +
+                       scopedReturn("%out", "!T"),
+                   1);
 }
-std::string scalarJoinSource(unsigned count, bool nested) {
-  std::string body = R"(
-%v = "algebra.exec.field_add"(%x,%x) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-)";
-  std::string value = "%v", condition = "%c";
-  for (unsigned i = 0; i < count; ++i) {
-    auto suffix = std::to_string(i);
-    body += "%j" + suffix + " = \"local.if\"(" + condition + "," + value + "," +
-            condition + ") ({^left" + suffix + "(%a" + suffix + ":!F,%c" +
-            suffix + ":i1):\n";
-    if (nested) {
-      value = "%a" + suffix;
-      condition = "%c" + suffix;
-    } else {
-      body += "\"local.yield\"(%a" + suffix + ") : (!F)->()\n}, {^right" +
-              suffix + "(%b" + suffix + ":!F,%d" + suffix + ":i1):\n" +
-              "\"local.yield\"(%b" + suffix + ") : (!F)->()\n}) {site=\"join" +
-              suffix + "\"} : (i1,!F,i1)->!F\n";
-      value = "%j" + suffix;
-    }
-  }
-  if (nested)
-    for (unsigned i = count; i-- > 0;) {
-      auto suffix = std::to_string(i);
-      body += "\"local.yield\"(" + value + ") : (!F)->()\n}, {^right" + suffix +
-              "(%b" + suffix + ":!F,%d" + suffix + ":i1):\n";
-      body += i % 3 == 0 ? "\"local.stop\"() {reason=\"reject\",site=\"stop" +
-                               suffix + "\"} : ()->()\n"
-                         : "\"local.yield\"(%b" + suffix + ") : (!F)->()\n";
-      body += "}) {site=\"join" + suffix + "\"} : (i1,!F,i1)->!F\n";
-      value = "%j" + suffix;
-    }
-  body += "local.return " + value + " : !F\n";
-  return R"(!F = !algebra.field<"bls12-381.fr">
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+std::string scalarJoinSource(MLIRContext &context, unsigned count,
+                             bool nested) {
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
 )",
-                         "%x:!F,%c:i1", "%x,%c", "!F,i1", "!F", body, 2);
+      R"(
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+)",
+      "%x:!F,%c:i1", "%x,%c", "!F,i1", "!F", 2,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto boolean = builder.getI1Type();
+        Value value =
+            sc::apply(control, builder, "add", "add",
+                      {work.getArgument(1), work.getArgument(1)}, {field})[0];
+        std::function<Value(exec::ScopedExecutionBuilder &, Value, Value,
+                            unsigned)>
+            join;
+        join = [&](exec::ScopedExecutionBuilder &parent, Value input,
+                   Value condition, unsigned i) -> Value {
+          auto suffix = std::to_string(i);
+          return parent.conditional(
+              condition, {input, condition}, {field}, "join" + suffix,
+              [&](unsigned arm) {
+                auto region =
+                    sc::region(builder, work, (arm ? "right" : "left") + suffix,
+                               {field, boolean}, {field});
+                exec::ScopedExecutionBuilder body(builder, region);
+                if (nested && arm && i % 3 == 0) {
+                  body.reject("reject", "stop" + suffix);
+                } else {
+                  Value next = region.getArgument(1);
+                  if (nested && !arm && i + 1 < count)
+                    next = join(body, next, region.getArgument(2), i + 1);
+                  body.complete({next});
+                }
+                return region;
+              })[0];
+        };
+        if (nested)
+          value = join(control, value, work.getArgument(2), 0);
+        else
+          for (unsigned i = 0; i < count; ++i)
+            value = join(control, value, work.getArgument(2), i);
+        control.returned({value});
+      });
 }
-std::string cyclicSequenceSource(bool seeded) {
-  std::string body = R"(
-%v = "algebra.exec.field_add"(%x,%x) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-%empty = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-)";
-  if (seeded)
-    body += R"(
-%seed = "data.exec.sequence_append"(%empty,%v) {binding=@append,site="seed",parameters=[]} : (!S,!F)->!S
-)";
-  body +=
-      "%out = \"local.for\"(%lo,%hi," +
-      std::string(seeded ? "%seed" : "%empty") +
-      R"(,%v,%c,%lo) ({^body(%i:ui64,%state:!S,%element:!F,%condition:i1,%index:ui64):
-  %loaded = "data.exec.sequence_at"(%state,%index) {binding=@at,site="at",parameters=[]} : (!S,ui64)->!F
-  %picked = "local.if"(%condition,%loaded,%element) ({^left(%a:!F,%b:!F):
-    "local.yield"(%a) : (!F)->()
-  }, {^right(%a:!F,%b:!F):
-    "local.yield"(%b) : (!F)->()
-  }) {site="join"} : (i1,!F,!F)->!F
-  %next = "data.exec.sequence_append"(%state,%picked) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next,%element,%condition,%index) : (!S,!F,i1,ui64)->()
-}) {site="loop"} : (ui64,ui64,!S,!F,i1,ui64)->!S
-%n = "data.exec.sequence_length"(%out) {binding=@length,site="length",parameters=[]} : (!S)->ui64
-local.return %n : ui64
-)";
-  return R"(!F = !algebra.field<"bls12-381.fr">
+std::string cyclicSequenceSource(MLIRContext &context, bool seeded) {
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="at",contract="sequence.at",arguments=["field:bls12-381.fr"],implementation="native/sequence.at"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
 )",
-                         "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi",
-                         "!F,i1,ui64,ui64", "ui64", body, 4);
+      R"(
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["field:bls12-381.fr"],implementation="native/sequence.at"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+)",
+      "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64",
+      "ui64", 4,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto sequence = data::SequenceType::get(&context, field);
+        auto boolean = builder.getI1Type();
+        auto index = work.getArgument(3).getType();
+        auto element =
+            sc::apply(control, builder, "add", "add",
+                      {work.getArgument(1), work.getArgument(1)}, {field})[0];
+        Value seed =
+            sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
+        if (seeded)
+          seed = sc::apply(control, builder, "append", "seed", {seed, element},
+                           {sequence})[0];
+        auto result = control.loop(
+            work.getArgument(3), work.getArgument(4), {seed},
+            {element, work.getArgument(2), work.getArgument(3)}, {sequence},
+            false, "loop", [&](unsigned) {
+              auto region = sc::region(builder, work, "iteration",
+                                       {index, sequence, field, boolean, index},
+                                       {sequence});
+              exec::ScopedExecutionBuilder body(builder, region);
+              auto loaded = sc::apply(
+                  body, builder, "at", "at",
+                  {region.getArgument(2), region.getArgument(5)}, {field})[0];
+              auto picked = body.conditional(
+                  region.getArgument(4), {loaded, region.getArgument(3)},
+                  {field}, "join", [&](unsigned arm) {
+                    auto branch =
+                        sc::region(builder, work, arm ? "right" : "left",
+                                   {field, field}, {field});
+                    exec::ScopedExecutionBuilder branchBody(builder, branch);
+                    branchBody.complete({branch.getArgument(arm ? 2 : 1)});
+                    return branch;
+                  });
+              body.complete(sc::apply(body, builder, "append", "append",
+                                      {region.getArgument(2), picked[0]},
+                                      {sequence}));
+              return region;
+            });
+        control.returned(
+            sc::apply(control, builder, "length", "length", result, {index}));
+      });
 }
-std::string inferredSequenceSource(StringRef control) {
-  std::string body = R"(
-%v = "algebra.exec.field_add"(%x,%x) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-)";
-  if (control == "straight")
-    body += R"(
-%out = "data.exec.sequence_append"(%s,%v) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-)";
-  else if (control == "scalar")
-    body += R"(
-%picked = "local.if"(%c,%v) ({^left(%element:!F):
-  "local.yield"(%element) : (!F)->()
-}, {^right(%element:!F):
-  "local.yield"(%element) : (!F)->()
-}) {site="scalar_branch"} : (i1,!F)->!F
-%out = "data.exec.sequence_append"(%s,%picked) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-)";
-  else if (control == "match")
-    body += R"(
-%values = "data.exec.sequence_append"(%s,%v) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-%tag = "local.variant_inject"(%values) {alternative="some",site="tag"} : (!S)->!Tag
-%out = "local.match"(%tag,%values,%v) ({^none(%capture:!S,%element:!F):
-  "local.yield"(%capture) : (!S)->()
-}, {^some(%payload:!S,%capture:!S,%element:!F):
-  %next = "data.exec.sequence_append"(%payload,%element) {binding=@append,site="match_append",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next) : (!S)->()
-}) {alternatives=["none","some"],site="match"} : (!Tag,!S,!F)->!S
-)";
-  else if (control == "loop")
-    body += R"(
-%out = "local.for"(%lo,%hi,%s,%v) ({^body(%i:ui64,%state:!S,%element:!F):
-  %next = "data.exec.sequence_append"(%state,%element) {binding=@append,site="loop_append",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next,%element) : (!S,!F)->()
-}) {site="loop"} : (ui64,ui64,!S,!F)->!S
-)";
-  else {
-    body += R"(
-%out = "local.if"(%c,%s,%v,%c) ({^left(%values:!S,%element:!F,%allowed:i1):
-  "local.exec.require"(%allowed) {binding=@guard,site="guard",parameters=[]} : (i1)->()
-  %next = "data.exec.sequence_append"(%values,%element) {binding=@append,site="append_left",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next) : (!S)->()
-}, {^right(%values:!S,%element:!F,%allowed:i1):
-)";
-    if (control == "stop")
-      body +=
-          "\"local.stop\"() {reason=\"reject\",site=\"stopped\"} : ()->()\n";
-    else if (control == "capture")
-      body += "\"local.yield\"(%values) : (!S)->()\n";
-    else
-      body += R"(
-  %next = "data.exec.sequence_append"(%values,%element) {binding=@append,site="append_right",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next) : (!S)->()
-)";
-    body += "}) {site=\"branch\"} : (i1,!S,!F,i1)->!S\n";
-  }
-  body += R"(
-%n = "data.exec.sequence_length"(%out) {binding=@length,site="length",parameters=[]} : (!S)->ui64
-local.return %n : ui64
-)";
-  auto variant = *encodeVariant(
+std::string inferredSequenceSource(MLIRContext &context, StringRef kind) {
+  auto descriptor = *encodeVariant(
       {"Inferred", {{"none", {}}, {"some", {"sequence<field:bls12-381.fr>"}}}});
-  return "!Tag = !local.variant<\"" + variant + "\">\n" +
-         R"(!F = !algebra.field<"bls12-381.fr">
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" +
-         mathematicalFixture(R"(
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
-"local.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
 )",
-                             "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi",
-                             "!F,i1,ui64,ui64", "ui64", body, 4);
+      R"(
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+)",
+      "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64",
+      "ui64", 4,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto sequence = data::SequenceType::get(&context, field);
+        auto boolean = builder.getI1Type();
+        auto index = work.getArgument(3).getType();
+        auto element =
+            sc::apply(control, builder, "add", "add",
+                      {work.getArgument(1), work.getArgument(1)}, {field})[0];
+        auto empty =
+            sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
+        Value result;
+        if (kind == "straight" || kind == "scalar") {
+          if (kind == "scalar")
+            element = control.conditional(
+                work.getArgument(2), {element}, {field}, "scalar_branch",
+                [&](unsigned arm) {
+                  auto branch = sc::region(
+                      builder, work, arm ? "right" : "left", {field}, {field});
+                  exec::ScopedExecutionBuilder body(builder, branch);
+                  body.complete({branch.getArgument(1)});
+                  return branch;
+                })[0];
+          result = sc::apply(control, builder, "append", "append",
+                             {empty, element}, {sequence})[0];
+        } else if (kind == "match") {
+          auto values = sc::apply(control, builder, "append", "append",
+                                  {empty, element}, {sequence})[0];
+          auto tag = control.invoke(
+              "exec.variant", {data::VariantType::get(&context, descriptor)},
+              control.scoped({values}),
+              {builder.getNamedAttr("alternative",
+                                    builder.getStringAttr("some")),
+               builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
+          result = control.match(
+              tag, {values, element}, {sequence}, {"none", "some"}, "match",
+              [&](unsigned arm) {
+                SmallVector<Type> arguments;
+                if (arm)
+                  arguments.push_back(sequence);
+                llvm::append_range(arguments, ArrayRef<Type>{sequence, field});
+                auto branch = sc::region(builder, work, arm ? "some" : "none",
+                                         arguments, {sequence});
+                exec::ScopedExecutionBuilder body(builder, branch);
+                Value next = branch.getArgument(1);
+                if (arm)
+                  next =
+                      sc::apply(body, builder, "append", "match_append",
+                                {next, branch.getArgument(3)}, {sequence})[0];
+                body.complete({next});
+                return branch;
+              })[0];
+        } else if (kind == "loop") {
+          result = control.loop(
+              work.getArgument(3), work.getArgument(4), {empty}, {element},
+              {sequence}, false, "loop", [&](unsigned) {
+                auto region = sc::region(builder, work, "iteration",
+                                         {index, sequence, field}, {sequence});
+                exec::ScopedExecutionBuilder body(builder, region);
+                body.complete(
+                    sc::apply(body, builder, "append", "loop_append",
+                              {region.getArgument(2), region.getArgument(3)},
+                              {sequence}));
+                return region;
+              })[0];
+        } else {
+          result = control.conditional(
+              work.getArgument(2), {empty, element, work.getArgument(2)},
+              {sequence}, "branch", [&](unsigned arm) {
+                auto region =
+                    sc::region(builder, work, arm ? "right" : "left",
+                               {sequence, field, boolean}, {sequence});
+                exec::ScopedExecutionBuilder body(builder, region);
+                if (arm && kind == "stop") {
+                  body.reject("reject", "stopped");
+                } else {
+                  Value next = region.getArgument(1);
+                  if (!arm)
+                    sc::apply(body, builder, "guard", "guard",
+                              {region.getArgument(3)}, {});
+                  if (!arm || kind != "capture")
+                    next =
+                        sc::apply(body, builder, "append",
+                                  arm ? "append_right" : "append_left",
+                                  {next, region.getArgument(2)}, {sequence})[0];
+                  body.complete({next});
+                }
+                return region;
+              })[0];
+        }
+        control.returned(
+            sc::apply(control, builder, "length", "length", {result}, {index}));
+      });
+}
+std::string independentVariantSource(MLIRContext &context,
+                                     StringRef descriptor) {
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
+!S = !data.sequence<!algebra.field<"bls12-381.fr">>
+)",
+      R"(
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+)",
+      "%x:!F", "%x", "!F", "ui64", 1,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto sequence = data::SequenceType::get(&context, field);
+        auto index = builder.getIntegerType(64, false);
+        auto empty =
+            sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
+        auto tag = control.invoke(
+            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            control.scoped({empty}),
+            {builder.getNamedAttr("alternative", builder.getStringAttr("left")),
+             builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
+        auto result = control.match(
+            tag, {work.getArgument(1)}, {index}, {"left", "right"}, "match",
+            [&](unsigned arm) {
+              StringRef name = arm ? "right" : "left";
+              auto region =
+                  sc::region(builder, work, name, {sequence, field}, {index});
+              exec::ScopedExecutionBuilder body(builder, region);
+              auto values =
+                  sc::apply(body, builder, "append", name.str() + "_append",
+                            region.getArguments().drop_front(), {sequence});
+              body.complete(sc::apply(body, builder, "length",
+                                      name.str() + "_length", values, {index}));
+              return region;
+            });
+        control.returned(result);
+      });
+}
+std::string selectedVariantSource(MLIRContext &context, StringRef descriptor) {
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
+!S = !data.sequence<!algebra.field<"bls12-381.fr">>
+)",
+      R"(
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+)",
+      "%x:!F", "%x", "!F", "!S", 1,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto sequence = data::SequenceType::get(&context, field);
+        auto fixed = algebra::FixedVectorType::get(&context, field, 2);
+        auto empty =
+            sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
+        auto values = sc::apply(control, builder, "append", "append",
+                                {empty, work.getArgument(1)}, {sequence})[0];
+        auto tag = control.invoke(
+            "exec.variant", {data::VariantType::get(&context, descriptor)},
+            control.scoped({values}),
+            {builder.getNamedAttr("alternative", builder.getStringAttr("some")),
+             builder.getNamedAttr("site", builder.getStringAttr("tag"))})[0];
+        auto result = control.match(
+            tag, {values}, {sequence}, {"none", "some", "unused"}, "match",
+            [&](unsigned arm) {
+              SmallVector<Type> arguments;
+              if (arm)
+                arguments.push_back(arm == 1 ? Type(sequence) : Type(fixed));
+              arguments.push_back(sequence);
+              auto region =
+                  sc::region(builder, work, "arm" + std::to_string(arm),
+                             arguments, {sequence});
+              exec::ScopedExecutionBuilder body(builder, region);
+              body.complete({region.getArgument(arm == 2 ? 2 : 1)});
+              return region;
+            });
+        control.returned(result);
+      });
+}
+std::string aggregateControlSource(MLIRContext &context) {
+  return authoredSource(
+      context, R"(!F = !algebra.field<"bls12-381.fr">
+!S = !data.sequence<!algebra.field<"bls12-381.fr">>
+)",
+      R"(
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
+)",
+      "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi", "!F,i1,ui64,ui64", "!S",
+      4,
+      [&](OpBuilder &builder, func::FuncOp work,
+          exec::ScopedExecutionBuilder &control) {
+        auto field = work.getArgument(1).getType();
+        auto sequence = data::SequenceType::get(&context, field);
+        auto boolean = builder.getI1Type();
+        auto index = work.getArgument(3).getType();
+        auto empty =
+            sc::apply(control, builder, "empty", "empty", {}, {sequence})[0];
+        auto joined = control.conditional(
+            work.getArgument(2),
+            {empty, work.getArgument(1), work.getArgument(2)}, {sequence},
+            "branch", [&](unsigned arm) {
+              auto region = sc::region(builder, work, arm ? "right" : "left",
+                                       {sequence, field, boolean}, {sequence});
+              exec::ScopedExecutionBuilder body(builder, region);
+              Value next = region.getArgument(1);
+              if (!arm) {
+                sc::apply(body, builder, "guard", "branch_guard",
+                          {region.getArgument(3)}, {});
+                next = sc::apply(body, builder, "append", "branch_append",
+                                 {next, region.getArgument(2)}, {sequence})[0];
+              }
+              body.complete({next});
+              return region;
+            });
+        auto result = control.loop(
+            work.getArgument(3), work.getArgument(4), joined,
+            {work.getArgument(1), work.getArgument(2)}, {sequence}, false,
+            "loop", [&](unsigned) {
+              auto region =
+                  sc::region(builder, work, "iteration",
+                             {index, sequence, field, boolean}, {sequence});
+              exec::ScopedExecutionBuilder body(builder, region);
+              sc::apply(body, builder, "guard", "loop_guard",
+                        {region.getArgument(4)}, {});
+              body.complete(sc::apply(
+                  body, builder, "append", "loop_append",
+                  {region.getArgument(2), region.getArgument(3)}, {sequence}));
+              return region;
+            });
+        control.returned(result);
+      });
 }
 class DenseCandidates final : public CandidateCatalog {
 public:
@@ -320,7 +628,7 @@ int main(int argc, char **argv) {
               [&] {
                 unsigned count = nestedJoins ? 16 : 512;
                 auto module = take(executableFixture(
-                    scalarJoinSource(count, nestedJoins), context));
+                    scalarJoinSource(context, count, nestedJoins), context));
                 mathematical::RealizationWork work;
                 PhysicalPlanOptions options;
                 options.numericalWork = &work;
@@ -531,8 +839,8 @@ int main(int argc, char **argv) {
         seeded ? "seeded scalar join and loop packing cycle"
                : "unseeded scalar join and loop packing cycle",
         [&] {
-          auto module =
-              take(executableFixture(cyclicSequenceSource(seeded), context));
+          auto module = take(executableFixture(
+              cyclicSequenceSource(context, seeded), context));
           auto plan = take(proposePhysical(*module, installedCandidates()));
           auto expected =
               seeded ? sequence
@@ -549,8 +857,8 @@ int main(int argc, char **argv) {
   for (StringRef control :
        {"straight", "scalar", "branch", "stop", "capture", "match", "loop"})
     cases.run("unseeded aggregate inference through " + control, [&] {
-      auto module =
-          take(executableFixture(inferredSequenceSource(control), context));
+      auto module = take(
+          executableFixture(inferredSequenceSource(context, control), context));
       auto plan = take(proposePhysical(*module, installedCandidates()));
       require(take(encodeBoundType(at(plan, *module, "length").inputs[0], true))
                       .spelling() == sequence,
@@ -564,18 +872,19 @@ int main(int argc, char **argv) {
                   "inference inserted an aggregate conversion");
       if (control == "branch" || control == "stop") {
         auto forged = plan;
-        at(forged, *module, "branch").blockArguments[0][0] = decodeBoundType(
-            &context,
-            take(parseBoundType(
-                "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
+        bodyDecision(forged, *module, "branch").blockArguments[0][0] =
+            decodeBoundType(
+                &context,
+                take(parseBoundType(
+                    "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
         refuses(validatePhysical(*module, forged),
                 "binding-operation-signature");
       }
       publish(*module, take(validatePhysical(*module, plan)));
     });
   cases.run("settled scalar joins do not require packing conversions", [&] {
-    auto module =
-        take(executableFixture(inferredSequenceSource("scalar"), context));
+    auto module = take(
+        executableFixture(inferredSequenceSource(context, "scalar"), context));
     PhysicalPlanOptions options;
     abi(options, *module, false, 0, scalar);
     DenseCandidates catalog;
@@ -592,12 +901,12 @@ int main(int argc, char **argv) {
     cases.run(
         "explicit aggregate layout keeps conversions reached in " + control,
         [&] {
-          auto module =
-              take(executableFixture(inferredSequenceSource(control), context));
+          auto module = take(executableFixture(
+              inferredSequenceSource(context, control), context));
           PhysicalPlanOptions options;
           const std::string ordinary =
               "sequence<field:bls12-381.fr>@logical.sequence/0";
-          options.valueLayouts.push_back({"Work", "branch", 0, ordinary});
+          layout(options, *module, "branch", ordinary);
           auto plan = take(
               proposePhysical(*module, installedCandidates(), {}, options));
           require(take(encodeBoundType(at(plan, *module, "branch").outputs[0],
@@ -613,41 +922,48 @@ int main(int argc, char **argv) {
           refuses(validatePhysical(*module, forged), "binding-no-conversion");
           accept(materializePhysical(*module,
                                      take(validatePhysical(*module, plan))));
-          module->walk([&](local::LocalIfOp branch) {
-            bool guard = false, converted = false;
-            for (auto &operation : branch->getRegion(0).front())
-              if (auto apply = dyn_cast<plan::ApplyOp>(operation)) {
-                guard |= apply.getSite() == "guard";
-                if (apply.getSite().starts_with("layout_")) {
-                  require(guard, "leaf conversion moved before the guard");
-                  converted = true;
-                }
-              }
-            require(converted, "leaf conversion escaped its branch");
-            if (control == "stop")
-              require(isa<local::StopOp>(branch->getRegion(1).front().front()),
-                      "conversion was inserted in the stopped arm");
-          });
+          reachedConversion(*module, "branch", "guard", control == "stop");
           require(succeeded(verify(*module)),
                   "explicit control materialization");
           take(program::decode(
               program::encode(take(readExecutionModel(*module)))));
         });
+  for (StringRef mutation : {"duplicate", "missing result", "wrong owner"})
+    cases.run("explicit control layout refuses " + mutation, [&] {
+      auto module = take(executableFixture(
+          inferredSequenceSource(context, "branch"), context));
+      PhysicalPlanOptions options;
+      layout(options, *module, "branch", sequence);
+      if (mutation == "duplicate")
+        options.valueLayouts.push_back(options.valueLayouts.front());
+      else if (mutation == "missing result")
+        options.valueLayouts.front().result = 1;
+      else
+        options.valueLayouts.front().function =
+            semanticOperation(*module, "append_left")
+                ->getParentOfType<func::FuncOp>()
+                .getSymName()
+                .str();
+      refuses(proposePhysical(*module, installedCandidates(), {}, options),
+              mutation == "duplicate" ? "binding-duplicate-selection"
+                                      : "binding-unknown-selection");
+    });
   cases.run("default aggregate entry ports remain exact during packing", [&] {
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+)" + scopedFixture(R"(
+"runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation="blst/resident/field.add"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
 )",
-                         "%x:!F,%s:!S", "%x,%s", "!F,!S", "ui64", R"(
-%v = "algebra.exec.field_add"(%x,%x) {binding=@add,site="add",parameters=[]} : (!F,!F)->!F
-%values = "data.exec.sequence_append"(%s,%v) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-%n = "data.exec.sequence_length"(%values) {binding=@length,site="length",parameters=[]} : (!S)->ui64
-local.return %n : ui64
-)",
-                         2);
+                   "%x:!F,%s:!S", "%x,%s", "!F,!S", "ui64",
+                   scopedApply("add", "add", "%x,%x", "!F,!F", "%v", "!F") +
+                       scopedApply("append", "append", "%s,%v", "!S,!F",
+                                   "%values", "!S") +
+                       scopedApply("length", "length", "%values", "!S", "%n",
+                                   "ui64") +
+                       scopedReturn("%n", "ui64"),
+                   2);
     auto module = take(executableFixture(source, context));
     auto plan = take(proposePhysical(*module, installedCandidates()));
     auto &append = at(plan, *module, "append");
@@ -664,36 +980,12 @@ local.return %n : ui64
         *encodeVariant({"IndependentPayloads",
                         {{"left", {"sequence<field:bls12-381.fr>"}},
                          {"right", {"sequence<field:bls12-381.fr>"}}}});
-    auto source = "!Tag = !local.variant<\"" + variant + "\">\n" + R"(
-!F = !algebra.field<"bls12-381.fr">
-!S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" +
-                  mathematicalFixture(R"(
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-)",
-                                      "%x:!F", "%x", "!F", "ui64", R"(
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%tag = "local.variant_inject"(%s) {alternative="left",site="tag"} : (!S)->!Tag
-%n = "local.match"(%tag,%x) ({^left(%payload:!S,%element:!F):
-  %values = "data.exec.sequence_append"(%payload,%element) {binding=@append,site="left_append",parameters=[]} : (!S,!F)->!S
-  %n = "data.exec.sequence_length"(%values) {binding=@length,site="left_length",parameters=[]} : (!S)->ui64
-  "local.yield"(%n) : (ui64)->()
-}, {^right(%payload:!S,%element:!F):
-  %values = "data.exec.sequence_append"(%payload,%element) {binding=@append,site="right_append",parameters=[]} : (!S,!F)->!S
-  %n = "data.exec.sequence_length"(%values) {binding=@length,site="right_length",parameters=[]} : (!S)->ui64
-  "local.yield"(%n) : (ui64)->()
-}) {alternatives=["left","right"],site="match"} : (!Tag,!F)->ui64
-local.return %n : ui64
-)",
-                                      1);
+    auto source = independentVariantSource(context, variant);
     auto module = take(executableFixture(source, context));
     PhysicalPlanOptions options;
-    options.valueLayouts.push_back({"Work", "left_append", 0, sequence});
-    options.valueLayouts.push_back(
-        {"Work", "right_append", 0,
-         "sequence<field:bls12-381.fr>@logical.sequence/0"});
+    layout(options, *module, "left_append", sequence);
+    layout(options, *module, "right_append",
+           "sequence<field:bls12-381.fr>@logical.sequence/0");
     auto plan =
         take(proposePhysical(*module, installedCandidates(), {}, options));
     auto tag = take(encodeBoundType(at(plan, *module, "tag").outputs[0], true));
@@ -707,14 +999,13 @@ local.return %n : ui64
       "inapplicable family candidate advances before physical admission", [&] {
         auto source = R"(!V = !algebra.field_vector<"koala-bear">
 !X = !algebra.fixed_vector<!algebra.field<"koala-bear">,2>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear","2"],implementation=""} : ()->()
+)" + scopedFixture(R"(
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["koala-bear","2"],implementation=""} : ()->()
 )",
-                         "%v:!V", "%v", "!V", "!X", R"(
-%out = "algebra.exec.fixed_vector_from_vector"(%v) {binding=@fixed,site="fixed",parameters=[]} : (!V)->!X
-local.return %out : !X
-)",
-                         1);
+                   "%v:!V", "%v", "!V", "!X",
+                   scopedApply("fixed", "fixed", "%v", "!V", "%out", "!X") +
+                       scopedReturn("%out", "!X"),
+                   1);
         DenseCandidates catalog;
         auto module = take(executableFixture(source, context));
         auto plan = take(proposePhysical(*module, catalog));
@@ -743,14 +1034,13 @@ local.return %out : !X
       "aggregate layout conflict advances its automatic family owner", [&] {
         auto source = R"(!V = !algebra.field_vector<"bls12-381.fr">
 !A = !algebra.field_array<"bls12-381.fr",2>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","2"],implementation=""} : ()->()
+)" + scopedFixture(R"(
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","2"],implementation=""} : ()->()
 )",
-                         "%v:!V", "%v", "!V", "!A", R"(
-%out = "algebra.exec.field_array_from_vector"(%v) {binding=@array,site="array",parameters=[]} : (!V)->!A
-local.return %out : !A
-)",
-                         1);
+                   "%v:!V", "%v", "!V", "!A",
+                   scopedApply("array", "array", "%v", "!V", "%out", "!A") +
+                       scopedReturn("%out", "!A"),
+                   1);
         DenseCandidates catalog;
         auto module = take(executableFixture(source, context));
         PhysicalPlanOptions options;
@@ -775,27 +1065,23 @@ local.return %out : !A
             Twine(declarations),
         [&] {
           std::string bindings = R"(
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["field:bls12-381.fr"],implementation="native/sequence.length"} : ()->()
 )";
           std::string body;
           for (unsigned i = 0; i + 1 < declarations; ++i) {
             auto suffix = std::to_string(i);
             bindings +=
-                "\"local.binding\"() {sym_name=\"empty_" + suffix +
+                "\"runtime.binding\"() {sym_name=\"empty_" + suffix +
                 "\",contract=\"sequence.empty\",arguments=[\"field:bls12-381."
                 "fr\"],implementation=\"native/sequence.empty\"} : ()->()\n";
-            body += "%s" + suffix +
-                    " = \"data.exec.sequence_empty\"() {binding=@empty_" +
-                    suffix + ",site=\"empty_" + suffix +
-                    "\",parameters=[]} : ()->!S\n";
-            body += "%n" + suffix + " = \"data.exec.sequence_length\"(%s" +
-                    suffix + ") {binding=@length,site=\"length_" + suffix +
-                    "\",parameters=[]} : (!S)->ui64\n";
+            body += scopedApply("empty_" + suffix, "empty_" + suffix, "", "",
+                                "%s" + suffix, "!S");
+            body += scopedApply("length", "length_" + suffix, "%s" + suffix,
+                                "!S", "%n" + suffix, "ui64");
           }
-          body += "local.return %n" + std::to_string(declarations - 2) +
-                  " : ui64\n";
+          body += scopedReturn("%n" + std::to_string(declarations - 2), "ui64");
           auto source = R"(!S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture(bindings, "", "", "", "ui64", body, 0);
+)" + scopedFixture(bindings, "", "", "", "ui64", body, 0);
           auto module = take(executableFixture(source, context));
           auto plan = take(proposePhysical(*module, installedCandidates()));
           require(plan.bindings.size() == declarations,
@@ -816,7 +1102,7 @@ local.return %out : !A
                   "binding-declaration-limit");
           if (declarations == 4096) {
             PhysicalPlanOptions selected;
-            selected.valueLayouts.push_back({"Work", "empty_0", 0, sequence});
+            layout(selected, *module, "empty_0", sequence);
             refuses(
                 proposePhysical(*module, installedCandidates(), {}, selected),
                 "binding-declaration-limit");
@@ -1004,7 +1290,7 @@ local.return %out : !A
     PhysicalPlanOptions options;
     abi(options, *module, false, 0, scalar);
     abi(options, *module, true, 0, nested);
-    options.valueLayouts.push_back({"Work", "empty", 0, sequence});
+    layout(options, *module, "empty", sequence);
     auto plan =
         take(proposePhysical(*module, installedCandidates(), {}, options));
     auto wrong = plan;
@@ -1032,78 +1318,34 @@ local.return %out : !A
                           take(parseBoundType("fixed_vector<field:bls12-381.fr,"
                                               "2>@blst/fixed-vector[blst/fr]",
                                               true))}));
-        auto source = "!Tag = !local.variant<\"" + variant + "\">\n" +
-                      R"(!F = !algebra.field<"bls12-381.fr">
-!S = !data.sequence<!algebra.field<"bls12-381.fr">>
-!X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>
-)" +
-                      mathematicalFixture(R"(
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-)",
-                                          "%x:!F", "%x", "!F", "!S", R"(
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%values = "data.exec.sequence_append"(%s,%x) {binding=@append,site="append",parameters=[]} : (!S,!F)->!S
-%tag = "local.variant_inject"(%values) {alternative="some",site="tag"} : (!S)->!Tag
-%out = "local.match"(%tag,%values) ({^none(%capture:!S):
-  "local.yield"(%capture) : (!S)->()
-}, {^some(%payload:!S,%capture:!S):
-  "local.yield"(%payload) : (!S)->()
-}, {^unused(%inactive:!X,%capture:!S):
-  "local.yield"(%capture) : (!S)->()
-}) {alternatives=["none","some","unused"],site="match"} : (!Tag,!S)->!S
-local.return %out : !S
-)",
-                                          1);
+        auto source = selectedVariantSource(context, variant);
         auto module = take(executableFixture(source, context));
         PhysicalPlanOptions options;
         abi(options, *module, false, 0, scalar);
         abi(options, *module, true, 0, sequence);
-        options.valueLayouts.push_back({"Work", "tag", 0, full.spelling()});
+        layout(options, *module, "tag", full.spelling());
         auto plan =
             take(proposePhysical(*module, installedCandidates(), {}, options));
-        require(take(encodeBoundType(
-                         at(plan, *module, "match").blockArguments[2][0], true))
+        require(take(encodeBoundType(bodyDecision(plan, *module, "match", 2)
+                                         .blockArguments[0][0],
+                                     true))
                         .representation == "blst/fixed-vector",
                 "inactive selected payload lost");
         require(at(plan, *module, "tag").conversions.empty(),
                 "selected variant packing converted aggregate");
         auto forged = plan;
-        at(forged, *module, "match").blockArguments[1][0] = decodeBoundType(
-            &context,
-            take(parseBoundType(
-                "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
+        bodyDecision(forged, *module, "match", 1).blockArguments[0][0] =
+            decodeBoundType(
+                &context,
+                take(parseBoundType(
+                    "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
         refuses(validatePhysical(*module, forged),
                 "binding-operation-signature");
         publish(*module, take(validatePhysical(*module, plan)), "variant");
       });
   cases.run(
       "aggregate branch and loop equations keep leaf conversions reached", [&] {
-        auto source = R"(!F = !algebra.field<"bls12-381.fr">
-!S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["field:bls12-381.fr"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["field:bls12-381.fr"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="guard",contract="control.require",arguments=[],implementation=""} : ()->()
-)",
-                         "%x:!F,%c:i1,%lo:ui64,%hi:ui64", "%x,%c,%lo,%hi",
-                         "!F,i1,ui64,ui64", "!S", R"(
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%joined = "local.if"(%c,%s,%x,%c) ({^left(%values:!S,%element:!F,%allowed:i1):
-  "local.exec.require"(%allowed) {binding=@guard,site="branch_guard",parameters=[]} : (i1)->()
-  %next = "data.exec.sequence_append"(%values,%element) {binding=@append,site="branch_append",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next) : (!S)->()
-}, {^right(%values:!S,%element:!F,%allowed:i1):
-  "local.yield"(%values) : (!S)->()
-}) {site="branch"} : (i1,!S,!F,i1)->!S
-%out = "local.for"(%lo,%hi,%joined,%x,%c) ({^body(%i:ui64,%state:!S,%element:!F,%allowed:i1):
-  "local.exec.require"(%allowed) {binding=@guard,site="loop_guard",parameters=[]} : (i1)->()
-  %next = "data.exec.sequence_append"(%state,%element) {binding=@append,site="loop_append",parameters=[]} : (!S,!F)->!S
-  "local.yield"(%next,%element,%allowed) : (!S,!F,i1)->()
-}) {site="loop"} : (ui64,ui64,!S,!F,i1)->!S
-local.return %out : !S
-)",
-                         4);
+        auto source = aggregateControlSource(context);
         auto module = take(executableFixture(source, context));
         PhysicalPlanOptions options;
         abi(options, *module, true, 0, sequence);
@@ -1118,27 +1360,16 @@ local.return %out : !S
         require(at(plan, *module, "branch_append").conversions[0].operand == 1,
                 "converted aggregate operand");
         auto forged = plan;
-        at(forged, *module, "loop").blockArguments[0][1] = decodeBoundType(
-            &context,
-            take(parseBoundType(
-                "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
+        bodyDecision(forged, *module, "loop").blockArguments[0][1] =
+            decodeBoundType(
+                &context,
+                take(parseBoundType(
+                    "sequence<field:bls12-381.fr>@logical.sequence/0", true)));
         refuses(validatePhysical(*module, forged),
                 "binding-operation-signature");
         auto checked = take(validatePhysical(*module, plan));
         accept(materializePhysical(*module, checked));
-        module->walk([&](local::LocalForOp loop) {
-          bool guard = false, conversion = false;
-          for (auto &operation : loop.getBody().front())
-            if (auto apply = dyn_cast<plan::ApplyOp>(operation)) {
-              if (apply.getSite() == "loop_guard")
-                guard = true;
-              if (apply.getSite().starts_with("layout_")) {
-                require(guard, "conversion moved before guard");
-                conversion = true;
-              }
-            }
-          require(conversion, "loop conversion was not kept inside loop");
-        });
+        reachedConversion(*module, "loop", "loop_guard");
         require(succeeded(verify(*module)), "aggregate controls publication");
         auto encoded = program::encode(take(readExecutionModel(*module)));
         take(program::decode(encoded));
@@ -1147,8 +1378,7 @@ local.return %out : !S
   cases.run("unavailable aggregate conversion refuses", [&] {
     auto source = R"(!F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
-)" + mathematicalFixture("", "%s:!S", "%s", "!S", "!S", "local.return %s : !S",
-                         1);
+)" + scopedFixture("", "%s:!S", "%s", "!S", "!S", scopedReturn("%s", "!S"), 1);
     auto module = take(executableFixture(source, context));
     PhysicalPlanOptions options;
     abi(options, *module, true, 0, sequence);
@@ -1162,20 +1392,21 @@ local.return %out : !S
 !V = !algebra.field_vector<"bls12-381.fr">
 !X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>
 !S = !data.sequence<!algebra.fixed_vector<!algebra.field<"bls12-381.fr">,2>>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","2"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="at",contract="sequence.at",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.at"} : ()->()
+)" + scopedFixture(R"(
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","2"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["fixed_vector<field:bls12-381.fr,2>"],implementation="native/sequence.at"} : ()->()
 )",
-                         "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!X", R"(
-%s = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%x = "algebra.exec.fixed_vector_from_vector"(%v) {binding=@fixed,site="fixed",parameters=[]} : (!V)->!X
-%values = "data.exec.sequence_append"(%s,%x) {binding=@append,site="append",parameters=[]} : (!S,!X)->!S
-%out = "data.exec.sequence_at"(%values,%i) {binding=@at,site="at",parameters=[]} : (!S,ui64)->!X
-local.return %out : !X
-)",
-                         2);
+                   "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!X",
+                   scopedApply("empty", "empty", "", "", "%s", "!S") +
+                       scopedApply("fixed", "fixed", "%v", "!V", "%x", "!X") +
+                       scopedApply("append", "append", "%s,%x", "!S,!X",
+                                   "%values", "!S") +
+                       scopedApply("at", "at", "%values,%i", "!S,ui64", "%out",
+                                   "!X") +
+                       scopedReturn("%out", "!X"),
+                   2);
         auto module = take(executableFixture(source, context));
         PhysicalPlanOptions options;
         abi(options, *module, false, 0, "vector:bls12-381.fr@blst/fr");
@@ -1190,9 +1421,10 @@ local.return %out : !X
       });
   cases.run(
       "one fixed source binding retains distinct checked specializations", [&] {
-        auto source = replaceText(sequenceSource(), "%s =", R"(
-%unused = "data.exec.sequence_empty"() {binding=@empty,site="ordinary_empty",parameters=[]} : ()->!S
-%s =)");
+        auto source = replaceText(
+            sequenceSource(), "%empty_attempt =",
+            scopedApply("empty", "ordinary_empty", "", "", "%unused", "!S") +
+                "%empty_attempt =");
         auto module = take(executableFixture(source, context));
         PhysicalPlanOptions options;
         abi(options, *module, false, 0, scalar);
@@ -1224,24 +1456,25 @@ local.return %out : !X
         publish(*module, take(validatePhysical(*module, plan)));
       });
   cases.run("compiled resident dense arrays and fixed vectors", [&] {
-    auto source = R"(!F = !algebra.field<"bls12-381.fr">
+    auto source =
+        R"(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 !A = !algebra.field_array<"bls12-381.fr",4>
 !X = !algebra.fixed_vector<!algebra.field<"bls12-381.fr">,4>
-)" + mathematicalFixture(R"(
-"local.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.from_vector"} : ()->()
-"local.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.get"} : ()->()
-"local.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
-"local.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.dot"} : ()->()
+)" + scopedFixture(
+            R"(
+"runtime.binding"() {sym_name="array",contract="field_array.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.from_vector"} : ()->()
+"runtime.binding"() {sym_name="get",contract="field_array.get",arguments=["bls12-381.fr","4"],implementation="blst/resident/field_array.get"} : ()->()
+"runtime.binding"() {sym_name="fixed",contract="fixed_vector.from_vector",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.from_vector"} : ()->()
+"runtime.binding"() {sym_name="dot",contract="fixed_vector.dot",arguments=["bls12-381.fr","4"],implementation="blst/resident/fixed_vector.dot"} : ()->()
 )",
-                         "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!F", R"(
-%a = "algebra.exec.field_array_from_vector"(%v) {binding=@array,site="array",parameters=[]} : (!V)->!A
-%x = "algebra.exec.field_array_get"(%a,%i) {binding=@get,site="get",parameters=[]} : (!A,ui64)->!F
-%f = "algebra.exec.fixed_vector_from_vector"(%v) {binding=@fixed,site="fixed",parameters=[]} : (!V)->!X
-%out = "algebra.exec.fixed_vector_dot"(%f,%f) {binding=@dot,site="dot",parameters=[]} : (!X,!X)->!F
-local.return %out : !F
-)",
-                         2);
+            "%v:!V,%i:ui64", "%v,%i", "!V,ui64", "!F",
+            scopedApply("array", "array", "%v", "!V", "%a", "!A") +
+                scopedApply("get", "get", "%a,%i", "!A,ui64", "%x", "!F") +
+                scopedApply("fixed", "fixed", "%v", "!V", "%f", "!X") +
+                scopedApply("dot", "dot", "%f,%f", "!X,!X", "%out", "!F") +
+                scopedReturn("%out", "!F"),
+            2);
     auto module = take(executableFixture(source, context));
     PhysicalPlanOptions options;
     abi(options, *module, false, 0, "vector:bls12-381.fr@blst/fr");
@@ -1362,18 +1595,17 @@ local.return %out : !F
     auto origin = take(encodeNativeOriginTemplate(
         "main", {}, {"message", "Round", "response", "response", "P", "V"}));
     auto source =
-        R"(!T = !local.capability<"transcript:merlin3.bls12-381.fr64be/0">
+        R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
 !S = !data.sequence<!algebra.field<"bls12-381.fr">>
 !I = !algebra.indices
-)" + mathematicalFixture(
+)" + scopedFixture(
             R"(
-"local.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","sequence<field:bls12-381.fr>"],implementation="arkworks/transcript.native.indexed.observe.data"} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","sequence<field:bls12-381.fr>"],implementation="arkworks/transcript.native.indexed.observe.data"} : ()->()
 )",
             "%t:!T,%s:!S,%i:!I", "%t,%s,%i", "!T,!S,!I", "!T",
-            R"(%out = "crypto.exec.indexed_transcript_observe_data"(%t,%s,%i) {binding=@observe,site="observe",parameters=[")" +
-                origin + R"("]} : (!T,!S,!I)->!T
-local.return %out : !T
-)",
+            scopedApply("observe", "observe", "%t,%s,%i", "!T,!S,!I", "%out",
+                        "!T", "[\"" + origin + "\"]") +
+                scopedReturn("%out", "!T"),
             3);
     auto module = take(executableFixture(source, context));
     PhysicalPlanOptions options;

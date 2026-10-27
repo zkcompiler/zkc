@@ -12,6 +12,9 @@ struct FunctionPortSelection {
   /// Complete canonical physical type, including every aggregate child.
   std::string physicalType = {};
 };
+/// Select a semantic instruction result in the retained executable subject.
+/// The function and site identify its actual outlined owner and qualified site;
+/// administrative CFG/scope operations carrying that site are not data results.
 struct ValueLayoutSelection {
   std::string function, site;
   unsigned result = 0;

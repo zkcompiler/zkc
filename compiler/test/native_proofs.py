@@ -202,11 +202,13 @@ with case('constructed validator export checks the candidate first'):
     assert exported[3] == json.loads(policy_path.read_text())
     names = [instruction[0] for instruction in exported[7]]
     # Helper calls are inlined: receives, transcript transitions and the equation remain.
-    assert 'local.call' not in names and names.count('protocol.receive') == 2
-    assert names.count('crypto.exec.indexed_transcript_challenge') == 1
-    assert names.count('crypto.exec.indexed_transcript_observe_data') == 3
+    assert 'func.call' not in names and names.count('protocol.receive') == 2
+    contracts = [instruction[2][0] for instruction in exported[7]
+                 if instruction[0] == 'exec.apply' and instruction[2]]
+    assert contracts.count('transcript.native.indexed.challenge') == 1
+    assert contracts.count('transcript.native.indexed.observe.data') == 3
     sorts = exported[5] + [ty for instruction in exported[7] for ty in instruction[4]]
-    assert sorts[exported[8][-1]].startswith('!local.capability<"transcript:')
+    assert sorts[exported[8][-1]].startswith('!runtime.capability<"transcript:')
     candidate_path.write_text(changed)
     commands.run([compiler, 'protocol-constructed-participant', source_path, policy_path, candidate_path],
                  refuses='native-proof-correspondence')
@@ -215,32 +217,39 @@ with case('constructed validator export checks the candidate first'):
 with case('constructed transcript helpers have a closed body and one use per role'):
     # These mutations preserve ordinary types and action occurrences. The
     # construction record must also constrain inserted helper bodies and reuse.
-    extra, count = re.subn(r'(?m)^(      return %)',
-                           r'      %unused = "local.bool_constant"() {value = true, site = "unused"} : () -> i1\n\1', candidate, count=1)
+    extra, count = re.subn(
+        r'(?m)^(    func.func private @_transcript_\d+[^\n]+ \{\n)',
+        r'\1      %unused = "exec.boolean"(%arg0) {value = true, site = "unused"} : (!runtime.scope) -> !exec.outcome<(i1)>\n'
+        r'      "exec.dispatch"(%unused)[^extra, ^bb2] : (!exec.outcome<(i1)>) -> ()\n'
+        r'    ^extra(%ignored: i1):\n', candidate, count=1,
+    )
     assert count == 1
     commands.verified(extra, 'mathematical-projection: invalid inserted transcript helper')
     # The two scalar-observation helpers have identical callable signatures.
-    helpers = re.findall(r'local.func @(_transcript_\d+)\(%arg0: [^\n]+, %arg1: !algebra.field<"bls12-381.fr">\)', candidate)
+    helpers = re.findall(r'func.func private @(_transcript_\d+)\(%arg0: !runtime.scope, %arg1: [^\n]+, %arg2: !algebra.field<"bls12-381.fr">\)', candidate)
     assert len(helpers) == 2, helpers
-    repeated = candidate.replace(f'callee = @{helpers[1]}', f'callee = @{helpers[0]}').replace(
-        f'local.call @{helpers[1]}', f'local.call @{helpers[0]}')
+    repeated = candidate.replace(f'callee = @{helpers[1]}', f'callee = @{helpers[0]}')
     assert repeated != candidate
     commands.verified(repeated, 'mathematical-projection: repeated inserted transcript helper')
 
 with case('retained action cannot disguise an extra inserted helper call'):
-    absorb = re.search(r'(?m)^      (%\w+) = local.call @(_transcript_\d+)\((%\w+), (%\w+)\) \{site = "([^\"]+)"\}( : [^\n]+)', candidate)
+    absorb = re.search(
+        r'(?m)^(      )(%\w+) = "protocol\.local_call"\((%\w+), (%\w+)\) '
+        r'<\{callee = @(_transcript_\d+), role = "([^"]+)", site = "([^"]+)"\}>( : [^\n]+)', candidate,
+    )
     assert absorb
-    state, helper, _, payload, site, signature = absorb.groups()
-    challenge = re.search(r'(?m)^      %\w+:2 = local.call @_transcript_\d+\(' + re.escape(state) + r'\)[^\n]+', candidate)
+    indent, state, _, payload, helper, role, site, signature = absorb.groups()
+    challenge = re.search(r'(?m)^      %\w+:2 = "protocol\.local_call"\(' + re.escape(state) + r'\)[^\n]+', candidate)
     assert challenge
-    inserted_call = f'      %extra_state = local.call @{helper}({state}, {payload}) {{site = "authored_extra"}}{signature}\n'
+    inserted_call = (f'{indent}%extra_state = "protocol.local_call"({state}, {payload}) '
+                     f'<{{callee = @{helper}, role = "{role}", site = "authored_extra"}}>{signature}\n')
     forged = candidate.replace(challenge[0], inserted_call + challenge[0].replace(f'({state})', '(%extra_state)'), 1)
-    participant = re.search(r'"protocol.participant"[^\n]+sym_name = "([^\"]+)"', candidate)[1]
-    extra = f'{{callee = @{helper}, kind = "protocol.local_call", site = "authored_extra", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
+    participant = re.search(r'"protocol.participant"[^\n]+sym_name = "([^"]+)"', candidate)[1]
+    extra = f'{{callee = @{helper}, kind = "protocol.local_call", site = "authored_extra", targets = [{{operation = "protocol.local_call", participant = @{participant}}}]}}'
     original_next = '{kind = "protocol.query", service = 4 : i64, site = "draw_challenge",'
     assert original_next in forged
     forged = forged.replace(original_next, extra + ', ' + original_next, 1)
-    inserted = f'{{callee = @{helper}, kind = "protocol.local_call", site = "{site}", targets = [{{operation = "local.call", participant = @{participant}}}]}}'
+    inserted = f'{{callee = @{helper}, kind = "protocol.local_call", site = "{site}", targets = [{{operation = "protocol.local_call", participant = @{participant}}}]}}'
     assert inserted in forged
     forged = forged.replace(inserted, inserted + ', ' + extra, 1)
     commands.verified(forged, 'mathematical-projection: inserted transcript helper used by retained action')

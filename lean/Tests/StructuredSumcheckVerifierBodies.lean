@@ -30,7 +30,7 @@ theorem original_reduction_maximum_four :
 theorem original_input_shape :
     SumcheckSourceViews.inputShapeDefinition.helper = SumcheckRelationContract.shapeHelper ∧
       SumcheckSourceViews.inputShapeDefinition.raw = SumcheckRelationContract.shapeBody.erase ∧
-      SumcheckSourceViews.unit.definitions.length = 28 :=
+      SumcheckSourceViews.unit.definitions.length = 30 :=
   ⟨rfl, SumcheckSourceViews.inputShape_raw, rfl⟩
 
 /-- Keeping the power equation while dropping the maximum changes the actual formula. -/

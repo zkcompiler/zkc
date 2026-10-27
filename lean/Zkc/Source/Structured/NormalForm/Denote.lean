@@ -52,7 +52,7 @@ def Op.evalTotal (model : DomainModel) : (op : Op) → op.total = true →
   | .select _, _, .cons condition (.cons yes (.cons no .nil)) =>
       .cons (if condition then yes else no) .nil
   | .exec _, total, _ | .boundedAt _, total, _ | .invoke _, total, _ | .fold _, total, _
-  | .map _, total, _ | .branch .., total, _ | .loop .., total, _ | .loopCondition .., total, _
+  | .collect _, total, _ | .map _, total, _ | .branch .., total, _ | .loop .., total, _ | .loopCondition .., total, _
   | .guard, total, _ | .mark _, total, _ => nomatch total
 
 namespace NormalForm

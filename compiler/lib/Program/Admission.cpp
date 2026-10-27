@@ -1,5 +1,6 @@
 #include "zkc/Program/Admission.h"
 #include "EncodingLimits.h"
+#include "ResourceOrigins.h"
 #include "Structure.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/NativePolicy.h"
@@ -23,6 +24,7 @@ struct Definition {
   std::vector<Port> inputs, outputs;
   const program::Body *body = nullptr;
   bool realization = false;
+  program::Names callbacks;
   program::Names arguments;
   std::string instance, role;
   std::map<std::string, std::string> services;
@@ -230,9 +232,13 @@ class Admission {
     if (!seen.insert(callee).second)
       return false;
     auto found = functions.find(callee);
-    if (found == functions.end() || !found->second.body)
+    if (found == functions.end())
       return false;
     bool result = false;
+    for (const auto &callback : found->second.callbacks)
+      result |= callsMatchUnsafe(callback, seen);
+    if (!found->second.body)
+      return result;
     program::walk(*found->second.body, [&](const program::Instruction &i) {
       if (const auto *op = i.get<program::Operation>()) {
         auto binding = bindings.find(op->callee);
@@ -734,6 +740,16 @@ class Admission {
         return false;
     return true;
   }
+  bool callbackEdges() {
+    for (const auto &[symbol, definition] : functions)
+      for (const auto &callback : definition.callbacks) {
+        auto found = functions.find(callback);
+        if (found == functions.end() || !found->second.body)
+          return fail("local-realization-callback");
+        edges[symbol].insert(callback);
+      }
+    return true;
+  }
   bool check(const program::LocalDefinitions &m) {
     if (!environment(m.bindings))
       return false;
@@ -742,7 +758,7 @@ class Admission {
     for (const auto &f : m.functions)
       if (!declare(f))
         return false;
-    return bodies(functions, true) && cycles();
+    return callbackEdges() && bodies(functions, true) && cycles();
   }
   bool check(const program::Participants &m) {
     target = true;
@@ -757,7 +773,8 @@ class Admission {
     for (const auto &p : m.participants)
       if (!declare(p))
         return false;
-    if (!bodies(functions, true) || !bodies(participants, false) || !cycles())
+    if (!callbackEdges() || !bodies(functions, true) ||
+        !bodies(participants, false) || !cycles())
       return false;
     if (m.entries.empty() && (!m.participants.empty() || m.functions.empty()))
       return fail("interactive-entry");
@@ -783,13 +800,18 @@ class Admission {
     return problem.empty();
   }
 
-  Error seedRealizations(ArrayRef<LocalRealization> realizations,
-                         bool totalOnly = false) {
+  Error seedRealizations(ArrayRef<LocalRealization> realizations) {
     unsigned typeWork = 200000;
     bool limited = false;
     for (const auto &realization : realizations) {
-      if (totalOnly && realization.kind != LocalRealization::Kind::Total)
-        return error("local-realization-signature");
+      if (realization.kind == LocalRealization::Kind::Total
+              ? !realization.callbacks.empty()
+              : (realization.callbacks.empty() ||
+                 realization.callbacks.size() > 2))
+        return error("local-realization-callback");
+      for (const auto &callback : realization.callbacks)
+        if (!name(callback))
+          return error("local-realization-callback");
       if (!name(realization.name) || !symbols.insert(realization.name).second)
         return error("local-realization-symbol");
       if (realization.domainArguments > realization.inputs.size())
@@ -808,6 +830,7 @@ class Admission {
       }
       Definition d;
       d.realization = true;
+      d.callbacks = realization.callbacks;
       for (bool input : {true, false}) {
         const auto &ports = input ? realization.inputs : realization.outputs;
         if (ports.size() > 1024)
@@ -846,6 +869,12 @@ class Admission {
   }
 
 public:
+  Error executionDefinitions(const program::LocalDefinitions &module,
+                             bool selected) {
+    target = true;
+    physical = selected;
+    return run(module);
+  }
   Error nativeLocals(const program::LocalDefinitions &module,
                      ArrayRef<LocalRealization> realizations) {
     if (realizations.size() > 4096 ||
@@ -853,7 +882,9 @@ public:
       return error("interactive-definition-limit");
     if (auto e = seedRealizations(realizations))
       return e;
-    return run(module);
+    if (auto e = run(module))
+      return e;
+    return program::detail::verifyFiniteResourceOrigins(module, realizations);
   }
   Error logicalParticipants(const program::Participants &module,
                             ArrayRef<LocalRealization> realizations) {
@@ -864,12 +895,15 @@ public:
                                    realizations.size();
     if (realizations.size() > 4096 || definitionCount > 4096)
       return error("interactive-definition-limit");
-    if (auto e = seedRealizations(realizations, true))
+    if (auto e = seedRealizations(realizations))
       return e;
     logicalRealizations = true;
     if (auto e = program::detail::checkNativeIRStructure(module, true))
       return e;
-    return checkRoot(module);
+    if (auto e = checkRoot(module))
+      return e;
+    return program::detail::verifyFiniteResourceOrigins(
+        {module.bindings, module.functions}, realizations);
   }
   template <typename Root> Error run(const Root &root) {
     if (auto e = program::detail::checkNativeIRStructure(root))
@@ -882,6 +916,10 @@ public:
 Error admitNativeLocalDefinitions(const program::LocalDefinitions &value,
                                   ArrayRef<LocalRealization> realizations) {
   return Admission().nativeLocals(value, realizations);
+}
+Error admitExecutionDefinitions(const program::LocalDefinitions &value,
+                                bool physical) {
+  return Admission().executionDefinitions(value, physical);
 }
 Error admit(const program::Participants &value) {
   return Admission().run(value);

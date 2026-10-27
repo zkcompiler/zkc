@@ -13,16 +13,26 @@ from bridges.common import lean_render  # noqa: E402
 def fixture():
     digest = "sha256:" + "0" * 64
     policy = ["zkc.native-proof-policy/0", "main", "P", "V", "0", "suite",
-              ["1"], ["0"], [], "zkc.framed/0", ""]
+              ["1"], ["0"], [["query", "delivery"]], "zkc.framed/0", ""]
     child = ["zkc.constructed-participant/0", digest, digest, policy, "producer",
-             ["i1", "!local.capability<\"transcript:suite\">"],
-             ["!local.capability<\"transcript:suite\">"], [], [1], []]
+             ["i1", "!runtime.capability<\"transcript:suite\">"],
+             ["!runtime.capability<\"transcript:suite\">"], [], [1], []]
     validator = deepcopy(child)
     validator[4] = "validator"
     return [pair.FORMAT, child, validator]
 
 
 class PairReader(unittest.TestCase):
+    def test_transcript_type_has_one_runtime_owner(self):
+        self.assertEqual(pair.participant.sort('!runtime.capability<"transcript:suite">')[1],
+                         ("transcript", "suite"))
+        for spelling in ['!local.capability<"transcript:suite">',
+                         '!runtime.capability<"rng:suite">',
+                         '!runtime.capability<"transcript:suite"> trailing']:
+            with self.subTest(spelling=spelling), self.assertRaisesRegex(
+                    ValueError, "unsupported constructed data type"):
+                pair.participant.sort(spelling)
+
     def test_exact_envelope(self):
         data = fixture()
         self.assertEqual(pair.decode(data, expected=deepcopy(data)), tuple(data[1:]))
@@ -43,10 +53,22 @@ class PairReader(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "policy mismatch"):
             pair.decode(data)
 
+    def test_guard_has_one_protocol_owner(self):
+        boolean = ("boolean", None)
+        attrs = {"site": ("string", "stop"), "owner": ("string", "P")}
+        self.assertEqual(pair.participant.operation(
+            "protocol.guard", attrs, [], [boolean], []), '.guard "stop"')
+        with self.assertRaisesRegex(ValueError, "guard owner"):
+            pair.participant.operation("protocol.guard", {
+                **attrs, "owner": ("string", "")}, [], [boolean], [])
+        self.assertIn("unsupported", pair.participant.operation(
+            "local.guard", {"site": ("string", "stop")}, [], [boolean], []))
+
     def test_fixed_selection_pins_body_not_labels(self):
         expected = fixture()
         data = deepcopy(expected)
-        data[1][7] = [["local.guard", [["site", ["string", "stop"]]], [], [0], [], []]]
+        data[1][7] = [["protocol.guard", [["owner", ["string", "P"]],
+                                             ["site", ["string", "stop"]]], [], [0], [], []]]
         pair.decode(data)  # Structurally readable; admission must pin the body.
         with self.assertRaisesRegex(ValueError, "fixed selection"):
             pair.decode(data, expected=expected)

@@ -1,10 +1,15 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -15,29 +20,40 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
-
 std::string replace(StringRef source, StringRef from, StringRef to) {
   auto text = source.str();
   auto pos = text.find(from.str());
-  require(pos != std::string::npos, "missing fixture edit");
+  require(pos != std::string::npos, "missing fixture edit " + from);
   text.replace(pos, from.size(), to.str());
   return text;
 }
 OwningOpRef<ModuleOp> copy(ModuleOp module) {
   return OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
 }
-void materialize(ModuleOp module) {
+protocol_ir::ProtocolModuleOp owner(ModuleOp module) {
+  return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+}
+func::FuncOp function(ModuleOp module, StringRef name = "work") {
+  auto result = SymbolTable(owner(module)).lookup<func::FuncOp>(name);
+  require(bool(result), "missing function " + name);
+  return result;
+}
+void logical(ModuleOp module) {
   PassManager manager(module.getContext());
   manager.addPass(protocol::createProjectProtocolPass(false));
   manager.addPass(protocol::createLowerMathPass());
-  manager.addPass(kernel::createLowerKernelsPass());
-  require(succeeded(manager.run(module)), "Kernel realization failed");
+  require(succeeded(manager.run(module)), "scoped demand lowering failed");
 }
-local::FuncOp realized(ModuleOp module) {
-  auto owner = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-  auto found = SymbolTable(owner).lookup<local::FuncOp>("realized");
-  require(bool(found), "missing realized function");
-  return found;
+void materialize(ModuleOp module) {
+  logical(module);
+  require(succeeded(kernel::lowerKernels(module)),
+          "numerical realization failed");
+}
+OwningOpRef<ModuleOp> close(func::FuncOp helper) {
+  uint64_t remaining = 1000000;
+  auto result = kernel::closeComputation(helper, remaining);
+  require(bool(result), "mathematical closure refused");
+  return result;
 }
 } // namespace
 int main(int argc, char **argv) {
@@ -50,229 +66,258 @@ int main(int argc, char **argv) {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  for (StringRef mutation :
+       {"foreign condition", "non-Boolean condition", "empty occurrence"})
+    cases.run("formation refuses " + mutation, [&] {
+      auto module = parseSourceString<ModuleOp>(R"mlir(module {
+        func.func @work(%condition:i1, %index:ui64) -> i1 {
+          func.return %condition : i1
+        }
+        func.func @other(%condition:i1) -> i1 {
+          func.return %condition : i1
+        }
+      })mlir",
+                                                &context);
+      require(bool(module), "guard formation fixture refused");
+      auto before = copy(*module);
+      SymbolTable symbols(*module);
+      auto wrapper = symbols.lookup<func::FuncOp>("work");
+      auto other = symbols.lookup<func::FuncOp>("other");
+      kernel::CalculationGuard guard{
+          mutation == "foreign condition"       ? other.getArgument(0)
+          : mutation == "non-Boolean condition" ? wrapper.getArgument(1)
+                                                : wrapper.getArgument(0),
+          StringAttr::get(&context,
+                          mutation == "empty occurrence" ? "" : "check")};
+      std::string diagnostic;
+      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &message) {
+        llvm::raw_string_ostream out(diagnostic);
+        message.print(out);
+        return success();
+      });
+      require(failed(kernel::formCalculation(wrapper, *module, {}, guard)) &&
+                  namesIdentifier(diagnostic, "kernel-formation"),
+              "malformed guard input passed formation");
+      require(OperationEquivalence::isEquivalentTo(
+                  *module, *before, OperationEquivalence::IgnoreLocations),
+              "refused formation changed the wrapper");
+    });
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "realization fixture refused");
-  auto expanded = copy(*source);
-  require(succeeded(mathematical::expandMathRealizations(*expanded)),
-          "realization failed");
-  cases.run("polynomial intermediates disappear from realized execution", [&] {
-    require(isa<kernel::CallOp>(realized(*expanded).getBody().front().front()),
-            "preparation bypassed logical Kernel IR");
+  auto frozen = copy(*source);
+  logical(*frozen);
+  auto executable = copy(*frozen);
+  require(succeeded(kernel::lowerKernels(*executable)),
+          "fixture lowering failed");
+  cases.run("polynomial mathematics stays exact until realization", [&] {
+    auto request = cast<exec::ComputeOp>(function(*frozen).front().front());
+    SymbolTableCollection symbols;
+    auto helper = request.resolveCallee(symbols);
+    require(bool(helper), "missing actual computation closure");
+    auto numerical = close(helper);
     bool retainedPolynomial = false;
-    expanded->walk([&](mlir::ModuleOp unit) {
-      if (!mathematical::isComputationUnit(unit))
-        return;
-      unit.walk([&](poly::MultiplyPolynomialOp) { retainedPolynomial = true; });
-    });
+    numerical->walk(
+        [&](poly::MultiplyPolynomialOp) { retainedPolynomial = true; });
     require(retainedPolynomial, "preparation erased the raw polynomial DAG");
-    auto executable = copy(*expanded);
-    materialize(*executable);
-    auto function = realized(*executable);
-    bool polynomial = false, kernel = false, dead = false;
-    function.walk([&](Operation *op) {
+    require(succeeded(kernel::verifyKernelClosure(helper->getParentOp(), helper,
+                                                  *numerical)),
+            "closure changed original mathematics");
+    bool polynomial = false;
+    executable->walk([&](Operation *op) {
       for (auto type : op->getResultTypes())
         polynomial |= isa<poly::PolynomialType>(type);
-      kernel |= op->hasAttr("binding");
-      dead |= op->hasAttr("binding") && op->getNumResults() && op->use_empty();
     });
-    require(!dead, "unused total recipe became executable work");
-    require(!polynomial && kernel,
+    auto calls = scopedFinite::applications(function(*executable));
+    require(!polynomial && !calls.empty(),
             "formal data escaped or evaluation vanished");
-    require(succeeded(mathematical::verifyMathRealizationsPreserved(*source,
-                                                                    *expanded)),
-            "containment failed");
+    for (auto call : calls)
+      for (auto value : scopedComputation::payload(call))
+        require(!value.use_empty(),
+                "unused total recipe became executable work");
+    require(succeeded(kernel::verifyKernelLowering(*frozen, *executable)),
+            "actual computation recipe comparison failed");
   });
   for (bool simplify : {false, true})
-    cases.run(
-        simplify ? "full optimized pipeline" : "full unsimplified pipeline",
-        [&] {
-          auto module = copy(*source);
-          PassManager manager(&context);
-          manager.addPass(protocol::createProjectProtocolPass(simplify));
-          manager.addPass(protocol::createLowerMathPass());
-          manager.addPass(protocol::createSelectPhysicalPass());
-          require(succeeded(manager.run(*module)),
-                  "realized program did not compile");
-          bool residual = false;
-          module->walk([&](Operation *op) {
-            residual |= isa<local::RealizeOp, local::ApplyOp, func::FuncOp>(op);
-          });
-          require(!residual, "preparation construct escaped into execution");
-        });
-  auto refusal = [&](StringRef label, StringRef text, StringRef code,
-                     bool prepare = false) {
+    cases.run(simplify ? "full optimized pipeline"
+                       : "full unsimplified pipeline",
+              [&] {
+                auto module = copy(*source);
+                PassManager manager(&context);
+                manager.addPass(protocol::createProjectProtocolPass(simplify));
+                manager.addPass(protocol::createLowerMathPass());
+                manager.addPass(protocol::createSelectPhysicalPass());
+                require(succeeded(manager.run(*module)),
+                        "realized program did not compile");
+                module->walk([&](Operation *op) {
+                  require(!isa<exec::ComputeOp>(op),
+                          "preparation construct escaped into execution");
+                  if (auto f = dyn_cast<func::FuncOp>(op))
+                    require(protocol::isScopedExecutionFunction(f),
+                            "mathematical function survived selection");
+                });
+              });
+  auto refusal = [&](StringRef label, StringRef text, StringRef code) {
     cases.run(label, [&] {
-      bool named = false;
+      std::string messages;
       ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
-        named |= diagnostic.str().find(code.str()) != std::string::npos;
+        messages += diagnostic.str();
         return success();
       });
       auto module = parseSourceString<ModuleOp>(text, &context);
-      if (prepare) {
-        require(bool(module), "preparation fixture failed before preparation");
-        require(failed(mathematical::expandMathRealizations(*module)),
-                "invalid observation accepted");
-      } else
-        require(!module, "invalid realization admitted");
-      require(named, "missing expected refusal identifier");
+      require(!module, "invalid computation admitted");
+      require(namesIdentifier(messages, code),
+              "unexpected refusal: " + messages);
     });
   };
-  refusal("missing helper", replace(fixture, "= @polynomial", "= @missing"),
-          "local-realization-helper");
-  refusal("ordered helper", replace(fixture, "= @polynomial", "= @work"),
-          "local-realization-helper");
+  refusal("missing helper",
+          replace(fixture, "callee = @polynomial", "callee = @missing"),
+          "execution-computation-symbol");
+  refusal("ordered helper",
+          replace(fixture, "callee = @polynomial", "callee = @work"),
+          "execution-computation-symbol");
   refusal("wrong signature",
-          replace(fixture,
-                  "local.realize @realized = @polynomial : (!F,!F,!F)->!F",
-                  "local.realize @realized = @polynomial : (!F,!F)->!F"),
-          "local-realization-signature");
-  refusal("extra realization attribute",
-          replace(fixture, "= @polynomial :", "= @polynomial {extra=true} :"),
-          "mathematical-formation");
+          replace(replace(fixture, "%arg0, %arg1, %arg2, %arg3",
+                          "%arg0, %arg1, %arg2"),
+                  "(!runtime.scope, !F, !F, !F) -> !exec.outcome",
+                  "(!runtime.scope, !F, !F) -> !exec.outcome"),
+          "execution-computation-signature");
+  refusal("extra computation attribute",
+          replace(fixture, "site = \"evaluate\"",
+                  "site = \"evaluate\", extra = true"),
+          "mlir-unknown-property");
   refusal("unused under-width observation",
           replace(fixture, "   %r = \"poly.evaluate\"",
-                  "   %unused = \"poly.coefficients\"(%q) : (!P)->!A\n   %r = "
-                  "\"poly.evaluate\""),
+                  "   %unused = \"poly.coefficients\"(%q) : (!P)->!A\n   %r "
+                  "= \"poly.evaluate\""),
           "polynomial-formation");
-  refusal("non-protocol realization context",
-          "module { func.func private @empty() {func.return} }",
-          "local-realization-context", true);
-  refusal("formal value at realization signature",
-          replace(fixture, " local.realize @realized",
-                  " func.func private @formal(%p:!P)->!P {func.return %p:!P}\n "
-                  "local.realize @formal_exec = @formal : (!P)->!P\n "
-                  "local.realize @realized"),
-          "local-realization-signature");
-  refusal("protocol call cannot bypass local application",
-          replace(fixture, "callee=@work", "callee=@realized"),
-          "interactive-symbol-kind");
-  cases.run("multiple realizations and nested helpers", [&] {
-    auto text = replace(fixture, " local.realize @realized", R"(
+  cases.run("non-protocol numerical context", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        "module { func.func private @empty() {func.return} }", &context);
+    require(bool(module), "standalone function refused");
+    auto before = copy(*module);
+    ScopedDiagnosticHandler handler(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(kernel::lowerKernels(*module)) &&
+                OperationEquivalence::isEquivalentTo(
+                    *module, *before, OperationEquivalence::IgnoreLocations),
+            "non-protocol realization was accepted or modified");
+  });
+  refusal("formal value at computation signature",
+          replace(fixture, "    func.func @work", R"(
+ func.func private @formal(%p:!P)->!P {func.return %p:!P}
+ func.func @formal_exec(%scope:!runtime.scope,%p:!P)->!exec.outcome<(!P)> attributes {no_inline,runtime.origin=["formal_exec",[]]} {
+   %call = "exec.compute"(%scope,%p) {callee=@formal,site="formal"}:(!runtime.scope,!P)->!exec.outcome<(!P)>
+   "exec.dispatch"(%call)[^done,^failed]:(!exec.outcome<(!P)>)->()
+ ^done(%value:!P):
+   %result = "exec.returned"(%value):(!P)->!exec.outcome<(!P)>
+   func.return %result:!exec.outcome<(!P)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop):(!exec.stop)->!exec.outcome<(!P)>
+   func.return %failure:!exec.outcome<(!P)>
+ }
+    func.func @work)"),
+          "execution-source-closure");
+  refusal("protocol call cannot bypass scoped computation",
+          replace(fixture, "callee=@work", "callee=@polynomial"),
+          "interactive-call-type");
+  auto withHelper = [&](StringRef definitions, StringRef name,
+                        StringRef caller) {
+    auto text = replace(fixture, "    func.func @work",
+                        definitions.str() + "\n    func.func @work");
+    auto module = parseSourceString<ModuleOp>(text, &context);
+    require(bool(module), "extra helper fixture refused");
+    scopedComputation::computation(function(*module, name), caller);
+    require(succeeded(verify(*module)), "extra scoped computation refused");
+    return module;
+  };
+  cases.run("multiple computations and nested helpers", [&] {
+    auto module = withHelper(R"(
  func.func private @nested(%a:!F,%b:!F,%x:!F)->!F {
    %r=func.call @polynomial(%a,%b,%x):(!F,!F,!F)->!F
    func.return %r:!F
- }
- local.realize @second = @nested : (!F,!F,!F)->!F
- local.realize @realized)");
-    auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module), "nested realization admission failed");
-    require(succeeded(mathematical::expandMathRealizations(*module)),
-            "nested realization expansion failed");
+ })",
+                             "nested", "second");
+    materialize(*module);
+    require(!scopedFinite::applications(function(*module, "second")).empty(),
+            "nested computation disappeared");
   });
   cases.run("independent helper recipe comparison", [&] {
-    auto owner =
-        cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
-    auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
-    auto function = mathematical::getComputationEntry(*numerical);
-    auto &block = function.front();
+    auto numerical =
+        kernelRecipeSource(owner(*source), "polynomial", "realized");
+    auto entry = mathematical::getComputationEntry(*numerical);
+    auto &block = entry.front();
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
     auto product = algebra::FieldMultiplyOp::create(
-        builder, function.getLoc(), block.getArgument(0).getType(),
+        builder, entry.getLoc(), block.getArgument(0).getType(),
         block.getArgument(0), block.getArgument(1));
-    func::ReturnOp::create(builder, function.getLoc(), product.getResult());
+    func::ReturnOp::create(builder, entry.getLoc(), product.getResult());
     mathematical::RealizationWork work;
     auto candidate = realizeKernelEntry(*numerical, "product", {}, work);
     require(bool(candidate), "direct recipe lowering failed");
     kernelRecipeOutput(*candidate);
-    auto result = realized(*candidate);
     require(succeeded(
                 kernel::verifyEntryRecipes(*numerical, *candidate, "product")),
             "valid recipe comparison failed");
-    {
-      finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
-                                         {}};
-      require(failed(kernel::verifyEntryRecipes(
-                  *numerical, *candidate, "different_call", {}, {}, &outcome)),
-              "different call site escaped independent recipe verification");
-      auto wrongSite = copy(*candidate);
-      realized(*wrongSite)
-          .getBody()
-          .front()
-          .front()
-          .setAttr("site", builder.getStringAttr("different_product"));
-      require(failed(kernel::verifyEntryRecipes(*numerical, *wrongSite,
-                                                "product", {}, {}, &outcome)),
-              "changed site escaped independent recipe verification");
-    }
-    result.getBody().front().front().setOperand(1, result.getArgument(0));
-    bool named = false;
-    ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
-      named |= diagnostic.str().find("mathematical-lowering-preservation") !=
-               std::string::npos;
-      return success();
-    });
+    ScopedDiagnosticHandler handler(&context,
+                                    [](Diagnostic &) { return success(); });
+    require(failed(kernel::verifyEntryRecipes(*numerical, *candidate,
+                                              "different_call")),
+            "different call site escaped comparison");
+    auto wrongSite = copy(*candidate);
+    scopedFinite::application(function(*wrongSite, "realized"), "field.mul")
+        .setSite("different_product");
     require(
-        failed(kernel::verifyEntryRecipes(*numerical, *candidate, "product")) &&
-            named,
+        failed(kernel::verifyEntryRecipes(*numerical, *wrongSite, "product")),
+        "changed site escaped comparison");
+    auto call = scopedFinite::application(function(*candidate, "realized"),
+                                          "field.mul");
+    call->setOperand(2, call.getInputs()[0]);
+    require(succeeded(verify(*candidate)), "operand mutation lost formation");
+    require(
+        failed(kernel::verifyEntryRecipes(*numerical, *candidate, "product")),
         "changed operand escaped independent recipe verification");
   });
   cases.run("static dimension discards unused field-array construction", [&] {
-    auto text = replace(fixture, " local.realize @realized", R"(
+    auto module = withHelper(R"(
  func.func private @dimension(%a:!F,%b:!F)->ui64 {
    %v = "algebra.array_from_elements"(%a,%b):(!F,!F)->!A
    %n = "data.dim"(%v){axis=0:i64}:(!A)->ui64
    func.return %n:ui64
- }
- local.realize @dimension_exec = @dimension : (!F,!F)->ui64
- local.realize @realized)");
-    auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module), "dimension fixture refused");
-    require(succeeded(mathematical::expandMathRealizations(*module)),
-            "dimension realization failed");
+ })",
+                             "dimension", "dimension_exec");
     materialize(*module);
-    module->walk([&](local::FuncOp function) {
-      if (function.getSymName() != "dimension_exec")
-        return;
-      auto &block = function.getBody().front();
-      require(std::distance(block.begin(), block.end()) == 2,
-              "static dimension emitted field-array construction");
-      require(block.front().getName().getStringRef() ==
-                  "algebra.exec.index_constant",
-              "dimension is not a constant");
-    });
+    auto calls =
+        scopedFinite::applications(function(*module, "dimension_exec"));
+    require(calls.size() == 1 &&
+                scopedFinite::contract(calls[0]) == "index.constant",
+            "static dimension emitted field-array construction");
   });
   cases.run("dynamic byte dimension uses the byte length recipe", [&] {
-    auto text = replace(fixture, " local.realize @realized", R"(
+    auto module = withHelper(R"(
  func.func private @byte_dimension(%bytes:!data.bytes)->ui64 {
    %n = "data.dim"(%bytes){axis=0:i64}:(!data.bytes)->ui64
    func.return %n:ui64
- }
- local.realize @byte_dimension_exec = @byte_dimension : (!data.bytes)->ui64
- local.realize @realized)");
-    auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module), "byte dimension fixture refused");
-    auto candidate = copy(*module);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "byte dimension realization failed");
-    require(succeeded(mathematical::verifyMathRealizationsPreserved(
-                *module, *candidate)),
-            "byte dimension recipe comparison failed");
-    materialize(*candidate);
-    bool found = false;
-    candidate->walk([&](local::FuncOp function) {
-      if (function.getSymName() != "byte_dimension_exec")
-        return;
-      found = true;
-      auto &block = function.getBody().front();
-      require(block.front().getName().getStringRef() ==
-                  "data.exec.bytes_length",
-              "byte dimension selected a different container recipe");
-    });
-    require(found, "byte dimension realization missing");
+ })",
+                             "byte_dimension", "byte_dimension_exec");
+    materialize(*module);
+    auto calls =
+        scopedFinite::applications(function(*module, "byte_dimension_exec"));
+    require(calls.size() == 1 &&
+                scopedFinite::contract(calls[0]) == "bytes.length",
+            "byte dimension selected a different container recipe");
   });
   cases.run("array recipe rejects shortened vector construction", [&] {
-    auto owner =
-        cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
-    auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
-    auto function = mathematical::getComputationEntry(*numerical);
-    auto &block = function.front();
+    auto numerical =
+        kernelRecipeSource(owner(*source), "polynomial", "realized");
+    auto entry = mathematical::getComputationEntry(*numerical);
+    auto &block = entry.front();
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
     auto array = algebra::ArrayFromElementsOp::create(
-        builder, function.getLoc(),
+        builder, entry.getLoc(),
         algebra::FieldArrayType::get(
             &context,
             cast<algebra::FieldType>(block.getArgument(0).getType())
@@ -280,56 +325,37 @@ int main(int argc, char **argv) {
             2),
         ValueRange{block.getArgument(0), block.getArgument(1)});
     auto at = algebra::ArrayAtOp::create(
-        builder, function.getLoc(), block.getArgument(0).getType(),
+        builder, entry.getLoc(), block.getArgument(0).getType(),
         array.getResult(), builder.getI64IntegerAttr(1));
-    func::ReturnOp::create(builder, function.getLoc(), at.getResult());
-    // Deliberately bypass normalization: exact projection folding would remove
-    // the vector construction and contract-instance mutation targets.
+    func::ReturnOp::create(builder, entry.getLoc(), at.getResult());
+    // Keep the construction intact so these mutations exercise the reader.
     mathematical::RealizationWork work;
     auto candidate = realizeKernelEntry(*numerical, "array", {}, work);
     require(bool(candidate), "array recipe failed");
-    kernelRecipeOutput(*candidate);
-    auto result = realized(*candidate);
     require(
         succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
         "valid array recipe comparison failed");
-    auto pristine = copy(*candidate);
     for (bool changeBinding : {false, true}) {
-      auto mutated = copy(*pristine);
-      auto changed = realized(*mutated);
-      bool found = false;
-      if (changeBinding)
-        for (auto binding : kernelRecipeOutput(*mutated)
-                                .getBody()
-                                .front()
-                                .getOps<local::OperationBindingOp>()) {
-          if (binding.getContract() == "field_array.at") {
-            binding->setAttr("arguments",
-                             builder.getStrArrayAttr({"bls12-381.fr", "3"}));
-            found = true;
-          }
-        }
-      else
-        changed.walk([&](Operation *op) {
-          if (op->getName().getStringRef() == "algebra.exec.field_array_at") {
-            op->setAttr("parameters", builder.getStrArrayAttr({"0"}));
-            found = true;
-          }
-        });
-      require(found, "array mutation target missing");
+      auto mutated = copy(*candidate);
+      auto access = scopedFinite::application(function(*mutated, "realized"),
+                                              "field_array.at");
+      if (changeBinding) {
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            access, access.getBindingAttr());
+        binding->setAttr("arguments",
+                         builder.getStrArrayAttr({"bls12-381.fr", "3"}));
+      } else
+        access.setParametersAttr(builder.getStrArrayAttr({"0"}));
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
       require(failed(kernel::verifyEntryRecipes(*numerical, *mutated, "array")),
               "changed array contract instance accepted");
     }
-    Operation *append = nullptr;
-    result.walk([&](Operation *op) {
-      if (op->getName().getStringRef() == "algebra.exec.vector_append")
-        append = op;
-    });
-    require(append, "array recipe did not append");
-    append->getResult(0).replaceAllUsesWith(append->getOperand(0));
-    append->erase();
+    auto append = scopedFinite::applications(function(*candidate, "realized"),
+                                             "vector.append");
+    require(!append.empty(), "array recipe did not append");
+    auto last = append.back();
+    scopedComputation::omit(last, last.getInputs()[0]);
     require(succeeded(kernel::verifyRecipeOutput(*candidate)),
             "short array mutation not formed");
     ScopedDiagnosticHandler handler(&context,
@@ -337,117 +363,173 @@ int main(int argc, char **argv) {
     require(failed(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
             "short vector accepted by recipe comparison");
   });
-  std::string large;
-  large += " func.func private @leaf(%x:!F)->!F {\n";
-  for (unsigned i = 0; i < 250; ++i)
-    large +=
-        "%v" + std::to_string(i) + " = algebra.field_add %x,%x : (!F,!F)->!F\n";
-  large += "func.return %x:!F }\n func.func private @expanded(%x:!F)->!F {\n";
-  for (unsigned i = 0; i < 220; ++i)
-    large += "%v" + std::to_string(i) + " = func.call @leaf(%x):(!F)->!F\n";
-  large +=
-      "func.return %x:!F }\n local.realize @large1 = @expanded : (!F)->!F\n"
-      "local.realize @large2 = @expanded : (!F)->!F\n local.realize @realized";
-  refusal("shared realization expansion budget",
-          replace(fixture, " local.realize @realized", large),
-          "mathematical-analysis-limit");
-  cases.run("conservative helper budget admits expandable bodies", [&] {
-    auto smaller = large;
-    for (unsigned i = 195; i < 220; ++i)
-      smaller = replace(
-          smaller,
-          "%v" + std::to_string(i) + " = func.call @leaf(%x):(!F)->!F\n", "");
-    auto module = parseSourceString<ModuleOp>(
-        replace(fixture, " local.realize @realized", smaller), &context);
-    require(bool(module), "bounded helper fixture refused");
-    require(succeeded(mathematical::expandMathRealizations(*module)),
-            "admitted conservative helper count failed expansion");
+  auto large = [&](unsigned repetitions) {
+    std::string text = "func.func private @leaf(%x:!F)->!F {\n";
+    for (unsigned i = 0; i < 250; ++i)
+      text += "%v" + std::to_string(i) +
+              " = algebra.field_add %x,%x : (!F,!F)->!F\n";
+    text += "func.return %x:!F }\n func.func private @expanded(%x:!F)->!F {\n";
+    for (unsigned i = 0; i < repetitions; ++i)
+      text += "%v" + std::to_string(i) + " = func.call @leaf(%x):(!F)->!F\n";
+    text += "func.return %x:!F }\n";
+    return replace(fixture, "    func.func @work",
+                   text + "    func.func @work");
+  };
+  // Selected units and source helpers have the same occurrence allowance.
+  // These roots are intentionally dormant: liveness grants no admission bypass.
+  for (bool selected : {false, true}) {
+    auto request = [&](ModuleOp module, StringRef name) {
+      auto caller =
+          scopedComputation::computation(function(module, "expanded"), name);
+      if (selected) {
+        auto target = SymbolTable(owner(module)).lookup<ModuleOp>("selected");
+        if (!target) {
+          auto closed = close(function(module, "expanded"));
+          closed->setSymName("selected");
+          target = closed.release();
+          owner(module).getBody().front().push_back(target);
+        }
+        auto entry = mathematical::getComputationEntry(target);
+        cast<exec::ComputeOp>(caller.front().front())
+            .setCalleeAttr(SymbolRefAttr::get(
+                target.getSymNameAttr(),
+                {FlatSymbolRefAttr::get(entry.getSymNameAttr())}));
+      }
+    };
+    cases.run(selected ? "selected computation shared expansion budget"
+                       : "source helper shared expansion budget",
+              [&] {
+                auto module = parseSourceString<ModuleOp>(large(220), &context);
+                require(bool(module), "single helper budget control refused");
+                request(*module, "large1");
+                require(succeeded(verify(*module)),
+                        "one large occurrence must be admitted");
+                request(*module, "large2");
+                std::string diagnostic;
+                ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
+                  diagnostic += d.str();
+                  return success();
+                });
+                auto checked = verify(*module);
+                require(failed(checked) &&
+                            namesIdentifier(diagnostic,
+                                            "mathematical-analysis-limit"),
+                        "shared helper budget was not enforced: " + diagnostic);
+              });
+    cases.run(
+        selected ? "bounded selected computation expansion"
+                 : "conservative helper budget admits expandable bodies",
+        [&] {
+          auto module = parseSourceString<ModuleOp>(large(195), &context);
+          require(bool(module), "bounded helper fixture refused");
+          request(*module, "large1");
+          request(*module, "large2");
+          materialize(*module);
+          require(
+              scopedFinite::applications(function(*module, "large1")).empty() &&
+                  scopedFinite::applications(function(*module, "large2"))
+                      .empty(),
+              "dead total mathematics became reached work");
+        });
+  }
+  auto closureMutation = [&](StringRef name,
+                             llvm::function_ref<void(ModuleOp)> change) {
+    cases.run(name, [&] {
+      auto helper = function(*source, "polynomial");
+      auto candidate = close(helper);
+      change(*candidate);
+      require(succeeded(verify(*candidate)), "closure mutation not formed");
+      std::string diagnostic;
+      ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
+        diagnostic += d.str();
+        return success();
+      });
+      auto result =
+          kernel::verifyKernelClosure(owner(*source), helper, *candidate);
+      require(failed(result) &&
+                  namesIdentifier(diagnostic, "kernel-closure-correspondence"),
+              "changed original mathematics escaped closure comparison: " +
+                  diagnostic);
+    });
+  };
+  closureMutation("retained helper result changed", [&](ModuleOp module) {
+    auto entry = mathematical::getComputationEntry(module);
+    entry.front().back().setOperand(0, entry.getArgument(0));
   });
+  closureMutation(
+      "polynomial evaluation operand changed", [&](ModuleOp module) {
+        bool changed = false;
+        module.walk([&](poly::EvaluatePolynomialOp op) {
+          op->setOperand(1, op->getParentOfType<func::FuncOp>().getArgument(0));
+          changed = true;
+        });
+        require(changed, "missing polynomial evaluation");
+      });
   auto mutation = [&](StringRef label,
                       llvm::function_ref<void(ModuleOp)> change) {
     cases.run(label, [&] {
-      auto candidate = copy(*expanded);
+      auto candidate = copy(*executable);
       change(*candidate);
       require(succeeded(verify(*candidate)), "mutation is not formed");
-      bool named = false;
-      ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
-        named |= diagnostic.str().find("local-realization-correspondence") !=
-                 std::string::npos;
+      std::string diagnostic;
+      ScopedDiagnosticHandler handler(&context, [&](Diagnostic &d) {
+        diagnostic += d.str();
         return success();
       });
-      require(failed(mathematical::verifyMathRealizationsPreserved(
-                  *source, *candidate)) &&
-                  named,
-              "containment accepted mutation");
+      auto result = kernel::verifyKernelLowering(*frozen, *candidate);
+      require(
+          failed(result) &&
+              namesIdentifier(diagnostic, "numerical-lowering-correspondence"),
+          "numerical comparison accepted mutation: " + diagnostic);
     });
   };
-  mutation("retained helper change", [&](ModuleOp module) {
-    module.walk([](func::ReturnOp op) {
-      op.setOperand(0, op->getBlock()->getArgument(0));
-    });
-  });
   mutation("realized result replaced by a same-type input",
            [&](ModuleOp module) {
-             auto function = realized(module);
-             function.getBody().front().back().setOperand(
-                 0, function.getArgument(0));
-           });
-  mutation("realized polynomial evaluation operand changed",
-           [&](ModuleOp module) {
-             bool changed = false;
-             module.walk([&](mlir::ModuleOp unit) {
-               if (!mathematical::isComputationUnit(unit))
-                 return;
-               unit.walk([&](Operation *op) {
-                 if (!changed && isa<poly::EvaluatePolynomialOp>(op)) {
-                   auto entry = op->getParentOfType<func::FuncOp>();
-                   auto replacement = entry.getArgument(0);
-                   if (op->getOperand(1) == replacement)
-                     replacement = entry.getArgument(1);
-                   op->setOperand(1, replacement);
-                   changed = true;
-                 }
-               });
-             });
-             require(changed, "missing raw polynomial evaluation");
+             auto f = function(module);
+             scopedComputation::returned(f)->setOperand(0, f.getArgument(1));
            });
   mutation("partial runtime operation inserted", [&](ModuleOp module) {
-    auto function = realized(module);
-    auto *returned = &function.getBody().front().back();
-    OpBuilder builder(function);
-    local::OperationBindingOp::create(
-        builder, function.getLoc(), "partial_inverse", "field.inverse",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
-    builder.setInsertionPoint(returned);
-    OperationState state(returned->getLoc(), "algebra.exec.field_inverse");
-    state.addOperands(returned->getOperands());
-    state.addTypes(returned->getOperandTypes());
-    state.addAttribute("binding",
-                       FlatSymbolRefAttr::get(&context, "partial_inverse"));
-    state.addAttribute("parameters", builder.getArrayAttr({}));
-    state.addAttribute("site", builder.getStringAttr("injected_inverse"));
-    auto *inverse = builder.create(state);
-    returned->setOperands(inverse->getResults());
+    auto f = function(module);
+    OpBuilder builder(f);
+    runtime::BindingOp::create(
+        builder, f.getLoc(), "partial_inverse", "field.inverse",
+        builder.getStrArrayAttr({"bls12-381.fr"}), "", ArrayAttr{});
+    auto end = scopedComputation::returned(f);
+    auto inverse = scopedComputation::appendApply(
+        f, "partial_inverse", end.getValues(), end.getValues().getTypes(),
+        "injected_inverse");
+    end->setOperands(scopedComputation::payload(inverse));
   });
   mutation("explicit stop inserted", [&](ModuleOp module) {
-    auto function = realized(module);
-    auto *returned = &function.getBody().front().back();
-    OpBuilder builder(returned);
-    local::StopOp::create(builder, returned->getLoc(), "injected", "reject");
+    auto f = function(module);
+    auto end = scopedComputation::returned(f);
+    auto first = scopedFinite::applications(f).front();
+    auto *failure = cast<exec::DispatchOp>(first->getNextNode()).getStopped();
+    auto *returned = end->getNextNode();
     returned->erase();
+    OpBuilder builder(end);
+    OperationState state(end.getLoc(), exec::RejectOp::getOperationName());
+    state.addOperands(f.getArgument(0));
+    state.addTypes(exec::StopType::get(&context));
+    state.addAttribute("reason", builder.getStringAttr("reject"));
+    state.addAttribute("site", builder.getStringAttr("injected"));
+    auto rejected = builder.create(state);
+    cf::BranchOp::create(builder, end.getLoc(), failure,
+                         rejected->getResults());
+    end.erase();
   });
   mutation("origin changed", [&](ModuleOp module) {
-    realized(module)->setAttr(
-        "logical_origin",
+    function(module)->setAttr(
+        "runtime.origin",
         ArrayAttr::get(&context, {StringAttr::get(&context, "unrelated"),
                                   ArrayAttr::get(&context, {})}));
   });
   mutation("unused binding inserted", [&](ModuleOp module) {
-    auto function = realized(module);
-    OpBuilder builder(function);
-    local::OperationBindingOp::create(
-        builder, function.getLoc(), "extra", "field.add",
-        builder.getStrArrayAttr({"bls12-381.fr"}), "", mlir::ArrayAttr{});
+    auto f = function(module);
+    OpBuilder builder(f);
+    runtime::BindingOp::create(builder, f.getLoc(), "extra", "field.add",
+                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
+                               ArrayAttr{});
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
     program::LocalDefinitions empty;

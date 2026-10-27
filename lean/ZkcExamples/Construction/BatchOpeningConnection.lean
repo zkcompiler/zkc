@@ -21,7 +21,7 @@ open BatchOpeningBodies BatchOpening
 
 namespace Associations
 structured_associations BatchOpening
-  [checkOpening, batchStep, batchValues, realization, formula, checkBatch]
+  [checkOpening, batchStep, batchValues, formula, realization, checkBatch]
 end Associations
 open Associations
 
@@ -32,8 +32,8 @@ def decision {F : Type} [DecidableEq F] (point value : F) (batch : Batch F) : Bo
   batch.all fun record => decide (record.1 = point) && decide (record.2.1 = value)
 
 abbrev batchFold : FoldSpec :=
-  ⟨⟨"finite_" ++ batchValuesHelper.name ++ "_s3_domain", [.sequence openingTy],
-      .sequence openingTy, .here, false⟩,
+  ⟨DomainSpec.elements ("finite_" ++ batchValuesHelper.name ++ "_s3_domain") [.sequence openingTy]
+      (.sequence openingTy) .here,
     [.boolean], [.field "koala-bear", .field "koala-bear"], batchStepHelper.name, "", .math⟩
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -82,12 +82,13 @@ theorem batchValues_bounded (point value : F) (batch : Batch F)
   change (Evaluation.denoteFold (meanings (F := F) (G := G)) batchFold
     ((Values.cons batch Values.nil).append
       ((Values.cons true Values.nil).append (.cons point (.cons value .nil))))).bind _ = _
-  have admitted : (batchFold.domain.denote (Values.cons batch
-      (Values.nil : Values (assignment F G) []))).admit = .returned batch := by
-    change (Finite.Domain.check (batch.length < indexLimit) .exhausted (.elements batch)).admit = _
-    simp [Finite.Domain.admit, bounded]
-  have folded := Evaluation.denoteFold_reference meanings batchFold
-    (.cons batch .nil) (.cons true .nil) (.cons point (.cons value .nil)) batch admitted
+  have admitted : batchFold.domain.admit (carriers := uniformCarriers F G) (Values.cons batch
+      (Values.nil : Values (assignment F G) [])) =
+      .returned (batch.map fun item => .cons item .nil) := by
+    simp [batchFold, DomainSpec.admit_elements, Collection.values, Values.get, bounded]
+  have folded := Evaluation.denoteFold_reference_map meanings batchFold
+    (.cons batch .nil) (.cons true .nil) (.cons point (.cons value .nil)) batch
+    (fun item => .cons item .nil) admitted
     (fun (state : Values (assignment F G) [.boolean]) record =>
       Values.cons (state.get .here && decide (record.1 = point) && decide (record.2.1 = value)) .nil)
     (fun _ => True) trivial (by
@@ -106,9 +107,10 @@ theorem batchValues_exhausted (point value : F) (batch : Batch F)
     invoke (meanings (F := F) (G := G)) batchValuesHelper (.cons point (.cons value (.cons batch .nil))) =
       .halt .exhausted := by
   rw [batchValues_association.invoke unit.linked]
-  change (Finite.execute (Finite.Domain.check (decide (batch.length < indexLimit))
-    .exhausted (.elements batch)) _ _).bind _ = _
-  simp [Finite.execute, Finite.Domain.admit, unbounded, Finite.admitThen, PIR.Process.bind]
+  change (Finite.admitThen (batchFold.domain.admit (carriers := uniformCarriers F G)
+    (Values.cons batch (.nil : Values (assignment F G) []))) _).bind _ = _
+  simp [batchFold, DomainSpec.admit_elements, Collection.values, Values.get,
+    unbounded, Finite.admitThen, PIR.Process.bind]
 
 /-- One all-answer equation, with the real finite-fold exhaustion branch. -/
 theorem check_equation (point value : F) (batch : Batch F) :

@@ -69,16 +69,22 @@ example : (admit "missing-characteristic" "base").map (fun _ => ()) =
 
 -- Exact native binding, with no new exec descriptor shape.
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
-    (.exec "algebra.exec.field_embed" "embed" []))).isOk = true := by decide
+    (.exec "exec.apply" "embed" []))).isOk = true := by decide
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
-    (.exec "algebra.exec.field_embed" "embed" []))).map (fun checked => checked.raw.operations) =
+    (.exec "exec.apply" "embed" []))).map (fun checked => checked.raw.operations) =
     .ok [.mark "embed_site", .fieldEmbed "extension" "base"] := rfl
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
-    (.exec "algebra.exec.field_embed" "embed" ["unexpected"]))).map (fun _ => ()) =
+    (.exec "exec.apply" "embed" ["unexpected"]))).map (fun _ => ()) =
     .error "structured-primitive-parameters" := by decide
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .local
     (.exec "algebra.exec.field_equal" "embed" []))).map (fun _ => ()) =
-    .error "structured-binding-contract" := by decide
+    .error "structured-primitive-operation" := by decide
+-- Changing the explicit binding changes the operation; a field equality
+-- cannot retain the embedding's one-input signature.
+example : (checkDefinition { snapshot with
+      bindings := [⟨"embed", "field.equal", ["extension"], ""⟩] } [] []
+    (helper "extension" "base" .local (.exec "exec.apply" "embed" []))).map (fun _ => ()) =
+    .error "structured-formation" := by decide
 example : (checkDefinition snapshot [] [] (helper "extension" "base" .math
     (.fieldEmbed "extension" "base") "other")).map (fun _ => ()) =
     .error "structured-formation" := by decide

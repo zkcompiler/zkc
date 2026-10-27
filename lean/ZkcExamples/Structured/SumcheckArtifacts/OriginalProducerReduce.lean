@@ -22,8 +22,9 @@ theorem less_lift (payload : UnitPayload)
     (left right : Nat) (leftBound : left < indexLimit) (rightBound : right < indexLimit) :
     invoke (helpers (F := F) (G := G) payload).closed MapFirstBodies.lessHelper
       (.cons left (.cons right .nil)) = .done (.cons (decide (left < right)) .nil) := by
+  obtain ⟨bindings, first⟩ := bodies.first
   rw [← (helpers_lift payload).closed, closed_invoke_plain,
-    MapFirstContracts.less_law payload.linked bodies.first left right leftBound rightBound]
+    MapFirstContracts.less_law payload.linked first left right leftBound rightBound]
   rfl
 
 /-- The producer prelude of the shared original Reduce, with the real observed

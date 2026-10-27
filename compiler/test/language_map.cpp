@@ -1,12 +1,18 @@
+#include "mlir/IR/Verifier.h"
+#include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
-#include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/IR.h"
 #include "zkc/Language/Project.h"
+#include "zkc/Translation/Language.h"
 #include <set>
 #include <string>
 
 using namespace llvm;
+using namespace mlir;
+using namespace zkc;
 using namespace zkc::language;
 using namespace zkc::test;
 namespace {
@@ -64,67 +70,71 @@ Expected<CheckedOriginal> original(StringRef body) {
     return closed.takeError();
   return prepareOriginal(*closed);
 }
-// Refusal identifiers and source locations of a failed preparation.
-struct Located {
-  std::string message;
-  std::vector<std::string> codes;
-  std::vector<zkc::DiagnosticLocation> locations;
-};
-Located located(Expected<CheckedOriginal> result) {
-  require(!result, "expected a refused original");
-  Located found;
-  handleAllErrors(
-      result.takeError(),
-      [&](const zkc::CompilationError &error) {
-        found.message = error.message;
-        for (const auto &refusal : error.refusals)
-          found.codes.push_back(refusal.code);
-        found.locations = error.locations;
-      },
-      [&](const ErrorInfoBase &error) { found.message = error.message(); });
-  return found;
+OwningOpRef<ModuleOp> read(const CheckedOriginal &original,
+                           MLIRContext &context) {
+  auto module = parseSourceString<ModuleOp>(original.bytes(), &context);
+  require(bool(module), "emitted map source did not parse");
+  return module;
 }
-// Whether `found` names the first occurrence of `needle` in the checked source.
-bool locates(const Located &found, StringRef body, StringRef needle) {
-  auto text = (prelude + body).str();
-  auto at = text.find(needle.str());
-  require(at != std::string::npos, "missing source text " + needle);
-  auto before = StringRef(text).take_front(at);
-  unsigned line = before.count('\n') + 1;
-  unsigned column = at - (before.rfind('\n') + 1) + 1;
-  return llvm::any_of(found.locations, [&](const auto &location) {
-    return location.filename == "map.zkc" && location.line == line &&
-           location.column == column;
-  });
-}
-unsigned occurrences(StringRef text, StringRef needle) {
-  unsigned result = 0;
-  for (auto at = text.find(needle); at != StringRef::npos;
-       at = text.find(needle, at + needle.size()))
-    ++result;
+SmallVector<exec::CollectOp> collections(ModuleOp module) {
+  SmallVector<exec::CollectOp> result;
+  module.walk([&](exec::CollectOp op) { result.push_back(op); });
   return result;
+}
+exec::ComputeOp callback(exec::CollectOp collect) {
+  auto function = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+      collect, collect.getBodyAttr());
+  require(bool(function), "map callback missing");
+  SmallVector<exec::ComputeOp> calls;
+  function.walk([&](exec::ComputeOp op) { calls.push_back(op); });
+  require(calls.size() == 1,
+          "map callback must invoke its actual math helper once");
+  return calls.front();
 }
 } // namespace
 
 int main() {
   Cases cases;
-  cases.run("generic inference, helper calls and local wrappers", [] {
+  DialectRegistry registry;
+  registerDialects(registry);
+  MLIRContext context(registry);
+  context.loadAllAvailableDialects();
+  cases.run("generic inference, helper calls and local wrappers", [&] {
     auto checked = take(original(program));
-    auto bytes = checked.bytes();
-    // fold and repeat share one helper instance and row mask.
-    require(occurrences(bytes, "\"algebra.map_realize\"") == 3,
-            "expected one declaration per helper instance and row mask");
-    require(bytes.contains("rowwise = array<i1: true, true, false>") &&
-                bytes.contains("rowwise = array<i1: true, true, true, false>"),
-            "row masks differ from the written each markers");
-    require(occurrences(bytes, "\"local.apply\"") == 4,
-            "map calls are not ordered");
-    require(!bytes.contains("vector_add") && !bytes.contains("vector_mul"),
+    auto module = read(checked, context);
+    auto maps = collections(*module);
+    require(maps.size() == 4,
+            "map occurrences were not retained in source order");
+    std::set<std::string> domains, bodies;
+    std::multiset<unsigned> widths;
+    for (auto map : maps) {
+      auto domain = SymbolTable::lookupNearestSymbolFrom<data::DomainOp>(
+          map, map.getDomainAttr());
+      require(bool(domain), "missing mapped domain");
+      auto call = callback(map);
+      auto function = call->getParentOfType<func::FuncOp>();
+      auto width = domain.getFunctionType().getNumInputs();
+      require(call.getInputs().size() == width + 1,
+              "mapped callback lost its scalar capture");
+      for (unsigned i = 0; i < width; ++i)
+        require(call.getInputs()[i] == function.getArgument(1 + i),
+                "callback row order differs from each markers");
+      require(call.getInputs().back() == function.getArgument(1 + 2 * width),
+              "mapped capture was confused with a domain container");
+      if (domains.insert(map.getDomain().str()).second)
+        widths.insert(width);
+      bodies.insert(map.getBody().str());
+    }
+    require(domains.size() == 3 && bodies.size() == 3 &&
+                widths == std::multiset<unsigned>{2, 2, 3},
+            "helper instances and each markers did not share exact adapters");
+    require(!checked.bytes().contains("vector_add") &&
+                !checked.bytes().contains("vector_mul"),
             "original contains realized vector arithmetic");
     take(compileEntry(checked));
     take(compileEntry(checked, {false, false}));
   });
-  cases.run("one helper as a scalar and under two masks", [] {
+  cases.run("one helper as a scalar and under two masks", [&] {
     auto checked = take(original(
         "fn rows(a: Vector<Fr>, b: Vector<Fr>, s: Fr) -> Vector<Fr> {\n"
         "  return map affine(each a, each b, s);\n}\n"
@@ -137,22 +147,25 @@ int main() {
         "  return (r = rows(a, b, s), t = toward(a, y, s),"
         " q = single(y, y, s));\n}\n"
         "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n"));
-    auto bytes = checked.bytes();
-    SmallVector<StringRef> lines;
-    bytes.split(lines, '\n');
-    std::set<std::string> helpers;
-    unsigned declarations = 0;
-    for (auto line : lines)
-      if (line.contains("\"algebra.map_realize\"") ||
-          line.contains("\"local.realize\"")) {
-        ++declarations;
-        auto helper = line.substr(line.find("helper = @"));
-        helpers.insert(helper.substr(0, helper.find_first_of(",}")).str());
-      }
-    require(declarations == 3 && helpers.size() == 1 &&
-                occurrences(bytes, "\"algebra.map_realize\"") == 2,
-            "expected one scalar and two mapped realizations of one helper");
-    // They share the realized helper budget.
+    auto module = read(checked, context);
+    auto maps = collections(*module);
+    std::set<std::string> helpers, domains;
+    std::set<unsigned> widths;
+    unsigned calls = 0;
+    module->walk([&](exec::ComputeOp op) {
+      ++calls;
+      helpers.insert(op.getCalleeAttr().getRootReference().str());
+    });
+    for (auto map : maps) {
+      domains.insert(map.getDomain().str());
+      auto domain = SymbolTable::lookupNearestSymbolFrom<data::DomainOp>(
+          map, map.getDomainAttr());
+      widths.insert(domain.getFunctionType().getNumInputs());
+    }
+    require(maps.size() == 2 && calls == 3 && helpers.size() == 1 &&
+                domains.size() == 2 && widths == std::set<unsigned>{1, 2},
+            "scalar and mapped occurrences lost their shared helper or "
+            "distinct domains");
     take(compileEntry(checked));
   });
   cases.run("compilation is deterministic", [] {
@@ -163,46 +176,63 @@ int main() {
                 take(compileEntry(second)).bytes(),
             "artifact bytes differ");
   });
-  cases.run("emitted original is compared with source", [] {
-    auto checked = take(original(program));
-    auto closed = take(
-        zkc::test::closeProtocolDeployment(take(check(program)), "m::Run"));
-    auto admit = [&](const std::string &text, StringRef code) {
-      refuses(admitOriginal(closed, text, checked.interfaceJson()), code);
-    };
-    auto edit = [&](StringRef from, StringRef to) {
-      auto text = checked.bytes().str();
-      auto at = text.find(from.str());
-      require(at != std::string::npos, "missing original edit: " + from);
-      text.replace(at, from.size(), to.str());
-      return text;
-    };
-    // Formation refuses a mask that disagrees with the declared signature.
-    admit(edit("rowwise = array<i1: true, true, false>",
-               "rowwise = array<i1: true, true, true>"),
-          "algebra-map-signature");
-    // Only local.apply may name a preparation-time declaration.
-    admit(edit("\"local.apply\"", "\"local.call\""), "interactive-symbol-kind");
-    // Two well-formed maps share a signature; exchanging their helpers is a
-    // different formula and must not correspond to the source.
-    SmallVector<StringRef> lines;
-    checked.bytes().split(lines, '\n');
-    SmallVector<StringRef> helpers;
-    for (auto line : lines)
-      if (line.contains("\"algebra.map_realize\"") &&
-          line.contains("rowwise = array<i1: true, true, false>")) {
-        auto helper = line.substr(line.find("helper = @"));
-        helpers.push_back(helper.substr(0, helper.find(',')));
+  for (StringRef change :
+       {"row-order", "callback-port", "helper-target", "invocation-kind"})
+    cases.run("emitted map source rejects " + change, [&] {
+      auto checked = take(original(program));
+      auto closed = take(
+          zkc::test::closeProtocolDeployment(take(check(program)), "m::Run"));
+      auto module = read(checked, context);
+      auto maps = collections(*module);
+      require(maps.size() == 4, "missing source maps");
+      bool formed = change != "invocation-kind";
+      if (change == "row-order") {
+        auto domain = SymbolTable::lookupNearestSymbolFrom<data::DomainOp>(
+            maps[0], maps[0].getDomainAttr());
+        auto elements =
+            domain.getBody().front().getOps<data::DomainElementsOp>();
+        require(llvm::range_size(elements) == 2, "expected two ordered rows");
+        auto first = *elements.begin(), second = *std::next(elements.begin());
+        auto operand = first->getOperand(0);
+        first->setOperand(0, second->getOperand(0));
+        second->setOperand(0, operand);
+      } else if (change == "callback-port") {
+        auto call = callback(maps[0]);
+        auto first = call.getInputs()[0], second = call.getInputs()[1];
+        call->setOperand(1, second);
+        call->setOperand(2, first);
+      } else if (change == "helper-target") {
+        SmallVector<exec::ComputeOp> helpers;
+        std::set<std::string> names;
+        for (auto map : maps) {
+          auto call = callback(map);
+          if (call.getInputs().size() == 3 &&
+              names.insert(call.getCalleeAttr().getRootReference().str())
+                  .second)
+            helpers.push_back(call);
+        }
+        require(helpers.size() == 2, "expected distinct same-shaped helpers");
+        auto first = helpers[0].getCalleeAttr();
+        helpers[0].setCalleeAttr(helpers[1].getCalleeAttr());
+        helpers[1].setCalleeAttr(first);
+      } else {
+        // A pure mathematical helper is not an ordinary scoped ABI callee.
+        auto call = callback(maps[0]);
+        OpBuilder builder(call);
+        auto replacement = func::CallOp::create(
+            builder, call.getLoc(), call.getCalleeAttr().getRootReference(),
+            call->getResultTypes(), call->getOperands());
+        replacement->setAttr("runtime.site", call.getSiteAttr());
+        call.getOutcome().replaceAllUsesWith(replacement.getResult(0));
+        call.erase();
       }
-    require(helpers.size() == 2 && helpers[0] != helpers[1],
-            "expected two same-shaped maps");
-    auto text = checked.bytes().str();
-    auto first = text.find(helpers[0].str()),
-         second = text.find(helpers[1].str());
-    text.replace(second, helpers[1].size(), helpers[0].str());
-    text.replace(first, helpers[0].size(), helpers[1].str());
-    admit(text, "source.correspondence");
-  });
+      ScopedDiagnosticHandler quiet(
+          &context, [](mlir::Diagnostic &) { return success(); });
+      require(succeeded(verify(*module)) == formed,
+              "mutation reached the wrong formation boundary");
+      refuses(compareOriginal(closed, *module),
+              formed ? "source.correspondence" : "target.admission");
+    });
 
   auto refusal = [&](StringRef label, StringRef body, StringRef code) {
     cases.run(label, [&] { refuses(check(body), code); });
@@ -280,9 +310,9 @@ int main() {
   refusal("each outside map",
           "fn f(a: Vector<Fr>) -> Vector<Fr> { return each a; }\n",
           "source.name");
-  // Formation refuses the helper closure while admitting the original; the
-  // refusal names the map expression and its helper.
-  cases.run("unsupported scalar operation in a mapped helper", [] {
+  // Total mathematics is admitted independently of optional Ring recognition.
+  // Dead scalar observations remain part of the authored helper body.
+  cases.run("total scalar work outside Ring remains admitted", [] {
     constexpr StringLiteral body =
         "math fn bad<F: Field>(x: F, y: F) -> F {\n"
         "  let unused = x == y;\n  return x;\n}\n"
@@ -292,18 +322,17 @@ int main() {
         "(r: Vector<Fr> @P) {\n"
         "  let r = f(a, b);\n  return (r = r);\n}\n"
         "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
-    auto found = located(original(body));
-    require(namesIdentifier(found.message, "algebra-map-formula") &&
-                llvm::is_contained(found.codes, "target.admission"),
-            "unexpected refusal: " + found.message);
-    require(locates(found, body, "map bad(each a, each b)"),
-            "refusal does not locate the map: " + found.message);
-    require(locates(found, body, "math fn bad"),
-            "refusal does not locate the helper: " + found.message);
+    auto checked = take(original(body));
+    require(checked.bytes().contains("algebra.field_equal") &&
+                checked.bytes().contains("exec.compute") &&
+                checked.bytes().contains("exec.collect"),
+            "source admission dropped the unused scalar computation");
+    take(compileEntry(checked));
+    take(compileEntry(checked, {false, false}));
   });
-  // Ring limits apply to the expanded formula during preparation. Each
-  // helper doubles the additions of the previous one.
-  cases.run("expanded formula beyond the Ring depth limit", [] {
+  // Ring limits bound optional recognition; they do not reject a total source
+  // helper. Each helper doubles the additions of the previous one.
+  cases.run("deep total formula retains ordered execution", [] {
     std::string body = "math fn h0<F: Field>(x: F) -> F { return x + 1; }\n";
     for (unsigned i = 1; i <= 10; ++i)
       body += "math fn h" + std::to_string(i) + "<F: Field>(x: F) -> F { " +
@@ -320,12 +349,13 @@ int main() {
         "(r: Vector<Fr> @P) {\n"
         "  let r = f(a, n);\n  return (r = r);\n}\n"
         "entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); }\n";
-    auto found = located(original(body));
-    require(llvm::is_contained(found.codes, "algebra-map-formula") &&
-                namesIdentifier(found.message, "ring-depth"),
-            "unexpected refusal: " + found.message);
-    require(locates(found, body, "map h10(each acc)"),
-            "refusal does not locate the map in the loop: " + found.message);
+    auto checked = take(original(body));
+    require(checked.bytes().contains("exec.collect"),
+            "deep source map was lost");
+    take(compileEntry(checked));
+    EntryOptions ordered;
+    ordered.mathematicalSelection.finiteBulk = false;
+    take(compileEntry(checked, ordered));
   });
   return cases.result();
 }

@@ -252,6 +252,14 @@ int main() {
     project(*module);
     require(succeeded(finite::verifyClosure(unit(*module))),
             "positive bound evidence was lost");
+    // Projection expanded all used pure helpers. Remove the now-dormant
+    // mathematical definitions so execution admission reaches the actual
+    // participant access, rather than refusing an earlier top-level owner.
+    for (auto helper : llvm::make_early_inc_range(
+             unit(*module).getBody().front().getOps<func::FuncOp>()))
+      helper.erase();
+    require(succeeded(verify(*module)),
+            "isolated participant control malformed");
     unit(*module).setProfileAttr(
         protocol_ir::ProfileAttr::get(&context, protocol_ir::Profile::Exec));
     require(succeeded(verify(access(*module))),

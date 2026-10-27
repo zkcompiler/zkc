@@ -18,7 +18,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 abbrev helperMeanings : Meanings F G := closedMeanings unit.definitions
 
 theorem bodies : SumcheckUnitContracts.Bodies unit.definitions :=
-  ⟨first_bodies, sums_association, empty_association, append_association, values_association,
+  ⟨⟨_, first_bodies⟩, sums_association, empty_association, append_association, values_association,
     width_association, variables_association⟩
 
 theorem first_laws : MapFirstContracts.Laws (helperMeanings (F := F) (G := G)) :=
@@ -46,7 +46,8 @@ theorem helper_plain (helper : Helper) (args : Values (assignment F G) helper.in
         (closedLift (I := participantInterface F G)) :=
   unit.closed_invoke_forgetSites helper args
 
-theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G)) :=
+theorem prefix_laws : MapPrefixContracts.Laws (helperMeanings (F := F) (G := G))
+    SumcheckSourceBodies.prefixBindings :=
   MapPrefixContracts.laws_of_bodies unit.linked prefix_bodies first_bodies
 
 theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
@@ -63,7 +64,7 @@ theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
 /-- The callback is an actual member of the same original table, not an appended fixture. -/
 theorem checkTable_body (xs point : List F) (claim : F) :
     invoke (helperMeanings (G := G)) checkTableHelper (checkInputs xs point claim) =
-      checkTableBody.denote (meaning F G (helperMeanings (G := G))) (checkInputs xs point claim).get :=
+      SumcheckSourceBodies.checkTableBody.denote (meaning F G (helperMeanings (G := G))) (checkInputs xs point claim).get :=
   checkTable_association.invoke unit.linked (checkInputs xs point claim)
 
 theorem checkTable_equation (xs point : List F) (claim : F)
@@ -120,7 +121,8 @@ theorem check_point_exhausted (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
     invoke (helperMeanings (G := G)) checkHelper (checkInputs xs point claim) = .halt .exhausted :=
   (check_association.invoke unit.linked (checkInputs xs point claim)).trans
-    (SumcheckHelperLaws.check_point_exhausted _ xs point claim overflow).1
+    (SumcheckHelperLaws.check_point_exhausted (bindings := SumcheckSourceBodies.prefixBindings)
+      _ xs point claim overflow).1
 
 /-- Total actual lookup, preserving the source's ordered admission and short-circuit cases. -/
 theorem check_all (xs point : List F) (claim : F) :

@@ -30,7 +30,7 @@ private def main : Definition := .function ⟨"main", .protocol, .publicDef,
     .instruction (.fold "queries" "step" "") [1, 0] [.boolean] [] ""] (.ret [0])⟩
 private def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main",
-    [⟨"queries", [queries], .elements 0⟩], [], [], [make, step, main], [⟨"main", []⟩], blsRows⟩
+    [⟨"queries", [queries], [.elements 0], 0⟩], [], [], [make, step, main], [⟨"main", []⟩], blsRows⟩
 private def runClosed (values : List Json) : Except String Json := do
   evaluate (← check snapshot) (arr [sequence values])
 private def changedStep (op : Descriptor) (result : Ty) (operandType : Ty := query) : Snapshot :=

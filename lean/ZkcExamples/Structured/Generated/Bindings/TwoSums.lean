@@ -66,14 +66,14 @@ theorem projectionLaws_hold {inputs : List Ty} (input : Values (Component (assig
       cases args with | cons _ args => cases args with | cons _ args => cases args with | cons _ args => rfl
     exact body.trans (congrArg PIR.Process.done (Option.some.inj (selected.symm.trans passed)))
   · intro args values passed
-    have body := helper_body payload (payload.definitions.get ⟨15, by decide +kernel⟩)
+    have body := helper_body payload (payload.definitions.get ⟨14, by decide +kernel⟩)
       (List.get_mem _ _) args
     change _ = PIR.Process.done ((.cons (args.get (.there (.there .here))) .nil) : Values (Component (assignment F G)) [.index]) at body
     have selected : passEntries args [.index] [2] = some (((.cons (args.get (.there (.there .here))) .nil) : Values (Component (assignment F G)) [.index])) := by
       cases args with | cons _ args => cases args with | cons _ args => cases args with | cons _ args => rfl
     exact body.trans (congrArg PIR.Process.done (Option.some.inj (selected.symm.trans passed)))
   · intro args values passed
-    have body := helper_body payload (payload.definitions.get ⟨16, by decide +kernel⟩)
+    have body := helper_body payload (payload.definitions.get ⟨15, by decide +kernel⟩)
       (List.get_mem _ _) args
     change _ = PIR.Process.done ((.cons (args.get (.there .here)) .nil) : Values (Component (assignment F G)) [.index]) at body
     have selected : passEntries args [.index] [1] = some (((.cons (args.get (.there .here)) .nil) : Values (Component (assignment F G)) [.index])) := by

@@ -25,6 +25,13 @@ of canonical KoalaBear values; installed execution is checked separately by
 
 ## Reproduce
 
+`scoped.py` exports fresh source-language helpers through the scoped Func/CF
+profile and checks them with the independent Lean reader and evaluator. Its
+bounded cases cover branches, stopped arms, invariant loop captures,
+mathematical requests, ordered finite callbacks and malformed formal binders.
+It checks logical outcomes; it does not claim native execution or resource
+equivalence. `lean-native` includes this suite in its bridge stage.
+
 From the repository root in the pinned development environment:
 
 ```sh
@@ -34,6 +41,8 @@ python3 lean/bridges/structured/check.py \
   --report build/experiments/structured-source/report.json
 python3 lean/bridges/structured/open_protocol.py \
   --report build/experiments/structured-open/report.json
+python3 lean/bridges/structured/scoped.py \
+  --report build/experiments/structured-scoped/report.json
 ```
 
 The suites' retained subjects (each one's Entry, sources and Lean data module)
@@ -340,13 +349,15 @@ request ([`lean/subjects/okamoto.toml`](../../subjects/okamoto.toml)). Its
 [formal support](../../docs/support.md#okamoto-representation-proof) states what
 is proved over the generated declarations.
 
-[`fixtures/gkr-source.json`](fixtures/gkr-source.json) (with its MLIR) is the
-original GKR Entry's structured export that the construction bridge renders to
-`GkrSourceData`; no maintained check regenerates it. A stale copy cannot make
-a false theorem: the generated `GkrRoundsNormalForms` and `GkrSourceNormalForms`
-equations are checked against the admitted `GkrSourceViews` unit and fail
-instead. The GKR manifest ([`lean/subjects/gkr.toml`](../../subjects/gkr.toml))
-names the root request, so the subject driver checks it.
+The GKR manifest ([`lean/subjects/gkr.toml`](../../subjects/gkr.toml)) owns both
+[`fixtures/gkr-source.mlir`](fixtures/gkr-source.mlir) and its exact structured
+export [`fixtures/gkr-source.json`](fixtures/gkr-source.json), together with
+`GkrSourceData` and the constructed participant. The subject driver regenerates
+these from the current source and checks the root request. Its check mode
+rejects stale retained bytes. The generated `GkrRoundsNormalForms` and
+`GkrSourceNormalForms` equations are separately kernel-checked against the
+admitted `GkrSourceViews` unit; regeneration does not establish native execution
+correspondence.
 
 A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
 module to write, `namespace` its namespace, `imports` and `open` its imports

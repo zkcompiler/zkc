@@ -36,6 +36,8 @@ theorem source_terminal (payload : UnitPayload)
       (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper)
       (.cons (some raw) (.cons (some point) (.cons (some scalar) .nil))) =
       terminal raw point scalar := by
+  obtain ⟨bindings, implementation⟩ := bodies
+  obtain ⟨collectBindings, first⟩ := implementation.first
   unfold terminal
   by_cases pointBound : point.length < indexLimit
   · rw [ite_eq_left pointBound]
@@ -43,16 +45,16 @@ theorem source_terminal (payload : UnitPayload)
     · rw [ite_eq_left small]
       by_cases rawBound : raw.length < indexLimit
       · rw [ite_eq_left rawBound]
-        exact OriginalSumcheckLibrary.check_present payload bodies self raw point scalar rawBound pointBound
+        exact OriginalSumcheckLibrary.check_present payload ⟨bindings, implementation⟩ self raw point scalar rawBound pointBound
       · rw [ite_eq_right rawBound]
         simp only [Participant.owned, ↓reduceIte, RoleFamily.sequence]
         change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
           (checkInputs raw point scalar)).bind _ = _
         rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
-          SumcheckVerifierHelpers.closed_invoke_plain, bodies.check.invoke payload.linked]
+          SumcheckVerifierHelpers.closed_invoke_plain, implementation.check.invoke payload.linked]
         rw [check_vector_exhausted_generic_body _
-          (lessAll_bounded _ (MapFirstContracts.less_all payload.linked bodies.first))
-          (fun xs n w => bodies.first.shape.invoke payload.linked (inputs xs n w))
+          (lessAll_bounded _ (MapFirstContracts.less_all payload.linked first))
+          (fun xs n w => first.shape.invoke payload.linked (inputs xs n w))
           raw point scalar small rawBound]
         rfl
     · rw [ite_eq_right small]
@@ -60,10 +62,10 @@ theorem source_terminal (payload : UnitPayload)
       change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
         (checkInputs raw point scalar)).bind _ = _
       rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
-        SumcheckVerifierHelpers.closed_invoke_plain, bodies.check.invoke payload.linked]
+        SumcheckVerifierHelpers.closed_invoke_plain, implementation.check.invoke payload.linked]
       rw [check_large_dimension_generic_body _
-        (lessAll_bounded _ (MapFirstContracts.less_all payload.linked bodies.first))
-        (fun xs n w => bodies.first.shape.invoke payload.linked (inputs xs n w))
+        (lessAll_bounded _ (MapFirstContracts.less_all payload.linked first))
+        (fun xs n w => first.shape.invoke payload.linked (inputs xs n w))
         raw point scalar pointBound small]
       rfl
   · rw [ite_eq_right pointBound]
@@ -71,8 +73,8 @@ theorem source_terminal (payload : UnitPayload)
     change (invoke (OriginalSumcheckLibrary.helpers (G := G) payload).closed checkHelper
       (checkInputs raw point scalar)).bind _ = _
     rw [← (OriginalSumcheckLibrary.helpers_lift payload).closed,
-      SumcheckVerifierHelpers.closed_invoke_plain, bodies.check.invoke payload.linked,
-      (check_point_exhausted _ raw point scalar pointBound).1]
+      SumcheckVerifierHelpers.closed_invoke_plain, implementation.check.invoke payload.linked,
+      (check_point_exhausted (bindings := bindings) _ raw point scalar pointBound).1]
     rfl
 
 end ZkcSecurity.Realizations.Sumcheck.OriginalRaw

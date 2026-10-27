@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from cases import case, counted
@@ -241,48 +242,12 @@ with case("collect-fold preparation choice is explicit even without an eligible 
 
 field = '!algebra.field<"bls12-381.fr">'
 vector = '!algebra.field_vector<"bls12-381.fr">'
-fusable = f'''
- "local.binding"() {{sym_name="vf_sum",contract="vector.sum",arguments=["bls12-381.fr"],implementation=""}} : ()->()
- func.func private @vf_mul(%x:{field},%y:{field})->{field} {{
-   %r = "algebra.field_multiply"(%x,%y) : ({field},{field})->{field}
-   func.return %r : {field}
- }}
- algebra.map_realize @vf_map = @vf_mul [true,true] : ({vector},{vector})->{vector}
- local.func @vf_work(%a:{vector},%b:{vector})->{field} attributes {{logical_origin=["vf_work",[]]}} {{
-   %v = local.apply @vf_map(%a,%b) {{site="map"}} : ({vector},{vector})->{vector}
-   %r = "algebra.exec.vector_sum"(%v) {{binding=@vf_sum,parameters=[],site="sum"}} : ({vector})->{field}
-   local.return %r : {field}
- }}
-'''
-with case("independent reduction checker rejects mismatched preparation choices"):
-    # Even an unused executable local is frozen by the structural checker.
-    mixed = source.replace('module { "protocol.module"() ({',
-                           'module { "protocol.module"() ({' + fusable, 1)
-    source_path.write_text(mixed)
-    requirement_path.write_text(canonical)
-    for fuse in (False, True):
-        choice = 'true' if fuse else 'false'
-        candidate = commands.verified(
-            mixed, None, f'--zkc-project-protocol=simplify=false fuse-vector-reductions={choice}')
-        # Preparation retains the map and records its family policy. Physical
-        # selection later chooses dot, numerical sum, or a separate map/sum.
-        assert 'algebra.exec.vector_dot' not in candidate
-        declaration = next(line for line in candidate.splitlines()
-                           if 'algebra.map_realize @vf_map' in line)
-        policy = declaration.split('policy = [', 1)[1].split(']', 1)[0]
-        assert policy.split(', ')[1] == choice
-        candidate_path.write_text(candidate)
-        flags = ['--fuse-vector-reductions'] if fuse else []
-        commands.run([compiler, 'protocol-check-reductions', source_path,
-                      requirement_path, candidate_path, *flags])
-        opposite = [] if fuse else ['--fuse-vector-reductions']
-        commands.run([compiler, 'protocol-check-reductions', source_path,
-                      requirement_path, candidate_path, *opposite],
-                     refuses='polynomial-correspondence-declaration')
-
 with case("finite policy matches independent reconstruction with and without simplify"):
     finite = (fixtures.parent / 'finite/sum.mlir').read_text()
-    declarations = finite.split('module { "protocol.module"() ({', 1)[1].split(' "protocol.func"', 1)[0]
+    declarations = finite[finite.index('    "runtime.binding"'):finite.rindex('  }) : () -> ()')]
+    declarations, entries = re.subn(
+        r'(?ms)^    "protocol.func"\(\).*?^    \}\) : \(\) -> \(\)\n', '', declarations)
+    assert entries == 1
     declarations = declarations.replace('!V', vector).replace('!F', field)
     mixed = source.replace('module { "protocol.module"() ({',
                            'module { "protocol.module"() ({' + declarations, 1)
@@ -292,7 +257,10 @@ with case("finite policy matches independent reconstruction with and without sim
         choice = 'true' if bulk else 'false'
         candidate = commands.verified(
             mixed, None, f'--zkc-project-protocol=simplify=false optimize-finite={choice}')
-        assert ('algebra.exec.vector_sum' in candidate) == bulk
+        # Preparation retains the request; physical selection owns the loop
+        # versus bulk decision. Identical prepared IR can satisfy either choice.
+        assert '"exec.fold"' in candidate
+        assert 'contract = "vector.sum"' not in candidate
         candidate_path.write_text(candidate)
         flags = [] if bulk else ['--no-finite-bulk']
         report = json.loads(commands.run([
@@ -301,9 +269,22 @@ with case("finite policy matches independent reconstruction with and without sim
         assert report['finite_bulk'] is bulk
         assert report['fuse_collect_fold'] is False
         opposite = ['--no-finite-bulk'] if bulk else []
+        alternate = json.loads(commands.run([
+            compiler, 'protocol-check-reductions', source_path,
+            requirement_path, candidate_path, *opposite]))
+        assert alternate['finite_bulk'] is not bulk
+        # A retained callback still freezes its actual equation, even when
+        # either policy can produce the same preparation stage.
+        changed, count = re.subn(
+            r'("exec\.apply"\(%arg0, %arg1, )%arg2(\) <\{binding = @add)',
+            r'\1%arg1\2', candidate, count=1)
+        assert count == 1
+        commands.verified(changed)
+        candidate_path.write_text(changed)
         commands.run([compiler, 'protocol-check-reductions', source_path,
-                      requirement_path, candidate_path, *opposite],
+                      requirement_path, candidate_path, *flags],
                      refuses='polynomial-correspondence-declaration')
+        candidate_path.write_text(candidate)
         for simplify in (False, True):
             compiled = json.loads(commands.source(
                 'protocol-checked-bundle', mixed, '--entry=reduction',

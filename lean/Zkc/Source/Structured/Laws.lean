@@ -41,8 +41,8 @@ theorem denoteFold_pack (table : HelperTable (assignment F G) interface) (spec :
     (initial : Values (assignment F G) spec.state)
     (captures : Values (assignment F G) spec.captures) :
     denoteFold table spec (arguments.append (initial.append captures)) =
-      Finite.execute (spec.domain.denote arguments)
-        (foldTransition table spec arguments captures) initial := by
+      Finite.admitThen (spec.domain.admit arguments) fun items =>
+        Finite.fold (foldTransition table spec arguments captures) items initial := by
   simp [denoteFold, Values.split_append]
 
 theorem foldTransition_unfiltered (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
@@ -50,9 +50,9 @@ theorem foldTransition_unfiltered (table : HelperTable (assignment F G) interfac
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item) :
+    (item : Values (assignment F G) spec.domain.items) :
     foldTransition table spec arguments captures state item =
-      invoke table spec.stepHelper (state.append (.cons item (arguments.append captures))) := by
+      invoke table spec.stepHelper (state.append (item.append (arguments.append captures))) := by
   simp [foldTransition, absent, PIR.Process.bind, Values.get]
   rfl
 
@@ -61,8 +61,8 @@ theorem foldTransition_false (table : HelperTable (assignment F G) interface) (s
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item)
-    (predicate : invoke table spec.predicateHelper (.cons item (arguments.append captures)) =
+    (item : Values (assignment F G) spec.domain.items)
+    (predicate : invoke table spec.predicateHelper (item.append (arguments.append captures)) =
       .done (.cons false .nil)) :
     foldTransition table spec arguments captures state item = .done state := by
   simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
@@ -72,11 +72,11 @@ theorem foldTransition_true (table : HelperTable (assignment F G) interface) (sp
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item)
-    (predicate : invoke table spec.predicateHelper (.cons item (arguments.append captures)) =
+    (item : Values (assignment F G) spec.domain.items)
+    (predicate : invoke table spec.predicateHelper (item.append (arguments.append captures)) =
       .done (.cons true .nil)) :
     foldTransition table spec arguments captures state item =
-      invoke table spec.stepHelper (state.append (.cons item (arguments.append captures))) := by
+      invoke table spec.stepHelper (state.append (item.append (arguments.append captures))) := by
   simp [foldTransition, present, predicate, PIR.Process.bind, Values.get]
   rfl
 
@@ -85,8 +85,8 @@ theorem foldTransition_predicate_stops (table : HelperTable (assignment F G) int
     (arguments : Values (assignment F G) spec.domain.inputs)
     (captures : Values (assignment F G) spec.captures)
     (state : Values (assignment F G) spec.state)
-    (item : assignment F G spec.domain.item) (reason : PIR.Stop)
-    (predicate : invoke table spec.predicateHelper (.cons item (arguments.append captures)) = .halt reason) :
+    (item : Values (assignment F G) spec.domain.items) (reason : PIR.Stop)
+    (predicate : invoke table spec.predicateHelper (item.append (arguments.append captures)) = .halt reason) :
     foldTransition table spec arguments captures state item = .halt reason := by
   simp [foldTransition, present, predicate, PIR.Process.bind]
 
@@ -94,10 +94,10 @@ theorem denoteFold_empty (table : HelperTable (assignment F G) interface) (spec 
     (arguments : Values (assignment F G) spec.domain.inputs)
     (initial : Values (assignment F G) spec.state)
     (captures : Values (assignment F G) spec.captures)
-    (empty : (spec.domain.denote arguments).admit = .returned []) :
+    (empty : spec.domain.admit arguments = .returned []) :
     denoteFold table spec (arguments.append (initial.append captures)) = .done initial := by
   rw [denoteFold_pack]
-  simp [Finite.execute, empty, Finite.admitThen, Finite.fold]
+  simp [empty, Finite.admitThen, Finite.fold]
 
 /-- Callback laws on reachable domain items suffice; no arbitrary semantic fuel
 or proof about out-of-premise helper inputs is needed. -/
@@ -105,9 +105,9 @@ theorem denoteFold_reference (table : HelperTable (assignment F G) interface) (s
     (arguments : Values (assignment F G) spec.domain.inputs)
     (initial : Values (assignment F G) spec.state)
     (captures : Values (assignment F G) spec.captures)
-    (items : List (assignment F G spec.domain.item))
-    (admitted : (spec.domain.denote arguments).admit = .returned items)
-    (reference : Values (assignment F G) spec.state → assignment F G spec.domain.item →
+    (items : List (Values (assignment F G) spec.domain.items))
+    (admitted : spec.domain.admit arguments = .returned items)
+    (reference : Values (assignment F G) spec.state → Values (assignment F G) spec.domain.items →
       Values (assignment F G) spec.state)
     (valid : Values (assignment F G) spec.state → Prop) (start : valid initial)
     (law : ∀ state item, item ∈ items → valid state →
@@ -116,7 +116,27 @@ theorem denoteFold_reference (table : HelperTable (assignment F G) interface) (s
     denoteFold table spec (arguments.append (initial.append captures)) =
       .done (items.foldl reference initial) := by
   rw [denoteFold_pack]
-  simp only [Finite.execute, admitted, Finite.admitThen]
+  simp only [admitted, Finite.admitThen]
+  exact Finite.fold_total_on _ reference valid items initial start law
+
+/-- A mathematical reference may use its own item representation. The explicit
+packing map must describe the complete admitted tuple and each reached callback. -/
+theorem denoteFold_reference_map {A : Type}
+    (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
+    (arguments : Values (assignment F G) spec.domain.inputs)
+    (initial : Values (assignment F G) spec.state)
+    (captures : Values (assignment F G) spec.captures)
+    (items : List A) (pack : A → Values (assignment F G) spec.domain.items)
+    (admitted : spec.domain.admit arguments = .returned (items.map pack))
+    (reference : Values (assignment F G) spec.state → A → Values (assignment F G) spec.state)
+    (valid : Values (assignment F G) spec.state → Prop) (start : valid initial)
+    (law : ∀ state item, item ∈ items → valid state →
+      foldTransition table spec arguments captures state (pack item) = .done (reference state item) ∧
+        valid (reference state item)) :
+    denoteFold table spec (arguments.append (initial.append captures)) =
+      .done (items.foldl reference initial) := by
+  rw [denoteFold_pack]
+  simp only [admitted, Finite.admitThen, Finite.fold_map]
   exact Finite.fold_total_on _ reference valid items initial start law
 
 theorem denoteLoop_congr (state captures : List Ty)
@@ -201,21 +221,23 @@ do not select the items. -/
 theorem indices_admit (name : String) (types : List Ty) (field : String)
     (container : Var types (.vector field)) (arguments : Values (assignment F G) types)
     (representable : (arguments.get container).length < indexLimit) :
-    ((⟨name, types, .vector field, container, true⟩ : DomainSpec).denote arguments).admit =
-      .returned (List.range (arguments.get container).length) := by
-  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
-    (Finite.Domain.elements _)).admit = _
-  simp [Finite.Domain.admit, representable, Collection.values]
+    (DomainSpec.indices name types (.vector field) container).admit arguments =
+      .returned ((List.range (arguments.get container).length).map fun index => .cons index .nil) := by
+  change (Finite.continueWith (if (arguments.get container).length < indexLimit then
+      .returned ((List.range (arguments.get container).length).map fun index => (Values.cons index Values.nil : Values (assignment F G) [.index]))
+      else .stopped .exhausted) fun rows => .returned rows) = _
+  rw [ite_eq_left representable]
   rfl
 
 theorem elements_admit (name : String) (types : List Ty) (field : String)
     (container : Var types (.vector field)) (arguments : Values (assignment F G) types)
     (representable : (arguments.get container).length < indexLimit) :
-    ((⟨name, types, .vector field, container, false⟩ : DomainSpec).denote arguments).admit =
-      .returned (arguments.get container) := by
-  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
-    (Finite.Domain.elements _)).admit = _
-  simp [Finite.Domain.admit, representable, Collection.values]
+    (DomainSpec.elements name types (.vector field) container).admit arguments =
+      .returned ((arguments.get container).map fun value => .cons value .nil) := by
+  change (Finite.continueWith (if (arguments.get container).length < indexLimit then
+      .returned ((arguments.get container).map fun value => (Values.cons value Values.nil : Values (assignment F G) [.field field]))
+      else .stopped .exhausted) fun rows => .returned rows) = _
+  rw [ite_eq_left representable]
   rfl
 
 theorem stopped_bypasses_suffix {A B : Type} (reason : PIR.Stop) (next : A → PIR.Process interface B) :

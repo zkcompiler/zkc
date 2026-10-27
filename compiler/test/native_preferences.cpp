@@ -1,14 +1,17 @@
 #include "../lib/Conversion/Bindings.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Protocol.h"
@@ -43,28 +46,81 @@ std::string source(StringRef contract, StringRef domain,
       "\n!V = !algebra.field_vector<\"bls12-381.fr\">\n!G = " +
       (scalar ? "!algebra.group<\"" : "!algebra.group_vector<\"") + group +
       "\">\n";
-  StringRef operation = pairing  ? "pairing_check"
-                        : each   ? "group_scale_each"
-                        : scalar ? "group_scale"
-                                 : "group_vector_scale";
   std::string body;
   std::string point = "%p", result;
   for (unsigned i = 0; i < count; ++i) {
     result = "%result" + std::to_string(i);
-    body += result + " = \"algebra.exec." + operation.str() + "\"(" +
-            (each ? "%s," + point : point + ",%s") +
-            ") {binding=@work,site=\"step" + std::to_string(i) +
-            "\",parameters=[]} : (" + types + ")->" + output + "\n";
+    body += scopedApply("work", "step" + std::to_string(i),
+                        each ? "%s," + point : point + ",%s", types, result,
+                        output);
     if (!pairing)
       point = result;
   }
-  body += "local.return " + result + " : " + output + "\n";
-  return aliases + mathematicalFixture(
-                       "\"local.binding\"() {sym_name=\"work\",contract=\"" +
+  body += scopedReturn(result, output);
+  return aliases +
+         scopedFixture("\"runtime.binding\"() {sym_name=\"work\",contract=\"" +
                            contract.str() + "\",arguments=[\"" + domain.str() +
                            "\"],implementation=\"" + implementation.str() +
                            "\"} : ()->()",
                        arguments, inputs, types, output, body, 2);
+}
+std::string observationSource(MLIRContext &context, bool fixed, bool joined) {
+  auto origin = take(encodeNativeOriginTemplate(
+      "main", {}, {"message", "Round", "point", "point", "P", "V"}));
+  auto text =
+      R"(!T = !runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">
+!G = !algebra.group<"bls12-381.g2">
+!F = !algebra.field<"bls12-381.fr">
+!I = !algebra.indices
+)" + scopedFixture(
+          R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
+              std::string(fixed ? "blst/resident/curve.scale" : "") +
+              R"("} : ()->()
+"runtime.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
+          joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I" : "%g:!G,%s:!F,%t:!T,%i:!I",
+          joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
+          joined ? "i1,!G,!F,!T,!I" : "!G,!F,!T,!I", "!T",
+          scopedReturn("%t", "!T"), joined ? 5 : 4);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "observation fixture parse");
+  auto work = scopedFinite::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto group = work.getArgument(joined ? 2 : 1);
+  auto scalar = work.getArgument(joined ? 3 : 2);
+  SmallVector<Value> point;
+  if (joined) {
+    point = control.conditional(
+        work.getArgument(1), {group, scalar}, {group.getType()}, "join",
+        [&](unsigned index) {
+          auto region = scopedComputation::region(
+              builder, work, index ? "right" : "left",
+              {group.getType(), scalar.getType()}, {group.getType()});
+          exec::ScopedExecutionBuilder nested(builder, region);
+          auto value = scopedComputation::apply(
+              nested, builder, "work", index ? "right" : "left",
+              region.getArguments().drop_front(), {group.getType()});
+          nested.complete(value);
+          return region;
+        });
+  } else {
+    point = scopedComputation::apply(control, builder, "work", "scale",
+                                     {group, scalar}, {group.getType()});
+  }
+  auto transcript = work.getArgument(joined ? 4 : 3);
+  auto indices = work.getArgument(joined ? 5 : 4);
+  auto observed = scopedComputation::apply(
+      control, builder, "observe", "observe",
+      {transcript, point.front(), indices}, {transcript.getType()}, {origin});
+  control.returned(observed);
+  require(succeeded(verify(*module)), "observation fixture formation");
+  std::string printed;
+  raw_string_ostream stream(printed);
+  module->print(stream);
+  return printed;
 }
 program::Participants publish(ModuleOp module, const PhysicalPlan &plan) {
   auto checked = take(validatePhysical(module, plan));
@@ -87,7 +143,7 @@ public:
 };
 void fillDeclarations(ModuleOp module) {
   auto root = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-  auto bindings = root.getBody().front().getOps<local::OperationBindingOp>();
+  auto bindings = root.getBody().front().getOps<runtime::BindingOp>();
   auto original = *bindings.begin();
   for (unsigned i = llvm::range_size(bindings); i < 4096; ++i) {
     auto *binding = original->clone();
@@ -255,42 +311,8 @@ int main(int argc, char **argv) {
         for (auto [fixed, joined] :
              {std::pair{false, false}, std::pair{true, false},
               std::pair{false, true}, std::pair{true, true}}) {
-          auto origin = take(encodeNativeOriginTemplate(
-              "main", {}, {"message", "Round", "point", "point", "P", "V"}));
-          std::string scale =
-              joined
-                  ? R"(%p = "local.if"(%c,%g,%s) ({
-^left(%point:!G,%scalar:!F):
- %left = "algebra.exec.group_scale"(%point,%scalar) {binding=@work,site="left",parameters=[]} : (!G,!F)->!G
- "local.yield"(%left) : (!G)->()
-}, {
-^right(%point:!G,%scalar:!F):
- %right = "algebra.exec.group_scale"(%point,%scalar) {binding=@work,site="right",parameters=[]} : (!G,!F)->!G
- "local.yield"(%right) : (!G)->()
-}) {site="join"} : (i1,!G,!F)->!G
-)"
-                  : R"(%p = "algebra.exec.group_scale"(%g,%s) {binding=@work,site="scale",parameters=[]} : (!G,!F)->!G
-)";
-          auto text =
-              R"(!T = !local.capability<"transcript:merlin3.bls12-381.fr64be/0">
-!G = !algebra.group<"bls12-381.g2">
-!F = !algebra.field<"bls12-381.fr">
-!I = !algebra.indices
-)" + mathematicalFixture(
-                  R"("local.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
-                      std::string(fixed ? "blst/resident/curve.scale" : "") +
-                      R"("} : ()->()
-"local.binding"() {sym_name="observe",contract="transcript.native.indexed.observe.data",arguments=["merlin3.bls12-381.fr64be/0","group:bls12-381.g2"],implementation=""} : ()->())",
-                  joined ? "%c:i1,%g:!G,%s:!F,%t:!T,%i:!I"
-                         : "%g:!G,%s:!F,%t:!T,%i:!I",
-                  joined ? "%c,%g,%s,%t,%i" : "%g,%s,%t,%i",
-                  joined ? "i1,!G,!F,!T,!I" : "!G,!F,!T,!I", "!T",
-                  scale +
-                      R"(%out = "crypto.exec.indexed_transcript_observe_data"(%t,%p,%i) {binding=@observe,site="observe",parameters=[")" +
-                      origin + R"("]} : (!T,!G,!I)->!T
-local.return %out : !T)",
-                  joined ? 5 : 4);
-          auto module = take(executableFixture(text, context));
+          auto module = take(executableFixture(
+              observationSource(context, fixed, joined), context));
           fillDeclarations(*module);
           auto proposal = proposePhysical(*module);
           if (fixed)
@@ -312,19 +334,21 @@ local.return %out : !T)",
           R"(!G = !algebra.group<"bls12-381.g2">
 !F = !algebra.field<"bls12-381.fr">
 !S = !data.sequence<!algebra.group<"bls12-381.g2">>
-)" + mathematicalFixture(
-              R"("local.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
+)" + scopedFixture(
+              R"("runtime.binding"() {sym_name="work",contract="curve.scale",arguments=["bls12-381.g2"],implementation=")" +
                   std::string(fixed ? "blst/resident/curve.scale" : "") +
                   R"("} : ()->()
-"local.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
-"local.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
-"local.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
-              "%g:!G,%s:!F", "%g,%s", "!G,!F", "ui64", R"(
-%p = "algebra.exec.group_scale"(%g,%s) {binding=@work,site="scale",parameters=[]} : (!G,!F)->!G
-%empty = "data.exec.sequence_empty"() {binding=@empty,site="empty",parameters=[]} : ()->!S
-%values = "data.exec.sequence_append"(%empty,%p) {binding=@append,site="append",parameters=[]} : (!S,!G)->!S
-%n = "data.exec.sequence_length"(%values) {binding=@length,site="length",parameters=[]} : (!S)->ui64
-local.return %n : ui64)",
+"runtime.binding"() {sym_name="empty",contract="sequence.empty",arguments=["group:bls12-381.g2"],implementation="native/sequence.empty"} : ()->()
+"runtime.binding"() {sym_name="append",contract="sequence.append",arguments=["group:bls12-381.g2"],implementation="native/sequence.append"} : ()->()
+"runtime.binding"() {sym_name="length",contract="sequence.length",arguments=["group:bls12-381.g2"],implementation="native/sequence.length"} : ()->())",
+              "%g:!G,%s:!F", "%g,%s", "!G,!F", "ui64",
+              scopedApply("work", "scale", "%g,%s", "!G,!F", "%p", "!G") +
+                  scopedApply("empty", "empty", "", "", "%empty", "!S") +
+                  scopedApply("append", "append", "%empty,%p", "!S,!G",
+                              "%values", "!S") +
+                  scopedApply("length", "length", "%values", "!S", "%n",
+                              "ui64") +
+                  scopedReturn("%n", "ui64"),
               2);
       auto module = take(executableFixture(text, context));
       fillDeclarations(*module);
@@ -410,13 +434,13 @@ local.return %n : ui64)",
         source("curve.scale", "bls12-381.g2", {}, 2), context));
     auto root = cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
     auto original =
-        *root.getBody().front().getOps<local::OperationBindingOp>().begin();
+        *root.getBody().front().getOps<runtime::BindingOp>().begin();
     auto *alias = original->clone();
     alias->setAttr("sym_name", StringAttr::get(&context, "alias"));
     root.getBody().front().push_back(alias);
     module->walk([&](Operation *op) {
       auto site = op->getAttrOfType<StringAttr>("site");
-      if (site && site.getValue() == "step1")
+      if (site && site.getValue() == "lc_5_step1")
         op->setAttr("binding", FlatSymbolRefAttr::get(&context, "alias"));
     });
     unsigned attempts = 0;

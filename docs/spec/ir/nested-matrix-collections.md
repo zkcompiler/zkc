@@ -27,10 +27,12 @@ independent of the outer index. The returned step denotes the admitted field mul
 either commutative operand order is allowed. Bounded neutral additions of zero
 and multiplications by one may surround its result, factors or state, or the
 outer returned inner result. The source reader reconstructs these identities
-independently. Every instruction, including unused work, must still belong to
-the admitted total scalar fragment; neutral result syntax cannot hide an effect
-or remove an implementation constraint.
-Additional ignored vector lanes and nested strict zips retain their admission.
+independently. Every scalar instruction must be total and contribute to that
+returned dataflow, including through a retained mathematical helper. An unused
+scalar calculation or helper invocation retains the ordered implementation.
+The reader still inspects every instruction: neutral result syntax cannot hide
+an effect or remove an implementation constraint. Additional ignored vector
+lanes and unused domain constructors retain their admission checks.
 
 If the outer extent is zero, the result is an empty vector. No inner domain
 constructor or shape check is evaluated. Otherwise, constructors are admitted in
@@ -50,27 +52,49 @@ matrix primitive. The selected native outcome interpretation maps those guards
 to the original finite admission rejection (`rejected:require`); a native
 `matrix-shape` backend failure is not substituted for that logical stop.
 
-Each synthesized admission guard retains the inner finite declaration's
-diagnostic location and its ordinary finite realization leaf site (`finite_N`
-in admission emission order). The existing local expansion record associates
-that leaf with the inner declaration and the original nested call path, relative
-to the outer collection. Previously expanded helper paths remain full paths;
-an encoded site is not reinterpreted as an authored leaf. Canonical local site
-encoding, its 128-byte hashing threshold, and cumulative origin budgets are
-shared with ordinary [local expansion](protocols.md#executable-local-calls-and-type-use).
-Final expansion prefixes later caller paths and retains the inner location.
-This is source provenance for diagnostics, not a cryptographic identity or a
-promise to preserve the generated control structure and every executable site.
+The default source form is an `exec.collect` whose scoped callback contains an
+`exec.fold`. Their data domains and callbacks remain explicit until finite
+preparation selects an algorithm. Optional analysis may inspect an
+invocation-local SSA view of those callbacks, including typed placeholders for
+nested computations. This view retains associations to the actual source
+operations, result coordinates and implementation constraints. It is neither a
+replacement program nor evidence for candidate correspondence.
 
-The preparation service retains an immutable source until an owned candidate
-has been admitted and independently checked. Its checker reads actual domain
-constructors, helper SSA, captures, scalar-law applications, seed and result,
-and actual candidate operands, branch captures and ordered guards. It does not
-consult the selector's recognition result. It reconstructs guard leaf identities,
-locations and occurrence records from the retained source and checks them
-against the candidate, including full paths when names are hashed. The checker
-also preserves every
-surrounding definition and its order, permits only used new primitive bindings,
-and replaces only the outer finite declaration with a same-name Local function.
-Ordinary finite realization consumes this accepted subject as its own source,
-while projection structurally preserves the resulting accepted Local bodies.
+Selection uses the caller's installed recipe inventory throughout the nested
+preparation transaction. Withholding the row or column recipe, disabling bulk
+selection, or retaining an implementation constraint keeps the checked ordered
+path. A pin preserves mathematical recognition but forbids replacing its actual
+invocation. Unsupported scalar operations likewise remain ordered.
+
+The candidate uses standard functions and CFG with explicit `exec` outcomes.
+An outlined nonempty arm contains the ordered inner admission followed by the
+matvec, fill and addition. The empty arm contains only empty-vector construction
+and control completion. Captures are distinct from returned values; ordinary
+function return packaging does not add a control-completion charge.
+
+Each synthesized admission guard retains the actual inner fold occurrence's
+diagnostic location and its ordinary finite admission leaf (`finite_N`, counting
+all inner admission primitives). Its executable name encodes the qualified outer
+occurrence and outer callback, followed by the inner fold site and step callback.
+The ordinary [site encoder](protocols.md#executable-local-calls-and-type-use)
+applies its 128-byte hashing threshold and the transaction's cumulative origin
+byte allowance. This retains source coordinates without a separate expansion
+record. Generated control shape and every executable site need not be identical
+across algorithms; these names are diagnostic provenance, not cryptographic
+identities.
+
+Preparation retains an immutable source until its owned candidate has been
+admitted and independently checked. The source reader reconstructs domain
+constructors, actual callback SSA, scalar laws, captures, seed, output and pins;
+it consumes no producer recognition view or recipe inventory. The candidate
+reader checks actual operands, both outlined arms, capture mapping, ordered
+guards, guard coordinates and locations, bulk orientation, seed fill and terminal
+result. The enclosing scoped checker accounts for retained definitions,
+generated functions and bindings, and the surrounding computation.
+
+Source interpretation debits the optional comparison allowance. Exhaustion is
+reported separately from mismatch and can trigger the transaction's checked
+ordered retry. Candidate construction, admission and checking retain their
+required limits. Failure never publishes a partially prepared source. This
+bounded native correspondence does not prove provider implementations, native
+resource equality, or a cryptographic protocol theorem.

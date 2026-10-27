@@ -2,15 +2,19 @@
 #include "Kernel/Support.h"
 #include "MathematicalSupport.h"
 #include "RealizationTrace.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/Exec/IR/ExecDialect.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/BitVector.h"
@@ -45,6 +49,11 @@ class Outliner {
   bool batching;
   OpBuilder builder;
   SmallVector<Attribute> calculations;
+  struct Calculation {
+    func::FuncOp function;
+    std::optional<kernel::CalculationGuard> guard;
+  };
+  SmallVector<Calculation> formed;
   uint64_t remaining = 1000000;
 
   LogicalResult participant(protocol_ir::ParticipantOp participant) {
@@ -141,7 +150,7 @@ class Outliner {
       }
       if (failed(demand(std::move(pending), needed, operations)))
         return failure();
-      auto guard = dyn_cast<local::GuardOp>(cut);
+      auto guard = dyn_cast<protocol_ir::GuardOp>(cut);
       if (needed.empty() && !guard) {
         updateOperands(cut);
         continue;
@@ -192,11 +201,11 @@ class Outliner {
       for (auto value : results)
         resultTypes.push_back(value.getType());
       builder.setInsertionPoint(participant);
-      auto function = local::FuncOp::create(
+      auto function = func::FuncOp::create(
           builder, cut->getLoc(), symbols.fresh(),
           builder.getFunctionType(inputTypes, resultTypes));
       function->setAttr(
-          "logical_origin",
+          "runtime.origin",
           builder.getArrayAttr({builder.getStringAttr(function.getSymName()),
                                 builder.getArrayAttr({})}));
       auto *entry = function.addEntryBlock();
@@ -208,12 +217,16 @@ class Outliner {
         auto *copy = builder.clone(*op, mapping);
         copy->removeAttr("site");
       }
-      if (guard)
-        builder.clone(*guard, mapping);
+
       SmallVector<Value> returned;
       for (auto value : results)
         returned.push_back(mapping.lookup(value));
-      local::ReturnOp::create(builder, cut->getLoc(), returned);
+      func::ReturnOp::create(builder, cut->getLoc(), returned);
+      std::optional<kernel::CalculationGuard> condition;
+      if (guard)
+        condition = kernel::CalculationGuard{
+            mapping.lookup(guard.getCondition()), guard.getSiteAttr()};
+      formed.push_back({function, condition});
       std::string site;
       if (guard)
         site = guard.getSite().str();
@@ -226,8 +239,9 @@ class Outliner {
       SmallVector<Value> arguments;
       for (auto value : captures)
         arguments.push_back(computed.lookupOrDefault(value));
-      auto call = local::CallOp::create(builder, cut->getLoc(), resultTypes,
-                                        arguments, function.getSymName(), site);
+      auto call = protocol_ir::LocalCallOp::create(
+          builder, cut->getLoc(), resultTypes, arguments, function.getSymName(),
+          site, participant.getRole());
       calculations.push_back(builder.getDictionaryAttr(
           {builder.getNamedAttr(
                "participant", FlatSymbolRefAttr::get(builder.getContext(),
@@ -257,7 +271,7 @@ public:
            bool batching)
       : unit(unit), symbols(symbols), batching(batching),
         builder(unit.getContext()) {}
-  LogicalResult run() {
+  LogicalResult run(MathematicalSelectionPolicy policy) {
     SmallVector<protocol_ir::ParticipantOp> participants;
     for (auto value :
          unit.getBody().front().getOps<protocol_ir::ParticipantOp>())
@@ -279,9 +293,10 @@ public:
     llvm::DenseSet<Attribute> generatedCallees;
     for (auto item : calculations)
       generatedCallees.insert(cast<DictionaryAttr>(item).get("callee"));
-    SmallVector<local::CallOp> calls;
+    SmallVector<protocol_ir::LocalCallOp> calls;
     for (auto participant : participants)
-      participant.walk([&](local::CallOp call) { calls.push_back(call); });
+      participant.walk(
+          [&](protocol_ir::LocalCallOp call) { calls.push_back(call); });
     for (auto call : calls) {
       if (!generatedCallees.contains(call.getCalleeAttr()))
         continue;
@@ -296,21 +311,25 @@ public:
       if (unused.none())
         continue;
       auto function =
-          cast<local::FuncOp>(outlinedSymbols.lookup(call.getCallee()));
-      auto returned = cast<local::ReturnOp>(function.getBody().front().back());
+          cast<func::FuncOp>(outlinedSymbols.lookup(call.getCallee()));
+      auto returned = cast<func::ReturnOp>(function.getBody().front().back());
       returned->eraseOperands(unused);
       function.setFunctionType(builder.getFunctionType(
           function.getFunctionType().getInputs(), types));
       builder.setInsertionPoint(call);
-      auto replacement =
-          local::CallOp::create(builder, call.getLoc(), types, call.getInputs(),
-                                call.getCalleeAttr(), call.getSiteAttr());
+      auto replacement = protocol_ir::LocalCallOp::create(
+          builder, call.getLoc(), types, call.getInputs(), call.getCalleeAttr(),
+          call.getSiteAttr(), call.getRoleAttr());
       unsigned next = 0;
       for (auto [index, result] : enumerate(call.getResults()))
         if (!unused[index])
           result.replaceAllUsesWith(replacement.getResult(next++));
       call.erase();
     }
+    for (auto &calculation : formed)
+      if (failed(kernel::formCalculation(calculation.function, unit, policy,
+                                         calculation.guard)))
+        return failure();
     return success();
   }
 };
@@ -354,13 +373,13 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       llvm::cl::desc("Dump mathematical lowering diagnostics and IR"),
       llvm::cl::init(false)};
   void getDependentDialects(DialectRegistry &registry) const final {
-    registry
-        .insert<local::LocalDialect, algebra::AlgebraDialect,
-                kernel::KernelDialect, exec::ExecDialect, func::FuncDialect>();
+    registry.insert<runtime::RuntimeDialect, algebra::AlgebraDialect,
+                    exec::ExecDialect, func::FuncDialect,
+                    cf::ControlFlowDialect, arith::ArithDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-math"; }
   StringRef getDescription() const final {
-    return "Form logical Kernel units at participant mathematics demands";
+    return "Form scoped computations at participant mathematics demands";
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -390,40 +409,18 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       return signalPassFailure();
     }
     scope.propose(policy);
-    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
+    auto expanded = protocol::expandScopedHelpers(source);
+    if (!expanded)
+      return signalPassFailure();
+    OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*expanded)->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
     OutlineSymbols symbols(unit);
-    if (failed(Outliner(unit, symbols, calculationBatching).run()))
+    if (failed(Outliner(unit, symbols, calculationBatching).run(policy)))
       return signalPassFailure();
-    llvm::DenseSet<Operation *> generated;
-    {
-      SymbolTable outlinedSymbols(unit);
-      auto record =
-          *unit.getBody().front().getOps<protocol_ir::ProjectionOp>().begin();
-      for (auto item : record.getCalculations()) {
-        auto reference =
-            cast<DictionaryAttr>(item).getAs<FlatSymbolRefAttr>("callee");
-        generated.insert(outlinedSymbols.lookup(reference.getValue()));
-      }
-    }
-    SmallVector<local::FuncOp> calculations;
-    for (auto &definition : unit.getBody().front())
-      if (generated.contains(&definition))
-        calculations.push_back(cast<local::FuncOp>(definition));
-    for (auto function : calculations)
-      if (failed(kernel::formCalculation(function, unit, policy)))
-        return signalPassFailure();
-    llvm::DenseSet<Operation *> mapHelpers;
-    if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
-      return signalPassFailure();
-    for (auto &declaration : make_early_inc_range(unit.getBody().front()))
-      if (isa<data::DomainOp, func::FuncOp>(declaration) &&
-          !mapHelpers.contains(&declaration))
-        declaration.erase();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(verify(*candidate)) ||
-        failed(verifyProjectionPreserved(source, *candidate, policy)))
+        failed(verifyProjectionPreserved(*expanded, *candidate, policy)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());

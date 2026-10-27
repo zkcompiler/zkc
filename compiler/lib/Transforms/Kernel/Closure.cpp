@@ -1,6 +1,7 @@
 #include "../HelperNormalization.h"
 #include "Support.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "llvm/ADT/DenseSet.h"
 

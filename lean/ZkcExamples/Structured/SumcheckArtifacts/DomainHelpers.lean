@@ -3,6 +3,7 @@ module
 public import Zkc.Construction.DomainBinding
 public import ZkcExamples.Structured.SumcheckUnitContracts
 public import ZkcExamples.Structured.MapPrefixContracts
+public import ZkcExamples.Structured.OriginalSumcheckChecks
 
 @[expose] public section
 
@@ -25,9 +26,11 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 Membership and exact bodies are checked in the actual program's definition list. -/
 structure Bodies (program : Structured.Program) : Prop where
   sumcheck : SumcheckUnitContracts.Bodies program.payload.definitions
-  prefixBodies : MapPrefixContracts.Bodies program.payload.definitions
-  check : BodyIn program.payload.definitions checkHelper checkBody
-  checkTable : BodyIn program.payload.definitions checkTableHelper checkTableBody
+  terminal : OriginalSumcheckLibrary.TerminalBodies program.payload.definitions
+
+theorem Bodies.check {program : Structured.Program} (bodies : Bodies program) :
+    BodyIn program.payload.definitions checkHelper checkBody :=
+  bodies.terminal.elim fun _ implementation => implementation.check
 
 /-- A uniform arithmetic theorem is transported through the exact same helper
 table, not through an equality of source and constructed operation signatures. -/
@@ -77,7 +80,7 @@ theorem table (raw : List F) (dimension columns : Nat)
   apply call_return program MapFirstBodies.tableHelper
     (inputs raw dimension columns) (inputs raw dimension columns) _ _ _ rfl rfl
   simpa only [shape, ite_true] using
-    MapFirstContracts.table_equation program.payload.linked bodies.first raw dimension columns
+    (SumcheckUnitContracts.first_laws program.payload.linked bodies).tableLaw raw dimension columns
       bounded dimensionBound columnsBound
 
 theorem first (raw : List F) (dimension columns : Nat) (challenge : F)
@@ -95,7 +98,7 @@ theorem first (raw : List F) (dimension columns : Nat) (challenge : F)
     (inputs (Zkc.Polynomial.Multilinear.restrictValues raw challenge) (dimension - 1) columns)
     _ _ _ rfl rfl
   simpa only [positive, ite_true] using
-    MapFirstContracts.first_equation program.payload.linked bodies.first raw dimension columns
+    (SumcheckUnitContracts.first_laws program.payload.linked bodies).first raw dimension columns
       challenge shape bounded
 
 theorem sums (raw : List F) (dimension columns : Nat)
@@ -118,15 +121,13 @@ theorem less (left right : Nat) (leftBound : left < indexLimit) (rightBound : ri
       .returned [.data (.boolean (decide (left < right)))] :=
   call_return program MapFirstBodies.lessHelper (.cons left (.cons right .nil))
     (.cons (decide (left < right)) .nil)
-    (MapFirstContracts.less_law program.payload.linked bodies.first left right leftBound rightBound)
+    (lessAll_bounded _ (SumcheckUnitContracts.first_laws program.payload.linked bodies).less
+      left right leftBound rightBound)
     _ _ rfl rfl
 
 omit bodies in
 theorem check
-    (prefixBodies : MapPrefixContracts.Bodies program.payload.definitions)
-    (firstBodies : MapFirstContracts.Bodies program.payload.definitions)
-    (checkBody : BodyIn program.payload.definitions checkHelper checkBody)
-    (tableBody : BodyIn program.payload.definitions checkTableHelper checkTableBody)
+    (terminal : OriginalSumcheckLibrary.TerminalBodies program.payload.definitions)
     (raw point : List F) (claim : F)
     (rawBound : raw.length < indexLimit) (pointBound : point.length < indexLimit) :
     Domain.callHelper (ringModel F G) program checkHelper.name [.data .boolean]
@@ -134,14 +135,16 @@ theorem check
         .data (.field "bls12-381.fr" claim)] =
       .returned [.data (.boolean (decide (HasShape raw point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))] := by
+  obtain ⟨bindings, implementation⟩ := terminal
+  obtain ⟨collectBindings, first⟩ := implementation.first
   apply call_return program checkHelper (checkInputs raw point claim)
     (boolResult (decide (HasShape raw point.length 1 ∧
       (Zkc.Polynomial.Multilinear.restrictPrefixValues raw point).sum = claim)))
     _ _ _ rfl rfl
-  exact (checkBody.invoke program.payload.linked (checkInputs raw point claim)).trans
+  exact (implementation.check.invoke program.payload.linked (checkInputs raw point claim)).trans
     (SumcheckHelperLaws.check_generic_body _
-      (MapPrefixContracts.laws_of_bodies program.payload.linked prefixBodies firstBodies)
-      (fun raw point claim => tableBody.invoke program.payload.linked (checkInputs raw point claim))
+      (MapPrefixContracts.laws_of_bodies program.payload.linked implementation.restriction first)
+      (fun raw point claim => implementation.checkTable.invoke program.payload.linked (checkInputs raw point claim))
       raw point claim rawBound pointBound)
 
 end ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers

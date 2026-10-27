@@ -2,6 +2,8 @@
 #include "MathematicalSupport.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "llvm/ADT/DenseMap.h"
@@ -20,6 +22,8 @@ class LoweringVerifier {
   SymbolTable sourceSymbols, symbols;
   size_t remaining = 1000000;
   bool batching = true;
+  std::optional<protocol::SourceExecutionClosure> closure;
+  llvm::DenseSet<Operation *> generatedRegions;
   LogicalResult refuse(Operation *op, StringRef detail) {
     return diagnostics::emit(op->emitOpError(),
                              "mathematical-lowering-preservation", detail);
@@ -30,25 +34,26 @@ class LoweringVerifier {
     remaining -= amount;
     return true;
   }
-  bool guard(local::GuardOp source, Operation *&cursor, Value condition) {
-    auto branch = dyn_cast_or_null<local::LocalIfOp>(cursor);
-    if (!branch || branch.getNumResults() ||
-        branch.getInputs() != ValueRange{condition})
+  bool guard(protocol_ir::GuardOp source,
+             const protocol::SourceExecutionStep &step, Value condition) {
+    if (!isa<exec::TestOp>(step.operation) || !step.outputs.empty() ||
+        ValueRange(step.inputs) != ValueRange{condition} ||
+        step.regions.size() != 2)
       return false;
-    if (!hasSingleElement(branch.getThenRegion()) ||
-        !hasSingleElement(branch.getElseRegion()))
+    func::FuncOp yesRegion = step.regions[0], noRegion = step.regions[1];
+    for (auto function : {yesRegion, noRegion}) {
+      if (sourceSymbols.lookup(function.getSymName()) ||
+          !generatedRegions.insert(function).second)
+        return false;
+    }
+    const auto &yes = closure->bodies.at(yesRegion.getSymName().str());
+    const auto &no = closure->bodies.at(noRegion.getSymName().str());
+    if (yes.size() != 1 || no.size() != 1 ||
+        !isa<exec::CompleteOp>(yes[0].operation) || !yes[0].inputs.empty())
       return false;
-    auto &yes = branch.getThenRegion().front();
-    auto &no = branch.getElseRegion().front();
-    if (!hasSingleElement(yes) || !hasSingleElement(no))
-      return false;
-    auto yield = dyn_cast<local::LocalYieldOp>(yes.back());
-    auto stop = dyn_cast<local::StopOp>(no.back());
-    if (!yield || yield.getNumOperands() || !stop ||
-        stop.getReason() != "reject" || stop.getSite() != source.getSite())
-      return false;
-    cursor = cursor->getNextNode();
-    return true;
+    auto stop = dyn_cast<exec::RejectOp>(no[0].operation);
+    return stop && stop.getReason() == "reject" &&
+           stop.getSite() == source.getSite();
   }
 
   LogicalResult participant(protocol_ir::ParticipantOp source,
@@ -131,12 +136,12 @@ class LoweringVerifier {
       llvm::sort(needed, [&](Operation *a, Operation *b) {
         return order[a] < order[b];
       });
-      auto sourceGuard = dyn_cast<local::GuardOp>(action);
+      auto sourceGuard = dyn_cast<protocol_ir::GuardOp>(action);
       if (!needed.empty() || sourceGuard) {
-        auto call = dyn_cast_or_null<local::CallOp>(cursor);
-        auto function = call ? dyn_cast_or_null<local::FuncOp>(
+        auto call = dyn_cast_or_null<protocol_ir::LocalCallOp>(cursor);
+        auto function = call ? dyn_cast_or_null<func::FuncOp>(
                                    symbols.lookup(call.getCallee()))
-                             : local::FuncOp();
+                             : func::FuncOp();
         if (!function || !generated.contains(function) ||
             !invoked.insert(function).second)
           return refuse(target,
@@ -145,10 +150,11 @@ class LoweringVerifier {
         // Splitting a valid calculation changes local invocations and finite
         // costs.
         if (!sourceGuard) {
-          auto next = dyn_cast_or_null<local::CallOp>(call->getNextNode());
-          auto nextFunction = next ? dyn_cast_or_null<local::FuncOp>(
+          auto next =
+              dyn_cast_or_null<protocol_ir::LocalCallOp>(call->getNextNode());
+          auto nextFunction = next ? dyn_cast_or_null<func::FuncOp>(
                                          symbols.lookup(next.getCallee()))
-                                   : local::FuncOp();
+                                   : func::FuncOp();
           if (nextFunction && generated.contains(nextFunction))
             return refuse(call, "multiple calculations at one cut");
         }
@@ -156,36 +162,45 @@ class LoweringVerifier {
           return refuse(call, "guard invocation changed its occurrence");
         llvm::DenseMap<Value, Value> localValues;
         llvm::DenseSet<Value> usedCaptures;
+        llvm::DenseSet<Value> captureArguments;
         for (auto [input, argument] :
-             zip(call.getInputs(), function.getArguments())) {
+             zip(call.getInputs(), function.getArguments().drop_front())) {
           auto value = sourceValues.lookup(input);
           if (!value || !localValues.try_emplace(value, argument).second)
             return refuse(call, "calculation changed or duplicated a capture");
+          captureArguments.insert(argument);
         }
         auto lookup = [&](Value value) -> Value {
           auto mapped = localValues.lookup(value);
-          if (mapped && isa<BlockArgument>(mapped))
+          if (mapped && captureArguments.contains(mapped))
             usedCaptures.insert(mapped);
           return mapped;
         };
-        auto *instruction = &function.getBody().front().front();
+        const auto &steps = closure->bodies.at(function.getSymName().str());
+        unsigned instruction = 0;
         if (!needed.empty()) {
-          auto kernelCall = dyn_cast<kernel::CallOp>(instruction);
-          auto entry = kernelCall ? kernel::resolve(kernelCall, kernelSymbols)
+          if (steps.empty())
+            return refuse(call, "missing mathematical invocation");
+          const auto &step = steps[instruction];
+          auto kernelCall = dyn_cast<exec::ComputeOp>(step.operation);
+          auto entry = kernelCall ? kernelCall.resolveCallee(kernelSymbols)
                                   : func::FuncOp();
           auto unit = entry ? dyn_cast<mlir::ModuleOp>(entry->getParentOp())
                             : mlir::ModuleOp();
           if (!unit || !generatedKernels.insert(unit).second ||
               sourceSymbols.lookup(SymbolTable::getSymbolName(unit)) ||
-              kernelCall.getInputs() != function.getArguments() ||
+              kernelCall.getInputs() != function.getArguments().drop_front() ||
               failed(kernel::verifyDependencies(before, unit)))
             return refuse(call, "missing or changed actual numerical closure");
           for (auto &value : localValues) {
             auto argument = dyn_cast<BlockArgument>(value.second);
             if (!argument || argument.getOwner() != &function.getBody().front())
               return refuse(call, "invalid capture mapping");
-            value.second = entry.getArgument(argument.getArgNumber());
+            value.second = entry.getArgument(argument.getArgNumber() - 1);
           }
+          captureArguments.clear();
+          captureArguments.insert(entry.getArguments().begin(),
+                                  entry.getArguments().end());
           auto *mathematics = &entry.front().front();
           for (auto *op : needed) {
             if (!charge(1 + op->getNumOperands() + op->getNumResults()))
@@ -224,20 +239,19 @@ class LoweringVerifier {
             }
             mathematics = mathematics->getNextNode();
           }
-          if (any_of(kernelCall.getResults(),
+          if (any_of(step.outputs,
                      [](Value value) { return value.use_empty(); }))
             return refuse(call, "unused extra numerical output");
           auto returned = dyn_cast_or_null<func::ReturnOp>(mathematics);
           if (!returned || returned->getNextNode() ||
-              returned.getNumOperands() != kernelCall.getNumResults())
+              returned.getNumOperands() != step.outputs.size())
             return refuse(
                 call, "numerical entry contains extra work or changed outputs");
           // The entry's actual return operands determine the wrapper values.
           // This detects same-typed result permutations and hidden/lost
           // escapes.
           llvm::DenseMap<Value, Value> returnedValues;
-          for (auto [value, result] :
-               zip(returned.getOperands(), kernelCall.getResults()))
+          for (auto [value, result] : zip(returned.getOperands(), step.outputs))
             if (!returnedValues.try_emplace(value, result).second)
               return refuse(call, "duplicated numerical return coordinate");
           if (sourceGuard) {
@@ -248,17 +262,22 @@ class LoweringVerifier {
           for (auto &value : localValues)
             if (auto actual = returnedValues.lookup(value.second))
               value.second = actual;
-          instruction = kernelCall->getNextNode();
+          ++instruction;
         }
-        if (sourceGuard && !guard(sourceGuard, instruction,
-                                  lookup(sourceGuard.getCondition())))
-          return refuse(call,
-                        "calculation changed the guard condition or rejection");
-        auto returned = dyn_cast_or_null<local::ReturnOp>(instruction);
-        if (!returned || instruction->getNextNode() ||
+        if (sourceGuard) {
+          if (instruction >= steps.size() ||
+              !guard(sourceGuard, steps[instruction++],
+                     lookup(sourceGuard.getCondition())))
+            return refuse(
+                call, "calculation changed the guard condition or rejection");
+        }
+        if (instruction >= steps.size() ||
+            !isa<exec::ReturnOp>(steps[instruction].operation) ||
+            instruction + 1 != steps.size() ||
             usedCaptures.size() != call.getNumOperands())
           return refuse(call,
                         "calculation contains extra work or unused captures");
+        auto returned = cast<exec::ReturnOp>(steps[instruction].operation);
         llvm::DenseMap<Value, Value> results;
         for (auto *op : needed)
           for (Value result : op->getResults())
@@ -266,7 +285,7 @@ class LoweringVerifier {
               results[localValues.lookup(result)] = result;
         llvm::DenseSet<Value> exported;
         for (auto [value, output] :
-             zip(returned.getInputs(), call.getResults())) {
+             zip(returned.getValues(), call.getResults())) {
           auto originalValue = results.lookup(value);
           if (!originalValue || !exported.insert(originalValue).second ||
               output.use_empty())
@@ -322,6 +341,10 @@ public:
       if (walk.wasInterrupted())
         return refuse(after, "lowering comparison work limit exceeded");
     }
+    auto admitted = protocol::readSourceExecutionClosure(after);
+    if (!admitted)
+      return diagnostics::emit(after.emitOpError(), admitted.takeError());
+    closure = std::move(*admitted);
     auto records = after.getBody().front().getOps<protocol_ir::ProjectionOp>();
     if (!hasSingleElement(records))
       return refuse(after, "lowering requires one projection record");
@@ -335,21 +358,21 @@ public:
         return refuse(record, "calculation callee is not unique");
       if (sourceSymbols.lookup(ref.getValue()))
         return refuse(record, "calculation callee must be fresh");
-      auto local = dyn_cast<local::FuncOp>(function);
-      if (!local || !hasSingleElement(local.getBody()))
-        return refuse(record, "calculation must have one local body");
+      auto local = dyn_cast<func::FuncOp>(function);
+      if (!local || !protocol::isScopedExecutionFunction(local))
+        return refuse(record, "calculation must have an admitted scoped body");
       Builder builder(after.getContext());
       auto origin = builder.getArrayAttr(
           {builder.getStringAttr(ref.getValue()), builder.getArrayAttr({})});
       const StringRef identityAttributes[] = {"sym_name", "function_type",
-                                              "logical_origin"};
+                                              "runtime.origin", "no_inline"};
       if (function->getAttrs().size() != std::size(identityAttributes) ||
           !all_of(function->getAttrs(),
                   [&](NamedAttribute attribute) {
                     return is_contained(identityAttributes,
                                         attribute.getName().getValue());
                   }) ||
-          function->getAttr("logical_origin") != origin)
+          function->getAttr("runtime.origin") != origin)
         return refuse(function, "calculation changed its generated identity");
     }
     unsigned count = 0;
@@ -383,11 +406,12 @@ public:
       if (name && !sourceSymbols.lookup(name) &&
           !generated.contains(&definition) &&
           !recipeBindings.contains(&definition) &&
-          !generatedKernels.contains(&definition))
+          !generatedKernels.contains(&definition) &&
+          !generatedRegions.contains(&definition))
         return refuse(&definition, "lowering added an untracked declaration");
     }
     llvm::DenseMap<Operation *, unsigned> uses;
-    after.walk([&](local::CallOp call) {
+    after.walk([&](protocol_ir::LocalCallOp call) {
       auto *callee = symbols.lookup(call.getCallee());
       if (generated.contains(callee))
         ++uses[callee];

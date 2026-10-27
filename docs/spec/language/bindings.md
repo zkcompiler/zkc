@@ -70,7 +70,7 @@ atomic constructors check their explicit admitted identity sets.
 A physical type adds one outer `@representation`. That representation must
 support the complete logical application, including every nested type and natural
 argument. Missing support is a physical-selection refusal, not a malformed
-logical type. MLIR retains both parts in `!plan.data<logical, representation>`;
+logical type. MLIR retains both parts in `!runtime.represented<logical, representation>`;
 domain-owned logical MLIR types preserve their static arguments before planning.
 The [nominal collection types](../ir/iteration.md) map directly to the existing
 `vector:F`, `groups:G`, `indices`, `matrix:F` and `field_array<F,N>` constructors.
@@ -97,10 +97,15 @@ Source names and direct kernel use obey the Language profile's permissions and
 installed source stage. Catalog presence alone cannot expose construction-only
 transcript operations or establish construction provenance.
 
-In MLIR, `local.binding` is a symbol declaration. Mathematical dialect
-operations reference it with a `binding` symbol attribute. This includes
-operations with no operands: their result domain is explicitly selected.
-The common-protocol interaction and role-projection structure is unchanged.
+In MLIR, `runtime.binding` is a symbol declaration for an ordered native
+operation. Domain-specific executable operations reference it with a `binding`
+symbol attribute, including operations with no operands whose result domain is
+explicitly selected. Pure Algebra/Poly mathematics does not require a Runtime
+binding. The declaration is shared by logical and physical execution profiles;
+it does not establish installation or reached invocation authority. A Protocol
+module fixes the declaration's stage. A `builtin.module` admits a well-formed
+logical or physical declaration; the selected execution profile must then check
+its stage and actual invocation ports, including both conversion endpoints.
 
 The finite numerical installation also admits `koala-bear` field, vector, matrix,
 coefficient-polynomial and quadratic-round carriers with Plonky3 implementations.

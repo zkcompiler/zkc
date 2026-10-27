@@ -14,41 +14,9 @@ namespace mlir {
 class SymbolTableCollection;
 } // namespace mlir
 namespace zkc::algebra {
-class MapRealizeOp;
-/// Admit and collect the complete scalar helper closure of retained maps.
-/// The expanded operation count shares the existing helper admission bound.
-mlir::LogicalResult
-collectMapHelpers(mlir::Operation *owner,
-                  llvm::DenseSet<mlir::Operation *> &helpers,
-                  uint64_t &expandedOperations);
-mlir::LogicalResult
-collectMapHelpers(mlir::Operation *owner,
-                  llvm::DenseSet<mlir::Operation *> &helpers);
 // Finite data formation; arrays acquire polynomial meaning only through poly.
 inline constexpr uint64_t MaximumArrayLength = 1048576;
 bool isFieldArray(mlir::Type type);
 bool isCanonicalFieldLiteral(llvm::StringRef field, llvm::StringRef value);
-/// The one admitted scalar field of a checked pointwise map signature, or a
-/// null type. Rowwise inputs and the single result are dynamic vectors
-/// (`!algebra.field_vector<"F">`); the other inputs are scalars `F`. At least
-/// one input must be rowwise. This is formation only; the scalar formula is
-/// checked by MapFormulas and by its realization.
-mlir::Type mapField(mlir::FunctionType type, llvm::ArrayRef<bool> rowwise);
-/// Formation of the scalar formulas that checked maps read. Every operation of
-/// the mapped helper and of each helper it calls, used or not, must be a Ring
-/// operation in the map's field or a call whose operands and results are that
-/// field. Each helper body is read once per field for one verification, without
-/// expansion; a refusal ends that verification. The caller first admits the
-/// helper closure's structure and bounds. Ring depth and node limits apply to
-/// the expanded formula during preparation.
-class MapFormulas {
-public:
-  explicit MapFormulas(mlir::SymbolTableCollection &tables) : tables(tables) {}
-  mlir::LogicalResult verify(MapRealizeOp map);
-
-private:
-  mlir::SymbolTableCollection &tables;
-  llvm::DenseSet<std::pair<mlir::Operation *, mlir::Type>> admitted;
-};
 } // namespace zkc::algebra
 #endif

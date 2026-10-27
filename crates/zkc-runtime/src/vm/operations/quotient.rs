@@ -4,6 +4,20 @@ use Type::*;
 
 const CONTRACTS: &[Contract] = &[
     Contract::new(
+        "quotient.prepare_matrix",
+        (
+            &[Indices, Index, Index, Index, Index, Index],
+            &[QuotientMatrix],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&["native/quotient.prepare_matrix"]),
+    Contract::new(
+        "quotient.matvec",
+        (&[QuotientMatrix, Indices], &[Indices], AttributeRule::None),
+    )
+    .implemented_by(&["native/quotient.matvec"]),
+    Contract::new(
         "quotient.project",
         (&[Indices, Index, Index], &[Indices], AttributeRule::None),
     )

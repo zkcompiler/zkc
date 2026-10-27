@@ -27,16 +27,12 @@ class RealizationEmitter {
   using Key = std::tuple<std::string, std::vector<std::string>, std::string>;
   std::map<Key, std::string> bindings;
 
-  mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
-                                  const protocol::BindingApplication &);
-
 public:
   RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
+  void reserveNames(mlir::Operation *source);
 
-  mlir::Operation *emit(mlir::OpBuilder &, mlir::Location, llvm::StringRef site,
-                        const protocol::BindingApplication &,
-                        mlir::ValueRange inputs, mlir::TypeRange outputs,
-                        llvm::ArrayRef<std::string> parameters = {});
+  mlir::FlatSymbolRefAttr binding(mlir::OpBuilder &, mlir::Location,
+                                  const protocol::BindingApplication &);
 };
 } // namespace zkc::mathematical
 

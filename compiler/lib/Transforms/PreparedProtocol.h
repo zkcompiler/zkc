@@ -22,6 +22,10 @@ public:
           RealizationTrace *trace = nullptr);
   mlir::OwningOpRef<mlir::ModuleOp> snapshot() const;
   mlir::OwningOpRef<mlir::ModuleOp> project(bool simplify) &&;
+  // Role-free helpers have no participant projection. Admit their closed
+  // declaration inventory, expand scoped calls with the independent checker,
+  // and change only the profile before shared numerical/physical selection.
+  mlir::OwningOpRef<mlir::ModuleOp> execute() &&;
 };
 } // namespace zkc::mathematical
 #endif

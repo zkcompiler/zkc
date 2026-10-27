@@ -155,13 +155,16 @@ def main():
         "lib/Program/Admission.cpp": "ZkcProgram",
         "lib/Dialect/Algebra/IR/Mathematical.cpp": "ZkcIR",
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
+        "lib/Dialect/Exec/Execution.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ExecutionComparison.cpp": "ZkcIR",
+        "lib/Dialect/Exec/ControlCursor.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
-        "lib/Dialect/Kernel/IR/Kernel.cpp": "ZkcIR",
+        "lib/Dialect/Exec/IR/Computation.cpp": "ZkcIR",
         "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
-        "lib/Transforms/Kernel/Schedule.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/ScopedSchedule.cpp": "ZkcTransforms",
         "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
@@ -170,27 +173,32 @@ def main():
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},
-        "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h"},
+        "ZkcProgram": {ROOT / "lib/Program/EncodingLimits.h", ROOT / "lib/Program/Structure.h", ROOT / "lib/Program/ResourceOrigins.h"},
         "ZkcIR": {ROOT / "lib/Dialect/Protocol/IR/ResourceOrigins.h", ROOT / "lib/Dialect/Verification.h", ROOT / "lib/Dialect/DomainVerification.h"},
     }
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
+    private_headers["ZkcIR"].add(ROOT / "lib/Dialect/Exec/ExecutionDefinitions.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
-    private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
+    private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/EmissionBudget.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcTransforms"] = {
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
-        ROOT / "lib/Target/AggregateLayouts.h",
+        ROOT / "lib/Target/AggregateLayouts.h", ROOT / "lib/Target/ExecutionPorts.h",
         ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
+        ROOT / "lib/Transforms/ScopedCandidate.h",
+        ROOT / "lib/Transforms/ScopedCallback.h",
+        ROOT / "lib/Transforms/ScopedSubstitution.h",
+        ROOT / "lib/Transforms/ScopedFinite.h",
+        ROOT / "lib/Transforms/ScopedCollectionSum.h",
+        ROOT / "lib/Transforms/ScopedNestedContraction.h",
+        ROOT / "lib/Transforms/ScopedPreparation.h",
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
         ROOT / "lib/Transforms/HelperNormalization.h",
-        ROOT / "lib/Transforms/AlgorithmSupport.h",
         ROOT / "lib/Transforms/ComputationSelection.h",
         ROOT / "lib/Transforms/ComputationEquations.h",
-        ROOT / "lib/Transforms/NestedContractionVerification.h",
-        ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
         ROOT / "lib/Transforms/CollectFold.h",
         ROOT / "lib/Transforms/FinitePreparation.h",
@@ -200,8 +208,6 @@ def main():
         ROOT / "lib/Transforms/RealizationEmission.h",
         ROOT / "lib/Transforms/MathematicalRecipes.h",
         ROOT / "lib/Transforms/LaneRealization.h",
-        ROOT / "lib/Transforms/MapOccurrence.h",
-        ROOT / "lib/Transforms/NumericalLowering.h",
         ROOT / "lib/Transforms/NumericalSelection.h",
         ROOT / "lib/Transforms/MathematicalComparison.h",
         ROOT / "lib/Transforms/MathematicalValues.h",
@@ -230,7 +236,10 @@ def main():
             assert path.is_file(), f"nonexistent header: {path}"
             assert path not in header_owners, f"multiple owners: {path}"
             header_owners[path] = name
-    assert set(header_owners) == {p for p in (ROOT / "include/zkc").rglob("*") if p.suffix in (".h", ".def")} | set((ROOT / "lib").rglob("*.h")), "unowned headers"
+    actual_headers = {p for p in (ROOT / "include/zkc").rglob("*") if p.suffix in (".h", ".def")} | set((ROOT / "lib").rglob("*.h"))
+    assert set(header_owners) == actual_headers, (
+        f"unowned headers: {sorted(str(p.relative_to(ROOT)) for p in actual_headers - set(header_owners))}; "
+        f"absent headers: {sorted(str(p.relative_to(ROOT)) for p in set(header_owners) - actual_headers)}")
     for path, owner in extra_headers.items():
         header_owners[path] = owner
         if path.suffix != ".td":
@@ -384,12 +393,14 @@ def main():
         ROOT / "include/zkc/Analysis/Computation.h",
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
-            "CollectionRealization", "RealizationEmission", "RecipeRealizations")),
+            "CollectionRealization", "RealizationEmission",
+            "ScopedFinite", "ScopedPreparation")),
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",
-                   "MathematicalComparison", "NestedContractionVerification",
-                   "HelperNormalizationVerification", "AlgorithmVerification",
-                   "Kernel/RecipeVerification"):
+                   "MathematicalComparison",
+                   "HelperNormalizationVerification",
+                   "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
+                   "Kernel/RecipeVerification", "Kernel/ScopedVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

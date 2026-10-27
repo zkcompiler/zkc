@@ -179,6 +179,8 @@ with case('unused-absent-capture-zero-optional-state-and-outside-roster'):
     assert run(identity, ['3', '7', None]) == returned(['7'])
     assert run(identity, ['0', None, None]) == returned([None])
     assert run(identity, [None, None, None], 'Q', capacity=4) == returned([None])
+    run(identity, [None, None, None], 'Q', capacity=3,
+        refusal='structured-reference-capacity')
     replacement = module(protocol('main', repeat(yielded='%capture')))
     assert run(replacement, ['2', '7', '19']) == returned(['19'])
     native(identity, 'outside-repeat')
@@ -484,7 +486,13 @@ with case('service-cannot-be-carried-even-at-maximum-zero'):
     refuse(source)
 
 with case('helper-stops-inside-repeat-keep-raw-helper-label'):
-    helper = 'local.func @stop() attributes {logical_origin=["stop",[]]} { "local.stop"() {reason="abort",site="raw"} : ()->() }'
+    helper = '''func.func @stop(%scope:!runtime.scope)->!exec.outcome<> attributes {no_inline,runtime.origin=["stop",[]]} {
+      %stop = "exec.reject"(%scope) {reason="abort",site="raw"} : (!runtime.scope)->!exec.stop
+      cf.br ^stopped(%stop : !exec.stop)
+    ^stopped(%reason:!exec.stop):
+      %failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<>
+      func.return %failure : !exec.outcome<>
+    }'''
     body = repeat('"protocol.local_call"() {callee=@stop,role="P",site="call"} : ()->()')
     child = protocol('child', body)
     caller = protocol('main', '%r = "protocol.apply"(%n,%x,%c) {callee=@child,roles=["P","Q"],site="A"} : (ui64,!F,!F)->!F')
@@ -502,8 +510,8 @@ for label, old, new, diagnostic, invariant in [
     ('missing-maximum', ',maximum=4:i64', '', 'structured-source-original', "'protocol.repeat' op requires attribute 'maximum'"),
     ('missing-scope', ',carried_roles=[["P"]]', '', 'structured-source-original', "'protocol.repeat' op requires attribute 'carried_roles'"),
     ('callback-extra-argument', '%capture:!F', '%capture:!F,%extra:!F', 'mathematical-formation', None),
-    ('callback-condition', '"protocol.yield"(%s) : (!F)', '"local.condition"(%s) : (!F)', 'structured-source-original', "'local.condition' op expects parent op 'local.for'"),
-    ('callback-stop', '"protocol.yield"(%s) : (!F)->()', '"local.stop"() {reason="abort",site="stopped"} : ()->()', 'mathematical-formation', 'repeat must yield its carried interface'),
+    ('callback-return', '"protocol.yield"(%s) : (!F)', '"func.return"(%s) : (!F)', 'structured-source-original', "'func.return' op expects parent op 'func.func'"),
+    ('callback-stop', '"protocol.yield"(%s) : (!F)->()', '"exec.stop"() {reason="abort"} : ()->!exec.stop\n"protocol.yield"(%s) : (!F)->()', 'mathematical-formation', None),
     ('disjoint-capture', '["P"], ["P"], ["P"]', '["P"], ["P"], ["Q"]', 'mathematical-formation', None),
 ]:
     with case(label + '-zero-maximum'):

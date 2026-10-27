@@ -181,6 +181,46 @@ def nestedHelper : CheckedDefinition :=
   ⟨"nested", .math, [.boolean], [], nestedBody.erase, nestedBody, nestedBody.elaborate_erase⟩
 example : defaultRelationHelper 2 [nestedHelper] nestedHelper.helper = false := by decide +kernel
 
+-- Collection admission visits both callbacks, including a predicate that could
+-- prevent every body invocation at runtime. Callback kinds are checked too.
+def collectionSpec (kind : HelperKind) : CollectSpec :=
+  ⟨DomainSpec.elements "items" [.sequence .index] (.sequence .index) .here,
+    .sequence .index, [], "element", "predicate", kind⟩
+
+def collectionCaller (kind : HelperKind) : CheckedDefinition :=
+  let body : Zkc.Source.Region dialect [.sequence .index] [.sequence .index] :=
+    .letOp (.collect (collectionSpec kind)) (.cons .here .nil) .nil
+      (.ret (.cons .here .nil))
+  ⟨"collection", .math, _, _, body.erase, body, body.elaborate_erase⟩
+
+def elementCallback (kind : HelperKind) (observed : Bool) : CheckedDefinition :=
+  let result : Zkc.Source.Region dialect [.index, .sequence .index] [.index] :=
+    .ret (.cons .here .nil)
+  let body := if observed then .letOp (.mark "element") .nil .nil result else result
+  ⟨"element", kind, _, _, body.erase, body, body.elaborate_erase⟩
+
+def predicateCallback (kind : HelperKind) (observed : Bool) : CheckedDefinition :=
+  let result : Zkc.Source.Region dialect [.index, .sequence .index] [.boolean] :=
+    .letOp (.booleanConstant false) .nil .nil (.ret (.cons .here .nil))
+  let body := if observed then .letOp (.mark "predicate") .nil .nil result else result
+  ⟨"predicate", kind, _, _, body.erase, body, body.elaborate_erase⟩
+
+example : defaultRelationHelper 3
+    [collectionCaller .math, elementCallback .math false, predicateCallback .math false]
+    (collectionCaller .math).helper = true := by decide +kernel
+example : defaultRelationHelper 3
+    [collectionCaller .math, elementCallback .math true, predicateCallback .math false]
+    (collectionCaller .math).helper = false := by decide +kernel
+example : defaultRelationHelper 3
+    [collectionCaller .math, elementCallback .math false, predicateCallback .math true]
+    (collectionCaller .math).helper = false := by decide +kernel
+example : defaultRelationHelper 3
+    [collectionCaller .local, elementCallback .local false, predicateCallback .local false]
+    (collectionCaller .local).helper = false := by decide +kernel
+example : defaultRelationHelper 3
+    [collectionCaller .math, elementCallback .math false]
+    (collectionCaller .math).helper = false := by decide +kernel
+
 example : reservedIdentifier ⟨"gaps.relative_distance", 1⟩ = true := rfl
 example : reservedIdentifier ⟨"producers.compiled", 1⟩ = true := rfl
 

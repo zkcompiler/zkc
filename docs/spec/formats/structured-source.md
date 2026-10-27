@@ -18,6 +18,24 @@ The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
 
+Ordinary source helpers use scoped `func.func`/CF bodies. Before exporting
+their logical `local` meaning, the execution reader checks the complete actual
+closure, scope ownership, outcome dispatch, failure propagation and transfer
+cleanup. The exporter consumes that checked control association and the
+original SSA operands. It does not infer a body from `runtime.origin`, strip
+scope ports from an unchecked function, or rebuild a Local-dialect module.
+Private outlined control bodies become closed formal regions. Distinct formal
+arguments remain distinct even when their caller's actual arguments alias.
+Invariant loop captures retained by the parent scope are explicitly forwarded
+in the formal region's result tuple.
+
+Supported `exec.compute` and ordered `exec.fold` occurrences retain their actual
+mathematical helper or domain/callback references. Their logical signatures
+become private `realize`, `finite` or `collect` declarations in the export; generated names
+identify these declarations and supply no mathematical evidence. The source
+hash still identifies the original, unexpanded MLIR. This checked export and
+independent Lean admission are not a native execution correspondence theorem.
+
 ## Envelope and types
 
 The current format is an exact tagged array, `zkc.structured-source/0`:
@@ -32,8 +50,10 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
-All ten slots are required, including empty tables. Each declaration category preserves its native encounter
-order. There is no cross-category declaration-order field.
+All ten slots are required, including empty tables. Each declaration category
+preserves its native encounter order. Private computation declarations derived
+from scoped bodies follow the native declarations in reader encounter order.
+There is no cross-category declaration-order field.
 
 | Type | Native interpretation |
 |---|---|
@@ -88,8 +108,12 @@ unlisted operations require a separately specified extension.
 ## Declarations
 
 ```text
-["domain", name, input-types, ["elements", container-argument]]
-["domain", name, input-types, ["indices", container-argument, 0]]
+["domain", name, input-types, constructors, returned-domain]
+constructor := ["elements", container-argument]
+             | ["indices", container-argument, 0]
+             | ["range", lower-argument, upper-argument]
+             | ["zip", domain-references]
+             | ["product", domain-references]
 
 ["function", name, kind, visibility, input-types, output-types,
  interface, preconditions, origin, body]
@@ -104,20 +128,28 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 
 ["finite", name, visibility, input-types, output-types,
  domain-name, step-name, predicate-name]
+["collect", name, visibility, input-types, output-types,
+ domain-name, body-name, predicate-name]
 
 ["realize", name, input-types, output-types, math-helper]
 ["map", name, input-types, output-types, math-helper, rowwise]
 ```
 
-Finite domains select an exact field-vector or sequence input. `elements`
-retains its ordered elements and `indices` enumerates its ordered positions.
-Both check length representability before iteration, including empty bodies.
+Domain data references select exact input arguments. Domain references use a
+separate de Bruijn context: zero is the most recently constructed descriptor.
+Each constructor binds one descriptor; `returned-domain` selects the actual
+`data.domain_yield` operand after the complete sequence. At least one constructor
+is required. Every stored constructor contributes to the instruction budget,
+including unused ones, and a domain has at most 4096 constructors.
 
-A domain body consists of exactly one supported constructor and its matching
-yield. Additional constructors are refused, including unused ones. The selected
-input is a vector; other inputs remain part of the domain and callback ABI.
-Elements yield one field value; indices yield one index. Only axis zero is
-supported.
+Elements and indices select field vectors or sequences and check u64 length
+representability. Only axis zero is admitted. Ranges check both index bounds
+before enumerating the half-open interval; reversed bounds yield an empty list.
+Strict zip requires equal lengths and concatenates complete item tuples. Products
+enumerate the last factor fastest. Both require at least one descriptor and
+preserve argument order, duplicate factors and unused domain constructors.
+Admission of the complete sequence precedes the first callback. Matrix domains
+and other collection types remain outside this export profile.
 
 Function `kind` is `protocol`, `math` or `local`; visibility is `public` or
 `private`. Each protocol has 1 to 16 unique nonempty native role strings. Every
@@ -175,7 +207,7 @@ unnamed statement supplies no exact selected-target evidence. Component
 application does not turn contracts into entry statements. Its actual body and
 role substitution determine invocation bindings.
 
-Operation bindings are non-callable metadata for `local.binding`, retained and
+Operation bindings are non-callable metadata for `runtime.binding`, retained and
 checked even when unused. The exact represented native attributes are
 `sym_name`, `contract`, `arguments`, and `implementation`; no signature, body,
 visibility, or execution parameters are invented for them. Names match ASCII
@@ -232,22 +264,25 @@ attribute, including an explicit `public`; its retained visibility is the
 default `public`. The general function record does not override that formation
 restriction or impose the Math helper's private-only rule on protocol calls.
 
-A finite declaration represents `local.finite_fold`. The empty predicate name
-means no predicate. There is no implicit Unit leaf for an empty state or result.
-The [finite ABI](../ir/finite.md) is retained: operands are `A ++ S ++ C`, the
-step receives `S ++ I ++ A ++ C`, and the predicate receives `I ++ A ++ C`.
-Callbacks are private and have the required Math or Local kind.
+A finite declaration records an admitted `exec.fold` occurrence, and a collect
+declaration records `exec.collect`. Their keys are private export-local identities
+associated with actual occurrences, not native declarations inferred from names.
+The empty predicate name means no predicate. The [finite ABI](../ir/finite.md)
+retains `A ++ S ++ C` for folds and `A ++ C` for collections. The step receives
+`S ++ I ++ A ++ C`; a collection body and predicate receive `I ++ A ++ C`.
+`I` is the complete ordered tuple of domain items. Callbacks are actual private
+scoped functions whose admitted CFG is exported through its data arguments and
+successful outcome payload. A collection returns one field vector or sequence;
+its body returns that collection's single element type. False predicates skip
+an item. Predicate and body stops retain the first reached stopping reason.
 
-Realization and map records retain original `local.realize` and
-`algebra.map_realize` declarations. Their exact native attributes are `sym_name`,
-`function_type`, `helper`, and, only for map, `rowwise`. They have no operands,
-results or regions. No visibility, origin, premise, site or function body is
-invented. The helper is an exact flat reference to a private defined Math sibling.
-The wire retains nonempty symbol strings within its 512-byte bound. Native Local
-formation additionally requires preparation names to match ASCII
-`[A-Za-z_][A-Za-z0-9_.-]*` within 128 bytes; the separate binding limit is 256.
-Math helper names retain the ordinary Math symbol bounds. Every declaration is
-checked, including unused ones.
+A realization record associates an actual `exec.compute` occurrence with its
+exact private Math helper and full data ABI. Native frontend maps export their
+actual collect, domain and scoped callback. Their scalar-map equations are proof
+obligations over those bodies, not an export classification inferred from a
+generated name. Every declaration and callback is checked, including dormant
+ones. The independent formal vocabulary also admits the `map` record below;
+the native exporter does not produce that constructor or a separate map callable.
 
 A realization has exactly the helper's full ordered input/output ABI, including
 unused inputs and zero or multiple results. Its derived Local meaning is one
@@ -272,19 +307,19 @@ only to the root. All helper preconditions are empty. Equality, selection,
 indices, groups, finite operations and other fields are outside this map profile.
 
 Both native tools run native formation before their separate structured checks.
-Native formation owns the map ABI, mask, helper identity and transitive ring
-fragment rules, including dead operations. Each structured reader repeats these
-checks, but malformed-map controls through these tools observe the native
-formation refusal first; they do not isolate the redundant structured closure
-checks. The independent C++ observer's Fr-only restriction and structural capacity
-limits remain independently observable. Native formation accepts a wider realization fragment
-than the conservative structured closure above.
+Native formation checks the complete actual scoped closure and mathematical
+bodies, including dormant definitions. The independent C++ observer's Fr-only
+restriction and structural capacity limits remain independently observable.
+Native formation accepts a wider realization fragment than the conservative
+structured closure above. Formal map records have their own checked ring
+fragment; their admission is not evidence about a native source map.
 
-Preparation declarations are invoked only by `local.apply` in a Local function.
-`protocol.local_call` requires an actual Local function, so an ordinary wrapper
-is necessary. Math calls cannot invoke preparations. Finite callbacks still
-require actual private functions of the appropriate kind; a derived Local
-meaning does not change the original native kind.
+Preparation records are export-local associations with actual `exec.compute`,
+`exec.fold` or `exec.collect` occurrences in scoped functions. Ordinary
+`func.call` composes those functions; `protocol.local_call` enters an actual
+scoped function from protocol control. Math calls cannot invoke ordered
+preparations. Finite callbacks remain actual private scoped definitions with the
+borrowed scope and outcome ABI, not derived callable declarations.
 
 ## Blocks, binding and control
 
@@ -327,7 +362,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 |---|---|
 | `["index.constant", decimal-string]` | pure canonical u64 constant |
 | `["index.equal"]` | pure two-index equality to Boolean |
-| `["exec", native-operation, binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
+| `["exec", "exec.apply", binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
 | `["field.constant", domain, literal-string]` | canonical scalar constant: a decimal residue, or for a binary field a [bit-pattern literal](../domains/values.md#bit-pattern-literals) |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
@@ -343,7 +378,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["product.make", constructor]` | ordered components to the exact declared product |
 | `["product.get", index]` | total projection of a component at its checked type |
 | `["call", name]` | ordinary Math helper call |
-| `["apply", name]` | Local function, finite, realization or map declaration call |
+| `["apply", name]` | Local function, finite, collect, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
 | `["protocol_repeat", carried, maximum, roles, carried_roles]` | Retained protocol repetition with one isolated optional-state callback |
@@ -385,7 +420,7 @@ native mathematical verifier admits Boolean, scalar-field and group selection in
 profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
-the original `protocol.guard`; projected `local.guard` is outside this source
+the original `protocol.guard`; projected participant guards are outside this source
 stage. Conditional entry completion and construction-start
 selection remain outside this profile, including dormant definitions.
 
@@ -491,8 +526,9 @@ parent invariant first, reported as `structured-source-original` or independent
 `structured-reference-source`.
 These wrapper identifiers alone do not identify which verification layer
 refused. Native controls also check the actual invariant message in both tools.
-A callback ending with `local.stop` instead reaches `mathematical-formation`
-because it does not yield the carried interface.
+A scoped execution stop inside a common repeat callback reaches
+`mathematical-formation`; common callbacks admit protocol actions and must
+yield the carried interface.
 
 The repeat roster is a nonempty subset of the enclosing active roster. Count
 availability covers it. Every state scope is nonempty, contained in that roster,
@@ -547,36 +583,38 @@ are separate obligations; no protocol-specific intrinsic supplies their meaning.
 
 ## Primitive execution
 
-An `exec` descriptor retains both the native operation kind and binding name,
-plus the exact ordered array of string parameters. It has zero regions and a
-required nonempty site, unique within its enclosing Local definition. Each use
-checks kind/contract agreement, nominal domain arguments, full ordered operand
-and result types, parameters, and Local ownership. Binding names confer no
+An `exec` descriptor retains the actual `exec.apply` operation, its binding
+name and the exact ordered array of string parameters. It has zero regions and
+a required nonempty site, unique within its logical Local definition. The
+binding's contract selects the primitive. Each use checks nominal domain
+arguments, full ordered data operand and successful payload types, parameters,
+and Local ownership. Native scope/outcome ports belong to the admitted CFG;
+they are not logical value ports in this descriptor. Binding names confer no
 semantics by themselves. The exporter reuses the native logical catalogue for
-these ABI checks; the test reference independently admits this closed table.
+these ABI checks; Lean independently admits this closed table. There is no
+reader for retired per-primitive MLIR operation names.
 
-Here `I` is index, `B` Boolean, `F` Fr, and `V` a vector over Fr. The operation
-spellings are exact, not an extensible prefix convention.
+Here `I` is index, `B` Boolean, `F` the binding's nominal field, and `V` an
+ordered vector over that field. Every row uses the same `exec.apply` operation.
 
-| Native operation | Binding contract | Inputs → outputs | Parameters |
-|---|---|---|---|
-| `algebra.exec.index_constant` | `index.constant` | `[] → [I]` | `[n]` |
-| `algebra.exec.index_add` | `index.add` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_sub` | `index.sub` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_mul` | `index.mul` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_div` | `index.div` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_mod` | `index.mod` | `[I,I] → [I]` | `[]` |
-| `algebra.exec.index_equal` | `index.equal` | `[I,I] → [B]` | `[]` |
-| `algebra.exec.index_less` | `index.less` | `[I,I] → [B]` | `[]` |
-| `algebra.exec.vector_empty` | `vector.empty` | `[] → [V]` | `[]` |
-| `algebra.exec.vector_length` | `vector.length` | `[V] → [I]` | `[]` |
-| `algebra.exec.vector_sum` | `vector.sum` | `[V] → [F]` | `[]` |
-| `algebra.exec.vector_split` | `vector.split` | `[V] → [V,V]` | `[]` |
-| `algebra.exec.vector_append` | `vector.append` | `[V,F] → [V]` | `[]` |
-| `algebra.exec.vector_equal` | `vector.equal` | `[V,V] → [B]` | `[]` |
-| `algebra.exec.vector_find_last` | `vector.find_last` | `[V,F] → [I]` | `[]` |
-| `algebra.exec.field_equal` | `field.equal` | `[F,F] → [B]` | `[]` |
-| `algebra.exec.field_embed` | `field.embed` | `[field:base] → [field:extension]` | `[]` |
+| Binding contract | Inputs → outputs | Parameters |
+|---|---|---|
+| `index.constant` | `[] → [I]` | `[n]` |
+| `index.add` | `[I,I] → [I]` | `[]` |
+| `index.sub` | `[I,I] → [I]` | `[]` |
+| `index.mul` | `[I,I] → [I]` | `[]` |
+| `index.div` | `[I,I] → [I]` | `[]` |
+| `index.mod` | `[I,I] → [I]` | `[]` |
+| `index.equal` | `[I,I] → [B]` | `[]` |
+| `index.less` | `[I,I] → [B]` | `[]` |
+| `vector.empty` | `[] → [V]` | `[]` |
+| `vector.length` | `[V] → [I]` | `[]` |
+| `vector.sum` | `[V] → [F]` | `[]` |
+| `vector.split` | `[V] → [V,V]` | `[]` |
+| `vector.append` | `[V,F] → [V]` | `[]` |
+| `vector.equal` | `[V,V] → [B]` | `[]` |
+| `field.equal` | `[F,F] → [B]` | `[]` |
+| `field.embed` | `[field:base] → [field:extension]` | `[]` |
 
 The `field.embed` binding takes one domain argument, the extension. Its
 `BaseField` member fixes the operand's domain. The existing `exec` descriptor
@@ -607,7 +645,7 @@ An owned Local call with absent required inputs stops `incomplete`; nonowners
 skip it. Pure `data.index` and `data.index_equal` export as the separate pure
 descriptors with empty sites and no bindings. Pure index equality propagates
 absent components. Pure scalar equality likewise remains distinct from Local
-`algebra.exec.field_equal`.
+`exec.apply` with a `field.equal` binding.
 
 Ordinary source wrappers capture the unchanged `multilinear::has_shape`,
 `table`, and `halves` helper closures, including the private rows loop and
@@ -619,14 +657,21 @@ or preparation; unsupported dormant native declarations still refuse.
 
 ## Map and realization execution
 
-The independent reference invokes the exact retained Math helper through its
-existing SSA evaluator. It does not dispatch a production kernel, extract a
-polynomial for another evaluator, or assign meaning by helper name. Realization
-passes every argument and returns every result in order. Owned Local calls are
-strict even for an unused projection input or a zero-result invocation.
-Native missing-input controls observe strictness at `protocol.local_call`, before
-entering its Local body. They do not separately exercise a direct optional
-derived map operation or the inner preparation invocation presence check.
+The independent reference executes actual Func/CF bodies, including block
+arguments, backedges, outcome dispatch, scoped calls and transfers. `exec.compute`
+invokes the exact Math helper through that same independent SSA evaluator. It
+passes every data argument and returns every result in order. It uses neither
+the structured exporter nor production preparation or runtime kernels.
+`protocol.local_call` sequences owned inputs before entering the scoped helper,
+including unused projection inputs and zero-result invocations. Nonowners skip
+the owned call.
+
+Finite requests execute every stored domain constructor in order, including
+unused results, before any callback. Strict zip concatenates complete tuples;
+Cartesian product varies the last factor fastest. Each fold or collection
+invokes its actual predicate before its body, preserving the first stop and
+the original argument positions. Domain admission failure uses the finite
+invocation site. A stop inside a callback retains that callback's site.
 
 Map first measures the first row length, stopping `exhausted` if it is not below
 2^64. It then visits each remaining row input in argument order, measures and
@@ -638,31 +683,38 @@ argument order, selecting each row element or scalar broadcast. Equal empty rows
 return the empty vector without invoking the helper. Admission has nevertheless
 already checked the entire unit and every helper body.
 
-The derived operation has no authored internal site; shape refusal uses the
-invoking `local.apply` site. Discarding its result cannot discard that stop or
-allow a subsequent interaction. Nonowners skip owned Local work. Native map
-preparation instead inserts `control.require` guards with generated sites and
-backend failure `rejected:require`. Relating that failure to source `refused`
-requires an explicit observation/site mapping; the raw codes and generated
-sites are not equated here.
+Frontend maps use `exec.collect` with ordered domain admission and a scoped
+callback. Shape refusal uses that collection's invocation site. Discarding its
+result cannot discard the stop or permit a subsequent interaction. The callback
+passes the complete ordered tuple and broadcasts to its actual computation.
+The independent observer checks the source outcome; relating selected native
+failure codes, generated sites and resource effects requires a separate bridge.
 
 Ordinary wrappers capture unchanged `multilinear::fix_first` and `fix_prefix`,
 including their table constructor and values/variables/width projections.
-`fix_prefix` uses existing Local finite folds. An independently authored Fr linear
+`fix_prefix` uses scoped finite folds. An independently authored Fr linear
 combination covers ordered broadcasts and unused scalar/row arguments. The native
 library's KoalaBear Ext8 Combination remains outside this Fr-only profile.
 
 Structured admission checks retained SSA, without production formula expansion.
-Native language emission additionally checks expanded Ring eligibility; native
-preparation can reject a handwritten map for Ring depth even after ordinary
-formation succeeds. Structured admission alone does not claim that eligibility.
+Collections admit actual effectful callbacks; a specialized scalar-ring
+optimization must separately establish eligibility of the selected computation.
+Neither a generated name nor collection admission establishes that eligibility.
 
 ## Limits and evidence
 
 The independent native SSA test executable retains its closed invocation:
 `zkc-structured_reference-test FILE SYMBOL INPUTS_JSON`. Its single-role scalar
-and finite inputs and outputs are unchanged. Open executions use a distinct
-command and exact request:
+and finite inputs and outputs are unchanged.
+
+Its scope and transfer identities check the observer's logical control and
+custody, including one-time transfer consumption. They do not model backend
+allocation, frame admission, cleanup failures or the native resource ledger.
+Observer work, tuple-storage and vector bounds produce diagnostics, never
+fabricated source stops. Native and formal agreement is bounded evidence, not
+a theorem of CFG lowering or resource correspondence.
+
+Open executions use a distinct command and exact request:
 
 ```text
 zkc-structured_reference-test open FILE SYMBOL REQUEST_JSON
@@ -738,20 +790,26 @@ to 512 UTF-8 bytes (protocol template paths to 2048 bytes, binding names to 256 
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. Operand references index the lexical
 value list and are also at most 4096. The instruction count includes nested
-bodies and one derived instruction per finite, realization or map declaration;
-it excludes terminators and domain
-constructors. The independent native reference enforces the same 4096-instruction
-admission budget, independently of runtime fuel and without expanding calls.
+bodies, domain constructors and one derived instruction per finite, realization,
+collection or map declaration; it excludes terminators. The independent native
+reference has a separate 4096-operation admission budget over actual native
+nonterminators, including outcome packaging, and all domain-body operations. It
+counts actual native definitions rather than export-local derived rows. Neither tool expands calls
+for these counts. Both capacities are independent of runtime fuel; equality of
+their numeric limits does not imply identical admitted source sets.
 General lexical JSON and region nesting are bounded by 64. Only slot 8 of an
 exact ten-slot protocol-function row in the definitions table is exempt from
 ordinary lexical JSON depth; its origin is strictly decoded using the separate
 typed tree limits above, with up to two arrays per term level. The input's MLIR
 nesting preflight still applies. Helper reference depth is the
-longest reference path in **edges**, with a leaf at 0 and a maximum of 64 in both
-native readers. A preparation-to-Math-helper reference contributes one edge,
-as do calls to Local wrappers and preparations. References are derived from
-stored instructions, with at most two helper references per instruction; shared
-calls are not expanded for admission.
+longest reference path in **edges**, with a leaf at 0 and a maximum of 64.
+The writer counts the emitted graph: a scoped request contributes an edge to
+its derived declaration, which contributes another edge to each referenced
+helper or domain. This matches the structured reader's retained declaration
+graph. The independent native observer instead counts actual native references;
+its graph has no export-local declaration nodes. Both inspect dormant references
+and shared suffixes without expanding calls. Their depth capacities are distinct
+from the observer's one-based reached invocation depth above.
 See the [formal contract](../../../lean/docs/spec/structured-source.md). All failures
 produce diagnostics rather than a partial successful snapshot.
 

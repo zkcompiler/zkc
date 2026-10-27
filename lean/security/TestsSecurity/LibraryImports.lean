@@ -304,6 +304,7 @@ import ZkcSecurity.Generation.SubjectABI.Command
 import ZkcSecurity.Generation.SubjectABI
 import ZkcSecurity.Generation.SumcheckAccounts
 import ZkcSecurity.Generation.TableMembership
+import ZkcSecurity.Generation.SumcheckSourceHelpers
 import ZkcSecurity.Generation.TargetSourceAliasesCatalogue
 import ZkcSecurity.Generation.UniformRoot
 import ZkcSecurity.HashChain.Bound

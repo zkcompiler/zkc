@@ -1,6 +1,7 @@
 #include "../HelperNormalization.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"

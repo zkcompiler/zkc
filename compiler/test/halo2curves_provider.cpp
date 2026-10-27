@@ -1,15 +1,17 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Translation/Language.h"
@@ -169,7 +171,7 @@ program::Participants sourceProgram(MLIRContext &context, StringRef source,
   auto original = take(language::emitOriginal(closed, context));
   auto module = take(executableFixture(original, context));
   SmallVector<std::pair<std::string, std::string>> selections;
-  module->walk([&](local::OperationBindingOp binding) {
+  module->walk([&](runtime::BindingOp binding) {
     auto contract = binding->getAttrOfType<StringAttr>("contract").getValue();
     auto *entry =
         installedImplementations().preferred(contract, "halo2curves-axiom");
@@ -180,15 +182,14 @@ program::Participants sourceProgram(MLIRContext &context, StringRef source,
   });
   require(!selections.empty(), "source operation bindings missing");
   PhysicalPlanOptions options;
-  if (residentPorts)
-    for (auto *operation : physicalPlanOperations(*module)) {
-      if (!isa<local::FuncOp, protocol_ir::ParticipantOp>(operation))
+  if (residentPorts) {
+    auto ports = take(ExecutionPorts::read(*module));
+    for (auto *operation : ports.operations()) {
+      auto type = ports.get(operation).callable;
+      if (!type)
         continue;
-      auto function = operation->getAttrOfType<TypeAttr>("function_type");
-      auto name = operation->getAttrOfType<StringAttr>("sym_name");
-      if (!function || !name)
-        continue;
-      auto type = cast<FunctionType>(function.getValue());
+      auto name = SymbolTable::getSymbolName(operation);
+      require(bool(name), "callable physical ports require a named owner");
       for (bool output : {false, true})
         for (auto [index, port] :
              enumerate(output ? type.getResults() : type.getInputs())) {
@@ -201,6 +202,7 @@ program::Participants sourceProgram(MLIRContext &context, StringRef source,
                      logical.identity});
         }
     }
+  }
   auto plan = take(
       proposePhysical(*module, installedCandidates(), selections, options));
   size_t conversions = 0;

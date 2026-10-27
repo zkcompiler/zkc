@@ -124,11 +124,11 @@ with case("source checking preserves the terminal acceptance dependency"):
     commands.run([compiler, "protocol-check-proof", src, policy, candidate])
     # Keep every operation and action record. An earlier root-equality result
     # dominates this opening guard, but cannot establish the opening check.
-    condition = re.search(r'local\.guard (%[^ ]+) \{site = "root_T_check"\}', original)
+    condition = re.search(r'protocol\.guard (%[^ ]+) \{owner = "[^"]+", site = "root_T_check"\}', original)
     assert condition
     changed, count = re.subn(
-        r'local\.guard %[^ ]+( \{site = "[^"\n]*opening_check"\})',
-        lambda m: 'local.guard ' + condition[1] + m[1],
+        r'protocol\.guard %[^ ]+( \{owner = "[^"]+", site = "[^"\n]*opening_check"\})',
+        lambda m: 'protocol.guard ' + condition[1] + m[1],
         original, count=1,
     )
     assert count == 1
@@ -141,7 +141,7 @@ for operand, label in [(1, "commitment"), (3, "claimed value"), (4, "proof")]:
         src, policy = OUT / "product_0.mlir", OUT / "product_0.policy"
         original = commands.run([compiler, "protocol-construct-proof", src, policy])
         calls = list(re.finditer(
-            r'local\.call @check\(([^)]+)\) \{site = "[^"\n]*open_[TU]_check"\}',
+            r'"protocol\.local_call"\(([^)]+)\) <\{callee = @check, role = "V", site = "[^"\n]*open_[TU]_check"\}>',
             original,
         ))
         assert len(calls) == 2

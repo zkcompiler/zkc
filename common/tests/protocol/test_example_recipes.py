@@ -20,4 +20,10 @@ def test_readme_recipe_runs_in_a_clean_consumer(toolchain, journal, directory, p
     # adapter supplies hidden source modules to these commands.
     path = os.pathsep.join([str(toolchain.runtime.parent), str(toolchain.compiler.parent),
                             os.environ['PATH']])
-    journal.run(['env', f'PATH={path}', 'sh', script], cwd=consumer)
+    # These literal recipes have one command per non-comment line. Checking,
+    # proving and verifying can each compile the project; the complete shell
+    # workflow needs their combined allowance, not one tool's timeout.
+    commands = sum(bool(line.strip()) and not line.lstrip().startswith('#')
+                   for line in blocks[0].splitlines())
+    journal.run(['env', f'PATH={path}', 'sh', script], cwd=consumer,
+                timeout=journal.timeout * max(1, commands))

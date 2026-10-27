@@ -149,7 +149,7 @@ with case('nested source correspondence retains actual coordinate operands'):
     # Find a helper call with distinct outer and inner induction arguments.
     # Both substitutions remain well typed and preserve helper/action metadata.
     calls = re.finditer(
-        r'(local\.call @_transcript_\d+\([^\n()]*, )(%arg\d+), (%arg\d+)(\) \{site = )',
+        r'("protocol\.local_call"\([^\n()]*, )(%arg\d+), (%arg\d+)(\) <\{callee = @_transcript_\d+, role = "[^"]+", site = )',
         original,
     )
     call = next(m for m in calls if m[2] != m[3])

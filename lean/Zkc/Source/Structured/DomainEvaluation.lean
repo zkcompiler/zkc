@@ -59,14 +59,6 @@ def Primitive.evaluateOn (model : FieldModel) :
 
 attribute [local simp] Primitive.evaluateOn
 
-def DomainSpec.denoteOn {carriers : Carriers} : (domain : DomainSpec) →
-    Values carriers.Value domain.inputs → Finite.Domain (carriers.Value domain.item)
-  | ⟨_, _, collection, container, true⟩, arguments =>
-      let values := collection.values (arguments.get container)
-      .check (values.length < indexLimit) .exhausted (.elements (List.range values.length))
-  | ⟨_, _, collection, container, false⟩, arguments =>
-      let values := collection.values (arguments.get container)
-      .check (values.length < indexLimit) .exhausted (.elements values)
 
 namespace Evaluation
 
@@ -121,9 +113,9 @@ def foldTransitionOn {carriers : Carriers} {interface : PIR.Signature}
     (arguments : Values carriers.Value spec.domain.inputs)
     (captures : Values carriers.Value spec.captures)
     (state : Values carriers.Value spec.state)
-    (item : carriers.Value spec.domain.item) :
+    (item : Values carriers.Value spec.domain.items) :
     PIR.Process interface (Values carriers.Value spec.state) :=
-  let callbackArguments := Values.cons item (arguments.append captures)
+  let callbackArguments := item.append (arguments.append captures)
   let enabled : PIR.Process interface (Values carriers.Value [.boolean]) :=
     if spec.predicate.isEmpty then .done (.cons true .nil)
     else invoke table spec.predicateHelper callbackArguments
@@ -137,8 +129,8 @@ def denoteFoldOn {carriers : Carriers} {interface : PIR.Signature}
     PIR.Process interface (Values carriers.Value spec.state) :=
   let (arguments, rest) := values.split spec.domain.inputs
   let (initial, captures) := rest.split spec.state
-  Finite.execute (spec.domain.denoteOn arguments) (foldTransitionOn table spec arguments captures)
-    initial
+  Finite.admitThen (spec.domain.admit arguments) fun items =>
+    Finite.fold (foldTransitionOn table spec arguments captures) items initial
 
 /-- Closed callback invocation adapter; the operation observes only returned
 values and stopping, and never inspects callback process constructors. -/
@@ -218,6 +210,7 @@ def operationOn (model : DomainModel) {interface : PIR.Signature}
       | none => .halt .refused
   | .invoke helper, args, .nil => invoke table helper args
   | .fold spec, args, .nil => denoteFoldOn table spec args
+  | .collect spec, args, .nil => denoteCollect table spec args
   | .map spec, args, .nil => denoteMapOn table spec args
   | .branch _ _, .cons condition captures, .cons yes (.cons no .nil) =>
       invokeCallbackOn (if condition then yes else no) captures
@@ -310,10 +303,6 @@ theorem Primitive.evaluate_eq_evaluateOn [CommRing F] [DecidableEq F] :
   funext primitive args
   cases primitive <;> (iterate 3 (try (rcases args with _ | ⟨_, args⟩))) <;> rfl
 
-theorem DomainSpec.denote_eq_denoteOn :
-    DomainSpec.denote (F := F) (G := G) = DomainSpec.denoteOn (carriers := uniformCarriers F G) := by
-  funext domain arguments
-  rcases domain with ⟨_, _, _, _, _ | _⟩ <;> rfl
 
 namespace Evaluation
 
@@ -363,8 +352,7 @@ theorem denoteFold_eq_denoteFoldOn {interface : PIR.Signature}
     (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (values : Values (assignment F G) spec.arguments) :
     denoteFold table spec values = denoteFoldOn (carriers := uniformCarriers F G) table spec values := by
-  simp only [denoteFold, denoteFoldOn, DomainSpec.denote_eq_denoteOn,
-    foldTransition_eq_foldTransitionOn]
+  simp only [denoteFold, denoteFoldOn, foldTransition_eq_foldTransitionOn]
 
 theorem denoteLoop_eq_denoteLoopOn {interface : PIR.Signature} (state captures : List Ty) :
     denoteLoop (F := F) (G := G) (interface := interface) state captures =

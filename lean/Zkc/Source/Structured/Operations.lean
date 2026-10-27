@@ -49,15 +49,66 @@ def Collection.element : Collection → Ty
   | .vector field => .field field
   | .sequence element => element
 
+/-- A constructor refers to data arguments and already admitted domain values.
+The latter are heterogeneous item tuples, not invented nominal products. -/
+inductive DomainNode (inputs : List Ty) (context : List (List Ty)) : List Ty → Type where
+  | elements (collection : Collection) (container : Var inputs collection.type) :
+      DomainNode inputs context [collection.element]
+  | indices (collection : Collection) (container : Var inputs collection.type) :
+      DomainNode inputs context [.index]
+  | range (lower upper : Var inputs .index) : DomainNode inputs context [.index]
+  | zip (items : List (List Ty)) (operands : Operands context items) :
+      DomainNode inputs context items.flatten
+  | product (items : List (List Ty)) (operands : Operands context items) :
+      DomainNode inputs context items.flatten
+
+/-- Stored constructor order is semantic: an unused constructor can stop before
+another constructor or before the first callback. References are typed SSA. -/
+inductive DomainBody (inputs : List Ty) : List (List Ty) → List Ty → Type where
+  | ret {context items} (value : Var context items) : DomainBody inputs context items
+  | letNode {context itemTypes items} (node : DomainNode inputs context itemTypes)
+      (next : DomainBody inputs (itemTypes :: context) items) : DomainBody inputs context items
+
 structure DomainSpec where
   name : String
   inputs : List Ty
-  collection : Collection
-  container : Var inputs collection.type
-  indices : Bool
+  items : List Ty
+  body : DomainBody inputs [] items
 
-def DomainSpec.item (domain : DomainSpec) : Ty :=
-  if domain.indices then .index else domain.collection.element
+/-- Single-collection definitions use the same constructor sequence as every
+composite domain. This is a typed authoring convenience, not another reader. -/
+def DomainSpec.elements (name : String) (inputs : List Ty) (collection : Collection)
+    (container : Var inputs collection.type) : DomainSpec :=
+  ⟨name, inputs, [collection.element], .letNode (.elements collection container) (.ret .here)⟩
+
+def DomainSpec.indices (name : String) (inputs : List Ty) (collection : Collection)
+    (container : Var inputs collection.type) : DomainSpec :=
+  ⟨name, inputs, [.index], .letNode (.indices collection container) (.ret .here)⟩
+
+/-- Derived item-to-container provenance; it is never supplied by the wire. -/
+def domainOperandBounds {context : List (List Ty)}
+    (environment : Values (fun _ => List (Nat × Nat)) context) :
+    {items : List (List Ty)} → Operands context items → List (Nat × Nat)
+  | [], .nil => []
+  | types :: _, .cons operand rest =>
+      environment.get operand ++
+        (domainOperandBounds environment rest).map (fun (item, container) =>
+          (types.length + item, container))
+
+def DomainNode.bounds {inputs : List Ty} {context : List (List Ty)}
+    (environment : Values (fun _ => List (Nat × Nat)) context) :
+    {items : List Ty} → DomainNode inputs context items → List (Nat × Nat)
+  | _, .indices _ container => [(0, container.index)]
+  | _, .zip _ operands | _, .product _ operands => domainOperandBounds environment operands
+  | _, .elements .. | _, .range .. => []
+
+def DomainBody.bounds {inputs : List Ty} : {context : List (List Ty)} → {items : List Ty} →
+    DomainBody inputs context items → Values (fun _ => List (Nat × Nat)) context → List (Nat × Nat)
+  | _, _, .ret value, environment => environment.get value
+  | _, _, .letNode node next, environment =>
+      next.bounds (.cons (node.bounds environment) environment)
+
+def DomainSpec.bounds (domain : DomainSpec) : List (Nat × Nat) := domain.body.bounds .nil
 
 structure FoldSpec where
   domain : DomainSpec
@@ -70,9 +121,24 @@ structure FoldSpec where
 def FoldSpec.arguments (fold : FoldSpec) : List Ty :=
   fold.domain.inputs ++ (fold.state ++ fold.captures)
 def FoldSpec.stepHelper (fold : FoldSpec) : Helper :=
-  ⟨fold.step, fold.kind, fold.state ++ (fold.domain.item :: (fold.domain.inputs ++ fold.captures)), fold.state⟩
+  ⟨fold.step, fold.kind, fold.state ++ (fold.domain.items ++ (fold.domain.inputs ++ fold.captures)), fold.state⟩
 def FoldSpec.predicateHelper (fold : FoldSpec) : Helper :=
-  ⟨fold.predicate, fold.kind, fold.domain.item :: (fold.domain.inputs ++ fold.captures), [.boolean]⟩
+  ⟨fold.predicate, fold.kind, fold.domain.items ++ (fold.domain.inputs ++ fold.captures), [.boolean]⟩
+
+structure CollectSpec where
+  domain : DomainSpec
+  collection : Collection
+  captures : List Ty
+  body : String
+  predicate : String
+  kind : HelperKind
+
+def CollectSpec.arguments (spec : CollectSpec) : List Ty := spec.domain.inputs ++ spec.captures
+def CollectSpec.bodyHelper (spec : CollectSpec) : Helper :=
+  ⟨spec.body, spec.kind, spec.domain.items ++ (spec.domain.inputs ++ spec.captures),
+    [spec.collection.element]⟩
+def CollectSpec.predicateHelper (spec : CollectSpec) : Helper :=
+  ⟨spec.predicate, spec.kind, spec.domain.items ++ (spec.domain.inputs ++ spec.captures), [.boolean]⟩
 
 inductive Op where
   | exec (primitive : Primitive)
@@ -98,6 +164,7 @@ inductive Op where
       (type : Ty) (field : Var fields.toList type)
   | invoke (helper : Helper)
   | fold (spec : FoldSpec)
+  | collect (spec : CollectSpec)
   | map (spec : MapSpec)
   | branch (captures outputs : List Ty)
   | loop (state captures : List Ty)
@@ -123,6 +190,7 @@ def Op.arguments : Op → List Ty
   | .getProduct identity constructor fields _ _ => [.product identity constructor fields]
   | .invoke helper => helper.inputs
   | .fold spec => spec.arguments
+  | .collect spec => spec.arguments
   | .map spec => spec.arguments
   | .branch captures _ => .boolean :: captures
   | .loop state captures | .loopCondition state captures => .index :: .index :: (state ++ captures)
@@ -143,6 +211,7 @@ def Op.results : Op → List Ty
   | .getProduct _ _ _ type _ => [type]
   | .invoke helper => helper.outputs
   | .fold spec => spec.state
+  | .collect spec => [spec.collection.type]
   | .map spec => [.vector spec.field]
   | .branch _ outputs => outputs
   | .loop state _ | .loopCondition state _ => state
@@ -160,6 +229,8 @@ callbacks remain dependencies even when a domain is empty at runtime. -/
 def Op.helpers : Op → List Helper
   | .invoke helper => [helper]
   | .map spec => [spec.helper]
+  | .collect spec => spec.bodyHelper ::
+      (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .indexLess | .indexPowerOfTwo | .vectorLength .. |

@@ -5,6 +5,8 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 namespace zkc::test::loops {
@@ -57,20 +59,20 @@ inline mlir::func::FuncOp helper(mlir::ModuleOp unit, llvm::StringRef name) {
   require(bool(result), "missing numerical helper");
   return result;
 }
-inline local::OperationBindingOp primitiveBinding(mlir::Operation *user) {
+inline runtime::BindingOp primitiveBinding(mlir::Operation *user) {
   // Schedules declare bindings in builtin modules; executable fragments use
   // Protocol owners. Resolve in the user's lexical symbol table in both cases.
   auto *owner = mlir::SymbolTable::getNearestSymbolTable(user);
   auto reference = user->getAttrOfType<mlir::FlatSymbolRefAttr>("binding");
   require(owner && reference, "missing primitive binding reference");
-  auto result = mlir::dyn_cast_or_null<local::OperationBindingOp>(
+  auto result = mlir::dyn_cast_or_null<runtime::BindingOp>(
       mlir::SymbolTable::lookupSymbolIn(owner, reference));
   require(bool(result), "missing actual primitive binding");
   return result;
 }
-inline local::FuncOp entry(mlir::ModuleOp output) {
+inline mlir::func::FuncOp entry(mlir::ModuleOp output) {
   auto result = mlir::SymbolTable(kernelRecipeOutput(output))
-                    .lookup<local::FuncOp>("evaluate");
+                    .lookup<mlir::func::FuncOp>("evaluate");
   require(bool(result), "missing executable numerical entry");
   return result;
 }
@@ -83,11 +85,25 @@ inline llvm::SmallVector<mlir::Operation *> operations(mlir::Operation *root,
   });
   return result;
 }
-inline llvm::SmallVector<local::LocalForOp> stateLoops(mlir::ModuleOp output) {
-  llvm::SmallVector<local::LocalForOp> result;
-  entry(output).walk([&](local::LocalForOp loop) {
-    if (loop->getNumResults())
-      result.push_back(loop);
+inline protocol::SourceExecutionStep loopStep(mlir::ModuleOp module,
+                                              exec::RangeOp loop) {
+  auto closure =
+      take(protocol::readSourceExecutionClosure(kernelRecipeOutput(module)));
+  auto function = loop->getParentOfType<mlir::func::FuncOp>();
+  for (const auto &step : closure.bodies.at(function.getSymName().str()))
+    if (step.operation == loop.getOperation())
+      return step;
+  throw std::runtime_error("missing scoped loop occurrence");
+}
+inline llvm::SmallVector<exec::RangeOp> stateLoops(mlir::ModuleOp output) {
+  auto closure =
+      take(protocol::readSourceExecutionClosure(kernelRecipeOutput(output)));
+  llvm::SmallVector<exec::RangeOp> result;
+  output.walk([&](exec::RangeOp loop) {
+    auto function = loop->getParentOfType<mlir::func::FuncOp>();
+    for (const auto &step : closure.bodies.at(function.getSymName().str()))
+      if (step.operation == loop.getOperation() && !step.outputs.empty())
+        result.push_back(loop);
   });
   return result;
 }

@@ -70,11 +70,11 @@ int main() {
           op->setOperand(0, op->getOperand(1));
           op->setOperand(1, value);
           changed = true;
-        } else if (change == "capture-order" && name == "local.apply" &&
-                   op->getNumOperands() == 4) {
-          auto value = op->getOperand(2);
-          op->setOperand(2, op->getOperand(3));
-          op->setOperand(3, value);
+        } else if (change == "capture-order" && name == "func.call" &&
+                   op->hasAttr("runtime.site") && op->getNumOperands() == 5) {
+          auto value = op->getOperand(3);
+          op->setOperand(3, op->getOperand(4));
+          op->setOperand(4, value);
           changed = true;
         } else if (change == "scalar-operand" &&
                    name == "algebra.field_multiply") {
@@ -87,10 +87,12 @@ int main() {
           op->getResult(0).replaceAllUsesWith(replacement->getResult(0));
           op->erase();
           changed = true;
-        } else if (change == "call-site" && name == "local.apply") {
-          op->setAttr("site", mlir::StringAttr::get(&context, "s999"));
+        } else if (change == "call-site" && name == "func.call" &&
+                   op->hasAttr("runtime.site")) {
+          op->setAttr("runtime.site", mlir::StringAttr::get(&context, "s999"));
           changed = true;
-        } else if (change == "helper-target" && name == "local.apply") {
+        } else if (change == "helper-target" && name == "func.call" &&
+                   op->hasAttr("runtime.site")) {
           op->setAttr("callee",
                       mlir::FlatSymbolRefAttr::get(&context, "missing"));
           changed = true;
@@ -112,8 +114,8 @@ int main() {
       fn f(xs:Vector<Fr>)->Fr{let terms=collect(xs,fn(x)=>x);return custom(terms);}
       protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return(r=f(xs));}entry fn Run(inputs: Demo::Inputs) { return Demo::run(inputs); })");
     auto original = take(prepareOriginal(entry));
-    require(original.bytes().contains("local.stop") &&
-                original.bytes().contains("local.finite_collect"),
+    require(original.bytes().contains("exec.reject") &&
+                original.bytes().contains("exec.collect"),
             "custom stop was replaced");
     take(compileEntry(original));
   });

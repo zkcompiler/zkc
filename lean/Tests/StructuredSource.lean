@@ -48,7 +48,7 @@ def totalRoot : Definition :=
   function "main" .protocol [vector, field, field] [field, field]
     (.block [.instruction (.fold "items" "step" "") [0, 1, 2] [field, field] [] ""] (.ret [0, 1]))
 
-def total : Snapshot := snapshot [totalStep, totalRoot] [⟨"items", [vector], .indices 0 0⟩]
+def total : Snapshot := snapshot [totalStep, totalRoot] [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 def unit (reason : PIR.Stop := .abort) : Snapshot := snapshot [
   function "step" .local [field, vector, .boolean] [] (.block [] (.stop reason "abort")),
@@ -58,7 +58,7 @@ def unit (reason : PIR.Stop := .abort) : Snapshot := snapshot [
     (.block [.instruction (.apply "fold") [0, 1] [] [] "fold"] (.ret [1])),
   function "main" .protocol [vector, .boolean] [.boolean]
     (.block [.instruction (.localCall "work" "P") [0, 1] [.boolean] [] "work"] (.ret [0]))]
-  [⟨"items", [vector], .elements 0⟩]
+  [⟨"items", [vector], [.elements 0], 0⟩]
 
 def localProgram (inputs outputs : List Ty) (body : Block) : Snapshot := snapshot [
   function "work" .local inputs outputs body,
@@ -121,7 +121,7 @@ def preconditionCall (wrong : Bool) : Snapshot :=
       [⟨1, 2, 0⟩],
     function "main" .protocol [vector, field, vector] [field]
       (.block [.instruction (.fold "items" "step" "") [0, 1, 2] [field] [] ""] (.ret [0]))]
-    [⟨"items", [vector], .indices 0 0⟩]
+    [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 def refused (raw : Snapshot) (code : String) : Bool :=
   match check raw with | .error actual => actual == code | .ok _ => false
@@ -139,7 +139,7 @@ def forwardedBound (direct wrong : Bool) : Snapshot := snapshot [
         [0, 1] [field] [] ""] (.ret [0])) [⟨1, 2, 0⟩],
   function "main" .protocol [vector, field, vector] [field]
     (.block [.instruction (.fold "items" "step" "") [0, 1, 2] [field] [] ""] (.ret [0]))]
-  [⟨"items", [vector], .indices 0 0⟩]
+  [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 /-- The selected vector is also passed as capture C; recurrent state is separate. -/
 def aliasedCapture (same : Bool) : Snapshot := snapshot [
@@ -147,14 +147,14 @@ def aliasedCapture (same : Bool) : Snapshot := snapshot [
     (.block [.instruction (.boundedAt scalarDomain) [3, 1] [field] [] ""] (.ret [0])) [⟨1, 3, 0⟩],
   function "main" .protocol [vector, vector, field] [field]
     (.block [.instruction (.fold "items" "step" "") [0, 2, if same then 0 else 1]
-      [field] [] ""] (.ret [0]))] [⟨"items", [vector], .indices 0 0⟩]
+      [field] [] ""] (.ret [0]))] [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 def stateBound : Snapshot := snapshot [
   function "step" .math [vector, .index, vector] [vector]
     (.block [.instruction (.boundedAt scalarDomain) [0, 1] [field] [] ""] (.ret [1])) [⟨1, 0, 0⟩],
   function "main" .protocol [vector] [vector]
     (.block [.instruction (.fold "items" "step" "") [0, 0] [vector] [] ""] (.ret [0]))]
-  [⟨"items", [vector], .indices 0 0⟩]
+  [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 /-- Both a helper summary and its caller must compare canonical identities,
 while an unrelated same-typed vector must remain distinct at either boundary. -/
@@ -169,7 +169,7 @@ def selectedBound (wrongHelper wrongCaller : Bool) : Snapshot := snapshot [
       .instruction (.boundedAt scalarDomain) [0, 3] [field] [] ""] (.ret [0])) [⟨1, 2, 0⟩],
   function "main" .protocol [vector, vector, .boolean, field] [field]
     (.block [.instruction (.fold "items" "step" "") [0, 3, 1, 2] [field] [] ""] (.ret [0]))]
-  [⟨"items", [vector], .indices 0 0⟩]
+  [⟨"items", [vector], [.indices 0 0], 0⟩]
 
 def dependencyChain (length copies : Nat) : Snapshot :=
   let helpers := (List.range length).map fun n =>
@@ -243,7 +243,7 @@ def run : IO Unit := do
   for (helper, caller) in [(true, false), (false, true), (true, true)] do
     test "select-unrelated-container-refused" (refused (selectedBound helper caller)
       "structured-bounded-at-premise")
-  test "static-budget-counts-finite-declaration" (!unit.instructionsWithin 2 && unit.instructionsWithin 3)
+  test "static-budget-counts-finite-declaration" (!unit.instructionsWithin 3 && unit.instructionsWithin 4)
   test "oversized-math-refused-before-summary" (refused (snapshot [
     function "oversized" .math [] []
       (.block (List.replicate 4097 (.instruction (.booleanConstant true) [] [.boolean] [] "")) (.ret [])),
@@ -252,8 +252,8 @@ def run : IO Unit := do
     "structured-bounded-at-premise")
   test "precondition-axis" (refused {total with definitions := [totalStep [2, 0] 3 [⟨2, 3, 1⟩], totalRoot]}
     "structured-header")
-  test "domain-axis" (refused {total with domains := [⟨"items", [vector], .indices 0 1⟩]} "structured-domain-axis")
-  test "unused-domain" (refused {total with domains := total.domains ++ [⟨"bad", [field], .elements 0⟩]}
+  test "domain-axis" (refused {total with domains := [⟨"items", [vector], [.indices 0 1], 0⟩]} "structured-domain-axis")
+  test "unused-domain" (refused {total with domains := total.domains ++ [⟨"bad", [field], [.elements 0], 0⟩]}
     "structured-domain-container")
   test "dormant-body" (refused {total with definitions := total.definitions ++
     [function "bad" .math [] [field] (.block [] (.ret [0]))]} "structured-formation")
@@ -467,7 +467,7 @@ def run : IO Unit := do
   test "extra-op-field" (!(Structured.Format.descriptor (.arr #[.str "bool.and", .str "extra"])).isOk)
   test "extra-domain-op" (!(Structured.Format.domain (.arr #[.str "domain", .str "items",
     .arr #[.arr #[.str "vector", .str scalarDomain]],
-    .arr #[.str "elements", toJson (0 : Nat), .str "extra"]])).isOk)
+    .arr #[.arr #[.str "elements", toJson (0 : Nat), .str "extra"]], toJson (0 : Nat)])).isOk)
   test "origin-bindings-retained" (match Structured.Format.origin .local
       (.arr #[.str "template", .arr #[.arr #[.str "N", .str "7"], .arr #[.str "F", .str scalarDomain]]]) with
     | .ok value => value == some (.local "template" [("N", "7"), ("F", scalarDomain)])

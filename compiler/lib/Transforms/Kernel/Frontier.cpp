@@ -2,10 +2,14 @@
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -15,9 +19,11 @@ LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "kernel-frontier", detail);
 }
 struct Step {
-  local::FuncOp wrapper;
-  local::CallOp invocation;
-  CallOp call;
+  func::FuncOp wrapper;
+  protocol_ir::LocalCallOp invocation;
+  exec::ComputeOp call;
+  exec::ReturnOp returned;
+  Block *payload;
   func::FuncOp entry;
   unsigned originalArguments = 0, originalResults = 0;
   unsigned originalKernelArguments = 0, originalKernelResults = 0;
@@ -64,17 +70,43 @@ class Frontier {
   Value wrapperInput(Step &step, Value value) {
     auto argument = dyn_cast<BlockArgument>(value);
     if (!argument || argument.getOwner() != &step.wrapper.getBody().front() ||
-        argument.getArgNumber() >= step.invocation.getNumOperands())
+        !argument.getArgNumber() ||
+        argument.getArgNumber() > step.invocation.getNumOperands())
       return {};
-    return step.invocation.getOperand(argument.getArgNumber());
+    return step.invocation.getOperand(argument.getArgNumber() - 1);
   }
   Value numericalReturn(Step &step, Value value) {
-    auto result = dyn_cast<OpResult>(value);
+    auto result = dyn_cast<BlockArgument>(value);
     auto returned = cast<func::ReturnOp>(step.entry.front().back());
-    if (!result || result.getOwner() != step.call.getOperation() ||
-        result.getResultNumber() >= returned.getNumOperands())
+    if (!result || result.getOwner() != step.payload ||
+        result.getArgNumber() >= returned.getNumOperands())
       return {};
-    return returned.getOperand(result.getResultNumber());
+    return returned.getOperand(result.getArgNumber());
+  }
+  bool wrapperOutputs(Step &step, TypeRange outputs) {
+    auto outcome = exec::OutcomeType::get(step.wrapper.getContext(),
+                                          llvm::to_vector(outputs));
+    // Only packaging changes. The active scope, failure continuation, guard
+    // bodies and success path are retained exactly.
+    for (auto &block : step.wrapper.getBody())
+      for (auto &op : block) {
+        if (!charge())
+          return false;
+        if (isa<exec::ReturnOp, exec::FailureOp>(op))
+          op.getResult(0).setType(outcome);
+      }
+    step.wrapper.setFunctionType(FunctionType::get(
+        step.wrapper.getContext(), step.wrapper.getArgumentTypes(), outcome));
+    return true;
+  }
+  protocol_ir::LocalCallOp replaceInvocation(Step &step, TypeRange types) {
+    OpBuilder builder(step.invocation);
+    OperationState state(step.invocation.getLoc(),
+                         protocol_ir::LocalCallOp::getOperationName());
+    state.addOperands(step.invocation.getInputs());
+    state.addTypes(types);
+    state.addAttributes(step.invocation->getAttrs());
+    return cast<protocol_ir::LocalCallOp>(builder.create(state));
   }
   Value exportValue(unsigned producer, Value value) {
     auto key = std::make_pair(producer, value);
@@ -83,9 +115,8 @@ class Frontier {
     auto &step = steps[producer];
     auto returned = cast<func::ReturnOp>(step.entry.front().back());
     // Reuse an existing result port when it already exports this exact SSA.
-    auto wrapperReturn =
-        cast<local::ReturnOp>(step.wrapper.getBody().front().back());
-    for (auto [index, output] : enumerate(wrapperReturn.getInputs())) {
+    auto wrapperReturn = step.returned;
+    for (auto [index, output] : enumerate(wrapperReturn.getValues())) {
       if (!charge())
         return {};
       // A forwarding return names a wrapper input, not a Kernel result
@@ -93,8 +124,8 @@ class Frontier {
       auto argument = dyn_cast<BlockArgument>(value);
       bool forwarded = wrapperInput(step, output) && argument &&
                        argument.getOwner() == &step.entry.front() &&
-                       argument.getArgNumber() < step.call.getNumOperands() &&
-                       step.call.getOperand(argument.getArgNumber()) == output;
+                       argument.getArgNumber() < step.call.getInputs().size() &&
+                       step.call.getInputs()[argument.getArgNumber()] == output;
       if (forwarded || numericalReturn(step, output) == value) {
         auto result = step.invocation.getResult(index);
         exports.try_emplace(key, result);
@@ -102,7 +133,8 @@ class Frontier {
       }
     }
     if (!charge(32 + step.invocation.getNumResults() +
-                step.call.getNumResults() + step.wrapper.getNumArguments()))
+                step.payload->getNumArguments() +
+                step.wrapper.getNumArguments()))
       return {};
     returned->insertOperands(returned.getNumOperands(), value);
     SmallVector<Type> kernelTypes(step.entry.getResultTypes());
@@ -110,26 +142,15 @@ class Frontier {
     OpBuilder builder(step.wrapper.getContext());
     step.entry.setFunctionType(
         builder.getFunctionType(step.entry.getArgumentTypes(), kernelTypes));
-    builder.setInsertionPoint(step.call);
-    OperationState callState(step.call.getLoc(), CallOp::getOperationName());
-    callState.addOperands(step.call.getInputs());
-    callState.addTypes(kernelTypes);
-    callState.addAttributes(step.call->getAttrs());
-    auto call = cast<CallOp>(builder.create(callState));
-    step.call->replaceAllUsesWith(
-        call.getResults().take_front(step.call.getNumResults()));
-    step.call.erase();
-    step.call = call;
-    wrapperReturn->insertOperands(wrapperReturn.getNumOperands(),
-                                  call.getResults().back());
-    SmallVector<Type> types(step.wrapper.getResultTypes());
+    step.call.getOutcome().setType(
+        exec::OutcomeType::get(builder.getContext(), kernelTypes));
+    auto payload = step.payload->addArgument(value.getType(), value.getLoc());
+    wrapperReturn->insertOperands(wrapperReturn.getNumOperands(), payload);
+    SmallVector<Type> types(step.invocation.getResultTypes());
     types.push_back(value.getType());
-    step.wrapper.setFunctionType(
-        builder.getFunctionType(step.wrapper.getArgumentTypes(), types));
-    builder.setInsertionPoint(step.invocation);
-    auto replacement = local::CallOp::create(
-        builder, step.invocation.getLoc(), types, step.invocation.getInputs(),
-        step.invocation.getCalleeAttr(), step.invocation.getSiteAttr());
+    if (!wrapperOutputs(step, types))
+      return {};
+    auto replacement = replaceInvocation(step, types);
     step.invocation->replaceAllUsesWith(
         replacement.getResults().take_front(step.invocation.getNumResults()));
     // Keep canonical identities when replacing an existing invocation handle.
@@ -166,18 +187,17 @@ class Frontier {
     }
     if (!charge(16 + step.entry.getNumArguments()))
       return {};
-    auto argument =
-        step.entry.front().addArgument(value.getType(), value.getLoc());
-    auto wrapperArgument = step.wrapper.getBody().front().addArgument(
-        value.getType(), value.getLoc());
+    auto entryIndex = step.entry.getNumArguments();
+    auto wrapperIndex = step.wrapper.getNumArguments();
+    if (failed(step.entry.insertArgument(entryIndex, value.getType(), {},
+                                         value.getLoc())) ||
+        failed(step.wrapper.insertArgument(wrapperIndex, value.getType(), {},
+                                           value.getLoc())))
+      return {};
+    auto argument = step.entry.getArgument(entryIndex);
+    auto wrapperArgument = step.wrapper.getArgument(wrapperIndex);
     step.invocation->insertOperands(step.invocation.getNumOperands(), input);
     step.call->insertOperands(step.call.getNumOperands(), wrapperArgument);
-    OpBuilder builder(step.wrapper.getContext());
-    step.entry.setFunctionType(builder.getFunctionType(
-        step.entry.front().getArgumentTypes(), step.entry.getResultTypes()));
-    step.wrapper.setFunctionType(builder.getFunctionType(
-        step.wrapper.getBody().front().getArgumentTypes(),
-        step.wrapper.getResultTypes()));
     return argument;
   }
 
@@ -304,10 +324,9 @@ public:
           instructions.push_back({&op, inputs, outputs, unsigned(position)});
         }
       }
-      auto wrapperReturn =
-          cast<local::ReturnOp>(step.wrapper.getBody().front().back());
+      auto wrapperReturn = step.returned;
       for (auto [value, result] :
-           zip(wrapperReturn.getInputs(), step.invocation.getResults())) {
+           zip(wrapperReturn.getValues(), step.invocation.getResults())) {
         if (!charge())
           return refuse(step.wrapper,
                         "normalization frontier return work limit");
@@ -324,8 +343,7 @@ public:
     // and every retained instruction remain fixed. No work is moved or erased.
     for (auto &step : reverse(steps)) {
       OpBuilder builder(step.wrapper.getContext());
-      auto wrapperReturn =
-          cast<local::ReturnOp>(step.wrapper.getBody().front().back());
+      auto wrapperReturn = step.returned;
       BitVector unused(step.invocation.getNumResults());
       SmallVector<Type> outputs;
       for (auto [index, result] : enumerate(step.invocation.getResults())) {
@@ -336,13 +354,9 @@ public:
       }
       if (unused.any()) {
         wrapperReturn->eraseOperands(unused);
-        step.wrapper.setFunctionType(
-            builder.getFunctionType(step.wrapper.getArgumentTypes(), outputs));
-        builder.setInsertionPoint(step.invocation);
-        auto replacement = local::CallOp::create(
-            builder, step.invocation.getLoc(), outputs,
-            step.invocation.getInputs(), step.invocation.getCalleeAttr(),
-            step.invocation.getSiteAttr());
+        if (!wrapperOutputs(step, outputs))
+          return refuse(step.wrapper, "wrapper output trimming work limit");
+        auto replacement = replaceInvocation(step, outputs);
         unsigned coordinate = 0;
         for (auto [index, result] : enumerate(step.invocation.getResults()))
           if (!unused[index])
@@ -351,10 +365,10 @@ public:
         step.invocation = replacement;
       }
       auto returned = cast<func::ReturnOp>(step.entry.front().back());
-      unused.resize(step.call.getNumResults());
+      unused.resize(step.payload->getNumArguments());
       unused.reset();
       outputs.clear();
-      for (auto [index, result] : enumerate(step.call.getResults())) {
+      for (auto [index, result] : enumerate(step.payload->getArguments())) {
         if (index >= step.originalKernelResults && result.use_empty())
           unused.set(index);
         else
@@ -364,47 +378,26 @@ public:
         returned->eraseOperands(unused);
         step.entry.setFunctionType(
             builder.getFunctionType(step.entry.getArgumentTypes(), outputs));
-        builder.setInsertionPoint(step.call);
-        OperationState state(step.call.getLoc(), CallOp::getOperationName());
-        state.addOperands(step.call.getInputs());
-        state.addTypes(outputs);
-        state.addAttributes(step.call->getAttrs());
-        auto replacement = cast<CallOp>(builder.create(state));
-        unsigned coordinate = 0;
-        for (auto [index, result] : enumerate(step.call.getResults()))
-          if (!unused[index])
-            result.replaceAllUsesWith(replacement.getResult(coordinate++));
-        step.call.erase();
-        step.call = replacement;
+        step.payload->eraseArguments(unused);
+        step.call.getOutcome().setType(
+            exec::OutcomeType::get(builder.getContext(), outputs));
       }
       // Numerical inputs and wrapper ports have independent coordinates. A
       // wrapper argument can be omitted, repeated or forwarded only by return.
       for (unsigned index = step.entry.getNumArguments();
            index-- > step.originalKernelArguments;)
         if (step.entry.getArgument(index).use_empty()) {
-          step.entry.front().eraseArgument(index);
-          step.call->eraseOperand(index);
+          if (failed(step.entry.eraseArgument(index)))
+            return refuse(step.entry, "cannot trim appended numerical input");
+          step.call->eraseOperand(index + 1);
         }
       for (unsigned index = step.wrapper.getNumArguments();
            index-- > step.originalArguments;)
         if (step.wrapper.getArgument(index).use_empty()) {
-          step.wrapper.getBody().front().eraseArgument(index);
-          step.invocation->eraseOperand(index);
+          if (failed(step.wrapper.eraseArgument(index)))
+            return refuse(step.wrapper, "cannot trim appended wrapper input");
+          step.invocation->eraseOperand(index - 1);
         }
-      step.entry.setFunctionType(builder.getFunctionType(
-          step.entry.front().getArgumentTypes(), step.entry.getResultTypes()));
-      step.wrapper.setFunctionType(builder.getFunctionType(
-          step.wrapper.getBody().front().getArgumentTypes(),
-          step.wrapper.getResultTypes()));
-      // CallOpInterface metadata follows the final port counts. Kernel
-      // admission permits only empty dictionaries, with no per-port premise.
-      auto empty = builder.getDictionaryAttr({});
-      if (step.call.getArgAttrsAttr())
-        step.call.setArgAttrsAttr(builder.getArrayAttr(
-            SmallVector<Attribute>(step.call.getNumOperands(), empty)));
-      if (step.call.getResAttrsAttr())
-        step.call.setResAttrsAttr(builder.getArrayAttr(
-            SmallVector<Attribute>(step.call.getNumResults(), empty)));
     }
     return success();
   }
@@ -417,30 +410,49 @@ public:
 // recipe is selected. Public verification reads actual candidate instructions.
 OwningOpRef<mlir::ModuleOp>
 prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
-                      std::optional<CapacityCause> *capacity) {
-  uint64_t standalone = 1000000;
+                      std::optional<CapacityCause> *capacity,
+                      mathematical::NumericalSelection *selection) {
+  llvm::TimeTraceScope timing("zkc.numerical-normalization");
+  uint64_t standalone = 4000000;
   auto &remaining = shared ? *shared : standalone;
   if (!chargeCopy(source, remaining, capacity))
     return {};
   IRMapping sourceMapping;
   OwningOpRef<mlir::ModuleOp> proposal(
       cast<mlir::ModuleOp>(source->clone(sourceMapping)));
+  auto inherit = [&] {
+    if (selection)
+      source.walk([&](Operation *op) {
+        for (auto id : selection->owners(op))
+          selection->record(sourceMapping.lookup(op), id);
+      });
+  };
   auto owner =
       cast<protocol_ir::ProtocolModuleOp>(proposal->getBody()->front());
   llvm::DenseSet<Operation *> shareable;
   SymbolTableCollection symbols;
   SmallVector<KernelNormalizationRewrite> rewrites;
-  SmallVector<CallOp> calls;
-  source.walk([&](CallOp call) { calls.push_back(call); });
+  SmallVector<Operation *> calls;
+  source.walk([&](Operation *op) {
+    if (isa<exec::ComputeOp>(op))
+      calls.push_back(op);
+  });
   // One immutable unit can have several actual invocations. Give each proposal
   // a private normalized entry so sharing never changes another invocation.
   SymbolTable outer(owner);
   for (auto sourceCall : calls) {
-    auto call = cast<CallOp>(sourceMapping.lookup(sourceCall.getOperation()));
-    auto raw = resolve(call, symbols);
+    auto *call = sourceMapping.lookup(sourceCall);
+    auto raw = resolveInvocation(call, symbols);
     if (!raw)
       return {};
-    auto unit = cast<mlir::ModuleOp>(raw->getParentOp());
+    auto unit = dyn_cast<mlir::ModuleOp>(raw->getParentOp());
+    OwningOpRef<mlir::ModuleOp> closed;
+    if (!unit || !mathematical::isComputationUnit(unit)) {
+      closed = closeComputation(raw, remaining);
+      if (!closed)
+        return {};
+      unit = *closed;
+    }
     llvm::DenseSet<Operation *> generated;
     auto normalized = normalizeUnit(unit, remaining, generated, capacity);
     if (!normalized)
@@ -451,8 +463,9 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     SymbolTable::setSymbolName(*normalized, "_normalized_kernel");
     auto fresh = normalized.release();
     auto name = outer.insert(fresh, owner.getBody().front().end());
-    call.setCalleeAttr(SymbolRefAttr::get(
-        name, {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
+    call->setAttr("callee",
+                  SymbolRefAttr::get(
+                      name, {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
     shareable.insert(generated.begin(), generated.end());
     rewrites.push_back({sourceCall, call, fresh});
   }
@@ -462,8 +475,10 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   // Only checked polynomial-generated operations can change a frontier. With
   // none, the checked normalized subject is already final: there is no port
   // rewrite to propose or independently compare, and no snapshot to copy.
-  if (shareable.empty())
+  if (shareable.empty()) {
+    inherit();
     return proposal;
+  }
   // Preserve the actual normalized subject and checked origins before any
   // port rewrite. The independent reader consumes this immutable snapshot.
   if (!chargeCopy(proposal->getOperation(), remaining, capacity))
@@ -482,7 +497,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     origins.push_back(std::move(origin));
   }
   // Only calculation wrappers explicitly attributed by the projection record
-  // may acquire ports. Authored Local interfaces are fixed, including dormant
+  // may acquire ports. Authored scoped interfaces are fixed, including dormant
   // authored definitions. Each selected wrapper has one actual invocation.
   llvm::DenseSet<Attribute> generatedWrappers;
   for (auto record :
@@ -490,7 +505,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
     for (auto item : record.getCalculations())
       generatedWrappers.insert(cast<DictionaryAttr>(item).get("callee"));
   llvm::DenseMap<Operation *, unsigned> uses;
-  owner.walk([&](local::CallOp call) {
+  owner.walk([&](protocol_ir::LocalCallOp call) {
     if (generatedWrappers.contains(call.getCalleeAttr()))
       if (auto *definition = outer.lookup(call.getCallee()))
         ++uses[definition];
@@ -505,25 +520,44 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   });
   for (auto *block : blocks) {
     SmallVector<Step> steps;
-    for (auto invocation : block->getOps<local::CallOp>()) {
+    for (auto invocation : block->getOps<protocol_ir::LocalCallOp>()) {
       if (!generatedWrappers.contains(invocation.getCalleeAttr()))
         continue;
-      auto wrapper = outer.lookup<local::FuncOp>(invocation.getCallee());
-      if (!wrapper || uses.lookup(wrapper) != 1 ||
-          !wrapper.getBody().hasOneBlock())
+      auto wrapper = outer.lookup<func::FuncOp>(invocation.getCallee());
+      if (!wrapper || uses.lookup(wrapper) != 1 || wrapper.empty())
         return {};
-      auto call = dyn_cast<CallOp>(wrapper.getBody().front().front());
+      auto call = dyn_cast<exec::ComputeOp>(wrapper.front().front());
       if (!call)
         continue; // A guard-only wrapper has no numerical work.
       SymbolTableCollection localSymbols;
-      auto entry = resolve(call, localSymbols);
+      auto entry = call.resolveCallee(localSymbols);
       if (!entry)
         return {};
       // Resolve actual wrapper ports in run(); their order and multiplicity
       // need not match the numerical entry's argument coordinates.
-      steps.push_back({wrapper, invocation, call, entry,
-                       wrapper.getNumArguments(), wrapper.getNumResults(),
-                       call.getNumOperands(), call.getNumResults()});
+      exec::ReturnOp returned;
+      auto walk = wrapper.walk([&](Operation *op) {
+        if (!remaining)
+          return WalkResult::interrupt();
+        --remaining;
+        if (auto result = dyn_cast<exec::ReturnOp>(op)) {
+          if (returned)
+            return WalkResult::interrupt();
+          returned = result;
+        }
+        return WalkResult::advance();
+      });
+      if (walk.wasInterrupted() || !returned || !call.getOutcome().hasOneUse())
+        return {};
+      auto dispatch =
+          dyn_cast<exec::DispatchOp>(*call.getOutcome().getUsers().begin());
+      if (!dispatch || dispatch->getPrevNode() != call.getOperation())
+        return {};
+      auto *payload = dispatch.getReturned();
+      steps.push_back({wrapper, invocation, call, returned, payload, entry,
+                       wrapper.getNumArguments(), invocation.getNumResults(),
+                       unsigned(call.getInputs().size()),
+                       payload->getNumArguments()});
     }
     if (steps.empty())
       continue;
@@ -533,6 +567,7 @@ prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
   if (failed(verifyKernelFrontier(*normalizedBefore, *proposal, origins,
                                   remaining)))
     return {};
+  inherit();
   return proposal;
 }
 } // namespace zkc::kernel

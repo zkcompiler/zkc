@@ -5,7 +5,7 @@ Entry control uses standard MLIR functions and CFG branches, with Data for
 logical value assembly and Exec for fallible numerical calls and deployments.
 Exec outcomes explicitly distinguish returned values from terminal stops.
 Protocol IR (PIR) retains participant mathematics and interaction. Both numerical
-Entry helpers and participant computation use the existing Kernel, physical
+Entry helpers and participant computation use the existing numerical, physical
 lowering and VM; the Host does not implement a second arithmetic interpreter.
 
 ## System map
@@ -22,7 +22,7 @@ explicit .zkc modules + Assets
                        ↓                   │                         │
                     participant            │                  proof / joint Host
                        ↓                   ↓                         │
-                    exec / Kernel → physical → zkc.program/0 ────────┘
+                    exec / runtime → physical → zkc.program/0 ────────┘
                                                     │
                                        interpreter + VM instance
                                                     │
@@ -45,7 +45,7 @@ relation declarations, library-level multi-table bundles and external adapters.
 | Entry control | Static application calls, ordinary data and ordered Host invocations; numerical islands remain separate |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
-| `exec` | Demand-driven standard computation units and ordered Local calls; checked numerical realization |
+| `exec` | Scoped Func/CF execution, explicit outcomes and typed mathematical requests; checked numerical realization |
 | `physical` | Admitted representations, installed operations, conversions and storage handling |
 | `zkc.program/0` | Closed participant or numerical function description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
@@ -130,18 +130,18 @@ also retain setup authority and the selected proof operation. Execution uses
 these bindings without reinterpreting the serialized carrier. Its shared ledger
 accounts for cumulative work and simultaneous parent/child value storage.
 
-[Numerical units](spec/ir/kernel.md) use standard `builtin.module` and
+[Numerical units](spec/ir/computation.md) use standard `builtin.module` and
 `func.func` with the explicitly checked `exec.computation` profile and existing
 mathematical operations. Ordered Local calls invoke them;
-physical planning retains their source and selected Local realization together.
+physical planning retains their source and selected scoped realization together.
 Independent numerical and physical readers check the result before publication.
 This boundary keeps the complete numerical body available independently of
 participant control.
 Normalization, analysis and recipe verification read standard-function bodies;
-Local functions are the executable output. Source symbol context and output
+Scoped standard functions are the executable output. Source symbol context and output
 binding allocation remain separate.
 Numerical realization chooses native contractions, compact pointwise expressions,
-bulk vector operations or a private standard SCF schedule before Local lowering.
+bulk vector operations or a private standard SCF schedule before scoped CFG lowering.
 Retained pointwise maps and selected sums first use standard Tensor/Linalg
 computations with exact Algebra scalar regions. A separate reader checks the
 actual transformed packet and its source formula before the native handler
