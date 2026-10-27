@@ -110,8 +110,9 @@ protocol Run roles(P)(xs:Vector<F>@P,seed:F@P,enabled:bool@P)
 
 
 @pytest.mark.parametrize('mode,module', [('fn', 'finite'), ('math fn', 'finite_math')])
-def test_pointwise_sum_dead_state_work_obeys_callback_mode(
-    toolchain, journal, directory, mode, module,
+@pytest.mark.parametrize('bulk', [True, False])
+def test_pointwise_sum_dead_total_state_work_has_checked_realizations(
+    toolchain, journal, directory, mode, module, bulk,
 ):
     source = '''module sample;
 use zkc::vector::{Vector};
@@ -125,10 +126,13 @@ MODE work(xs:Vector<F>,seed:F)->F{
 }
 protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,seed);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 '''.replace('FINITE_MODULE', module).replace('MODE', mode)
-    entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify'])
+    flags = [] if bulk else ['--no-finite-bulk']
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify', *flags])
     assert entry.run('values', {'xs': ['2', '3'], 'seed': '7'})['result'] == '25'
     iterations = joint_execution(json.loads(journal.last.stdout))['roles'][0]['usage']['iterations']
-    assert iterations == (0 if mode == 'math fn' else 2)
+    # The checked bulk recipe may discard total dead work in either mode.
+    # The adjacent partial-work test retains unused inverses and explicit stops.
+    assert iterations == (0 if bulk else 2)
 
 
 def test_pointwise_sum_broadcast_uses_result_field_and_index_domain(

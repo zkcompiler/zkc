@@ -43,7 +43,10 @@ class ScopedExpander : private OpBuilder::Listener {
   llvm::StringSet<> names;
   unsigned nextRegion = 0;
   unsigned definitions = 0, bindings = 0;
-  uint64_t defaultRemaining = 100000, defaultBytes = 16 * 1024 * 1024;
+  // Substitution charges logical operations and every data port across the
+  // complete closure. Use the same word allowance as numerical materialization;
+  // the separate source-operation and declaration limits still apply.
+  uint64_t defaultRemaining = 1000000, defaultBytes = 16 * 1024 * 1024;
   uint64_t &remaining, &remainingBytes;
   const llvm::DenseMap<Operation *, func::FuncOp> *replacements;
   mathematical::NumericalSelection *selection;

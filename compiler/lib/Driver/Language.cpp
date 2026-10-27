@@ -168,7 +168,7 @@ int runLanguageCompiler(int argc, char **argv) {
       arg.split(names, ',');
       for (auto name : names) {
         if (name != "entry" && name != "protocol" && name != "participant" &&
-            name != "exec" && name != "physical")
+            name != "exec" && name != "execution" && name != "physical")
           return refuse(error("source.options", "unknown dump phase"));
         dumps.push_back(name.str());
       }

@@ -32,3 +32,9 @@ quotient, with cardinalities `q` and `q^8` and characteristic `q` in both.
 The theorem is relative to the admitted IR and ideal typed oracle. Native
 octic basis/byte codecs and computational or QROM security require separate
 correspondence and security arguments.
+
+Check the source declarations from this project directory:
+
+```sh zkc-example
+zkc check
+```

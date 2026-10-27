@@ -45,7 +45,7 @@ relation declarations, library-level multi-table bundles and external adapters.
 | Entry control | Static application calls, ordinary data and ordered Host invocations; numerical islands remain separate |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
-| `exec` | Demand-driven standard computation units and ordered Local calls; checked numerical realization |
+| `exec` | Scoped Func/CF execution, explicit outcomes and typed mathematical requests; checked numerical realization |
 | `physical` | Admitted representations, installed operations, conversions and storage handling |
 | `zkc.program/0` | Closed participant or numerical function description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |

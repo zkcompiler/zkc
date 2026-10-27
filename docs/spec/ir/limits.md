@@ -9,6 +9,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Helper depth and expanded helper analysis | 64 levels; 100,000 operations |
 | Helper dependency analysis and availability replay | 1,000,000 words/indices within their separate budgets |
 | Role expansion | 100,000 operation/port visits |
+| Scoped helper substitution | 1,000,000 operation/port visits, 4,096 definitions and 4,096 bindings, 64 nesting levels, and 16 MiB occurrence text; independent comparison has its own 1,000,000 visits |
 | Exact resource-origin analysis | 100,000 shared work units and 64 call/region levels |
 | Pointwise map formulas and correspondence | Shared helper expansion budget; expanded formula within the Ring view limits of 65,536 nodes and depth 1,024; 1,000,000 matcher steps |
 | Mathematical preparation helper copying | 100,000 operations and 1,000,000 operand/result slots, cumulative across realization stages |

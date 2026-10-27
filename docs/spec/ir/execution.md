@@ -404,9 +404,9 @@ comparison also rechecks mathematical admission, but does not bind those
 equations to authored source: a different total equation can pass this
 component. Language and mathematical correspondence must supply that check.
 Mathematical and finite realization requests are not admitted by these APIs;
-they need their separate actual-body, port and domain checks. These APIs neither
-replace language-source correspondence nor establish the default compiler
-cutover. The native record writer is not an authored-source emitter.
+they need their separate actual-body, port and domain checks. These APIs do not
+replace language-source correspondence. The default compiler uses its own
+authored-source emitter and independent comparison at that boundary.
 
 ## Independent admission
 
@@ -479,7 +479,7 @@ repeating expansion is checked against that new input. The checker
 recovers those paths even when a bounded name uses a digest, and publishes
 optional occurrence records only after the whole comparison succeeds.
 
-Construction bounds substituted operation/port work to 100000, definitions to
+Construction bounds substituted operation/port work to 1000000, definitions to
 4096, nesting to 64 and occurrence encoding to 16 MiB. The separate comparison
 has a 1000000 operation/port allowance. Refusal discards the candidate and
 leaves the original and caller-owned occurrence output unchanged. This edge

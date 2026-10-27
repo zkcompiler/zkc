@@ -57,7 +57,7 @@ the selected compiler's installation, actual executable SHA-256 and capabilities
 alongside the calling Rust runtime's count-instrument capability.
 
 ```sh
-zkc compile Proof --report=build/explain --dump=entry,protocol,participant,exec,physical
+zkc compile Proof --report=build/explain --dump=entry,protocol,participant,exec,execution,physical
 zkc run Main --report=build/run-observation
 ```
 
@@ -66,7 +66,9 @@ The report directory must be fresh. `command.json` retains the operation result;
 location/binding/type metadata, inclusive pass times, and mathematical decisions.
 Requested phase dumps are separate `.mlir` files with ordinal prefixes. The
 `entry` phase describes application control; nested calculations and child
-deployments retain their own phases. Each observation has a `unit` path from
+deployments retain their own phases. Numerical calculations report `execution`
+for scoped executable IR; protocol deployments report their `participant` and
+`exec` stages. Each observation has a `unit` path from
 the root Entry to the calculation or deployment, so repeated phases remain
 distinct. Bounded journals report omitted records. `time-trace.json` is an LLVM
 scoped trace suitable for Chrome tracing or Perfetto. Compilation observations

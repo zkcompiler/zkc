@@ -8,6 +8,7 @@ import sys
 import tomllib
 
 from project import project_text, project_arguments
+from input_files import input_files
 
 import pytest
 
@@ -61,23 +62,29 @@ pub math fn affine<F:Field>(low:F,high:F,r:E)->F{return low;}
 ''')
     diagnostic = journal.json(command, refuses='source-compilation')['diagnostics']
     assert 'source.type' in diagnostic and str(library) in diagnostic
-    # Full helper vocabulary admission belongs to the concrete mathematical IR.
-    # Dead unsupported operations must still be refused before simplification.
+    # The checked mathematical closure accepts total dead equality, while the
+    # map domain still requires equal lengths even when one row is unused.
     library.write_text('''module formula;
 pub math fn affine<F:Field>(low:F,high:F,r:F)->F{let unused=low==high;return low;}
 ''')
     assert journal.json(command)['scope'] == 'definitions'
-    package = directory / 'unsupported-map.zkpkg'
-    diagnostic = journal.json([toolchain.runtime, '--json', 'compile',
-                              f'--compiler={toolchain.compiler}',
-                              f'--project={project}', 'main::Job',
-                              f'--output={package}'],
-                              refuses='source-compilation')['diagnostics']
-    assert 'algebra-map-formula' in diagnostic and str(library) in diagnostic
-    assert str(source) in diagnostic
-    assert '\\0A' not in diagnostic
-    assert '\nrelated source declaration: formula::affine\n' in diagnostic
-    assert not package.exists()
+    package = directory / 'mapped.zkpkg'
+    compiled = journal.json([toolchain.runtime, '--json', 'compile',
+                             f'--compiler={toolchain.compiler}',
+                             f'--project={project}', 'main::Job',
+                             f'--output={package}'])
+    for name, a, b, refusal in [('equal', ['2', '3'], ['4', '5'], None),
+                              ('unequal', ['2'], [], 'entry-host-run-failed')]:
+        inputs = input_files(journal, name, package=package,
+                             arguments={'inputs': {'P': {'a': a, 'b': b, 'r': '7'}}})
+        results = directory / f'{name}.outputs.json'
+        journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                      f'--sha256={compiled["package_sha256"]}', *inputs,
+                      f'--results={results}'], refuses=refusal)
+        if refusal is None:
+            assert json.loads(results.read_text())['value']['P']['out'] == a
+        else:
+            assert not results.exists()
 
 
 def write(directory, name, value):
