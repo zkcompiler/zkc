@@ -1,4 +1,5 @@
 #include "WrittenSource.h"
+#include "WrittenSourceIndex.h"
 #include "zkc/Language/Inspection.h"
 #include "zkc/Support/BoundedStream.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -229,26 +230,6 @@ StringRef syntaxKind(Declaration::Kind value) {
   }
   llvm_unreachable("unknown syntax kind");
 }
-using WrittenNodeKey =
-    std::tuple<uint32_t, uint32_t, uint32_t, LexicalNode::Kind, unsigned>;
-WrittenNodeKey nodeKey(Span declaration, LexicalNode node) {
-  return {declaration.source.index, declaration.begin, declaration.end,
-          node.kind, node.index};
-}
-struct WrittenAddress {
-  std::string owner;
-  std::vector<std::pair<std::string, unsigned>> path;
-};
-using WrittenAddresses = std::map<WrittenNodeKey, std::vector<WrittenAddress>>;
-using WrittenSpanKey = std::tuple<uint32_t, uint32_t, uint32_t>;
-WrittenSpanKey spanKey(Span span) {
-  return {span.source.index, span.begin, span.end};
-}
-struct WrittenIndex {
-  WrittenAddresses lexical;
-  std::map<WrittenSpanKey, std::vector<WrittenAddress>> spans;
-};
-
 /// A flat node table keeps the wire document's nesting bounded independently
 /// of source depth. Edges are structural paths relative to one authored owner.
 class Writer {
@@ -292,7 +273,7 @@ private:
       error = std::move(failure);
       return;
     }
-    addresses->lexical[nodeKey(declaration, node)].push_back(
+    addresses->lexical[writtenNodeKey(declaration, node)].push_back(
         {addressOwner, path});
   }
   json::Array address() const {
@@ -313,7 +294,7 @@ private:
         error = std::move(failure);
         return nullptr;
       }
-      addresses->spans[spanKey(span)].push_back({addressOwner, path});
+      addresses->spans[writtenSpanKey(span)].push_back({addressOwner, path});
     }
     fields["kind"] = kind.str();
     fields["path"] = address();
@@ -977,6 +958,32 @@ private:
   }
 };
 } // namespace
+namespace detail {
+Expected<WrittenIndex> indexWrittenSource(const CheckedProject &project,
+                                          const WrittenSources &written,
+                                          Work &work) {
+  WrittenIndex result;
+  auto value = Writer(project, work, &result).run(written);
+  if (!value)
+    return value.takeError();
+  return result;
+}
+Expected<json::Array> encodeWrittenAddresses(ArrayRef<WrittenAddress> values,
+                                             Work &work) {
+  json::Array result;
+  for (const auto &address : values) {
+    if (auto error =
+            work.charge(1 + address.owner.size() + 2 * address.path.size()))
+      return std::move(error);
+    json::Array path;
+    for (const auto &[category, ordinal] : address.path)
+      path.push_back(json::Array{category, ordinal});
+    result.push_back(
+        json::Object{{"owner", address.owner}, {"path", std::move(path)}});
+  }
+  return result;
+}
+} // namespace detail
 Expected<std::string> inspectWrittenSource(const CheckedProject &project,
                                            const Limits &limits) {
   if (auto error = checkLimits(limits))
@@ -1011,54 +1018,31 @@ Expected<std::string> inspectSourceBindings(const CheckedProject &project,
         "source.limit", "checked project exceeds source binding export limits");
   if (!project.storage->writtenSources)
     return detail::failure("source.syntax", "written source was not retained");
-  WrittenIndex index;
-  auto &addresses = index.lexical;
   Work work{limits};
-  {
-    auto indexed =
-        Writer(project, work, &index).run(*project.storage->writtenSources);
-    if (!indexed)
-      return indexed.takeError();
-  }
-  auto encode = [&](ArrayRef<WrittenAddress> values) -> Expected<json::Array> {
-    json::Array result;
-    for (const auto &address : values) {
-      if (auto error = work.charge(1 + 2 * address.path.size()))
-        return std::move(error);
-      json::Array path;
-      for (const auto &[category, ordinal] : address.path)
-        path.push_back(json::Array{category, ordinal});
-      result.push_back(
-          json::Object{{"owner", address.owner}, {"path", std::move(path)}});
-    }
-    return result;
-  };
+  auto index =
+      indexWrittenSource(project, *project.storage->writtenSources, work);
+  if (!index)
+    return index.takeError();
   json::Array references, unassociated;
   for (const auto &resolution : project.storage->lexicalResolutions)
     for (const auto &reference : resolution.references) {
       if (auto error = work.charge(1, resolution.declaration))
         return std::move(error);
-      auto uses =
-          addresses.find(nodeKey(resolution.declaration, reference.use));
+      auto uses = index->at(resolution.declaration, reference.use);
       auto binders = reference.binder
-                         ? addresses.find(nodeKey(resolution.declaration,
-                                                  *reference.binder))
-                         : addresses.end();
+                         ? index->at(resolution.declaration, *reference.binder)
+                         : ArrayRef<WrittenAddress>{};
       StringRef kind =
           reference.access == LexicalReference::Access::Read   ? "read"
           : reference.access == LexicalReference::Access::Call ? "call"
                                                                : "assign";
-      auto from = encode(uses == addresses.end()
-                             ? ArrayRef<WrittenAddress>{}
-                             : ArrayRef<WrittenAddress>(uses->second));
+      auto from = encodeWrittenAddresses(uses, work);
       if (!from)
         return from.takeError();
-      auto to = encode(binders == addresses.end()
-                           ? ArrayRef<WrittenAddress>{}
-                           : ArrayRef<WrittenAddress>(binders->second));
+      auto to = encodeWrittenAddresses(binders, work);
       if (!to)
         return to.takeError();
-      if (uses != addresses.end() && binders != addresses.end()) {
+      if (!uses.empty() && !binders.empty()) {
         references.push_back(json::Object{{"kind", kind},
                                           {"uses", std::move(*from)},
                                           {"binders", std::move(*to)}});
@@ -1101,10 +1085,7 @@ Expected<std::string> inspectSourceBindings(const CheckedProject &project,
                                           : 0),
             reference.span))
       return std::move(error);
-    auto found = index.spans.find(spanKey(reference.span));
-    auto candidates = encode(found == index.spans.end()
-                                 ? ArrayRef<WrittenAddress>{}
-                                 : ArrayRef<WrittenAddress>(found->second));
+    auto candidates = encodeWrittenAddresses(index->at(reference.span), work);
     if (!candidates)
       return candidates.takeError();
     declarations.push_back(json::Object{

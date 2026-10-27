@@ -888,6 +888,8 @@ private:
   inspectWrittenSource(const CheckedProject &, const Limits &);
   friend llvm::Expected<std::string>
   inspectSourceBindings(const CheckedProject &, const Limits &);
+  friend llvm::Expected<std::string> inspectSourceInstances(const ClosedEntry &,
+                                                            const Limits &);
   friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
                                                       const Limits &);
   friend llvm::Expected<EntrySelection> resolveEntry(const CheckedProject &,
