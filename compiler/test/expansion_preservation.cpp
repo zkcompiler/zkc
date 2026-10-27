@@ -371,14 +371,17 @@ int main() {
         auto target = cast<exec::DispatchOp>(evaluation->getNextNode());
         auto *after = target.getReturned();
         auto *before = guard->getBlock();
+        IRRewriter rewriter(&context);
+        auto *resumed = rewriter.splitBlock(after, after->begin());
         guard->remove();
         dispatch->remove();
-        IRRewriter rewriter(&context);
+        // Remove the edge before deleting its old destination. Detached
+        // operations still own their successor uses.
+        dispatch->setSuccessor(resumed, 0);
+        require(continuation->use_empty(), "guard continuation must be unique");
         rewriter.mergeBlocks(continuation, before);
-        auto *resumed = rewriter.splitBlock(after, after->begin());
         after->push_back(guard);
         after->push_back(dispatch);
-        dispatch->setSuccessor(resumed, 0);
       });
   return cases.result();
 }

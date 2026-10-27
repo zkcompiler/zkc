@@ -41,8 +41,14 @@ class Consumer {
                output.getArguments().drop_front());
     for (auto *op = source.first(&input.front()); op; op = source.next(op)) {
       auto *step = source.get(op);
-      if (!step ||
-          !charge(64 + 16 * (step->inputs.size() + step->outputs.size())))
+      if (!step)
+        return failure();
+      // Only range/branch/match steps construct scopes and transfers. Charge
+      // scalar invocations for their invocation/dispatch pair and slots,
+      // including the shared failure continuation on its first use.
+      bool structured = isa<exec::RangeOp, exec::TestOp, exec::MatchOp>(op);
+      uint64_t width = step->inputs.size() + step->outputs.size();
+      if (!charge(structured ? 64 + 16 * width : 16 + 2 * width))
         return failure();
       Values inputs;
       for (Value value : step->inputs) {

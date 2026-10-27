@@ -195,6 +195,12 @@ class Recipes {
                        SmallVector<Value> &results) {
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!isTotal(op) || !site ||
+        !reserve(1 + inputs.size() + op->getNumResults()))
+      return failure();
+    // Scalar inspection and emitted execution have separate costs. Ordinary
+    // primitives allocate one invocation/dispatch pair; only control recipes
+    // need the larger scope/transfer envelope in addition to their outlines.
+    if (isa<data::GetOp, data::IsOp, arith::SelectOp>(op) &&
         !reserve(64 + 16 * (inputs.size() + op->getNumResults())))
       return failure();
     control.setLocation(op->getLoc());
@@ -205,7 +211,9 @@ class Recipes {
     };
     auto refuse = [](Operation *, StringRef) { return failure(); };
     auto emitState = [&](const OperationState &state) -> SmallVector<Value> {
-      if (!reserve(32 + 8 * (state.operands.size() + state.types.size())))
+      // Covers invocation operands/results, dispatch edges, continuation
+      // arguments and the shared failure continuation (even on first use).
+      if (!reserve(16 + 2 * (state.operands.size() + state.types.size())))
         return SmallVector<Value>(state.types.size());
       return control.invoke(state.attributes.get("binding")
                                 ? "exec.apply"
@@ -544,10 +552,11 @@ class Recipes {
           !constant.getType().isSignlessInteger(1))
         return refuse(op, "expected scalar Boolean constant");
       auto value = attribute.getValue().getBoolValue();
-      replace(control.invoke(
-          "exec.boolean", rewriter.getI1Type(), control.scoped({}),
-          {rewriter.getNamedAttr("value", rewriter.getBoolAttr(value)),
-           rewriter.getNamedAttr("site", site)}));
+      OperationState state(op->getLoc(), exec::BooleanOp::getOperationName());
+      state.addTypes(rewriter.getI1Type());
+      state.addAttribute("value", rewriter.getBoolAttr(value));
+      state.addAttribute("site", site);
+      replace(emitState(state));
       return success();
     }
     if (isa<arith::AndIOp, arith::OrIOp, arith::XOrIOp, arith::CmpIOp>(op)) {

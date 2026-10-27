@@ -283,7 +283,7 @@ rejects("IR cannot depend on carrier translation",
         "ZkcIR: upward include")
 
 rejects("SSA transforms cannot depend on carrier translation",
-        root / "lib/Transforms/Algorithms.cpp",
+        root / "lib/Transforms/ScopedAlgorithms.cpp",
         lambda text: '#include "zkc/Translation/Protocol.h"\n' + text,
         "ZkcTransforms: upward include")
 
@@ -301,7 +301,7 @@ rejects("IR cannot parse invocation input",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
         "parsing belongs to Compiler or Driver")
 rejects("transforms cannot parse invocation input",
-        root / "lib/Transforms/Algorithms.cpp",
+        root / "lib/Transforms/ScopedAlgorithms.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
         "parsing belongs to Compiler or Driver")
 
@@ -348,7 +348,7 @@ rejects("prepared protocol bridge grants no other private transform header",
         "private component dependency")
 
 for source in ("FiniteVerification", "MathLoweringVerification",
-               "MathematicalComparison", "NestedContractionVerification",
+               "MathematicalComparison", "HelperNormalizationVerification",
                "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
                "Kernel/ScopedVerification"):
     for header in ("ComputationEquations.h", "ComputationSelection.h",

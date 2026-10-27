@@ -164,7 +164,7 @@ def main():
         "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
-        "lib/Transforms/Kernel/Schedule.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/ScopedSchedule.cpp": "ZkcTransforms",
         "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
