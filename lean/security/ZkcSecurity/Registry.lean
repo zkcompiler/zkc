@@ -529,6 +529,58 @@ def entries : List Entry := [
     some `ZkcSecurity.Claims.HonestPair.Nonvacuous,
     "Some source input satisfies both the subject's retained target relation and its \
     fixed honest input contract."⟩,
+  ⟨"event.proximity-far", .event,
+    some `ZkcSecurity.Families.Proximity.Far,
+    "The word has at least the fixed normalized Hamming distance from every codeword; the \
+    threshold determines the gap."⟩,
+  ⟨"event.gkr-output-difference", .event,
+    some `ZkcSecurity.Families.Gkr.Output.Differ,
+    "The output-difference polynomial is nonzero on some Boolean suffix of the current \
+    dimension-aligned challenge prefix."⟩,
+  ⟨"wellformed.gkr-circuit-shape", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.CircuitEncoding.Shape,
+    "The input and stacked wiring vectors have their declared dimensions, and the layer \
+    count fits the selector domain."⟩,
+  ⟨"wellformed.gkr-circuit-admission", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.CircuitEncoding.Admitted,
+    "Circuit shape, output length, configured width and layer bounds, and the logical index \
+    limit hold before execution."⟩,
+  ⟨"event.gkr-circuit-outputs", .event,
+    some `ZkcSecurity.Realizations.Gkr.CircuitEncoding.Outputs,
+    "The shaped circuit encoding decodes the claimed outputs to the mathematical evaluation \
+    of the circuit at its final layer."⟩,
+  ⟨"event.gkr-combination-claim", .event,
+    some `ZkcSecurity.Realizations.Gkr.Combination.gateClaim,
+    "The carried claim equals the wiring polynomial applied to the two lower-layer \
+    evaluations at the selected left and right points."⟩,
+  ⟨"wellformed.gkr-stacked-encoding", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.HonestCircuit.StackedEncoding,
+    "The raw wiring stack has the declared size, and every active layer block decodes to \
+    the specified mathematical wiring table."⟩,
+  ⟨"wellformed.gkr-honest-round-decoding", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.HonestProducerRounds.Decodes,
+    "All four raw factor vectors decode at the selected dimension to the honest round \
+    state."⟩,
+  ⟨"event.gkr-residual-relation", .event,
+    some `ZkcSecurity.Realizations.Gkr.Relations.Residual,
+    "The raw factors decode at one common dimension, and the claim equals their Boolean sum \
+    after the retained prefix restriction."⟩,
+  ⟨"wellformed.gkr-anchored-round", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.Rounds.Anchored,
+    "The remaining dimension matches the retained point, and every suffix evaluation agrees \
+    with the original reference at that prefix."⟩,
+  ⟨"event.gkr-returned-false-residual", .event,
+    some `ZkcSecurity.Realizations.Gkr.Rounds.Residual,
+    "The returned point and scalar encode an anchored admissible round state whose claim \
+    differs from its mathematical total."⟩,
+  ⟨"wellformed.gkr-source-representation", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.Source.Represents,
+    "The invocation dimensions, input and output tables, wiring blocks and source index \
+    bounds represent the specified mathematical circuit."⟩,
+  ⟨"wellformed.gkr-source-admission", .wellFormedness,
+    some `ZkcSecurity.Realizations.Gkr.Source.Invocation.Admitted,
+    "The concrete source invocation meets its fixed circuit admission bounds and output \
+    shape, independently of target truth."⟩,
   ⟨"wellformed.gkr-rounds-active-independent", .wellFormedness,
     some `ZkcSecurity.Examples.Components.GkrRoundsReference.independent,
     "At least one of the two retained wire factors is independent of the active challenge \
