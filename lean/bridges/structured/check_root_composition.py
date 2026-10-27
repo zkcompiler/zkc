@@ -76,7 +76,8 @@ def check(args):
     (generation.directory / "acceptance.json").unlink(missing_ok=True)
     fixture = Path(__file__).parent / "fixtures/root-composition"
     modules, assets = project_inputs(fixture / "zkc.toml")
-    assert not assets
+    if assets:
+        raise ValueError("the root-composition fixture must not contain assets")
     root = dict(name="FourSums", entry="example::Proof", source=str(modules.pop("example")),
                 modules={key: str(value) for key, value in modules.items()}, target="totals")
     config = tomllib.loads((Path(__file__).parent / "roots/sampled.toml").read_text())
