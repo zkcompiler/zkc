@@ -167,3 +167,48 @@ recompute the occurrence and route against the written modules and imports.
 Specialization, role/port inference, control, notation and oracle proposals remain
 separate obligations; the independent checker and its soundness theorem are
 still required.
+
+## Checked source artifact
+
+`exportSourceCorrespondence` and `zkc-compile language-check
+--subject=MODULE::Protocol --source-correspondence` publish a
+`zkc.source-correspondence/0` object. The CLI nests it under
+`source_correspondence`. A proof Entry can replace the explicit subject.
+Ordinary Host functions are outside the structured protocol export profile.
+
+The root has exactly `format`, `admission`, `source_ast`, `bindings`, `snapshot`
+and `rows`. `admission` is the same association used by the
+[source-claim export](claims.md): original-byte SHA-256, protocol symbol,
+interface SHA-256, capture and installation. `source_ast` and `bindings` use the
+formats above. `snapshot` is the actual [structured source](../formats/structured-source.md)
+export of that checked original. No separate subject digest is introduced.
+
+Each `rows` element has `row`, `operation`, `derivation`, `original` and `sources`.
+`row` follows array indices in that exact snapshot. `operation`, `derivation`
+and the nullable original lexical range come from the structured encoder's
+[association table](../formats/structured-source.md#native-row-associations).
+They are produced in the same call that emits the snapshot. The original range
+has `begin`, `end`, `line` and `column`.
+
+`sources` retains every checked-original source span at that parsed MLIR
+position. Each element contains `span` and `candidates`. Candidates are all
+written `{owner,path}` nodes with exactly that span. They are search hints;
+there is no nearest-span match. Empty sources or candidates remain explicit,
+including generated rows with no authored node. A row is never silently omitted
+because its source association is missing. Diagnostic filesystem paths do not
+enter the artifact.
+
+Component export ceilings still apply. The join has its own bounded work counter
+and charges source positions, syntax paths and copied candidates before storing
+them. The complete publication is bounded by `apiInspectionBytes`, including
+all components, and a refusal returns no partial document. The retained original
+and interface must fit the requested ceilings too.
+
+`checkSourceCorrespondenceExport` checks publication integrity against this
+canonical producer, accepting JSON whitespace/member-order differences and
+refusing duplicate keys, unknown fields and changed components. It does not
+admit a new original and is not the independent Lean checker. This artifact
+currently supplies written syntax, binding observations and source-to-row
+associations. Specialization, notation/scoped, role/control and oracle elaboration
+proposals remain to be added. Neither native comparison nor a location join
+removes the parser, source-correspondence or structured-denotation trusted links.
