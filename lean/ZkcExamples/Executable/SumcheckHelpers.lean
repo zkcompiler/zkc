@@ -352,25 +352,43 @@ local macro "returns_iterate " results:term : tactic =>
   `(tactic| refine Evaluated.Returns.iterate installed validator (results := $results) (by rfl) (by rfl)
     (by rfl) (by rfl) ?_ ?_ (by rfl) ?_)
 
-/-- The body of the check's fold loop. -/
-def restrictionBody : List Zkc.Executable.Step :=
-  match checkFunction.body with
-  | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
-      match checked with
-      | [_, _, _, _, _, _, _, _, _, _, .iterate _ _ _ _ _ _ body _, _, _, _] => body
-      | _ => []
-  | _ => []
+/-- The actual loop ports and body used by the retained executable check.
+Register names are local presentation choices, not part of the mathematical
+fold. Read them together with the body whose evaluation is proved below. -/
+structure RestrictionLoop where
+  induction : String
+  carried : List String
+  captures : List String
+  body : List Zkc.Executable.Step
 
-/-- The parameters of the fold loop's numerical call: its expression. -/
-def interpolationParameters : List Parameter :=
-  match restrictionBody with
-  | [_, _, _, _, _, _, _, _, _, .operation _ _ parameters _ _, _, _, _] => parameters
-  | _ => []
+def restrictionLoop : RestrictionLoop :=
+  let view : Option RestrictionLoop :=
+    match checkFunction.body with
+    | [_, _, _, _, _, _, _, .cond _ _ _ checked _ _, _] =>
+        match checked with
+        | [_, _, _, _, _, _, _, _, _, _, .iterate _ induction _ _ carried captures body _, _, _, _] =>
+            some ⟨induction, carried.map (·.1), captures, body⟩
+        | _ => none
+    | _ => none
+  view.get (by decide +kernel)
+
+/-- The body of the check's fold loop. -/
+abbrev restrictionBody : List Zkc.Executable.Step := restrictionLoop.body
+
+/-- The actual binding and parameters of the fold loop's numerical call.
+The resolution theorem checks this selected declaration, not a generated name
+copied from an earlier program. -/
+def interpolationCall : String × List Parameter :=
+  let call : Option (String × List Parameter) :=
+    match restrictionBody with
+    | [_, _, _, _, _, _, _, _, _, .operation _ binding parameters _ _, _, _, _] => some (binding, parameters)
+    | _ => none
+  call.get (by decide +kernel)
 
 /-- The fold's numerical call resolves to the installed map over a low vector,
 a high vector and a scalar, with the decoded interpolation. -/
 theorem interpolation_resolves :
-    validator.binding? "_map_binding_3" >>= (installed.resolve · interpolationParameters) =
+    validator.binding? interpolationCall.1 >>= (installed.resolve · interpolationCall.2) =
       some (.compute (.numerical .map "bls12-381.fr" [true, true, false] interpolation)) := by
   decide +kernel
 
@@ -388,8 +406,8 @@ theorem interpolate_eq (low high : List F) (r : F) :
 
 /-- The arguments of the check as the body names them. -/
 abbrev checkEnv (xs point : List F) (claim : F) : Env F G :=
-  [("v108", .vector "bls12-381.fr" xs), ("v109", .vector "bls12-381.fr" point),
-    ("v110", .data (.field "bls12-381.fr" claim))]
+  (checkFunction.inputs.map (·.1)).zip
+    [.vector "bls12-381.fr" xs, .vector "bls12-381.fr" point, .data (.field "bls12-381.fr" claim)]
 
 /-- One installed operation that returns, with its exact charge. -/
 local macro "charged_operation " evaluates:term : tactic =>
@@ -443,9 +461,9 @@ theorem doubling_cost {first second two doubled carried induction : String}
 theorem restriction_cost (point : List F) (small : point.length < 64) :
     ∀ (count start : Nat) (current : List F), start + count = point.length →
       current.length = 2 ^ count →
-      (evalFor (fun env => evalSteps installed validator restrictionBody env) "v169"
-          ["v170", "v171", "v172"]
-          [("v109", .vector "bls12-381.fr" point), ("v167", .index point.length)]
+      (evalFor (fun env => evalSteps installed validator restrictionBody env) restrictionLoop.induction
+          restrictionLoop.carried
+          (restrictionLoop.captures.zip [.vector "bls12-381.fr" point, .index point.length])
           (List.range' start count)
           [(.vector "bls12-381.fr" current : Value F G), .index count, .index 1]).ReturnsAfter
         [.vector "bls12-381.fr" (restrictPrefixValues current (point.drop start)), .index 0, .index 1]

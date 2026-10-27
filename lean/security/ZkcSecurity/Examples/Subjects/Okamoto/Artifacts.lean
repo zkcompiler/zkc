@@ -50,8 +50,8 @@ def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
   ⟨"sha256:aa1b8536620f3ead19faad512fe95ba5fb4b6de8683309571e8829c44d99af21", "zkl_9cdd0a5f70a0ca96171d93c3dd785e5e27e287a64a646c3fc511d97f10bd4aec", stage,
     match stage with
     | .interactive => []
-    | .compiledIdeal => [⟨"constructed-participant", "sha256:cf93abe6f8f97f164af790e92c88b0e817577e01e62668db5bec0eac05534a42"⟩]
-    | .executableBytes => [⟨"constructed-participant", "sha256:cf93abe6f8f97f164af790e92c88b0e817577e01e62668db5bec0eac05534a42"⟩]⟩
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:d0583e79275cd9a6168842d3e0c589411e0a2f6beffe2a3afb71abe89b2b9532"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:d0583e79275cd9a6168842d3e0c589411e0a2f6beffe2a3afb71abe89b2b9532"⟩]⟩
 
 /-- Actual full construction occurrences selected by native source paths. -/
 def sourceSites : List (ZkcSecurity.Claims.Site compiled.context) :=

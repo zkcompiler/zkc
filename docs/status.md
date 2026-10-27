@@ -53,10 +53,11 @@ emitter replay. Both checks can inspect the complete immediate execution
 inventory inside a mixed symbol table; its other declarations and stage remain
 the enclosing profile's responsibility. This scoped path is now the default for
 source emission, participant preparation, numerical realization, physical
-selection, publication and artifact comparison. The cutover is still under
-validation: migration of the remaining test consumers and removal of the
-replaced native Local/Plan/Kernel owners are incomplete. Those retained owners
-do not constitute a second supported publication route.
+selection, publication and artifact comparison. Source-facing compiler consumers
+and maintained formal fixtures now exercise that default. The replaced native
+Local/Plan/Kernel implementation owners still need retirement. Transparent word
+arithmetic and compiler-selected writable-buffer execution also remain incomplete.
+The retained owners do not constitute a second supported publication route.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
 
 The logical source-scoped API additionally retains ordinary helper calls,
