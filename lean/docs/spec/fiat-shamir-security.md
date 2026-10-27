@@ -1100,6 +1100,19 @@ complete nested occurrence coordinates. Both property consumers use the same
 validator certificate installed by `CanonicalInstallation`; neither assumes a
 whole-program equality, helper success or an honest adversarial statement.
 
+The concrete GKR physical installation is owned by
+`lean/security/checks/generate_gkr_connections.py`. Recursive source/artifact
+descriptors supply frame lengths, read/yield maps and generated callback paths;
+the family template applies the existing explicit callback and loop laws.
+The generic `Original.Simulation.participant` checks the full input ABI, live
+captures and returned values around the generated body certificate. Every
+emitted proof is kernel checked. The same installation also certifies a formal
+artifact permutation with an additional root allocation and shifted callback
+frames (`TestsSecurity.GkrStructuralGeneration`); that control does not change
+the canonical native subject or assert a new native byte association. Exact
+regeneration ownership and the before/after authored inventory are recorded in
+`lean/security/checks/gkr-connection-{ownership,inventory}.json`.
+
 - `Generated.Completeness.compiled_ideal_complete` proves perfect completeness
   in the registered honest-pair model. The actual source producer computes its
   messages, and `CanonicalReadback.actual` proves their agreement with the actual

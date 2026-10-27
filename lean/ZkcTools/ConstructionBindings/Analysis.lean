@@ -1,5 +1,6 @@
 module
 
+public import ZkcTools.ConstructionBindings.Common
 public import ZkcTools.StructuredSource.Methods.SumcheckRoot
 public import Zkc.Construction.SourceDelivery
 
@@ -38,10 +39,6 @@ structure Layout where
   loops : List Loop
   arity : Nat
   deriving Repr
-
-def unique {α : Type} (label : String) : List α → Except String α
-  | [value] => .ok value
-  | _ => .error ("construction-binding-" ++ label)
 
 /-- Enumerate source applications, in source order. This installation supports
 a straight root and a single repeated library; effects in other regions refuse. -/

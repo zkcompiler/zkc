@@ -44,13 +44,56 @@ both sides share the exact history, and their complete source returns remain
 in the postcondition. Its mathematical premises are independent admission and
 circuit outputs.
 
-The separately constructed `OriginalCertificates.producer` and `.validator`
+The generated `OriginalCertificates.producer` and `.validator`
 certify the full actual compiled participants, for all typed inputs and
 replies, including stops. Their live relations check the complete input ABI;
 return relations retain the complete physical frames and transcript values.
 `CanonicalInstallation` installs this validator certificate together with the
 same nominal reading used by `CanonicalCompleteness` for the pair. No helper
 success, representation witness or transcript equality is supplied by a caller.
+
+## Structural connection generation
+
+Run `python3 lean/security/checks/generate_gkr_connections.py --write` from the
+repository to regenerate the two constructed views and ten concrete connection
+modules for each installation. Omit `--write` for exact comparison, including
+the committed ownership and authored-connection inventory in `checks/`.
+The owner uses this checkout's Lake outputs and prepared dependencies.
+
+`ZkcTools.ConstructionBindings.Frames` traverses recursive SSA syntax. Qualified
+source repeat occurrences select the output, layer, two rounds and coefficient
+regions; the selected descriptors supply capture lengths, count/initial/yield
+references and callback paths. Source visibility and a proposed input permutation
+supply the full optional input ABI. `Generation.GkrConnections` is a registered
+family installation of the existing GKR callback laws. Its small typed
+`Installation` contains the actual participants and their input orders. The
+shared traversal and constructed-view printer contain no GKR dispatch or
+additional evaluator.
+
+`ConnectionTactics` shares the layer, root and repeat assembly strategies.
+`OutputTemplate` retains the parametric output-loop law as ordinary library
+mathematics. `Original.Simulation.participant` installs any full body certificate
+with its checked input/live relation and complete return readback. Generated
+callback equations and proofs are independently elaborated and kernel checked;
+the descriptor or printer does not grant semantic authority. Unsupported shapes
+refuse, or fail their emitted correspondence proof.
+
+`LayoutVariant` is a formal perturbation of the canonical artifact trees with
+explicit provenance: it reverses live input slots within equal nominal sorts,
+prepends a pure coordinate allocation and renames recursive uses and yields.
+This changes allocated offsets, input references and callback selectors. The
+same owner generates the `Rebound` connections, including both complete roots
+and their arbitrary-handler execution theorems. Structural and occurrence
+checks are independent of those full connections.
+`TestsSecurity.GkrStructuralGeneration` checks rebinding and refuses a mismatched
+input descriptor and the old callback descriptor. This variant has no claimed
+native byte identity; canonical artifacts and property consumers stay fixed.
+
+The ownership manifest records current input/output hashes. The inventory
+accounts separately for the original 20 linkage files, retained mathematical
+and source-presentation libraries, generated installations, and newly authored
+templates/rules. The original 2,709 lines were not all duplication, and moving
+work into a generator is not a reduction in total authored library code.
 
 ## Generated endpoints
 
