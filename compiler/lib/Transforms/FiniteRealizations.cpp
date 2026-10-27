@@ -20,6 +20,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
@@ -177,6 +178,7 @@ class Realizer {
   NumericalExpressionMode expressionMode;
   bool failedHelper = false;
   ScopedCallbackEmitter scopedCallback;
+  TotalRecipeEmitter totalCallback;
   ScopedEmissionBudget *budget;
   StringRef scopedOccurrence;
   bool stoppedCallback = false;
@@ -191,7 +193,7 @@ class Realizer {
       controls;
   exec::ScopedExecutionBuilder *entryControl;
   func::FuncOp scopedEntry;
-  bool scoped() const { return bool(scopedCallback); }
+  bool scoped() const { return bool(scopedCallback) || bool(totalCallback); }
   func::FuncOp function() {
     return cast<func::FuncOp>(builder.getInsertionBlock()->getParentOp());
   }
@@ -201,8 +203,8 @@ class Realizer {
       return *entryControl;
     auto &control = controls[current];
     if (!control)
-      control =
-          std::make_unique<exec::ScopedExecutionBuilder>(builder, current);
+      control = std::make_unique<exec::ScopedExecutionBuilder>(
+          builder, current, entryControl->getLoopForm());
     return *control;
   }
   std::string sitePrefix = "finite_";
@@ -638,8 +640,9 @@ class Realizer {
       failedHelper = true;
       return {};
     }
-    auto environment = bindCallback(
-        *callback, actuals, scoped() ? scopeControl().getScope() : Value());
+    auto environment =
+        bindCallback(*callback, actuals,
+                     callback->scope ? scopeControl().getScope() : Value());
     if (failed(environment)) {
       failedHelper = true;
       return {};
@@ -693,8 +696,24 @@ class Realizer {
               return {};
             }
         }
-        auto *copy = builder.clone(op, mapping);
-        copy->setAttr("site", builder.getStringAttr(site()));
+        auto occurrence = site();
+        if (failedHelper)
+          return {};
+        if (totalCallback) {
+          op.setAttr("site", builder.getStringAttr(occurrence));
+          SmallVector<Value> inputs;
+          for (Value operand : op.getOperands())
+            inputs.push_back(mapping.lookup(operand));
+          auto result = totalCallback(&op, inputs, scopeControl());
+          if (failed(result) || result->size() != op.getNumResults()) {
+            failedHelper = true;
+            return {};
+          }
+          mapping.map(op.getResults(), *result);
+        } else {
+          auto *copy = builder.clone(op, mapping);
+          copy->setAttr("site", builder.getStringAttr(occurrence));
+        }
       }
       SmallVector<Value> results;
       for (Value v : scratch->front().back().getOperands())
@@ -791,24 +810,29 @@ public:
            StringRef scopedOccurrence = {},
            ScopedEmissionBudget *budget = nullptr,
            const protocol::SourceExecutionClosure *sourceClosure = nullptr,
-           const llvm::DenseSet<Operation *> *fixedBindings = nullptr)
+           const llvm::DenseSet<Operation *> *fixedBindings = nullptr,
+           TotalRecipeEmitter totalCallback = {})
       : unit(unit), sourceClosure(sourceClosure), fixedBindings(fixedBindings),
         builder(builder), loc(unit->getLoc()),
         index(IntegerType::get(unit->getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
         work(work), recipes(recipes), observation(observation),
         retryOrdered(retryOrdered), expressionMode(expressionMode),
-        scopedCallback(scopedCallback), budget(budget),
-        scopedOccurrence(scopedOccurrence), entryControl(entryControl),
-        scopedEntry(scopedCallback ? function() : func::FuncOp()) {}
+        scopedCallback(scopedCallback), totalCallback(totalCallback),
+        budget(budget), scopedOccurrence(scopedOccurrence),
+        entryControl(entryControl),
+        scopedEntry(scoped() ? function() : func::FuncOp()) {}
   FailureOr<SmallVector<Value>>
   emitBody(Operation *source, ValueRange entry, bool optimize,
            const CollectFold *pair = nullptr, ValueRange consumerInputs = {},
-           Operation *sumConsumer = nullptr, StringRef sumOccurrence = {}) {
+           Operation *sumConsumer = nullptr, StringRef sumOccurrence = {},
+           Operation *explicitSourceRoot = nullptr) {
     composition = pair;
     // The source closure may be separate from the table receiving bindings.
     // Detached helper copies keep resolving through this original owner.
-    sourceRoot = SymbolTable::getNearestSymbolTable(source);
+    sourceRoot = explicitSourceRoot
+                     ? explicitSourceRoot
+                     : SymbolTable::getNearestSymbolTable(source);
     if (!sourceRoot ||
         failed(describe(source, computation, sourceRoot, &symbols)))
       return failure();
@@ -1280,6 +1304,34 @@ public:
   explicit BodyRewriter(const OpBuilder &builder) : RewriterBase(builder) {}
 };
 } // namespace
+FailureOr<SmallVector<Value>> realizeScopedTotalExpression(
+    Operation *source, Operation *sourceRoot, ValueRange inputs,
+    OpBuilder &builder, exec::ScopedExecutionBuilder &control,
+    TotalRecipeEmitter callback, mathematical::RealizationWork &work,
+    MathematicalSelectionPolicy policy, mathematical::RealizationTrace *trace,
+    ScopedEmissionBudget &budget, bool orderedRetry, const CollectFold *pair,
+    ValueRange consumerInputs) {
+  auto function = control.getFunction();
+  auto *owner = SymbolTable::getNearestSymbolTable(function);
+  auto occurrence = source->getAttrOfType<StringAttr>("site");
+  if (!callback || !sourceRoot || !owner || !occurrence ||
+      occurrence.getValue().empty() || !isComputation(source) ||
+      !mathematical::isTotal(source))
+    return failure();
+  mathematical::RealizationScope scope(trace, "finite-expression", source,
+                                       policy, &work);
+  Realizer realizer(owner, builder, work, mathematical::mathematicalRecipes(),
+                    &scope, orderedRetry, policy.numericalExpressions, {},
+                    &control, occurrence.getValue(), &budget, nullptr, nullptr,
+                    callback);
+  auto result =
+      realizer.emitBody(source, inputs, pair ? false : policy.finiteBulk, pair,
+                        consumerInputs, nullptr, {}, sourceRoot);
+  if (succeeded(result))
+    scope.complete();
+  return result;
+}
+
 FailureOr<SmallVector<Value>> realizeScopedExpression(
     Operation *source, ValueRange inputs, OpBuilder &builder,
     exec::ScopedExecutionBuilder &control, ScopedCallbackEmitter callback,

@@ -4,6 +4,7 @@
 #include "../MathematicalSupport.h"
 #include "../RealizationSubject.h"
 #include "../ScopedCandidate.h"
+#include "Schedule.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Verifier.h"
@@ -763,7 +764,8 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
             policy, outcome);
 }
 
-LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
+static LogicalResult verifyNumericalOutput(mlir::ModuleOp candidate,
+                                           bool scheduled) {
   if (!candidate || candidate->getNumRegions() != 1 ||
       candidate->getNumOperands() || candidate->getNumResults() ||
       !candidate.getBodyRegion().hasOneBlock() ||
@@ -784,14 +786,14 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
   // A closed scoped fragment has no participant Entry. Admit its actual
   // functions and bindings without inventing a runnable protocol wrapper.
   for (auto &definition : owner.getBody().front()) {
-    if (!isa<runtime::BindingOp, func::FuncOp>(definition) ||
-        failed(verify(&definition)))
+    if (!isa<runtime::BindingOp, func::FuncOp>(definition))
       return failure();
     if (auto function = dyn_cast<func::FuncOp>(definition);
         function && !protocol::isScopedExecutionFunction(function))
       return failure();
   }
-  auto view = ScopedCandidate::read(owner);
+  auto view = scheduled ? ScopedCandidate::readSchedule(owner)
+                        : ScopedCandidate::read(owner);
   if (!view) {
     consumeError(view.takeError());
     return failure();
@@ -799,12 +801,19 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
   return success();
 }
 
-LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
-                                 mlir::ModuleOp candidate, StringRef callSite,
-                                 MathematicalSelectionPolicy policy,
-                                 finite::VerificationLimits limits,
-                                 finite::VerificationResult *reported,
-                                 NumericalSelection *selection) {
+LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
+  return verifyNumericalOutput(candidate, false);
+}
+LogicalResult verifyScheduledRecipeOutput(mlir::ModuleOp candidate) {
+  return verifyNumericalOutput(candidate, true);
+}
+static LogicalResult verifyRecipes(mlir::ModuleOp source,
+                                   mlir::ModuleOp candidate, StringRef callSite,
+                                   MathematicalSelectionPolicy policy,
+                                   finite::VerificationLimits limits,
+                                   finite::VerificationResult *reported,
+                                   NumericalSelection *selection,
+                                   bool scheduled) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                      "numerical recipes differ"};
   auto finish = [&](bool valid) -> LogicalResult {
@@ -826,7 +835,7 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
     }
     return success(valid);
   };
-  if (failed(verifyRecipeOutput(candidate)))
+  if (failed(verifyNumericalOutput(candidate, scheduled)))
     return finish(false);
   auto entry = mathematical::getComputationEntry(source);
   auto owner =
@@ -856,7 +865,8 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
           target->getAttrDictionary() ||
       target.empty() || target.front().empty())
     return finish(false);
-  auto view = ScopedCandidate::read(owner);
+  auto view = scheduled ? ScopedCandidate::readSchedule(owner)
+                        : ScopedCandidate::read(owner);
   if (!view) {
     consumeError(view.takeError());
     return finish(false);
@@ -882,7 +892,7 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
     if (ports
             .walk(op,
                   [&](Operation *nested) {
-                    functions.insert(nested->getParentOp());
+                    functions.insert(nested->getParentOfType<func::FuncOp>());
                     if (auto ref =
                             nested->getAttrOfType<FlatSymbolRefAttr>("binding"))
                       used.insert(symbols.lookup(ref.getValue()));
@@ -907,5 +917,22 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
   return finish(succeeded(outputs) && isa_and_nonnull<exec::ReturnOp>(cursor) &&
                 !ports.next(cursor) &&
                 ports.inputs(cursor) == ValueRange(*outputs));
+}
+LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
+                                 mlir::ModuleOp candidate, StringRef callSite,
+                                 MathematicalSelectionPolicy policy,
+                                 finite::VerificationLimits limits,
+                                 finite::VerificationResult *outcome,
+                                 NumericalSelection *selection) {
+  return verifyRecipes(source, candidate, callSite, policy, limits, outcome,
+                       selection, false);
+}
+LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
+                                  mlir::ModuleOp candidate, StringRef callSite,
+                                  MathematicalSelectionPolicy policy,
+                                  finite::VerificationLimits limits,
+                                  finite::VerificationResult *outcome) {
+  return verifyRecipes(source, candidate, callSite, policy, limits, outcome,
+                       nullptr, true);
 }
 } // namespace zkc::kernel

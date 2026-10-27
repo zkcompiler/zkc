@@ -163,41 +163,53 @@ contract remain applicable. Compile-time work is bounded independently of
 runtime capacity. Total mathematical meaning does not promise execution under
 arbitrary work or memory limits.
 
-The unit remains the logical source. Numerical realization produces a private
-scheduled function before its selected Local realization and physical
-conversions. The physical plan also checks optional binding-lifetime decisions
-before publication. [Native numerical calls](../runtime/numerical.md) use checked
-typed storage views and private destinations inside existing installed handlers.
-This does not turn nominal scheduled values into addressable buffers.
-Compiler buffer lowering and target-specific vectorization remain separate work.
-Participant scheduling, transcript state, transport and capability authority
-remain with their existing owners.
+The unit remains the logical source. Numerical realization emits a private
+scoped schedule directly from immutable mathematical expressions, before its
+selected scoped CFG and physical conversions. The physical plan also checks
+optional binding-lifetime decisions before publication.
+[Native numerical calls](../runtime/numerical.md) use checked typed storage views
+and private destinations inside existing installed handlers. This does not turn
+nominal scheduled values into addressable buffers. Compiler buffer lowering and
+target-specific vectorization remain separate work. Participant scheduling,
+transcript state, transport and capability authority retain their own owners.
 
 ## Numerical loop schedule
 
-The private schedule uses standard `func.func` and sequential `scf.for` with
-nominal field and container values. It is compiler IR, consumed before executable
-publication; the VM continues to execute Local control and bound operations.
-The schedule must pass ordinary MLIR verification as well as its closed-profile
-checks. Local control verifies its isolated frames and logical primitives verify
-their bound ports. Bindings resolve within the nearest lexical symbol table;
-an enclosing module cannot supply a missing schedule binding. The containing
-executable profile owns placement and vocabulary restrictions.
+The private schedule uses scoped `func.func`, Exec and Runtime operations, with
+`scf.while` and `scf.execute_region` carrying loop continuation and transfer
+outcomes. The numerical producer emits this form directly, including scalar
+branches and normalized finite callbacks. It constructs no intermediate Local
+function or raw Local loop packet. The schedule is an internal compiler carrier;
+its dedicated reader admits it, and executable admission still requires flat
+scoped CFG. A scheduled owner is not a publishable executable artifact.
 
-A scheduled loop has unsigned signless `i64` control, unit stride, an explicit
-state prefix and invariant captures. Exact `ui64`/`i64` representation bridges
-preserve all index bits. No host-sized `index` conversion is permitted.
-Zero-trip Local admission checks retain the original lower/upper resource checks
-before the SCF loop, including empty and reversed intervals. The closed profile
-requires explicit captures, unchanged invariant backedges and unused invariant
-result suffixes. Free casts, altered strides and implicit captures refuse.
+A scheduled loop has unsigned signless `i64` comparison and unit increment. Its
+three SCF iterates carry the coordinate, continuation bit and transfer outcome.
+An explicit `exec.range` retains reached lower/upper admission before any seed
+transfer, including empty and reversed intervals. Each iteration checks its
+coordinate, enters a scope, invokes an outlined body with explicit state and
+captures, exits that scope, and transfers the resulting state. Stopped paths
+release the previous transfer exactly once. Conditional continuation consumes
+its new condition tuple separately. Final output publication accepts the final
+transfer only after successful outcome dispatch.
 
-The finite reader checks the original domain, callbacks and state against the
-actual schedule. A separate structural reader checks the actual scheduled
-function against the emitted Local function. Neither reader regenerates an
-expected candidate. The Local consumer preserves nominal types, operands,
-bindings, sites and state order. General SCF canonicalization is not an admitted
-transformation of this profile without its own preservation check.
+The bounded schedule reader checks actual SCF/CFG edges, outlined calls,
+cleanup, failure propagation, occurrence sites and output ports. Ownership
+analysis follows region entry, yield, continuation and backedges; every join
+must agree on the live owned resources. These checks grant no general SCF or
+native nested-region admission. General SCF canonicalization requires its own
+preservation argument for this profile.
+
+The mathematical reader independently compares the original domains, callbacks
+and state with the actual scoped schedule. The CFG consumer then uses only the
+schedule's admitted SSA association. A separate comparator reads the emitted
+CFG against logical definitions reconstructed from that immutable schedule,
+checking its full binding and function inventory. Neither comparison replays
+recipe emission or substitutes the earlier mathematical candidate for the
+actual schedule. Required construction and checking allowances remain shared
+across nested callbacks and optional retries. Generated traversal site bytes
+spend the same construction account as root site bytes; discarded alternatives
+retain their own actual debit without reducing the selected ordered allowance.
 
 ## Collect–fold composition
 

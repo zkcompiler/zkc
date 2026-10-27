@@ -20,6 +20,22 @@ struct ScopedEmissionBudget {
   std::optional<CapacityCause> &capacity;
 };
 
+// Scalar/nested total recipes consume an immutable normalized callback. The
+// producer supplies its original symbol root separately; detached scratch
+// bodies must never resolve helpers through the destination execution owner.
+using TotalRecipeEmitter =
+    llvm::function_ref<mlir::FailureOr<llvm::SmallVector<mlir::Value>>(
+        mlir::Operation *, mlir::ValueRange, exec::ScopedExecutionBuilder &)>;
+struct CollectFold;
+mlir::FailureOr<llvm::SmallVector<mlir::Value>> realizeScopedTotalExpression(
+    mlir::Operation *source, mlir::Operation *sourceRoot,
+    mlir::ValueRange inputs, mlir::OpBuilder &builder,
+    exec::ScopedExecutionBuilder &control, TotalRecipeEmitter callback,
+    mathematical::RealizationWork &work, MathematicalSelectionPolicy policy,
+    mathematical::RealizationTrace *trace, ScopedEmissionBudget &budget,
+    bool orderedRetry, const CollectFold *pair = nullptr,
+    mlir::ValueRange consumerInputs = {});
+
 // Producer-only traversal at the caller's current scoped insertion point.
 // Callback substitution uses the same builder and borrowed runtime scope.
 // The caller must discard failed construction and independently check the

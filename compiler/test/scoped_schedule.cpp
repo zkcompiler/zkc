@@ -13,12 +13,6 @@ namespace {
 protocol_ir::ProtocolModuleOp owner(mlir::ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
 }
-OwningOpRef<mlir::ModuleOp> scheduled(MLIRContext &context) {
-  auto result = parseSourceFile<mlir::ModuleOp>(
-      std::string(ZKC_LOOP_FIXTURES) + "/authored-schedule.mlir", &context);
-  require(bool(result), "independently authored schedule did not parse");
-  return result;
-}
 // Independently spell the expected traversal, ports, primitive occurrences and
 // completion rules. No schedule reader or consumer supplies this body.
 OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
@@ -89,6 +83,9 @@ OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
       });
   control.returned(outputs);
   return module;
+}
+OwningOpRef<mlir::ModuleOp> scheduled(MLIRContext &context) {
+  return expected(context, false, false, true);
 }
 void acceptSchedule(mlir::ModuleOp schedule, mlir::ModuleOp actual) {
   require(succeeded(kernel::verifyRecipeOutput(actual)),

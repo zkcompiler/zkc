@@ -20,7 +20,11 @@ public:
   using Values = llvm::SmallVector<mlir::Value>;
   using RegionBuilder = llvm::function_ref<mlir::func::FuncOp(unsigned)>;
 
-  ScopedExecutionBuilder(mlir::OpBuilder &builder, mlir::func::FuncOp function);
+  enum class LoopForm { CFG, Structured };
+  ScopedExecutionBuilder(mlir::OpBuilder &builder, mlir::func::FuncOp function,
+                         LoopForm loops = LoopForm::CFG);
+  LoopForm getLoopForm() const { return loops; }
+  mlir::func::FuncOp getFunction() const { return function; }
   mlir::Value getScope() const { return scope; }
   mlir::Location getLocation() const { return location; }
   void setLocation(mlir::Location value) { location = value; }
@@ -62,6 +66,7 @@ private:
   exec::OutcomeType result;
   mlir::Block *failure = nullptr;
   mlir::Region *insertionRegion;
+  LoopForm loops;
   mlir::Operation *make(llvm::StringRef name, mlir::TypeRange types,
                         mlir::ValueRange operands,
                         llvm::ArrayRef<mlir::NamedAttribute> attributes = {},

@@ -111,6 +111,7 @@ realizeEntry(mlir::ModuleOp source, llvm::StringRef callSite,
 // participant Entry; whole-program admission applies after insertion. Read the
 // actual CFG, outlined bodies, resource origins and resolved binding closure.
 mlir::LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate);
+mlir::LogicalResult verifyScheduledRecipeOutput(mlir::ModuleOp candidate);
 
 // Independent comparison of the actual scoped source and numerical candidate.
 mlir::LogicalResult verifyScopedNumericalContext(

@@ -1,7 +1,6 @@
 #include "FiniteVerification.h"
 #include "CollectFold.h"
 #include "CollectionInterpretation.h"
-#include "Kernel/Schedule.h"
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
 #include "ScopedCandidate.h"
@@ -133,8 +132,7 @@ class Reader {
     return true;
   }
   SmallVector<Value> arguments(Block *block) {
-    return ports.isScoped() ? SmallVector<Value>(ports.arguments(block))
-                            : zkc::kernel::traversalArguments(block);
+    return SmallVector<Value>(ports.arguments(block));
   }
   Operation *consume(StringRef name) {
     if (ports.isScoped()) {
@@ -219,40 +217,6 @@ class Reader {
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {
-    if (name == "local.for" && !ports.isScoped()) {
-      auto *at = cursor;
-      auto available = availableWork();
-      auto scheduleWork = available;
-      auto parsed = zkc::kernel::readScheduledLoop(at, scheduleWork);
-      // Schema inspection spends required work even if no packet matches or
-      // inspection exhausts its allowance. Settle its actual debit once.
-      if (!charge(available - scheduleWork))
-        return nullptr;
-      if (failed(parsed)) {
-        result = {
-            VerificationStatus::RequiredCapacity, "finite reader work",
-            CapacityCause{WorkOwner::RequiredFiniteReader, {}, availableWork()},
-            mathematical::realizationSubject(c.operation)};
-        fail();
-        return nullptr;
-      }
-      auto &scheduled = *parsed;
-      if (scheduled) {
-        if (!charge())
-          return nullptr;
-        if (ValueRange(scheduled->inputs) != operands ||
-            scheduled->states != results.size() ||
-            !llvm::equal(scheduled->loop.getResults()
-                             .take_front(results.size())
-                             .getTypes(),
-                         results)) {
-          fail();
-          return nullptr;
-        }
-        cursor = at;
-        return scheduled->loop;
-      }
-    }
     auto *op = consume(name);
     if (!op)
       return nullptr;
@@ -295,9 +259,6 @@ class Reader {
       }
     }
     cursor = ports.first(block);
-    if (isa<scf::ForOp>(op))
-      cursor =
-          cursor->getNextNode(); // Exact induction bridge checked by schema.
     return block;
   }
   void end(StringRef name, ValueRange inputs) {
@@ -306,9 +267,6 @@ class Reader {
         fail();
       return;
     }
-    if (cursor && isa<scf::ForOp>(cursor->getParentOp()) &&
-        name == "local.yield")
-      name = "scf.yield";
     auto *op = consume(name);
     if (!op)
       return;

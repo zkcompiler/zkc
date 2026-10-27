@@ -1104,6 +1104,7 @@ module @difference attributes {exec.computation} {
         CountingCatalog catalog;
         mathematical::RealizationWork work;
         work.finiteExpressions = 0;
+        const auto beforeWork = work;
         PhysicalPlanOptions options;
         options.numericalWork = &work;
         ScopedDiagnosticHandler quiet(&context,
@@ -1111,7 +1112,12 @@ module @difference attributes {exec.computation} {
         refuses(proposePhysical(*module, catalog, {}, options),
                 "kernel-lowering");
         require(
-            catalog.queryCount() == 0 && work.finiteExpressions == 0,
+            catalog.queryCount() == 0 && work.finiteExpressions == 0 &&
+                work.discardedRecipeCopy == beforeWork.discardedRecipeCopy &&
+                work.discardedRecipeSiteBytes ==
+                    beforeWork.discardedRecipeSiteBytes &&
+                work.discardedRecipeExpansion ==
+                    beforeWork.discardedRecipeExpansion,
             "required capacity refusal retried or replenished its allowance");
         before.check(*module);
       });

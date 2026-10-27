@@ -61,8 +61,10 @@ The retained owners do not constitute a second supported publication route.
 Source preparation now has one service with polynomial recipe, protocol
 application and participant mathematics stages. The old Local preparation API,
 Local numerical-wrapper formation and standalone Local expansion pass are
-removed. Executable numerical recipe production still needs its Local
-intermediate removed. Participant guards now stay in Protocol through
+removed. Executable numerical recipes now emit scoped operations and SCF loops
+directly. The intermediate Local recipe and raw loop-schedule producer are
+removed; standalone Local finite test APIs and the remaining dialect consumers
+still need retirement. Participant guards now stay in Protocol through
 projection, retaining their owner. Demand formation passes their condition
 separately from the total mathematical wrapper and emits scoped rejection;
 `local.guard` is removed.
@@ -220,8 +222,9 @@ restrictions.
 Existing installed backends execute the resulting operations. The checked physical
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
-standard SCF loops and are independently checked before scoped execution
-lowering. Finite recipe, provider and conversion choices share one bounded
+scoped `scf.while`/`scf.execute_region` loops. The source reader checks their
+actual state, callbacks and custody; a separate CFG comparator checks their
+consumption before executable publication. Finite recipe, provider and conversion choices share one bounded
 search; actual emitted uses identify which eligible occurrences may change.
 Explicit requests remain fixed, and semantic comparison failures are terminal.
 Retained pointwise maps and selected sums now use a private

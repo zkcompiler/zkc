@@ -17,11 +17,12 @@ ArrayAttr strings(Builder &builder, ArrayRef<std::string> values) {
 }
 } // namespace
 ScopedExecutionBuilder::ScopedExecutionBuilder(OpBuilder &builder,
-                                               func::FuncOp function)
+                                               func::FuncOp function,
+                                               LoopForm loops)
     : builder(builder), location(function.getLoc()), function(function),
       scope(function.getArgument(0)),
       result(cast<exec::OutcomeType>(function.getResultTypes().front())),
-      insertionRegion(&function.getBody()) {}
+      insertionRegion(&function.getBody()), loops(loops) {}
 Operation *ScopedExecutionBuilder::make(StringRef name, TypeRange types,
                                         ValueRange operands,
                                         ArrayRef<NamedAttribute> attributes,
@@ -175,6 +176,9 @@ ScopedExecutionBuilder::match(Value input, ValueRange captures, TypeRange types,
 ScopedExecutionBuilder::Values ScopedExecutionBuilder::loop(
     Value lower, Value upper, ValueRange seeds, ValueRange captures,
     TypeRange types, bool conditional, StringRef site, RegionBuilder body) {
+  if (loops == LoopForm::Structured)
+    return scheduledLoop(lower, upper, seeds, captures, types, conditional,
+                         site, body);
   auto carry = transfer(types);
   auto counters =
       invoke("exec.range", {builder.getI64Type(), builder.getI64Type()},
