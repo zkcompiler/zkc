@@ -456,10 +456,9 @@ class Emitter {
     return function;
   }
   std::optional<mlir::Value> pack(const PackedLayout &layout,
-                                  mlir::ValueRange values, PackingMode mode,
-                                  StringRef site) {
+                                  mlir::ValueRange values, StringRef site) {
     if (!scoped || !layout.product)
-      return take(emitPack(builder, location, layout, values, mode, site));
+      return take(emitMathematicalPack(builder, location, layout, values));
     auto flat = types(*layout.flat);
     auto carrier = protocol::decodeBoundType(&context, layout.carrier);
     if (!flat || !carrier || values.getTypes() != mlir::TypeRange(*flat)) {
@@ -473,9 +472,9 @@ class Emitter {
         .front();
   }
   std::optional<Values> unpack(const PackedLayout &layout, mlir::Value value,
-                               PackingMode mode, StringRef site) {
+                               StringRef site) {
     if (!scoped || !layout.product)
-      return take(emitUnpack(builder, location, layout, value, mode, site));
+      return take(emitMathematicalUnpack(builder, location, layout, value));
     auto flat = types(*layout.flat);
     auto carrier = protocol::decodeBoundType(&context, layout.carrier);
     if (!flat || !carrier || value.getType() != carrier) {
@@ -844,8 +843,7 @@ class Emitter {
                             "total sequence projection operation limit");
             return false;
           }
-          auto decoded = unpack(*packed, result.front(),
-                                PackingMode::Mathematical, site + "_unpack");
+          auto decoded = unpack(*packed, result.front(), site + "_unpack");
           if (!decoded)
             return false;
           result = std::move(*decoded);
@@ -870,8 +868,8 @@ class Emitter {
                   error("source.limit", "emitted operation limit exceeded");
               return false;
             }
-            auto item = pack(*packed, values[local->operands[1].index],
-                             PackingMode::Local, site + "_pack");
+            auto item =
+                pack(*packed, values[local->operands[1].index], site + "_pack");
             if (!item)
               return false;
             operands = values[local->operands[0].index];
@@ -893,8 +891,7 @@ class Emitter {
             failure = error("source.limit", "emitted operation limit exceeded");
             return false;
           }
-          auto flat = unpack(*packed, result.front(), PackingMode::Local,
-                             site + "_unpack");
+          auto flat = unpack(*packed, result.front(), site + "_unpack");
           if (!flat)
             return false;
           result = std::move(*flat);
@@ -1592,11 +1589,10 @@ Expected<SmallVector<mlir::Type>> packedLeafTypes(mlir::MLIRContext *context,
   return types;
 }
 } // namespace
-Expected<mlir::Value> emitPack(mlir::OpBuilder &builder,
-                               mlir::Location location,
-                               const PackedLayout &layout,
-                               mlir::ValueRange leaves, PackingMode mode,
-                               StringRef site) {
+Expected<mlir::Value> emitMathematicalPack(mlir::OpBuilder &builder,
+                                           mlir::Location location,
+                                           const PackedLayout &layout,
+                                           mlir::ValueRange leaves) {
   auto types = packedLeafTypes(builder.getContext(), layout);
   if (!types)
     return types.takeError();
@@ -1611,20 +1607,15 @@ Expected<mlir::Value> emitPack(mlir::OpBuilder &builder,
       return error("source.layout", "native element carrier differs");
     return leaves.front();
   }
-  mlir::OperationState state(location, mode == PackingMode::Local
-                                           ? "local.variant_inject"
-                                           : "data.make");
+  mlir::OperationState state(location, "data.make");
   state.addTypes(carrier);
   state.addOperands(leaves);
   state.addAttribute("alternative", builder.getStringAttr(layout.alternative));
-  if (mode == PackingMode::Local)
-    state.addAttribute("site", builder.getStringAttr(site));
   return builder.create(state)->getResult(0);
 }
 Expected<SmallVector<mlir::Value>>
-emitUnpack(mlir::OpBuilder &builder, mlir::Location location,
-           const PackedLayout &layout, mlir::Value value, PackingMode mode,
-           StringRef site) {
+emitMathematicalUnpack(mlir::OpBuilder &builder, mlir::Location location,
+                       const PackedLayout &layout, mlir::Value value) {
   auto types = packedLeafTypes(builder.getContext(), layout);
   if (!types)
     return types.takeError();
@@ -1637,34 +1628,15 @@ emitUnpack(mlir::OpBuilder &builder, mlir::Location location,
       return error("source.layout", "native element flat layout differs");
     return SmallVector<mlir::Value>{value};
   }
-  if (mode == PackingMode::Mathematical) {
-    SmallVector<mlir::Value> leaves;
-    for (unsigned i = 0; i < types->size(); ++i) {
-      mlir::OperationState state(location, "data.get");
-      state.addOperands(value);
-      state.addTypes((*types)[i]);
-      state.addAttribute("index", builder.getI64IntegerAttr(i));
-      leaves.push_back(builder.create(state)->getResult(0));
-    }
-    return leaves;
+  SmallVector<mlir::Value> leaves;
+  for (unsigned i = 0; i < types->size(); ++i) {
+    mlir::OperationState state(location, "data.get");
+    state.addOperands(value);
+    state.addTypes((*types)[i]);
+    state.addAttribute("index", builder.getI64IntegerAttr(i));
+    leaves.push_back(builder.create(state)->getResult(0));
   }
-  mlir::OperationState state(location, "local.match");
-  state.addOperands(value);
-  state.addTypes(*types);
-  state.addAttribute("site", builder.getStringAttr(site));
-  state.addAttribute("alternatives",
-                     builder.getStrArrayAttr({layout.alternative}));
-  state.addRegion()->push_back(new mlir::Block());
-  auto *match = builder.create(state);
-  auto &arm = match->getRegion(0).front();
-  for (auto type : *types)
-    arm.addArgument(type, location);
-  mlir::OpBuilder::InsertionGuard guard(builder);
-  builder.setInsertionPointToEnd(&arm);
-  mlir::OperationState yield(location, "local.yield");
-  yield.addOperands(arm.getArguments());
-  builder.create(yield);
-  return SmallVector<mlir::Value>(match->getResults());
+  return leaves;
 }
 Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,

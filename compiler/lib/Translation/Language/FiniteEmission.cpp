@@ -174,9 +174,9 @@ class FiniteEmitter {
       for (uint64_t i = 0; i < size; ++i) {
         if (!canInsert(packed->product ? 1 : 0))
           return {};
-        auto item = take(emitPack(builder, location, *packed,
-                                  block.getArguments().slice(i * width, width),
-                                  PackingMode::Mathematical));
+        auto item = take(
+            emitMathematicalPack(builder, location, *packed,
+                                 block.getArguments().slice(i * width, width)));
         if (!item)
           return {};
         auto *append =
@@ -373,9 +373,8 @@ class FiniteEmitter {
               return helper;
             });
       }
-      return take(emitUnpack(builder, location, *packed, inputs.front(),
-                             PackingMode::Mathematical,
-                             "item_" + std::to_string(ordinal++)));
+      return take(
+          emitMathematicalUnpack(builder, location, *packed, inputs.front()));
     }
     return Values(inputs);
   }
@@ -493,8 +492,8 @@ class FiniteEmitter {
             "exec.variant", adapterOutputs, control->scoped(result),
             {text("alternative", packed->alternative), text("site", "result")});
       else {
-        auto value = take(emitPack(builder, location, *packed, result,
-                                   PackingMode::Mathematical, "result"));
+        auto value =
+            take(emitMathematicalPack(builder, location, *packed, result));
         if (!value)
           return false;
         result = {*value};

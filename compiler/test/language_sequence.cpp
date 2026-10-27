@@ -314,10 +314,10 @@ void mathematicalPacking() {
   require(bool(module), "cannot parse mathematical bridge");
   auto *ret = first(*module, "func.return");
   mlir::OpBuilder builder(ret);
-  auto value = must(emitPack(builder, ret->getLoc(), packed, ret->getOperands(),
-                             PackingMode::Mathematical));
-  auto leaves = must(emitUnpack(builder, ret->getLoc(), packed, value,
-                                PackingMode::Mathematical));
+  auto value = must(
+      emitMathematicalPack(builder, ret->getLoc(), packed, ret->getOperands()));
+  auto leaves =
+      must(emitMathematicalUnpack(builder, ret->getLoc(), packed, value));
   ret->setOperands(leaves);
   require(succeeded(mlir::verify(*module)),
           "mathematical packing API emitted invalid data operations");
@@ -333,8 +333,7 @@ void mathematicalPacking() {
     }
   });
   require(index == 2, "mathematical unpack omitted fields");
-  auto wrong =
-      emitPack(builder, ret->getLoc(), packed, {}, PackingMode::Mathematical);
+  auto wrong = emitMathematicalPack(builder, ret->getLoc(), packed, {});
   zkc::test::refuses(std::move(wrong), "source.layout");
 }
 void refusals() {
