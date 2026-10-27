@@ -570,8 +570,10 @@ construction and their [participant projection](../lean/docs/spec/participant-pr
 against the original exports and proves that each compiled verifier's ideal
 meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
 transform of its original verifier; other Entries, suites and programmable
-constructions have no such check. The composed Sumcheck Entry has this
-transform equation only; no security theorem covers it. The compiled Sigma proof
+constructions have no such check. The composed Sumcheck Entry is covered by the
+generated `TwoSums` root, with exact scalar and charged soundness requests and a
+compiled-ideal completeness receipt. These are independent of native execution
+correspondence. The compiled Sigma proof
 Entries (Chaum–Pedersen, two-proof AND, Okamoto) also have fixed-statement
 knowledge soundness through the registered endpoints. The
 exporter repeats the native proof check before printing the validator; it is
@@ -741,9 +743,9 @@ of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
 statements, every round count up to the static maximum, malformed vectors
 included). A records run given the subject pipeline's evidence establishes the
 assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto, the guessing Entry
-and Sumcheck; the composed Sumcheck and GKR Entries
-retain no target clause to state a claim at, and composed Sumcheck has no
-certificate composition yet.
+and Sumcheck. Composed Sumcheck retains `target public_sums`; its maintained
+claims use the generated `TwoSums` root rather than that manifest report. The
+GKR Entry has no retained target clause for this claim-selection path.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

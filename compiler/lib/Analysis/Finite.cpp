@@ -700,7 +700,10 @@ LogicalResult verifyDefinitionClosure(Operation *unit,
   }
   llvm::DenseMap<Operation *, unsigned> color;
   SymbolTableCollection symbols;
-  unsigned work = 100000;
+  // Count actual IR, including scoped outcome/control operations, with the
+  // same structural allowance as execution-closure formation. Semantic helper
+  // expansion and each premise query retain their separate smaller budgets.
+  unsigned work = 1000000;
   std::function<LogicalResult(Operation *, unsigned)> visit =
       [&](Operation *definition, unsigned depth) -> LogicalResult {
     if (depth > 64 || !work)

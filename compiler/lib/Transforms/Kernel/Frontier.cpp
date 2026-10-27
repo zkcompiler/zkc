@@ -9,6 +9,7 @@
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -411,7 +412,8 @@ OwningOpRef<mlir::ModuleOp>
 prepareKernelLowering(mlir::ModuleOp source, uint64_t *shared,
                       std::optional<CapacityCause> *capacity,
                       mathematical::NumericalSelection *selection) {
-  uint64_t standalone = 1000000;
+  llvm::TimeTraceScope timing("zkc.numerical-normalization");
+  uint64_t standalone = 4000000;
   auto &remaining = shared ? *shared : standalone;
   if (!chargeCopy(source, remaining, capacity))
     return {};

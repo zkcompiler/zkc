@@ -71,7 +71,9 @@ public:
   NumericalSelection(const NumericalSelection &) = delete;
   NumericalSelection &operator=(const NumericalSelection &) = delete;
   RealizationWork work;
-  uint64_t remainingCopy = 1000000;
+  // One transaction includes whole scoped-context copies and independent
+  // context reads, in addition to recipe emission.
+  uint64_t remainingCopy = 4000000;
   uint64_t remainingSiteBytes = 16 * 1024 * 1024;
   /// Candidate pointers are transient. Clear before destroying the candidate;
   /// physical failure reports copy only occurrence ids and integer indices.

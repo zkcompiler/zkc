@@ -1306,7 +1306,9 @@ compiled theorems and holds the Lean controls:
 
 With the subject pipeline's evidence, the assurance reports of schnorr,
 chaum-pedersen, schnorr-and, okamoto-proof, guess and sumcheck are
-`established`. The composed Sumcheck and GKR Entries retain no target clause. Every
+`established`. Composed Sumcheck instead uses the generated `TwoSums` root and
+its retained `public_sums` target, as described above. The GKR Entry has no
+retained target clause for this claim-selection path. Every
 declaration's axioms are within `propext`, `Classical.choice` and `Quot.sound`.
 
 ## Construction obligation counterexamples

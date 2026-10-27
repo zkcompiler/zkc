@@ -988,9 +988,10 @@ module @difference attributes {exec.computation} {
         auto previous = work;
         auto previousCopies = copies, previousBytes = siteBytes;
         require(
-            work.discardedRecipeCopy < 1000000 && copies < 1000000 &&
-                siteBytes < 16 * 1024 * 1024 && !work.numericalSelection &&
-                !work.numericalOccurrence,
+            work.discardedRecipeCopy <
+                    mathematical::RealizationWork{}.discardedRecipeCopy &&
+                copies < 1000000 && siteBytes < 16 * 1024 * 1024 &&
+                !work.numericalSelection && !work.numericalOccurrence,
             "failed physical candidates were not charged to discard reserve");
         auto second = take(proposePhysical(*module, catalog, {}, options));
         take(validatePhysical(*module, second, catalog));

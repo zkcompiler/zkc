@@ -22,6 +22,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <deque>
 #include <map>
 #include <set>
@@ -1577,6 +1578,7 @@ Expected<PhysicalPlan>
 proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                 ArrayRef<std::pair<std::string, std::string>> selections,
                 PhysicalPlanOptions options, Location *failureLocation) {
+  llvm::TimeTraceScope timing("zkc.physical-proposal");
   locate(failureLocation, module);
   if (failed(verify(module)) || module.getBody()->empty() ||
       !isa<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front()))

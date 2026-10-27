@@ -340,8 +340,10 @@ Reconstruction admits all returned native definitions and bindings at the
 explicit logical or physical stage. It retains physical representations and
 checks every potential region body. It rereads current SSA on each invocation;
 an earlier successful read is not a cached validation grant. Bounds are 4,096
-Func/domain definitions and, separately, 4,096 Runtime bindings, 64 active
-outlined bodies and one million inspected operations. Direct declaration
+callable Func/domain definitions and, separately, 4,096 Runtime bindings,
+64 active outlined bodies and one million inspected operations. Outlined
+`runtime.region` functions represent control inside those callables and consume
+the structural allowance; they are not additional Program definitions. Direct declaration
 collision inspection consumes that structural allowance, including declarations
 owned by an enclosing profile; those declarations do not consume the local
 Func/domain or binding inventories. Independent native model limits also apply,
@@ -479,8 +481,8 @@ repeating expansion is checked against that new input. The checker
 recovers those paths even when a bounded name uses a digest, and publishes
 optional occurrence records only after the whole comparison succeeds.
 
-Construction bounds substituted operation/port work to 1000000, definitions to
-4096, nesting to 64 and occurrence encoding to 16 MiB. The separate comparison
+Construction bounds substituted operation/port work to 1000000, callable/domain
+definitions and bindings to 4096 each, nesting to 64 and occurrence encoding to 16 MiB. The separate comparison
 has a 1000000 operation/port allowance. Refusal discards the candidate and
 leaves the original and caller-owned occurrence output unchanged. This edge
 does not select a numerical implementation, add native participant completion,

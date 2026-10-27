@@ -513,7 +513,7 @@ calls remain subject to admission, closure depth and cycle checks.
 Reference permission depends on the original retained variant, before deriving
 a semantic Local helper. A Math `call` targets a private defined Math function.
 Local `apply` may target an ordinary Local function, fold or collection declaration,
-realization or map. Protocol `local.call` targets an ordinary Local function
+realization or map. Protocol `local_call` targets an ordinary Local function
 only. Finite callbacks remain private ordinary functions of the required kind;
 derived preparation helpers do not gain callback permission. A preparation's
 helper must be an exact private Math reference. Selected entries remain

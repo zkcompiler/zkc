@@ -26,7 +26,7 @@ struct RealizationWork {
   // Settle a successful attempt into the caller's selected quotas, or debit
   // discarded work here. Matching work is never replenished; expansion is
   // restored only after transferring its debit to the discard account.
-  uint64_t discardedRecipeCopy = 1000000;
+  uint64_t discardedRecipeCopy = 4000000;
   uint64_t discardedRecipeSiteBytes = 16 * 1024 * 1024;
   // Aggregate helper operations/slots, polynomial work, finite expressions
   // from rejected recipes. Transfer these
@@ -35,8 +35,8 @@ struct RealizationWork {
   // One late numerical transaction shares these checking balances across
   // declarations and retries. Optional native interpretation cannot consume
   // the mandatory guard/vector reserve. Exact exhaustion on success is valid.
-  uint64_t numericalContextChecking = 1000000;
-  uint64_t numericalCheckCopy = 1000000;
+  uint64_t numericalContextChecking = 4000000;
+  uint64_t numericalCheckCopy = 4000000;
   uint64_t numericalCheckSiteBytes = 16 * 1024 * 1024;
   uint64_t requiredFiniteChecking = 1000000;
   uint64_t optionalFiniteChecking = 1000000;

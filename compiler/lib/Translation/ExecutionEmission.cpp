@@ -36,7 +36,6 @@ class ResultTypes {
   std::map<std::string, Types> bindings;
   std::map<const program::Instruction *, Types> results;
   bool valid = true;
-  unsigned definitions = 0;
 
   Type decode(const BoundType &bound) {
     auto type = decodeBoundType(&context, bound);
@@ -101,10 +100,12 @@ public:
   }
   Types body(const program::Body &body, TypeEnvironment env,
              unsigned depth = 0) {
-    if (!valid || depth >= 64 || ++definitions > 4096) {
+    if (!valid || depth >= 64) {
       valid = false;
       return {};
     }
+    // Independent Program admission already bounded all instructions and
+    // callable declarations. Outlined bodies are control, not new callables.
     for (const auto &instruction : body) {
       Types outputs;
       program::Names names;

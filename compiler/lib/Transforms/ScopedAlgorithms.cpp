@@ -19,6 +19,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -44,8 +45,8 @@ class ScopedExpander : private OpBuilder::Listener {
   unsigned nextRegion = 0;
   unsigned definitions = 0, bindings = 0;
   // Substitution charges logical operations and every data port across the
-  // complete closure. Use the same word allowance as numerical materialization;
-  // the separate source-operation and declaration limits still apply.
+  // complete closure. Numerical materialization has a separate transaction
+  // allowance for its additional snapshots and correspondence reads.
   uint64_t defaultRemaining = 1000000, defaultBytes = 16 * 1024 * 1024;
   uint64_t &remaining, &remainingBytes;
   const llvm::DenseMap<Operation *, func::FuncOp> *replacements;
@@ -89,6 +90,10 @@ class ScopedExpander : private OpBuilder::Listener {
   }
   bool declaration(Operation *op) {
     // Binding and Func/domain inventories have separate carrier limits.
+    // Outlined bodies become control inside a callable, not extra Program
+    // definitions. Their construction still consumes operation/port work.
+    if (isa<func::FuncOp>(op) && op->hasAttr("runtime.region"))
+      return true;
     // Profile metadata shares the symbol namespace, not either inventory.
     auto *inventory = isa<runtime::BindingOp>(op)             ? &bindings
                       : isa<func::FuncOp, data::DomainOp>(op) ? &definitions
@@ -614,6 +619,7 @@ OwningOpRef<ModuleOp> substituteNumericalBodies(
     const llvm::DenseMap<Operation *, func::FuncOp> &replacements,
     mathematical::NumericalSelection &selection,
     std::optional<CapacityCause> *capacity) {
+  llvm::TimeTraceScope timing("zkc.numerical-substitution");
   if (!hasSingleElement(*source.getBody()) ||
       !kernel::chargeCopy(source, selection.remainingCopy, capacity))
     return {};
@@ -668,6 +674,7 @@ prepareScopedFinite(ModuleOp source, mathematical::RealizationWork &work,
                     mathematical::VerificationDecision *reported,
                     const mathematical::MathematicalRecipes &recipes,
                     mathematical::RealizationTrace *trace) {
+  llvm::TimeTraceScope timing("zkc.finite-preparation");
   mathematical::RealizationScope scope(trace, "scoped-finite-preparation",
                                        source, policy, &work);
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))

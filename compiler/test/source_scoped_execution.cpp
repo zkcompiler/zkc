@@ -1243,12 +1243,12 @@ protocol Run roles(P)(xs:Vector<Fr>@P,go:bool@P)->(a:Vector<Fr>@P,b:Vector<Fr>@P
   });
   cases.run("outlined expansion capacity refuses without publication", [&] {
     std::string text = "fn f0(x:Fr)->Fr{return if true{x}else{x};}\n";
-    for (unsigned i = 1; i <= 12; ++i) {
+    for (unsigned i = 1; i <= 17; ++i) {
       auto prior = "f" + std::to_string(i - 1);
       text += "fn f" + std::to_string(i) + "(x:Fr)->Fr{let y=" + prior +
               "(x);return " + prior + "(y);}\n";
     }
-    text += "protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return f12(x);}";
+    text += "protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return f17(x);}";
     Fixture fixture(context, {"bounded outlined expansion", text.c_str()});
     std::vector<protocol::AlgorithmOrigin> origins{
         {"unchanged", {}, {}, {}, {}}};
@@ -1554,5 +1554,41 @@ protocol Run roles(P)(x:Fr@P)->(r:Fr@P){return work(x);}
           require(!protocol::expandScopedHelpers(*module),
                   "overflow source was expanded");
         });
+  cases.run("outlined source bodies do not consume callable inventory", [&] {
+    Fixture fixture(context, {"outlined inventory", R"(
+fn work(x:bool)->bool{return if x{x}else{x};}
+protocol Run roles(P)(x:bool@P)->(r:bool@P){return work(x);}
+)"});
+    auto owner =
+        cast<protocol_ir::ProtocolModuleOp>(fixture.module->getBody()->front());
+    func::FuncOp prototype;
+    unsigned roots = 0;
+    for (auto function : owner.getBody().front().getOps<func::FuncOp>()) {
+      if (function->hasAttr("runtime.region"))
+        continue;
+      prototype = function;
+      ++roots;
+    }
+    require(prototype && roots > 0, "missing source root");
+    unsigned outlines = 0;
+    for (auto function : owner.getBody().front().getOps<func::FuncOp>())
+      outlines += function->hasAttr("runtime.region");
+    require(outlines >= 2, "inventory control must contain outlined branches");
+    OpBuilder builder(&context);
+    builder.setInsertionPoint(prototype);
+    for (unsigned i = roots; i < 4096; ++i) {
+      auto *copy = builder.clone(*prototype);
+      auto name = builder.getStringAttr("extra_" + std::to_string(i));
+      copy->setAttr("sym_name", name);
+      copy->setAttr("runtime.origin",
+                    builder.getArrayAttr({name, builder.getArrayAttr({})}));
+    }
+    auto expanded = protocol::expandScopedHelpers(*fixture.module);
+    require(bool(expanded), "control outlines consumed callable inventory");
+    auto actual = take(protocol::readSourceExecutionClosure(
+        cast<protocol_ir::ProtocolModuleOp>(expanded->getBody()->front())));
+    require(actual.definitions.functions.size() == 4096,
+            "outlined expansion changed callable inventory");
+  });
   return cases.result();
 }

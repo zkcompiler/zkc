@@ -255,7 +255,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
   SymbolTable targetSymbols(after);
   SymbolTableCollection symbolTables;
   // Adjacent executable data flow must agree even for supplied programs or
-  // the older source route, which carry no mathematical projection record.
+  // source modules that carry no mathematical projection record.
   if (before.getProfile() == protocol_ir::Profile::Exec ||
       before.getProfile() == protocol_ir::Profile::Physical) {
     auto sourceParticipants =

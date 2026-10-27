@@ -17,6 +17,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace mlir;
 using namespace llvm;
@@ -113,6 +114,12 @@ class Reader {
   std::map<std::string, Operation *> computationOrigins;
   std::map<std::string, std::vector<SourceExecutionStep>> sourceBodies;
   llvm::DenseMap<Operation *, std::string> mathematicalNames;
+  // One reader observes immutable IR. Reuse its symbol index and exact type
+  // encodings, but never carry admission results across an IR transformation.
+  SymbolTableCollection symbols;
+  llvm::DenseMap<Type, std::string> typeSpellings;
+  llvm::DenseMap<Operation *, std::pair<OperationBinding, BoundOperation>>
+      applications;
   unsigned nextMathematics = 0;
 
 public:
@@ -121,6 +128,9 @@ public:
       : module(module), physical(physical), source(source),
         mathematicalCalls(mathematicalCalls), scheduled(scheduled) {}
   bool isScheduled() const { return scheduled; }
+  func::FuncOp callee(func::CallOp call) {
+    return symbols.lookupSymbolIn<func::FuncOp>(module, call.getCalleeAttr());
+  }
   unsigned &work() { return remaining; }
   bool isSource() const { return source; }
   std::vector<LocalRealization> takeComputations() {
@@ -139,7 +149,6 @@ public:
         failed(finite::verifyCallPreconditions(call)))
       return fail(
           "unresolved mathematical invocation outside source admission");
-    SymbolTableCollection symbols;
     auto helper = call.resolveCallee(symbols);
     if (!helper)
       return fail("mathematical invocation has no actual definition");
@@ -157,7 +166,7 @@ public:
         return false;
       signature.name =
           "_mathematical_admission_" + std::to_string(nextMathematics++);
-    } while (SymbolTable::lookupSymbolIn(module, signature.name));
+    } while (symbols.getSymbolTable(module).lookup(signature.name));
     for (bool input : {true, false}) {
       auto ports = input ? helper.getArgumentTypes() : helper.getResultTypes();
       for (Type port : ports) {
@@ -175,8 +184,7 @@ public:
     return true;
   }
   bool helper(func::CallOp call) {
-    auto function = dyn_cast_or_null<func::FuncOp>(
-        SymbolTable::lookupSymbolIn(module, call.getCallee()));
+    auto function = callee(call);
     return (source && !scheduled && function && !function.isExternal() &&
             function->hasAttr("runtime.origin") &&
             !function->hasAttr("runtime.region") && call.getNumOperands() &&
@@ -199,7 +207,7 @@ public:
       if (!charge())
         return false;
       signature.name = "_finite_admission_" + std::to_string(nextMathematics++);
-    } while (SymbolTable::lookupSymbolIn(module, signature.name));
+    } while (symbols.getSymbolTable(module).lookup(signature.name));
     signature.kind = computation.collect ? LocalRealization::Kind::FiniteCollect
                                          : LocalRealization::Kind::FiniteFold;
     signature.domainArguments = computation.arguments;
@@ -231,12 +239,17 @@ public:
   }
   std::string fresh() { return "v" + std::to_string(next++); }
   bool type(Type type, std::string &spelling) {
+    if (auto found = typeSpellings.find(type); found != typeSpellings.end()) {
+      spelling = found->second;
+      return true;
+    }
     auto encoded = encodeBoundType(type, physical);
     if (!encoded) {
       consumeError(encoded.takeError());
       return fail("value outside the selected execution stage");
     }
     spelling = encoded->spelling();
+    typeSpellings.try_emplace(type, spelling);
     return true;
   }
   bool ports(TypeRange actual, ArrayRef<BoundType> expected) {
@@ -250,21 +263,36 @@ public:
     return true;
   }
   bool application(exec::ApplyOp op) {
-    auto binding = operationBinding(op);
-    if (!binding) {
-      consumeError(binding.takeError());
+    auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+    auto *root = SymbolTable::getNearestSymbolTable(op);
+    auto *declaration =
+        root && reference ? symbols.lookupSymbolIn(root, reference) : nullptr;
+    if (!declaration)
       return fail("invocation binding");
+    auto found = applications.find(declaration);
+    if (found == applications.end()) {
+      auto binding = readBinding(declaration);
+      if (!binding) {
+        consumeError(binding.takeError());
+        return fail("invocation binding");
+      }
+      auto signature = resolveBinding(binding->application, physical);
+      if (!signature) {
+        consumeError(signature.takeError());
+        return fail("binding signature");
+      }
+      found =
+          applications
+              .try_emplace(declaration, std::make_pair(std::move(*binding),
+                                                       std::move(*signature)))
+              .first;
     }
-    auto signature = resolveBinding(binding->application, physical);
-    if (!signature) {
-      consumeError(signature.takeError());
-      return fail("binding signature");
-    }
-    if (!ports(op.getInputs().getTypes(), signature->inputs) ||
-        !ports(op.getOutcome().getType().getPayload(), signature->outputs))
+    const auto &[binding, signature] = found->second;
+    if (!ports(op.getInputs().getTypes(), signature.inputs) ||
+        !ports(op.getOutcome().getType().getPayload(), signature.outputs))
       return false;
-    if (auto e = checkParameters(binding->application,
-                                 strings(op.getParameters()))) {
+    if (auto e =
+            checkParameters(binding.application, strings(op.getParameters()))) {
       consumeError(std::move(e));
       return fail("invocation parameter formation");
     }
@@ -309,8 +337,7 @@ public:
   }
   bool region(func::CallOp call, ArrayRef<std::string> names,
               program::Body &result) {
-    auto function = dyn_cast_or_null<func::FuncOp>(
-        SymbolTable::lookupSymbolIn(module, call.getCallee()));
+    auto function = callee(call);
     return (function && function.isPrivate() &&
             body(function, names, result, true)) ||
            fail("region body must be an actual private function");
@@ -376,8 +403,7 @@ bool BodyReader::invokeRegion(runtime::EnterScopeOp enter, StringRef kind,
   if (!call || !attributes(call, {"callee"}) || call.getOperands() != inputs ||
       call.getNumResults() != 1 || !reader.region(call, captures, body))
     return reader.fail("region callee or actual captures");
-  step.regions.push_back(cast<func::FuncOp>(
-      SymbolTable::lookupSymbolIn(function->getParentOp(), call.getCallee())));
+  step.regions.push_back(reader.callee(call));
   auto exit = dyn_cast_or_null<runtime::ExitScopeOp>(take());
   if (!exit || !bare(exit) || exit.getScope() != acquired.front() ||
       exit.getBody() != call.getResult(0))
@@ -594,8 +620,7 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record,
       call.getOperands() != callInputs || call.getNumResults() != 1 ||
       !reader.region(call, bodyNames, record.body))
     return reader.fail("iteration body must use actual scoped arguments");
-  step.regions.push_back(cast<func::FuncOp>(
-      SymbolTable::lookupSymbolIn(function->getParentOp(), call.getCallee())));
+  step.regions.push_back(reader.callee(call));
   step.inputs = {range.getLower(), range.getUpper()};
   append_range(step.inputs, initial.getInputs());
   append_range(step.inputs, enter.getInputs().drop_front(prefix.size()));
@@ -733,9 +758,7 @@ bool BodyReader::scheduledLoop(exec::RangeOp range, program::For &record,
             if (arm || call != invocation ||
                 !reader.region(call, bodyNames, record.body))
               return false;
-            step.regions.push_back(
-                cast<func::FuncOp>(SymbolTable::lookupSymbolIn(
-                    function->getParentOp(), call.getCallee())));
+            step.regions.push_back(reader.callee(call));
             return true;
           },
           outputs) ||
@@ -919,6 +942,7 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
   return reader.fail("missing native completion");
 }
 Expected<program::LocalDefinitions> Reader::run(bool mixed) {
+  llvm::TimeTraceScope timing("zkc.execution-read");
   program::LocalDefinitions result;
   unsigned definitions = 0, bindings = 0;
   for (Operation &op : module->getRegion(0).front()) {
@@ -926,7 +950,9 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
       return error("execution-cfg", "definition inspection limit");
     --remaining;
     if ((isa<runtime::BindingOp>(op) && ++bindings > 4096) ||
-        (isa<func::FuncOp, data::DomainOp>(op) && ++definitions > 4096))
+        (isa<func::FuncOp, data::DomainOp>(op) &&
+         !(isa<func::FuncOp>(op) && op.hasAttr("runtime.region")) &&
+         ++definitions > 4096))
       return error("execution-cfg", "definition inventory limit");
     if (auto binding = dyn_cast<runtime::BindingOp>(op)) {
       if (!attributes(binding, {"sym_name", "contract", "arguments",
@@ -994,10 +1020,12 @@ Expected<program::LocalDefinitions> Reader::run(bool mixed) {
   if (source) {
     if (mathematicalCalls && result.functions.empty())
       return result;
+    llvm::TimeTraceScope admissionTiming("zkc.execution-native-admission");
     if (auto e = admitNativeLocalDefinitions(result, mathematicalSignatures))
       return std::move(e);
     return result;
   }
+  llvm::TimeTraceScope admissionTiming("zkc.execution-native-admission");
   if (auto e = admitExecutionDefinitions(result, physical))
     return std::move(e);
   return result;
@@ -1054,6 +1082,7 @@ readSourceExecutionDefinitions(Operation *symbolTable) {
 }
 Expected<SourceExecutionClosure>
 readSourceExecutionClosure(Operation *symbolTable) {
+  llvm::TimeTraceScope timing("zkc.source-execution-closure");
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable, true)))
     return error("execution-source-closure", "invalid source definition scope");
   SmallVector<Operation *> definitions;

@@ -11,6 +11,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <map>
 
 using namespace mlir;
@@ -329,6 +330,7 @@ bool BodyComparison::run(const program::Body &expected,
   return control.complete();
 }
 bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
+  llvm::TimeTraceScope timing("zkc.execution-comparison");
   for (const auto &binding : expected.bindings) {
     auto signature = resolveBinding(binding.application, physical);
     if (!signature) {
@@ -340,7 +342,9 @@ bool Comparison::run(const program::LocalDefinitions &expected, bool mixed) {
   unsigned binding = 0, root = 0, definitions = 0;
   for (Operation &op : module->getRegion(0).front()) {
     if (!charge() ||
-        (isa<func::FuncOp, data::DomainOp>(op) && ++definitions > 4096))
+        (isa<func::FuncOp, data::DomainOp>(op) &&
+         !(isa<func::FuncOp>(op) && op.hasAttr("runtime.region")) &&
+         ++definitions > 4096))
       return false;
     if (auto declaration = dyn_cast<runtime::BindingOp>(op)) {
       if (binding >= 4096 || binding == expected.bindings.size() ||

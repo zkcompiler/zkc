@@ -765,44 +765,44 @@ int main() {
     take(target::validatePhysical(*original, pinned));
   });
   for (bool fusion : {false, true})
-    cases.run("complete-program refusal changes only one occurrence, fusion=" +
-                  std::to_string(fusion),
-              [&] {
-                auto source = parse(reductionFixture(true)),
-                     original = executable(*source),
-                     frozen = sf::clone(*original);
-                mathematical::RealizationWork work;
-                target::PhysicalPlanOptions options;
-                options.numericalWork = &work;
-                options.numericalPolicy.vectorReductionFusion = fusion;
-                unsigned visits = 0;
-                StringRef rejected = fusion ? "vector.dot" : "numerical.map";
-                options.programCapacity = [&](ModuleOp,
-                                              const target::PhysicalPlan &plan)
-                    -> llvm::Expected<SmallVector<target::OperationIndex>> {
-                  if (++visits == 1)
-                    for (const auto &operation : plan.operations)
-                      if (operation.binding &&
-                          plan.bindings[*operation.binding]
-                                  .binding.application.contract == rejected)
-                        return SmallVector<target::OperationIndex>{
-                            operation.operation};
-                  return SmallVector<target::OperationIndex>{};
-                };
-                auto plan = take(target::proposePhysical(
-                    *original, target::installedCandidates(), {}, options));
-                auto selected = take(plan.cloneSelectedSubject(*original));
-                require(visits == 2 &&
-                            callsOf(*selected, rejected).size() == 1 &&
-                            callsOf(*selected,
-                                    fusion ? "numerical.sum" : "vector.sum")
-                                    .size() == (fusion ? 1u : 2u) &&
-                            work.discardedRecipeCopy < 1000000 &&
-                            same(*original, *frozen),
-                        "attributed refusal replaced both shared occurrences "
-                        "or refunded work");
-                take(target::validatePhysical(*original, plan));
-              });
+    cases.run(
+        "complete-program refusal changes only one occurrence, fusion=" +
+            std::to_string(fusion),
+        [&] {
+          auto source = parse(reductionFixture(true)),
+               original = executable(*source), frozen = sf::clone(*original);
+          mathematical::RealizationWork work;
+          target::PhysicalPlanOptions options;
+          options.numericalWork = &work;
+          options.numericalPolicy.vectorReductionFusion = fusion;
+          unsigned visits = 0;
+          StringRef rejected = fusion ? "vector.dot" : "numerical.map";
+          options.programCapacity = [&](ModuleOp,
+                                        const target::PhysicalPlan &plan)
+              -> llvm::Expected<SmallVector<target::OperationIndex>> {
+            if (++visits == 1)
+              for (const auto &operation : plan.operations)
+                if (operation.binding &&
+                    plan.bindings[*operation.binding]
+                            .binding.application.contract == rejected)
+                  return SmallVector<target::OperationIndex>{
+                      operation.operation};
+            return SmallVector<target::OperationIndex>{};
+          };
+          auto plan = take(target::proposePhysical(
+              *original, target::installedCandidates(), {}, options));
+          auto selected = take(plan.cloneSelectedSubject(*original));
+          require(
+              visits == 2 && callsOf(*selected, rejected).size() == 1 &&
+                  callsOf(*selected, fusion ? "numerical.sum" : "vector.sum")
+                          .size() == (fusion ? 1u : 2u) &&
+                  work.discardedRecipeCopy <
+                      mathematical::RealizationWork{}.discardedRecipeCopy &&
+                  same(*original, *frozen),
+              "attributed refusal replaced both shared occurrences "
+              "or refunded work");
+          take(target::validatePhysical(*original, plan));
+        });
   for (StringRef mutation : {"unused-guard", "guard-order", "extent",
                              "formula-input", "extra-work", "result-use"})
     cases.run("physical map reader rejects " + mutation, [&] {
@@ -1103,10 +1103,12 @@ int main() {
           auto spent = 100000 - measure.finiteExpressions;
           require(spent >= 2,
                   "finite construction failed to charge both occurrences");
-          require(!fallback ||
-                      (measure.discardedRecipeCopy < 1000000 &&
-                       measure.discardedRecipeExpansion < 16 * 1024 * 1024),
-                  "catalog retry refunded discarded construction");
+          require(
+              !fallback ||
+                  (measure.discardedRecipeCopy <
+                       mathematical::RealizationWork{}.discardedRecipeCopy &&
+                   measure.discardedRecipeExpansion < 16 * 1024 * 1024),
+              "catalog retry refunded discarded construction");
           for (bool oneShort : {false, true}) {
             mathematical::RealizationWork work;
             work.finiteExpressions = spent - unsigned(oneShort);

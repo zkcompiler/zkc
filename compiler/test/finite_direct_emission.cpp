@@ -1151,7 +1151,8 @@ int main(int argc, char **argv) {
                 "structural work was replenished");
       if (limit == 4)
         require(work.optionalFiniteChecking == 0 &&
-                    work.discardedRecipeCopy < 1000000,
+                    work.discardedRecipeCopy <
+                        mathematical::RealizationWork{}.discardedRecipeCopy,
                 "discarded proposal was not cumulatively accounted");
     });
   for (StringRef fixture :

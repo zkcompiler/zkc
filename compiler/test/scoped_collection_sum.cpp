@@ -298,36 +298,38 @@ int main(int argc, char **argv) {
     });
   for (bool bulk : {false, true})
     for (unsigned withheld = 0; withheld <= 4; ++withheld)
-      cases.run("physical retry bulk=" + std::to_string(bulk) +
-                    " withheld=" + std::to_string(withheld),
-                [&] {
-                  auto module = take(executableFixture(fixture(), context));
-                  Providers providers;
-                  providers.withheld = withheld;
-                  mathematical::RealizationWork work;
-                  target::PhysicalPlanOptions options;
-                  options.numericalWork = &work;
-                  options.numericalPolicy = {bulk, true, false};
-                  auto proposal = take(
-                      target::proposePhysical(*module, providers, {}, options));
-                  auto checked = take(
-                      target::validatePhysical(*module, proposal, providers));
-                  auto actual = take(checked.cloneSelectedSubject(*module));
-                  auto function = sf::function(*actual, "Work");
-                  StringRef expected = withheld == 0           ? "vector.dot"
-                                       : withheld == 1         ? "numerical.sum"
-                                       : withheld == 2 && bulk ? "numerical.map"
-                                       : withheld == 3 && bulk ? "vector.mul"
-                                                               : "vector.sum";
-                  require(sf::applications(function, expected).size() == 1,
-                          "wrong surviving numerical alternative");
-                  require(sf::hasLoop(function) ==
-                              (withheld >= 4 || (!bulk && withheld >= 2)),
-                          "retry lost the required ordered endpoint");
-                  if (withheld)
-                    require(work.discardedRecipeCopy < 1000000,
-                            "failed alternatives refunded construction work");
-                });
+      cases.run(
+          "physical retry bulk=" + std::to_string(bulk) +
+              " withheld=" + std::to_string(withheld),
+          [&] {
+            auto module = take(executableFixture(fixture(), context));
+            Providers providers;
+            providers.withheld = withheld;
+            mathematical::RealizationWork work;
+            target::PhysicalPlanOptions options;
+            options.numericalWork = &work;
+            options.numericalPolicy = {bulk, true, false};
+            auto proposal =
+                take(target::proposePhysical(*module, providers, {}, options));
+            auto checked =
+                take(target::validatePhysical(*module, proposal, providers));
+            auto actual = take(checked.cloneSelectedSubject(*module));
+            auto function = sf::function(*actual, "Work");
+            StringRef expected = withheld == 0           ? "vector.dot"
+                                 : withheld == 1         ? "numerical.sum"
+                                 : withheld == 2 && bulk ? "numerical.map"
+                                 : withheld == 3 && bulk ? "vector.mul"
+                                                         : "vector.sum";
+            require(sf::applications(function, expected).size() == 1,
+                    "wrong surviving numerical alternative");
+            require(sf::hasLoop(function) ==
+                        (withheld >= 4 || (!bulk && withheld >= 2)),
+                    "retry lost the required ordered endpoint");
+            if (withheld)
+              require(work.discardedRecipeCopy <
+                          mathematical::RealizationWork{}.discardedRecipeCopy,
+                      "failed alternatives refunded construction work");
+          });
   cases.run("missing lane recipes cannot enable unrequested map lowering", [&] {
     const auto &installed = mathematical::mathematicalRecipes();
     mathematical::MathematicalRecipes recipes{{}, installed.reductions};

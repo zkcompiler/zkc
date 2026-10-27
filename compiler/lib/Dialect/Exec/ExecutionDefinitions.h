@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/TimeProfiler.h"
 
 namespace zkc::protocol::detail {
 // Formation shared by the two independent body checks. Do not verify the
@@ -20,6 +21,7 @@ namespace zkc::protocol::detail {
 inline mlir::LogicalResult
 verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false,
                                bool scheduled = false) {
+  llvm::TimeTraceScope timing("zkc.execution-formation");
   using namespace mlir;
   if (!scope || !scope->hasTrait<OpTrait::SymbolTable>() ||
       scope->getNumRegions() != 1 ||
@@ -35,10 +37,13 @@ verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false,
       return failure();
     --remaining;
     // Bindings and callable/domain definitions have independent inventories.
-    // Enclosing protocol metadata belongs to neither; collision inspection
-    // still consumes the shared structural allowance.
+    // Outlined control bodies and enclosing protocol metadata consume the
+    // shared structural allowance, not the callable inventory. Every region
+    // still undergoes formation and complete body checking below.
     if ((isa<runtime::BindingOp>(op) && ++bindingsCount > 4096) ||
-        (isa<func::FuncOp, data::DomainOp>(op) && ++definitionsCount > 4096))
+        (isa<func::FuncOp, data::DomainOp>(op) &&
+         !(isa<func::FuncOp>(op) && op.hasAttr("runtime.region")) &&
+         ++definitionsCount > 4096))
       return failure();
     if (auto raw = op.getAttr(SymbolTable::getSymbolAttrName())) {
       auto name = dyn_cast<StringAttr>(raw);

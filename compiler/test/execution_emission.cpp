@@ -400,6 +400,16 @@ int main(int argc, char **argv) {
               expected.functions.push_back(std::move(function));
             }
           }
+          // Control outlines are not additional native callable definitions.
+          // Put a branch in one root after filling the exact inventory.
+          expected.functions.front().body = {
+              {"condition", program::BooleanConstant{"condition", true}},
+              {"choose", program::Conditional{"condition",
+                                              {"x"},
+                                              {{"", program::Yield{{"x"}}}},
+                                              {{"", program::Yield{{"x"}}}},
+                                              {"answer"}}},
+              {"", program::Return{{"answer"}}}};
           auto module =
               take(protocol::writeLocalExecution(context, expected, true));
           auto actual = take(protocol::readLocalExecution(*module, true));
@@ -525,25 +535,30 @@ int main(int argc, char **argv) {
     refuses(protocol::writeLocalExecution(empty, nested(true), true),
             "execution-emission");
   });
-  cases.run(
-      "outlined definition limit is enforced before constructing CFG", [&] {
-        auto model = nested(false);
-        auto &body = model.functions[0].body;
-        body.clear();
-        for (unsigned i = 0; i < 2048; ++i) {
-          auto suffix = std::to_string(i);
-          body.push_back({"choose_" + suffix,
-                          program::Conditional{
-                              "again",
-                              {},
-                              {{"left_" + suffix, program::Stop{"refused"}}},
-                              {{"right_" + suffix, program::Stop{"reject"}}},
-                              {}}});
-        }
-        body.push_back({"", program::Return{{"x"}}});
+  cases.run("outlined control uses the native instruction bound", [&] {
+    for (unsigned branches :
+         {2048u, unsigned(program::staticInstructionLimit / 3 + 1)}) {
+      auto model = nested(false);
+      auto &body = model.functions[0].body;
+      body.clear();
+      for (unsigned i = 0; i < branches; ++i) {
+        auto suffix = std::to_string(i);
+        body.push_back({"choose_" + suffix,
+                        program::Conditional{
+                            "again",
+                            {},
+                            {{"left_" + suffix, program::Stop{"refused"}}},
+                            {{"right_" + suffix, program::Stop{"reject"}}},
+                            {}}});
+      }
+      body.push_back({"", program::Return{{"x"}}});
+      if (branches == 2048)
+        check(model, "many-outlined-bodies");
+      else
         refuses(protocol::writeLocalExecution(context, model, true),
-                "execution-emission");
-      });
+                "interactive-instruction-limit");
+    }
+  });
   cases.run(
       "writer preserves the stricter native carrier nesting boundary", [&] {
         for (unsigned depth : {29, 30}) {
