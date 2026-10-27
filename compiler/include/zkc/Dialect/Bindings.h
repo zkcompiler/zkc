@@ -24,7 +24,7 @@ llvm::Expected<BoundType> encodeBoundType(mlir::Type, bool physical);
 /// also check their selected stage and actual invocation ports.
 llvm::Expected<protocol::OperationBinding> readBinding(mlir::Operation *);
 llvm::Expected<protocol::OperationBinding> operationBinding(mlir::Operation *);
-mlir::LogicalResult verifyBoundOperation(mlir::Operation *, bool physical);
+mlir::LogicalResult verifyBoundOperation(mlir::Operation *);
 } // namespace zkc::protocol
 
 #endif

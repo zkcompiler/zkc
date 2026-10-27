@@ -1,7 +1,7 @@
 # Native numerical calls
 
-This contract connects checked Kernel realization and physical bindings to
-synchronous native numerical handlers. It uses the existing `plan.apply` and
+This contract connects checked numerical realization and physical bindings to
+synchronous native numerical handlers. It uses the existing `exec.apply` and
 `zkc.program/0` operation path; there is no separate numerical executable format.
 
 ## Types and storage

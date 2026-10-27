@@ -8,7 +8,6 @@ include "zkc/Dialect/Local/IR/LocalDialect.td"
 include "zkc/Dialect/Exec/IR/ExecDialect.td"
 include "zkc/Dialect/Kernel/IR/KernelDialect.td"
 include "zkc/Dialect/Crypto/IR/CryptoDialect.td"
-include "zkc/Dialect/Plan/IR/PlanDialect.td"
 include "zkc/Dialect/Commitment/IR/CommitmentDialect.td"
 include "zkc/Dialect/Relation/IR/RelationDialect.td"
 

@@ -35,8 +35,8 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 Logical variants use Data-owned types; runtime capabilities and exact physical
 representation wrappers use Runtime-owned types. Their independent binding
-adapters preserve current native descriptors and installation checks. Local and
-Plan own no value types. Runtime also owns the shared `runtime.binding`
+adapters preserve current native descriptors and installation checks. Local owns
+no value types; the Plan dialect has been removed. Runtime also owns the shared `runtime.binding`
 declaration used by logical and physical ordered execution. See
 [native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
 
@@ -55,7 +55,7 @@ the enclosing profile's responsibility. This scoped path is now the default for
 source emission, participant preparation, numerical realization, physical
 selection, publication and artifact comparison. Source-facing compiler consumers
 and maintained formal fixtures now exercise that default. The replaced native
-Local/Plan/Kernel implementation owners still need retirement. Transparent word
+Local/Kernel implementation owners still need retirement; physical selection uses scoped Exec and Runtime directly. Transparent word
 arithmetic and compiler-selected writable-buffer execution also remain incomplete.
 The retained owners do not constitute a second supported publication route.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).

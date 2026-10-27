@@ -402,7 +402,7 @@ module { "protocol.module"() ({
         op->getName().getStringRef() ==
             (isAdd ? "algebra.exec.field_add" : "algebra.exec.field_multiply"),
         "actual imported add/mul identity swapped: " + site.getValue());
-    check(succeeded(protocol::verifyBoundOperation(op, false)),
+    check(succeeded(protocol::verifyBoundOperation(op)),
           "valid binding refused before swap");
     auto original = op->getAttr("binding");
     op->setAttr("binding",
@@ -412,7 +412,7 @@ module { "protocol.module"() ({
       llvm::append_range(refusals, diagnostics::refusals(diagnostic));
       return success();
     });
-    check(failed(protocol::verifyBoundOperation(op, false)),
+    check(failed(protocol::verifyBoundOperation(op)),
           "same-signature wrong binding passed adapter verifier");
     check(llvm::any_of(refusals,
                        [](const auto &info) {

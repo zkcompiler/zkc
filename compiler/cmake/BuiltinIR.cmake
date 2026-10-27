@@ -10,7 +10,6 @@ set(zkc_builtin_dialects
   "crypto|Crypto|types"
   "algebra|Algebra|types"
   "poly|Polynomial|types"
-  "plan|Plan|none"
   "commitment|Commitment|types"
   "relation|Relation|none"
 )

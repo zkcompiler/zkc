@@ -196,26 +196,21 @@ Expected<protocol::OperationBinding> operationBinding(Operation *user) {
   return readBinding(SymbolTable::lookupSymbolIn(root, reference));
 }
 
-LogicalResult verifyBoundOperation(Operation *op, bool physical) {
+LogicalResult verifyBoundOperation(Operation *op) {
   auto selected = operationBinding(op);
   if (!selected)
     return diagnostics::emit(op->emitOpError(), selected.takeError());
-  auto signature = resolveBinding(selected->application, physical);
+  auto signature = resolveBinding(selected->application, false);
   if (!signature)
     return diagnostics::emit(op->emitOpError(), signature.takeError());
-  if (physical) {
-    auto key = op->getAttrOfType<StringAttr>("implementation");
-    if (!isa<zkc::plan::ApplyOp>(op) || !key ||
-        key.getValue() != selected->application.implementation)
-      return diagnostics::emit(op->emitOpError(), "binding-implementation");
-  } else if (!operationSupportsContract(op->getName().getStringRef(),
-                                        selected->application.contract))
+  if (!operationSupportsContract(op->getName().getStringRef(),
+                                 selected->application.contract))
     return diagnostics::emit(op->emitOpError(), "binding-operation");
   auto types = [&](TypeRange actual, ArrayRef<BoundType> expected) {
     if (actual.size() != expected.size())
       return false;
     for (auto [type, target] : zip(actual, expected)) {
-      auto value = encodeBoundType(type, physical);
+      auto value = encodeBoundType(type, false);
       if (!value) {
         consumeError(value.takeError());
         return false;

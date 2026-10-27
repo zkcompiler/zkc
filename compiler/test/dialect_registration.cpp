@@ -32,7 +32,10 @@ int main() {
   require(!native.isOperationRegistered("protocol.exec_func"));
   check<zkc::protocol_ir::ProtocolDialect>(native, "protocol");
   check<zkc::local::LocalDialect>(native, "local");
-  check<zkc::plan::PlanDialect>(native, "plan");
+  require(!nativeRegistry.getDialectAllocator("plan"));
+  require(!native.getLoadedDialect("plan"));
+  for (auto name : {"plan.apply", "plan.bool_constant", "plan.release"})
+    require(!native.isOperationRegistered(name));
   check<zkc::runtime::RuntimeDialect>(native, "runtime");
   require(native.isOperationRegistered("runtime.binding"));
   require(!native.isOperationRegistered("local.binding"));
@@ -51,7 +54,7 @@ int main() {
   require(!registry.getDialectAllocator("table"));
   check<zkc::algebra::AlgebraDialect>(context, "algebra");
   check<zkc::poly::PolynomialDialect>(context, "poly");
-  check<zkc::plan::PlanDialect>(context, "plan");
+  require(!registry.getDialectAllocator("plan"));
   check<zkc::commitment::CommitmentDialect>(context, "commitment");
   require(!registry.getDialectAllocator("pcs"));
   require(!registry.getDialectAllocator("oracle"));

@@ -2281,8 +2281,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
       const auto &base = plan.bindings[original->second];
       // Exact contract AND arguments, not merely physical signature equality.
       // The source verifier also checks its ODS association and parameters.
-      if (!isa<zkc::exec::ApplyOp>(op) &&
-          failed(verifyBoundOperation(op, false)))
+      if (!isa<zkc::exec::ApplyOp>(op) && failed(verifyBoundOperation(op)))
         return error("binding-operation");
       if (!sameLogical(binding.binding.application, base.binding.application))
         return error("binding-operation");

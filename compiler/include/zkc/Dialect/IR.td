@@ -11,7 +11,6 @@ include "zkc/Dialect/Local/IR/LocalOps.td"
 include "zkc/Dialect/Exec/IR/ExecOps.td"
 include "zkc/Dialect/Kernel/IR/KernelOps.td"
 include "zkc/Dialect/Crypto/IR/CryptoOps.td"
-include "zkc/Dialect/Plan/IR/PlanOps.td"
 include "zkc/Dialect/Commitment/IR/CommitmentOps.td"
 include "zkc/Dialect/Relation/IR/RelationOps.td"
 

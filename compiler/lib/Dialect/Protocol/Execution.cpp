@@ -286,12 +286,6 @@ class ExecutionModelReader {
         out.push_back(
             {site, program::ReturnIf{inputs.front(), std::move(values),
                                      std::move(continuations)}});
-      } else if (isa<zkc::plan::ReleaseOp>(op)) {
-        if (!physical || !local || !attributes(op, {})) {
-          fail("interactive-release-context");
-          return {};
-        }
-        out.push_back({"", program::Release{names(op->getOperands(), env)}});
       } else if (isa<zkc::local::StopOp>(op)) {
         if (!local || !attributes(op, {"site", "reason"}) ||
             op != &block.back()) {
@@ -418,16 +412,13 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
-      } else if (isa<zkc::local::BoolConstantOp, zkc::plan::BoolConstantOp>(
-                     op)) {
-        if (!local || physical != isa<zkc::plan::BoolConstantOp>(op) ||
-            !attributes(op, {"site", "value"})) {
+      } else if (isa<zkc::local::BoolConstantOp>(op)) {
+        if (!local || physical || !attributes(op, {"site", "value"})) {
           fail("native-boolean-context");
           return {};
         }
         auto value = op->getAttrOfType<BoolAttr>("value");
-        if (!value || type(op->getResult(0).getType()) !=
-                          (physical ? "bool@native.bool/0" : "bool")) {
+        if (!value || type(op->getResult(0).getType()) != "bool") {
           fail("native-boolean-type");
           return {};
         }
@@ -581,13 +572,9 @@ class ExecutionModelReader {
                                  std::move(captures), std::move(content),
                                  results(op, env)}});
       } else {
-        if (!local ||
-            !attributes(op, physical ? ArrayRef<StringRef>{"site", "binding",
-                                                           "implementation",
-                                                           "parameters"}
-                                     : ArrayRef<StringRef>{"site", "binding",
-                                                           "parameters"}) ||
-            failed(verifyBoundOperation(op, physical))) {
+        if (!local || physical ||
+            !attributes(op, {"site", "binding", "parameters"}) ||
+            failed(verifyBoundOperation(op))) {
           fail("binding-operation");
           return {};
         }

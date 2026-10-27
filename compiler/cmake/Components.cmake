@@ -227,7 +227,6 @@ add_zkc_component(IR
   lib/Dialect/Protocol/Execution.cpp
   lib/Dialect/Relation/IR/AIR.cpp
   lib/Dialect/Relation/IR/R1CS.cpp
-  lib/Dialect/Plan/IR/PlanDialect.cpp
   lib/Dialect/Polynomial/IR/PolynomialDialect.cpp
   lib/Dialect/Registry.cpp
   lib/Dialect/Relation/IR/RelationDialect.cpp

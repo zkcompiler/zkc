@@ -164,7 +164,7 @@ int main() {
                                     "collection_" + std::to_string(site++),
                                     *application, inputs, TypeRange{output},
                                     parameters);
-            require(succeeded(protocol::verifyBoundOperation(op, false)),
+            require(succeeded(protocol::verifyBoundOperation(op)),
                     "emitted operation failed resolved contract check");
             return op->getResult(0);
           };
@@ -244,7 +244,7 @@ int main() {
                                 helper.getArguments(), TypeRange{field});
         require(op->getBlock() == &helper.getBody().front() &&
                     op->getAttrOfType<StringAttr>("site").getValue() == site &&
-                    succeeded(protocol::verifyBoundOperation(op, false)),
+                    succeeded(protocol::verifyBoundOperation(op)),
                 "emitter lost insertion point, site or resolved signature");
         return take(protocol::operationBinding(op));
       };
@@ -285,7 +285,7 @@ int main() {
                            {"field.constant", {type.getDomain().str()}, ""}, {},
                            TypeRange{type}, {parameter.str()});
           require(
-              succeeded(protocol::verifyBoundOperation(op, false)),
+              succeeded(protocol::verifyBoundOperation(op)),
               "constant failed declaration signature or parameter validation");
           return op;
         };
