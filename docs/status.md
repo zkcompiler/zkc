@@ -172,8 +172,12 @@ account checks. Map consumers now use the shared scoped collection fixture, incl
 eight native field families, complete malformed/admitted mutation controls,
 large formula and wide-capture workloads, cumulative required allowances, affine
 repeat helpers and physical pipelines. Optional Ring limits retain ordered
-execution; actual retained/generated callback admission remains bounded. This
-is affected-suite coverage, not validation of the complete base.
+execution; actual retained/generated callback admission remains bounded.
+Late-selection consumers now check the retained finite and numerical stages of
+physical plans, provider and per-occurrence fallback, explicit callback policies
+and implementation pins, admitted physical mutations, cumulative work boundaries
+and identity-map capture canonicalization through scoped control. These are
+affected-suite checks, not validation of the complete base.
 Unresolved requests are refused by
 executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
 
