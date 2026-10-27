@@ -60,6 +60,14 @@ selection.
 
 ## CPU execution
 
+The KoalaBear base/octic Keccak Merkle adapter uses the pinned hasher's SIMD
+lanes for independent leaves and parent nodes. Canonical leaf bytes, node tags,
+roots and paths are unchanged. Optional encoded staging is bounded to 32 KiB
+per task; wide rows or failed reservations use scalar streaming. This is
+provider-private temporary storage, separate from retained table/tree charges
+and the managed `numerical::Call` scope. Plonky3 still owns tree topology and
+its internal temporary allocations.
+
 `cpu::CpuExecution::new(workers)` creates a fallible, clonable worker owner.
 Use `cpu.enter(|| kernel_call())` to supply it while keeping validation and
 partial effects on the caller. Parallel-capable numerical leaves install their

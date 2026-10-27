@@ -75,6 +75,7 @@ against those revisions. The harness supplies no legacy CLI or source aliases.
 |---|---|
 | `fri-32`, `fri-64` | 32/64 Ext8 evaluations, degree below 8/16, 3/4 folds, 8 queries |
 | `fri-1024` | 1,024 Ext8 evaluations, degree below 64, 6 folds, 8 queries |
+| `fri-4096` | 4,096 Ext8 evaluations, degree below 64, 6 folds, 8 queries; keeps degree/query work fixed while scaling Merkle input |
 | `air-stark-32`, `air-stark-64`, `air-stark-1024` | Imported recurrence Bundle, fixed 8-row trace, 32/64/1,024 evaluation points, 8 queries and OOD attempts |
 | `machine-logup-absent`, `machine-product-absent` | Arithmetic-only fixture: CPU/program height 4; optional memory absent; 64-point domain |
 | `machine-logup-present`, `machine-product-present` | Store/load fixture: CPU/program height 16, memory height 32; 64-point domain |

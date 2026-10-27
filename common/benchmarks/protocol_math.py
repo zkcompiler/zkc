@@ -42,7 +42,7 @@ EXIT_COUNTERS = ('live_values', 'live_value_bytes', 'live_resource_units',
 
 def case_catalog():
     cases = []
-    for size, rounds in [(32, 3), (64, 4), (1024, 6)]:
+    for size, rounds in [(32, 3), (64, 4), (1024, 6), (4096, 6)]:
         cases.append({'name': f'fri-{size}', 'project': 'fri', 'entry': 'example::Proof',
                       'storage_entry': 'example::Fri',
                       'size': size, 'rounds': rounds,
