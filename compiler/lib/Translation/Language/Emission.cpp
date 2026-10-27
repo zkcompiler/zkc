@@ -138,18 +138,16 @@ class Emitter {
                                   ArrayRef<std::string> parameters,
                                   StringRef site,
                                   std::optional<ArrayRef<Type>> statics = {}) {
+    if (!scoped) {
+      failure =
+          error("source.mode", "ordered primitives require scoped execution");
+      return {};
+    }
     if (!statics && contract == "bool.constant") {
-      if (scoped)
-        return scoped->invoke(
-            "exec.boolean", outputs, scoped->getScope(),
-            {attr("value", builder.getBoolAttr(parameters.front() == "true")),
-             text("site", site)});
-      auto *op = make(
-          "local.bool_constant", outputs, {},
+      return scoped->invoke(
+          "exec.boolean", outputs, scoped->getScope(),
           {attr("value", builder.getBoolAttr(parameters.front() == "true")),
            text("site", site)});
-      return op ? std::optional<Values>(Values(op->getResults()))
-                : std::nullopt;
     }
     if (!statics && contract == "bool.equal") {
       auto a = primitive("bool.and", inputs, outputs, {}, site.str() + "_both");
@@ -202,23 +200,10 @@ class Emitter {
         return {};
       found = bindings.emplace(key, std::move(name)).first;
     }
-    auto operationName = protocol::boundOperationName(contract);
-    if (operationName.empty()) {
-      failure = error("source.emission",
-                      "no installed ordered operation for " + contract);
-      return {};
-    }
-    if (scoped)
-      return scoped->invoke(
-          "exec.apply", outputs, scoped->scoped(inputs),
-          {attr("binding",
-                mlir::FlatSymbolRefAttr::get(&context, found->second)),
-           attr("parameters", strings(parameters)), text("site", site)});
-    auto *op = make(
-        operationName, outputs, inputs,
+    return scoped->invoke(
+        "exec.apply", outputs, scoped->scoped(inputs),
         {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
          attr("parameters", strings(parameters)), text("site", site)});
-    return op ? std::optional<Values>(Values(op->getResults())) : std::nullopt;
   }
   std::optional<Values> map(const Declaration &helper, ArrayRef<bool> rowwise,
                             mlir::ValueRange inputs, mlir::TypeRange outputs,
@@ -497,6 +482,11 @@ class Emitter {
   }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             bool region = false, unsigned forwarded = 0) {
+    if (region && source.mode == Body::Mode::Math) {
+      failure =
+          error("source.mode", "mathematical bodies have no ordered regions");
+      return false;
+    }
     builder.setInsertionPointToEnd(&block);
     std::vector<Values> values(source.values.size());
     auto *previous = scoped;
@@ -623,21 +613,17 @@ class Emitter {
                 alternative(*resultLayouts.front(), construct->alternative);
             if (!label)
               return false;
-            if (scoped)
-              result.push_back(scoped
-                                   ->invoke("exec.variant", resultTypes.back(),
-                                            scoped->scoped(input),
-                                            {text("site", site),
-                                             text("alternative", *label)})
-                                   .front());
-            else {
-              auto *actual =
-                  make("local.variant_inject", resultTypes.back(), input,
-                       {text("site", site), text("alternative", *label)});
-              if (!actual)
-                return false;
-              result.push_back(actual->getResult(0));
+            if (!scoped) {
+              failure = error("source.mode",
+                              "variant construction requires scoped execution");
+              return false;
             }
+            result.push_back(
+                scoped
+                    ->invoke("exec.variant", resultTypes.back(),
+                             scoped->scoped(input),
+                             {text("site", site), text("alternative", *label)})
+                    .front());
           } else
             llvm::append_range(result, input);
         }
@@ -909,10 +895,14 @@ class Emitter {
           result = scoped->invoke(math ? "exec.compute" : "func.call",
                                   resultTypes, scoped->scoped(operands), attrs);
         } else {
-          if (target.kind == Declaration::Kind::Local ||
-              source.mode == Body::Mode::Local) {
-            name = source.mode == Body::Mode::Protocol ? "protocol.local_call"
-                                                       : "local.apply";
+          if (target.kind == Declaration::Kind::Local) {
+            if (source.mode != Body::Mode::Protocol) {
+              failure =
+                  error("source.mode", "ordered calls require scoped execution "
+                                       "or a participant owner");
+              return false;
+            }
+            name = "protocol.local_call";
             attrs.push_back(text("site", site));
             if (call->owner)
               attrs.push_back(text("role", nativeRoleName(*call->owner)));
@@ -1207,11 +1197,9 @@ class Emitter {
       }
       return true;
     }
-    return make(region && source.mode == Body::Mode::Protocol ? "protocol.yield"
-                : region                                      ? "local.yield"
-                : source.mode == Body::Mode::Protocol ? "protocol.return"
-                : source.mode == Body::Mode::Local    ? "local.return"
-                                                      : "func.return",
+    return make(source.mode == Body::Mode::Protocol
+                    ? (region ? "protocol.yield" : "protocol.return")
+                    : "func.return",
                 {}, results, {});
   }
 

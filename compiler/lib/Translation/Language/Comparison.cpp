@@ -380,19 +380,20 @@ class Comparator {
                                 mlir::ValueRange inputs,
                                 const LayoutLeaf &output, StringRef alternative,
                                 StringRef site) {
+    if (!scoped) {
+      fail("variant construction requires scoped execution");
+      return {};
+    }
     Values result;
     auto *actual =
-        scoped ? invoke(block, cursor, span, "exec.variant", inputs, {output},
-                        result)
-               : next(block, cursor, span, "local.variant_inject", inputs, 1);
+        invoke(block, cursor, span, "exec.variant", inputs, {output}, result);
     if (!actual || !attributes(*actual, {"alternative", "site"}) ||
         !string(*actual, "alternative", alternative) ||
-        !string(*actual, "site", site) ||
-        (!scoped && !types(actual->getResultTypes(), {output}))) {
+        !string(*actual, "site", site)) {
       fail("variant alternative or occurrence differs");
       return {};
     }
-    return scoped ? result : Values(actual->getResults());
+    return result;
   }
   std::optional<Values> unpack(mlir::Value value, ArrayRef<LayoutLeaf> outputs,
                                StringRef alternative, Span span,
@@ -591,24 +592,25 @@ class Comparator {
   primitive(mlir::Block &block, mlir::Block::iterator &cursor,
             const LocalPrimitive &expected, mlir::ValueRange operands,
             ArrayRef<LayoutLeaf> outputs, Span span, StringRef site) {
+    if (!scoped) {
+      fail("ordered primitives require scoped execution");
+      return {};
+    }
     if (!expected.bindingArguments && expected.contract == "bool.constant") {
       Values result;
       auto *actual =
-          scoped
-              ? invoke(block, cursor, span, "exec.boolean", {}, outputs, result)
-              : next(block, cursor, span, "local.bool_constant", {}, 1);
+          invoke(block, cursor, span, "exec.boolean", {}, outputs, result);
       if (!actual)
         return {};
       auto value = actual->getAttrOfType<mlir::BoolAttr>("value");
       if (!attributes(*actual, {"value", "site"}) || !value ||
           value.getValue() != (expected.parameters.front() == "true") ||
-          !string(*actual, "site", site) ||
-          (!scoped && !types(actual->getResultTypes(), outputs))) {
+          !string(*actual, "site", site)) {
         if (!failure)
           fail("local Boolean literal differs");
         return {};
       }
-      return scoped ? result : Values(actual->getResults());
+      return result;
     }
     if (!expected.bindingArguments && expected.contract == "bool.equal") {
       auto invoke = [&](StringRef contract, mlir::ValueRange ins,
@@ -634,23 +636,16 @@ class Comparator {
     }
     Values result;
     auto *actual =
-        scoped ? invoke(block, cursor, span, "exec.apply", operands, outputs,
-                        result)
-               : next(block, cursor, span, "", operands, outputs.size());
+        invoke(block, cursor, span, "exec.apply", operands, outputs, result);
     if (!actual)
       return {};
     if (!attributes(*actual, {"binding", "parameters", "site"}) ||
         !string(*actual, "site", site) ||
-        !strings(actual->getAttr("parameters"), expected.parameters) ||
-        (!scoped && !protocol::operationSupportsContract(
-                        actual->getName().getStringRef(), expected.contract)) ||
-        (!scoped && !types(actual->getResultTypes(), outputs))) {
+        !strings(actual->getAttr("parameters"), expected.parameters)) {
       if (!failure)
         fail("ordered operation contract, parameters or site differ");
       return {};
     }
-    if (!scoped)
-      result = Values(actual->getResults());
     auto ref = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("binding");
     auto found = ref ? bindings.find(ref.getValue().str()) : bindings.end();
     if (found == bindings.end()) {
