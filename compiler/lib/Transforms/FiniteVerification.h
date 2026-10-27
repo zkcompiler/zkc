@@ -54,10 +54,6 @@ struct VerificationResult {
   mlir::LogicalResult diagnose(mlir::ModuleOp candidate) const;
 };
 
-VerificationResult checkRealizations(mlir::ModuleOp original,
-                                     mlir::ModuleOp candidate,
-                                     VerificationLimits limits = {});
-
 // Typed inline outcome for the containing checked transaction. This overload
 // does not diagnose capacity; the transaction may discard an optional proposal.
 // Disabled bulk policy requires the ordered payload after domain admission.

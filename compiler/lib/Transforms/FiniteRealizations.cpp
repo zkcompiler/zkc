@@ -1,4 +1,3 @@
-#include "CheckedCandidate.h"
 #include "CollectFold.h"
 #include "CollectionRealization.h"
 #include "ComputationSelection.h"
@@ -10,12 +9,10 @@
 #include "NumericalSelection.h"
 #include "RealizationEmission.h"
 #include "RealizationTrace.h"
-#include "RecipeRealizations.h"
 #include "ScopedFinite.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
@@ -1275,29 +1272,6 @@ public:
       return failure();
     return results;
   }
-  LogicalResult run(Operation *declaration, bool optimize) {
-    Computation source;
-    if (failed(describe(declaration, source, unit, &symbols)))
-      return failure();
-    builder.setInsertionPointToEnd(&unit->getRegion(0).front());
-    auto name = SymbolTable::getSymbolName(declaration);
-    auto function = local::FuncOp::create(builder, declaration->getLoc(),
-                                          name.getValue(), source.signature);
-    function->setAttr("logical_origin",
-                      builder.getArrayAttr({name, builder.getArrayAttr({})}));
-    auto *entry = builder.createBlock(
-        &function.getBody(), function.getBody().end(),
-        source.signature.getInputs(),
-        SmallVector<Location>(source.signature.getNumInputs(),
-                              declaration->getLoc()));
-    auto results = emitBody(declaration, entry->getArguments(), optimize);
-    if (failed(results))
-      return failure();
-    local::ReturnOp::create(builder, declaration->getLoc(), *results);
-    declaration->erase();
-    symbols.invalidateSymbolTable(unit);
-    return success();
-  }
 };
 // RewriterBase's builder-copy constructor retains the caller's listener and
 // insertion point. All new operations, blocks and bindings use this rewriter.
@@ -1385,94 +1359,4 @@ realizeCollectFold(const CollectFold &pair, ValueRange producerInputs,
   return results;
 }
 
-LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
-                            mathematical::RealizationWork *work,
-                            mathematical::RealizationTrace *trace) {
-  return realizeLocals(module, policy, work,
-                       mathematical::mathematicalRecipes(), trace);
-}
-
-LogicalResult realizeLocals(ModuleOp module, MathematicalSelectionPolicy policy,
-                            mathematical::RealizationWork *work,
-                            const mathematical::MathematicalRecipes &recipes,
-                            mathematical::RealizationTrace *trace) {
-  return realizeLocalsWithLimits(module, policy, work, recipes, {}, trace);
-}
-
-LogicalResult
-realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
-                        mathematical::RealizationWork *work,
-                        const mathematical::MathematicalRecipes &recipes,
-                        VerificationLimits limits,
-                        mathematical::RealizationTrace *trace) {
-  mathematical::RealizationWork standalone;
-  auto &available = work ? *work : standalone;
-  mathematical::RealizationScope scope(trace, "finite-realizations", module,
-                                       policy, &available);
-  if (failed(mlir::verify(module)) || !hasSingleElement(*module.getBody()))
-    return failure();
-  bool optimize = policy.finiteBulk;
-  for (;;) {
-    // Reserve required ordered work independently of a speculative proposal.
-    // A retry always starts from the admitted source, never from bulk output.
-    auto attemptWork = available;
-    auto effective = policy;
-    effective.finiteBulk = optimize;
-    mathematical::RealizationScope attempt(trace, "finite-attempt", module,
-                                           effective);
-    bool changed = false;
-    mathematical::CheckedCandidate candidate(module);
-    auto unit =
-        dyn_cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-    if (!unit)
-      return failure();
-    IRRewriter rewriter(module.getContext());
-    Realizer realizer(unit, rewriter, attemptWork, recipes, &attempt,
-                      policy.finiteBulk && !optimize,
-                      policy.numericalExpressions);
-    auto retainOptionalWork = [&] {
-      available.matching = attemptWork.matching;
-      available.lanes = attemptWork.lanes;
-    };
-    for (auto &op : make_early_inc_range(unit.getBody().front())) {
-      if (!isDeclaration(&op))
-        continue;
-      if (!changed)
-        attempt.propose(effective);
-      changed = true;
-      if (failed(realizer.run(&op, optimize))) {
-        retainOptionalWork();
-        return failure();
-      }
-    }
-    // Matching/lane allowances remain cumulative even when the candidate is
-    // discarded. Only required construction work has an ordered reserve.
-    retainOptionalWork();
-    VerificationResult checked{VerificationStatus::Mismatch, {}};
-    auto published = candidate.publish([&](ModuleOp source, ModuleOp proposal) {
-      checked = checkRealizations(source, proposal, limits);
-      if (checked.status == VerificationStatus::OptionalCapacity && optimize)
-        return failure();
-      return checked.diagnose(proposal);
-    });
-    if (succeeded(published)) {
-      available = attemptWork;
-      if (changed)
-        attempt.publish();
-      else
-        attempt.complete(mathematical::CompletionKind::Unchanged);
-      if (changed)
-        scope.publish();
-      else
-        scope.complete(mathematical::CompletionKind::Unchanged);
-      return success();
-    }
-    attempt.discard(mathematical::verificationDecision(checked));
-    if (!optimize || checked.status != VerificationStatus::OptionalCapacity)
-      return failure();
-    optimize = false;
-    effective.finiteBulk = false;
-    attempt.retry(effective);
-  }
-}
 } // namespace zkc::finite

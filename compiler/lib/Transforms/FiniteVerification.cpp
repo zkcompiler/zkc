@@ -6,9 +6,7 @@
 #include "RealizationSubject.h"
 #include "ScopedCandidate.h"
 #include "ScopedNestedContraction.h"
-#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/SymbolTable.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
@@ -37,7 +35,7 @@ class Reader {
   Operation *cursor = nullptr;
   Type index, boolean;
   llvm::DenseMap<Value, Value> actual, cardinalities, offsets;
-  bool valid = true, inlineMode = false;
+  bool valid = true;
   bool stoppedCallback = false;
   bool allowBulk;
   unsigned occurrence = 0;
@@ -686,27 +684,11 @@ public:
     allowBulk = false;
   }
   VerificationResult outcome() const { return result; }
-  bool check(local::FuncOp target) {
-    if (!target || target.getFunctionType() != c.signature ||
-        !target.getBody().hasOneBlock() || target->getAttrs().size() != 3)
-      return false;
-    auto origin = target->getAttrOfType<ArrayAttr>("logical_origin");
-    if (!origin || origin.size() != 2 ||
-        origin[0] != SymbolTable::getSymbolName(c.operation) ||
-        origin[1] != ArrayAttr::get(target.getContext(), {}))
-      return false;
-    auto &entry = target.getBody().front();
-    return checkBody(entry.getArguments(), &entry.front());
-  }
   void finish(ValueRange values) {
-    if (inlineMode)
-      expressionResults.assign(values.begin(), values.end());
-    else
-      end("local.return", values);
+    expressionResults.assign(values.begin(), values.end());
   }
   FailureOr<SmallVector<Value>> checkInline(ValueRange inputs, Operation *&at,
                                             HelperReader helper) {
-    inlineMode = true;
     helperReader = helper;
     if (!checkBody(inputs, at))
       return failure();
@@ -778,9 +760,8 @@ public:
       auto compare = [&](bool sum) {
         return mathematical::compareFinitePayload(
             c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
-            bindings, comparisonWork,
-            inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
-            &debit, limits.candidate, sum);
+            bindings, comparisonWork, nullptr, &capacity, &debit,
+            limits.candidate, sum);
       };
       auto compared = compare(summed);
       if (failed(compared) && summed && allowBulk &&
@@ -944,7 +925,7 @@ public:
       results[0] = kernel("field_array.from_vector", results,
                           c.signature.getResult(0), col.arguments);
     }
-    finish(results);
+    expressionResults.assign(results.begin(), results.end());
     return valid;
   }
 };
@@ -1013,50 +994,6 @@ verifyCollectFold(const CollectFold &pair, ValueRange producerInputs,
   return result;
 }
 
-VerificationResult checkRealizations(ModuleOp original, ModuleOp candidate,
-                                     VerificationLimits limits) {
-  if (failed(mlir::verify(original)) || failed(mlir::verify(candidate)))
-    return {VerificationStatus::Mismatch, "module verification"};
-  auto refuse = [&](StringRef detail) {
-    return VerificationResult{VerificationStatus::Mismatch, detail};
-  };
-  if (!hasSingleElement(*original.getBody()) ||
-      !hasSingleElement(*candidate.getBody()) ||
-      original->getAttrDictionary() != candidate->getAttrDictionary())
-    return refuse("module shape");
-  auto before =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
-  auto after =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!before || !after ||
-      before->getAttrDictionary() != after->getAttrDictionary())
-    return refuse("unit profile");
-  SymbolTable symbols(after);
-  SymbolTableCollection sourceSymbols;
-  llvm::DenseSet<Operation *> retained, usedBindings;
-  for (auto &op : before.getBody().front()) {
-    auto name = SymbolTable::getSymbolName(&op);
-    Operation *replacement = name ? symbols.lookup(name) : nullptr;
-    if (!replacement)
-      return refuse("missing declaration");
-    retained.insert(replacement);
-    if (isDeclaration(&op)) {
-      Computation c;
-      if (failed(describe(&op, c, before, &sourceSymbols)))
-        return refuse("finite recipe differs from its domain/helper");
-      Reader reader(c, symbols, usedBindings, limits);
-      if (!reader.check(dyn_cast<local::FuncOp>(replacement)))
-        return reader.outcome();
-    } else if (!OperationEquivalence::isEquivalentTo(
-                   &op, replacement, OperationEquivalence::IgnoreLocations))
-      return refuse("changed retained definition or helper body");
-  }
-  for (auto &op : after.getBody().front())
-    if (!retained.contains(&op) && !usedBindings.contains(&op))
-      return refuse("unexpected declaration");
-  return {VerificationStatus::Verified, {}};
-}
-
 LogicalResult VerificationResult::diagnose(ModuleOp candidate) const {
   if (status == VerificationStatus::Verified)
     return success();
@@ -1067,7 +1004,4 @@ LogicalResult VerificationResult::diagnose(ModuleOp candidate) const {
                            detail);
 }
 
-LogicalResult verifyRealizations(ModuleOp original, ModuleOp candidate) {
-  return checkRealizations(original, candidate).diagnose(candidate);
-}
 } // namespace zkc::finite

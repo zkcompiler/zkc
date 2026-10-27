@@ -199,7 +199,6 @@ def main():
         ROOT / "lib/Transforms/HelperNormalization.h",
         ROOT / "lib/Transforms/ComputationSelection.h",
         ROOT / "lib/Transforms/ComputationEquations.h",
-        ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
         ROOT / "lib/Transforms/CollectFold.h",
         ROOT / "lib/Transforms/FinitePreparation.h",
@@ -396,7 +395,7 @@ def main():
         ROOT / "include/zkc/Analysis/Computation.h",
         *(ROOT / f"lib/Transforms/{name}.h" for name in (
             "ComputationEquations", "ComputationSelection", "MathematicalRecipes",
-            "CollectionRealization", "RealizationEmission", "RecipeRealizations",
+            "CollectionRealization", "RealizationEmission",
             "ScopedFinite", "ScopedPreparation")),
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",

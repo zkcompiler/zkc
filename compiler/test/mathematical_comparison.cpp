@@ -50,37 +50,6 @@ module { "protocol.module"() ({
  }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
 )mlir";
-const char *indexed = R"mlir(
-!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="get",contract="vector.get",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="add",contract="field.add",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%xs:!V,%ys:!V):
-   %x = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %y = "data.domain_indices"(%ys) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %d = "data.domain_zip"(%x,%y) : (!data.domain<ui64>,!data.domain<ui64>)->!data.domain<ui64,ui64>
-   "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!V,!V)->!data.domain<ui64,ui64>} : ()->()
- local.func private @step(%s:!F,%i:ui64,%j:ui64,%xs:!V,%ys:!V)->!F attributes {logical_origin=["step",[]]} {
-   %x = "algebra.exec.vector_get"(%xs,%i) {binding=@get,parameters=[],site="x"} : (!V,ui64)->!F
-   %y = "algebra.exec.vector_get"(%ys,%i) {binding=@get,parameters=[],site="y"} : (!V,ui64)->!F
-   %p = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,parameters=[],site="p"} : (!F,!F)->!F
-   %r = "algebra.exec.field_add"(%p,%s) {binding=@add,parameters=[],site="r"} : (!F,!F)->!F
-   local.return %r : !F
- }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,!V,!F)->!F,domain=@items,step=@step} : ()->()
- local.func @work(%xs:!V,%ys:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @fold(%xs,%ys,%seed) {site="fold"} : (!V,!V,!F)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({ ^entry(%xs:!V,%ys:!V,%seed:!F):
-   %r = "protocol.local_call"(%xs,%ys,%seed) {callee=@work,role="P",site="work"} : (!V,!V,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
-)mlir";
 std::string edit(std::string source, StringRef from, StringRef to) {
   auto offset = source.find(from.str());
   require(offset != std::string::npos, "missing fixture edit: " + from);
@@ -847,20 +816,20 @@ int main() {
             "foreign zero was discarded before checking source fields");
   });
   cases.run("indices access is read from source SSA", [&] {
-    auto before = parseSourceString<ModuleOp>(indexed, &context);
+    auto before =
+        parseSourceString<ModuleOp>(fixture("indexed-zip-dot"), &context);
     require(bool(before), "indexed fixture refused");
-    OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-    require(succeeded(finite::realizeLocals(*after)),
-            "indexed realization failed");
-    auto *dot = bound(*after, "fold", "vector.dot");
-    Value left = dot->getOperand(0), right = dot->getOperand(1);
-    dot->setOperands({right, left});
-    require(succeeded(finite::verifyRealizations(*before, *after)),
+    auto after = prepare(*before);
+    auto *dot = scopedBound(*after, "vector.dot");
+    Value left = dot->getOperand(1), right = dot->getOperand(2);
+    dot->setOperand(1, right);
+    dot->setOperand(2, left);
+    require(corresponds(*before, *after),
             "independent indexed dot comparison failed");
-    dot->setOperand(1, dot->getOperand(0));
+    dot->setOperand(2, dot->getOperand(1));
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(finite::verifyRealizations(*before, *after)),
+    require(!corresponds(*before, *after),
             "indexed capture mutation was accepted");
   });
   for (StringRef name :

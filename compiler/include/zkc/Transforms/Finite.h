@@ -32,15 +32,5 @@ realizeExpression(mlir::Operation *, mlir::ValueRange, mlir::OpBuilder &,
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 verifyExpression(mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
                  HelperReader, mlir::Operation *symbolRoot = nullptr);
-// Retain finite declarations until ordinary helper expansion/recognition.
-// Publishes only a checked candidate; all definitions share work. A null work
-// argument starts a standalone scope for this invocation.
-mlir::LogicalResult
-realizeLocals(mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
-              mathematical::RealizationWork *work = nullptr,
-              mathematical::RealizationTrace *trace = nullptr);
-// Reads actual candidate bodies; never invokes the realizer.
-mlir::LogicalResult verifyRealizations(mlir::ModuleOp original,
-                                       mlir::ModuleOp candidate);
 } // namespace zkc::finite
 #endif

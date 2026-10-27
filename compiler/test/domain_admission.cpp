@@ -4,8 +4,8 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/Passes.h"
 #include "support/NativeCases.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Finite.h"
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -37,19 +37,9 @@ module { "protocol.module"() ({
     %result = "data.domain_zip"(%elements, %same) : (!data.domain<!F>, !data.domain<!F>) -> !data.domain<!F, !F>
     "data.domain_yield"(%result) : (!data.domain<!F, !F>) -> ()
   }) {sym_name = "items", sym_visibility = "private", function_type = (!V, !M, ui64, ui64, ui64) -> !data.domain<!F, !F>} : () -> ()
-  local.func private @step(%state: !F, %x: !F, %y: !F, %xs: !V, %matrix: !M, %lower: ui64, %upper: ui64, %selector: ui64) -> !F attributes {logical_origin = ["step", []]} {
-    local.return %state : !F
-  }
-  "local.finite_fold"() {sym_name = "fold", function_type = (!V, !M, ui64, ui64, ui64, !F) -> !F, domain = @items, step = @step} : () -> ()
-  local.func @work(%xs: !V, %matrix: !M, %lower: ui64, %upper: ui64, %selector: ui64, %seed: !F) -> !F attributes {logical_origin = ["work", []]} {
-    %result = local.apply @fold(%xs, %matrix, %lower, %upper, %selector, %seed) {site = "fold"} : (!V, !M, ui64, ui64, ui64, !F) -> !F
-    local.return %result : !F
-  }
   "protocol.func"() ({
-  ^entry(%xs: !V, %matrix: !M, %lower: ui64, %upper: ui64, %selector: ui64, %seed: !F):
-    %result = "protocol.local_call"(%xs, %matrix, %lower, %upper, %selector, %seed) {callee = @work, role = "P", site = "work"} : (!V, !M, ui64, ui64, ui64, !F) -> !F
-    "protocol.return"(%result) : (!F) -> ()
-  }) {sym_name = "main", function_type = (!V, !M, ui64, ui64, ui64, !F) -> !F, roles = ["P"], input_roles = [["P"], ["P"], ["P"], ["P"], ["P"], ["P"]], output_roles = [["P"]]} : () -> ()
+    "protocol.return"() : () -> ()
+  }) {sym_name = "main", function_type = () -> (), roles = ["P"], input_roles = [], output_roles = []} : () -> ()
 }) {profile = #protocol.profile<protocol>} : () -> () }
 )mlir";
 
@@ -102,9 +92,8 @@ void preservesDomains(StringRef source, MLIRContext &context,
   require(domains(*candidate) == expected,
           "generic simplification changed ordered domain admission");
   if (realize) {
-    require(succeeded(finite::realizeLocals(*candidate)),
-            "simplified finite realization failed");
-    require(succeeded(finite::verifyRealizations(*original, *candidate)),
+    auto prepared = scopedFinite::prepare(*candidate);
+    require(succeeded(scopedFinite::compare(*original, *prepared)),
             "realization lost original admission or nested entry conditions");
   }
 }
