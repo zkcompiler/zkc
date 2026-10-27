@@ -100,7 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
     let bytes = include_bytes!("proof.zkpkg");
-    let prover = proof::admit(bytes, options, Default::default())?;
+    let prover = proof::admit(bytes, options.clone(), Default::default())?;
     let verifier = proof::admit(bytes, options, Default::default())?;
     let proving = |expected, candidate| ProofRequest {
         public: proof::PublicInputs { expected }.into(),
