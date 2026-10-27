@@ -98,5 +98,8 @@ The compiler's `scoped-control-schedule` case checks transient scoped SCF loop
 construction and independent inspection against an authored fixture. Mutations
 cover continuation, bounds, coordinates, stale cleanup, altered transfer flow,
 extra work and unreachable blocks. Exact inspection allowances include nested
-SCF operations. This preparation check does not establish native admission of
-SCF or complete numerical-pipeline correspondence.
+SCF operations. The whole scheduled closure is compared with an independently
+authored flat CFG; additional controls reject missing/doubled cleanup, leaked
+owners, borrowed-result forwarding and excessive region nesting. This preparation
+check does not establish native admission of SCF or complete numerical-pipeline
+correspondence.

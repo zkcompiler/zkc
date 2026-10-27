@@ -22,7 +22,8 @@ OwningOpRef<mlir::ModuleOp> scheduled(MLIRContext &context) {
 // Independently spell the expected traversal, ports, primitive occurrences and
 // completion rules. No schedule reader or consumer supplies this body.
 OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
-                                     bool extra = false) {
+                                     bool extra = false,
+                                     bool structured = false) {
   auto location = UnknownLoc::get(&context);
   OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(location));
   OpBuilder builder(module->getBody(), module->getBody()->end());
@@ -51,7 +52,9 @@ OwningOpRef<mlir::ModuleOp> expected(MLIRContext &context, bool omit = false,
   entry.addEntryBlock();
   builder.setInsertionPointToEnd(&entry.front());
   exec::ScopedExecutionBuilder control(builder, entry);
-  auto outputs = control.loop(
+  auto buildLoop = structured ? &exec::ScopedExecutionBuilder::scheduledLoop
+                              : &exec::ScopedExecutionBuilder::loop;
+  auto outputs = (control.*buildLoop)(
       entry.getArgument(1), entry.getArgument(2),
       entry.getArguments().slice(3, 2), entry.getArguments().slice(5, 2),
       TypeRange{field, field}, false, "traverse", [&](unsigned) {
@@ -101,6 +104,40 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run(
+      "numerical candidate ports read the actual scoped SCF schedule", [&] {
+        auto schedule = expected(context, false, false, true);
+        auto flat = expected(context);
+        auto root = owner(*schedule);
+        auto entry = SymbolTable(root).lookup<func::FuncOp>("evaluate");
+        auto actual = protocol::readScheduledExecutionClosure(root);
+        require(bool(actual), actual ? "" : llvm::toString(actual.takeError()));
+        auto error = protocol::verifySourceExecutionDefinitions(
+            owner(*flat), actual->definitions);
+        require(!error, error ? llvm::toString(std::move(error)) : "");
+        auto view = mathematical::ScopedCandidate::readSchedule(root);
+        require(bool(view), view ? "" : llvm::toString(view.takeError()));
+        mathematical::CandidatePorts ports(view->get());
+        auto *loop = ports.first(&entry.front());
+        require(isa_and_nonnull<exec::RangeOp>(loop) &&
+                    ports.bodies(loop) == 1 &&
+                    ports.inputs(loop) == entry.getArguments().drop_front() &&
+                    ports.outputs(loop).size() == 2,
+                "loop data coordinates differ from actual schedule");
+        auto *body = ports.body(loop, 0);
+        auto *sum = ports.first(body);
+        require(ports.arguments(body).size() == 5 &&
+                    isa_and_nonnull<exec::ApplyOp>(sum) &&
+                    ports.inputs(sum) == ValueRange{body->getArgument(2),
+                                                    body->getArgument(4)} &&
+                    ports.producer(ports.outputs(sum).front()) == sum,
+                "outlined scalar association did not retain actual SSA");
+        auto *returned = ports.next(loop);
+        require(isa_and_nonnull<exec::ReturnOp>(returned) &&
+                    !ports.next(returned) &&
+                    ports.inputs(returned) == ports.outputs(loop),
+                "scheduled output boundary differs");
+      });
   cases.run("independent SCF and scoped execution agree", [&] {
     auto schedule = scheduled(context), native = expected(context);
     auto before = clone(*schedule), nativeBefore = clone(*native);

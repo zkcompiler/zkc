@@ -13,6 +13,11 @@ namespace zkc::runtime {
 /// nesting, source association, invocation identity or native correspondence.
 /// Those remain obligations of the enclosing executable-profile reader.
 mlir::LogicalResult verifyScopeOwnership(mlir::func::FuncOp function);
+/// Transient numerical scheduling variant. Checks actual scf.while and
+/// scf.execute_region edges, including zero-trip exits and loop backedges.
+/// All other region control is refused. This is ownership checking only;
+/// executable admission continues to use the flat-CFG entrypoint above.
+mlir::LogicalResult verifyScheduledScopeOwnership(mlir::func::FuncOp function);
 } // namespace zkc::runtime
 
 #endif

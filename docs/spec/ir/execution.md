@@ -606,7 +606,8 @@ These are consumer obligations. Current native coverage is recorded in
 ## Transient structured loop construction
 
 The numerical cutover has a mechanical builder and an independent cursor for
-scoped `scf.while` schedules. These are preparation infrastructure; the default
+scoped `scf.while` schedules, plus a closed scheduled-definition reader for
+numerical comparison. These are preparation infrastructure; the default
 numerical route has not switched to this form. Executable admission continues
 to require the flat scoped CFG and refuses these nested regions.
 
@@ -627,3 +628,19 @@ lowering pass. It checks bounds, continuation, iteration coordinates, calls,
 cleanup, final transfer and operation inventory. Outlined body meaning and
 whole-candidate admission remain the consumer's obligations. Standard SCF
 interfaces and `no_inline` hints supply no additional execution or metering law.
+
+The scheduled-definition entrypoint admits only runtime bindings and scoped
+functions with resolved numerical operations. It checks actual outlined bodies,
+all dormant definitions and the derived native program; ordinary helper calls
+and retained mathematical requests are refused. Its borrowed SSA view binds
+loop inputs, results, continuation and actual outlined functions to that program.
+It performs no lowering or reconstruction of the schedule from source recipes.
+
+Ownership analysis follows both successors of SCF conditions and actual yielded
+values through region entries, backedges and exits. Owned outcomes and transfers
+move between region arguments and operation results exactly once. Every join
+must have the same live-owner set; borrowed scope arguments cannot be yielded as
+owned results. Missing cleanup, abandoned owners and unreachable operations
+refuse. Inspection bounds precede recursive MLIR verification. The ordinary
+ownership entrypoint still rejects nested control; the separate scheduling
+entrypoint admits only `scf.while` and `scf.execute_region`, not arbitrary SCF.

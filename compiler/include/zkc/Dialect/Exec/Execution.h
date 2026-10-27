@@ -80,6 +80,13 @@ struct SourceExecutionClosure {
 };
 llvm::Expected<SourceExecutionClosure>
 readSourceExecutionClosure(mlir::Operation *symbolTable);
+/// Read a closed transient numerical schedule directly, including scoped SCF
+/// loops. This entrypoint does not widen source or native executable admission.
+/// Every declaration must be a runtime binding or scoped function; unresolved
+/// helpers, computations and other declarations are refused. The returned
+/// records/SSA association are derived from the actual immutable schedule.
+llvm::Expected<SourceExecutionClosure>
+readScheduledExecutionClosure(mlir::Operation *symbolTable);
 /// Read the fully realized native profile with its actual SSA/control
 /// association. No ordinary helper or mathematical requests are admitted.
 llvm::Expected<SourceExecutionClosure>

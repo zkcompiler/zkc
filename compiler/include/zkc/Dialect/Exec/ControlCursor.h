@@ -6,6 +6,7 @@
 #include "llvm/ADT/STLFunctionalExtras.h"
 
 namespace zkc::exec {
+class RangeOp;
 // Bounded read-only navigation of a formed scoped Func body. The consumer owns
 // operation meaning, source/record association and whole-function ownership.
 // Structured inspection checks actual CFG or the closed SCF loop schedule,
@@ -61,6 +62,12 @@ public:
   bool scheduledLoop(mlir::Value lower, mlir::Value upper,
                      mlir::ValueRange seeds, mlir::ValueRange captures,
                      bool conditional, llvm::StringRef site, RegionCheck body,
+                     llvm::SmallVectorImpl<mlir::Value> &results);
+  // Same inspection after the caller has consumed this exact range operation.
+  // The current cursor must be immediately after it; no rewind or skipped work.
+  bool scheduledLoop(RangeOp range, mlir::ValueRange seeds,
+                     mlir::ValueRange captures, bool conditional,
+                     RegionCheck body,
                      llvm::SmallVectorImpl<mlir::Value> &results);
 
 private:

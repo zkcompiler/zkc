@@ -26,10 +26,22 @@ public:
   enum class Requests { Resolved, Retained };
   static llvm::Expected<std::unique_ptr<ScopedCandidate>>
   read(mlir::Operation *owner, Requests requests = Requests::Resolved) {
-    auto value = protocol::readSourceExecutionClosure(owner);
+    return index(owner, protocol::readSourceExecutionClosure(owner), requests);
+  }
+  static llvm::Expected<std::unique_ptr<ScopedCandidate>>
+  readSchedule(mlir::Operation *owner) {
+    return index(owner, protocol::readScheduledExecutionClosure(owner),
+                 Requests::Resolved);
+  }
+
+private:
+  static llvm::Expected<std::unique_ptr<ScopedCandidate>>
+  index(mlir::Operation *owner,
+        llvm::Expected<protocol::SourceExecutionClosure> value,
+        Requests requests) {
     if (!value)
       return value.takeError();
-    if (requests == Requests::Resolved && !value->computations.empty())
+    if (requests != Requests::Retained && !value->computations.empty())
       return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                      "unresolved numerical candidate");
     auto result = std::unique_ptr<ScopedCandidate>(
@@ -52,6 +64,7 @@ public:
     return std::move(result);
   }
 
+public:
   const protocol::SourceExecutionStep *get(mlir::Operation *operation) const {
     return steps.lookup(operation);
   }

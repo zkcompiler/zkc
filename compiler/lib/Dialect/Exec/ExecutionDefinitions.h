@@ -2,6 +2,7 @@
 #define ZKC_DIALECT_EXEC_EXECUTION_DEFINITIONS_H
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/TotalClosure.h"
@@ -17,7 +18,8 @@ namespace zkc::protocol::detail {
 // Source functions can also belong to the independently admitted mathematical
 // closure. This checks admission, not their correspondence to source equations.
 inline mlir::LogicalResult
-verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false) {
+verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false,
+                               bool scheduled = false) {
   using namespace mlir;
   if (!scope || !scope->hasTrait<OpTrait::SymbolTable>() ||
       scope->getNumRegions() != 1 ||
@@ -51,14 +53,23 @@ verifyExecutionDefinitionScope(mlir::Operation *scope, bool source = false) {
       continue;
     auto function = dyn_cast<func::FuncOp>(op);
     bool scoped = !source || (function && isScopedExecutionFunction(function));
-    if (op.walk<WalkOrder::PreOrder>([&](Operation *nested) {
-            if (!remaining ||
-                (scoped && nested != &op && nested->getNumRegions()))
-              return WalkResult::interrupt();
-            --remaining;
-            return WalkResult::advance();
-          }).wasInterrupted() ||
-        failed(verify(&op)))
+    SmallVector<std::pair<Operation *, unsigned>> pending{{&op, 0}};
+    while (!pending.empty()) {
+      auto [nested, depth] = pending.pop_back_val();
+      if (!remaining || depth > 64 ||
+          (scoped && nested != &op && nested->getNumRegions() &&
+           (!scheduled || !isa<scf::WhileOp, scf::ExecuteRegionOp>(nested))))
+        return failure();
+      --remaining;
+      for (auto &region : nested->getRegions())
+        for (auto &block : region)
+          for (auto &child : block) {
+            if (pending.size() >= remaining)
+              return failure();
+            pending.emplace_back(&child, depth + 1);
+          }
+    }
+    if (failed(verify(&op)))
       return failure();
   }
   if (source) {

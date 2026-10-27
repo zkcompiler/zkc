@@ -2,11 +2,13 @@
 #include "ExecutionDefinitions.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/ControlCursor.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Runtime/Execution.h"
@@ -72,15 +74,13 @@ class BodyReader {
   func::FuncOp function;
   exec::OutcomeType outcome;
   Value scope;
-  Block *current = nullptr, *failure = nullptr;
-  Block::iterator cursor;
-  llvm::DenseSet<Block *> checked;
+  exec::ControlCursor navigation;
   llvm::DenseMap<Value, std::string> environment;
   bool regionBody;
 
   bool block(Block *next);
   Operation *take();
-  bool atEnd() const { return cursor == current->end(); }
+  bool atEnd() const { return navigation.atEnd(); }
   bool failedEdge(Block *block);
   bool dispatch(Value value, SmallVectorImpl<Value> &results,
                 Block *expectedFailure = nullptr);
@@ -96,15 +96,16 @@ class BodyReader {
              SourceExecutionStep &step);
   bool loop(exec::RangeOp range, program::For &record,
             SourceExecutionStep &step);
+  bool scheduledLoop(exec::RangeOp range, program::For &record,
+                     SourceExecutionStep &step);
 
 public:
-  BodyReader(Reader &reader, func::FuncOp function, bool regionBody)
-      : reader(reader), function(function), regionBody(regionBody) {}
+  BodyReader(Reader &reader, func::FuncOp function, bool regionBody);
   bool run(ArrayRef<std::string> arguments, program::Body &body);
 };
 class Reader {
   Operation *module;
-  bool physical, source, mathematicalCalls;
+  bool physical, source, mathematicalCalls, scheduled;
   unsigned remaining = 1000000, next = 0;
   llvm::DenseSet<Operation *> active, visited;
   std::string problem;
@@ -116,9 +117,11 @@ class Reader {
 
 public:
   Reader(Operation *module, bool physical, bool source = false,
-         bool mathematicalCalls = false)
+         bool mathematicalCalls = false, bool scheduled = false)
       : module(module), physical(physical), source(source),
-        mathematicalCalls(mathematicalCalls) {}
+        mathematicalCalls(mathematicalCalls), scheduled(scheduled) {}
+  bool isScheduled() const { return scheduled; }
+  unsigned &work() { return remaining; }
   bool isSource() const { return source; }
   std::vector<LocalRealization> takeComputations() {
     return std::move(mathematicalSignatures);
@@ -174,7 +177,7 @@ public:
   bool helper(func::CallOp call) {
     auto function = dyn_cast_or_null<func::FuncOp>(
         SymbolTable::lookupSymbolIn(module, call.getCallee()));
-    return (source && function && !function.isExternal() &&
+    return (source && !scheduled && function && !function.isExternal() &&
             function->hasAttr("runtime.origin") &&
             !function->hasAttr("runtime.region") && call.getNumOperands() &&
             call.getNumResults() == 1 &&
@@ -286,7 +289,8 @@ public:
              ? bool(function->getAttrOfType<UnitAttr>("runtime.region")) &&
                    !function->hasAttr("runtime.origin")
              : !function->hasAttr("runtime.region")) &&
-        succeeded(runtime::verifyScopeOwnership(function));
+        succeeded(scheduled ? runtime::verifyScheduledScopeOwnership(function)
+                            : runtime::verifyScopeOwnership(function));
     if (valid) {
       auto outcome =
           cast<exec::OutcomeType>(function.getFunctionType().getResult(0));
@@ -314,46 +318,21 @@ public:
   Expected<program::LocalDefinitions> run(bool mixed = false);
 };
 
+BodyReader::BodyReader(Reader &reader, func::FuncOp function, bool regionBody)
+    : reader(reader), function(function), navigation(function, reader.work()),
+      regionBody(regionBody) {}
 bool BodyReader::block(Block *next) {
-  if (!next || next->getParent() != &function.getBody() ||
-      !checked.insert(next).second)
-    return reader.fail("unexpected CFG join or cycle");
-  current = next;
-  cursor = current->begin();
-  return true;
+  return navigation.enter(next) || reader.fail("unexpected CFG join or cycle");
 }
-Operation *BodyReader::take() {
-  if (!reader.charge() || atEnd())
-    return nullptr;
-  return &*cursor++;
-}
+Operation *BodyReader::take() { return navigation.take(); }
 bool BodyReader::failedEdge(Block *block) {
-  if (failure)
-    return failure == block || reader.fail("changed failure continuation");
-  if (!block || block == current || block->getParent() != &function.getBody() ||
-      !checked.insert(block).second || block->getNumArguments() != 1 ||
-      !isa<exec::StopType>(block->getArgument(0).getType()) ||
-      block->getOperations().size() != 2 || !reader.charge() ||
-      !reader.charge())
-    return reader.fail("invalid failure block");
-  auto failed = dyn_cast<exec::FailureOp>(block->front());
-  if (!failed || !bare(failed) || failed.getStop() != block->getArgument(0) ||
-      failed.getOutcome().getType() != outcome ||
-      !returned(&block->back(), failed.getOutcome()))
-    return reader.fail("failure was not propagated");
-  failure = block;
-  return true;
+  return navigation.failure(block) ||
+         reader.fail("invalid failure continuation");
 }
 bool BodyReader::dispatch(Value value, SmallVectorImpl<Value> &results,
                           Block *expectedFailure) {
-  auto edge = dyn_cast_or_null<exec::DispatchOp>(take());
-  if (!edge || !bare(edge) || edge.getOutcome() != value || !atEnd() ||
-      !(expectedFailure ? edge.getStopped() == expectedFailure
-                        : failedEdge(edge.getStopped())) ||
-      !block(edge.getReturned()))
-    return reader.fail("invocation must dispatch its exact outcome");
-  append_range(results, current->getArguments());
-  return true;
+  return navigation.dispatch(value, results, expectedFailure) ||
+         reader.fail("invocation must dispatch its exact outcome");
 }
 bool BodyReader::names(ValueRange values, program::Names &names) {
   for (Value value : values) {
@@ -458,9 +437,10 @@ bool BodyReader::conditional(exec::TestOp test, program::Conditional &record,
   }
   step.inputs.push_back(test.getCondition());
   append_range(step.inputs, actualCaptures);
-  if (!block(join) || !results(current->getArguments(), record.outputs))
+  if (!block(join) ||
+      !results(navigation.currentBlock()->getArguments(), record.outputs))
     return false;
-  append_range(step.outputs, current->getArguments());
+  append_range(step.outputs, navigation.currentBlock()->getArguments());
   return true;
 }
 bool BodyReader::match(exec::MatchOp match, program::Match &record,
@@ -503,9 +483,10 @@ bool BodyReader::match(exec::MatchOp match, program::Match &record,
   }
   step.inputs.push_back(match.getInput());
   append_range(step.inputs, match.getCaptures());
-  if (!block(join) || !results(current->getArguments(), record.outputs))
+  if (!block(join) ||
+      !results(navigation.currentBlock()->getArguments(), record.outputs))
     return false;
-  append_range(step.outputs, current->getArguments());
+  append_range(step.outputs, navigation.currentBlock()->getArguments());
   return true;
 }
 bool BodyReader::loop(exec::RangeOp range, program::For &record,
@@ -531,7 +512,7 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record,
           ValueRange{counters[0], initial.getTransfer()} ||
       !block(initialEdge.getDest()))
     return reader.fail("loop initial edge");
-  Block *header = current;
+  Block *header = navigation.currentBlock();
   if (header->getNumArguments() != 2)
     return reader.fail("loop header ports");
   Value coordinate = header->getArgument(0), previous = header->getArgument(1);
@@ -556,13 +537,13 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record,
       !attributes(iteration, {"site"}))
     return reader.fail("loop iteration admission association");
   // Every failure before replacement releases the still-live prior carry.
-  auto iterationEdge =
-      dyn_cast_or_null<exec::DispatchOp>(atEnd() ? nullptr : &*cursor);
+  auto iterationEdge = dyn_cast_or_null<exec::DispatchOp>(navigation.peek());
   if (!iterationEdge)
     return reader.fail("iteration admission requires an outcome edge");
   Block *releaseFailure = iterationEdge.getStopped();
   if (!releaseFailure || releaseFailure->getParent() != &function.getBody() ||
-      releaseFailure == current || !checked.insert(releaseFailure).second ||
+      releaseFailure == navigation.currentBlock() ||
+      !navigation.inspect(releaseFailure) ||
       releaseFailure->getNumArguments() != 1 ||
       releaseFailure->getOperations().size() != 2 || !reader.charge() ||
       !reader.charge())
@@ -686,10 +667,90 @@ bool BodyReader::loop(exec::RangeOp range, program::For &record,
   append_range(step.outputs, values);
   return true;
 }
+bool BodyReader::scheduledLoop(exec::RangeOp range, program::For &record,
+                               SourceExecutionStep &step) {
+  // Derive proposed data ports from a bounded prefix of the actual packet.
+  // These are not accepted until ControlCursor independently checks every
+  // SCF/CFG, scope, transfer and continuation edge against them below.
+  for (unsigned i = 0; i < 12; ++i)
+    if (!reader.charge())
+      return false;
+  auto first = [](Block *block) -> Operation * {
+    return block && !block->empty() ? &block->front() : nullptr;
+  };
+  auto next = [](Operation *op) { return op ? op->getNextNode() : nullptr; };
+  auto edge = dyn_cast_or_null<exec::DispatchOp>(navigation.peek());
+  auto initial = dyn_cast_or_null<runtime::BorrowTransferOp>(
+      edge ? first(edge.getReturned()) : nullptr);
+  auto loop = dyn_cast_or_null<scf::WhileOp>(next(next(next(initial))));
+  auto packet = dyn_cast_or_null<scf::ExecuteRegionOp>(
+      loop && loop.getAfter().hasOneBlock() ? first(&loop.getAfter().front())
+                                            : nullptr);
+  auto unpack = dyn_cast_or_null<exec::DispatchOp>(
+      packet && !packet.getRegion().empty() ? first(&packet.getRegion().front())
+                                            : nullptr);
+  auto iteration = dyn_cast_or_null<runtime::IterationOp>(
+      unpack ? first(unpack.getReturned()) : nullptr);
+  auto enteredIndex = dyn_cast_or_null<exec::DispatchOp>(next(iteration));
+  auto values = dyn_cast_or_null<runtime::TransferValuesOp>(
+      enteredIndex ? first(enteredIndex.getReturned()) : nullptr);
+  auto enter = dyn_cast_or_null<runtime::EnterScopeOp>(next(values));
+  auto enteredScope = dyn_cast_or_null<exec::DispatchOp>(next(enter));
+  auto invocation = dyn_cast_or_null<func::CallOp>(
+      enteredScope ? first(enteredScope.getReturned()) : nullptr);
+  auto bodyOutcome =
+      invocation && invocation.getNumResults() == 1
+          ? dyn_cast<exec::OutcomeType>(invocation.getResult(0).getType())
+          : exec::OutcomeType();
+  if (!initial || !enter || !bodyOutcome ||
+      enter.getInputs().size() < 1 + initial.getInputs().size())
+    return reader.fail("missing scoped SCF iteration ports");
+  auto captures = enter.getInputs().drop_front(1 + initial.getInputs().size());
+  unsigned states = initial.getInputs().size();
+  if (bodyOutcome.getPayload().size() != states &&
+      bodyOutcome.getPayload().size() != states + 1)
+    return reader.fail("scheduled iteration result arity");
+  record.conditional = bodyOutcome.getPayload().size() == states + 1;
+  step.conditional = record.conditional;
+  program::Names bounds, seeds;
+  if (!names({range.getLower(), range.getUpper()}, bounds) ||
+      !names(initial.getInputs(), seeds) || !names(captures, record.captures))
+    return false;
+  record.lower = bounds[0];
+  record.upper = bounds[1];
+  record.induction = reader.fresh();
+  program::Names bodyNames{record.induction};
+  for (const auto &seed : seeds) {
+    auto name = reader.fresh();
+    record.carried.emplace_back(name, seed);
+    bodyNames.push_back(std::move(name));
+  }
+  append_range(bodyNames, record.captures);
+  SmallVector<Value> outputs;
+  if (!navigation.scheduledLoop(
+          range, initial.getInputs(), captures, record.conditional,
+          [&](func::CallOp call, unsigned arm) {
+            if (arm || call != invocation ||
+                !reader.region(call, bodyNames, record.body))
+              return false;
+            step.regions.push_back(
+                cast<func::FuncOp>(SymbolTable::lookupSymbolIn(
+                    function->getParentOp(), call.getCallee())));
+            return true;
+          },
+          outputs) ||
+      !results(outputs, record.outputs))
+    return reader.fail("scoped SCF iteration differs");
+  step.inputs = {range.getLower(), range.getUpper()};
+  append_range(step.inputs, initial.getInputs());
+  append_range(step.inputs, captures);
+  step.outputs = outputs;
+  return true;
+}
 bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
   std::vector<SourceExecutionStep> sourceBody;
   auto finish = [&]() {
-    if (checked.size() != function.getBody().getBlocks().size())
+    if (!navigation.complete())
       return reader.fail("unchecked CFG blocks");
     reader.recordBody(function, std::move(sourceBody));
     return true;
@@ -805,7 +866,8 @@ bool BodyReader::run(ArrayRef<std::string> arguments, program::Body &body) {
       body.push_back({selected.getSite().str(), std::move(record)});
     } else if (auto range = dyn_cast<exec::RangeOp>(op)) {
       program::For record;
-      if (!loop(range, record, step))
+      if (!(reader.isScheduled() ? scheduledLoop(range, record, step)
+                                 : loop(range, record, step)))
         return false;
       body.push_back({range.getSite().str(), std::move(record)});
     } else if (auto release = dyn_cast<runtime::ReleaseBindingsOp>(op)) {
@@ -952,6 +1014,24 @@ readExecutionDefinitions(Operation *symbolTable, bool physical) {
   if (failed(detail::verifyExecutionDefinitionScope(symbolTable)))
     return error("execution-cfg", "invalid execution definition scope");
   return Reader(symbolTable, physical).run(/*mixed=*/true);
+}
+Expected<SourceExecutionClosure>
+readScheduledExecutionClosure(Operation *symbolTable) {
+  if (failed(detail::verifyExecutionDefinitionScope(symbolTable, true, true)))
+    return error("execution-schedule", "invalid scheduled definition scope");
+  for (Operation &op : symbolTable->getRegion(0).front()) {
+    if (isa<runtime::BindingOp>(op))
+      continue;
+    auto function = dyn_cast<func::FuncOp>(op);
+    if (!function || !isScopedExecutionFunction(function))
+      return error("execution-schedule", "non-executable schedule declaration");
+  }
+  Reader reader(symbolTable, false, true, false, true);
+  auto definitions = reader.run(true);
+  if (!definitions)
+    return error("execution-schedule", toString(definitions.takeError()));
+  return SourceExecutionClosure{
+      std::move(*definitions), {}, {}, reader.takeBodies()};
 }
 Expected<SourceExecutionClosure> readExecutionClosure(Operation *symbolTable,
                                                       bool physical) {

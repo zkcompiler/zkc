@@ -310,7 +310,19 @@ bool ControlCursor::scheduledLoop(Value lower, Value upper, ValueRange seeds,
                                   ValueRange captures, bool conditional,
                                   StringRef site, RegionCheck body,
                                   SmallVectorImpl<Value> &results) {
-  const Value scope = getScope();
+  auto range = dyn_cast_or_null<exec::RangeOp>(take());
+  return range && range.getLower() == lower && range.getUpper() == upper &&
+         range.getSite() == site &&
+         scheduledLoop(range, seeds, captures, conditional, body, results);
+}
+bool ControlCursor::scheduledLoop(RangeOp range, ValueRange seeds,
+                                  ValueRange captures, bool conditional,
+                                  RegionCheck body,
+                                  SmallVectorImpl<Value> &results) {
+  if (!range || range->getBlock() != current || range->getNextNode() != peek())
+    return false;
+  const Value scope = getScope(), lower = range.getLower();
+  const auto site = range.getSite();
   auto constant = [&](int64_t value, unsigned width) -> Value {
     auto op = dyn_cast_or_null<arith::ConstantIntOp>(take());
     return op && attrs(op, {"value"}) &&
@@ -320,11 +332,9 @@ bool ControlCursor::scheduledLoop(Value lower, Value upper, ValueRange seeds,
                ? op.getResult()
                : Value{};
   };
-  auto range = dyn_cast_or_null<exec::RangeOp>(take());
   SmallVector<Value> bounds;
   if (!range || !attrs(range, {"site"}) || range.getScope() != scope ||
-      range.getSite() != site || range.getLower() != lower ||
-      range.getUpper() != upper || !dispatch(range.getOutcome(), bounds))
+      !dispatch(range.getOutcome(), bounds))
     return false;
   auto initial = dyn_cast_or_null<runtime::BorrowTransferOp>(take());
   auto packaged = dyn_cast_or_null<exec::ReturnOp>(take());

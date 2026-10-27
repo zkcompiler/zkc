@@ -1,9 +1,11 @@
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Runtime/Execution.h"
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "llvm/ADT/DenseSet.h"
 #include <map>
 #include <set>
 
@@ -27,9 +29,27 @@ using Ownership = std::set<Value, ValueOrder>;
 LogicalResult refuse(Operation *op, StringRef reason) {
   return diagnostics::emit(op->emitOpError(), "execution-ownership", reason);
 }
-} // namespace
-
-LogicalResult verifyScopeOwnership(func::FuncOp function) {
+LogicalResult checkOwnership(func::FuncOp function, bool scheduled) {
+  // Bound structural work before recursive MLIR verification. Only the closed
+  // scheduling vocabulary can introduce nested regions in this analysis.
+  SmallVector<std::pair<Operation *, unsigned>> structure{{function, 0}};
+  unsigned operationCount = 0;
+  while (!structure.empty()) {
+    auto [op, depth] = structure.pop_back_val();
+    if (++operationCount > 1000000 || depth > 64)
+      return refuse(function, "scope ownership structural limit");
+    if (op != function && op->getNumRegions() &&
+        (!scheduled || !isa<scf::WhileOp, scf::ExecuteRegionOp>(op)))
+      return refuse(op,
+                    "scope ownership requires its selected control profile");
+    for (auto &region : op->getRegions())
+      for (auto &block : region)
+        for (auto &nested : block) {
+          if (operationCount + structure.size() >= 1000000)
+            return refuse(function, "scope ownership structural limit");
+          structure.emplace_back(&nested, depth + 1);
+        }
+  }
   if (function.isExternal() || failed(verify(function)))
     return refuse(function, "scope ownership requires a verified body");
   Ownership borrowed, initial;
@@ -39,22 +59,100 @@ LogicalResult verifyScopeOwnership(func::FuncOp function) {
     else if (linear(argument.getType()))
       initial.insert(argument);
   }
-  std::map<Block *, Ownership> incoming;
-  SmallVector<Block *> pending{&function.front()};
-  incoming.emplace(&function.front(), std::move(initial));
+  // Worklist points are block entries and continuations after region control.
+  // Ordinary operations are traversed linearly without copying a live-owner
+  // set per instruction. Backedges must reproduce the exact incoming set.
+  std::map<Operation *, Ownership> incoming;
+  SmallVector<Operation *> pending{&function.front().front()};
+  incoming.emplace(pending.front(), std::move(initial));
+  llvm::DenseSet<Operation *> visited;
+  auto enqueue = [&](Operation *from, Operation *to, Ownership live) {
+    if (!to)
+      return refuse(from, "missing control continuation");
+    auto [entry, fresh] = incoming.emplace(to, live);
+    if (fresh)
+      pending.push_back(to);
+    else if (entry->second != live)
+      return refuse(from, "incoming edges disagree on live ownership");
+    return success();
+  };
+  auto move = [&](Operation *op, Ownership live, ValueRange operands,
+                  ValueRange destinations, Operation *next) {
+    if (operands.size() != destinations.size())
+      return refuse(op, "ownership edge has inconsistent ports");
+    SmallVector<Value> introduced;
+    for (auto [operand, destination] : llvm::zip(operands, destinations)) {
+      if (!linear(destination.getType()))
+        continue;
+      if (live.erase(operand) != 1)
+        return refuse(op, "edge duplicates or forwards borrowed ownership");
+      introduced.push_back(destination);
+    }
+    for (Value value : introduced)
+      if (!live.insert(value).second)
+        return refuse(op, "edge aliases an existing owner");
+    return enqueue(op, next, std::move(live));
+  };
   unsigned remaining = 1000000;
   while (!pending.empty()) {
-    Block *block = pending.pop_back_val();
-    Ownership live = incoming.at(block);
-    for (Operation &op : *block) {
-      if (!remaining--)
-        return refuse(&op, "scope ownership analysis limit");
-      if (op.getNumRegions())
-        return refuse(&op, "scope ownership requires flat CFG regions");
+    Operation *point = pending.pop_back_val();
+    Ownership live = incoming.at(point);
+    for (Operation *next = point; next; next = next->getNextNode()) {
+      Operation &op = *next;
+      if (!remaining-- || !visited.insert(&op).second)
+        return refuse(&op,
+                      "scope ownership analysis limit or overlapping edge");
       for (Value operand : op.getOperands())
         if (linear(operand.getType()) && !live.count(operand) &&
             !borrowed.count(operand))
           return refuse(&op, "scope or transfer used after consumption");
+      // SCF edges transport ownership just like CF block arguments. The
+      // condition has both successors even when it is a constant: this is a
+      // conservative all-path check, not a reachability optimization.
+      if (auto loop = dyn_cast<scf::WhileOp>(op)) {
+        auto &before = loop.getBefore().front();
+        if (failed(move(&op, live, loop.getOperands(), before.getArguments(),
+                        &before.front())))
+          return failure();
+        break;
+      }
+      if (auto execute = dyn_cast<scf::ExecuteRegionOp>(op)) {
+        if (execute.getRegion().empty() ||
+            failed(enqueue(&op, &execute.getRegion().front().front(), live)))
+          return failure();
+        break;
+      }
+      if (auto condition = dyn_cast<scf::ConditionOp>(op)) {
+        auto loop = dyn_cast<scf::WhileOp>(op.getParentOp());
+        if (!scheduled || !loop || op.getParentRegion() != &loop.getBefore())
+          return refuse(&op, "condition outside scheduled while");
+        auto &after = loop.getAfter().front();
+        if (failed(move(&op, live, condition.getArgs(), after.getArguments(),
+                        &after.front())) ||
+            failed(move(&op, live, condition.getArgs(), loop.getResults(),
+                        loop->getNextNode())))
+          return failure();
+        break;
+      }
+      if (auto yield = dyn_cast<scf::YieldOp>(op)) {
+        if (!scheduled)
+          return refuse(&op, "yield outside scheduled control");
+        if (auto loop = dyn_cast<scf::WhileOp>(op.getParentOp())) {
+          if (op.getParentRegion() != &loop.getAfter())
+            return refuse(&op, "yield outside while continuation");
+          auto &before = loop.getBefore().front();
+          if (failed(move(&op, live, yield.getOperands(), before.getArguments(),
+                          &before.front())))
+            return failure();
+        } else if (auto execute =
+                       dyn_cast<scf::ExecuteRegionOp>(op.getParentOp())) {
+          if (failed(move(&op, live, yield.getOperands(), execute.getResults(),
+                          execute->getNextNode())))
+            return failure();
+        } else
+          return refuse(&op, "yield outside scheduled region");
+        break;
+      }
       auto consume = [&](Value value) {
         return !linear(value.getType()) || live.erase(value) == 1;
       };
@@ -126,11 +224,8 @@ LogicalResult verifyScopeOwnership(func::FuncOp function) {
           for (Value argument : introduced)
             if (!outgoing.insert(argument).second)
               return refuse(&op, "edge aliases an existing owner");
-          auto [entry, fresh] = incoming.emplace(destination, outgoing);
-          if (fresh)
-            pending.push_back(destination);
-          else if (entry->second != outgoing)
-            return refuse(&op, "incoming edges disagree on live ownership");
+          if (failed(enqueue(&op, &destination->front(), std::move(outgoing))))
+            return failure();
         }
       } else if (op.hasTrait<OpTrait::IsTerminator>() &&
                  !isa<func::ReturnOp>(op)) {
@@ -138,8 +233,15 @@ LogicalResult verifyScopeOwnership(func::FuncOp function) {
       }
     }
   }
-  if (incoming.size() != function.getBody().getBlocks().size())
-    return refuse(function, "unreachable blocks lack checked ownership");
+  if (visited.size() + 1 != operationCount)
+    return refuse(function, "unreachable operations lack checked ownership");
   return success();
+}
+} // namespace
+LogicalResult verifyScopeOwnership(func::FuncOp function) {
+  return checkOwnership(function, false);
+}
+LogicalResult verifyScheduledScopeOwnership(func::FuncOp function) {
+  return checkOwnership(function, true);
 }
 } // namespace zkc::runtime
