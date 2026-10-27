@@ -150,7 +150,7 @@ def test_fresh_reproduction_records_clean_wrapper_and_patch():
         cwd=root / 'lean', capture_output=True, text=True, check=True)
     inputs = json.loads(result.stdout)
     for name in ['CleanExamples.lean', 'compatibility.json', 'compatibility.patch',
-                 'TestsClean/NativeClients.lean', 'ZkcClean/NativeExport.lean']:
+                 'CleanExamples/NativeClients.lean', 'ZkcClean/NativeExport.lean']:
         path = root / 'lean/integrations/clean' / name
         assert inputs['integrations/clean/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
 

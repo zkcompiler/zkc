@@ -23,13 +23,20 @@ def refused(label, action):
     raise AssertionError("reader accepted " + label)
 
 
+def require(condition, label):
+    if not condition:
+        raise AssertionError("reader " + label)
+
+
 def main():
     descriptor = variant.descriptor("example.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
     spelling = '!data.sequence<!local.variant<"' + descriptor + '">>'
     term, kind = render.sort(spelling)
-    assert kind[0] == "data" and '.sequence (.product "\\\"example.Opening\\\"" "opening"' in term
+    require(kind[0] == "data" and '.sequence (.product "\\\"example.Opening\\\"" "opening"' in term,
+            "lost the nominal sequence")
     other = variant.descriptor("other.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
-    assert render.sort('!data.sequence<!local.variant<"' + other + '">>') != (term, kind)
+    require(render.sort('!data.sequence<!local.variant<"' + other + '">>') != (term, kind),
+            "merged distinct nominal identities")
     # Canonical node tables have no unreachable or duplicate nodes.
     value = json.loads(bytes.fromhex(descriptor[8:]))
     value[1].append("unused")

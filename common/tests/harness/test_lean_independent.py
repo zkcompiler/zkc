@@ -59,10 +59,10 @@ def artifacts(audit, root, directory, legacy=False):
     return directory / 'manifest.json'
 
 
-def test_repository_covers_all_88_locked_declarations():
+def test_repository_covers_all_107_locked_declarations():
     groups = checker().configuration(ROOT / 'lean')
     assert {p: len(g['theorems']) for p, g in groups.items()} == {
-        'main': 41, 'security': 24, 'arklib': 20, 'clean': 3}
+        'main': 49, 'security': 31, 'arklib': 24, 'clean': 3}
 
 
 @pytest.mark.parametrize('defect', ['missing', 'extra', 'duplicate', 'hole', 'axiom', 'unknown-field', 'module'])
