@@ -85,6 +85,10 @@ abbrev sourceHelper30 : CheckedDefinition := payload.definitions.get ⟨30, by d
 theorem sourceHelper30_body : sourceHelper30.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper30Body := by kernel_rfl
 abbrev sourceHelper31 : CheckedDefinition := payload.definitions.get ⟨31, by decide +kernel⟩
 theorem sourceHelper31_body : sourceHelper31.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper31Body := by kernel_rfl
+abbrev sourceHelper32 : CheckedDefinition := payload.definitions.get ⟨32, by decide +kernel⟩
+theorem sourceHelper32_body : sourceHelper32.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper32Body := by kernel_rfl
+abbrev sourceHelper33 : CheckedDefinition := payload.definitions.get ⟨33, by decide +kernel⟩
+theorem sourceHelper33_body : sourceHelper33.body = ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper33Body := by kernel_rfl
 abbrev sourceProtocol0 : CheckedProtocol := payload.protocols.get ⟨0, by decide +kernel⟩
 theorem sourceProtocol0_member : sourceProtocol0 ∈ payload.protocols := List.get_mem _ _
 def maximum0 : Nat := 4
@@ -132,7 +136,7 @@ abbrev step0Realized (input2 : (Option F)) (input4 : (Option Nat)) (input5 : (Op
   (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_6c656674" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons (input2) (.cons (input4) (.cons (input5) .nil)))))))
 
 abbrev step1 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input0 : (Option (List F))) (out0 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (Participant.owned 1 1 (invoke tables.closed sourceHelper30.helper) (.cons (input0) (.cons ((out0).get (.there (.there (.there (.there .here))))) (.cons ((out0).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper33.helper) (.cons (input0) (.cons ((out0).get (.there (.there (.there (.there .here))))) (.cons ((out0).get (.there (.there (.there (.there (.there .here)))))) .nil))))
 
 abbrev step2 (protocols : ProtocolTable (assignment F G) (signature (F := F) (G := G))) (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")]) :=
   (invokeProtocol protocols sourceProtocol0.signature (ProtocolContext.enter {} "label_7269676874" [0, 1]) 1 (.cons (none) (.cons (none) (.cons (none) (.cons (input3) (.cons (input4) (.cons (input5) .nil)))))))
@@ -140,10 +144,10 @@ abbrev step2Realized (input3 : (Option F)) (input4 : (Option Nat)) (input5 : (Op
   (realizeCall (G := G) payload maximum0 (ProtocolContext.enter {} "label_7269676874" [0, 1]) sourceProtocol0.outputScopes (.cons (none) (.cons (none) (.cons (none) (.cons (input3) (.cons (input4) (.cons (input5) .nil)))))))
 
 abbrev step3 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (input1 : (Option (List F))) (out2 : (Values (Component (assignment F G)) [(.vector "bls12-381.fr"), (.vector "bls12-381.fr"), .index, .index, (.vector "bls12-381.fr"), (.field "bls12-381.fr")])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (Participant.owned 1 1 (invoke tables.closed sourceHelper30.helper) (.cons (input1) (.cons ((out2).get (.there (.there (.there (.there .here))))) (.cons ((out2).get (.there (.there (.there (.there (.there .here)))))) .nil))))
+  (Participant.owned 1 1 (invoke tables.closed sourceHelper33.helper) (.cons (input1) (.cons ((out2).get (.there (.there (.there (.there .here))))) (.cons ((out2).get (.there (.there (.there (.there (.there .here)))))) .nil))))
 
 abbrev step4 (tables : Evaluation.ComponentTables F G (signature (F := F) (G := G))) (out1 : (Values (Component (assignment F G)) [.boolean])) (out3 : (Values (Component (assignment F G)) [.boolean])) : PIR.Process (signature (F := F) (G := G)) (Values (Component (assignment F G)) [.boolean]) :=
-  (invoke tables.components sourceHelper31.helper (.cons ((out1).get .here) (.cons ((out3).get .here) .nil)))
+  (invoke tables.components sourceHelper21.helper (.cons ((out1).get .here) (.cons ((out3).get .here) .nil)))
 def callContext0 : ProtocolContext := (ProtocolContext.enter {} "label_6c656674" [0, 1])
 theorem callContext0_roles : (callContext0).roles 0 ≠ (callContext0).roles 1 := by decide
 
@@ -156,7 +160,7 @@ abbrev reduceDefinition := sourceProtocol0
 abbrev maximum := maximum0
 abbrev protocolPrefix := protocolPrefix1 (F := F) (G := G)
 abbrev checkContinuation := step1 (F := F) (G := G)
-abbrev terminalHelper : Helper := sourceHelper31.helper
+abbrev terminalHelper : Helper := sourceHelper21.helper
 abbrev terminalCalculation := step4 (F := F) (G := G)
 theorem step0_binding (input2 : (Option F)) (input4 : (Option Nat)) (input5 : (Option Nat)) :
     step0 (protocolPrefix (F := F) (G := G)) input2 input4 input5 = step0Realized (G := G) input2 input4 input5 := by

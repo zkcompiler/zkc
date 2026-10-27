@@ -25,7 +25,7 @@ copyable variants at those ports; affine variants remain local. It also admits
 the closed [structured message grammar](../formats/messages.md).
 Port, representation and codec availability remain independent judgments.
 
-Local functions retain construction, ordered match, results and captures.
+Scoped functions retain construction, ordered match, results and captures.
 An installed primitive must explicitly accept its complete payload type; local
 variant formation never supplies a wildcard signature. Total native data operations include a tag test under
 the separate [structured-data contract](iteration.md).
@@ -52,8 +52,8 @@ This single-alternative carrier stores the ordinary ordered source ABI leaves,
 including zero payload leaves for empty products. Its separate nominal namespace
 retains the complete source type identity. It adds neither a runtime type nor a
 new operation contract, and does not change ordinary record ports or source
-variant alternatives. Local adaptation uses `local.variant_inject` and a
-single-arm `local.match` with an identity yield; mathematical adaptation uses
+variant alternatives. Scoped adaptation uses `exec.variant` and a
+single-arm `exec.match` with a charged identity completion; mathematical adaptation uses
 `data.make` and one `data.get` per ordinary leaf.
 
 ## Portable representation

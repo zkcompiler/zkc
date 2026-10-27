@@ -29,8 +29,54 @@ function(zkc_source_project target manifest)
   target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
 endfunction()
 
-add_zkc_test(kernel_ir IR kernel-ir)
-mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
+add_zkc_test(computation_unit IR computation-unit)
+mlir_target_link_libraries(zkc-computation_unit-test PRIVATE MLIRParser)
+
+add_zkc_test(execution_finite IR execution-finite)
+mlir_target_link_libraries(zkc-execution_finite-test PRIVATE MLIRParser)
+add_zkc_test(execution_computation IR execution-computation)
+mlir_target_link_libraries(zkc-execution_computation-test PRIVATE MLIRParser)
+
+add_zkc_test(runtime_scopes IR runtime-scopes)
+target_compile_definitions(zkc-runtime_scopes-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-runtime_scopes-test PRIVATE MLIRParser)
+
+add_zkc_test(execution_comparison IR execution-comparison)
+target_compile_definitions(zkc-execution_comparison-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-execution_comparison-test PRIVATE MLIRParser)
+
+add_zkc_test(scoped_control_schedule IR scoped-control-schedule)
+target_compile_definitions(zkc-scoped_control_schedule-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-scoped_control_schedule-test PRIVATE MLIRParser MLIRSCFDialect)
+add_zkc_test(execution_control_cursor IR execution-control-cursor)
+target_compile_definitions(zkc-execution_control_cursor-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-execution_control_cursor-test PRIVATE MLIRParser)
+
+add_zkc_test(source_emission_budget Translation source-emission-budget)
+add_zkc_test(source_finite_execution Translation source-finite-execution)
+add_zkc_test(source_scoped_execution Translation source-scoped-execution)
+target_link_libraries(zkc-source_scoped_execution-test PRIVATE ZkcTransforms)
+mlir_target_link_libraries(zkc-source_scoped_execution-test PRIVATE MLIRParser)
+mlir_target_link_libraries(zkc-source_emission_budget-test PRIVATE MLIRParser)
+
+add_zkc_test(execution_emission Translation execution-emission)
+target_compile_definitions(zkc-execution_emission-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-execution_emission-test PRIVATE MLIRParser)
+
+add_zkc_test(source_execution IR source-execution)
+target_compile_definitions(zkc-source_execution-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-source_execution-test PRIVATE MLIRParser)
+
+add_zkc_test(execution_reader IR execution-reader)
+target_compile_definitions(zkc-execution_reader-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-execution_reader-test PRIVATE MLIRParser)
 
 add_zkc_test(structured_computation Transforms structured-computation)
 mlir_target_link_libraries(zkc-structured_computation-test PRIVATE MLIRParser)
@@ -73,6 +119,8 @@ mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
 
 add_zkc_test(finite_callback_selection Transforms finite-callback-selection)
 mlir_target_link_libraries(zkc-finite_callback_selection-test PRIVATE MLIRParser)
+add_zkc_test(scoped_collection_sum Transforms scoped-collection-sum)
+mlir_target_link_libraries(zkc-scoped_collection_sum-test PRIVATE MLIRParser)
 add_zkc_test(finite_preparation Transforms finite-preparation)
 mlir_target_link_libraries(zkc-finite_preparation-test PRIVATE MLIRParser)
 
@@ -144,12 +192,12 @@ target_compile_definitions(zkc-vector_reductions-test PRIVATE
 mlir_target_link_libraries(zkc-vector_reductions-test PRIVATE MLIRParser)
 add_zkc_test(numerical_expressions Transforms)
 add_test(NAME numerical-expressions COMMAND zkc-numerical_expressions-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/structured-source/map-declarations.mlir")
 set_tests_properties(numerical-expressions PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-numerical_expressions-test PRIVATE MLIRParser)
 add_zkc_test(map_realization Transforms)
 add_test(NAME map-realization COMMAND zkc-map_realization-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical/map-realization.mlir")
+  "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/structured-source/map-declarations.mlir")
 set_tests_properties(map-realization PROPERTIES LABELS native)
 mlir_target_link_libraries(zkc-map_realization-test PRIVATE MLIRParser)
 add_zkc_test(late_maps Transforms late-maps)
@@ -202,6 +250,7 @@ add_zkc_test(group_identity Compiler group-identity)
 mlir_target_link_libraries(zkc-group_identity-test PRIVATE MLIRParser)
 add_zkc_test(language_boolean Compiler language-boolean)
 add_zkc_test(language_map Compiler language-map)
+mlir_target_link_libraries(zkc-language_map-test PRIVATE MLIRParser)
 add_zkc_test(language_scoped Language language-scoped)
 add_zkc_test(language_effect_algebra Language language-effect-algebra)
 add_zkc_test(language_effect_boundaries Language language-effect-boundaries)
@@ -330,8 +379,6 @@ add_zkc_test(expansion_preservation Transforms expansion-preservation)
 target_compile_definitions(zkc-expansion_preservation-test PRIVATE
   ZKC_MATH_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/mathematical")
 mlir_target_link_libraries(zkc-expansion_preservation-test PRIVATE MLIRParser)
-add_zkc_test(algorithm_accounting Transforms algorithm-accounting)
-mlir_target_link_libraries(zkc-algorithm_accounting-test PRIVATE MLIRParser)
 add_zkc_test(construction_starts Transforms construction-starts)
 mlir_target_link_libraries(zkc-construction_starts-test PRIVATE MLIRParser)
 add_zkc_test(mathematical_correspondence Transforms mathematical-correspondence)
@@ -342,9 +389,9 @@ add_zkc_test(projection_metadata Transforms projection-metadata)
 target_link_libraries(zkc-projection_metadata-test PRIVATE ZkcTranslation)
 mlir_target_link_libraries(zkc-projection_metadata-test PRIVATE MLIRParser)
 add_zkc_test(resource_origin_analysis IR resource-origin-analysis)
-target_compile_definitions(zkc-resource_origin_analysis-test PRIVATE
-  ZKC_ORIGIN_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/resource-origins")
-mlir_target_link_libraries(zkc-resource_origin_analysis-test PRIVATE MLIRParser)
+add_zkc_test(resource_origin_sources IR)
+mlir_target_link_libraries(zkc-resource_origin_sources-test PRIVATE MLIRAsmParser)
+mlir_target_link_libraries(zkc-resource_origin_analysis-test PRIVATE MLIRParser MLIRAsmParser)
 add_zkc_test(mathematical_dependencies IR mathematical-dependencies)
 mlir_target_link_libraries(zkc-mathematical_dependencies-test PRIVATE MLIRParser)
 add_zkc_test(mathematical_interfaces IR mathematical-interfaces)
@@ -379,6 +426,7 @@ set(zkc_script_environment
   ZKC_CTEST_COMPILER=$<TARGET_FILE:zkc-compile>
   ZKC_CTEST_OPTIMIZER=$<TARGET_FILE:zkc-opt>
   ZKC_CTEST_REQUIREMENTS_TEST=$<TARGET_FILE:zkc-requirements-test>
+  ZKC_CTEST_RESOURCE_ORIGIN_SOURCES=$<TARGET_FILE:zkc-resource_origin_sources-test>
   PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/support:${PROJECT_SOURCE_DIR}/../common/tests/support)
 
 # Every Python file in this directory is a test, and its name is the test's
@@ -436,6 +484,7 @@ target_compile_definitions(zkc-total_verification_capacity-test PRIVATE
 mlir_target_link_libraries(zkc-total_verification_capacity-test PRIVATE MLIRParser)
 
 add_zkc_test(program_logical_realizations Program program-logical-realizations)
+add_zkc_test(program_resource_origins Program program-resource-origins)
 
 add_zkc_test(kernel_transforms Transforms kernel-transforms)
 target_compile_definitions(zkc-kernel_transforms-test PRIVATE
@@ -496,3 +545,8 @@ mlir_target_link_libraries(zkc-native_preferences-test PRIVATE MLIRParser MLIRPa
 
 add_zkc_test(aggregate_layouts Transforms aggregate-layouts)
 mlir_target_link_libraries(zkc-aggregate_layouts-test PRIVATE MLIRParser MLIRPass)
+
+add_zkc_test(scoped_schedule Transforms scoped-schedule)
+target_compile_definitions(zkc-scoped_schedule-test PRIVATE
+  ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-scoped_schedule-test PRIVATE MLIRParser MLIRSCFDialect)

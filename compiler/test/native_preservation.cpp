@@ -8,6 +8,7 @@
 #include "zkc/Contracts/NativeOrigin.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -20,22 +21,21 @@ namespace {
 unsigned removeAbsorption(ModuleOp module, StringRef origin) {
   auto *context = module.getContext();
   std::string helper;
-  local::OperationBindingOp binding;
-  module.walk([&](local::FuncOp fn) {
+  runtime::BindingOp binding;
+  module.walk([&](func::FuncOp fn) {
     fn.walk([&](Operation *op) {
       auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
       if (parameters && parameters.size() == 1 &&
           cast<StringAttr>(parameters[0]).getValue() == origin) {
         helper = fn.getSymName().str();
-        binding =
-            SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                op, op->getAttrOfType<FlatSymbolRefAttr>("binding"));
+        binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            op, op->getAttrOfType<FlatSymbolRefAttr>("binding"));
       }
     });
   });
   require(!helper.empty() && bool(binding), "absorption helper missing");
-  SmallVector<local::CallOp> calls;
-  module.walk([&](local::CallOp call) {
+  SmallVector<pir::LocalCallOp> calls;
+  module.walk([&](pir::LocalCallOp call) {
     if (call.getCallee() == helper)
       calls.push_back(call);
   });
@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
     plan.services.assign(selected.services.begin(), selected.services.end());
     plan.nativeBase = true;
     plan.state.push_back(
-        local::CapabilityType::get(&context, "transcript:" + selected.suite));
+        runtime::CapabilityType::get(&context, "transcript:" + selected.suite));
     if (auto error = zkc::detail::verifyNativeTranscript(
             *projected, *candidate, selected, events, &plan))
       throw std::runtime_error(toString(std::move(error)));
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
                if (participant.getRole() != policy.producer)
                  return;
                auto &block = participant.getBody().front();
-               for (auto call : block.getOps<local::CallOp>())
+               for (auto call : block.getOps<pir::LocalCallOp>())
                  if (!changed && call.getNumOperands() == 2 &&
                      call.getInputs()[1].getType() ==
                          block.getArgument(0).getType()) {
@@ -224,8 +224,7 @@ int main(int argc, char **argv) {
       if (!ref || changed)
         return;
       auto binding =
-          SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(op,
-                                                                          ref);
+          SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(op, ref);
       if (binding &&
           binding.getContract() == "transcript.native.indexed.observe.data") {
         op->setAttr(
@@ -283,8 +282,9 @@ int main(int argc, char **argv) {
     after->walk([&](pir::ParticipantOp participant) {
       if (participant.getRole() != policy.validator)
         return;
-      for (auto call : participant.getBody().front().getOps<local::CallOp>()) {
-        auto fn = SymbolTable::lookupNearestSymbolFrom<local::FuncOp>(
+      for (auto call :
+           participant.getBody().front().getOps<pir::LocalCallOp>()) {
+        auto fn = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
             call, call.getCalleeAttr());
         bool delivery = false;
         fn.walk([&](Operation *op) {

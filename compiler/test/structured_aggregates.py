@@ -23,7 +23,7 @@ with case('sequence fold retains exact nominal product and components'):
              [['bool'], ['field', 'bls12-381.fr']]]
     sequence = ['sequence', query]
     assert definitions['main'][4] == [sequence]
-    assert snapshot[4] == [['domain', 'queries', [sequence], ['elements', 0]]]
+    assert snapshot[4] == [['domain', 'queries', [sequence], [['elements', 0]], 0]]
     assert definitions['step'][4] == [['bool'], query, sequence]
     body = definitions['step'][9][1]
     assert body[0][:4] == [['product.get', 0], [1], [['bool']], []]
@@ -51,7 +51,7 @@ for name, before, after in [
 with case('multi constructor variants require a separate admitted profile'):
     new = descriptor(['query', 'bls12-381.fr'], [('value', ['bool', 'field:bls12-381.fr']), ('none', [])])
     # A valid unused declaration still belongs to whole-unit admission.
-    unused = f'func.func private @unused(%x:!local.variant<{json.dumps(new)}>)->!local.variant<{json.dumps(new)}> {{ return %x : !local.variant<{json.dumps(new)}> }}'
+    unused = f'func.func private @unused(%x:!data.variant<{json.dumps(new)}>)->!data.variant<{json.dumps(new)}> {{ return %x : !data.variant<{json.dumps(new)}> }}'
     export(source.replace('  func.func private @make', unused + '\n  func.func private @make'),
            'structured-source-product')
 

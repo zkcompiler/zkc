@@ -56,7 +56,11 @@ for name, project in [("SmallSumcheck", "examples/projects/sumcheck"),
         assert producer_names.count("protocol.send") == (4 if name == "TwoSums" else 2)
         assert "protocol.receive" not in producer_names
         assert "protocol.send" not in validator_names
-        assert "crypto.exec.indexed_transcript_challenge" in producer_names
+        challenges = [op for op in instructions(producer[7])
+                      if op[0] == "exec.apply" and op[2]
+                      and op[2][0] == "transcript.native.indexed.challenge"]
+        assert len(challenges) == (2 if name == "TwoSums" else 1)
+        assert all(op[2][1:] == [[policy[5]], ""] for op in challenges)
         assert len(producer) == len(validator) == 10
         assert validator[9] == []
         if name == "Schnorr":

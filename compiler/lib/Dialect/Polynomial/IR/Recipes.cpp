@@ -2,11 +2,12 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeTypes.h"
 #include "llvm/ADT/StringExtras.h"
 using namespace mlir;
 using namespace llvm;
@@ -88,7 +89,7 @@ Type residualStateType(RecipeOp recipe) {
   auto descriptor = protocol::encodeVariant(
       {"poly.residual." + recipe.getSymName().str(), {{"state", payload}}});
   return descriptor
-             ? Type(local::VariantType::get(recipe.getContext(), *descriptor))
+             ? Type(data::VariantType::get(recipe.getContext(), *descriptor))
              : Type{};
 }
 FailureOr<FunctionType> realizationType(RealizeOp realization) {

@@ -93,7 +93,7 @@ def FinishIfOp : Op<ProtocolDialect, "finish_if",
 }
 
 def GuardOp : Op<ProtocolDialect, "guard",
-    [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp"]>]> {
+    [MemoryEffects<[MemRead, MemWrite]>, ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::RepeatOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp"]>]> {
   let arguments = (ins I1:$condition, StrAttr:$site, StrAttr:$owner);
   let assemblyFormat = "$condition attr-dict";
 }
@@ -102,7 +102,7 @@ def GuardOp : Op<ProtocolDialect, "guard",
 
 
 def LocalCallOp : Op<ProtocolDialect, "local_call",
-    [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
+    [ParentOneOf<["zkc::protocol_ir::MathematicalOp", "zkc::protocol_ir::ParticipantOp", "zkc::protocol_ir::ProtocolLoopOp", "zkc::protocol_ir::RepeatOp"]>,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$callee,
     StrAttr:$site, StrAttr:$role);

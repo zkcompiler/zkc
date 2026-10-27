@@ -1,129 +1,228 @@
 #include "Bindings.h"
+#include "../Target/ExecutionPorts.h"
 #include "../Target/PhysicalPlan.h"
 #include "Storage.h"
+#include "mlir/IR/IRMapping.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Builders.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Refusal.h"
 
 using namespace llvm;
 using namespace mlir;
 namespace zkc::protocol {
-static Error applyCheckedSignature(Block &block, ArrayRef<Type> types) {
-  if (block.getNumArguments() != types.size())
-    return error("binding-operation-signature");
-  // The checked plan preserves argument positions and cardinality. Apply its
-  // explicit one-to-one signature without asking a converter to materialize
-  // casts for uses whose exact conversions are recorded separately.
-  for (auto [argument, type] : zip(block.getArguments(), types))
-    argument.setType(type);
-  return Error::success();
-}
 static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
+  auto admitted = target::ExecutionPorts::read(module);
+  if (!admitted)
+    return admitted.takeError();
+  const auto &flow = *admitted;
   auto work = target::physicalPlanOperations(module);
-  SmallVector<SmallVector<Value>, 0> conversions;
-  if (!plan.releases.empty())
-    conversions.resize(work.size());
+  if (work.size() != plan.operations.size())
+    return error("binding-plan-coverage");
   auto root =
-      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
+      cast<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front());
   OpBuilder builder(module.getContext());
-  auto physicalArguments = [&](const std::vector<std::string> &values) {
+  auto strings = [&](ArrayRef<std::string> values) {
     SmallVector<Attribute> attributes;
     for (const auto &value : values)
       attributes.push_back(builder.getStringAttr(value));
     return builder.getArrayAttr(attributes);
   };
-  // All choices, including names and ports, have been checked on this exact
-  // selected Local payload. Application contains no numerical producer,
-  // selection/default/adapter policy or catalog query.
   for (const auto &decision : plan.bindings) {
+    const auto &binding = decision.binding;
     if (decision.purpose == target::BindingPurpose::Original) {
       auto declaration =
-          cast<zkc::local::OperationBindingOp>(work[*decision.declaration]);
-      declaration.setImplementation(
-          decision.binding.application.implementation);
+          cast<zkc::runtime::BindingOp>(work[*decision.declaration]);
+      declaration.setImplementation(binding.application.implementation);
       declaration.setPhysicalArgumentsAttr(
-          physicalArguments(decision.binding.application.physicalArguments));
-      continue;
+          strings(binding.application.physicalArguments));
+    } else {
+      builder.setInsertionPointToStart(&root.getBody().front());
+      zkc::runtime::BindingOp::create(
+          builder, work[decision.location]->getLoc(), binding.name,
+          binding.application.contract, strings(binding.application.arguments),
+          binding.application.implementation,
+          strings(binding.application.physicalArguments));
     }
-    builder.setInsertionPointToStart(&root.getBody().front());
-    const auto &binding = decision.binding;
-    SmallVector<Attribute> arguments;
-    for (const auto &argument : binding.application.arguments)
-      arguments.push_back(builder.getStringAttr(argument));
-    zkc::local::OperationBindingOp::create(
-        builder, work[decision.location]->getLoc(), binding.name,
-        binding.application.contract, builder.getArrayAttr(arguments),
-        binding.application.implementation,
-        physicalArguments(binding.application.physicalArguments));
   }
-  // Apply interface ports without changing operation order. Bound operations
-  // get their selected result ports when replaced below.
-  for (auto [op, decision] : zip(work, plan.operations)) {
-    size_t blockIndex = 0;
-    for (auto &region : op->getRegions())
-      for (auto &block : region) {
-        if (auto error = applyCheckedSignature(
-                block, decision.blockArguments[blockIndex]))
-          return error;
-        ++blockIndex;
+  // Retain the complete admitted bodies while constructing their replacements.
+  // The port index borrows these actual values; no mutation invalidates it.
+  OwningOpRef<ModuleOp> retired(ModuleOp::create(module.getLoc()));
+  llvm::DenseMap<Operation *, func::FuncOp> functions;
+  IRMapping mapping;
+  std::map<target::StorageValue, Value> stored;
+  std::map<target::StoragePoint, SmallVector<const target::StorageRelease *>>
+      releases;
+  for (const auto &release : plan.releases)
+    releases[release.point].push_back(&release);
+  for (auto [index, op] : enumerate(work)) {
+    const auto &choice = plan.operations[index];
+    if (auto function = dyn_cast<func::FuncOp>(op)) {
+      SmallVector<Type> inputs{runtime::ScopeType::get(module.getContext())};
+      append_range(inputs, choice.functionType.getInputs());
+      auto output = exec::OutcomeType::get(
+          module.getContext(),
+          SmallVector<Type>(choice.functionType.getResults()));
+      auto type = builder.getFunctionType(inputs, output);
+      builder.setInsertionPoint(function);
+      auto replacement = func::FuncOp::create(builder, function.getLoc(),
+                                              function.getSymName(), type);
+      replacement->setAttrs(function->getAttrs());
+      replacement.setType(type);
+      replacement.addEntryBlock();
+      functions[function] = replacement;
+      for (auto [port, values] :
+           enumerate(zip(function.getArguments().drop_front(),
+                         replacement.getArguments().drop_front()))) {
+        mapping.map(std::get<0>(values), std::get<1>(values));
+        stored[{target::StorageValue::BlockArgument, index, unsigned(port),
+                0}] = std::get<1>(values);
       }
-    if (decision.functionType)
-      op->setAttr("function_type", TypeAttr::get(decision.functionType));
-    if (!decision.binding)
-      for (auto [result, type] : zip(op->getResults(), decision.outputs))
-        result.setType(type);
+      function->moveBefore(retired->getBody(), retired->getBody()->end());
+      continue;
+    }
+    if (op->getParentOfType<func::FuncOp>())
+      continue;
+    // Participant transport remains protocol-owned. Its selected data ports
+    // have no scope/outcome administrative values and retain their actual SSA.
+    if (choice.functionType)
+      op->setAttr("function_type", TypeAttr::get(choice.functionType));
+    for (auto [value, type] : zip(flow.outputs(op), choice.outputs))
+      value.setType(type);
+    unsigned block = 0;
+    for (auto *entry : flow.get(op).bodies) {
+      const auto &body = flow.body(entry);
+      if (body.owner == op) {
+        for (auto [value, type] :
+             zip(body.arguments, choice.blockArguments[block++]))
+          Value(value).setType(type);
+      }
+    }
+    if (!choice.conversions.empty() || choice.binding)
+      return error("binding-materialization-context");
   }
-  for (auto [index, decision] : enumerate(plan.operations)) {
-    auto *op = work[index];
-    if (auto literal = dyn_cast<zkc::local::BoolConstantOp>(op)) {
-      if (decision.outputs.size() != 1 || decision.binding ||
-          !decision.conversions.empty())
-        return createStringError("native-boolean-physical-plan");
-      builder.setInsertionPoint(op);
-      auto physical = zkc::plan::BoolConstantOp::create(
-          builder, op->getLoc(), decision.outputs.front(),
-          literal.getValueAttr(), literal.getSiteAttr());
-      op->replaceAllUsesWith(physical->getResults());
-      op->erase();
-      work[index] = physical;
+  llvm::DenseMap<Operation *, unsigned> indices;
+  for (auto [index, op] : enumerate(work))
+    indices[op] = index;
+  for (auto *op : work) {
+    auto source = dyn_cast<func::FuncOp>(op);
+    if (!source)
       continue;
+    auto function = functions.lookup(source);
+    builder.setInsertionPointToEnd(&function.front());
+    exec::ScopedExecutionBuilder native(builder, function);
+    auto release = [&](target::StoragePoint point) -> Error {
+      auto found = releases.find(point);
+      if (found == releases.end())
+        return Error::success();
+      for (auto *chunk : found->second) {
+        SmallVector<Value> values;
+        for (const auto &coordinate : chunk->values) {
+          auto value = stored.find(coordinate);
+          if (value == stored.end())
+            return error("storage-schedule-coordinate");
+          values.push_back(value->second);
+        }
+        native.release(values);
+      }
+      releases.erase(found);
+      return Error::success();
+    };
+    if (auto e = release(
+            {target::StoragePoint::BlockEntry, indices.lookup(source), 0}))
+      return e;
+    for (auto *instruction : flow.body(&source.front()).instructions) {
+      auto index = indices.lookup(instruction);
+      const auto &node = flow.get(instruction);
+      const auto &choice = plan.operations[index];
+      SmallVector<Value> inputs;
+      for (auto input : node.inputs) {
+        auto mapped = mapping.lookupOrNull(input);
+        if (!mapped)
+          return error("binding-materialization-coordinate");
+        inputs.push_back(mapped);
+      }
+      auto invoke = [&](const OperationBinding &binding, TypeRange outputs,
+                        ValueRange inputs, StringRef site,
+                        ArrayAttr parameters) {
+        return native.invoke(
+            "exec.apply", outputs, native.scoped(inputs),
+            {builder.getNamedAttr(
+                 "binding",
+                 FlatSymbolRefAttr::get(module.getContext(), binding.name)),
+             builder.getNamedAttr("parameters", parameters),
+             builder.getNamedAttr("site", builder.getStringAttr(site))});
+      };
+      for (auto [crossing, conversion] : enumerate(choice.conversions)) {
+        auto converted =
+            invoke(plan.bindings[conversion.binding].binding,
+                   TypeRange{conversion.to}, inputs[conversion.operand],
+                   conversion.site, builder.getArrayAttr({}));
+        inputs[conversion.operand] = converted.front();
+        stored[{target::StorageValue::ConversionResult, index,
+                unsigned(crossing)}] = converted.front();
+        if (auto e = release({target::StoragePoint::AfterConversion, index,
+                              unsigned(crossing)}))
+          return e;
+      }
+      SmallVector<Value> outputs;
+      auto site = instruction->getAttrOfType<StringAttr>("site");
+      auto body = [&](unsigned arm) {
+        return functions.lookup(flow.body(node.bodies[arm]).owner);
+      };
+      if (choice.binding) {
+        outputs = invoke(plan.bindings[*choice.binding].binding, choice.outputs,
+                         inputs, site.getValue(),
+                         instruction->getAttrOfType<ArrayAttr>("parameters"));
+      } else if (isa<exec::BooleanOp, exec::VariantOp>(instruction)) {
+        outputs =
+            native.invoke(instruction->getName().getStringRef(), choice.outputs,
+                          native.scoped(inputs), instruction->getAttrs());
+      } else if (isa<exec::TestOp>(instruction)) {
+        outputs =
+            native.conditional(inputs.front(), ArrayRef(inputs).drop_front(),
+                               choice.outputs, site.getValue(), body);
+      } else if (auto match = dyn_cast<exec::MatchOp>(instruction)) {
+        SmallVector<std::string> alternatives;
+        for (auto alternative : match.getAlternatives())
+          alternatives.push_back(cast<StringAttr>(alternative).str());
+        outputs =
+            native.match(inputs.front(), ArrayRef(inputs).drop_front(),
+                         choice.outputs, alternatives, site.getValue(), body);
+      } else if (isa<exec::RangeOp>(instruction)) {
+        auto state = ArrayRef(inputs).slice(2, choice.outputs.size());
+        auto captures = ArrayRef(inputs).drop_front(2 + choice.outputs.size());
+        outputs =
+            native.loop(inputs[0], inputs[1], state, captures, choice.outputs,
+                        node.step->conditional, site.getValue(), body);
+      } else if (isa<runtime::ReleaseBindingsOp>(instruction)) {
+        native.release(inputs);
+      } else if (isa<exec::ReturnOp, exec::CompleteOp>(instruction)) {
+        // Source helper packaging has already been substituted. At the native
+        // publication boundary this root now performs its charged completion.
+        native.complete(inputs);
+      } else if (auto reject = dyn_cast<exec::RejectOp>(instruction)) {
+        native.reject(reject.getReason(), reject.getSite());
+      } else {
+        return error("binding-materialization-context");
+      }
+      if (outputs.size() != node.outputs.size())
+        return error("binding-materialization-coordinate");
+      for (auto [port, pair] : enumerate(zip(node.outputs, outputs))) {
+        mapping.map(std::get<0>(pair), std::get<1>(pair));
+        stored[{target::StorageValue::OperationResult, index, unsigned(port)}] =
+            std::get<1>(pair);
+      }
+      if (auto e = release({target::StoragePoint::AfterOperation, index}))
+        return e;
     }
-    if (!decision.binding && decision.conversions.empty())
-      continue;
-    builder.setInsertionPoint(op);
-    SmallVector<Value> operands(op->getOperands());
-    for (const auto &conversion : decision.conversions) {
-      const auto &binding = plan.bindings[conversion.binding].binding;
-      // One instruction per crossing, immediately before this consumer in
-      // operand order. The runtime charges and may stop this instruction.
-      auto converted = zkc::plan::ApplyOp::create(
-          builder, op->getLoc(), TypeRange{conversion.to},
-          ValueRange{operands[conversion.operand]}, conversion.site,
-          binding.application.implementation, builder.getArrayAttr({}),
-          FlatSymbolRefAttr::get(module.getContext(), binding.name));
-      operands[conversion.operand] = converted.getResult(0);
-      if (!plan.releases.empty())
-        conversions[index].push_back(converted.getResult(0));
-    }
-    if (!decision.binding) {
-      op->setOperands(operands);
-      continue;
-    }
-    const auto &binding = plan.bindings[*decision.binding].binding;
-    auto physical = zkc::plan::ApplyOp::create(
-        builder, op->getLoc(), decision.outputs, operands,
-        op->getAttrOfType<StringAttr>("site"),
-        builder.getStringAttr(binding.application.implementation),
-        op->getAttrOfType<ArrayAttr>("parameters"),
-        FlatSymbolRefAttr::get(module.getContext(), binding.name));
-    op->replaceAllUsesWith(physical->getResults());
-    op->erase();
-    work[index] = physical;
   }
-  if (auto e = applyStorage(module, plan.releases, work, conversions))
-    return e;
+  if (!releases.empty())
+    return error("storage-schedule-coordinate");
   root.setProfile(zkc::protocol_ir::Profile::Physical);
   return Error::success();
 }
@@ -186,13 +285,15 @@ Error materializePhysical(ModuleOp module,
 LogicalResult lowerBoundPhysical(
     ModuleOp original, ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats, bool releaseStorage,
-    ArrayRef<target::FunctionPortSelection> functionPorts) {
-  // One plan binds the original Kernel-bearing input through both checked
-  // edges. Materialization owns the candidate and publishes only after all
-  // admission, physical correspondence and projection checks succeed.
+    ArrayRef<target::FunctionPortSelection> functionPorts,
+    MathematicalSelectionPolicy numericalPolicy) {
+  // One plan binds the original input with numerical requests through both
+  // checked edges. Materialization owns the candidate and publishes only after
+  // all admission, physical correspondence and projection checks succeed.
   Location failureLocation = original->getLoc();
   target::PhysicalPlanOptions options;
   options.linearContractions = linearContractions;
+  options.numericalPolicy = numericalPolicy;
   options.releaseStorage = releaseStorage;
   options.programCapacity = checkProgramCapacity;
   options.functionPorts.assign(functionPorts.begin(), functionPorts.end());

@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapFirstLaws
+public import ZkcExamples.Structured.MultilinearPrefixBodies
 public import Zkc.Source.Structured.Linking
 
 @[expose] public section
@@ -23,10 +24,10 @@ theorem values_equation (body : BodyIn definitions valuesHelper valuesBody)
   (body.invoke linked (inputs xs dimension columns)).trans
     (MapSourceExpansions.first_values _ xs dimension columns)
 
-theorem valuesRealization_equation (projection : BodyIn definitions valuesHelper valuesBody)
-    (body : BodyIn definitions valuesRealizationHelper valuesRealizationBody)
+theorem valuesRealization_equation {computation : String} (projection : BodyIn definitions valuesHelper valuesBody)
+    (body : BodyIn definitions (MultilinearPrefixBodies.valuesRealizationHelper computation) valuesRealizationBody)
     (xs : List F) (dimension columns : Nat) :
-    invoke (closedMeanings (F := F) (G := G) definitions) valuesRealizationHelper
+    invoke (closedMeanings (F := F) (G := G) definitions) (MultilinearPrefixBodies.valuesRealizationHelper computation)
       (inputs xs dimension columns) = .done (.cons xs .nil) := by
   rw [body.invoke linked]
   dsimp only [inputs, vector]

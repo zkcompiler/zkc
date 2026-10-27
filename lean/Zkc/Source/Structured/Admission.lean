@@ -122,7 +122,7 @@ def Snapshot.storedTypes (snapshot : Snapshot) : List Ty :=
     instructionTypes Limits.instructions (snapshot.definitions.filterMap fun definition =>
       match definition with
       | .function function => let .block instructions _ := function.body; some instructions
-      | .finite _ | .realization _ | .map _ => none)
+      | .finite _ | .collect _ | .realization _ | .map _ => none)
 
 /-- The unit's rows are consistent and are the environment's rows, and every
 stored type is an admitted instance. -/
@@ -148,22 +148,61 @@ def Snapshot.instructionsWithin (snapshot : Snapshot) (limit : Nat) : Bool :=
   let work := snapshot.definitions.filterMap fun definition =>
     match definition with
     | .function function => let .block instructions _ := function.body; some instructions
-    | .finite _ | .realization _ | .map _ => none
-  derivedCount ≤ limit && instructionWorkWithin (limit - derivedCount) work
+    | .finite _ | .collect _ | .realization _ | .map _ => none
+  let domainCount := (snapshot.domains.map (·.constructors.length)).sum
+  derivedCount + domainCount ≤ limit && instructionWorkWithin (limit - derivedCount - domainCount) work
 
-def Domain.resolve (domain : Domain) : Except String DomainSpec := do
-  if !validString domain.name || !validTypes domain.inputs then throw "structured-domain"
-  let (index, indices) ← match domain.constructor with
-    | .elements index => pure (index, false)
-    | .indices index 0 => pure (index, true)
-    | .indices _ _ => throw "structured-domain-axis"
-  let collection ← match domain.inputs[index]? with
+def domainCollection (inputs : List Ty) (index : Nat) :
+    Except String ((collection : Collection) × Var inputs collection.type) := do
+  let collection ← match inputs[index]? with
     | some (.vector field) => pure (Collection.vector field)
     | some (.sequence element) => pure (Collection.sequence element)
     | _ => throw "structured-domain-container"
-  let container ← decodeVariable domain.inputs collection.type index |>.mapError
+  let container ← decodeVariable inputs collection.type index |>.mapError
     fun _ => "structured-domain-container"
-  return ⟨domain.name, domain.inputs, collection, container, indices⟩
+  return ⟨collection, container⟩
+
+def DomainConstructor.resolve (inputs : List Ty) (context : List (List Ty)) :
+    DomainConstructor → Except String ((items : List Ty) × DomainNode inputs context items)
+  | .elements index => do
+      let ⟨collection, container⟩ ← domainCollection inputs index
+      return ⟨[collection.element], .elements collection container⟩
+  | .indices index axis => do
+      if axis != 0 then throw "structured-domain-axis"
+      let ⟨collection, container⟩ ← domainCollection inputs index
+      return ⟨[.index], .indices collection container⟩
+  | .range lower upper => do
+      let lower ← decodeVariable inputs .index lower |>.mapError fun _ => "structured-domain-bound"
+      let upper ← decodeVariable inputs .index upper |>.mapError fun _ => "structured-domain-bound"
+      return ⟨[.index], .range lower upper⟩
+  | constructor@(.zip references) | constructor@(.product references) => do
+      if references.isEmpty || references.length > 512 then throw "structured-domain-operands"
+      let types ← references.mapM fun index =>
+        requireSome context[index]? "structured-domain-reference"
+      if types.flatten.length > 512 then throw "structured-domain-items"
+      let operands ← decodeOperands context types references |>.mapError
+        fun _ => "structured-domain-reference"
+      match constructor with
+      | .zip _ => return ⟨types.flatten, .zip types operands⟩
+      | _ => return ⟨types.flatten, .product types operands⟩
+
+def resolveDomainBody (inputs : List Ty) (result : Nat) :
+    (context : List (List Ty)) → List DomainConstructor →
+      Except String ((items : List Ty) × DomainBody inputs context items)
+  | context, [] => do
+      let types ← requireSome context[result]? "structured-domain-reference"
+      let value ← decodeVariable context types result |>.mapError fun _ => "structured-domain-reference"
+      return ⟨types, .ret value⟩
+  | context, constructor :: rest => do
+      let ⟨types, node⟩ ← constructor.resolve inputs context
+      let ⟨items, next⟩ ← resolveDomainBody inputs result (types :: context) rest
+      return ⟨items, .letNode node next⟩
+
+def Domain.resolve (domain : Domain) : Except String DomainSpec := do
+  if !validString domain.name || !validTypes domain.inputs || domain.constructors.isEmpty ||
+      domain.constructors.length > 4096 then throw "structured-domain"
+  let ⟨items, body⟩ ← resolveDomainBody domain.inputs domain.result [] domain.constructors
+  return ⟨domain.name, domain.inputs, items, body⟩
 
 def Bound.valid (inputs : List Ty) (bound : Bound) : Bool :=
   bound.axis == 0 && inputs[bound.index]? == some .index &&
@@ -190,6 +229,8 @@ def Definition.headerValid (definition : Definition) : Bool :=
     | _, _ => false)
   | .finite f => !(f.inputs ++ f.outputs).any Ty.isService &&
     validString f.domain && validString f.step && validString f.predicate true
+  | .collect f => !(f.inputs ++ f.outputs).any Ty.isService &&
+    validString f.domain && validString f.body && validString f.predicate true
   | .realization f => validPreparationName f.name && validString f.helper &&
     !(f.inputs ++ f.outputs).any Ty.isService
   | .map f => validPreparationName f.name && validString f.helper &&
@@ -206,7 +247,7 @@ def Definition.acceptsEdge (definition : Definition) (edge : ReferenceEdge) : Bo
   | .protocolApply, .function f => f.kind == .protocol && f.visibility == .publicDef
   | .call, .function f => f.kind == .math && f.visibility == .privateDef
   | .apply, .function f | .localCall, .function f => f.kind == .local
-  | .apply, .finite _ | .apply, .realization _ | .apply, .map _ => true
+  | .apply, .finite _ | .apply, .collect _ | .apply, .realization _ | .apply, .map _ => true
   | .callback kind, .function f =>
     kind != .protocol && f.kind == kind && f.visibility == .privateDef
   | _, _ => false
@@ -234,15 +275,15 @@ def dischargeFold (facts : Facts) (spec : FoldSpec) (operands : List Nat)
     (stateCount : Nat) (premises : List Bound) : Bool :=
   let domainCount := spec.domain.inputs.length
   let invariantArgs := operands.take domainCount ++ operands.drop (domainCount + spec.state.length)
+  let invariantStart := stateCount + spec.domain.items.length
   premises.all fun bound =>
-    (spec.domain.indices && bound.index == stateCount && bound.container > stateCount &&
-      match invariantArgs[bound.container - stateCount - 1]?,
-          invariantArgs[spec.domain.container.index]? with
-      | some container, some selected => container == selected
-      | _, _ => false) ||
-    (bound.index > stateCount && bound.container > stateCount &&
-      match invariantArgs[bound.index - stateCount - 1]?,
-          invariantArgs[bound.container - stateCount - 1]? with
+    (spec.domain.bounds.any fun (item, selected) =>
+      bound.index == stateCount + item && bound.container ≥ invariantStart &&
+        match invariantArgs[bound.container - invariantStart]?, invariantArgs[selected]? with
+        | some container, some selected => container == selected
+        | _, _ => false) ||
+    (bound.index ≥ invariantStart && bound.container ≥ invariantStart &&
+      match invariantArgs[bound.index - invariantStart]?, invariantArgs[bound.container - invariantStart]? with
       | some index, some container => facts.contains (index, container)
       | _, _ => false)
 
@@ -270,6 +311,28 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       throw "structured-fold-predicate"
     if !dischargeFold facts spec operands 0 predicate.preconditions then
       throw "structured-fold-premise"
+  return spec
+
+/-- Collection callbacks retain their actual Local bodies. No totality or scalar
+ring profile is inferred from a generated function name. -/
+def resolveCollect (snapshot : Snapshot) (domains : List DomainSpec)
+    (declaration : CollectDeclaration) : Except String CollectSpec := do
+  let domain ← lookupDomain domains declaration.domain
+  let collection ← match declaration.outputs with
+    | [.vector field] => pure (Collection.vector field)
+    | [.sequence element] => pure (Collection.sequence element)
+    | _ => throw "structured-collect-result"
+  let captures := declaration.inputs.drop domain.inputs.length
+  let spec : CollectSpec :=
+    ⟨domain, collection, captures, declaration.body, declaration.predicate, .local⟩
+  if declaration.inputs != spec.arguments then throw "structured-collect-arguments"
+  let body ← lookupDefinition snapshot declaration.body
+  if !body.acceptsEdge (.callback .local) || body.inputs != spec.bodyHelper.inputs ||
+      body.outputs != spec.bodyHelper.outputs then throw "structured-collect-body"
+  if !declaration.predicate.isEmpty then
+    let predicate ← lookupDefinition snapshot declaration.predicate
+    if !predicate.acceptsEdge (.callback .local) || predicate.inputs != spec.predicateHelper.inputs ||
+        predicate.outputs != [.boolean] then throw "structured-collect-predicate"
   return spec
 
 structure LowerState where
@@ -300,38 +363,42 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
-/-- Resolve the exact operation/contract pair, the binding's root against the
-unit's catalogue rows, and the parameters, independently of wire parsing.
-Direct constructor subjects pass the same checks. -/
+/-- Resolve an actual invocation through its explicit binding, independently of
+wire parsing. Data ports are checked by ordinary formation after selection;
+native scope/outcome plumbing belongs to the export correspondence boundary. -/
 def resolvePrimitive (snapshot : Snapshot) (operation name : String)
-    (parameters : List String) : Except String Primitive := do
+    (parameters : List String) : Except String Op := do
+  if operation != "exec.apply" then throw "structured-primitive-operation"
   let binding ← requireSome (snapshot.bindings.find? (·.name == name)) "structured-unknown-binding"
   if !binding.valid then throw "structured-binding"
-  let pair : String × (String → Primitive) ← match operation with
-    | "algebra.exec.index_constant" => pure ("index.constant", fun _ => Primitive.indexConstant 0)
-    | "algebra.exec.index_equal" => pure ("index.equal", fun _ => Primitive.indexEqual)
-    | "algebra.exec.index_less" => pure ("index.less", fun _ => Primitive.indexLess)
-    | "algebra.exec.index_add" => pure ("index.add", fun _ => Primitive.indexAdd)
-    | "algebra.exec.index_mul" => pure ("index.mul", fun _ => Primitive.indexMul)
-    | "algebra.exec.index_sub" => pure ("index.sub", fun _ => Primitive.indexSub)
-    | "algebra.exec.index_div" => pure ("index.div", fun _ => Primitive.indexDiv)
-    | "algebra.exec.index_mod" => pure ("index.mod", fun _ => Primitive.indexMod)
-    | "algebra.exec.vector_empty" => pure ("vector.empty", Primitive.vectorEmpty)
-    | "algebra.exec.vector_length" => pure ("vector.length", Primitive.vectorLength)
-    | "algebra.exec.vector_sum" => pure ("vector.sum", Primitive.vectorSum)
-    | "algebra.exec.vector_split" => pure ("vector.split", Primitive.vectorSplit)
-    | "algebra.exec.vector_append" => pure ("vector.append", Primitive.vectorAppend)
-    | "algebra.exec.vector_equal" => pure ("vector.equal", Primitive.vectorEqual)
-    | "algebra.exec.field_equal" => pure ("field.equal", Primitive.fieldEqual)
-    | _ => throw "structured-primitive-operation"
-  if binding.contract != pair.1 then throw "structured-binding-contract"
   let root ← binding.resolveRoot snapshot.catalogue
-  if operation == "algebra.exec.index_constant" then
-    let [text] := parameters | throw "structured-primitive-parameters"
-    return .indexConstant (← Format.indexDecimal text)
-  else
+  if binding.contract == "field.embed" then
     if !parameters.isEmpty then throw "structured-primitive-parameters"
-    return pair.2 root
+    let nominal ← snapshot.catalogue.expect root .field
+    let some base := nominal.member "BaseField" | throw "structured-domain-member"
+    snapshot.catalogue.requireEmbedding root base
+    return .fieldEmbed root base
+  if binding.contract == "index.constant" then
+    let [text] := parameters | throw "structured-primitive-parameters"
+    return .exec (.indexConstant (← Format.indexDecimal text))
+  if !parameters.isEmpty then throw "structured-primitive-parameters"
+  let primitive ← match binding.contract with
+    | "index.equal" => pure Primitive.indexEqual
+    | "index.less" => pure Primitive.indexLess
+    | "index.add" => pure Primitive.indexAdd
+    | "index.mul" => pure Primitive.indexMul
+    | "index.sub" => pure Primitive.indexSub
+    | "index.div" => pure Primitive.indexDiv
+    | "index.mod" => pure Primitive.indexMod
+    | "vector.empty" => pure (Primitive.vectorEmpty root)
+    | "vector.length" => pure (Primitive.vectorLength root)
+    | "vector.sum" => pure (Primitive.vectorSum root)
+    | "vector.split" => pure (Primitive.vectorSplit root)
+    | "vector.append" => pure (Primitive.vectorAppend root)
+    | "vector.equal" => pure (Primitive.vectorEqual root)
+    | "field.equal" => pure (Primitive.fieldEqual root)
+    | _ => throw "structured-primitive-contract"
+  return .exec primitive
 
 def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (context : List Ty) (facts : Facts) (identities : List Nat)
@@ -367,18 +434,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (catalogue.require d .field "Field" : Except String Unit)
   match descriptor with
   | .exec operation binding parameters =>
-    if operation == "algebra.exec.field_embed" then
-      let binding ← requireSome (snapshot.bindings.find? (·.name == binding)) "structured-unknown-binding"
-      if !binding.valid then throw "structured-binding"
-      if binding.contract != "field.embed" then throw "structured-binding-contract"
-      let extension ← binding.resolveRoot catalogue
-      if !parameters.isEmpty then throw "structured-primitive-parameters"
-      let nominal ← catalogue.expect extension .field
-      let some base := nominal.member "BaseField" | throw "structured-domain-member"
-      catalogue.requireEmbedding extension base
-      return .fieldEmbed extension base
-    else
-      return .exec (← resolvePrimitive snapshot operation binding parameters)
+    return ← resolvePrimitive snapshot operation binding parameters
   | .indexConstant text => return .indexConstant (← Format.indexDecimal text)
   | .indexEqual => return .indexEqual
   | .indexLess => return .indexLess

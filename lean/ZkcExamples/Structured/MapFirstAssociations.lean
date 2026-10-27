@@ -18,6 +18,8 @@ theorem first_bodies : MapFirstContracts.Bodies program.payload.definitions := b
   · exact_body tableDefinition
   · exact_body halvesDefinition
   · exact_body interpolateDefinition
+  · exact_body interpolateRealizationDefinition
+  · exact_body mapCallbackDefinition
   · exact_body mapDefinition
   · exact_body firstDefinition
 

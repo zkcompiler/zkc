@@ -1,13 +1,18 @@
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/AttrTypeSubElements.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "mlir/Transforms/RegionUtils.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -116,33 +121,33 @@ protocol Run roles(P)(x:Pair@P)->(r:Pair@P){
   let r @P =roundtrip(x);return(r=r);
 }entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
-  require(source.bytes().contains("local.variant_inject") &&
-              source.bytes().contains("local.match"),
+  require(source.bytes().contains("exec.variant") &&
+              source.bytes().contains("exec.match"),
           "missing explicit packing bridge");
   mutation(source, [](auto module) {
-    auto *pack = first(module, "local.variant_inject");
-    auto a = pack->getOperand(0), b = pack->getOperand(1);
-    pack->setOperand(0, b);
-    pack->setOperand(1, a);
+    auto *pack = first(module, "exec.variant");
+    auto a = pack->getOperand(1), b = pack->getOperand(2);
+    pack->setOperand(1, b);
+    pack->setOperand(2, a);
   });
   mutation(source, [](auto module) {
-    auto *unpack = first(module, "local.match");
-    auto &yield = unpack->getRegion(0).front().back();
-    auto a = yield.getOperand(0), b = yield.getOperand(1);
-    yield.setOperand(0, b);
-    yield.setOperand(1, a);
+    auto *complete = first(module, "exec.complete");
+    auto a = complete->getOperand(1), b = complete->getOperand(2);
+    complete->setOperand(1, b);
+    complete->setOperand(2, a);
   });
   mutation(source, [](auto module) {
-    auto *unpack = first(module, "local.match");
     // Change an actual result use, preserving the native function type.
-    auto *ret = unpack->getNextNode();
+    auto *ret = first(module, "exec.returned");
     require(ret && ret->getNumOperands() == 2, "missing unpack result use");
-    ret->setOperand(0, unpack->getResult(1));
-    ret->setOperand(1, unpack->getResult(0));
+    auto a = ret->getOperand(0), b = ret->getOperand(1);
+    ret->setOperand(0, b);
+    ret->setOperand(1, a);
   });
   mutation(source, [](auto module) {
-    auto oldType =
-        first(module, "local.variant_inject")->getResult(0).getType();
+    auto oldType = mlir::cast<zkc::exec::OutcomeType>(
+                       first(module, "exec.variant")->getResult(0).getType())
+                       .getPayload()[0];
     auto old = must(zkc::protocol::encodeBoundType(oldType, false)).spelling();
     auto descriptor = zkc::protocol::decodeVariant(old);
     require(bool(descriptor), "missing packed descriptor");
@@ -221,8 +226,32 @@ void kernelProducts() {
   auto unitSource = original(prefix + sequence + R"(
     protocol Run roles(P)()->(){let value @P =roundtrip(());return();}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
   )");
-  mutation(unitSource,
-           [](auto module) { first(module, "local.match")->erase(); });
+  mutation(unitSource, [](auto module) {
+    auto *match = first(module, "exec.match");
+    auto *returned = first(module, "exec.returned");
+    require(returned->getNumOperands() == 0 &&
+                returned->getParentRegion() == match->getParentRegion(),
+            "unit unpack continuation missing");
+    // Bypass only the unit unpack; retain the reached sequence operations.
+    auto *region = match->getParentRegion();
+    auto *continuation = returned->getBlock();
+    mlir::func::FuncOp control;
+    match->getParentOp()->walk([&](mlir::func::CallOp call) {
+      if (!call->hasAttr("runtime.site"))
+        control = mlir::cast<mlir::func::FuncOp>(
+            mlir::SymbolTable::lookupNearestSymbolFrom(call,
+                                                       call.getCalleeAttr()));
+    });
+    require(bool(control), "unit unpack body missing");
+    mlir::IRRewriter rewriter(module.getContext());
+    auto *before = match->getBlock();
+    rewriter.setInsertionPoint(match);
+    rewriter.replaceOpWithNewOp<mlir::cf::BranchOp>(match, continuation);
+    (void)mlir::eraseUnreachableBlocks(rewriter, *region);
+    rewriter.eraseOp(before->getTerminator());
+    rewriter.mergeBlocks(continuation, before);
+    rewriter.eraseOp(control);
+  });
 }
 void authority() {
   const std::string lib = R"(module lib;
@@ -285,10 +314,10 @@ void mathematicalPacking() {
   require(bool(module), "cannot parse mathematical bridge");
   auto *ret = first(*module, "func.return");
   mlir::OpBuilder builder(ret);
-  auto value = must(emitPack(builder, ret->getLoc(), packed, ret->getOperands(),
-                             PackingMode::Mathematical));
-  auto leaves = must(emitUnpack(builder, ret->getLoc(), packed, value,
-                                PackingMode::Mathematical));
+  auto value = must(
+      emitMathematicalPack(builder, ret->getLoc(), packed, ret->getOperands()));
+  auto leaves =
+      must(emitMathematicalUnpack(builder, ret->getLoc(), packed, value));
   ret->setOperands(leaves);
   require(succeeded(mlir::verify(*module)),
           "mathematical packing API emitted invalid data operations");
@@ -304,8 +333,7 @@ void mathematicalPacking() {
     }
   });
   require(index == 2, "mathematical unpack omitted fields");
-  auto wrong =
-      emitPack(builder, ret->getLoc(), packed, {}, PackingMode::Mathematical);
+  auto wrong = emitMathematicalPack(builder, ret->getLoc(), packed, {});
   zkc::test::refuses(std::move(wrong), "source.layout");
 }
 void refusals() {

@@ -1,6 +1,7 @@
 """Independent setups compose through ordinary protocol applications."""
 
 import json
+import re
 from pathlib import Path
 from cases import case
 from commands import Commands
@@ -45,9 +46,11 @@ for suffix, options in [
         manifest.append(dict(name=name))
 with case("actual terminal key operand remains source-bound"):
     original = (OUT / "setups.candidate.mlir").read_text()
-    changed = original.replace(
-        "local.call @check(%arg0,", "local.call @check(%arg4,", 1
+    changed, count = re.subn(
+        r'("protocol\.local_call"\()(%arg0)(,[^\n]+callee = @check,)',
+        r'\1%arg4\3', original, count=1,
     )
+    assert count == 1
     assert changed != original
     candidate = OUT / "swapped-key.candidate.mlir"
     candidate.write_text(changed)

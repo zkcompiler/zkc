@@ -115,7 +115,7 @@ private def partialMathSubset : Snapshot :=
   { unit [root (repeatInstruction (body := callback) (inputs := [.index, scalar, vector])
       (outputs := [scalar]) (operands := [0, 1, 2])) [.index, scalar, vector]
       [["P"], ["P"], ["P"]] [scalar], helper] with
-    domains := [⟨"elements", [vector], .elements 0⟩] }
+    domains := [⟨"elements", [vector], [.elements 0], 0⟩] }
 
 private def metadata (definitions : List Definition) := checkEffectiveProtocolSites (unit definitions)
 

@@ -84,7 +84,7 @@ a randomness root; this owner check does not establish independent randomness.
 ## Programmable state and handlers
 
 A selected `protocol.construction` symbol binds a protocol, provider, replaced
-services, state slots, root factory and typed Local handlers. Preparation preserves
+services, state slots, root factory and typed scoped functions. Preparation preserves
 that record exactly. Construction admits its event coverage and authority before
 consuming the record and projecting participant programs.
 
@@ -105,7 +105,7 @@ both participants; its `roles` and `site` identify the owners and occurrence.
 Inside a repeat, both roles must participate in that repeat, even for a start
 with no inputs or with only body-local constants.
 Correspondence checks its position against the original call. Projection
-preserves it at both roles. Construction consumes it into ordinary Local calls
+preserves it at both roles. Construction consumes it into `protocol.local_call` operations
 on the current state, actual arguments and enclosing loop coordinates. It is
 neither a runtime opcode nor a second state initializer. Starts of empty
 children remain ordered; zero-trip loops execute no starts.
@@ -115,7 +115,7 @@ the start handler on that role's actual selected original inputs. Local state
 requires `Copy` and `Drop`; it may contain several native slots or none. State
 slots are internal results, not application outputs. A host root instead uses
 the selected managed transcript capability described below. Only the selected
-handler closure can consume it; original protocol ports and unrelated Local
+handler closure can consume it; original protocol ports and unrelated scoped
 functions cannot introduce another transcript root. Checked `ManagedHistory`
 operations expose byte observation, field sampling and supported index sampling
 to ordinary source functions. This facet permits advancing existing state and
@@ -126,14 +126,26 @@ after the last send or receive. Total calculations may separate those leaves;
 another ordered effect may not. Each role uses its actual local values. A query
 handler receives the current state and, for an index request, its admitted static
 bound. Its returned sample replaces the original query or corresponding receive;
-its returned state feeds the next handler. Handler bodies retain ordinary Local
+its returned state feeds the next handler. Handler bodies retain their scoped
 control, effects and failure behavior.
 
 The construction pass carries the complete state vector through affected loops,
 completion and final return, including zero-slot state with ordered handler calls.
-Custom adapters preserve the selected prepared body and reorder only the query
-result ABI. Dynamic occurrence coordinates remain explicit adapter operands;
+Custom adapters call the selected prepared function through ordinary `func.call`,
+borrowing the current runtime scope and retaining its returned or stopped outcome.
+They reorder only the query result ABI. Checked helper substitution subsequently
+expands those calls without creating a frame or charging a helper return.
+Dynamic occurrence coordinates remain explicit adapter operands;
 custom bodies absorb only what they explicitly compute and observe.
+
+Construction and codec signatures expose only logical data ports: the first
+function argument is the borrowed scope and its sole result is an outcome carrying
+the data results. Mathematical functions and outlined control bodies are not
+ordinary handler targets. Conditional codec finalization uses `exec.test` with
+closed child scopes; only the taken arm calls the selected method. Each arm
+retains charged completion, including an empty untaken arm. The untaken write
+arm produces empty bytes. Independent checking compares the actual decision,
+captures, handler call, arm completion and return, as well as byte-slice offsets.
 
 Projection metadata records the selected plan, root kind, ordered state types,
 helper symbols, the sorted removed-service set and resulting action map.
@@ -231,9 +243,13 @@ programs. The [occurrence encoding](#native-occurrence-encoding) fixes those
 bytes and bounds. Generated helper names and runtime diagnostic frames do not
 determine transcript identity. Occurrence resolution precedes optimization.
 
-Each inserted native transition is top-level in a straight-line local helper containing
-only its coordinate construction, transition, complete return and admitted
-storage releases. A UniformIndex helper additionally begins with exactly one
+Each inserted native transition belongs to an ordinary scoped `func.func`.
+Its admitted execution steps contain only coordinate construction, the
+`exec.apply` transition, exact return payload and admitted storage releases.
+Actual CFG branches dispatch each returned or stopped outcome. Source helpers
+package their return with `exec.returned`; native lowering introduces the
+charged root completion. Projection admission and the independent construction
+checker read those actual CFG associations rather than trusting helper names. A UniformIndex helper additionally begins with exactly one
 `index.constant` whose parameter is the event's bound and whose result is the
 transition's bound operand. The helper executes at one static participant site per role;
 an enclosing participant loop may reach that site repeatedly. Local conditional

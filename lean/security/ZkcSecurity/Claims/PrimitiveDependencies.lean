@@ -21,7 +21,7 @@ def defaultRelationOperation : Op → Bool
     .groupEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
     .makeProduct .. | .getProduct .. | .invoke .. |
-    .fold .. | .map .. | .branch .. | .loop .. | .loopCondition .. | .guard => true
+    .fold .. | .collect .. | .map .. | .branch .. | .loop .. | .loopCondition .. | .guard => true
   | .exec .. | .mark .. => false
 
 /-- The admitted declaration table is acyclic. Its size bounds the depth;

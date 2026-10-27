@@ -40,6 +40,7 @@ TOOLS = {
     "compiler": ("zkc-compile", "ZKC_CTEST_COMPILER", "."),
     "optimizer": ("zkc-opt", "ZKC_CTEST_OPTIMIZER", "."),
     "requirements_test": ("zkc-requirements-test", "ZKC_CTEST_REQUIREMENTS_TEST", "test"),
+    "resource_origin_sources": ("zkc-resource_origin_sources-test", "ZKC_CTEST_RESOURCE_ORIGIN_SOURCES", "test"),
 }
 
 

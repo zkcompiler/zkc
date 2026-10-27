@@ -50,12 +50,12 @@ theorem sums_expansion (table : Meanings F G) (xs : List F) (dimension columns :
 
 set_option backward.isDefEq.respectTransparency false in
 /-- The initial length can stop before the constructor or prefix. -/
-theorem checkTable_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
-    checkTableBody.denote (meaning F G table) (checkInputs xs point claim).get =
+theorem checkTable_expansion (table : Meanings F G) {bindings : MultilinearPrefixBodies.Bindings} (xs point : List F) (claim : F) :
+    (checkTableBody bindings).denote (meaning F G table) (checkInputs xs point claim).get =
       if point.length < indexLimit then
         (invoke table tableHelper (inputs xs point.length 1)).bind fun constructed =>
         (invoke table prefixHelper (constructed.append (.cons point .nil))).bind fun residual =>
-        (invoke table valuesRealizationHelper residual).bind fun values =>
+        (invoke table (MultilinearPrefixBodies.valuesRealizationHelper bindings.values) residual).bind fun values =>
         .done (boolResult (decide ((values.get .here).sum = claim)))
       else .halt .exhausted := by
   simp only [checkTableBody, checkInputs, inputs, boolResult, Region.denote, meaning,

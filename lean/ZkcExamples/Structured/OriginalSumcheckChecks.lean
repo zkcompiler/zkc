@@ -15,11 +15,18 @@ noncomputable section
 namespace ZkcExamples.Structured.OriginalSumcheckLibrary
 open Zkc.Source Zkc.Source.Structured
 
-structure TerminalBodies (definitions : List CheckedDefinition) : Prop where
-  first : MapFirstContracts.Bodies definitions
-  restriction : MapPrefixContracts.Bodies definitions
+structure TerminalImplementation (definitions : List CheckedDefinition)
+    (bindings : MultilinearPrefixBodies.Bindings) : Prop where
+  first : ∃ collectBindings, MapFirstContracts.Bodies definitions collectBindings
+  restriction : MapPrefixContracts.Bodies definitions bindings
   check : BodyIn definitions SumcheckHelperBodies.checkHelper SumcheckHelperBodies.checkBody
-  checkTable : BodyIn definitions SumcheckHelperBodies.checkTableHelper SumcheckHelperBodies.checkTableBody
+  checkTable : BodyIn definitions SumcheckHelperBodies.checkTableHelper
+    (SumcheckHelperBodies.checkTableBody bindings)
+
+/-- A coherent exact implementation exists in this source; private names do not
+escape into the protocol-level theorem's interface. -/
+def TerminalBodies (definitions : List CheckedDefinition) : Prop :=
+  ∃ bindings, TerminalImplementation definitions bindings
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -33,10 +40,12 @@ theorem check_terminal (payload : UnitPayload) (bodies : TerminalBodies payload.
       (SumcheckHelperLaws.checkInputs entries point claim) =
       .done (PrimitiveLibrary.boolResult (decide (PrimitiveLibrary.HasShape entries point.length 1 ∧
         (Zkc.Polynomial.Multilinear.restrictPrefixValues entries point).sum = claim))) := by
+  obtain ⟨bindings, bodies⟩ := bodies
+  obtain ⟨collectBindings, first⟩ := bodies.first
   rw [← (helpers_lift payload).closed, SumcheckVerifierHelpers.closed_invoke_plain]
   rw [(bodies.check.invoke payload.linked (SumcheckHelperLaws.checkInputs entries point claim)).trans
     (SumcheckHelperLaws.check_generic_body _
-      (MapPrefixContracts.laws_of_bodies payload.linked bodies.restriction bodies.first)
+      (MapPrefixContracts.laws_of_bodies payload.linked bodies.restriction first)
       (fun xs rs scalar => bodies.checkTable.invoke payload.linked
         (SumcheckHelperLaws.checkInputs xs rs scalar))
       entries point claim vectorBound pointBound)]

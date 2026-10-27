@@ -32,7 +32,7 @@ def checkTableIgnoreClaimBody : Region dialect [.vector "bls12-381.fr", .vector 
   .letOp (.mark "s6") .nil .nil <|
   .letOp (.invoke prefixHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
   .letOp (.mark "s8") .nil .nil <|
-  .letOp (.invoke valuesRealizationHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.invoke SumcheckSourceBodies.valuesRealizationHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "s9") .nil .nil <|
   .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons .here .nil) .nil <|
   .letOp (.mark "s11") .nil .nil <|
@@ -148,7 +148,7 @@ theorem check_ignore_claim_expansion (table : Meanings F G) (xs point : List F) 
       if point.length < indexLimit then
         (invoke table tableHelper (inputs xs point.length 1)).bind fun constructed =>
         (invoke table prefixHelper (constructed.append (.cons point .nil))).bind fun residual =>
-        (invoke table valuesRealizationHelper residual).bind fun values =>
+        (invoke table SumcheckSourceBodies.valuesRealizationHelper residual).bind fun values =>
         .done (boolResult (decide ((values.get .here).sum = (values.get .here).sum)))
       else .halt .exhausted := by
   simp only [checkTableIgnoreClaimBody, checkInputs, inputs, boolResult, Region.denote, meaning,

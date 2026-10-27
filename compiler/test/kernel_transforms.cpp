@@ -7,8 +7,12 @@
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "support/ProtocolDeployment.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -23,6 +27,8 @@ using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
 namespace {
+namespace sc = scopedComputation;
+namespace sf = scopedFinite;
 constexpr llvm::StringLiteral realization = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
@@ -30,10 +36,25 @@ module { "protocol.module"() ({
    %v = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %v : !F
  }
- local.realize @realized = @difference : (!F,!F)->!F
- local.func @work(%a:!F,%b:!F)->!F attributes {logical_origin=["work",[]]} {
-   %v = local.apply @realized(%a,%b) {site="difference"} : (!F,!F)->!F
-   local.return %v : !F
+ func.func @realized(%scope:!runtime.scope,%a:!F,%b:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["realized",[]]} {
+   %call = "exec.compute"(%scope,%a,%b) {callee=@difference,site="kernel"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
+ }
+ func.func @work(%scope:!runtime.scope,%a:!F,%b:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %call = "func.call"(%scope,%a,%b) {callee=@realized,runtime.site="difference"} : (!runtime.scope,!F,!F)->!exec.outcome<(!F)>
+   "exec.dispatch"(%call)[^done,^failed] : (!exec.outcome<(!F)>)->()
+ ^done(%value:!F):
+   %result = "exec.returned"(%value) : (!F)->!exec.outcome<(!F)>
+   func.return %result : !exec.outcome<(!F)>
+ ^failed(%stop:!exec.stop):
+   %failure = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(!F)>
+   func.return %failure : !exec.outcome<(!F)>
  }
  "protocol.func"() ({ ^entry(%a:!F,%b:!F):
    %v = "protocol.local_call"(%a,%b) {callee=@work,site="work",role="P"} : (!F,!F)->!F
@@ -77,17 +98,49 @@ void run(mlir::ModuleOp module, std::unique_ptr<Pass> pass) {
   manager.addPass(std::move(pass));
   require(succeeded(manager.run(module)), "compiler pass refused");
 }
-mlir::ModuleOp numericalUnit(mlir::ModuleOp module) {
-  auto units = owner(module).getBody().front().getOps<mlir::ModuleOp>();
-  require(!units.empty(), "missing logical numerical unit");
-  return *units.begin();
+exec::ComputeOp computation(mlir::ModuleOp module) {
+  exec::ComputeOp result;
+  module.walk([&](exec::ComputeOp call) {
+    if (!result)
+      result = call;
+  });
+  require(bool(result), "missing actual computation request");
+  return result;
 }
 func::FuncOp numericalEntry(mlir::ModuleOp module) {
-  return mathematical::getComputationEntry(numericalUnit(module));
+  SymbolTableCollection symbols;
+  auto result = computation(module).resolveCallee(symbols);
+  require(bool(result), "missing actual mathematical helper");
+  return result;
 }
-local::FuncOp localFunction(mlir::ModuleOp module, StringRef name) {
-  auto result = SymbolTable(owner(module)).lookup<local::FuncOp>(name);
-  require(bool(result), "missing Local function");
+mlir::ModuleOp numericalUnit(mlir::ModuleOp module) {
+  auto result = dyn_cast<mlir::ModuleOp>(numericalEntry(module)->getParentOp());
+  require(result && mathematical::isComputationUnit(result),
+          "expected a closed selected calculation");
+  return result;
+}
+func::FuncOp scopedFunction(mlir::ModuleOp module, StringRef name) {
+  auto result = SymbolTable(owner(module)).lookup<func::FuncOp>(name);
+  require(bool(result), "missing scoped function");
+  return result;
+}
+OwningOpRef<mlir::ModuleOp> close(func::FuncOp helper) {
+  uint64_t remaining = 1000000;
+  auto result = kernel::closeComputation(helper, remaining);
+  require(bool(result), "mathematical closure refused");
+  return result;
+}
+OwningOpRef<mlir::ModuleOp> closedFixture(mlir::ModuleOp source) {
+  auto result = copy(source);
+  auto call = computation(*result);
+  SymbolTableCollection symbols;
+  auto closure = close(call.resolveCallee(symbols));
+  auto entry = mathematical::getComputationEntry(*closure);
+  SymbolTable table(owner(*result));
+  auto name = table.insert(closure.release());
+  call.setCalleeAttr(SymbolRefAttr::get(
+      name, {FlatSymbolRefAttr::get(entry.getSymNameAttr())}));
+  require(succeeded(verify(*result)), "closed computation fixture refused");
   return result;
 }
 OwningOpRef<mlir::ModuleOp> fixture(MLIRContext &context, StringRef path) {
@@ -99,16 +152,18 @@ OwningOpRef<mlir::ModuleOp> fixture(MLIRContext &context, StringRef path) {
 void expectRefusal(mlir::ModuleOp candidate, StringRef code,
                    llvm::function_ref<LogicalResult()> check) {
   bool diagnostic = false;
+  std::string messages;
   ScopedDiagnosticHandler handler(
       candidate.getContext(), [&](Diagnostic &value) {
+        messages += value.str();
         diagnostic |= value.str().find(code.str()) != std::string::npos;
         return success();
       });
   require(failed(check()), "mutated correspondence was accepted");
-  require(diagnostic, "refusal lost its diagnostic identifier");
+  require(diagnostic, "refusal lost " + code + ": " + messages);
 }
-OwningOpRef<mlir::ModuleOp> exec(mlir::ModuleOp source,
-                                 MathematicalSelectionPolicy policy = {}) {
+OwningOpRef<mlir::ModuleOp>
+formExecutable(mlir::ModuleOp source, MathematicalSelectionPolicy policy = {}) {
   auto result = copy(source);
   run(*result, protocol::createProjectProtocolPass(false, policy));
   run(*result, protocol::createLowerMathPass(policy));
@@ -116,19 +171,25 @@ OwningOpRef<mlir::ModuleOp> exec(mlir::ModuleOp source,
           "lower-math did not produce Exec");
   return result;
 }
-local::CallOp appendReturns(local::FuncOp function, local::CallOp invocation,
-                            ValueRange values) {
-  auto returned = cast<local::ReturnOp>(function.getBody().front().back());
+protocol_ir::LocalCallOp appendReturns(func::FuncOp function,
+                                       protocol_ir::LocalCallOp invocation,
+                                       ValueRange values) {
+  auto returned = sc::returned(function);
   returned->insertOperands(returned.getNumOperands(), values);
-  SmallVector<Type> types(function.getResultTypes());
-  for (Value value : values)
-    types.push_back(value.getType());
+  auto outcome = exec::OutcomeType::get(
+      function.getContext(), llvm::to_vector(returned->getOperandTypes()));
+  returned.getOutcome().setType(outcome);
+  function.walk(
+      [&](exec::FailureOp failure) { failure.getResult().setType(outcome); });
   OpBuilder builder(invocation);
-  function.setFunctionType(builder.getFunctionType(
-      function.getBody().front().getArgumentTypes(), types));
-  auto replacement = local::CallOp::create(
-      builder, invocation.getLoc(), types, invocation.getInputs(),
-      invocation.getCalleeAttr(), invocation.getSiteAttr());
+  function.setFunctionType(
+      builder.getFunctionType(function.getArgumentTypes(), outcome));
+  OperationState state(invocation.getLoc(),
+                       protocol_ir::LocalCallOp::getOperationName());
+  state.addOperands(invocation.getInputs());
+  state.addTypes(outcome.getPayload());
+  state.addAttributes(invocation->getAttrs());
+  auto replacement = cast<protocol_ir::LocalCallOp>(builder.create(state));
   invocation->replaceAllUsesWith(
       replacement.getResults().take_front(invocation.getNumResults()));
   invocation.erase();
@@ -143,7 +204,7 @@ int main() {
   Cases cases;
   cases.run("direct Kernel recipe output retains the immutable source", [&] {
     auto original = parse(demanded, context);
-    auto logical = exec(*original);
+    auto logical = formExecutable(*original);
     auto unit = numericalUnit(*logical);
     auto entry = mathematical::getComputationEntry(unit);
     OpBuilder builder(&context);
@@ -160,13 +221,13 @@ int main() {
             "direct numerical recipe publication failed");
     auto executable = kernelRecipeOutput(*output);
     auto result =
-        SymbolTable(executable).lookup<local::FuncOp>(entry.getSymName());
+        SymbolTable(executable).lookup<func::FuncOp>(entry.getSymName());
     require(
-        result && result.getFunctionType() == entry.getFunctionType() &&
-            result->getAttrs().size() == 3 &&
-            !result->hasAttr("sym_visibility") &&
-            !result->hasAttr("data.preconditions") &&
-            result->getAttr("logical_origin") ==
+        result &&
+            protocol::scopedDataSignature(result) == entry.getFunctionType() &&
+            result->getAttrs().size() == 5 && result.isPrivate() &&
+            result.getNoInline() && !result->hasAttr("data.preconditions") &&
+            result->getAttr("runtime.origin") ==
                 builder.getArrayAttr({builder.getStringAttr(entry.getSymName()),
                                       builder.getArrayAttr({})}),
         "recipe entry did not preserve its executable interface");
@@ -178,20 +239,21 @@ int main() {
     for (StringRef mutation :
          {"return", "operand", "site", "interface", "declaration", "module",
           "owner-argument", "owner-operand", "owner-result", "module-argument",
-          "module-operand"}) {
+          "module-operand", "module-result"}) {
       auto changed = copy(*output);
       auto function = SymbolTable(kernelRecipeOutput(*changed))
-                          .lookup<local::FuncOp>(entry.getSymName());
-      auto &body = function.getBody().front();
+                          .lookup<func::FuncOp>(entry.getSymName());
+      auto returned = sc::returned(function);
+      auto calls = sf::applications(function);
       OpBuilder builder(&context);
       if (mutation == "return")
-        body.back().setOperand(0, body.back().getOperand(1));
+        returned->setOperand(0, returned->getOperand(1));
       else if (mutation == "operand")
-        body.front().setOperand(1, body.front().getOperand(0));
+        calls.front()->setOperand(2, calls.front().getInputs()[0]);
       else if (mutation == "site")
-        body.front().setAttr("site", builder.getStringAttr("other-call"));
+        calls.front()->setAttr("site", builder.getStringAttr("other-call"));
       else if (mutation == "interface")
-        function->setAttr("logical_origin",
+        function->setAttr("runtime.origin",
                           builder.getArrayAttr({builder.getStringAttr("extra"),
                                                 builder.getArrayAttr({})}));
       else if (mutation == "declaration") {
@@ -223,16 +285,19 @@ int main() {
                 "owner mutation did not change its structural arity");
       } else if (mutation == "module-argument")
         changed->getBody()->addArgument(builder.getI1Type(), entry.getLoc());
-      else if (mutation == "module-operand") {
+      else if (mutation == "module-operand" || mutation == "module-result") {
         OperationState state(changed->getLoc(), (*changed)->getName());
-        state.addOperands(function.getArguments()[0]);
+        if (mutation == "module-operand")
+          state.addOperands(function.getArguments()[0]);
+        else
+          state.addTypes(builder.getI1Type());
         state.addRegion();
         auto *replacement = Operation::create(state);
         replacement->getRegion(0).takeBody(changed->getBodyRegion());
         changed =
             OwningOpRef<mlir::ModuleOp>(cast<mlir::ModuleOp>(replacement));
-        require((*changed)->getNumOperands() == 1,
-                "module mutation did not add its operand");
+        require((*changed)->getNumOperands() + (*changed)->getNumResults() == 1,
+                "module mutation did not change its structural arity");
       } else
         (*changed)->setAttr("unexpected", builder.getUnitAttr());
       finite::VerificationResult outcome{finite::VerificationStatus::Verified,
@@ -275,14 +340,14 @@ module {
                 succeeded(kernel::verifyEntryRecipes(unit, *output, "square")),
             "unused caller prevented recipe publication");
     auto executable = kernelRecipeOutput(*output);
-    require(SymbolTable(executable).lookup<local::FuncOp>("square") &&
+    require(SymbolTable(executable).lookup<func::FuncOp>("square") &&
                 !SymbolTable(executable).lookup("unused_caller"),
             "source helper escaped into executable output");
     require(OperationEquivalence::isEquivalentTo(
                 *source, *before, OperationEquivalence::IgnoreLocations),
             "recipe production changed the unused caller or public entry");
   });
-  cases.run("identity recipe rejects an extra Local return attribute", [&] {
+  cases.run("identity recipe rejects an extra scoped return attribute", [&] {
     auto source = parse(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module {
@@ -304,12 +369,15 @@ module {
         "identity recipe publication failed");
     kernelRecipeOutput(*output);
     auto changed = copy(*output);
-    auto &body = localFunction(*changed, "identity").getBody().front();
-    require(llvm::hasSingleElement(body) && isa<local::ReturnOp>(body.back()),
+    auto result = scopedFunction(*changed, "identity");
+    auto returned = sc::returned(result);
+    require(result.getBody().hasOneBlock() &&
+                std::distance(result.front().begin(), result.front().end()) ==
+                    2,
             "identity fixture unexpectedly contains executable work");
-    body.back().setAttr("unexpected", UnitAttr::get(&context));
-    expectRefusal(*changed, "interactive-unknown-attribute",
-                  [&] { return kernel::verifyRecipeOutput(*changed); });
+    returned->setAttr("unexpected", UnitAttr::get(&context));
+    require(failed(kernel::verifyRecipeOutput(*changed)),
+            "malformed scoped recipe was admitted");
     expectRefusal(*changed, "mathematical-lowering-preservation", [&] {
       return kernel::verifyEntryRecipes(unit, *changed, "identity");
     });
@@ -349,10 +417,8 @@ module {
             "variant observation recipe publication failed");
     kernelRecipeOutput(*output);
     auto changed = copy(*output);
-    SmallVector<local::BoolConstantOp> constants;
-    localFunction(*changed, "present").walk([&](local::BoolConstantOp op) {
-      constants.push_back(op);
-    });
+    SmallVector<exec::BooleanOp> constants;
+    changed->walk([&](exec::BooleanOp op) { constants.push_back(op); });
     require(constants.size() == 2, "variant recipe lost its two alternatives");
     auto first = constants[0]->getAttrOfType<StringAttr>("site");
     auto second = constants[1]->getAttrOfType<StringAttr>("site");
@@ -362,8 +428,8 @@ module {
                 second.getValue().starts_with(prefix),
             "variant recipe did not generate distinct owned sites");
     constants[1]->setAttr("site", first);
-    expectRefusal(*changed, "interactive-site",
-                  [&] { return kernel::verifyRecipeOutput(*changed); });
+    require(failed(kernel::verifyRecipeOutput(*changed)),
+            "malformed scoped recipe was admitted");
     expectRefusal(*changed, "mathematical-lowering-preservation", [&] {
       return kernel::verifyEntryRecipes(*numerical, *changed, "presence");
     });
@@ -373,103 +439,92 @@ module {
                     *source, *original, OperationEquivalence::IgnoreLocations),
             "variant recipe production or checking changed its source");
   });
-  cases.run(
-      "Local realization owns mathematics through public Exec phase", [&] {
-        auto source = parse(realization, context);
-        auto prepared = copy(*source);
-        require(succeeded(mathematical::expandMathRealizations(*prepared)),
-                "formation failed");
-        auto wrapper = localFunction(*prepared, "realized");
-        require(isa<kernel::CallOp>(wrapper.getBody().front().front()),
-                "wrapper did not call Kernel");
-        require(succeeded(mathematical::verifyMathRealizationsPreserved(
-                    *source, *prepared)),
-                "actual helper/closure correspondence failed");
-        auto original =
-            SymbolTable(owner(*source)).lookup<func::FuncOp>("difference");
-        require(succeeded(kernel::verifyKernelClosure(
-                    owner(*source), original, numericalUnit(*prepared))),
-                "exact closure with entry rename failed");
-        auto logical = exec(*prepared, {false, false});
-        require(bool(numericalEntry(*logical)),
-                "Kernel did not survive projection/lower-math");
-        auto lowered = copy(*logical);
-        require(succeeded(kernel::lowerKernels(*lowered)),
-                "explicit lowering failed");
-        require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
-                "checked edge failed");
-        bool residual = false;
-        lowered->walk([&](Operation *op) {
-          residual |=
-              (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
-        });
-        require(!residual, "unresolved numerical code survived");
-        auto result = localFunction(*lowered, "realized");
-        auto site =
-            result.getBody().front().front().getAttrOfType<StringAttr>("site");
-        uint64_t bytes = 1024;
-        auto expected =
-            protocol::algorithmSite({{"kernel", "kernel"}}, "0", bytes);
-        require(expected && site && site.getValue() == *expected,
-                "normalized ordinal did not use the actual ordered call site");
-        require(result->getAttr("logical_origin") ==
-                    wrapper->getAttr("logical_origin"),
-                "logical origin changed");
-      });
-  cases.run("formation rejects same-type helper operand permutation", [&] {
+  cases.run("scoped computation owns its immutable mathematical closure", [&] {
     auto source = parse(realization, context);
-    auto candidate = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "formation failed");
-    auto &op = numericalEntry(*candidate).front().front();
+    auto prepared = closedFixture(*source);
+    auto wrapper = scopedFunction(*prepared, "realized");
+    require(isa<exec::ComputeOp>(wrapper.front().front()),
+            "wrapper lost its typed mathematical request");
+    auto original =
+        SymbolTable(owner(*source)).lookup<func::FuncOp>("difference");
+    require(succeeded(kernel::verifyKernelClosure(owner(*source), original,
+                                                  numericalUnit(*prepared))),
+            "exact closure with entry visibility change failed");
+    auto logical = formExecutable(*prepared, {false, false});
+    auto lowered = copy(*logical);
+    require(succeeded(kernel::lowerKernels(*lowered)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+            "scoped numerical edge failed");
+    bool residual = false;
+    lowered->walk([&](Operation *op) {
+      residual |=
+          mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op);
+    });
+    require(!residual, "unresolved numerical code survived");
+    auto result = scopedFunction(*lowered, "realized");
+    auto call = sf::application(result, "field.sub");
+    auto originalCall = cast<exec::ComputeOp>(
+        scopedFunction(*logical, "realized").front().front());
+    require(call.getSite() == kernelRecipeSite(originalCall.getSite(), 0),
+            "normalized ordinal lost the actual ordered call site");
+    require(result->getAttr("runtime.origin") ==
+                wrapper->getAttr("runtime.origin"),
+            "source origin changed");
+  });
+  cases.run("closure rejects same-type helper operand permutation", [&] {
+    auto source = parse(realization, context);
+    auto helper = numericalEntry(*source);
+    auto candidate = close(helper);
+    auto &op = mathematical::getComputationEntry(*candidate).front().front();
     auto first = op.getOperand(0);
     op.setOperand(0, op.getOperand(1));
     op.setOperand(1, first);
     require(succeeded(verify(*candidate)), "mutation malformed");
-    expectRefusal(*candidate, "local-realization-correspondence", [&] {
-      return mathematical::verifyMathRealizationsPreserved(*source, *candidate);
+    expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
+      return kernel::verifyKernelClosure(owner(*source), helper, *candidate);
     });
   });
-  cases.run("formation rejects wrapper capture permutation", [&] {
+  cases.run("lowering rejects a permuted original computation capture", [&] {
     auto source = parse(realization, context);
-    auto candidate = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "formation failed");
-    auto &call =
-        localFunction(*candidate, "realized").getBody().front().front();
-    auto first = call.getOperand(0);
-    call.setOperand(0, call.getOperand(1));
-    call.setOperand(1, first);
-    require(succeeded(verify(*candidate)), "mutation malformed");
-    expectRefusal(*candidate, "local-realization-correspondence", [&] {
-      return mathematical::verifyMathRealizationsPreserved(*source, *candidate);
+    auto logical = formExecutable(*source);
+    auto candidate = copy(*logical);
+    auto call = computation(*candidate);
+    auto first = call.getInputs()[0];
+    call->setOperand(1, call.getInputs()[1]);
+    call->setOperand(2, first);
+    require(succeeded(verify(*candidate)) &&
+                succeeded(kernel::lowerKernels(*candidate)),
+            "permuted candidate was not admitted and lowered");
+    expectRefusal(*candidate, "numerical-lowering-correspondence", [&] {
+      return kernel::verifyKernelLowering(*logical, *candidate);
     });
   });
   cases.run(
-      "actual Local recipe same-type operand permutation is refused", [&] {
+      "actual scoped recipe same-type operand permutation is refused", [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
-        auto &op =
-            localFunction(*lowered, "realized").getBody().front().front();
-        auto first = op.getOperand(0);
-        op.setOperand(0, op.getOperand(1));
-        op.setOperand(1, first);
+        auto op =
+            sf::application(scopedFunction(*lowered, "realized"), "field.sub");
+        auto first = op.getInputs()[0];
+        op->setOperand(1, op.getInputs()[1]);
+        op->setOperand(2, first);
         require(succeeded(verify(*lowered)), "mutation malformed");
-        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+        expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
           return kernel::verifyKernelLowering(*logical, *lowered);
         });
       });
   cases.run("independent lowering rejects a changed numerical root site", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto lowered = copy(*logical);
     require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
-    auto &op = localFunction(*lowered, "realized").getBody().front().front();
-    op.setAttr("site", StringAttr::get(&context, "kernel"));
+    auto op =
+        sf::application(scopedFunction(*lowered, "realized"), "field.sub");
+    op->setAttr("site", StringAttr::get(&context, "kernel"));
     require(succeeded(verify(*lowered)), "mutation malformed");
-    expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+    expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
       return kernel::verifyKernelLowering(*logical, *lowered);
     });
   });
@@ -504,11 +559,11 @@ module {
     run(*logical, protocol::createLowerMathPass());
     bool partial = false;
     numericalUnit(*logical).walk([&](Operation *op) {
-      partial |= isa<local::StopOp, local::GuardOp, local::LocalIfOp>(op);
+      partial |= isa<exec::RejectOp, exec::TestOp>(op);
     });
     require(!partial, "partial control entered numerical unit");
-    local::StopOp stop;
-    logical->walk([&](local::StopOp op) {
+    exec::RejectOp stop;
+    logical->walk([&](exec::RejectOp op) {
       if (op.getSite() == "check")
         stop = op;
     });
@@ -527,7 +582,7 @@ module {
           "finite/total-predicate.mlir"})
       cases.run(Twine(optimize ? "optimized " : "ordered ") + name, [&] {
         auto source = fixture(context, name);
-        auto logical = exec(*source, {optimize, false});
+        auto logical = formExecutable(*source, {optimize, false});
         auto entry = numericalEntry(*logical);
         require(
             entry.front().front().getName().getStringRef().contains("finite"),
@@ -537,7 +592,7 @@ module {
         require(succeeded(kernel::lowerKernels(*lowered, {!optimize, false})),
                 "finite lowering failed");
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
-                "finite logical-to-Local check failed");
+                "finite logical-to-scoped check failed");
       });
   for (bool optimize : {false, true})
     cases.run(
@@ -546,12 +601,16 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source, {optimize, false});
+          auto logical = formExecutable(*source, {optimize, false});
+          logical->walk([&](exec::ComputeOp call) {
+            call->setAttr("policy", Builder(&context).getBoolArrayAttr(
+                                        {optimize, false, false}));
+          });
           auto lowered = copy(*logical);
           require(succeeded(kernel::lowerKernels(*lowered, {!optimize, false})),
                   "finite policy lowering failed");
           bool loop = false;
-          lowered->walk([&](local::LocalForOp) { loop = true; });
+          lowered->walk([&](exec::RangeOp) { loop = true; });
           require(loop == !optimize,
                   "fallback policy replaced retained per-call policy");
         });
@@ -574,29 +633,32 @@ module {
         builder.create(product);
         require(succeeded(verify(*source)),
                 "unused product source not admitted");
-        auto logical = exec(*source, {true, false});
+        auto logical = formExecutable(*source, {true, false});
         auto bulk = copy(*logical);
         require(succeeded(kernel::lowerKernels(*bulk)), "bulk control failed");
         unsigned admissionLoops = 0, traversals = 0;
         bool reduction = false;
-        bulk->walk([&](local::LocalForOp loop) {
-          if (loop.getNumResults())
-            ++traversals;
-          else
-            ++admissionLoops;
-        });
-        bulk->walk([&](local::OperationBindingOp binding) {
+        auto closure = take(protocol::readSourceExecutionClosure(owner(*bulk)));
+        for (const auto &[name, steps] : closure.bodies)
+          for (const auto &step : steps)
+            if (isa<exec::RangeOp>(step.operation)) {
+              if (step.outputs.empty())
+                ++admissionLoops;
+              else
+                ++traversals;
+            }
+        bulk->walk([&](runtime::BindingOp binding) {
           reduction |= binding.getContract() == "vector.sum";
         });
         require(
             admissionLoops && !traversals && reduction,
             "control lacks bulk reduction beside mandatory admission loops");
-        logical->walk([&](kernel::CallOp call) {
+        logical->walk([&](exec::ComputeOp call) {
           call->setAttr("policy",
                         builder.getBoolArrayAttr({false, false, false}));
         });
         require(succeeded(verify(*logical)), "disabled source not admitted");
-        expectRefusal(*bulk, "kernel-lowering-correspondence", [&] {
+        expectRefusal(*bulk, "numerical-lowering-correspondence", [&] {
           return kernel::verifyKernelLowering(*logical, *bulk);
         });
         auto ordered = copy(*logical);
@@ -611,9 +673,9 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source);
+          auto logical = formExecutable(*source);
           logical->walk(
-              [](kernel::CallOp call) { call->removeAttr("policy"); });
+              [](exec::ComputeOp call) { call->removeAttr("policy"); });
           auto lowered = copy(*logical);
           MathematicalSelectionPolicy policy{optimize, false};
           require(succeeded(kernel::lowerKernels(*lowered, policy)) &&
@@ -621,24 +683,25 @@ module {
                                                              policy)),
                   "fallback policy was not shared with verification");
           bool loop = false;
-          lowered->walk([&](local::LocalForOp) { loop = true; });
+          lowered->walk([&](exec::RangeOp) { loop = true; });
           require(loop == !optimize, "omitted policy ignored lowering request");
         });
   cases.run(
       "isolated units resolve identical private names independently", [&] {
         auto source =
             fixture(context, "structured-source/realization-finite.mlir");
-        auto logical = exec(*source, {false, false});
+        auto closed = closedFixture(*source);
+        auto logical = formExecutable(*closed, {false, false});
         OpBuilder builder(numericalUnit(*logical));
         auto second = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
         SymbolTable::setSymbolName(second, "second_numerical");
-        auto wrapper = localFunction(*logical, "realized");
+        auto wrapper = scopedFunction(*logical, "realized");
         builder.setInsertionPoint(wrapper);
         auto secondWrapper =
-            cast<local::FuncOp>(builder.clone(*wrapper.getOperation()));
+            cast<func::FuncOp>(builder.clone(*wrapper.getOperation()));
         SymbolTable::setSymbolName(secondWrapper, "second_realized");
-        secondWrapper.walk([&](kernel::CallOp call) {
+        secondWrapper.walk([&](exec::ComputeOp call) {
           auto reference = call.getCallee();
           call->setAttr("callee",
                         SymbolRefAttr::get(&context, "second_numerical",
@@ -660,10 +723,8 @@ module {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "isolated closure correspondence failed");
         bool addition = false, subtraction = false;
-        for (auto binding : owner(*lowered)
-                                .getBody()
-                                .front()
-                                .getOps<local::OperationBindingOp>()) {
+        for (auto binding :
+             owner(*lowered).getBody().front().getOps<runtime::BindingOp>()) {
           addition |= binding.getContract() == "field.add";
           subtraction |= binding.getContract() == "field.sub";
         }
@@ -676,10 +737,9 @@ module {
       [&] {
         auto source =
             fixture(context, "structured-source/realization-finite.mlir");
-        auto candidate = copy(*source);
-        require(succeeded(mathematical::expandMathRealizations(*candidate)),
-                "formation failed");
-        auto unit = numericalUnit(*candidate);
+        auto helper = numericalEntry(*source);
+        auto candidate = close(helper);
+        auto unit = *candidate;
         auto domain = *unit.getBody()->getOps<data::DomainOp>().begin();
         auto oldName = SymbolTable::getSymbolName(domain);
         SymbolTable::setSymbolName(domain, "other_items");
@@ -691,27 +751,25 @@ module {
         });
         require(succeeded(verify(*candidate)), "nominal mutation malformed");
         expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
-          return mathematical::verifyMathRealizationsPreserved(*source,
-                                                               *candidate);
+          return kernel::verifyKernelClosure(owner(*source), helper,
+                                             *candidate);
         });
       });
   cases.run("finite closure checks actual callback computation", [&] {
     auto source = fixture(context, "structured-source/realization-finite.mlir");
-    auto candidate = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "formation failed");
-    auto step =
-        SymbolTable(numericalUnit(*candidate)).lookup<func::FuncOp>("step");
+    auto helper = numericalEntry(*source);
+    auto candidate = close(helper);
+    auto step = SymbolTable(*candidate).lookup<func::FuncOp>("step");
     step.front().back().setOperand(0, step.getArgument(0));
     require(succeeded(verify(*candidate)), "callback mutation malformed");
     expectRefusal(*candidate, "kernel-closure-correspondence", [&] {
-      return mathematical::verifyMathRealizationsPreserved(*source, *candidate);
+      return kernel::verifyKernelClosure(owner(*source), helper, *candidate);
     });
   });
   cases.run(
       "checked polynomial math stays numerical until explicit lowering", [&] {
         auto source = fixture(context, "mathematical/helper-realization.mlir");
-        auto logical = exec(*source, {false, false});
+        auto logical = formExecutable(*source, {false, false});
         require(bool(numericalEntry(*logical)),
                 "polynomial realization did not form a unit");
         auto lowered = copy(*logical);
@@ -723,7 +781,8 @@ module {
   cases.run(
       "dormant owned units are checked and removed without execution", [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto closed = closedFixture(*source);
+        auto logical = formExecutable(*closed);
         OpBuilder builder(numericalUnit(*logical));
         auto dormant = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
@@ -745,7 +804,7 @@ module {
       });
   cases.run("exact readback expands authored standard helper calls", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto entry = numericalEntry(*logical);
     OpBuilder builder(entry);
     auto helper = cast<func::FuncOp>(builder.clone(*entry.getOperation()));
@@ -768,7 +827,7 @@ module {
       "raw authored polynomial entry lowers through checked normalization",
       [&] {
         auto source = fixture(context, "mathematical/helper-realization.mlir");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto original =
             SymbolTable(owner(*source)).lookup<func::FuncOp>("polynomial");
         auto entry = numericalEntry(*logical);
@@ -788,74 +847,73 @@ module {
                     OperationEquivalence::IgnoreLocations),
                 "lowering changed its immutable original source root");
       });
-  cases.run("repeated staged Local expansion distinguishes ordered calls", [&] {
-    std::string text = realization.str();
-    auto position = text.find("   local.return %v : !F");
-    require(position != std::string::npos, "missing repeated-use insertion");
-    text.insert(position, "   %again = local.apply @realized(%b,%a) "
-                          "{site=\"again\"} : (!F,!F)->!F\n");
-    auto source = parse(text, context);
-    require(succeeded(mathematical::expandMathRealizations(*source)),
-            "formation failed");
-    protocol::AlgorithmExpansionState state;
-    require(succeeded(protocol::expandAlgorithms(
-                *source, protocol::AlgorithmExpansionPhase::RetainMaps, state)),
-            "retaining algorithms failed");
-    auto before = copy(*source);
-    auto beforeState = state;
-    std::vector<protocol::AlgorithmOrigin> origins;
-    require(succeeded(protocol::expandAlgorithms(
-                *source, protocol::AlgorithmExpansionPhase::Finish, state,
-                &origins)),
-            "finishing algorithms failed");
-    require(succeeded(protocol::verifyStagedAlgorithmExpansionPreserved(
-                *before, *source, protocol::AlgorithmExpansionPhase::Finish,
-                beforeState, state)),
-            "independent algorithm correspondence failed");
-    auto work = localFunction(*source, "work");
-    llvm::StringSet<> invocationSites;
-    unsigned count = 0;
-    work.walk([&](kernel::CallOp call) {
-      require(!call->hasAttr("occurrences"),
-              "retired constituent evidence survived");
-      require(invocationSites.insert(call.getSite()).second,
-              "repeated invocation collapsed ordered call identity");
-      require(llvm::any_of(origins,
-                           [&](const auto &origin) {
-                             return origin.function == "work" &&
-                                    origin.site == call.getSite() &&
-                                    origin.originalSite == "kernel" &&
-                                    !origin.path.empty();
-                           }),
-              "ordered call lost original provenance");
-      ++count;
-    });
-    require(count == 2, "repeated calls lost numerical work");
-    auto logical = exec(*source);
-    auto lowered = copy(*logical);
-    require(succeeded(kernel::lowerKernels(*lowered)),
-            "repeated call realization failed");
-    require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
-            "repeated call checked edge failed");
-  });
+  cases.run(
+      "scoped helper expansion distinguishes repeated ordered calls", [&] {
+        auto source = parse(realization, context);
+        auto wrapper = scopedFunction(*source, "work");
+        auto *again =
+            sc::duplicateInvocation(&wrapper.front().front(), wrapper, "again");
+        again->removeAttr("site");
+        again->setAttr("runtime.site", StringAttr::get(&context, "again"));
+        auto first = again->getOperand(1);
+        again->setOperand(1, again->getOperand(2));
+        again->setOperand(2, first);
+        require(succeeded(verify(*source)), "repeated scoped source refused");
+        std::vector<protocol::AlgorithmOrigin> origins;
+        auto expanded = protocol::expandScopedHelpers(*source, &origins);
+        require(bool(expanded) &&
+                    succeeded(protocol::verifyScopedHelperExpansionPreserved(
+                        *source, *expanded)),
+                "independent scoped substitution failed");
+        auto repeated = protocol::expandScopedHelpers(*expanded);
+        require(bool(repeated) &&
+                    succeeded(protocol::verifyScopedHelperExpansionPreserved(
+                        *expanded, *repeated)),
+                "repeated preparation changed expanded calls");
+        auto work = scopedFunction(*expanded, "work");
+        llvm::StringSet<> invocationSites;
+        unsigned count = 0;
+        work.walk([&](exec::ComputeOp call) {
+          require(!call->hasAttr("occurrences"),
+                  "retired constituent evidence survived");
+          require(invocationSites.insert(call.getSite()).second,
+                  "repeated invocation collapsed ordered call identity");
+          require(llvm::any_of(origins,
+                               [&](const auto &origin) {
+                                 return origin.function == "work" &&
+                                        origin.site == call.getSite() &&
+                                        origin.originalSite == "kernel" &&
+                                        !origin.path.empty();
+                               }),
+                  "ordered call lost original provenance");
+          ++count;
+        });
+        require(count == 2, "repeated calls lost numerical work");
+        auto logical = formExecutable(*expanded);
+        auto lowered = copy(*logical);
+        require(succeeded(kernel::lowerKernels(*lowered)),
+                "repeated call realization failed");
+        require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                "repeated call checked edge failed");
+      });
   cases.run(
       "fixed opaque binding survives and cannot be silently repinned", [&] {
         std::string text = realization.str();
         text.insert(text.find(" func.func private"), R"mlir(
-      "local.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+      "runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
     )mlir");
         auto source = parse(text, context);
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "pinned context prevented lowering");
-        auto pinned = SymbolTable(owner(*lowered))
-                          .lookup<local::OperationBindingOp>("pinned");
+        auto pinned =
+            SymbolTable(owner(*lowered)).lookup<runtime::BindingOp>("pinned");
         require(pinned.getImplementation() == "arkworks-msb/poly.fold",
                 "pin changed during numerical lowering");
         pinned->setAttr("implementation", StringAttr::get(&context, ""));
         require(succeeded(verify(*lowered)), "repinned context malformed");
-        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+        expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
           return kernel::verifyKernelLowering(*logical, *lowered);
         });
       });
@@ -864,9 +922,7 @@ module {
       "projection",
       [&] {
         auto source = fixture(context, "kernel/mixed-helper.mlir");
-        auto prepared = copy(*source);
-        require(succeeded(mathematical::expandMathRealizations(*prepared)),
-                "raw formation failed");
+        auto prepared = closedFixture(*source);
         auto unit = numericalUnit(*prepared);
         auto mixed = SymbolTable(unit).lookup<func::FuncOp>("mixed");
         auto original =
@@ -877,7 +933,7 @@ module {
                 "formation replaced the original helper body");
         require(isa<func::CallOp>(numericalEntry(*prepared).front().front()),
                 "formation expanded the raw helper call");
-        auto logical = exec(*prepared);
+        auto logical = formExecutable(*prepared);
         require(isa<func::CallOp>(numericalEntry(*logical).front().front()),
                 "projection erased the raw helper call");
         auto lowered = copy(*logical);
@@ -885,13 +941,13 @@ module {
                 "mixed helper lowering failed");
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "mixed helper coordinates failed correspondence");
-        auto result = localFunction(*lowered, "realized");
-        auto returned = cast<local::ReturnOp>(result.getBody().front().back());
+        auto result = scopedFunction(*lowered, "realized");
+        auto returned = sc::returned(result);
         auto first = returned.getOperand(0);
         returned.setOperand(0, returned.getOperand(2));
         returned.setOperand(2, first);
         require(succeeded(verify(*lowered)), "mixed result mutation malformed");
-        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+        expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
           return kernel::verifyKernelLowering(*logical, *lowered);
         });
       });
@@ -921,14 +977,19 @@ module {
           require(bool(normalized), "shared normalization frontier refused");
           unsigned extraInputs = 0, extraOutputs = 0;
           for (auto function :
-               owner(*normalized).getBody().front().getOps<local::FuncOp>()) {
+               owner(*normalized).getBody().front().getOps<func::FuncOp>()) {
+            if (!protocol::isScopedExecutionFunction(function) ||
+                function->hasAttr("runtime.region"))
+              continue;
             auto before = SymbolTable(owner(*logical))
-                              .lookup<local::FuncOp>(function.getSymName());
+                              .lookup<func::FuncOp>(function.getSymName());
             require(bool(before),
-                    "normalization added an unrelated Local function");
+                    "normalization added an unrelated scoped function");
             extraInputs +=
                 function.getNumArguments() - before.getNumArguments();
-            extraOutputs += function.getNumResults() - before.getNumResults();
+            extraOutputs +=
+                protocol::scopedDataSignature(function).getNumResults() -
+                protocol::scopedDataSignature(before).getNumResults();
           }
           require(extraInputs && extraOutputs,
                   "shared coefficients were recomputed instead of exported");
@@ -937,12 +998,13 @@ module {
                   "shared frontier recipe lowering failed");
           require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                   "shared frontier actual candidate failed correspondence");
-          local::CallOp consumer;
+          protocol_ir::LocalCallOp consumer;
           lowered->walk([&](protocol_ir::ParticipantOp participant) {
-            participant.walk([&](local::CallOp call) {
+            participant.walk([&](protocol_ir::LocalCallOp call) {
               auto before = SymbolTable(owner(*logical))
-                                .lookup<local::FuncOp>(call.getCallee());
-              if (before && call.getNumOperands() > before.getNumArguments())
+                                .lookup<func::FuncOp>(call.getCallee());
+              if (before &&
+                  call.getNumOperands() + 1 > before.getNumArguments())
                 consumer = call;
             });
           });
@@ -958,7 +1020,7 @@ module {
           require(changed, "frontier fixture has no same-typed mutation");
           require(succeeded(verify(*lowered)),
                   "frontier coordinate mutation malformed");
-          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+          expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
             return kernel::verifyKernelLowering(*logical, *lowered);
           });
         });
@@ -994,11 +1056,16 @@ module {
   cases.run(
       "mixed helper concrete work is not replayed across action cuts", [&] {
         auto source = fixture(context, "kernel/mixed-helper-cuts.mlir");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         unsigned differences = 0;
-        logical->walk([&](Operation *op) {
-          differences +=
-              op->getName().getStringRef() == "algebra.field_subtract";
+        uint64_t remaining = 1000000;
+        SymbolTableCollection symbols;
+        logical->walk([&](exec::ComputeOp call) {
+          auto helper = call.resolveCallee(symbols);
+          auto body =
+              kernel::exactReadback(helper, helper->getParentOp(), remaining);
+          require(bool(body), "actual computation closure did not read back");
+          body->walk([&](algebra::SubtractFieldOp) { ++differences; });
         });
         require(differences == 1,
                 "mixed helper replayed an already concrete dependency");
@@ -1012,27 +1079,25 @@ module {
       "authored forwarding wrapper is admitted before and after projection",
       [&] {
         auto source = parse(realization, context);
-        require(succeeded(mathematical::expandMathRealizations(*source)),
-                "authored numerical wrapper formation failed");
-        auto function = localFunction(*source, "realized");
-        function.getBody().front().back().setOperand(0,
-                                                     function.getArgument(1));
+        require(succeeded(verify(*source)), "authored scoped wrapper refused");
+        auto function = scopedFunction(*source, "realized");
+        sc::returned(function)->setOperand(0, function.getArgument(2));
         require(succeeded(verify(*source)),
-                "original profile refused a forwarding Local return");
+                "original profile refused a forwarding scoped return");
         auto normalized = kernel::prepareKernelLowering(*source);
         require(bool(normalized) && succeeded(verify(*normalized)),
                 "original forwarding wrapper normalization failed");
-        auto logical = exec(*source);
+        auto logical = formExecutable(*source);
         require(succeeded(verify(*logical)),
                 "projected authored forwarding wrapper was refused");
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)) &&
                     succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "authored forwarding wrapper lost correspondence");
-        auto actual = localFunction(*lowered, "realized");
+        auto actual = scopedFunction(*lowered, "realized");
         require(actual.getFunctionType() == function.getFunctionType() &&
-                    actual.getBody().front().back().getOperand(0) ==
-                        actual.getArgument(1),
+                    sc::returned(actual)->getOperand(0) ==
+                        actual.getArgument(2),
                 "authored forwarding interface changed");
       });
   for (StringRef wiring : {"identity", "permuted", "duplicated"})
@@ -1041,17 +1106,18 @@ module {
             " numerical inputs",
         [&] {
           auto source = fixture(context, "kernel/shared-polynomial.mlir");
-          auto logical = exec(*source);
-          SmallVector<local::CallOp> invocations;
+          auto logical = formExecutable(*source);
+          SmallVector<protocol_ir::LocalCallOp> invocations;
           logical->walk([&](protocol_ir::ParticipantOp participant) {
-            participant.walk(
-                [&](local::CallOp call) { invocations.push_back(call); });
+            participant.walk([&](protocol_ir::LocalCallOp call) {
+              invocations.push_back(call);
+            });
           });
           require(invocations.size() == 2,
                   "shared fixture no longer has two calculation cuts");
-          auto first = localFunction(*logical, invocations[0].getCallee());
-          auto second = localFunction(*logical, invocations[1].getCallee());
-          auto call = cast<kernel::CallOp>(first.getBody().front().front());
+          auto first = scopedFunction(*logical, invocations[0].getCallee());
+          auto second = scopedFunction(*logical, invocations[1].getCallee());
+          auto call = cast<exec::ComputeOp>(first.getBody().front().front());
           if (wiring != "identity") {
             bool changed = false;
             for (unsigned i = 0; i < call.getNumOperands() && !changed; ++i)
@@ -1067,24 +1133,30 @@ module {
                 }
             require(changed, "fixture has no matching numerical inputs");
           }
-          unsigned firstResults = first.getNumResults();
-          SmallVector<Value> forwarded(first.getArguments());
-          forwarded.push_back(first.getArgument(0));
-          forwarded.push_back(call.getResult(0));
-          forwarded.push_back(call.getResult(0));
+          unsigned firstResults =
+              protocol::scopedDataSignature(first).getNumResults();
+          SmallVector<Value> forwarded(first.getArguments().drop_front());
+          forwarded.push_back(first.getArgument(1));
+          forwarded.push_back(sc::payload(call).front());
+          forwarded.push_back(sc::payload(call).front());
           invocations[0] = appendReturns(first, invocations[0], forwarded);
           // This original wrapper port imports an earlier forwarding
           // alias without passing it to the Kernel at all. Kernel and
           // wrapper argument coordinates must therefore stay separate.
           auto alias = invocations[0].getResult(firstResults);
-          auto argument = second.getBody().front().addArgument(alias.getType(),
-                                                               alias.getLoc());
+          auto inputPosition = second.getNumArguments();
+          require(succeeded(
+                      second.insertArgument(inputPosition, alias.getType(),
+                                            DictionaryAttr{}, alias.getLoc())),
+                  "cannot append forwarded input");
+          auto argument = second.getArgument(inputPosition);
           invocations[1]->insertOperands(invocations[1].getNumOperands(),
                                          alias);
-          unsigned secondResults = second.getNumResults();
+          unsigned secondResults =
+              protocol::scopedDataSignature(second).getNumResults();
           invocations[1] = appendReturns(
               second, invocations[1],
-              ValueRange{argument, argument, second.getArgument(0)});
+              ValueRange{argument, argument, second.getArgument(1)});
           require(succeeded(verify(*logical)),
                   "projected profile refused genuine forwarding ports");
           auto snapshot = copy(*logical);
@@ -1095,34 +1167,33 @@ module {
               OperationEquivalence::isEquivalentTo(
                   *logical, *snapshot, OperationEquivalence::IgnoreLocations),
               "frontier preparation changed the admitted source");
-          auto actualFirst = localFunction(*normalized, first.getSymName());
-          auto actualSecond = localFunction(*normalized, second.getSymName());
-          auto returned =
-              cast<local::ReturnOp>(actualFirst.getBody().front().back());
-          for (auto [index, input] :
-               llvm::enumerate(actualFirst.getArguments().take_front(
-                   first.getNumArguments())))
+          auto actualFirst = scopedFunction(*normalized, first.getSymName());
+          auto actualSecond = scopedFunction(*normalized, second.getSymName());
+          auto returned = sc::returned(actualFirst);
+          for (auto [index, input] : llvm::enumerate(
+                   actualFirst.getArguments().drop_front().take_front(
+                       first.getNumArguments() - 1)))
             require(returned.getOperand(firstResults + index) == input,
                     "original forwarding coordinate changed");
-          require(returned.getOperand(firstResults + first.getNumArguments()) ==
-                          actualFirst.getArgument(0) &&
+          require(
+              returned.getOperand(firstResults + first.getNumArguments() - 1) ==
+                      actualFirst.getArgument(1) &&
+                  returned.getOperand(firstResults + first.getNumArguments()) ==
                       returned.getOperand(firstResults +
-                                          first.getNumArguments() + 1) ==
-                          returned.getOperand(firstResults +
-                                              first.getNumArguments() + 2),
-                  "duplicate original return aliases diverged");
-          returned =
-              cast<local::ReturnOp>(actualSecond.getBody().front().back());
+                                          first.getNumArguments() + 1),
+              "duplicate original return aliases diverged");
+          returned = sc::returned(actualSecond);
           require(returned.getOperand(secondResults) ==
                           actualSecond.getArgument(argument.getArgNumber()) &&
                       returned.getOperand(secondResults + 1) ==
                           returned.getOperand(secondResults),
                   "earlier imported forwarding aliases changed");
           if (wiring == "identity")
-            require(actualFirst.getNumResults() > first.getNumResults() &&
-                        actualSecond.getNumArguments() >
-                            second.getNumArguments(),
-                    "forwarding fixture did not exercise frontier exports");
+            require(
+                protocol::scopedDataSignature(actualFirst).getNumResults() >
+                        protocol::scopedDataSignature(first).getNumResults() &&
+                    actualSecond.getNumArguments() > second.getNumArguments(),
+                "forwarding fixture did not exercise frontier exports");
           auto lowered = copy(*logical);
           require(
               succeeded(kernel::lowerKernels(*lowered)) &&
@@ -1130,47 +1201,48 @@ module {
               "forwarding frontier recipe correspondence failed");
           // A same-typed return mutation remains profile-admitted but
           // must fail exact original-coordinate correspondence.
-          auto changed = localFunction(*lowered, first.getSymName());
+          auto changed = scopedFunction(*lowered, first.getSymName());
           bool mutated = false;
-          for (Value input : changed.getArguments().drop_front())
-            if (input.getType() == changed.getArgument(0).getType()) {
-              changed.getBody().front().back().setOperand(firstResults, input);
+          for (Value input : changed.getArguments().drop_front(2))
+            if (input.getType() == changed.getArgument(1).getType()) {
+              sc::returned(changed)->setOperand(firstResults, input);
               mutated = true;
               break;
             }
           require(mutated && succeeded(verify(*lowered)),
                   "forwarding coordinate mutation malformed");
-          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+          expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
             return kernel::verifyKernelLowering(*logical, *lowered);
           });
         });
-  for (unsigned ports : {1u, 2u, 3u})
+  for (unsigned flags : {1u, 2u, 3u})
     cases.run(
-        "standard call metadata survives concrete port growth " + Twine(ports),
+        "computation policy survives concrete port growth " + Twine(flags),
         [&] {
           auto source = fixture(context, "kernel/shared-polynomial.mlir");
-          auto logical = exec(*source);
-          logical->walk([&](kernel::CallOp call) {
-            auto empty = DictionaryAttr::get(&context);
-            if (ports & 1)
-              call.setArgAttrsAttr(ArrayAttr::get(
-                  &context,
-                  SmallVector<Attribute>(call.getNumOperands(), empty)));
-            if (ports & 2)
-              call.setResAttrsAttr(ArrayAttr::get(
-                  &context,
-                  SmallVector<Attribute>(call.getNumResults(), empty)));
-          });
+          auto logical = formExecutable(*source);
+          Builder builder(&context);
+          auto policy = builder.getBoolArrayAttr(
+              {bool(flags & 1), bool(flags & 2), false});
+          logical->walk(
+              [&](exec::ComputeOp call) { call->setAttr("policy", policy); });
           require(succeeded(verify(*logical)),
-                  "standard empty call metadata was refused");
+                  "retained policy source refused");
           auto normalized = kernel::prepareKernelLowering(*logical);
           require(bool(normalized) && succeeded(verify(*normalized)),
-                  "port growth invalidated standard call metadata");
+                  "policy prevented port growth");
+          unsigned count = 0;
+          normalized->walk([&](exec::ComputeOp call) {
+            ++count;
+            require(call.getPolicyAttr() == policy,
+                    "port growth changed retained policy");
+          });
+          require(count == 2, "policy fixture lost its computation cuts");
           auto lowered = copy(*logical);
-          require(succeeded(kernel::lowerKernels(*lowered)),
-                  "standard metadata prevented numerical realization");
-          require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
-                  "standard metadata lost checked correspondence");
+          require(
+              succeeded(kernel::lowerKernels(*lowered)) &&
+                  succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+              "retained policy lost checked realization");
         });
   cases.run("descriptor operands cannot change across reconstructed cuts", [&] {
     auto source = fixture(context, "kernel/shared-polynomial.mlir");
@@ -1239,19 +1311,14 @@ module {
             parse(take(language::emitOriginal(closed, context)), context);
         take(language::compareOriginal(closed, *original));
         auto prepared = copy(*original);
-        require(succeeded(mathematical::expandMathRealizations(*prepared)),
-                "source realization formation failed");
+        auto closure = close(numericalEntry(*prepared));
         bool polynomial = false;
-        prepared->walk([&](mlir::ModuleOp unit) {
-          if (!mathematical::isComputationUnit(unit))
-            return;
-          unit.walk([&](Operation *op) {
-            polynomial |= op->getName().getDialectNamespace() == "poly";
-          });
+        closure->walk([&](Operation *op) {
+          polynomial |= op->getName().getDialectNamespace() == "poly";
         });
         require(polynomial, "original-source polynomial helper was normalized "
                             "before formation");
-        auto logical = exec(*prepared);
+        auto logical = formExecutable(*prepared);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "original-source raw Kernel failed");
@@ -1265,64 +1332,57 @@ module {
         [&] {
           auto source =
               fixture(context, "structured-source/realization-finite.mlir");
-          auto logical = exec(*source, {true, false});
+          auto logical = formExecutable(*source, {true, false});
           auto lowered = copy(*logical);
           require(succeeded(kernel::lowerKernels(*lowered)),
                   "bulk fixture failed");
-          logical->walk([&](kernel::CallOp call) {
+          logical->walk([&](exec::ComputeOp call) {
             Builder builder(call.getContext());
             call->setAttr("policy", builder.getBoolArrayAttr(
                                         {false, false, collectFoldFusion}));
           });
           require(succeeded(verify(*logical)), "policy mutation malformed");
-          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+          expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
             return kernel::verifyKernelLowering(*logical, *lowered);
           });
         });
   cases.run("empty helper premises remain part of the immutable closure", [&] {
     auto source = fixture(context, "structured-source/realization-finite.mlir");
-    auto prepared = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*prepared)),
-            "formation failed");
-    auto helper =
-        SymbolTable(numericalUnit(*prepared)).lookup<func::FuncOp>("step");
+    auto original = numericalEntry(*source);
+    auto prepared = close(original);
+    auto helper = SymbolTable(*prepared).lookup<func::FuncOp>("step");
     helper->setAttr("data.preconditions", ArrayAttr::get(&context, {}));
     require(succeeded(verify(*prepared)), "premise mutation malformed");
     expectRefusal(*prepared, "kernel-closure-correspondence", [&] {
-      return mathematical::verifyMathRealizationsPreserved(*source, *prepared);
+      return kernel::verifyKernelClosure(owner(*source), original, *prepared);
     });
   });
   cases.run("an extra concrete recipe cannot be replayed", [&] {
     auto source = parse(realization, context);
-    auto logical = exec(*source);
+    auto logical = formExecutable(*source);
     auto lowered = copy(*logical);
     require(succeeded(kernel::lowerKernels(*lowered)), "lowering failed");
-    auto function = localFunction(*lowered, "realized");
-    auto *instruction = &function.getBody().front().front();
-    OpBuilder builder(instruction);
-    auto *extra = builder.clone(*instruction);
-    extra->setAttr("site", builder.getStringAttr("extra_concrete_work"));
+    auto function = scopedFunction(*lowered, "realized");
+    auto instruction = sf::application(function, "field.sub");
+    sc::duplicateInvocation(instruction, function, "extra_concrete_work");
     require(succeeded(verify(*lowered)),
             "replayed instruction mutation malformed");
-    expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+    expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
       return kernel::verifyKernelLowering(*logical, *lowered);
     });
   });
   cases.run(
       "concrete work cannot move from before to after a source guard", [&] {
         auto source = fixture(context, "kernel/shared-polynomial.mlir");
-        auto logical = exec(*source);
-        local::FuncOp wrapper;
-        logical->walk([&](local::FuncOp function) {
-          if (llvm::any_of(
-                  function.getBody().front().without_terminator(),
-                  [](Operation &op) { return isa<local::LocalIfOp>(op); }))
-            wrapper = function;
+        auto logical = formExecutable(*source);
+        func::FuncOp wrapper;
+        logical->walk([&](exec::TestOp op) {
+          wrapper = op->getParentOfType<func::FuncOp>();
         });
         require(bool(wrapper), "missing guarded calculation");
-        auto call = cast<kernel::CallOp>(wrapper.getBody().front().front());
+        auto call = cast<exec::ComputeOp>(wrapper.getBody().front().front());
         SymbolTableCollection symbols;
-        auto entry = kernel::resolve(call, symbols);
+        auto entry = call.resolveCallee(symbols);
         OpBuilder builder(&entry.front().back());
         OperationState literal(entry.getLoc(), "algebra.constant");
         literal.addTypes(entry.getArgument(0).getType());
@@ -1345,18 +1405,18 @@ module {
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "guard fixture lowering failed");
-        auto actual = localFunction(*lowered, wrapper.getSymName());
+        auto actual = scopedFunction(*lowered, wrapper.getSymName());
         Operation *constant = nullptr;
-        local::LocalIfOp guard;
-        for (auto &op : actual.getBody().front()) {
-          if (auto branch = dyn_cast<local::LocalIfOp>(op))
+        exec::TestOp guard;
+        actual.walk([&](Operation *op) {
+          if (auto branch = dyn_cast<exec::TestOp>(op))
             guard = branch;
-          if (auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+          if (auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
               parameters && parameters.size() == 1)
             if (auto value = dyn_cast<StringAttr>(parameters[0]);
                 value && value.getValue() == "123")
-              constant = &op;
-        }
+              constant = op;
+        });
         require(constant && guard, "guard ordering mutation targets missing");
         constant->moveAfter(guard);
         ScopedDiagnosticHandler quiet(&context,
@@ -1368,17 +1428,18 @@ module {
       "equivalent unpinned recipe bindings share one imported declaration",
       [&] {
         auto source = parse(realization, context);
-        auto logical = exec(*source);
+        auto closed = closedFixture(*source);
+        auto logical = formExecutable(*closed);
         OpBuilder builder(numericalUnit(*logical));
         auto secondUnit = cast<mlir::ModuleOp>(
             builder.clone(*numericalUnit(*logical).getOperation()));
         SymbolTable::setSymbolName(secondUnit, "second_unit");
-        auto wrapper = localFunction(*logical, "realized");
+        auto wrapper = scopedFunction(*logical, "realized");
         builder.setInsertionPoint(wrapper);
         auto second =
-            cast<local::FuncOp>(builder.clone(*wrapper.getOperation()));
+            cast<func::FuncOp>(builder.clone(*wrapper.getOperation()));
         SymbolTable::setSymbolName(second, "second_wrapper");
-        second.walk([&](kernel::CallOp call) {
+        second.walk([&](exec::ComputeOp call) {
           call->setAttr("callee", SymbolRefAttr::get(
                                       &context, "second_unit",
                                       call.getCallee().getNestedReferences()));
@@ -1389,10 +1450,8 @@ module {
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "duplicate lowering failed");
         unsigned bindings = 0;
-        for (auto binding : owner(*lowered)
-                                .getBody()
-                                .front()
-                                .getOps<local::OperationBindingOp>())
+        for (auto binding :
+             owner(*lowered).getBody().front().getOps<runtime::BindingOp>())
           bindings += binding.getContract() == "field.sub" &&
                       binding.getImplementation().empty();
         require(bindings == 1,
@@ -1405,44 +1464,84 @@ module {
         auto source = parse(R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
- func.func private @identity(%x:!F)->!F { func.return %x : !F }
- local.realize @identity_local = @identity : (!F)->!F
- local.func @work(%a:!F,%b:!F,%flag:i1)->!F attributes {logical_origin=["work",[]]} {
-   %alias = local.apply @identity_local(%a) {site="identity"} : (!F)->!F
-   %other = local.apply @identity_local(%b) {site="other"} : (!F)->!F
-   %again = local.apply @identity_local(%a) {site="again"} : (!F)->!F
-   %result = "local.if"(%flag,%a,%alias,%b,%other,%again) ({
-   ^yes(%x:!F,%y:!F,%z:!F,%u:!F,%v:!F): "local.yield"(%v) : (!F)->()
-   }, {
-   ^no(%x:!F,%y:!F,%z:!F,%u:!F,%v:!F): "local.yield"(%u) : (!F)->()
-   }) {site="choose"} : (i1,!F,!F,!F,!F,!F)->!F
-   local.return %result : !F
+ func.func private @identity(%x:!F)->!F {func.return %x:!F}
+ func.func @work(%scope:!runtime.scope,%a:!F,%b:!F,%flag:i1)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %r = "exec.returned"(%a):(!F)->!exec.outcome<(!F)>
+   func.return %r:!exec.outcome<(!F)>
  }
- "protocol.func"() ({ ^entry(%a:!F,%b:!F,%flag:i1):
-   %result = "protocol.local_call"(%a,%b,%flag) {callee=@work,site="work",role="P"} : (!F,!F,i1)->!F
-   "protocol.return"(%result) : (!F)->()
- }) {sym_name="main",function_type=(!F,!F,i1)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+ "protocol.func"() ({^entry(%a:!F,%b:!F,%flag:i1):
+   %result = "protocol.local_call"(%a,%b,%flag) {callee=@work,site="work",role="P"}:(!F,!F,i1)->!F
+   "protocol.return"(%result):(!F)->()
+ }) {sym_name="main",function_type=(!F,!F,i1)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]}:()->()
+}) {profile=#protocol.profile<protocol>}:()->() }
 )mlir",
                             context);
-        auto logical = exec(*source);
+        auto identity =
+            SymbolTable(owner(*source)).lookup<func::FuncOp>("identity");
+        OpBuilder builder(identity);
+        auto field = identity.getArgument(0).getType();
+        auto root = scopedFunction(*source, "work");
+        root.getBody().getBlocks().clear();
+        builder.setInsertionPointToEnd(root.addEntryBlock());
+        exec::ScopedExecutionBuilder control(builder, root);
+        auto invoke = [&](Value value, StringRef site) {
+          return control
+              .invoke(
+                  "exec.compute", field, control.scoped(value),
+                  {builder.getNamedAttr(
+                       "callee",
+                       FlatSymbolRefAttr::get(identity.getSymNameAttr())),
+                   builder.getNamedAttr("site", builder.getStringAttr(site))})
+              .front();
+        };
+        auto alias = invoke(root.getArgument(1), "identity");
+        auto other = invoke(root.getArgument(2), "other");
+        auto again = invoke(root.getArgument(1), "again");
+        SmallVector<Value> captures{root.getArgument(1), alias,
+                                    root.getArgument(2), other, again};
+        auto result = control.conditional(
+            root.getArgument(3), captures, field, "choose",
+            [&](unsigned branch) {
+              auto region =
+                  sc::region(builder, root, branch ? "otherwise" : "then",
+                             TypeRange(captures), field);
+              exec::ScopedExecutionBuilder action(builder, region);
+              action.complete(region.getArgument(branch ? 4 : 5));
+              return region;
+            });
+        control.returned(result);
+        require(succeeded(verify(*source)), "authored scoped aliases refused");
+        auto logical = formExecutable(*source);
         auto lowered = copy(*logical);
         require(succeeded(kernel::lowerKernels(*lowered)),
                 "alias capture lowering failed");
-        auto function = localFunction(*lowered, "work");
-        auto branch =
-            *function.getBody().front().getOps<local::LocalIfOp>().begin();
-        require(branch->getNumOperands() == 3 &&
-                    branch->getRegion(0).front().getNumArguments() == 2,
-                "shared leaf was not captured once");
+        auto function = scopedFunction(*lowered, "work");
+        exec::TestOp test;
+        function.walk([&](exec::TestOp op) { test = op; });
+        require(bool(test), "conditional test disappeared");
+        SmallVector<runtime::EnterScopeOp> entries;
+        function.walk([&](runtime::EnterScopeOp enter) {
+          if (enter.getSite() == test.getSite())
+            entries.push_back(enter);
+        });
+        require(entries.size() == 2, "conditional alternatives disappeared");
+        for (auto enter : entries)
+          require(enter.getInputs().size() == 2,
+                  "shared leaf was not captured once");
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "alias layout correspondence failed");
-        auto left = branch->getOperand(1), right = branch->getOperand(2);
-        branch->setOperand(1, right);
-        branch->setOperand(2, left);
+        for (auto enter : entries) {
+          auto inputs = enter.getInputsMutable();
+          auto left = enter.getInputs()[0], right = enter.getInputs()[1];
+          inputs.assign(ValueRange{right, left});
+          auto dispatch = cast<exec::DispatchOp>(enter->getNextNode());
+          auto invocation = cast<func::CallOp>(dispatch.getReturned()->front());
+          invocation->setOperand(1, right);
+          invocation->setOperand(2, left);
+        }
         require(succeeded(verify(*lowered)),
                 "same-type capture mutation must remain formed");
-        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+        expectRefusal(*lowered, "numerical-lowering-correspondence", [&] {
           return kernel::verifyKernelLowering(*logical, *lowered);
         });
       });

@@ -168,8 +168,9 @@ def wire_controls(suite, subject):
 def local_boundary_cases(suite):
     source = '''!F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
-  local.func @work(%x:!F,%unused:!F)->!F attributes {logical_origin=["work",[]]} {
-    local.return %x : !F
+  func.func @work(%scope:!runtime.scope,%x:!F,%unused:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+    %done = "exec.returned"(%x) : (!F)->!exec.outcome<(!F)>
+    func.return %done : !exec.outcome<(!F)>
   }
   "protocol.func"() ({
   ^entry(%x:!F,%unused:!F):
@@ -193,8 +194,10 @@ module { "protocol.module"() ({
     ]:
         suite.case(label, lambda n=label, r=role, i=inputs, e=expected:
                    suite.compare_open(subject, n, r, i, [], e))
-    stopping = source.replace('local.return %x : !F',
-        '"local.stop"() {reason="abort",site="helper_stop"} : ()->()')
+    stopping = source.replace('%done = "exec.returned"(%x) : (!F)->!exec.outcome<(!F)>',
+        '%stop = "exec.reject"(%scope) {reason="abort",site="helper_stop"} : (!runtime.scope)->!exec.stop\n'
+        'cf.br ^failed(%stop : !exec.stop)\n^failed(%cause:!exec.stop):\n'
+        '%done = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<(!F)>')
     for site in ("A", "B"):
         variant = suite.export("local-stop-" + site, stopping.replace('site="A"', f'site="{site}"'))
         label = "local-raw-helper-stop-" + site
@@ -207,8 +210,12 @@ module { "protocol.module"() ({
     subset = '''!F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
   func.func private @identity(%x:!F)->!F { func.return %x : !F }
-  local.func @stop() attributes {logical_origin=["stop",[]]} {
-    "local.stop"() {reason="abort",site="helper_stop"} : ()->()
+  func.func @stop(%scope:!runtime.scope)->!exec.outcome<> attributes {no_inline,runtime.origin=["stop",[]]} {
+    %stop = "exec.reject"(%scope) {reason="abort",site="helper_stop"} : (!runtime.scope)->!exec.stop
+    cf.br ^failed(%stop : !exec.stop)
+  ^failed(%cause:!exec.stop):
+    %done = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
+    func.return %done : !exec.outcome<>
   }
   "protocol.func"() ({
     %one = "algebra.constant"() {value="1"} : ()->!F

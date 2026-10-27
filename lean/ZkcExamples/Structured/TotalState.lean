@@ -13,12 +13,13 @@ the unsigned index limit. These theorems concern the imported logical process. -
 
 namespace ZkcExamples.Structured.TotalState
 open Zkc.Source Zkc.Source.Structured
+set_option backward.isDefEq.respectTransparency false
 
 abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
 
 abbrev foldSpec : FoldSpec :=
-  ⟨⟨"items", [vector], (.vector "bls12-381.fr"), .here, true⟩,
+  ⟨DomainSpec.indices "items" [vector] (.vector "bls12-381.fr") .here,
     [scalar, scalar], [], "step", "", .math⟩
 
 def stepReturn : Region dialect
@@ -51,7 +52,7 @@ def protocolSignature : ProtocolSignature where
 set_option smartUnfolding true in
 def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
   .letOp (.mark "") .nil .nil <|
-  .letOp (.calculate (.fold {domain := {name := "items", inputs := [.vector "bls12-381.fr"], collection := .vector "bls12-381.fr", container := .here, indices := true}, state := [.field "bls12-381.fr", .field "bls12-381.fr"], captures := [], step := "step", predicate := "", kind := .math}) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.calculate (.fold foldSpec) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here (.cons (.there .here) .nil))
 
 -- The program is the literal checked unit admitted from the exact exported
@@ -155,14 +156,11 @@ theorem process_eq_reference (xs : List F) (a b : F)
     process (G := G) xs a b = .done (outputs (reference xs a b).1 (reference xs a b).2) := by
   rw [process_fold]
   have domainAdmitted :
-      (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
-        .returned (List.range xs.length) := by
-    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
-      (.elements (List.range xs.length))).admit = _
-    simp [Finite.Domain.admit, lengthValid]
-    rfl
-  have folded := Evaluation.denoteFold_reference (table F G) foldSpec (.cons xs .nil) (outputs a b) .nil
-    (List.range xs.length) domainAdmitted
+      foldSpec.domain.admit (.cons xs (.nil : Values (assignment F G) [])) =
+        .returned ((List.range xs.length).map fun item => .cons item .nil) :=
+    Evaluation.indices_admit _ _ _ _ _ lengthValid
+  have folded := Evaluation.denoteFold_reference_map (table F G) foldSpec (.cons xs .nil) (outputs a b) .nil
+    (List.range xs.length) (fun item => .cons item .nil) domainAdmitted
     (fun state (i : Nat) => outputs (G := G) (state.get (.there .here)) (xs[i]?.getD 0))
     (fun _ => True) trivial (by
       intro state i member _
@@ -174,7 +172,7 @@ theorem process_eq_reference (xs : List F) (a b : F)
       have read : xs[i]? = some xs[i] := List.getElem?_eq_getElem bound
       constructor
       · exact (Evaluation.foldTransition_unfiltered (table F G) foldSpec (by rfl)
-          (.cons xs .nil) .nil (.cons a (.cons b .nil)) i).trans
+          (.cons xs .nil) .nil (.cons a (.cons b .nil)) (.cons i .nil)).trans
           (by
             have result := step_read (G := G) xs a b xs[i] i read
             rw [read]
@@ -198,13 +196,11 @@ theorem process_exhausted (xs : List F) (a b : F)
   change Evaluation.denoteFold (table F G) foldSpec
     ((Values.cons xs Values.nil).append ((outputs a b).append Values.nil)) = _
   rw [Evaluation.denoteFold_pack]
-  have refused : (foldSpec.domain.denote (.cons xs (.nil : Values (assignment F G) []))).admit =
+  have refused : foldSpec.domain.admit (.cons xs (.nil : Values (assignment F G) [])) =
       .stopped .exhausted := by
-    change (Finite.Domain.check (xs.length < indexLimit) .exhausted
-      (.elements (List.range xs.length))).admit = _
-    simp [Finite.Domain.admit, lengthInvalid]
-    rfl
-  simp [Finite.execute, refused, Finite.admitThen]
+    rw [DomainSpec.admit_indices]
+    exact ite_eq_right lengthInvalid
+  simp [refused, Finite.admitThen]
 
 /-- The complete equation includes domain admission on every input. -/
 theorem process_eq_checked_reference (xs : List F) (a b : F) :

@@ -212,7 +212,9 @@
       "quotient.project",
       "quotient.ntt",
       "quotient.intt",
-      "quotient.pointwise"
+      "quotient.pointwise",
+      "quotient.prepare_matrix",
+      "quotient.matvec"
     ],
     "resource": [
       "resource_unit.create",
@@ -261,6 +263,7 @@
     "atomic": [
       "bytes",
       "shake128_state",
+      "quotient_matrix",
       "bool",
       "index",
       "indices",

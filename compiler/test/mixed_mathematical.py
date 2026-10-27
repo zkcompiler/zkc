@@ -8,11 +8,13 @@ OUT = records()
 commands = Commands(OUT)
 source = (Path(__file__).parent / 'fixtures/mathematical/local-execution.mlir').read_text()
 prepared = commands.verified(source, None, '--zkc-prepare-protocol')
-assert 'local.apply' not in prepared and 'apply @' not in prepared
-assert 'lc_6_nested_4_leaf_5_twice' in prepared
+assert 'func.func @work' in prepared and 'call @leaf' in prepared
+assert 'runtime.site = "nested"' in prepared
 participant = commands.verified(prepared, None, '--zkc-project-protocol')
 simplified = commands.verified(participant, None, '--zkc-simplify-participant')
 bound = commands.verified(simplified, None, '--zkc-lower-math')
+assert 'lc_6_nested_4_leaf_5_twice' in bound
+assert 'call @leaf' not in bound
 physical = commands.verified(bound, None, '--zkc-select-physical')
 carrier = json.loads(commands.source('protocol-export', physical))
 (OUT / 'mixed.json').write_text(json.dumps(carrier))
@@ -41,17 +43,17 @@ refuses('input_roles=[["P"],["P"],["P"]]', 'input_roles=[["P"],["P","V"],["P"]]'
 refuses('output_roles=[["P", "V"],["P"]]', 'output_roles=[["P", "V"],["P","V"]]', 'exactly one owner')
 refuses('"protocol.return"(%sent, %done#1)', '"protocol.return"(%sent, %resource)', 'affine component used more than once')
 refuses('callee=@work, role="P"', 'callee=@work, role="V"', 'available owner operands')
-refuses('    %sent = protocol.exchange', '    %alias = protocol.restrict_roles %done#1 {roles=["P"]} : !local.capability<"rng:bls12-381.fr">\n    %sent = protocol.exchange', 'owner-local values cannot be restricted')
-refuses('    %sent = protocol.exchange', '    %illegal = protocol.exchange %done#1 {sender="P", receiver="V", site="resource_wire"} : !local.capability<"rng:bls12-381.fr">\n    %sent = protocol.exchange', 'exchange requires an admitted wire type')
+refuses('    %sent = protocol.exchange', '    %alias = protocol.restrict_roles %done#1 {roles=["P"]} : !runtime.capability<"rng:bls12-381.fr">\n    %sent = protocol.exchange', 'owner-local values cannot be restricted')
+refuses('    %sent = protocol.exchange', '    %illegal = protocol.exchange %done#1 {sender="P", receiver="V", site="resource_wire"} : !runtime.capability<"rng:bls12-381.fr">\n    %sent = protocol.exchange', 'exchange requires an admitted wire type')
 # Even a never-called definition is admitted before optimization can remove it.
-refuses('  local.func @check', '  local.func private @unused(i1) -> i1\n  local.func @check', 'closed executable definition')
-refuses('    local.return %v :', '    %bad = algebra.field_add %x, %x : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">\n    local.return %v :', 'binding-operation')
-refuses('{site="nested"}', '{site="nested", bad="new_semantics"}', 'interactive-unknown-attribute')
+refuses('    func.func @check', '    func.func private @unused(!runtime.scope, i1) -> !exec.outcome<(i1)> attributes {no_inline,runtime.origin=["unused",[]]}\n    func.func @check', 'execution-source-closure')
+refuses('      %2 = "exec.returned"(%1)', '      %bad = algebra.field_add %arg1, %arg1 : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">\n      %2 = "exec.returned"(%1)', 'execution-source-closure')
+refuses('{runtime.site = "nested"}', '{runtime.site = "nested", bad="new_semantics"}', 'execution-source-closure')
 
 refuses('callee=@work', 'callee=@missing', 'interactive-symbol-kind')
 refuses('callee=@work', 'callee=@main', 'interactive-symbol-kind')
-refuses('callee=@work', 'callee=@leaf', 'interactive-call-signature')
-for ty in ['!local.capability<"rng:bls12-381.fr">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">']:
+refuses('callee=@work', 'callee=@leaf', 'interactive-call-type')
+for ty in ['!runtime.capability<"rng:bls12-381.fr">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">', '!commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">']:
     declaration = f'relation.declare @forbidden {{kind="external", key="example/type", revision="0", signature=({ty}) -> i1, purposes=["statement"]}}'
     commands.verified('module { ' + declaration + ' }', 'relation-declaration-signature')
 
@@ -68,8 +70,15 @@ vector_physical = commands.verified(vector, None, '--zkc-project-protocol', '--z
 assert 'vector:bls12-381.fr' in commands.source('protocol-export', vector_physical)
 commands.verified(vector.replace('!algebra.field_vector<"bls12-381.fr">', '!algebra.fixed_vector<i1, 2>'), 'exactly one owner')
 # Generate resource-transition variants for execution by mixed_native.rs.
-draw = source.replace('  local.func @leaf', '  "local.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n  local.func @leaf', 1)
-draw = draw.replace('    local.return %v, %resource :', '    %sample:2 = "crypto.exec.random_draw"(%resource) {binding=@draw, parameters=[], site="draw"} : (!local.capability<"rng:bls12-381.fr">) -> (!algebra.field<"bls12-381.fr">, !local.capability<"rng:bls12-381.fr">)\n    local.return %v, %sample#1 :')
+draw = source.replace('    func.func @leaf', '  "runtime.binding"() {sym_name="draw", contract="random.draw", arguments=["bls12-381.fr"], implementation=""} : () -> ()\n    func.func @leaf', 1)
+completion = '      %18 = "exec.returned"(%17, %arg2)'
+assert draw.count(completion) == 1
+field = '!algebra.field<"bls12-381.fr">'
+rng = '!runtime.capability<"rng:bls12-381.fr">'
+draw = draw.replace(completion, f'''      %sample = "exec.apply"(%arg0, %arg2) <{{binding=@draw, parameters=[], site="draw"}}> : (!runtime.scope, {rng}) -> !exec.outcome<({field}, {rng})>
+      "exec.dispatch"(%sample)[^drawn,^bb2] : (!exec.outcome<({field}, {rng})>) -> ()
+    ^drawn(%unused_sample: {field}, %drawn_rng: {rng}):
+      %18 = "exec.returned"(%17, %drawn_rng)''')
 stop_after = '\n'.join(line for line in draw.splitlines() if 'site="before_work"' not in line and 'callee=@check' not in line)
 stop_after = stop_after.replace('    %sent = protocol.exchange', '    protocol.guard %go {owner="P", site="before_work"}\n    %sent = protocol.exchange')
 for name, variant in [('mixed-draw', draw), ('mixed-stop-after', stop_after)]:

@@ -5,7 +5,9 @@
 #include "NativeCases.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/SymbolTable.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/MathematicalWork.h"
 #include "llvm/ADT/STLExtras.h"
@@ -22,18 +24,21 @@ inline protocol_ir::ProtocolModuleOp kernelRecipeOutput(mlir::ModuleOp module) {
           "Kernel recipe output must use the Exec profile");
   unsigned entries = 0;
   for (auto &declaration : owner.getBody().front()) {
-    if (mlir::isa<local::FuncOp>(declaration))
-      ++entries;
-    else
-      require(mlir::isa<local::OperationBindingOp>(declaration),
+    if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(declaration)) {
+      require(protocol::isScopedExecutionFunction(function),
+              "recipe output retained a mathematical source function");
+      entries += !function->hasAttr("runtime.region");
+    } else
+      require(mlir::isa<runtime::BindingOp>(declaration),
               "Kernel recipe output retained a source declaration");
   }
-  require(entries == 1, "Kernel recipe output must have one Local entry");
+  require(entries == 1, "Kernel recipe output must have one scoped entry");
   return owner;
 }
 
-// Keep the Protocol fixture immutable. A recipe source owns only standard
-// functions and domains, including every original dependency and its premises.
+// Keep the Protocol fixture immutable. An isolated mathematical recipe source
+// owns pure standard functions and domains, including dormant mathematical
+// definitions and their premises. Scoped source callers are separate owners.
 inline mlir::OwningOpRef<mlir::ModuleOp>
 kernelRecipeUnit(mlir::Operation *sourceOwner) {
   mlir::OpBuilder builder(sourceOwner->getContext());
@@ -43,6 +48,9 @@ kernelRecipeUnit(mlir::Operation *sourceOwner) {
   builder.setInsertionPointToEnd(unit->getBody());
   for (auto &definition : sourceOwner->getRegion(0).front()) {
     if (!mlir::isa<mlir::func::FuncOp, data::DomainOp>(definition))
+      continue;
+    if (auto function = mlir::dyn_cast<mlir::func::FuncOp>(definition);
+        function && protocol::isScopedExecutionFunction(function))
       continue;
     auto *copy = builder.clone(definition);
     mlir::SymbolTable::setSymbolVisibility(

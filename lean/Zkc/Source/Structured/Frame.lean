@@ -42,6 +42,21 @@ theorem denoteFold_table_congr (left right : HelperTable (assignment F G) interf
   funext values
   simp only [denoteFold, foldTransition_table_congr left right spec agree]
 
+theorem denoteCollect_table_congr (left right : HelperTable (assignment F G) interface)
+    (spec : CollectSpec)
+    (agree : ∀ helper ∈ (Op.collect spec).helpers, invoke left helper = invoke right helper) :
+    denoteCollect left spec = denoteCollect right spec := by
+  have body := agree spec.bodyHelper (by simp [Op.helpers])
+  have transition : collectTransition left spec = collectTransition right spec := by
+    funext arguments captures collected item
+    cases present : spec.predicate.isEmpty with
+    | true => simp only [collectTransition, present, ↓reduceIte, body]
+    | false =>
+      have predicate := agree spec.predicateHelper (by simp [Op.helpers, present])
+      simp only [collectTransition, present, Bool.false_eq_true, ↓reduceIte, predicate, body]
+  funext values
+  simp only [denoteCollect, transition]
+
 /-- With the same callback meanings, an operation observes only its helpers. -/
 theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (left right : HelperTable (assignment F G) interface) (op : Op)
@@ -94,6 +109,10 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     cases callbacks
     exact denoteMap_table_congr left right spec
       (agree spec.helper (by simp [Op.helpers])) arguments
+  | collect spec =>
+    funext arguments callbacks
+    cases callbacks
+    exact congrFun (denoteCollect_table_congr left right spec agree) arguments
   | fold spec =>
     funext arguments callbacks
     cases callbacks

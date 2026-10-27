@@ -51,6 +51,7 @@ root.
 | `generated` | `interactive_data`, `interactive_bodies`, `interactive_views` | generated modules of the interactive protocol |
 | `generated` | `interactive_export`, `interactive_source` | retained JSON and MLIR of the interactive protocol |
 | `generated` | `original_export` | retained original JSON of the Proof Entry, before preparation or projection |
+| `generated` | `original_source` | exact original MLIR bytes of the Proof Entry that the retained JSON names |
 | `generated` | `artifacts`, `claims` | physical generated modules: artifact/compilation facts and exact source Wire.Request data with typed Lean resolution, evaluation and receipts |
 | `normal_forms` | `request` | normal-form request checked with `normal_forms.py --check`, then its output built before dependent receipts |
 | `lean` | `namespace`, `imports` | generated declaration namespace and maintained Lean registration imports; physical configuration only |

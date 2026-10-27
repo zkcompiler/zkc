@@ -7,15 +7,18 @@
 
 namespace zkc::mathematical {
 /// Implementation constraints are queried only at algorithm selection,
-/// including the original kernel calls retained by structural substitution.
-/// Callers reserve payload and numerical-call visits in scoped equation work.
+/// including the original mathematical invocations retained by structural
+/// substitution. Callers reserve payload and numerical-call visits in scoped
+/// equation work.
 bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 
 enum class RealizationKind {
   Ordered,
   Bilinear,
+  NestedContraction,
   Reduction,
+  CollectionSum,
   PointwiseReduction,
   Elementwise
 };
@@ -31,7 +34,14 @@ struct ComputationSelection {
   OptimizationStatus outcome() const { return diagnostic.outcome.status; }
   std::optional<finite::ComputationView> view;
   ComputationEquations equations;
+  std::optional<NestedContraction> nested;
   std::optional<SelectedReduction> reduction;
+  std::optional<SelectedReduction> collectionSum;
+  // An actual collection/native-sum pair permits a summed expression even
+  // when ordinary finite map selection is disabled. These are producer choices,
+  // never premises supplied to the independent source/candidate reader.
+  bool sumCollection = false;
+  bool allowCollectionMap = true;
   const ReductionRecipe *pointwiseReduction = nullptr;
   const MatrixContractionRecipe *matrix = nullptr;
 };

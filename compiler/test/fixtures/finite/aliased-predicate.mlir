@@ -1,31 +1,53 @@
-!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 !I = !algebra.indices
-module { "protocol.module"() ({
- "local.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%xs:!V,%lo:ui64,%hi:ui64):
-   %i = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %j = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
-   %d = "data.domain_zip"(%i,%j) : (!data.domain<ui64>,!data.domain<ui64>)->!data.domain<ui64,ui64>
-   "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!V,ui64,ui64)->!data.domain<ui64,ui64>} : ()->()
- local.func private @body(%i:ui64,%j:ui64,%xs:!V,%lo:ui64,%hi:ui64,%base:ui64) -> ui64 attributes {logical_origin=["body",[]]} {
-   %major = "algebra.exec.index_mul"(%i,%base) {binding=@mul,parameters=[],site="major"} : (ui64,ui64)->ui64
-   %value = "algebra.exec.index_add"(%major,%j) {binding=@add,parameters=[],site="value"} : (ui64,ui64)->ui64
-   local.return %value : ui64
- }
- local.func private @predicate(%i:ui64,%j:ui64,%xs:!V,%lo:ui64,%hi:ui64,%base:ui64) -> i1 attributes {logical_origin=["predicate",[]]} {
-   %yes = "local.bool_constant"() {value=true,site="yes"} : ()->i1
-   local.return %yes : i1
- }
- "local.finite_collect"() {sym_name="collect",function_type=(!V,ui64,ui64,ui64)->!I,domain=@items,body=@body,predicate=@predicate} : ()->()
- local.func @work(%xs:!V,%lo:ui64,%hi:ui64,%base:ui64) -> !I attributes {logical_origin=["work",[]]} {
-   %r = local.apply @collect(%xs,%lo,%hi,%base) {site="collect"} : (!V,ui64,ui64,ui64)->!I
-   local.return %r : !I
- }
- "protocol.func"() ({ ^entry(%xs:!V,%lo:ui64,%hi:ui64,%base:ui64):
-   %r = "protocol.local_call"(%xs,%lo,%hi,%base) {callee=@work,role="P",site="work"} : (!V,ui64,ui64,ui64)->!I
-   "protocol.return"(%r) : (!I)->()
- }) {sym_name="main",function_type=(!V,ui64,ui64,ui64)->!I,roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = [], contract = "index.mul", implementation = "", sym_name = "mul"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "add"}> : () -> ()
+    "data.domain"() <{function_type = (!V, ui64, ui64) -> !data.domain<ui64, ui64>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !V, %arg1: ui64, %arg2: ui64):
+      %0 = "data.domain_indices"(%arg0) <{axis = 0 : i64}> : (!V) -> !data.domain<ui64>
+      %1 = "data.domain_indices"(%arg0) <{axis = 0 : i64}> : (!V) -> !data.domain<ui64>
+      %2 = "data.domain_zip"(%0, %1) : (!data.domain<ui64>, !data.domain<ui64>) -> !data.domain<ui64, ui64>
+      "data.domain_yield"(%2) : (!data.domain<ui64, ui64>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = (!V, ui64, ui64, ui64) -> !I, input_roles = [["P"], ["P"], ["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
+    ^bb0(%arg0: !V, %arg1: ui64, %arg2: ui64, %arg3: ui64):
+      %0 = "protocol.local_call"(%arg0, %arg1, %arg2, %arg3) <{callee = @work, role = "P", site = "work"}> : (!V, ui64, ui64, ui64) -> !I
+      "protocol.return"(%0) : (!I) -> ()
+    }) : () -> ()
+    func.func private @body(%arg0: !runtime.scope, %arg1: ui64, %arg2: ui64, %arg3: !V, %arg4: ui64, %arg5: ui64, %arg6: ui64) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["body", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg6) <{binding = @mul, parameters = [], site = "major"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb1(%1: ui64):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1, %arg2) <{binding = @add, parameters = [], site = "value"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %4 : !exec.outcome<(ui64)>
+    ^bb3(%5: ui64):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (ui64) -> !exec.outcome<(ui64)>
+      return %6 : !exec.outcome<(ui64)>
+    }
+    func.func private @predicate(%arg0: !runtime.scope, %arg1: ui64, %arg2: ui64, %arg3: !V, %arg4: ui64, %arg5: ui64, %arg6: ui64) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["predicate", []]} {
+      %0 = "exec.boolean"(%arg0) <{site = "yes", value = true}> : (!runtime.scope) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (i1) -> !exec.outcome<(i1)>
+      return %2 : !exec.outcome<(i1)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
+      return %4 : !exec.outcome<(i1)>
+    }
+    func.func @work(%arg0: !runtime.scope, %arg1: !V, %arg2: ui64, %arg3: ui64, %arg4: ui64) -> !exec.outcome<(!I)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = "exec.collect"(%arg0, %arg1, %arg2, %arg3, %arg4) <{body = @body, domain = @items, predicate = @predicate, site = "collect"}> : (!runtime.scope, !V, ui64, ui64, ui64) -> !exec.outcome<(!I)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!I)>) -> ()
+    ^bb1(%1: !I):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!I) -> !exec.outcome<(!I)>
+      return %2 : !exec.outcome<(!I)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!I)>
+      return %4 : !exec.outcome<(!I)>
+    }
+  }) : () -> ()
+}

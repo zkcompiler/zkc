@@ -28,7 +28,7 @@ def realization : RealizationDeclaration := ⟨"realized", [vector], [.boolean],
 
 def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main",
-    [⟨"coordinates", [vector], .indices 0 0⟩], [], [], [main, calculation, predicate, step, .realization realization],
+    [⟨"coordinates", [vector], [.indices 0 0], 0⟩], [], [], [main, calculation, predicate, step, .realization realization],
     [⟨"main", []⟩], blsRows⟩
 
 private def run : IO Unit := do

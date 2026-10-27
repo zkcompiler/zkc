@@ -1,5 +1,7 @@
 use zkc_runtime::interpreter::Runner;
 mod common;
+#[path = "local_control/lifecycle.rs"]
+mod lifecycle;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_native::*;
@@ -36,7 +38,9 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
             match op[0].as_str().unwrap() {
                 "op" => {
                     let name = op[2].as_str().unwrap();
-                    let args = if name.starts_with("index.")
+                    let args = if name.starts_with("resource_unit.") {
+                        json!(["Control.Ticket"])
+                    } else if name.starts_with("index.")
                         || name.starts_with("bool.")
                         || name.starts_with("control.")
                     {
@@ -44,16 +48,25 @@ fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
                     } else {
                         json!(["bls12-381.fr"])
                     };
-                    bindings.insert(
-                        name.into(),
-                        json!([name, name, args, format!("arkworks/{name}"), []]),
-                    );
+                    let implementation = if name.starts_with("resource_unit.") {
+                        format!("logical/{name}")
+                    } else if name == "index.constant" {
+                        format!("native/{name}")
+                    } else {
+                        format!("arkworks/{name}")
+                    };
+                    bindings.insert(name.into(), json!([name, name, args, implementation, []]));
                 }
                 "if" => {
                     gather(&op[4], bindings);
                     gather(&op[5], bindings);
                 }
-                "for" => gather(&op[7], bindings),
+                "for" | "for_while" => gather(&op[7], bindings),
+                "match" => {
+                    for arm in op[4].as_array().unwrap() {
+                        gather(&arm[2], bindings);
+                    }
+                }
                 _ => {}
             }
         }
@@ -89,6 +102,9 @@ struct Traced {
     prepared: std::cell::RefCell<Vec<OperationBinding>>,
     substitute: Option<OperationBinding>,
     fail_leave: Option<u64>,
+    fail_enter: Option<u64>,
+    failing_exits: Vec<u64>,
+    lifecycle: Vec<FrameObservation>,
     nondeterministic: Option<&'static str>,
 }
 impl Traced {
@@ -101,9 +117,22 @@ impl Traced {
             prepared: Default::default(),
             substitute: None,
             fail_leave: None,
+            fail_enter: None,
+            failing_exits: vec![],
+            lifecycle: vec![],
             nondeterministic: None,
         }
     }
+}
+#[derive(Debug)]
+struct FrameObservation {
+    id: u64,
+    exit: Option<FrameExit>,
+    origin: Json,
+    values: usize,
+    active: (usize, usize),
+    resources: (usize, usize),
+    error: Option<String>,
 }
 struct TracedOperation {
     inner: NativeOperation,
@@ -147,18 +176,48 @@ impl Backend for Traced {
         self.inner.validate_value(v)
     }
     fn enter_frame(&mut self, f: &Frame, args: &[Value]) -> Result<(), BackendError> {
-        self.inner.enter_frame(f, args)?;
-        self.frames
-            .push((f.id().get(), f.parent().map(|id| id.get())));
-        Ok(())
+        let before = (self.inner.active_frames(), self.inner.live_resource_units());
+        let result = if self.fail_enter == Some(f.id().get()) {
+            Err(BackendError::new("test:entry"))
+        } else {
+            self.inner.enter_frame(f, args)
+        };
+        self.lifecycle.push(FrameObservation {
+            id: f.id().get(),
+            exit: None,
+            origin: f.origin().json(),
+            values: args.len(),
+            active: (before.0, self.inner.active_frames()),
+            resources: (before.1, self.inner.live_resource_units()),
+            error: result.as_ref().err().map(|e| e.code.clone()),
+        });
+        if result.is_ok() {
+            self.frames
+                .push((f.id().get(), f.parent().map(|id| id.get())));
+        }
+        result
     }
     fn leave_frame(&mut self, f: &Frame, e: FrameExit, v: &[Value]) -> Result<(), BackendError> {
-        self.inner.leave_frame(f, e, v)?;
-        if self.fail_leave == Some(f.id().get()) {
-            Err(BackendError::new("test:cleanup"))
-        } else {
-            Ok(())
-        }
+        let before = (self.inner.active_frames(), self.inner.live_resource_units());
+        let result = self.inner.leave_frame(f, e, v).and_then(|()| {
+            if self.fail_leave == Some(f.id().get()) {
+                Err(BackendError::new("test:cleanup"))
+            } else if self.failing_exits.contains(&f.id().get()) {
+                Err(BackendError::new(format!("test:cleanup:{}", f.id().get())))
+            } else {
+                Ok(())
+            }
+        });
+        self.lifecycle.push(FrameObservation {
+            id: f.id().get(),
+            exit: Some(e),
+            origin: f.origin().json(),
+            values: v.len(),
+            active: (before.0, self.inner.active_frames()),
+            resources: (before.1, self.inner.live_resource_units()),
+            error: result.as_ref().err().map(|e| e.code.clone()),
+        });
+        result
     }
     fn apply(
         &mut self,
@@ -320,6 +379,7 @@ fn sum_loop() -> Vec<u8> {
         ]),
     )
 }
+
 #[test]
 fn input_length_driven_loop_zero_inverted_and_ordered_effects() {
     let bytes = sum_loop();

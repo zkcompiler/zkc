@@ -339,8 +339,9 @@ class Correspondence {
       } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
         if (call.getRoleAttr() != role)
           continue;
-        auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
+        auto invocation = dyn_cast_if_present<protocol_ir::LocalCallOp>(cursor);
         if (!invocation || invocation.getCalleeAttr() != call.getCalleeAttr() ||
+            invocation.getRoleAttr() != call.getRoleAttr() ||
             invocation.getSite() != call.getSite() ||
             !operands(left, call.getInputs(), right, invocation.getInputs()) ||
             !results(left, &op, right, cursor))
@@ -348,8 +349,9 @@ class Correspondence {
       } else if (auto guard = dyn_cast<protocol_ir::GuardOp>(op)) {
         if (guard.getOwnerAttr() != role)
           continue;
-        auto check = dyn_cast_if_present<local::GuardOp>(cursor);
-        if (!check || check.getSite() != guard.getSite() ||
+        auto check = dyn_cast_if_present<protocol_ir::GuardOp>(cursor);
+        if (!check || check.getOwnerAttr() != role ||
+            check.getSite() != guard.getSite() ||
             !terms.compare(left, guard.getCondition(), right,
                            check.getCondition()))
           return fail("projected guard operand differs");

@@ -1,6 +1,7 @@
 "format" = "zkc.project/0"
 
 ["modules"]
+"zkc::quotient_matrix" = "quotient_matrix.zkc"
 "zkc::primitives::quotient" = "quotient.zkc"
 "zkc::quotient_math" = "quotient_math.zkc"
 "zkc::polynomial" = "polynomial.zkc"

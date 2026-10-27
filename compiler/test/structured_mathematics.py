@@ -138,6 +138,12 @@ with case('factorwise fixing retains two shared table leaves'):
     check_candidate(fixed)
     plain = commands.verified(candidate, None, '--zkc-eliminate-polynomials')
     realized = commands.verified(fixed, None, '--zkc-eliminate-polynomials')
+    # Projection retains the authored recipe definition. This pass eliminates
+    # participant observations; remove only unreachable private symbols before
+    # measuring the resulting participant arithmetic.
+    assert 'func.func private @recipe' in plain and 'func.func private @recipe' in realized
+    plain = commands.verified(plain, None, '--symbol-dce')
+    realized = commands.verified(realized, None, '--symbol-dce')
     assert '!poly.polynomial' not in plain and '!poly.polynomial' not in realized
     counts = {name: {op: text.count(op) for op in ['algebra.field_add', 'algebra.field_multiply', 'algebra.field_subtract', 'algebra.array_at']}
               for name, text in [('plain', plain), ('factorwise', realized)]}

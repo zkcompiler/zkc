@@ -4,8 +4,10 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/Execution.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -38,7 +40,7 @@ bool supportedPreservationEdge(protocol_ir::Profile before,
   return false;
 }
 Type logicalType(Type type) {
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     return physical.getLogical();
   return type;
 }
@@ -161,28 +163,25 @@ LogicalResult verifyProtocolPreparationPreserved(Operation *before,
 LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
                                             Operation *after) {
   SymbolTable sourceSymbols(before), targetSymbols(after);
-  llvm::DenseSet<Operation *> sourceHelpers, targetHelpers;
-  if (failed(algebra::collectMapHelpers(before, sourceHelpers)) ||
-      failed(algebra::collectMapHelpers(after, targetHelpers)))
-    return failure();
   auto profile = cast<protocol_ir::ProtocolModuleOp>(after).getProfile();
+  const bool retainsMathematics = profile == protocol_ir::Profile::Protocol ||
+                                  profile == protocol_ir::Profile::Participant;
+  auto retained = [](Operation *op) {
+    return isa<func::FuncOp, data::DomainOp, mlir::ModuleOp,
+               runtime::BindingOp>(op);
+  };
   // Projection and mathematical simplification cannot invent executable work.
   // Lowering may add generated calculations while preserving every authored
   // one.
-  if (profile == protocol_ir::Profile::Protocol ||
-      profile == protocol_ir::Profile::Participant) {
+  if (retainsMathematics) {
     for (auto &op : after->getRegion(0).front())
-      if ((targetHelpers.contains(&op) ||
-           isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-               local::OperationBindingOp>(op)) &&
+      if (retained(&op) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!sourceHelpers.contains(&op) &&
-        !isa<algebra::MapRealizeOp, mlir::ModuleOp, local::FuncOp,
-             local::OperationBindingOp>(op))
+    if (!retained(&op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);
@@ -256,7 +255,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
   SymbolTable targetSymbols(after);
   SymbolTableCollection symbolTables;
   // Adjacent executable data flow must agree even for supplied programs or
-  // the older source route, which carry no mathematical projection record.
+  // source modules that carry no mathematical projection record.
   if (before.getProfile() == protocol_ir::Profile::Exec ||
       before.getProfile() == protocol_ir::Profile::Physical) {
     auto sourceParticipants =
@@ -310,6 +309,8 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
   }
   if (before.getProfile() != protocol_ir::Profile::Protocol)
     return success();
+  if (failed(verifyAuthoredLocalsPreserved(before, after)))
+    return failure();
   // Raw application-bearing inputs compose an independently checked
   // substitution edge with projection. Already prepared pass inputs are used
   // directly, so the producer's actual adjacent subject is retained.

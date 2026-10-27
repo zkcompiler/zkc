@@ -1,19 +1,20 @@
 #include "FiniteVerification.h"
 #include "CollectFold.h"
 #include "CollectionInterpretation.h"
-#include "Kernel/Schedule.h"
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
-#include "mlir/IR/OperationSupport.h"
+#include "ScopedCandidate.h"
+#include "ScopedNestedContraction.h"
 #include "mlir/IR/SymbolTable.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -26,12 +27,78 @@ namespace {
 class Reader {
   Computation c;
   SymbolTable &symbols;
+  mathematical::CandidatePorts ports;
+  llvm::DenseMap<Operation *, unsigned> regionReturns;
   llvm::DenseSet<Operation *> &bindings;
   Operation *cursor = nullptr;
   Type index, boolean;
   llvm::DenseMap<Value, Value> actual, cardinalities, offsets;
-  bool valid = true, inlineMode = false;
+  bool valid = true;
+  bool stoppedCallback = false;
   bool allowBulk;
+  unsigned occurrence = 0;
+  std::optional<Location> admissionLocation;
+  std::optional<protocol::Assignments> admissionPath;
+  unsigned admissionOccurrence = 0;
+  std::string nextSite() {
+    auto suffix = std::to_string(occurrence++);
+    auto size =
+        limits.finiteSite.size() + StringRef("_finite_").size() + suffix.size();
+    if (size > 128) {
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes =
+          limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite(
+          {}, (limits.finiteSite + "_finite_" + suffix).str(), bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes}};
+        fail();
+        return {};
+      }
+      return std::move(*encoded);
+    }
+    if (!limits.finiteSite.empty() && limits.sharedSiteBytes) {
+      if (size > *limits.sharedSiteBytes) {
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes, size,
+                                *limits.sharedSiteBytes}};
+        fail();
+        return {};
+      }
+      *limits.sharedSiteBytes -= size;
+    }
+    return (limits.finiteSite + "_finite_" + suffix).str();
+  }
+  bool site(Operation *op, StringRef contract = {}) {
+    if (limits.finiteSite.empty())
+      return true;
+    std::string expected;
+    if (admissionPath && contract == "control.require") {
+      ++occurrence;
+      uint64_t standaloneBytes = 16 * 1024 * 1024;
+      auto &bytes =
+          limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+      auto encoded = protocol::algorithmSite(
+          *admissionPath, "finite_" + std::to_string(admissionOccurrence),
+          bytes);
+      if (!encoded) {
+        llvm::consumeError(encoded.takeError());
+        result = {VerificationStatus::RequiredCapacity, "finite site bytes",
+                  CapacityCause{WorkOwner::AlgorithmOriginBytes}};
+        fail();
+        return false;
+      }
+      expected = std::move(*encoded);
+    } else
+      expected = nextSite();
+    if (admissionPath)
+      ++admissionOccurrence;
+    auto actual = op->getAttrOfType<StringAttr>("site");
+    return valid && actual && actual.getValue() == expected;
+  }
+
   HelperReader helperReader;
   const CollectFold *composition = nullptr;
   ComposedHelperReader composedHelper;
@@ -63,33 +130,39 @@ class Reader {
       *limits.sharedReader -= amount;
     return true;
   }
+  SmallVector<Value> arguments(Block *block) {
+    return SmallVector<Value>(ports.arguments(block));
+  }
   Operation *consume(StringRef name) {
-    if (!valid || !cursor || cursor->getName().getStringRef() != name) {
+    if (!valid || !ports.contains(cursor) ||
+        cursor->getName().getStringRef() != name) {
       fail();
       return nullptr;
     }
     if (!charge())
       return nullptr;
     auto *op = cursor;
-    cursor = cursor->getNextNode();
+    cursor = ports.next(cursor);
     return op;
   }
   Value kernel(StringRef contract, ValueRange operands, Type result,
                ArrayRef<std::string> arguments = {},
                ArrayRef<std::string> parameters = {}) {
-    auto *op = consume(protocol::boundOperationName(contract));
+    auto *op = consume(exec::ApplyOp::getOperationName());
     if (!op)
       return {};
     auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
+    auto binding = ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                       : runtime::BindingOp();
     auto params = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
-    if (!binding || !params || !site || op->getAttrs().size() != 3 ||
-        op->getNumRegions() || op->getOperands() != operands ||
-        op->getNumResults() != unsigned(bool(result)) ||
-        (result && op->getResult(0).getType() != result) ||
+    if (!binding || !params || !site || !this->site(op, contract) ||
+        op->getAttrs().size() != 3 || ports.bodies(op) ||
+        ports.inputs(op) != operands ||
+        ports.outputs(op).size() != unsigned(bool(result)) ||
+        (result && ports.outputs(op)[0].getType() != result) ||
+        (admissionLocation && contract == "control.require" &&
+         op->getLoc() != *admissionLocation) ||
         binding.getContract() != contract ||
         !binding.getImplementation().empty() ||
         binding.getArguments().size() != arguments.size() ||
@@ -104,7 +177,7 @@ class Reader {
       if (a != StringAttr::get(op->getContext(), b))
         fail();
     bindings.insert(binding);
-    return result ? op->getResult(0) : Value();
+    return result ? ports.outputs(op)[0] : Value();
   }
   Value natural(uint64_t n) {
     return kernel("index.constant", {}, index, {}, {std::to_string(n)});
@@ -131,83 +204,75 @@ class Reader {
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {
-    if (name == "local.for") {
-      auto *at = cursor;
-      auto available = availableWork();
-      auto scheduleWork = available;
-      auto parsed = zkc::kernel::readScheduledLoop(at, scheduleWork);
-      // Schema inspection spends required work even if no packet matches or
-      // inspection exhausts its allowance. Settle its actual debit once.
-      if (!charge(available - scheduleWork))
-        return nullptr;
-      if (failed(parsed)) {
-        result = {
-            VerificationStatus::RequiredCapacity, "finite reader work",
-            CapacityCause{WorkOwner::RequiredFiniteReader, {}, availableWork()},
-            mathematical::realizationSubject(c.operation)};
-        fail();
-        return nullptr;
-      }
-      auto &scheduled = *parsed;
-      if (scheduled) {
-        if (!charge())
-          return nullptr;
-        if (ValueRange(scheduled->inputs) != operands ||
-            scheduled->states != results.size() ||
-            !llvm::equal(scheduled->loop.getResults()
-                             .take_front(results.size())
-                             .getTypes(),
-                         results)) {
-          fail();
-          return nullptr;
-        }
-        cursor = at;
-        return scheduled->loop;
-      }
-    }
     auto *op = consume(name);
     if (!op)
       return nullptr;
-    if (op->getOperands() != operands || op->getResultTypes() != results ||
-        op->getNumRegions() != regions ||
-        !op->getAttrOfType<StringAttr>("site") || op->getAttrs().size() != 1) {
+    if (ports.inputs(op) != operands ||
+        ports.outputs(op).getTypes() != results ||
+        ports.bodies(op) != regions || !op->getAttrOfType<StringAttr>("site") ||
+        op->getAttrs().size() != 1 || !site(op)) {
       fail();
       return nullptr;
     }
     return op;
   }
   Block *enter(Operation *op, unsigned region, TypeRange types) {
-    if (!op || !op->getRegion(region).hasOneBlock()) {
+    auto *block = ports.body(op, region);
+    if (!block) {
       fail();
       return nullptr;
     }
-    auto &block = op->getRegion(region).front();
-    auto arguments = zkc::kernel::traversalArguments(&block);
-    if (!llvm::equal(ValueRange(arguments).getTypes(), types) ||
-        block.empty()) {
+    auto values = arguments(block);
+    if (!llvm::equal(ValueRange(values).getTypes(), types) ||
+        !ports.first(block)) {
       fail();
       return nullptr;
     }
-    cursor = &block.front();
-    if (isa<scf::ForOp>(op))
-      cursor =
-          cursor->getNextNode(); // Exact induction bridge checked by schema.
-    return &block;
+    regionReturns[block->getParentOp()] = ports.outputs(op).size();
+    if (!limits.finiteSite.empty()) {
+      auto function = cast<func::FuncOp>(block->getParentOp());
+      NamedAttrList expected;
+      expected.set("sym_name", function.getSymNameAttr());
+      expected.set("function_type", function->getAttr("function_type"));
+      expected.set("sym_visibility",
+                   StringAttr::get(op->getContext(), "private"));
+      expected.set("no_inline", UnitAttr::get(op->getContext()));
+      expected.set("runtime.region", UnitAttr::get(op->getContext()));
+      if (expected.getDictionary(op->getContext()) !=
+          function->getAttrDictionary()) {
+        fail();
+        return nullptr;
+      }
+    }
+    cursor = ports.first(block);
+    return block;
   }
   void end(StringRef name, ValueRange inputs) {
-    if (cursor && isa<scf::ForOp>(cursor->getParentOp()) &&
-        name == "local.yield")
-      name = "scf.yield";
+    if (stoppedCallback) {
+      if (cursor)
+        fail();
+      return;
+    }
     auto *op = consume(name);
-    if (!op || op->getOperands() != inputs || op->getNumResults() ||
-        op->getNumRegions() || !op->getAttrs().empty() || cursor)
+    if (!op)
+      return;
+    if (isa<exec::CompleteOp>(op)) {
+      auto found = regionReturns.find(op->getParentOp());
+      if (found == regionReturns.end() || inputs.size() < found->second) {
+        fail();
+        return;
+      }
+      inputs = inputs.take_front(found->second);
+    }
+    if (ports.inputs(op) != inputs || !ports.outputs(op).empty() ||
+        ports.bodies(op) || !op->getAttrs().empty() || cursor)
       fail();
   }
   void bound(Value value) {
-    auto *loop = control("local.for", {value, value}, {}, 1);
+    auto *loop = control("exec.range", {value, value}, {}, 1);
     Operation *after = cursor;
     if (enter(loop, 0, {index}))
-      end("local.yield", {});
+      end("exec.complete", {});
     cursor = after;
   }
   Value range(Value lower, Value upper) {
@@ -216,21 +281,100 @@ class Reader {
     if (upper != lower)
       inputs.push_back(upper);
     SmallVector<Type> types(inputs.size() - 1, index);
-    auto *branch = control("local.if", inputs, {index}, 2);
+    auto *branch = control("exec.test", inputs, {index}, 2);
     auto *after = cursor;
     if (auto *yes = enter(branch, 0, types)) {
       Value size = kernel(
           "index.sub",
-          {yes->getArgument(upper == lower ? 0 : 1), yes->getArgument(0)},
-          index);
-      end("local.yield", size ? ValueRange{size} : ValueRange{});
+          {arguments(yes)[upper == lower ? 0 : 1], arguments(yes)[0]}, index);
+      end("exec.complete", size ? ValueRange{size} : ValueRange{});
     }
     if (enter(branch, 1, types)) {
       Value zero = natural(0);
-      end("local.yield", zero ? ValueRange{zero} : ValueRange{});
+      end("exec.complete", zero ? ValueRange{zero} : ValueRange{});
     }
     cursor = after;
-    return branch ? branch->getResult(0) : Value();
+    return branch ? ports.outputs(branch)[0] : Value();
+  }
+  bool nestedContraction(const nested::ScopedSource &source, ValueRange entry,
+                         Value size) {
+    auto output = c.signature.getResult(0);
+    auto field = cast<algebra::FieldVectorType>(output).getElementType();
+    SmallVector<std::string> parameters{
+        cast<algebra::FieldType>(field).getDomain().str()};
+    Value zero = natural(0);
+    Value nonempty = kernel("index.less", {zero, size}, boolean);
+    SmallVector<Value> inputs{nonempty};
+    append_range(inputs, entry);
+    inputs.push_back(size);
+    inputs.push_back(zero);
+    auto *branch = control("exec.test", inputs, output, 2);
+    if (!branch)
+      return false;
+    auto *after = cursor;
+    auto captureTypes = ValueRange(inputs).drop_front().getTypes();
+    for (unsigned arm = 0; arm < 2 && valid; ++arm) {
+      auto *block = enter(branch, arm, captureTypes);
+      if (!block)
+        return false;
+      auto captures = arguments(block);
+      if (arm) {
+        Value empty = kernel("vector.empty", {}, output, parameters);
+        end("exec.complete", empty ? ValueRange{empty} : ValueRange{});
+        continue;
+      }
+      auto &domain = source.inner.domain->getRegion(0).front();
+      auto mapped = [&](Value formal) {
+        auto position = cast<BlockArgument>(formal).getArgNumber();
+        auto input = source.inputMap[position];
+        return input ? captures[input - 1] : captures.back();
+      };
+      llvm::DenseMap<Value, Value> extents;
+      admissionLocation = source.inner.operation->getLoc();
+      admissionPath = protocol::Assignments{
+          {limits.finiteSite.str(), SymbolTable::getSymbolName(c.helper).str()},
+          {source.call->getAttrOfType<StringAttr>("site").str(),
+           SymbolTable::getSymbolName(source.inner.helper).str()}};
+      admissionOccurrence = 0;
+      for (auto &op : domain.without_terminator()) {
+        if (!valid)
+          return false;
+        Value size;
+        if (isa<data::DomainElementsOp>(op))
+          size = extent(mapped(op.getOperand(0)));
+        else if (isa<data::DomainMatrixRowOp, data::DomainMatrixColumnOp>(op)) {
+          Value matrix = mapped(op.getOperand(0));
+          Value bound = extent(matrix, source.axis);
+          require(
+              kernel("index.less", {mapped(op.getOperand(1)), bound}, boolean));
+          size = extent(matrix, 1 - source.axis);
+        } else {
+          size = extents.lookup(op.getOperand(0));
+          for (Value child : op.getOperands().drop_front())
+            require(
+                kernel("index.equal", {size, extents.lookup(child)}, boolean));
+        }
+        extents[op.getResult(0)] = size;
+      }
+      admissionLocation.reset();
+      admissionPath.reset();
+      Value seed = source.seed.input
+                       ? captures[*source.seed.input]
+                       : kernel("field.constant", {}, field, parameters,
+                                {source.seed.constant});
+      Value result = kernel(source.axis ? "matrix.transpose_mul_vector"
+                                        : "matrix.mul_vector",
+                            {captures[source.matrix], captures[source.vector]},
+                            output, parameters);
+      Value initial = kernel("vector.fill", {seed, captures[entry.size()]},
+                             output, parameters);
+      Value value = kernel("vector.add", {initial, result}, output, parameters);
+      end("exec.complete", value ? ValueRange{value} : ValueRange{});
+    }
+    cursor = after;
+    if (valid)
+      finish(ports.outputs(branch));
+    return valid;
   }
   Value product(Value left, Value right) {
     bound(left);
@@ -344,18 +488,47 @@ class Reader {
   SmallVector<Value> invoke(CallbackRole role, CallbackValues actuals) {
     // Reconstruct from this reader's immutable source and actual candidate
     // values. No selected producer environment participates in correspondence.
-    auto callback = readCallback(c, role);
+    auto callback = readCallbackABI(c, role);
     if (failed(callback)) {
       fail();
       return {};
     }
-    auto environment = bindCallback(*callback, actuals);
+    Value scope;
+    if (c.scoped && cursor)
+      scope = cast<func::FuncOp>(cursor->getParentOp()).getArgument(0);
+    auto environment = bindCallback(*callback, actuals, scope);
     if (failed(environment)) {
       fail();
       return {};
     }
     auto *helper = callback->symbol;
     ValueRange args = environment->actuals;
+    if (c.scoped) {
+      if (!limits.callback) {
+        fail();
+        return {};
+      }
+      auto callSite = nextSite();
+      if (!valid)
+        return {};
+      auto result = limits.callback(cast<func::FuncOp>(helper),
+                                    args.drop_front(), callSite, cursor);
+      if (failed(result)) {
+        fail();
+        return {};
+      }
+      stoppedCallback = result->stopped;
+      if ((stoppedCallback && !result->values.empty()) ||
+          (!stoppedCallback &&
+           !llvm::equal(
+               ValueRange(result->values).getTypes(),
+               cast<exec::OutcomeType>(callback->signature.getResult(0))
+                   .getPayload()))) {
+        fail();
+        return {};
+      }
+      return result->values;
+    }
     if (c.total) {
       auto result = helperReader(helper, args, cursor);
       if (failed(result)) {
@@ -364,18 +537,8 @@ class Reader {
       }
       return *result;
     }
-    auto *op = consume("local.apply");
-    if (!op)
-      return {};
-    auto type = callback->signature;
-    auto ref = op->getAttrOfType<FlatSymbolRefAttr>("callee");
-    if (!ref ||
-        ref.getValue() != SymbolTable::getSymbolName(helper).getValue() ||
-        op->getOperands() != args ||
-        op->getResultTypes() != type.getResults() ||
-        op->getAttrs().size() != 2 || !op->getAttrOfType<StringAttr>("site"))
-      fail();
-    return SmallVector<Value>(op->getResults());
+    fail();
+    return {};
   }
   SmallVector<Value> transition(ValueRange state, ValueRange items,
                                 ValueRange env, Value position = {}) {
@@ -397,7 +560,7 @@ class Reader {
         consumerEnv.push_back(value == composition->collected ? value
                                                               : rest[next++]);
       auto &consumer = composition->consumer;
-      auto callback = readCallback(consumer, CallbackRole::Step);
+      auto callback = readCallbackABI(consumer, CallbackRole::Step);
       if (failed(callback)) {
         fail();
         return {};
@@ -424,7 +587,7 @@ class Reader {
         invoke(c.collect ? CallbackRole::Body : CallbackRole::Step,
                {c.collect ? ValueRange{} : state, items,
                 env.take_front(c.arguments), env.drop_front(c.arguments)});
-    if (!valid || !c.collect)
+    if (!valid || stoppedCallback || !c.collect)
       return next;
     auto col = mathematical::interpretCollection(state[0].getType());
     return {kernel(col.append, {state[0], next[0]}, state[0].getType(),
@@ -442,9 +605,9 @@ public:
   Reader(Computation computation, SymbolTable &symbols,
          llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {},
          bool allowBulk = true)
-      : c(computation), symbols(symbols), bindings(bindings),
-        index(IntegerType::get(c.operation->getContext(), 64,
-                               IntegerType::Unsigned)),
+      : c(computation), symbols(symbols), ports(limits.candidate),
+        bindings(bindings), index(IntegerType::get(c.operation->getContext(),
+                                                   64, IntegerType::Unsigned)),
         boolean(IntegerType::get(c.operation->getContext(), 1)),
         allowBulk(allowBulk), remaining(limits.reader), limits(limits) {}
   void compose(const CollectFold &pair, ValueRange inputs,
@@ -455,27 +618,11 @@ public:
     allowBulk = false;
   }
   VerificationResult outcome() const { return result; }
-  bool check(local::FuncOp target) {
-    if (!target || target.getFunctionType() != c.signature ||
-        !target.getBody().hasOneBlock() || target->getAttrs().size() != 3)
-      return false;
-    auto origin = target->getAttrOfType<ArrayAttr>("logical_origin");
-    if (!origin || origin.size() != 2 ||
-        origin[0] != SymbolTable::getSymbolName(c.operation) ||
-        origin[1] != ArrayAttr::get(target.getContext(), {}))
-      return false;
-    auto &entry = target.getBody().front();
-    return checkBody(entry.getArguments(), &entry.front());
-  }
   void finish(ValueRange values) {
-    if (inlineMode)
-      expressionResults.assign(values.begin(), values.end());
-    else
-      end("local.return", values);
+    expressionResults.assign(values.begin(), values.end());
   }
   FailureOr<SmallVector<Value>> checkInline(ValueRange inputs, Operation *&at,
                                             HelperReader helper) {
-    inlineMode = true;
     helperReader = helper;
     if (!checkBody(inputs, at))
       return failure();
@@ -494,14 +641,43 @@ public:
     if (!valid)
       return false;
     Value rootDomain = c.domain.getBody().front().back().getOperand(0);
-    if (allowBulk &&
+    auto binding = cursor ? cursor->getAttrOfType<FlatSymbolRefAttr>("binding")
+                          : FlatSymbolRefAttr();
+    auto declaration =
+        binding ? symbols.lookup<runtime::BindingOp>(binding.getValue())
+                : runtime::BindingOp();
+    if (allowBulk && c.collect && declaration &&
+        declaration.getContract() == "index.constant") {
+      // The optional source interpreter has its own comparison allowance. It
+      // consumes actual scoped instructions, never the producer's selection.
+      uint64_t comparisonWork =
+          reserve(std::min(availableWork(), limits.comparison),
+                  limits.sharedComparison);
+      auto settle = llvm::scope_exit([&] {
+        if (limits.sharedComparison)
+          *limits.sharedComparison += comparisonWork;
+      });
+      bool exhausted = false;
+      auto nested = nested::readScopedSource(c, comparisonWork, exhausted);
+      if (exhausted) {
+        result = {VerificationStatus::OptionalCapacity,
+                  "nested contraction source work",
+                  CapacityCause{WorkOwner::OptionalComparison, {}, {}},
+                  mathematical::realizationSubject(c.operation)};
+        return false;
+      }
+      if (nested)
+        return nestedContraction(*nested, entry,
+                                 cardinalities.lookup(rootDomain));
+    }
+    bool startsEmpty =
+        declaration && declaration.getContract() == "vector.empty";
+    if ((allowBulk || !limits.collectionSumSite.empty()) &&
         (mathematical::hasFinitePayloadContract(cursor, symbols) ||
-         // An identity collect can return an existing vector without emitting
-         // payload. Its ordered alternative starts with an empty container.
+         // An identity collect may return an existing vector without payload.
          (c.collect && cursor &&
           isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
-          cursor->getName().getStringRef() !=
-              protocol::boundOperationName("vector.empty")))) {
+          !startsEmpty))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
       uint64_t comparisonWork =
@@ -513,12 +689,37 @@ public:
       });
       mathematical::ComparisonCapacity capacity;
       std::optional<CapacityCause> debit;
-      if (auto compared = mathematical::compareFinitePayload(
-              c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
-              bindings, comparisonWork,
-              inlineMode ? nullptr : &begin->getBlock()->back(), &capacity,
-              &debit);
-          succeeded(compared)) {
+      auto *payload = cursor;
+      bool summed = !limits.collectionSumSite.empty();
+      auto compare = [&](bool sum) {
+        return mathematical::compareFinitePayload(
+            c, entry, cardinalities.lookup(rootDomain), cursor, symbols,
+            bindings, comparisonWork, nullptr, &capacity, &debit,
+            limits.candidate, sum);
+      };
+      auto compared = compare(summed);
+      if (failed(compared) && summed && allowBulk &&
+          capacity == mathematical::ComparisonCapacity::None) {
+        summed = false;
+        compared = compare(false);
+      }
+      if (succeeded(compared)) {
+        // Mathematical equality does not authorize changing the actual
+        // occurrence identities. Account and check the complete consumed
+        // payload, including unused arithmetic admitted by the comparison.
+        for (auto *op = payload; op != cursor; op = ports.next(op)) {
+          bool final = op && summed && ports.next(op) == cursor;
+          bool named =
+              final ? op->getAttrOfType<StringAttr>("site") ==
+                              StringAttr::get(op->getContext(),
+                                              limits.collectionSumSite) &&
+                          limits.collectionSumLocation == op->getLoc()
+                    : op && site(op);
+          if (!op || !charge() || !named) {
+            fail();
+            return false;
+          }
+        }
         finish(ValueRange{*compared});
         return valid;
       }
@@ -577,7 +778,7 @@ public:
     SmallVector<Type> types;
     for (Value v : state)
       types.push_back(v.getType());
-    auto *loop = control("local.for", inputs, types, 1);
+    auto *loop = control("exec.range", inputs, types, 1);
     auto *after = cursor;
     SmallVector<Type> bt{index};
     append_range(bt, types);
@@ -586,7 +787,7 @@ public:
     auto *body = enter(loop, 0, bt);
     if (!body)
       return false;
-    auto bodyArguments = zkc::kernel::traversalArguments(body);
+    auto bodyArguments = arguments(body);
     auto current = ValueRange(bodyArguments).slice(1, state.size()),
          captured = ValueRange(bodyArguments).drop_front(1 + state.size());
     llvm::DenseMap<Value, Value> mapping;
@@ -605,73 +806,64 @@ public:
                           item,
                           ValueRange(environment).take_front(c.arguments),
                           ValueRange(environment).drop_front(c.arguments)});
-      if (!valid || pred.size() != 1)
+      if (!valid || (!stoppedCallback && pred.size() != 1))
         return false;
-      SmallVector<Value> capturedValues;
-      for (ValueRange operands :
-           {ValueRange(current), ValueRange(item), ValueRange(environment)})
-        for (Value value : operands)
-          if (!is_contained(capturedValues, value))
-            capturedValues.push_back(value);
-      SmallVector<Value> bi{pred[0]};
-      append_range(bi, capturedValues);
-      auto *branch = control("local.if", bi, types, 2);
-      auto *following = cursor;
-      SmallVector<Type> branchTypes;
-      for (Value v : capturedValues)
-        branchTypes.push_back(v.getType());
-      auto remap = [&](Block *block, ValueRange operands) {
-        SmallVector<Value> result;
-        for (Value value : operands) {
-          auto position =
-              llvm::find(capturedValues, value) - capturedValues.begin();
-          result.push_back(block->getArgument(position));
+      if (!stoppedCallback) {
+        SmallVector<Value> capturedValues;
+        for (ValueRange operands :
+             {ValueRange(current), ValueRange(item), ValueRange(environment)})
+          for (Value value : operands)
+            if (!is_contained(capturedValues, value))
+              capturedValues.push_back(value);
+        SmallVector<Value> bi{pred[0]};
+        append_range(bi, capturedValues);
+        auto *branch = control("exec.test", bi, types, 2);
+        auto *following = cursor;
+        SmallVector<Type> branchTypes;
+        for (Value v : capturedValues)
+          branchTypes.push_back(v.getType());
+        auto remap = [&](Block *block, ValueRange operands) {
+          SmallVector<Value> result;
+          for (Value value : operands) {
+            auto position =
+                llvm::find(capturedValues, value) - capturedValues.begin();
+            result.push_back(arguments(block)[position]);
+          }
+          return result;
+        };
+        if (auto *yes = enter(branch, 0, branchTypes)) {
+          auto result = transition(remap(yes, current), remap(yes, item),
+                                   remap(yes, environment));
+          end("exec.complete", result);
         }
-        return result;
-      };
-      if (auto *yes = enter(branch, 0, branchTypes)) {
-        auto result = transition(remap(yes, current), remap(yes, item),
-                                 remap(yes, environment));
-        end("local.yield", result);
+        stoppedCallback = false;
+        if (auto *no = enter(branch, 1, branchTypes))
+          end("exec.complete", remap(no, current));
+        cursor = following;
+        if (!valid)
+          return false;
+        append_range(next, ports.outputs(branch));
       }
-      if (auto *no = enter(branch, 1, branchTypes))
-        end("local.yield", remap(no, current));
-      cursor = following;
-      if (!valid)
-        return false;
-      append_range(next, branch->getResults());
     } else
       next = transition(current, item, environment, bodyArguments[0]);
     append_range(next, captured);
-    end("local.yield", next);
+    end("exec.complete", next);
+    stoppedCallback = false;
     cursor = after;
     if (!valid)
       return false;
-    SmallVector<Value> results(loop->getResults().take_front(state.size()));
+    SmallVector<Value> results(ports.outputs(loop).take_front(state.size()));
     if (!composition && c.collect &&
         results[0].getType() != c.signature.getResult(0)) {
       auto col = mathematical::interpretCollection(c.signature.getResult(0));
       results[0] = kernel("field_array.from_vector", results,
                           c.signature.getResult(0), col.arguments);
     }
-    finish(results);
+    expressionResults.assign(results.begin(), results.end());
     return valid;
   }
 };
 } // namespace
-FailureOr<SmallVector<Value>>
-verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
-                 HelperReader helper, Operation *symbolRoot) {
-  VerificationResult outcome{VerificationStatus::Mismatch, {}};
-  auto result =
-      verifyExpression(source, inputs, cursor, helper, symbolRoot, {}, outcome);
-  if (outcome.status == VerificationStatus::OptionalCapacity ||
-      outcome.status == VerificationStatus::RequiredCapacity)
-    diagnostics::emit(source->emitError(), "finite-verification-capacity",
-                      outcome.detail);
-  return result;
-}
-
 FailureOr<SmallVector<Value>>
 verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
                  HelperReader helper, Operation *symbolRoot,
@@ -679,7 +871,7 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
                  MathematicalSelectionPolicy policy) {
   outcome = {VerificationStatus::Mismatch,
              "finite expression differs from its domain/helper"};
-  if (!cursor)
+  if (!cursor || !limits.candidate)
     return failure();
   auto *unit = SymbolTable::getNearestSymbolTable(cursor);
   if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
@@ -690,6 +882,8 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
   SymbolTableCollection sourceSymbols;
   if (failed(describe(source, c, symbolRoot, &sourceSymbols)))
     return failure();
+  c.scopedSource = limits.sourceClosure;
+  c.fixedBindings = limits.fixedBindings;
   Reader reader(c, symbols, bindings, limits, policy.finiteBulk);
   auto result = reader.checkInline(inputs, cursor, helper);
   outcome = succeeded(result)
@@ -705,7 +899,7 @@ verifyCollectFold(const CollectFold &pair, ValueRange producerInputs,
                   VerificationLimits limits, VerificationResult &outcome) {
   outcome = {VerificationStatus::Mismatch,
              "collect-fold recipe differs from its domain/helpers"};
-  if (!cursor)
+  if (!cursor || !limits.candidate)
     return failure();
   auto *unit = SymbolTable::getNearestSymbolTable(cursor);
   if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
@@ -721,50 +915,6 @@ verifyCollectFold(const CollectFold &pair, ValueRange producerInputs,
   return result;
 }
 
-VerificationResult checkRealizations(ModuleOp original, ModuleOp candidate,
-                                     VerificationLimits limits) {
-  if (failed(mlir::verify(original)) || failed(mlir::verify(candidate)))
-    return {VerificationStatus::Mismatch, "module verification"};
-  auto refuse = [&](StringRef detail) {
-    return VerificationResult{VerificationStatus::Mismatch, detail};
-  };
-  if (!hasSingleElement(*original.getBody()) ||
-      !hasSingleElement(*candidate.getBody()) ||
-      original->getAttrDictionary() != candidate->getAttrDictionary())
-    return refuse("module shape");
-  auto before =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(original.getBody()->front());
-  auto after =
-      dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  if (!before || !after ||
-      before->getAttrDictionary() != after->getAttrDictionary())
-    return refuse("unit profile");
-  SymbolTable symbols(after);
-  SymbolTableCollection sourceSymbols;
-  llvm::DenseSet<Operation *> retained, usedBindings;
-  for (auto &op : before.getBody().front()) {
-    auto name = SymbolTable::getSymbolName(&op);
-    Operation *replacement = name ? symbols.lookup(name) : nullptr;
-    if (!replacement)
-      return refuse("missing declaration");
-    retained.insert(replacement);
-    if (isDeclaration(&op)) {
-      Computation c;
-      if (failed(describe(&op, c, before, &sourceSymbols)))
-        return refuse("finite recipe differs from its domain/helper");
-      Reader reader(c, symbols, usedBindings, limits);
-      if (!reader.check(dyn_cast<local::FuncOp>(replacement)))
-        return reader.outcome();
-    } else if (!OperationEquivalence::isEquivalentTo(
-                   &op, replacement, OperationEquivalence::IgnoreLocations))
-      return refuse("changed retained definition or helper body");
-  }
-  for (auto &op : after.getBody().front())
-    if (!retained.contains(&op) && !usedBindings.contains(&op))
-      return refuse("unexpected declaration");
-  return {VerificationStatus::Verified, {}};
-}
-
 LogicalResult VerificationResult::diagnose(ModuleOp candidate) const {
   if (status == VerificationStatus::Verified)
     return success();
@@ -775,7 +925,4 @@ LogicalResult VerificationResult::diagnose(ModuleOp candidate) const {
                            detail);
 }
 
-LogicalResult verifyRealizations(ModuleOp original, ModuleOp candidate) {
-  return checkRealizations(original, candidate).diagnose(candidate);
-}
 } // namespace zkc::finite

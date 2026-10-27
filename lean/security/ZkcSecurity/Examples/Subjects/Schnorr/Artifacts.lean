@@ -52,8 +52,8 @@ def sourceReference (stage : Zkc.Claims.Stage) : Zkc.Claims.SubjectRef :=
   ⟨"sha256:96e7911cc0127e0d751223fec8d3d4fb6f2b6f518f1fd884290251e35893be4a", "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad", stage,
     match stage with
     | .interactive => []
-    | .compiledIdeal => [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩]
-    | .executableBytes => [⟨"constructed-participant", "sha256:19a0425a0933930417ecc530361d3d11775e88f52ae110229976dbce4eb236d6"⟩, ⟨"verifier-program", "sha256:e4e3ceccb896909a93fbf4711b60481a2f89ccea7a5c26ecc244e10c1f59efd5"⟩]⟩
+    | .compiledIdeal => [⟨"constructed-participant", "sha256:81f6400d41f8d2cf31323c0f8f248e8de498b261a98b32a44253eae3854bd87c"⟩]
+    | .executableBytes => [⟨"constructed-participant", "sha256:81f6400d41f8d2cf31323c0f8f248e8de498b261a98b32a44253eae3854bd87c"⟩, ⟨"verifier-program", "sha256:d01f7638470e602c4a35c0124282a71c88226b9a978d6792bd81a78d5ee08f2c"⟩]⟩
 
 /-- Independently bound bytes for the separately admitted interactive protocol subject. -/
 def interactiveReference : Zkc.Claims.SubjectRef :=

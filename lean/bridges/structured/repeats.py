@@ -473,8 +473,12 @@ def handwritten_cases(suite):
         inputs=(("n", "ui64", ("P",)),), outputs=(("ui64", ("P",)), ("ui64", ("P",))), returns=("%r#0", "%r#1"))))
     for n in (0, 1, 2, 4):
         observe(suite, indexed, f"index-count-{n}", "P", [str(n)], [], returned([str(max(0, n-1)), str(n)]))
-    stop_helper = '''local.func @work(%x:!F,%unused:!F)->!F attributes {logical_origin=["work",[]]} {
-      "local.stop"() {reason="abort",site="raw_helper_stop"} : ()->()
+    stop_helper = '''func.func @work(%scope:!runtime.scope,%x:!F,%unused:!F)->!exec.outcome<(!F)> attributes {no_inline,runtime.origin=["work",[]]} {
+      %stop = "exec.reject"(%scope) {reason="abort",site="raw_helper_stop"} : (!runtime.scope)->!exec.stop
+      cf.br ^failed(%stop : !exec.stop)
+  ^failed(%cause:!exec.stop):
+    %done = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<(!F)>
+      func.return %done : !exec.outcome<(!F)>
     }'''
     stopping = suite.export("repeat-local-stop", module(stop_helper, protocol("main", repeat(
         '%v = "protocol.local_call"(%s,%capture) {callee=@work,role="P",site="work"} : (!F,!F)->!F', yielded="%v"))))

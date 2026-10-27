@@ -30,24 +30,24 @@ def require(condition, label):
 
 def main():
     descriptor = variant.descriptor("example.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
-    spelling = '!data.sequence<!local.variant<"' + descriptor + '">>'
+    spelling = '!data.sequence<!data.variant<"' + descriptor + '">>'
     term, kind = render.sort(spelling)
     require(kind[0] == "data" and '.sequence (.product "\\\"example.Opening\\\"" "opening"' in term,
             "lost the nominal sequence")
     other = variant.descriptor("other.Opening", [("opening", ["field:koala-bear", "field:koala-bear"])])
-    require(render.sort('!data.sequence<!local.variant<"' + other + '">>') != (term, kind),
+    require(render.sort('!data.sequence<!data.variant<"' + other + '">>') != (term, kind),
             "merged distinct nominal identities")
     # Canonical node tables have no unreachable or duplicate nodes.
     value = json.loads(bytes.fromhex(descriptor[8:]))
     value[1].append("unused")
     noncanonical = "variant:" + json.dumps(value, separators=(",", ":")).encode().hex()
-    refused("noncanonical product", lambda: render.sort('!local.variant<"' + noncanonical + '">'))
+    refused("noncanonical product", lambda: render.sort('!data.variant<"' + noncanonical + '">'))
     service = variant.descriptor("example.Private", [("private", ["service:random.koala-bear/0"])])
-    refused("nested service", lambda: render.sort('!data.sequence<!local.variant<"' + service + '">>'))
+    refused("nested service", lambda: render.sort('!data.sequence<!data.variant<"' + service + '">>'))
     sum_type = variant.descriptor("example.Sum", [("left", []), ("right", [])])
-    refused("multiple constructors", lambda: render.sort('!local.variant<"' + sum_type + '">'))
+    refused("multiple constructors", lambda: render.sort('!data.variant<"' + sum_type + '">'))
     refused("trailing type suffix", lambda: render.sort(spelling + "garbage"))
-    refused("unsupported capability", lambda: render.sort('!data.sequence<!local.capability<"private">>'))
+    refused("unsupported capability", lambda: render.sort('!data.sequence<!runtime.capability<"private">>'))
     plain = ["zkc.native-proof-policy/0", "entry", "P", "V", "0", "", [], ["0"], [], "zkc.framed/0", ""]
     render.policy(plain)
     forged = list(plain)
@@ -57,7 +57,7 @@ def main():
     forged[8] = [["query", "delivery"]]
     refused("plain draw schedule", lambda: render.policy(forged))
     fake = [render.FORMAT, "sha256:" + "0" * 64, "sha256:" + "1" * 64, plain, "V",
-            ['!local.capability<"transcript:invented">'], ["i1"], [], [], []]
+            ['!runtime.capability<"transcript:invented">'], ["i1"], [], [], []]
     refused("plain transcript ABI", lambda: render.render_declaration(fake, "ForgedPlain"))
     print("plain construction reader: 3 positive, 8 refusal controls passed")
 

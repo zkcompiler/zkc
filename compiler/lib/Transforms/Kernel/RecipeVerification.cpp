@@ -3,14 +3,20 @@
 #include "../HelperNormalization.h"
 #include "../MathematicalSupport.h"
 #include "../RealizationSubject.h"
+#include "../ScopedCandidate.h"
+#include "Schedule.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
@@ -29,6 +35,7 @@ namespace {
 class RecipeReader {
   Operation *sourceRoot;
   SymbolTable symbols;
+  CandidatePorts ports;
   const CheckedHelperNormalizations &helpers;
   uint64_t remaining = 1000000;
   bool allowFiniteBulk = true;
@@ -55,10 +62,10 @@ class RecipeReader {
   bool occurrences(Operation *begin, Operation *end, StringRef root,
                    bool finite) {
     auto prefix = (root + (finite ? "_finite_" : "_recipe_")).str();
-    for (auto *op = begin; op != end; op = op->getNextNode()) {
+    for (auto *op = begin; op != end; op = ports.next(op)) {
       if (!op)
         return false;
-      auto walk = op->walk([&](Operation *nested) {
+      auto walk = ports.walk(op, [&](Operation *nested) {
         if (!charge())
           return WalkResult::interrupt();
         auto site = nested->getAttrOfType<StringAttr>("site");
@@ -79,16 +86,14 @@ class RecipeReader {
   bool primitive(Operation *op, StringRef contract, ValueRange inputs,
                  ArrayRef<StringRef> arguments = {},
                  ArrayRef<StringRef> expectedParameters = {}) {
-    if (!op ||
-        op->getName().getStringRef() !=
-            protocol::boundOperationName(contract) ||
-        op->getNumResults() != 1 || op->getNumRegions() != 0 ||
-        op->getOperands() != inputs || !charge(1 + inputs.size()))
+    if (!op || !ports.contains(op) || !isa<exec::ApplyOp>(op) ||
+        ports.outputs(op).size() != 1 || ports.bodies(op) != 0 ||
+        ports.inputs(op) != inputs || !charge(1 + inputs.size()))
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding = reference ? dyn_cast_or_null<local::OperationBindingOp>(
+    auto binding = reference ? dyn_cast_or_null<runtime::BindingOp>(
                                    symbols.lookup(reference.getValue()))
-                             : local::OperationBindingOp();
+                             : runtime::BindingOp();
     auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!binding || binding.getContract() != contract ||
@@ -210,10 +215,17 @@ class RecipeReader {
                          subject};
         return failure();
       }
-      for (auto *at = begin; at != cursor; at = at->getNextNode()) {
+      for (auto *at = begin; at != cursor; at = ports.next(at)) {
         if (!at)
           return failure();
-        at->walk([&](Operation *nested) { selection->record(nested, *owner); });
+        if (ports
+                .walk(at,
+                      [&](Operation *nested) {
+                        selection->record(nested, *owner);
+                        return WalkResult::advance();
+                      })
+                .wasInterrupted())
+          return failure();
       }
     }
     // A recursive finite callback may already have reported capacity; its
@@ -229,8 +241,8 @@ class RecipeReader {
                     ArrayRef<StringRef> parameters = {}) -> Value {
       if (!primitive(cursor, contract, operands, arguments, parameters))
         return {};
-      auto value = cursor->getResult(0);
-      cursor = cursor->getNextNode();
+      auto value = ports.outputs(cursor)[0];
+      cursor = ports.next(cursor);
       return value;
     };
     if (isa<poly::ObserveQuotientOp>(source))
@@ -337,34 +349,44 @@ class RecipeReader {
     if (isa<data::EqualOp, data::LessOp>(source))
       return take(isa<data::EqualOp>(source) ? "index.equal" : "index.less",
                   inputs);
+    auto isBoolean = [&](Operation *op) {
+      return ports.contains(op) && isa<exec::BooleanOp>(op);
+    };
+    auto isYield = [&](Operation *op) {
+      return ports.contains(op) && isa<exec::CompleteOp>(op);
+    };
     if (auto make = dyn_cast<data::MakeOp>(source)) {
-      auto target = dyn_cast_or_null<local::VariantInjectOp>(cursor);
-      if (!target || target.getOperands() != inputs ||
-          target.getAlternative() != make.getAlternative())
+      auto *target = cursor;
+      if (!ports.contains(target) || !isa<exec::VariantOp>(target) ||
+          ports.inputs(target) != inputs || ports.outputs(target).size() != 1 ||
+          target->getAttr("alternative") != make.getAlternativeAttr())
         return {};
-      cursor = cursor->getNextNode();
-      return target.getOutput();
+      cursor = ports.next(cursor);
+      return ports.outputs(target)[0];
     }
     if (isa<data::GetOp, data::IsOp>(source)) {
-      auto target = dyn_cast_or_null<local::LocalMatchOp>(cursor);
+      auto *target = cursor;
       auto descriptor = protocol::decodeVariant(
-          cast<local::VariantType>(source->getOperand(0).getType())
+          cast<data::VariantType>(source->getOperand(0).getType())
               .getDescriptor());
-      if (!target || !descriptor || target.getOperands() != inputs ||
-          target.getNumRegions() != descriptor->alternatives.size() ||
-          target.getAlternatives().size() != descriptor->alternatives.size() ||
-          target.getNumResults() != 1)
+      auto alternatives = target
+                              ? target->getAttrOfType<ArrayAttr>("alternatives")
+                              : ArrayAttr();
+      if (!ports.contains(target) || !descriptor || !alternatives ||
+          !isa<exec::MatchOp>(target) || ports.inputs(target) != inputs ||
+          ports.bodies(target) != descriptor->alternatives.size() ||
+          alternatives.size() != descriptor->alternatives.size() ||
+          ports.outputs(target).size() != 1)
         return {};
       for (auto [i, arm] : enumerate(descriptor->alternatives)) {
-        if (target.getAlternatives()[i] !=
+        auto *body = ports.body(target, i);
+        auto arguments = ports.arguments(body);
+        if (!body ||
+            alternatives[i] !=
                 StringAttr::get(source->getContext(), arm.label) ||
-            !hasSingleElement(target->getRegion(i)))
+            arguments.size() != arm.payload.size())
           return {};
-        auto &body = target->getRegion(i).front();
-        if (body.getNumArguments() != arm.payload.size())
-          return {};
-        for (auto [argument, spelling] :
-             zip(body.getArguments(), arm.payload)) {
+        for (auto [argument, spelling] : zip(arguments, arm.payload)) {
           auto bound = protocol::encodeBoundType(argument.getType(), false);
           if (!bound) {
             consumeError(bound.takeError());
@@ -373,67 +395,73 @@ class RecipeReader {
           if (bound->spelling() != spelling)
             return {};
         }
+        auto *at = ports.first(body);
         Value expected;
         if (auto get = dyn_cast<data::GetOp>(source)) {
-          if (!hasSingleElement(body))
+          auto index = get.getIndexAttr().getInt();
+          if (index < 0 || uint64_t(index) >= arguments.size())
             return {};
-          expected = body.getArgument(get.getIndexAttr().getInt());
+          expected = arguments[index];
         } else {
-          if (body.getOperations().size() != 2)
+          if (!isBoolean(at) || ports.outputs(at).size() != 1 ||
+              at->getAttrOfType<BoolAttr>("value") !=
+                  BoolAttr::get(source->getContext(),
+                                arm.label ==
+                                    cast<data::IsOp>(source).getAlternative()))
             return {};
-          auto value = dyn_cast<local::BoolConstantOp>(body.front());
-          if (!value ||
-              value.getValue() !=
-                  (arm.label == cast<data::IsOp>(source).getAlternative()))
-            return {};
-          expected = value.getOutput();
+          expected = ports.outputs(at)[0];
+          at = ports.next(at);
         }
-        auto yield = dyn_cast<local::LocalYieldOp>(body.back());
-        if (!yield || yield.getInputs() != ValueRange{expected})
+        if (!isYield(at) || ports.inputs(at) != ValueRange{expected} ||
+            ports.next(at))
           return {};
       }
-      cursor = cursor->getNextNode();
-      return target.getResult(0);
+      cursor = ports.next(cursor);
+      return ports.outputs(target)[0];
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(source)) {
-      auto target = dyn_cast_or_null<local::BoolConstantOp>(cursor);
+      auto *target = cursor;
       auto value = dyn_cast<IntegerAttr>(constant.getValue());
-      if (!target || !value || !value.getType().isSignlessInteger(1) ||
+      if (!isBoolean(target) || !value ||
+          !value.getType().isSignlessInteger(1) ||
           !constant.getType().isSignlessInteger(1) ||
-          target.getValue() != value.getValue().getBoolValue())
+          ports.outputs(target).size() != 1 ||
+          target->getAttrOfType<BoolAttr>("value") !=
+              BoolAttr::get(source->getContext(),
+                            value.getValue().getBoolValue()))
         return {};
-      cursor = cursor->getNextNode();
-      return target.getOutput();
+      cursor = ports.next(cursor);
+      return ports.outputs(target)[0];
     }
     if (isa<arith::SelectOp>(source)) {
-      auto target = dyn_cast_or_null<local::LocalIfOp>(cursor);
-      if (!target || target.getNumResults() != 1 ||
-          target.getNumOperands() < 2 || target.getNumOperands() > 3 ||
-          target.getInputs()[0] != inputs[0])
+      auto *target = cursor;
+      auto operands = ports.inputs(target);
+      if (!ports.contains(target) || !isa<exec::TestOp>(target) ||
+          ports.outputs(target).size() != 1 || operands.size() < 2 ||
+          operands.size() > 3 || operands[0] != inputs[0] ||
+          ports.bodies(target) != 2)
         return {};
       llvm::DenseSet<Value> captures;
-      for (auto value : target.getInputs().drop_front())
+      for (Value value : operands.drop_front())
         if ((value != inputs[1] && value != inputs[2]) ||
             !captures.insert(value).second)
           return {};
-      for (auto [index, region] : enumerate(target->getRegions())) {
-        if (!hasSingleElement(region))
+      for (unsigned index = 0; index != 2; ++index) {
+        auto *body = ports.body(target, index);
+        auto *yield = ports.first(body);
+        auto arguments = ports.arguments(body);
+        if (!isYield(yield) || ports.inputs(yield).size() != 1 ||
+            ports.next(yield))
           return {};
-        auto &block = region.front();
-        if (!hasSingleElement(block))
-          return {};
-        auto yield = dyn_cast<local::LocalYieldOp>(block.back());
-        if (!yield || yield.getNumOperands() != 1)
-          return {};
-        auto selected = dyn_cast<BlockArgument>(yield.getInputs()[0]);
-        if (!selected || selected.getOwner() != &block ||
-            selected.getArgNumber() + 1 >= target.getNumOperands() ||
-            target.getInputs()[selected.getArgNumber() + 1] !=
-                inputs[index + 1])
+        auto selected = llvm::find(arguments, ports.inputs(yield)[0]);
+        auto position = std::distance(arguments.begin(), selected);
+        if (selected == arguments.end() ||
+            unsigned(position + 1) >= operands.size() ||
+            operands[position + 1] != inputs[index + 1])
           return {};
       }
-      cursor = cursor->getNextNode();
-      return target.getResult(0);
+      cursor = ports.next(cursor);
+      return ports.outputs(target)[0];
     }
     if (isa<arith::AndIOp, arith::OrIOp>(source))
       return take(isa<arith::AndIOp>(source) ? "bool.and" : "bool.or", inputs);
@@ -530,8 +558,8 @@ public:
   RecipeReader(Operation *sourceRoot, Operation *targetRoot,
                const CheckedHelperNormalizations &helpers,
                finite::VerificationLimits limits, NumericalSelection *selection)
-      : sourceRoot(sourceRoot), symbols(targetRoot), helpers(helpers),
-        selection(selection), finiteLimits(limits) {}
+      : sourceRoot(sourceRoot), symbols(targetRoot), ports(limits.candidate),
+        helpers(helpers), selection(selection), finiteLimits(limits) {}
   FailureOr<SmallVector<Value>> read(func::FuncOp entry, StringRef callSite,
                                      ValueRange arguments, Operation *&cursor,
                                      uint64_t &budget, uint64_t &remainingBytes,
@@ -661,11 +689,17 @@ public:
                            "numerical occurrence discovery"};
           return finish(false);
         }
-        for (auto *at = begin; at != cursor; at = at->getNextNode()) {
+        for (auto *at = begin; at != cursor; at = ports.next(at)) {
           if (!at)
             return finish(false);
-          at->walk(
-              [&](Operation *nested) { selection->record(nested, *owner); });
+          if (ports
+                  .walk(at,
+                        [&](Operation *nested) {
+                          selection->record(nested, *owner);
+                          return WalkResult::advance();
+                        })
+                  .wasInterrupted())
+            return finish(false);
         }
       }
       auto site =
@@ -683,7 +717,7 @@ public:
       if (!finite && !results.empty() &&
           !isa<poly::ObserveQuotientOp>(resultSource)) {
         auto rootSite =
-            results.back().getDefiningOp()->getAttrOfType<StringAttr>("site");
+            ports.producer(results.back())->getAttrOfType<StringAttr>("site");
         if (!rootSite || rootSite.getValue() != *site)
           return finish(false);
       }
@@ -706,7 +740,8 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
   outcome = {finite::VerificationStatus::Mismatch, "numerical recipes differ"};
   auto unit = source ? dyn_cast_or_null<mlir::ModuleOp>(source->getParentOp())
                      : mlir::ModuleOp();
-  if (!unit || source != mathematical::getComputationEntry(unit) ||
+  if (!limits.candidate || !unit ||
+      source != mathematical::getComputationEntry(unit) ||
       !source.getBody().hasOneBlock() || source.front().empty() ||
       callSite.empty())
     return failure();
@@ -718,8 +753,10 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
             policy, outcome);
 }
 
-LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
+static LogicalResult verifyNumericalOutput(mlir::ModuleOp candidate,
+                                           bool scheduled) {
   if (!candidate || candidate->getNumRegions() != 1 ||
+      candidate->getNumOperands() || candidate->getNumResults() ||
       !candidate.getBodyRegion().hasOneBlock() ||
       !candidate->getAttrs().empty() ||
       candidate.getBody()->getNumArguments() ||
@@ -728,18 +765,44 @@ LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
     return failure();
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front());
-  // This is a Local fragment, not an independently runnable participant
-  // program. Reuse its established admission instead of inventing dummy
-  // participants or weakening whole-program Entry requirements.
-  return verifyLocalFragment(owner);
+  if (!owner || !owner.getProfileAttr() ||
+      owner.getProfile() != protocol_ir::Profile::Exec ||
+      owner->getNumOperands() || owner->getNumResults() ||
+      owner->getAttrs().size() != 1 || owner->getNumRegions() != 1 ||
+      !owner.getBody().hasOneBlock() ||
+      owner.getBody().front().getNumArguments())
+    return failure();
+  // A closed scoped fragment has no participant Entry. Admit its actual
+  // functions and bindings without inventing a runnable protocol wrapper.
+  for (auto &definition : owner.getBody().front()) {
+    if (!isa<runtime::BindingOp, func::FuncOp>(definition))
+      return failure();
+    if (auto function = dyn_cast<func::FuncOp>(definition);
+        function && !protocol::isScopedExecutionFunction(function))
+      return failure();
+  }
+  auto view = scheduled ? ScopedCandidate::readSchedule(owner)
+                        : ScopedCandidate::read(owner);
+  if (!view) {
+    consumeError(view.takeError());
+    return failure();
+  }
+  return success();
 }
 
-LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
-                                 mlir::ModuleOp candidate, StringRef callSite,
-                                 MathematicalSelectionPolicy policy,
-                                 finite::VerificationLimits limits,
-                                 finite::VerificationResult *reported,
-                                 NumericalSelection *selection) {
+LogicalResult verifyRecipeOutput(mlir::ModuleOp candidate) {
+  return verifyNumericalOutput(candidate, false);
+}
+LogicalResult verifyScheduledRecipeOutput(mlir::ModuleOp candidate) {
+  return verifyNumericalOutput(candidate, true);
+}
+static LogicalResult verifyRecipes(mlir::ModuleOp source,
+                                   mlir::ModuleOp candidate, StringRef callSite,
+                                   MathematicalSelectionPolicy policy,
+                                   finite::VerificationLimits limits,
+                                   finite::VerificationResult *reported,
+                                   NumericalSelection *selection,
+                                   bool scheduled) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                      "numerical recipes differ"};
   auto finish = [&](bool valid) -> LogicalResult {
@@ -761,7 +824,7 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
     }
     return success(valid);
   };
-  if (failed(verifyRecipeOutput(candidate)))
+  if (failed(verifyNumericalOutput(candidate, scheduled)))
     return finish(false);
   auto entry = mathematical::getComputationEntry(source);
   auto owner =
@@ -770,23 +833,37 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
       owner.getProfile() != protocol_ir::Profile::Exec)
     return finish(false);
   SymbolTable symbols(owner);
-  auto target = symbols.lookup<local::FuncOp>(entry.getSymName());
+  auto target = symbols.lookup<func::FuncOp>(entry.getSymName());
   Builder builder(candidate.getContext());
   NamedAttrList interface;
   interface.set("sym_name", entry.getSymNameAttr());
-  interface.set("function_type", entry.getFunctionTypeAttr());
+  SmallVector<Type> arguments{runtime::ScopeType::get(candidate.getContext())};
+  append_range(arguments, entry.getArgumentTypes());
   interface.set(
-      "logical_origin",
+      "function_type",
+      TypeAttr::get(builder.getFunctionType(
+          arguments, {exec::OutcomeType::get(candidate.getContext(),
+                                             entry.getResultTypes())})));
+  interface.set("sym_visibility", builder.getStringAttr("private"));
+  interface.set("no_inline", builder.getUnitAttr());
+  interface.set(
+      "runtime.origin",
       builder.getArrayAttr({entry.getSymNameAttr(), builder.getArrayAttr({})}));
   if (!target ||
       interface.getDictionary(candidate.getContext()) !=
           target->getAttrDictionary() ||
-      !target.getBody().hasOneBlock() || target.getBody().front().empty())
+      target.empty() || target.front().empty())
     return finish(false);
-  // Local-definition admission above owns closed attributes, unique sites,
-  // binding signatures and control/resource legality. This result contains
-  // only the one output function and its used bindings. Source dependencies
-  // remain in the immutable Kernel owner used by the independent reader.
+  auto view = scheduled ? ScopedCandidate::readSchedule(owner)
+                        : ScopedCandidate::read(owner);
+  if (!view) {
+    consumeError(view.takeError());
+    return finish(false);
+  }
+  limits.candidate = view->get();
+  CandidatePorts ports(limits.candidate);
+  // Admission checks every actual scoped body. This comparison must also
+  // account for every declaration and every reached recipe body.
   llvm::DenseSet<Operation *> used;
   uint64_t standalone = 1000000, standaloneBytes = 16 * 1024 * 1024;
   auto &remaining = limits.sharedContext ? *limits.sharedContext : standalone;
@@ -799,23 +876,52 @@ LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
                CapacityCause{WorkOwner::AlgorithmChecking}};
     return finish(false);
   }
-  target.walk([&](Operation *op) {
-    if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
-      used.insert(symbols.lookup(ref.getValue()));
-  });
+  llvm::DenseSet<Operation *> functions;
+  for (auto *op = ports.first(&target.front()); op; op = ports.next(op))
+    if (ports
+            .walk(op,
+                  [&](Operation *nested) {
+                    functions.insert(nested->getParentOfType<func::FuncOp>());
+                    if (auto ref =
+                            nested->getAttrOfType<FlatSymbolRefAttr>("binding"))
+                      used.insert(symbols.lookup(ref.getValue()));
+                    return WalkResult::advance();
+                  })
+            .wasInterrupted())
+      return finish(false);
   for (auto &definition : owner.getBody().front()) {
-    if (&definition == target.getOperation())
+    if (functions.contains(&definition)) {
+      if (&definition != target.getOperation() &&
+          !definition.hasAttr("runtime.region"))
+        return finish(false);
       continue;
-    if (!isa<local::OperationBindingOp>(definition) ||
-        !used.contains(&definition))
+    }
+    if (!isa<runtime::BindingOp>(definition) || !used.contains(&definition))
       return finish(false);
   }
-  auto *cursor = &target.getBody().front().front();
+  auto *cursor = ports.first(&target.front());
   auto outputs = verifyKernelRecipes(
-      entry, owner, callSite, target.getArguments(), cursor, remaining,
-      remainingBytes, policy, limits, outcome, selection);
-  auto returned = dyn_cast_or_null<local::ReturnOp>(cursor);
-  return finish(succeeded(outputs) && returned && !returned->getNextNode() &&
-                returned.getInputs() == ValueRange(*outputs));
+      entry, owner, callSite, target.getArguments().drop_front(), cursor,
+      remaining, remainingBytes, policy, limits, outcome, selection);
+  return finish(succeeded(outputs) && isa_and_nonnull<exec::ReturnOp>(cursor) &&
+                !ports.next(cursor) &&
+                ports.inputs(cursor) == ValueRange(*outputs));
+}
+LogicalResult verifyEntryRecipes(mlir::ModuleOp source,
+                                 mlir::ModuleOp candidate, StringRef callSite,
+                                 MathematicalSelectionPolicy policy,
+                                 finite::VerificationLimits limits,
+                                 finite::VerificationResult *outcome,
+                                 NumericalSelection *selection) {
+  return verifyRecipes(source, candidate, callSite, policy, limits, outcome,
+                       selection, false);
+}
+LogicalResult verifyEntrySchedule(mlir::ModuleOp source,
+                                  mlir::ModuleOp candidate, StringRef callSite,
+                                  MathematicalSelectionPolicy policy,
+                                  finite::VerificationLimits limits,
+                                  finite::VerificationResult *outcome) {
+  return verifyRecipes(source, candidate, callSite, policy, limits, outcome,
+                       nullptr, true);
 }
 } // namespace zkc::kernel

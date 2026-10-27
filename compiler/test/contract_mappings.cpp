@@ -1,3 +1,4 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "zkc/Contracts/OperationShapes.h"
@@ -33,6 +34,8 @@ struct ExpectedMapping {
 // boundOperationName, operationSupportsContract, or C++ operation classes.
 // Contract spelling and IR mnemonic intentionally differ in several families.
 constexpr ExpectedMapping expected[] = {
+    {"quotient.prepare_matrix", "runtime.prepare_quotient_matrix"},
+    {"quotient.matvec", "runtime.quotient_matvec"},
     {"quotient.add", "poly.exec.quotient_add"},
     {"quotient.subtract", "poly.exec.quotient_subtract"},
     {"quotient.multiply", "poly.exec.quotient_multiply"},
@@ -70,9 +73,9 @@ constexpr ExpectedMapping expected[] = {
     {"fixed_vector.from_vector", "algebra.exec.fixed_vector_from_vector"},
     {"fixed_vector.to_vector", "algebra.exec.fixed_vector_to_vector"},
     {"fixed_vector.dot", "algebra.exec.fixed_vector_dot"},
-    {"resource_unit.create", "local.exec.resource_unit_create"},
-    {"resource_unit.pass", "local.exec.resource_unit_pass"},
-    {"resource_unit.consume", "local.exec.resource_unit_consume"},
+    {"resource_unit.create", ""},
+    {"resource_unit.pass", ""},
+    {"resource_unit.consume", ""},
     {"external.monero.init", "crypto.exec.monero_init"},
     {"external.monero.hash", "crypto.exec.monero_hash"},
     {"external.monero.update", "crypto.exec.monero_update"},
@@ -229,7 +232,7 @@ constexpr ExpectedMapping expected[] = {
     {"bool.and", "algebra.exec.bool_and"},
     {"bool.not", "algebra.exec.bool_not"},
     {"bool.or", "algebra.exec.bool_or"},
-    {"control.require", "local.exec.require"},
+    {"control.require", ""},
     {"poly.product_sum", "poly.exec.product_sum"},
     {"poly.product_round", "poly.exec.product_round"},
     {"poly.boundary", "poly.exec.boundary"},
@@ -284,7 +287,7 @@ void identities(MLIRContext &context) {
     check(covered.insert(row.contract).second, "duplicate expected contract");
     check(installed.contains(row.contract),
           "uninstalled oracle: " + row.contract);
-    check(context.isOperationRegistered(row.operation),
+    check(row.operation.empty() || context.isOperationRegistered(row.operation),
           "unregistered expected operation: " + row.operation);
     check(protocol::boundOperationName(row.contract) == row.operation,
           "wrong imported identity for " + row.contract + ": expected " +
@@ -294,7 +297,7 @@ void identities(MLIRContext &context) {
     for (const auto &other : expected)
       check(
           protocol::operationSupportsContract(row.operation, other.contract) ==
-              (row.operation == other.operation),
+              (!row.operation.empty() && row.operation == other.operation),
           "wrong operation-side association: " + row.operation + " / " +
               other.contract);
   }
@@ -318,16 +321,18 @@ void identities(MLIRContext &context) {
             "unmapped operation accepted contract: " + unknown);
 }
 
+// Typed numerical adapters remain independently verified before scoped
+// realization; these fixtures deliberately exercise their local invariants.
 // A deliberately tiny independent interpreter for the two imported mnemonics.
 // Small values do not wrap in koala-bear. This is a discriminating identity
 // vector, not a production backend execution or a general field interpreter.
-void arithmeticVector(zkc::local::FuncOp function, uint64_t x, uint64_t y,
+void arithmeticVector(func::FuncOp function, uint64_t x, uint64_t y,
                       uint64_t sum, uint64_t product) {
   llvm::DenseMap<Value, uint64_t> values;
   values[function.getArgument(0)] = x;
   values[function.getArgument(1)] = y;
   for (auto &op : function.getBody().front()) {
-    if (auto ret = dyn_cast<zkc::local::ReturnOp>(op)) {
+    if (auto ret = dyn_cast<func::ReturnOp>(op)) {
       if (!check(ret.getNumOperands() == 2, "arithmetic return arity"))
         return;
       auto left = values.find(ret.getOperand(0));
@@ -361,26 +366,23 @@ void arithmeticVector(zkc::local::FuncOp function, uint64_t x, uint64_t y,
 void importedArithmetic(MLIRContext &context) {
   auto imported = mlir::parseSourceString<ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
-module { "protocol.module"() ({
- "local.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
- local.func @Arithmetic(%x:!F,%y:!F)->(!F,!F) attributes {logical_origin=["Arithmetic",[]]} {
+module {
+ "runtime.binding"() {sym_name="add",contract="field.add",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="mul",contract="field.mul",arguments=["koala-bear"],implementation=""} : ()->()
+ func.func @Arithmetic(%x:!F,%y:!F)->(!F,!F) {
    %sum = "algebra.exec.field_add"(%x,%y) {binding=@add,site="add_site",parameters=[]} : (!F,!F)->!F
    %product = "algebra.exec.field_multiply"(%x,%y) {binding=@mul,site="mul_site",parameters=[]} : (!F,!F)->!F
-   local.return %sum,%product : !F,!F
+   func.return %sum,%product : !F,!F
  }
- "protocol.func"() ({^entry(%x:!F,%y:!F):
-   %out:2 = "protocol.local_call"(%x,%y) {callee=@Arithmetic,role="P",site="work"} : (!F,!F)->(!F,!F)
-   "protocol.return"(%out#0,%out#1) : (!F,!F)->()
- }) {sym_name="main",function_type=(!F,!F)->(!F,!F),roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+}
+
 )",
                                                     &context);
   if (!check(bool(imported), "mathematical arithmetic fixture refused"))
     return;
   check(succeeded(verify(*imported)), "arithmetic fixture rejected");
   unsigned sites = 0, functions = 0;
-  imported->walk([&](zkc::local::FuncOp function) {
+  imported->walk([&](func::FuncOp function) {
     ++functions;
     arithmeticVector(function, 2, 3, 5, 6);
     arithmeticVector(function, 0, 7, 7, 0);
@@ -400,7 +402,7 @@ module { "protocol.module"() ({
         op->getName().getStringRef() ==
             (isAdd ? "algebra.exec.field_add" : "algebra.exec.field_multiply"),
         "actual imported add/mul identity swapped: " + site.getValue());
-    check(succeeded(protocol::verifyBoundOperation(op, false)),
+    check(succeeded(protocol::verifyBoundOperation(op)),
           "valid binding refused before swap");
     auto original = op->getAttr("binding");
     op->setAttr("binding",
@@ -410,7 +412,7 @@ module { "protocol.module"() ({
       llvm::append_range(refusals, diagnostics::refusals(diagnostic));
       return success();
     });
-    check(failed(protocol::verifyBoundOperation(op, false)),
+    check(failed(protocol::verifyBoundOperation(op)),
           "same-signature wrong binding passed adapter verifier");
     check(llvm::any_of(refusals,
                        [](const auto &info) {
@@ -435,19 +437,16 @@ void importedProduct(MLIRContext &context) {
   auto imported = mlir::parseSourceString<ModuleOp>(R"(
 !F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
-module { "protocol.module"() ({
- "local.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
- "local.binding"() {sym_name="other",contract="vector.product",arguments=["bn254.fr"],implementation=""} : ()->()
- local.func @Product(%xs:!V)->!F attributes {logical_origin=["Product",[]]} {
+module {
+ "runtime.binding"() {sym_name="product",contract="vector.product",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="other",contract="vector.product",arguments=["bn254.fr"],implementation=""} : ()->()
+ func.func @Product(%xs:!V)->!F {
    %result = "algebra.exec.vector_product"(%xs) {binding=@product,site="product_site",parameters=[]} : (!V)->!F
-   local.return %result : !F
+   func.return %result : !F
  }
- "protocol.func"() ({^entry(%xs:!V):
-   %out = "protocol.local_call"(%xs) {callee=@Product,role="P",site="work"} : (!V)->!F
-   "protocol.return"(%out) : (!F)->()
- }) {sym_name="main",function_type=(!V)->!F,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+}
+
 )",
                                                     &context);
   if (!check(bool(imported), "product fixture refused"))

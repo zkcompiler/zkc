@@ -15,20 +15,30 @@ open Zkc.Source Zkc.Source.Structured
 
 namespace Small
 
-theorem first_bodies : MapFirstContracts.Bodies payload.definitions := by
+abbrev collectBindings : MultilinearCollectBodies.Bindings :=
+  ⟨"_finite_admission_0",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body",
+    "_mathematical_admission_1"⟩
+
+abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+
+theorem first_bodies : MapFirstContracts.Bodies payload.definitions collectBindings := by
   bind_structured_bodies
 
-theorem prefix_bodies : MapPrefixContracts.Bodies payload.definitions := by
+theorem prefix_bodies : MapPrefixContracts.Bodies payload.definitions prefixBindings := by
   bind_structured_bodies
 
-theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions where
-  first := first_bodies
-  restriction := prefix_bodies
-  check := by bind_structured_bodies
-  checkTable := by bind_structured_bodies
+theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions :=
+  ⟨prefixBindings, {
+    first := ⟨collectBindings, first_bodies⟩
+    restriction := prefix_bodies
+    check := by bind_structured_bodies
+    checkTable := by bind_structured_bodies }⟩
 
 theorem producer_bodies : SumcheckUnitContracts.Bodies payload.definitions where
-  first := first_bodies
+  first := ⟨collectBindings, first_bodies⟩
   sums := by bind_structured_bodies
   empty := helpers_bound.empty
   append := helpers_bound.append
@@ -40,20 +50,30 @@ end Small
 
 namespace Two
 
-theorem first_bodies : MapFirstContracts.Bodies payload.definitions := by
+abbrev collectBindings : MultilinearCollectBodies.Bindings :=
+  ⟨"_finite_admission_0",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain",
+    "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body",
+    "_mathematical_admission_1"⟩
+
+abbrev prefixBindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_3", "_mathematical_admission_2"⟩
+
+theorem first_bodies : MapFirstContracts.Bodies payload.definitions collectBindings := by
   bind_structured_bodies
 
-theorem prefix_bodies : MapPrefixContracts.Bodies payload.definitions := by
+theorem prefix_bodies : MapPrefixContracts.Bodies payload.definitions prefixBindings := by
   bind_structured_bodies
 
-theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions where
-  first := first_bodies
-  restriction := prefix_bodies
-  check := by bind_structured_bodies
-  checkTable := by bind_structured_bodies
+theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions :=
+  ⟨prefixBindings, {
+    first := ⟨collectBindings, first_bodies⟩
+    restriction := prefix_bodies
+    check := by bind_structured_bodies
+    checkTable := by bind_structured_bodies }⟩
 
 theorem producer_bodies : SumcheckUnitContracts.Bodies payload.definitions where
-  first := first_bodies
+  first := ⟨collectBindings, first_bodies⟩
   sums := by bind_structured_bodies
   empty := helpers_bound.empty
   append := helpers_bound.append

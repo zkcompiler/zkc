@@ -1,11 +1,16 @@
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "mlir/Transforms/RegionUtils.h"
 #include "support/ProtocolDeployment.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Registry.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
 #include "llvm/Support/JSON.h"
@@ -85,6 +90,52 @@ mlir::Operation *first(mlir::ModuleOp module, StringRef name) {
   require(found, "missing mutation target");
   return found;
 }
+bool hasContract(zkc::exec::ApplyOp op, StringRef contract) {
+  auto binding = mlir::dyn_cast_or_null<zkc::runtime::BindingOp>(
+      mlir::SymbolTable::lookupNearestSymbolFrom(op, op.getBindingAttr()));
+  return binding && binding.getContract() == contract;
+}
+unsigned boundCount(const CheckedOriginal &source, StringRef contract) {
+  mlir::DialectRegistry registry;
+  zkc::registerDialects(registry);
+  mlir::MLIRContext context(registry);
+  auto module =
+      mlir::parseSourceString<mlir::ModuleOp>(source.bytes(), &context);
+  require(bool(module), "cannot inspect original bindings");
+  unsigned count = 0;
+  module->walk(
+      [&](zkc::exec::ApplyOp op) { count += hasContract(op, contract); });
+  return count;
+}
+mlir::func::FuncOp duplicateMathematics(mlir::Operation *compute,
+                                        StringRef name) {
+  auto callee = compute->getAttrOfType<mlir::SymbolRefAttr>("callee");
+  auto helper = mlir::cast<mlir::func::FuncOp>(
+      mlir::SymbolTable::lookupNearestSymbolFrom(compute, callee));
+  auto duplicate = mlir::cast<mlir::func::FuncOp>(helper->clone());
+  duplicate.setSymName(name);
+  helper->getBlock()->push_back(duplicate);
+  return duplicate;
+}
+void omitUnitConsumption(mlir::ModuleOp module) {
+  zkc::exec::ApplyOp consume;
+  module.walk([&](zkc::exec::ApplyOp op) {
+    if (!consume && hasContract(op, "resource_unit.consume"))
+      consume = op;
+  });
+  require(bool(consume), "missing resource consumption");
+  auto dispatch = mlir::cast<zkc::exec::DispatchOp>(consume->getNextNode());
+  auto *continuation = dispatch.getReturned();
+  require(continuation->getNumArguments() == 0,
+          "resource consumption unexpectedly returns a value");
+  auto *before = consume->getBlock();
+  auto *region = consume->getParentRegion();
+  mlir::IRRewriter rewriter(module.getContext());
+  rewriter.eraseOp(dispatch);
+  rewriter.eraseOp(consume);
+  rewriter.mergeBlocks(continuation, before);
+  (void)mlir::eraseUnreachableBlocks(rewriter, *region);
+}
 void mutation(const CheckedOriginal &source,
               const std::function<void(mlir::ModuleOp)> &edit) {
   mlir::DialectRegistry registry;
@@ -143,7 +194,7 @@ fn sample()->index {
 protocol Run roles(P)()->(r:index@P){let r @P=sample();return(r=r);}
 entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
-  require(StringRef(history.bytes()).contains("crypto.exec.openvm_sample"),
+  require(boundCount(history, "external.openvm.sample") == 1,
           "source history lost its ordered operation");
   must(compileEntry(history));
   auto shake = original(R"(
@@ -160,7 +211,7 @@ fn digest(input:Bytes)->Bytes {
 protocol Run roles(P)(input:Bytes@P)->(r:Bytes@P){let r @P=digest(input);return(r=r);}
 entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); }
 )");
-  require(StringRef(shake.bytes()).count("crypto.exec.shake128_squeeze") == 2,
+  require(boundCount(shake, "shake128.squeeze") == 2,
           "unused history transition disappeared from source IR");
   must(compileEntry(shake));
   auto encoding = original(R"(
@@ -719,50 +770,43 @@ protocol Run roles(P)(x:Fr@P,go:bool@P)->(r:Fr@P){let r @P =choose(outer(x),go);
   )");
   must(compileEntry(sharedMath));
   mutation(sharedMath, [](mlir::ModuleOp module) {
-    auto *realization = first(module, "local.realize");
-    auto *duplicate = realization->clone();
-    duplicate->setAttr("sym_name", mlir::StringAttr::get(module.getContext(),
-                                                         "second_realization"));
-    realization->getBlock()->push_back(duplicate);
-    bool changed = false;
-    module.walk([&](mlir::Operation *op) {
-      if (!changed && op->getName().getStringRef() == "local.apply") {
-        op->setAttr("callee", mlir::FlatSymbolRefAttr::get(
-                                  module.getContext(), "second_realization"));
-        changed = true;
-      }
-    });
-    require(changed, "duplicate realization mutation found no call");
+    auto *compute = first(module, "exec.compute");
+    auto duplicate = duplicateMathematics(compute, "second_mathematics");
+    compute->setAttr("callee",
+                     mlir::FlatSymbolRefAttr::get(duplicate.getSymNameAttr()));
   });
-  require(local.bytes().contains("local.realize") &&
+  require(local.bytes().contains("exec.compute") &&
               local.bytes().contains("func.call"),
-          "math helper was specialized into a local body");
+          "math helper was specialized into an ordered body");
   mutation(local, [](auto module) {
-    auto *realization = first(module, "local.realize");
-    auto helper = realization->getAttr("helper");
+    auto *compute = first(module, "exec.compute");
+    auto helper = mlir::cast<mlir::func::FuncOp>(
+        mlir::SymbolTable::lookupNearestSymbolFrom(
+            compute,
+            compute->template getAttrOfType<mlir::SymbolRefAttr>("callee")));
     mlir::Attribute replacement;
-    module.walk([&](mlir::Operation *op) {
-      if (op->getName().getStringRef() == "func.call" &&
-          op->getAttr("callee") != helper)
-        replacement = op->getAttr("callee");
+    helper.walk([&](mlir::func::CallOp call) {
+      auto alternative = mlir::cast<mlir::func::FuncOp>(
+          mlir::SymbolTable::lookupNearestSymbolFrom(call,
+                                                     call.getCalleeAttr()));
+      if (alternative.getFunctionType() == helper.getFunctionType())
+        replacement = call.getCalleeAttr();
     });
     require(bool(replacement), "missing alternative math helper");
-    realization->setAttr("helper", replacement);
+    compute->setAttr("callee", replacement);
   });
   mutation(local, [](auto module) {
-    auto *realization = first(module, "local.realize");
-    auto *duplicate = realization->clone();
-    duplicate->setAttr("sym_name", mlir::StringAttr::get(module.getContext(),
-                                                         "unused_realization"));
-    realization->getBlock()->push_back(duplicate);
+    duplicateMathematics(first(module, "exec.compute"), "unused_mathematics");
   });
   mutation(local, [](auto module) {
-    auto *branch = first(module, "local.if");
-    auto &a = branch->getRegion(0).front();
-    a.back().setOperand(0, a.getArgument(0));
+    auto *complete = first(module, "exec.complete");
+    auto function = complete->template getParentOfType<mlir::func::FuncOp>();
+    require(complete->getOperand(1) != function.getArgument(1),
+            "branch payload mutation must change the selected capture");
+    complete->setOperand(1, function.getArgument(1));
   });
   mutation(local, [](auto module) {
-    first(module, "local.apply")
+    first(module, "exec.compute")
         ->setAttr("site",
                   mlir::StringAttr::get(module.getContext(), "different"));
   });
@@ -772,7 +816,7 @@ fn make(x:Fr)->Choice{return Choice::A(x);}
 fn get(v:Choice)->Fr{return match v {A(x)=>{ x},B(x)=>{ x}};}
 protocol Run roles(P)(x:Fr@P)->(r:Fr@P){let v @P =make(x);let y @P =get(v);return(r=y);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(variant, [](auto module) {
-    first(module, "local.variant_inject")
+    first(module, "exec.variant")
         ->setAttr("alternative",
                   mlir::StringAttr::get(module.getContext(), "case00000001"));
   });
@@ -809,10 +853,10 @@ protocol Run roles(P)(box:Box<BLS>@P)->(r:Fr@P){let r @P =get<BLS>(box);return(r
 fn count(n:index,x:Fr)->Fr{let mut s:Fr=0;for _ in 0..n{s=s+x;}return s;}
 protocol Run roles(P)(n:index@P,x:Fr@P)->(r:Fr@P){let r @P =count(n,x);return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   mutation(loop, [](auto module) {
-    auto *op = first(module, "local.for");
-    auto low = op->getOperand(0), high = op->getOperand(1);
-    op->setOperand(0, high);
-    op->setOperand(1, low);
+    auto *op = first(module, "exec.range");
+    auto low = op->getOperand(1), high = op->getOperand(2);
+    op->setOperand(1, high);
+    op->setOperand(2, low);
   });
   auto guard = original(prefix + R"(
 fn guarded(go:bool)->(){require go;return ();}
@@ -820,18 +864,49 @@ protocol Run roles(P)(go:bool@P)->(){let ignored @P =guarded(go);return();}entry
   mutation(guard,
            [](auto module) { first(module, "protocol.local_call")->erase(); });
   mutation(guard, [](auto module) {
-    auto *stop = first(module, "local.stop");
+    auto *stop = first(module, "exec.reject");
     stop->setAttr("reason",
                   mlir::StringAttr::get(module.getContext(), "abort"));
   });
   mutation(guard, [](auto module) {
-    auto *branch = first(module, "local.if");
-    mlir::Region temporary;
-    temporary.takeBody(branch->getRegion(0));
-    branch->getRegion(0).takeBody(branch->getRegion(1));
-    branch->getRegion(1).takeBody(temporary);
+    auto function = first(module, "exec.test")
+                        ->template getParentOfType<mlir::func::FuncOp>();
+    llvm::SmallVector<mlir::func::CallOp> arms;
+    function.walk([&](mlir::func::CallOp call) {
+      if (!call->hasAttr("runtime.site"))
+        arms.push_back(call);
+    });
+    require(arms.size() == 2, "missing guard arms");
+    auto yes = arms[0].getCalleeAttr();
+    arms[0].setCalleeAttr(arms[1].getCalleeAttr());
+    arms[1].setCalleeAttr(yes);
   });
-  mutation(guard, [](auto module) { first(module, "local.if")->erase(); });
+  mutation(guard, [](auto module) {
+    auto function = first(module, "exec.test")
+                        ->template getParentOfType<mlir::func::FuncOp>();
+    llvm::SmallVector<mlir::func::FuncOp> arms;
+    function.walk([&](mlir::func::CallOp call) {
+      if (!call->hasAttr("runtime.site"))
+        arms.push_back(mlir::cast<mlir::func::FuncOp>(
+            mlir::SymbolTable::lookupNearestSymbolFrom(call,
+                                                       call.getCalleeAttr())));
+    });
+    require(arms.size() == 2, "missing guard bodies");
+    auto outcome =
+        mlir::cast<zkc::exec::OutcomeType>(function.getResultTypes()[0]);
+    require(outcome.getPayload().empty(), "guard unexpectedly returns values");
+    function.getBody().dropAllReferences();
+    function.getBody().getBlocks().clear();
+    auto *entry = function.addEntryBlock();
+    mlir::OpBuilder builder(module.getContext());
+    builder.setInsertionPointToEnd(entry);
+    auto returned = zkc::exec::ReturnOp::create(builder, function.getLoc(),
+                                                outcome, mlir::ValueRange{});
+    mlir::func::ReturnOp::create(builder, function.getLoc(),
+                                 returned.getOutcome());
+    for (auto arm : arms)
+      arm.erase();
+  });
   auto inferred = original(prefix + R"(
 fn identity(x:Fr)->Fr{return x;}
 protocol Run roles(P,V)(x:Fr@(P,V))->(){let unused@P=identity(x);return ();}
@@ -846,9 +921,7 @@ entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
 fn get()->Fr{let v=Choice::unpack();return match v {Other(x)=>{ x},unpack()=>{let zero:Fr=0; zero}};}
 protocol Run roles(P)()->(r:Fr@P){let r @P =get();return(r=r);}entry fn Demo(inputs: Run::Inputs) { return Run::run(inputs); })");
   must(compileEntry(custodyVariant));
-  mutation(custodyVariant, [](auto module) {
-    first(module, "local.exec.resource_unit_consume")->erase();
-  });
+  mutation(custodyVariant, omitUnitConsumption);
   auto nominal = original(prefix + R"(
 #[affine] struct Tok<N:nat> {}
 struct Holder<N:nat>{pub token:Tok<N+1>}
@@ -864,9 +937,7 @@ protocol Run roles(P)()->(){let r @P =forward<C>();return();}entry fn Demo(input
   require(resource.bytes().contains("resource_unit"),
           "empty associated resource lost custody");
   must(compileEntry(resource));
-  mutation(resource, [](auto module) {
-    first(module, "local.exec.resource_unit_consume")->erase();
-  });
+  mutation(resource, omitUnitConsumption);
 }
 void sourceNotation() {
   original("module m;math fn pick(x:[bool;2])->bool{return x[1];}protocol Run "
@@ -1132,20 +1203,10 @@ void nativeData() {
   mutation(selected, [](mlir::ModuleOp module) {
     mlir::Builder builder(module.getContext());
     module.walk([&](mlir::Operation *op) {
-      if (op->getName().getStringRef() == "local.binding" &&
+      if (op->getName().getStringRef() == "runtime.binding" &&
           op->getAttrOfType<mlir::StringAttr>("contract").getValue() ==
               "vector.sub")
         op->setAttr("contract", builder.getStringAttr("vector.add"));
-      if (op->getName().getStringRef() == "algebra.exec.vector_sub") {
-        mlir::OperationState state(op->getLoc(), "algebra.exec.vector_add");
-        state.addOperands(op->getOperands());
-        state.addTypes(op->getResultTypes());
-        state.addAttributes(op->getAttrs());
-        mlir::OpBuilder at(op);
-        auto *replacement = at.create(state);
-        op->replaceAllUsesWith(replacement->getResults());
-        op->erase();
-      }
     });
   });
   must(compileEntry(original(library + R"(

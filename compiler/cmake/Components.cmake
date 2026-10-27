@@ -165,19 +165,25 @@ add_zkc_component(Program
   lib/Program/Encode.cpp
   lib/Program/Structure.cpp
   lib/Program/Admission.cpp
+  lib/Program/ResourceOrigins.cpp
 )
 add_zkc_component(IR
   lib/Dialect/Collection.cpp
   lib/Dialect/Diagnostics.cpp
   lib/Dialect/Crypto/IR/CryptoDialect.cpp
-  lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Exec/IR/ExecDialect.cpp
-  lib/Dialect/Local/IR/Functions.cpp
-  lib/Dialect/Local/IR/Control.cpp
-  lib/Dialect/Kernel/IR/KernelDialect.cpp
-  lib/Dialect/Kernel/IR/Kernel.cpp
+  lib/Dialect/Exec/IR/Instructions.cpp
+  lib/Dialect/Exec/Builders.cpp
+  lib/Dialect/Exec/Execution.cpp
+  lib/Dialect/Exec/ExecutionComparison.cpp
+  lib/Dialect/Exec/IR/Computation.cpp
+  lib/Dialect/Exec/ControlCursor.cpp
+  lib/Dialect/Runtime/IR/RuntimeDialect.cpp
+  lib/Dialect/Runtime/IR/Scopes.cpp
+  lib/Dialect/Runtime/Ownership.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Logical.cpp
+  lib/Dialect/Data/IR/Variant.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
   lib/Analysis/TotalClosure.cpp
@@ -188,12 +194,10 @@ add_zkc_component(IR
   lib/Analysis/MathematicalFacts.cpp
   lib/Dialect/Algebra/IR/AlgebraDialect.cpp
   lib/Dialect/Algebra/IR/Mathematical.cpp
-  lib/Dialect/Algebra/IR/Maps.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
   lib/Dialect/BoundOperations.cpp
   lib/Dialect/MathematicalInterfaces.cpp
-  lib/Dialect/PreparationCallable.cpp
   lib/Dialect/LinearContraction.cpp
   lib/Dialect/Algebra/IR/Types.cpp
   lib/Dialect/Polynomial/IR/Types.cpp
@@ -216,7 +220,6 @@ add_zkc_component(IR
   lib/Dialect/Protocol/Execution.cpp
   lib/Dialect/Relation/IR/AIR.cpp
   lib/Dialect/Relation/IR/R1CS.cpp
-  lib/Dialect/Plan/IR/PlanDialect.cpp
   lib/Dialect/Polynomial/IR/PolynomialDialect.cpp
   lib/Dialect/Registry.cpp
   lib/Dialect/Relation/IR/RelationDialect.cpp
@@ -225,6 +228,7 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Algebra.cpp
   lib/Dialect/TypeAdapters/Commitment.cpp
   lib/Dialect/TypeAdapters/Core.cpp
+  lib/Dialect/TypeAdapters/Runtime.cpp
   lib/Dialect/TypeAdapters/Curve.cpp
   lib/Dialect/TypeAdapters/Polynomial.cpp
   lib/Dialect/TypeAdapters/Registry.cpp
@@ -232,6 +236,7 @@ add_zkc_component(IR
   lib/Dialect/TypeAdapters/Resources.cpp
 )
 add_zkc_component(Translation
+  lib/Translation/ExecutionEmission.cpp
   lib/Translation/Entry.cpp
   lib/Translation/Language/Emission.cpp
   lib/Translation/Language/DataPreconditions.cpp
@@ -249,19 +254,20 @@ add_zkc_component(Transforms
   lib/Conversion/PhysicalVerification.cpp
   lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
-  lib/Transforms/Algorithms.cpp
-  lib/Transforms/AlgorithmVerification.cpp
+  lib/Transforms/AlgorithmSites.cpp
+  lib/Transforms/ScopedAlgorithms.cpp
+  lib/Transforms/ScopedAlgorithmVerification.cpp
   lib/Transforms/Mathematical.cpp
   lib/Transforms/MathematicalTrace.cpp
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
-  lib/Transforms/MathRealizations.cpp
   lib/Transforms/Kernel/Formation.cpp
   lib/Transforms/Kernel/Closure.cpp
   lib/Transforms/Kernel/Readback.cpp
   lib/Transforms/Kernel/Lowering.cpp
   lib/Transforms/Kernel/Verification.cpp
-  lib/Transforms/Kernel/Schedule.cpp
+  lib/Transforms/Kernel/ScopedSchedule.cpp
+  lib/Transforms/Kernel/ScopedVerification.cpp
   lib/Transforms/Kernel/Recipes.cpp
   lib/Transforms/Kernel/RecipeVerification.cpp
   lib/Transforms/Kernel/Frontier.cpp
@@ -277,15 +283,11 @@ add_zkc_component(Transforms
   lib/Transforms/ComputationEquations.cpp
   lib/Transforms/ComputationSelection.cpp
   lib/Transforms/NumericalSelection.cpp
-  lib/Transforms/NumericalLowering.cpp
   lib/Transforms/MathematicalRecipes.cpp
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp
-  lib/Transforms/NestedContractions.cpp
-  lib/Transforms/NestedContractionVerification.cpp
-  lib/Transforms/MapRealizations.cpp
+  lib/Transforms/ScopedNestedContraction.cpp
   lib/Transforms/StructuredComputation.cpp
-  lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
   lib/Transforms/PolynomialLowering.cpp
@@ -300,6 +302,7 @@ add_zkc_component(Transforms
   lib/Dialect/Relation/Transforms/Deduplicate.cpp
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
+  lib/Target/ExecutionPorts.cpp
   lib/Target/PhysicalPlan.cpp
   lib/Target/StorageSchedule.cpp
 )

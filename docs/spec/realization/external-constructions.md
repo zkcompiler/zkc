@@ -346,8 +346,8 @@ predicate. There is no automatic external construction correspondence claim.
 The `History` facet identifies the declared state input/successor relation; it
 neither makes copyable data affine nor proves a unique live chain. Affine-origin
 analysis tracks affine outputs only. These operations are admitted in ordinary
-`local.if` and `local.for`; the existing lexical prohibition on history calls in
-private `local.match` arms still applies. History metadata does not permit
+scoped conditionals and bounded loops; the lexical prohibition on history calls
+in private `exec.match` arms still applies. History metadata does not permit
 deleting or reordering a call.
 
 ## Work, attempts and control

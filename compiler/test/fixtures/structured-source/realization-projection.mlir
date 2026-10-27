@@ -4,11 +4,16 @@ module { "protocol.module"() ({
  func.func private @value(%xs:!V,%dimension:ui64,%width:ui64)->!V {
    func.return %xs : !V
  }
- local.realize @realized = @value : (!V,ui64,ui64)->!V
- local.func @work(%xs:!V,%dimension:ui64,%width:ui64)->!V attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%xs,%dimension,%width) {site="realize"} : (!V,ui64,ui64)->!V
-   local.return %r : !V
- }
+func.func @work(%scope:!runtime.scope,%a0:!V,%a1:ui64,%a2:ui64)->!exec.outcome<(!V)> attributes {no_inline,runtime.origin=["work",[]]} {
+%value_attempt = "exec.compute"(%scope,%a0,%a1,%a2) {callee=@value,site="realize"} : (!runtime.scope,!V,ui64,ui64)->!exec.outcome<(!V)>
+"exec.dispatch"(%value_attempt)[^value,^failed] : (!exec.outcome<(!V)>)->()
+^value(%r:!V):
+%done = "exec.returned"(%r) : (!V)->!exec.outcome<(!V)>
+func.return %done : !exec.outcome<(!V)>
+^failed(%reason:!exec.stop):
+%failure = "exec.failed"(%reason) : (!exec.stop)->!exec.outcome<(!V)>
+func.return %failure : !exec.outcome<(!V)>
+}
  "protocol.func"() ({
  ^entry(%xs:!V,%dimension:ui64,%width:ui64):
    %r = "protocol.local_call"(%xs,%dimension,%width) {callee=@work,role="P",site="work"} : (!V,ui64,ui64)->!V

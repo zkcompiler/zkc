@@ -1,4 +1,4 @@
-!message = !local.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
+!message = !data.variant<"variant:5b227a6b632e76617269616e742f30222c5b224f70656e696e67222c226e6f6e65222c5b5d2c5b2231222c2232225d2c22736f6d65222c226669656c643a626c7331322d3338312e6672222c2270726f6f663a6d756c74696c696e6561722e6b7a672e626c7331322d3338312f30222c5b2235222c2236225d2c5b2234222c2237225d2c5b2233222c2238225d2c5b2230222c2239225d5d5d">
 !pk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "prover_key">
 !vk = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "verifier_key">
 !c = !commitment.polynomial<"multilinear.kzg.bls12-381/0", "commitment">
@@ -8,53 +8,148 @@
 !t = !poly.multilinear<"bls12-381.fr">
 !p = !poly.point<"bls12-381.fr">
 module { "protocol.module"() ({
- "local.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- "local.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
- local.func @empty_point() -> !p attributes {logical_origin=["empty_point",[]]} {
-   %p = "poly.exec.empty_point"() {binding=@empty,parameters=[],site="empty"} : ()->!p
-   local.return %p : !p
- }
- local.func @append_point(%p:!p,%r:!f) -> !p attributes {logical_origin=["append_point",[]]} {
-   %out = "poly.exec.append_point"(%p,%r) {binding=@append,parameters=[],site="append"} : (!p,!f)->!p
-   local.return %out : !p
- }
+ "runtime.binding"() {sym_name="empty",contract="poly.empty_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="append",contract="poly.append_point",arguments=["bls12-381.fr"],implementation=""} : ()->()
+    func.func @empty_point(%arg0: !runtime.scope) -> !exec.outcome<(!p)> attributes {no_inline, runtime.origin = ["empty_point", []]} {
+      %0 = "exec.apply"(%arg0) <{binding = @empty, parameters = [], site = "empty"}> : (!runtime.scope) -> !exec.outcome<(!p)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!p)>) -> ()
+    ^bb1(%1: !p):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!p) -> !exec.outcome<(!p)>
+      return %2 : !exec.outcome<(!p)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!p)>
+      return %4 : !exec.outcome<(!p)>
+    }
+    func.func @append_point(%arg0: !runtime.scope, %arg1: !p, %arg2: !f) -> !exec.outcome<(!p)> attributes {no_inline, runtime.origin = ["append_point", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @append, parameters = [], site = "append"}> : (!runtime.scope, !p, !f) -> !exec.outcome<(!p)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!p)>) -> ()
+    ^bb1(%1: !p):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!p) -> !exec.outcome<(!p)>
+      return %2 : !exec.outcome<(!p)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!p)>
+      return %4 : !exec.outcome<(!p)>
+    }
+    func.func @commit(%arg0: !runtime.scope, %arg1: !pk, %arg2: !t) -> !exec.outcome<(!c, !o)> attributes {no_inline, runtime.origin = ["commit", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @commit_kernel, parameters = [], site = "commit"}> : (!runtime.scope, !pk, !t) -> !exec.outcome<(!c, !o)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!c, !o)>) -> ()
+    ^bb1(%1: !c, %2: !o):  // pred: ^bb0
+      %3 = "exec.returned"(%1, %2) : (!c, !o) -> !exec.outcome<(!c, !o)>
+      return %3 : !exec.outcome<(!c, !o)>
+    ^bb2(%4: !exec.stop):  // pred: ^bb0
+      %5 = "exec.failed"(%4) : (!exec.stop) -> !exec.outcome<(!c, !o)>
+      return %5 : !exec.outcome<(!c, !o)>
+    }
+    func.func @open(%arg0: !runtime.scope, %arg1: !o, %arg2: !p) -> !exec.outcome<(!f, !proof)> attributes {no_inline, runtime.origin = ["open", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @open_kernel, parameters = [], site = "open"}> : (!runtime.scope, !o, !p) -> !exec.outcome<(!f, !proof)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f, !proof)>) -> ()
+    ^bb1(%1: !f, %2: !proof):  // pred: ^bb0
+      %3 = "exec.returned"(%1, %2) : (!f, !proof) -> !exec.outcome<(!f, !proof)>
+      return %3 : !exec.outcome<(!f, !proof)>
+    ^bb2(%4: !exec.stop):  // pred: ^bb0
+      %5 = "exec.failed"(%4) : (!exec.stop) -> !exec.outcome<(!f, !proof)>
+      return %5 : !exec.outcome<(!f, !proof)>
+    }
+    func.func @check(%arg0: !runtime.scope, %arg1: !vk, %arg2: !c, %arg3: !p, %arg4: !f, %arg5: !proof) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["check", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2, %arg3, %arg4, %arg5) <{binding = @check_kernel, parameters = [], site = "check"}> : (!runtime.scope, !vk, !c, !p, !f, !proof) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (i1) -> !exec.outcome<(i1)>
+      return %2 : !exec.outcome<(i1)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
+      return %4 : !exec.outcome<(i1)>
+    }
+    func.func @same_root(%arg0: !runtime.scope, %arg1: !c, %arg2: !c) -> !exec.outcome<(i1)> attributes {no_inline, runtime.origin = ["same_root", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg2) <{binding = @equal_kernel, parameters = [], site = "equal"}> : (!runtime.scope, !c, !c) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (i1) -> !exec.outcome<(i1)>
+      return %2 : !exec.outcome<(i1)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(i1)>
+      return %4 : !exec.outcome<(i1)>
+    }
+    func.func @pack_opening(%arg0: !runtime.scope, %arg1: !f, %arg2: !proof) -> !exec.outcome<(!message)> attributes {no_inline, runtime.origin = ["pack_opening", []]} {
+      %0 = "exec.variant"(%arg0, %arg1, %arg2) <{alternative = "some", site = "present"}> : (!runtime.scope, !f, !proof) -> !exec.outcome<(!message)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!message)>) -> ()
+    ^bb1(%1: !message):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!message) -> !exec.outcome<(!message)>
+      return %2 : !exec.outcome<(!message)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!message)>
+      return %4 : !exec.outcome<(!message)>
+    }
+    func.func @check_message(%arg0: !runtime.scope, %arg1: !message, %arg2: !vk, %arg3: !c, %arg4: !p) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.origin = ["check_message", []]} {
+      "exec.match"(%arg0, %arg1, %arg2, %arg3, %arg4)[^bb2, ^bb3, ^bb4] <{alternatives = ["none", "some"], site = "presence"}> : (!runtime.scope, !message, !vk, !c, !p) -> ()
+    ^bb1(%0: !f, %1: i1):  // 2 preds: ^bb7, ^bb10
+      %2 = "exec.returned"(%0, %1) : (!f, i1) -> !exec.outcome<(!f, i1)>
+      return %2 : !exec.outcome<(!f, i1)>
+    ^bb2(%3: !exec.stop):  // 7 preds: ^bb0, ^bb3, ^bb4, ^bb5, ^bb6, ^bb8, ^bb9
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f, i1)>
+      return %4 : !exec.outcome<(!f, i1)>
+    ^bb3(%5: !vk, %6: !c, %7: !p):  // pred: ^bb0
+      %8 = "runtime.enter_scope"(%arg0, %5, %6, %7) <{kind = "match", operandSegmentSizes = array<i32: 1, 0, 3>, selection = "none", site = "presence"}> : (!runtime.scope, !vk, !c, !p) -> !exec.outcome<(!runtime.scope)>
+      "exec.dispatch"(%8)[^bb5, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
+    ^bb4(%9: !f, %10: !proof, %11: !vk, %12: !c, %13: !p):  // pred: ^bb0
+      %14 = "runtime.enter_scope"(%arg0, %9, %10, %11, %12, %13) <{kind = "match", operandSegmentSizes = array<i32: 1, 0, 5>, selection = "some", site = "presence"}> : (!runtime.scope, !f, !proof, !vk, !c, !p) -> !exec.outcome<(!runtime.scope)>
+      "exec.dispatch"(%14)[^bb8, ^bb2] : (!exec.outcome<(!runtime.scope)>) -> ()
+    ^bb5(%15: !runtime.scope):  // pred: ^bb3
+      %16 = call @control_0(%15, %5, %6, %7) : (!runtime.scope, !vk, !c, !p) -> !exec.outcome<(!f, i1)>
+      %17 = "runtime.exit_scope"(%15, %16) : (!runtime.scope, !exec.outcome<(!f, i1)>) -> !exec.outcome<(!runtime.transfer<(!f, i1)>)>
+      "exec.dispatch"(%17)[^bb6, ^bb2] : (!exec.outcome<(!runtime.transfer<(!f, i1)>)>) -> ()
+    ^bb6(%18: !runtime.transfer<(!f, i1)>):  // pred: ^bb5
+      %19 = "runtime.accept_transfer"(%arg0, %18) : (!runtime.scope, !runtime.transfer<(!f, i1)>) -> !exec.outcome<(!f, i1)>
+      "exec.dispatch"(%19)[^bb7, ^bb2] : (!exec.outcome<(!f, i1)>) -> ()
+    ^bb7(%20: !f, %21: i1):  // pred: ^bb6
+      cf.br ^bb1(%20, %21 : !f, i1)
+    ^bb8(%22: !runtime.scope):  // pred: ^bb4
+      %23 = call @control_1(%22, %9, %10, %11, %12, %13) : (!runtime.scope, !f, !proof, !vk, !c, !p) -> !exec.outcome<(!f, i1)>
+      %24 = "runtime.exit_scope"(%22, %23) : (!runtime.scope, !exec.outcome<(!f, i1)>) -> !exec.outcome<(!runtime.transfer<(!f, i1)>)>
+      "exec.dispatch"(%24)[^bb9, ^bb2] : (!exec.outcome<(!runtime.transfer<(!f, i1)>)>) -> ()
+    ^bb9(%25: !runtime.transfer<(!f, i1)>):  // pred: ^bb8
+      %26 = "runtime.accept_transfer"(%arg0, %25) : (!runtime.scope, !runtime.transfer<(!f, i1)>) -> !exec.outcome<(!f, i1)>
+      "exec.dispatch"(%26)[^bb10, ^bb2] : (!exec.outcome<(!f, i1)>) -> ()
+    ^bb10(%27: !f, %28: i1):  // pred: ^bb9
+      cf.br ^bb1(%27, %28 : !f, i1)
+    }
+    func.func private @control_0(%arg0: !runtime.scope, %arg1: !vk, %arg2: !c, %arg3: !p) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.region} {
+      %0 = "exec.apply"(%arg0) <{binding = @constant, parameters = ["0"], site = "zero"}> : (!runtime.scope) -> !exec.outcome<(!f)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!f)>) -> ()
+    ^bb1(%1: !f):  // pred: ^bb0
+      %2 = "exec.boolean"(%arg0) <{site = "absent", value = false}> : (!runtime.scope) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f, i1)>
+      return %4 : !exec.outcome<(!f, i1)>
+    ^bb3(%5: i1):  // pred: ^bb1
+      %6 = "exec.complete"(%arg0, %1, %5) : (!runtime.scope, !f, i1) -> !exec.outcome<(!f, i1)>
+      return %6 : !exec.outcome<(!f, i1)>
+    }
+    func.func private @control_1(%arg0: !runtime.scope, %arg1: !f, %arg2: !proof, %arg3: !vk, %arg4: !c, %arg5: !p) -> !exec.outcome<(!f, i1)> attributes {no_inline, runtime.region} {
+      %0 = "exec.apply"(%arg0, %arg3, %arg4, %arg5, %arg1, %arg2) <{binding = @check_kernel, parameters = [], site = "opening"}> : (!runtime.scope, !vk, !c, !p, !f, !proof) -> !exec.outcome<(i1)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(i1)>) -> ()
+    ^bb1(%1: i1):  // pred: ^bb0
+      %2 = "exec.complete"(%arg0, %arg1, %1) : (!runtime.scope, !f, i1) -> !exec.outcome<(!f, i1)>
+      return %2 : !exec.outcome<(!f, i1)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!f, i1)>
+      return %4 : !exec.outcome<(!f, i1)>
+    }
 
- "local.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- "local.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
- local.func @commit(%k:!pk,%t:!t) -> (!c,!o) attributes {logical_origin=["commit",[]]} {
-   %r:2 = "commitment.exec.polynomial_commit"(%k,%t) {binding=@commit_kernel,parameters=[],site="commit"} : (!pk,!t)->(!c,!o)
-   local.return %r#0,%r#1 : !c,!o
- }
- local.func @open(%s:!o,%p:!p) -> (!f,!proof) attributes {logical_origin=["open",[]]} {
-   %r:2 = "commitment.exec.polynomial_open"(%s,%p) {binding=@open_kernel,parameters=[],site="open"} : (!o,!p)->(!f,!proof)
-   local.return %r#0,%r#1 : !f,!proof
- }
- local.func @check(%k:!vk,%c:!c,%p:!p,%v:!f,%proof:!proof) -> i1 attributes {logical_origin=["check",[]]} {
-   %ok = "commitment.exec.polynomial_check"(%k,%c,%p,%v,%proof) {binding=@check_kernel,parameters=[],site="check"} : (!vk,!c,!p,!f,!proof)->i1
-   local.return %ok : i1
- }
- local.func @same_root(%a:!c,%b:!c) -> i1 attributes {logical_origin=["same_root",[]]} {
-   %ok = "commitment.exec.polynomial_equal"(%a,%b) {binding=@equal_kernel,parameters=[],site="equal"} : (!c,!c)->i1
-   local.return %ok : i1
- }
- "local.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
- local.func @pack_opening(%v:!f,%proof:!proof) -> !message attributes {logical_origin=["pack_opening",[]]} {
-   %message = "local.variant_inject"(%v,%proof) {alternative="some",site="present"} : (!f,!proof)->!message
-   local.return %message : !message
- }
- local.func @check_message(%message:!message,%k:!vk,%c:!c,%p:!p) -> (!f,i1) attributes {logical_origin=["check_message",[]]} {
-   %result:2 = "local.match"(%message,%k,%c,%p) ({ ^none(%key:!vk,%root:!c,%point:!p):
-     %zero = "algebra.exec.field_constant"() {binding=@constant,parameters=["0"],site="zero"} : ()->!f
-     %false = "local.bool_constant"() {value=false,site="absent"} : ()->i1
-     "local.yield"(%zero,%false) : (!f,i1)->()
-   }, { ^some(%v:!f,%proof:!proof,%key:!vk,%root:!c,%point:!p):
-     %ok = "commitment.exec.polynomial_check"(%key,%root,%point,%v,%proof) {binding=@check_kernel,parameters=[],site="opening"} : (!vk,!c,!p,!f,!proof)->i1
-     "local.yield"(%v,%ok) : (!f,i1)->()
-   }) {alternatives=["none","some"],site="presence"} : (!message,!vk,!c,!p)->(!f,i1)
-   local.return %result#0,%result#1 : !f,i1
- }
+
+
+ "runtime.binding"() {sym_name="commit_kernel",contract="pcs.commit",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="open_kernel",contract="pcs.open",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="check_kernel",contract="pcs.check",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+ "runtime.binding"() {sym_name="equal_kernel",contract="pcs.equal",arguments=["multilinear.kzg.bls12-381/0"],implementation=""} : ()->()
+
+
+
+
+ "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["bls12-381.fr"],implementation=""} : ()->()
+
+
  "protocol.func"() ({ ^entry(%state:!o,%pointP:!p,%pointV:!p,%key:!vk,%root:!c):
    %opened:2 = "protocol.local_call"(%state,%pointP) {callee=@open,role="P",site="open"} : (!o,!p)->(!f,!proof)
    %message = "protocol.local_call"(%opened#0,%opened#1) {callee=@pack_opening,role="P",site="pack"} : (!f,!proof)->!message

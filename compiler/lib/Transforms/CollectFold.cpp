@@ -64,7 +64,7 @@ FailureOr<CollectFold> readCollectFold(Operation *producer, Operation *consumer,
           (!isa<func::ReturnOp>(op) && !mathematical::isTotal(&op)))
         return failure();
   }
-  auto callback = readCallback(c, CallbackRole::Step);
+  auto callback = readCallbackABI(c, CallbackRole::Step);
   if (failed(callback) || callback->formals.items.size() != 1)
     return failure();
   auto environment =
@@ -73,7 +73,7 @@ FailureOr<CollectFold> readCollectFold(Operation *producer, Operation *consumer,
   if (failed(environment))
     return failure();
   for (auto [formal, actual] :
-       zip(callback->body->getArguments(), environment->actuals)) {
+       zip(callback->entry->getArguments(), environment->actuals)) {
     if (actual != pair.collected)
       continue;
     for (auto &use : formal.getUses()) {

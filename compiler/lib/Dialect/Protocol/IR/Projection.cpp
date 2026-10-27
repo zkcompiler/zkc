@@ -5,11 +5,13 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
@@ -36,7 +38,7 @@ bool portType(Type type, NativeTypePolicies &types) {
   return policy && policy->protocolPort;
 }
 Type logicalType(Type type) {
-  if (auto physical = dyn_cast<plan::DataType>(type))
+  if (auto physical = dyn_cast<runtime::RepresentedType>(type))
     return physical.getLogical();
   return type;
 }
@@ -70,6 +72,7 @@ struct MetadataVerifier {
   llvm::DenseMap<std::pair<Attribute, Attribute>, StringAttr> queryPorts;
   llvm::DenseSet<Operation *> seenParticipants, entries;
   unsigned remaining = 1000000;
+  std::optional<protocol::SourceExecutionClosure> closure;
   using Occurrences =
       llvm::DenseMap<Attribute, std::pair<unsigned, Operation *>>;
   llvm::DenseMap<Operation *, Occurrences> occurrences;
@@ -86,62 +89,77 @@ struct MetadataVerifier {
     return success();
   }
 
-  LogicalResult checkTranscriptHelper(local::FuncOp function) {
-    if (!function.getBody().hasOneBlock())
+  LogicalResult execution() {
+    if (closure)
+      return success();
+    auto value = unit.getProfile() == protocol_ir::Profile::Physical
+                     ? protocol::readExecutionClosure(unit, true)
+                     : protocol::readSourceExecutionClosure(unit);
+    if (!value)
+      return diagnostics::emit(record.emitOpError(), value.takeError());
+    closure = std::move(*value);
+    return success();
+  }
+  LogicalResult checkTranscriptHelper(func::FuncOp function) {
+    if (failed(execution()))
+      return failure();
+    auto found = closure->bodies.find(function.getSymName().str());
+    if (found == closure->bodies.end())
       return refuse(record, "invalid inserted transcript helper");
-    auto &body = function.getBody().front();
-    Operation *transition = nullptr;
+    const auto &body = found->second;
+    auto arguments = function.getArguments().drop_front();
+    const protocol::SourceExecutionStep *transition = nullptr;
     Value coordinates, bound;
     SmallVector<Value> indices;
-    for (auto &op : body) {
+    for (const auto &step : body) {
+      auto &op = *step.operation;
+      ValueRange inputs(step.inputs), outputs(step.outputs);
       if (failed(charge(1)))
         return failure();
-      if (auto release = dyn_cast<plan::ReleaseOp>(op)) {
-        if (any_of(release.getOperands(), [&](Value value) {
-              return isa<local::CapabilityType>(logicalType(value.getType()));
+      if (isa<runtime::ReleaseBindingsOp>(op)) {
+        if (any_of(inputs, [&](Value value) {
+              return isa<runtime::CapabilityType>(logicalType(value.getType()));
             }))
           return refuse(record, "invalid inserted transcript helper");
         continue;
       }
-      if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-        if (!transition || &op != &body.back() ||
-            !llvm::equal(returned.getOperands(), transition->getResults()))
+      if (isa<exec::ReturnOp, exec::CompleteOp>(op)) {
+        if (!transition || &step != &body.back() ||
+            !llvm::equal(inputs, transition->outputs))
           return refuse(record, "invalid inserted transcript helper");
         continue;
       }
       auto binding = op.getAttrOfType<FlatSymbolRefAttr>("binding");
       auto declaration =
-          binding ? tables.lookupNearestSymbolFrom<local::OperationBindingOp>(
-                        &op, binding)
-                  : local::OperationBindingOp();
+          binding
+              ? tables.lookupNearestSymbolFrom<runtime::BindingOp>(&op, binding)
+              : runtime::BindingOp();
       if (transition || !declaration)
         return refuse(record, "invalid inserted transcript helper");
       auto contract = declaration.getContract();
-      if (!isa<plan::ApplyOp>(op) &&
-          op.getName().getStringRef() != protocol::boundOperationName(contract))
+      if (!isa<exec::ApplyOp>(op))
         return refuse(record, "invalid inserted transcript helper");
       // A UniformIndex helper first materializes its static domain.
       if (contract == "index.constant" && !bound && !coordinates &&
-          op.getNumOperands() == 0 && op.getNumResults() == 1) {
+          inputs.size() == 0 && outputs.size() == 1) {
         auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
         auto value = parameters && parameters.size() == 1
                          ? dyn_cast<StringAttr>(parameters[0])
                          : StringAttr();
         if (!value || !protocol::parseUniformIndexBound(value.getValue()))
           return refuse(record, "invalid inserted transcript helper");
-        bound = op.getResult(0);
+        bound = outputs[0];
         continue;
       }
-      if (contract == "indices.empty" && !coordinates &&
-          op.getNumOperands() == 0 && op.getNumResults() == 1) {
-        coordinates = op.getResult(0);
+      if (contract == "indices.empty" && !coordinates && inputs.size() == 0 &&
+          outputs.size() == 1) {
+        coordinates = outputs[0];
         continue;
       }
-      if (contract == "indices.append" && coordinates &&
-          op.getNumOperands() == 2 && op.getOperand(0) == coordinates &&
-          op.getNumResults() == 1) {
-        indices.push_back(op.getOperand(1));
-        coordinates = op.getResult(0);
+      if (contract == "indices.append" && coordinates && inputs.size() == 2 &&
+          inputs[0] == coordinates && outputs.size() == 1) {
+        indices.push_back(inputs[1]);
+        coordinates = outputs[0];
         continue;
       }
       bool index = contract == "transcript.native.indexed.index";
@@ -151,21 +169,21 @@ struct MetadataVerifier {
         return refuse(record, "invalid inserted transcript helper");
       unsigned ordinary = contract.ends_with(".observe.data") ? 2 : 1;
       {
-        if (op.getNumOperands() != ordinary + unsigned(index) + 1 ||
-            (index && op.getOperand(1) != bound) ||
-            op.getOperands().back() != coordinates ||
-            body.getNumArguments() != ordinary + indices.size() ||
-            !llvm::equal(op.getOperands().take_front(ordinary),
-                         body.getArguments().take_front(ordinary)) ||
-            !llvm::equal(indices, body.getArguments().drop_front(ordinary)) ||
+        if (inputs.size() != ordinary + unsigned(index) + 1 ||
+            (index && inputs[1] != bound) || inputs.back() != coordinates ||
+            arguments.size() != ordinary + indices.size() ||
+            !llvm::equal(inputs.take_front(ordinary),
+                         arguments.take_front(ordinary)) ||
+            !llvm::equal(indices, arguments.drop_front(ordinary)) ||
             any_of(indices, [&](Value value) {
               return !logicalType(value.getType()).isUnsignedInteger(64);
             }))
           return refuse(record, "invalid inserted transcript coordinates");
       }
-      transition = &op;
+      transition = &step;
     }
-    if (!transition || body.empty() || !isa<local::ReturnOp>(body.back()))
+    if (!transition || body.empty() ||
+        !isa<exec::ReturnOp, exec::CompleteOp>(body.back().operation))
       return refuse(record, "invalid inserted transcript helper");
     return success();
   }
@@ -274,8 +292,8 @@ struct MetadataVerifier {
       if (hostRoot) {
         auto capability =
             stateTypes.size() == 1
-                ? dyn_cast<local::CapabilityType>(stateTypes.front())
-                : local::CapabilityType();
+                ? dyn_cast<runtime::CapabilityType>(stateTypes.front())
+                : runtime::CapabilityType();
         if (!capability || !capability.getKind().starts_with("transcript:") ||
             protocol::nativeChallengeField(capability.getKind().drop_front(11))
                 .empty())
@@ -286,7 +304,8 @@ struct MetadataVerifier {
       for (auto item : helpers) {
         auto ref = dyn_cast<FlatSymbolRefAttr>(item);
         if (!ref || !constructionHelpers.insert(ref).second ||
-            !tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref))
+            !protocol::scopedDataSignature(
+                tables.lookupNearestSymbolFrom<func::FuncOp>(record, ref)))
           return refuse(record, "invalid construction helper selection");
       }
       if (codec) {
@@ -389,14 +408,14 @@ struct MetadataVerifier {
                         }) ||
                 (exchange ? operation.getValue() != "protocol.send" &&
                                 operation.getValue() != "protocol.receive"
-                 : call   ? operation.getValue() != "local.call"
+                 : call   ? operation.getValue() != "protocol.local_call"
                  : loop   ? operation.getValue() != "protocol.loop"
                  : start ? operation.getValue() != "protocol.construction_start"
                  : kind.getValue() == "protocol.query"
                      ? operation.getValue() != "protocol.service_query"
                  : kind.getValue() == "protocol.finish_if"
                      ? operation.getValue() != "protocol.finish_if"
-                     : operation.getValue() != "local.guard"))
+                     : operation.getValue() != "protocol.guard"))
               return refuse(record, "invalid original construction target");
           }
         }
@@ -661,8 +680,8 @@ struct MetadataVerifier {
             return refuse(record, "unsupported inserted construction action");
           auto ref = action.getAs<FlatSymbolRefAttr>("callee");
           auto function =
-              ref ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, ref)
-                  : local::FuncOp();
+              ref ? tables.lookupNearestSymbolFrom<func::FuncOp>(record, ref)
+                  : func::FuncOp();
           if (!function || !constructionHelpers.contains(ref))
             return refuse(record, "missing constructed helper");
           if (insertedCallees.insert(ref).second && !programmable &&
@@ -765,13 +784,13 @@ struct MetadataVerifier {
                 ? (operation.getValue() == "protocol.send" ||
                    operation.getValue() == "protocol.receive")
             : loop      ? operation.getValue() == "protocol.loop"
-            : localCall ? operation.getValue() == "local.call"
+            : localCall ? operation.getValue() == "protocol.local_call"
             : start     ? operation.getValue() == "protocol.construction_start"
             : kind.getValue() == "protocol.query"
                 ? operation.getValue() == "protocol.service_query"
             : kind.getValue() == "protocol.finish_if"
                 ? operation.getValue() == "protocol.finish_if"
-                : operation.getValue() == "local.guard";
+                : operation.getValue() == "protocol.guard";
         if (!allowed)
           return refuse(record, "action target has wrong execution kind");
         // Targets retain their source projection kind. The checked profile
@@ -779,7 +798,7 @@ struct MetadataVerifier {
         StringRef expected = operation.getValue();
         if (kind.getValue() == "protocol.guard" &&
             unit.getProfile() != protocol_ir::Profile::Participant)
-          expected = "local.call";
+          expected = "protocol.local_call";
         auto found = occurrences[participant].find(site);
         if (found == occurrences[participant].end() ||
             found->second.second->getName().getStringRef() != expected ||
@@ -889,64 +908,70 @@ struct MetadataVerifier {
               : protocol_ir::ParticipantOp();
       auto callee =
           calleeRef
-              ? tables.lookupNearestSymbolFrom<local::FuncOp>(record, calleeRef)
-              : local::FuncOp();
+              ? tables.lookupNearestSymbolFrom<func::FuncOp>(record, calleeRef)
+              : func::FuncOp();
       if (!participant || !seenParticipants.count(participant) || !callee ||
-          !site || !calculations.insert({participant, site}).second)
+          callee.getNumArguments() == 0 || callee.getNumResults() != 1 ||
+          !isa<runtime::ScopeType>(callee.getArgumentTypes().front()) ||
+          !isa<exec::OutcomeType>(callee.getResultTypes().front()) || !site ||
+          !calculations.insert({participant, site}).second)
         return refuse(record, "invalid calculation symbol reference");
       if ((retainedActions.count({participant, site}) &&
            !requiredCalculations.count({participant, site})) ||
           authoredCallees.count(calleeRef))
         return refuse(record, "calculation origin overlaps authored execution");
-      for (auto type : callee.getArgumentTypes()) {
+      for (auto type : callee.getArgumentTypes().drop_front()) {
         auto policy = types.get(logicalType(type));
         if (!policy || !policy->total)
           return refuse(record, "calculation has a non-total input type");
       }
-      for (auto type : callee.getResultTypes()) {
+      for (auto type : cast<exec::OutcomeType>(callee.getResultTypes().front())
+                           .getPayload()) {
         auto policy = types.get(logicalType(type));
         if (!policy || !policy->total)
           return refuse(record, "calculation has a non-total result type");
       }
       auto found = occurrences[participant].find(site);
-      auto call = found == occurrences[participant].end()
-                      ? local::CallOp()
-                      : dyn_cast<local::CallOp>(found->second.second);
+      auto call =
+          found == occurrences[participant].end()
+              ? protocol_ir::LocalCallOp()
+              : dyn_cast<protocol_ir::LocalCallOp>(found->second.second);
       if (!call || call.getCalleeAttr() != calleeRef)
         return refuse(record,
                       "calculation origin does not name one invocation");
     }
+
+    if (!requiredCalculations.empty() && failed(execution()))
+      return failure();
     for (auto occurrence : requiredCalculations) {
       if (!calculations.count(occurrence))
         return refuse(record,
                       "guard is missing its generated calculation origin");
-      auto call = cast<local::CallOp>(
+      auto call = cast<protocol_ir::LocalCallOp>(
           occurrences[occurrence.first].lookup(occurrence.second).second);
-      auto function = tables.lookupNearestSymbolFrom<local::FuncOp>(
-          call, call.getCalleeAttr());
-      if (!function || !hasSingleElement(function.getBody()))
+      auto found = closure->bodies.find(call.getCallee().str());
+      if (found == closure->bodies.end())
         return refuse(record,
-                      "guard calculation requires an executable function");
-      SmallVector<Operation *> body;
-      for (auto &op : function.getBody().front())
-        if (!isa<plan::ReleaseOp>(op))
-          body.push_back(&op);
-      auto guard = body.size() >= 2
-                       ? dyn_cast<local::LocalIfOp>(body[body.size() - 2])
-                       : local::LocalIfOp();
-      if (!guard || !isa<local::ReturnOp>(body.back()) ||
-          guard.getNumOperands() != 1 || guard.getNumResults() ||
-          !hasSingleElement(guard.getThenRegion()) ||
-          !hasSingleElement(guard.getElseRegion()))
+                      "guard calculation requires an admitted scoped function");
+      SmallVector<const protocol::SourceExecutionStep *> body;
+      for (const auto &step : found->second)
+        if (!isa<runtime::ReleaseBindingsOp>(step.operation))
+          body.push_back(&step);
+      auto *guard = body.size() >= 2 ? body[body.size() - 2] : nullptr;
+      if (!guard || !isa<exec::TestOp>(guard->operation) ||
+          !isa<exec::ReturnOp, exec::CompleteOp>(body.back()->operation) ||
+          guard->inputs.size() != 1 || !guard->outputs.empty() ||
+          guard->regions.size() != 2)
         return refuse(record,
                       "guard calculation lost its final conditional rejection");
-      auto &yes = guard.getThenRegion().front(),
-           &no = guard.getElseRegion().front();
-      if (!hasSingleElement(yes) || !hasSingleElement(no) ||
-          !isa<local::LocalYieldOp>(yes.front()) ||
-          !isa<local::StopOp>(no.front()))
+      func::FuncOp yesRegion = guard->regions[0], noRegion = guard->regions[1];
+      const auto &yes = closure->bodies.at(yesRegion.getSymName().str());
+      const auto &no = closure->bodies.at(noRegion.getSymName().str());
+      if (yes.size() != 1 || no.size() != 1 ||
+          !isa<exec::CompleteOp>(yes[0].operation) ||
+          !isa<exec::RejectOp>(no[0].operation))
         return refuse(record, "guard calculation changed its branch outcomes");
-      auto stop = cast<local::StopOp>(no.front());
+      auto stop = cast<exec::RejectOp>(no[0].operation);
       if (stop.getReason() != "reject" ||
           stop.getSiteAttr() != call.getSiteAttr())
         return refuse(record,
@@ -960,7 +985,7 @@ struct MetadataVerifier {
               record,
               "participant action is missing from retained occurrences");
         if (calculations.count({participant, site}) &&
-            !isa<local::CallOp>(occurrence.second))
+            !isa<protocol_ir::LocalCallOp>(occurrence.second))
           return refuse(record, "calculation origin names a non-call action");
       }
     return success();
@@ -1001,7 +1026,9 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return refuse(unit, "expected one participant symbol-table block");
   if (unit->getAttrs().size() != 1)
     return refuse(unit, "unexpected attribute in the 'participant' profile");
-  if (failed(verifyTotalClosure(unit)))
+  if (auto error = protocol::verifySourceExecutionClosure(unit))
+    return diagnostics::emit(unit.emitOpError(), std::move(error));
+  if (failed(finite::verifyClosure(unit)))
     return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);
@@ -1020,8 +1047,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, local::FuncOp,
-            mlir::ModuleOp, local::OperationBindingOp>(declaration))
+    if (isa<data::DomainOp, func::FuncOp, mlir::ModuleOp, runtime::BindingOp>(
+            declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;
@@ -1085,6 +1112,9 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           if (policy->affine && !consumed.insert(input).second)
             return refuse(&op, "affine participant value reused");
         }
+        if (auto guard = dyn_cast<protocol_ir::GuardOp>(op))
+          if (guard.getOwnerAttr() != participant.getRoleAttr())
+            return refuse(guard, "guard requires its owning participant");
         if (auto start = dyn_cast<protocol_ir::ConstructionStartOp>(op)) {
           if (start.getRoles().size() != 2 ||
               start.getRoles()[0] == start.getRoles()[1] ||
@@ -1146,8 +1176,6 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     if (failed(check(check, participant.getBody().front(), 0)))
       return failure();
   }
-  if (failed(verifyNativeLocals(unit, false, types)))
-    return failure();
   return verifyProjectionMetadata(unit, types);
 }
 
@@ -1163,6 +1191,7 @@ LogicalResult zkc::protocol_ir::ProjectionOp::verifySymbolUses(
     return mathematical::refuse(*this,
                                 "cannot enumerate projection references");
   unsigned remaining = 1000000;
+  std::optional<protocol::SourceExecutionClosure> closure;
   for (const auto &use : *uses) {
     if (!remaining--)
       return mathematical::refuse(*this, "projection symbol work limit");

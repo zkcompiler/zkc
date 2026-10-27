@@ -1,764 +1,824 @@
-#include "mlir/IR/Verifier.h"
-#include "mlir/Parser/Parser.h"
-#include "mlir/Pass/PassManager.h"
-#include "support/NativeCases.h"
-#include "zkc/Dialect/IR.h"
+#include "mlir/IR/OperationSupport.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
+#include "zkc/Dialect/Registry.h"
 #include "zkc/Transforms/Mathematical.h"
-#include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
+namespace sf = zkc::test::scopedFinite;
+namespace sc = zkc::test::scopedComputation;
 namespace {
 std::string edit(StringRef source, StringRef from, StringRef to) {
   auto text = source.str();
-  auto pos = text.find(from.str());
-  require(pos != std::string::npos, "missing fixture edit: " + from);
-  text.replace(pos, from.size(), to.str());
+  auto position = text.find(from.str());
+  require(position != std::string::npos, "missing fixture fragment " + from);
+  text.replace(position, from.size(), to.str());
   return text;
 }
-OwningOpRef<ModuleOp> copy(ModuleOp module) {
-  return OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
+func::FuncOp function(ModuleOp module, StringRef name = "work") {
+  return sf::function(module, name);
 }
-local::FuncOp function(ModuleOp module, StringRef name) {
-  local::FuncOp found;
-  module.walk([&](local::FuncOp candidate) {
-    if (candidate.getSymName() == name)
-      found = candidate;
-  });
-  require(bool(found), "missing function " + name);
-  return found;
+exec::ApplyOp nth(ModuleOp module, StringRef contract, unsigned index = 0,
+                  StringRef owner = "work") {
+  auto found = sf::executionApplications(module, owner, contract);
+  require(index < found.size(), "missing invocation " + contract);
+  return found[index];
 }
-// Bound operations of one generated body, in order, with their contracts.
-SmallVector<std::pair<std::string, Operation *>> actions(ModuleOp module,
-                                                         StringRef name) {
-  SymbolTable symbols(&module.getBody()->front());
-  SmallVector<std::pair<std::string, Operation *>> result;
-  for (auto &op : function(module, name).getBody().front()) {
-    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto binding =
-        ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-            : local::OperationBindingOp();
-    result.emplace_back(binding ? binding.getContract().str()
-                                : op.getName().getStringRef().str(),
-                        &op);
-  }
+MathematicalSelectionPolicy vectorPolicy() {
+  MathematicalSelectionPolicy policy;
+  policy.numericalExpressions = NumericalExpressionMode::VectorOnly;
+  return policy;
+}
+OwningOpRef<ModuleOp>
+prepare(ModuleOp source, MathematicalSelectionPolicy policy = vectorPolicy()) {
+  mathematical::RealizationWork work;
+  uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+  std::optional<CapacityCause> capacity;
+  auto result = protocol::prepareScopedFinite(source, work, copy, bytes,
+                                              capacity, policy);
+  require(bool(result), "scoped collection preparation refused");
   return result;
 }
-Operation *nth(ModuleOp module, StringRef name, StringRef contract,
-               unsigned index = 0) {
-  for (auto &[found, op] : actions(module, name))
-    if (found == contract && !index--)
-      return op;
-  require(false, "missing action " + contract);
-  return nullptr;
+LogicalResult compare(ModuleOp source, ModuleOp candidate,
+                      MathematicalSelectionPolicy policy = vectorPolicy()) {
+  mathematical::RealizationWork work;
+  return protocol::verifyScopedFinitePreparation(source, candidate, work,
+                                                 policy);
 }
-} // namespace
+bool same(Operation *left, Operation *right) {
+  return OperationEquivalence::isEquivalentTo(
+      left, right, OperationEquivalence::IgnoreLocations);
+}
+std::string invoke(StringRef operation, StringRef attributes, StringRef site,
+                   StringRef inputs, StringRef types, StringRef output,
+                   StringRef result) {
+  auto text = scopedApply("unused", site, inputs, types, output, result);
+  text = replaceText(text, "\"exec.apply\"", "\"" + operation.str() + "\"");
+  text = replaceText(text, "binding=@unused", attributes);
+  return replaceText(text, ",parameters=[]", "");
+}
+std::string functionText(StringRef name, StringRef arguments, StringRef result,
+                         StringRef body, bool privateFunction = false) {
+  auto outcome = "!exec.outcome<(" + result.str() + ")>";
+  return std::string(privateFunction ? "func.func private @" : "func.func @") +
+         name.str() + "(%scope:!runtime.scope," + arguments.str() + ")->" +
+         outcome + " attributes {no_inline,runtime.origin=[\"" + name.str() +
+         "\",[]]} {\n" + body.str() +
+         (body.contains("^failed")
+              ? "\n^failed(%reason:!exec.stop):\n%failure = "
+                "\"exec.failed\"(%reason) : (!exec.stop)->" +
+                    outcome + "\nfunc.return %failure : " + outcome
+              : "") +
+         "\n}\n";
+}
+// Actual general collection declarations and scoped callbacks. All captures
+// remain explicit, including scalar formula arguments whose values are unused.
+std::string oneRowFixture(StringRef mathematics, unsigned scalarCaptures = 0,
+                          unsigned roots = 1) {
+  std::string arguments = "%xs:!V", inputs = "%xs", types = "!V";
+  std::string formulaInputs = "%x", formulaTypes = "!F";
+  for (unsigned i = 0; i < scalarCaptures; ++i) {
+    auto name = "%s" + std::to_string(i);
+    arguments += "," + name + ":!F";
+    inputs += "," + name;
+    types += ",!F";
+    formulaInputs += "," + name;
+    formulaTypes += ",!F";
+  }
+  std::string declarations = mathematics.str() + R"mlir(
+"data.domain"() ({^entry(%xs:!V):
+  %values = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+  "data.domain_yield"(%values) : (!data.domain<!F>)->()
+}) {sym_name="elements",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+)mlir";
+  std::string rootBody;
+  for (unsigned i = 0; i < roots; ++i) {
+    auto suffix = std::to_string(i);
+    declarations +=
+        functionText("row" + suffix, "%x:!F," + arguments, "!F",
+                     invoke("exec.compute", "callee=@outer", "calculate",
+                            formulaInputs, formulaTypes, "%r", "!F") +
+                         scopedReturn("%r", "!F"),
+                     true);
+    auto body = invoke("exec.collect", "domain=@elements,body=@row" + suffix,
+                       "map", inputs, types, "%r", "!V") +
+                scopedReturn("%r", "!V");
+    if (i == 0)
+      rootBody = body;
+    else
+      declarations += functionText("work" + suffix, arguments, "!V", body);
+  }
+  auto text = "!F = !algebra.field<\"koala-bear\">\n!V = "
+              "!algebra.field_vector<\"koala-bear\">\n" +
+              scopedFixture(declarations, arguments, inputs, types, "!V",
+                            rootBody, 1 + scalarCaptures);
+  return replaceText(replaceText(text, "@Work", "@work"), "\"Work\"",
+                     "\"work\"");
+}
+std::string chain(unsigned steps, bool subtract = false, unsigned calls = 1,
+                  bool unused = false, unsigned roots = 1) {
+  std::string text = "func.func private @chain(%x:!F)->!F {\n"
+                     "%v0 = algebra.field_add %x,%x : (!F,!F)->!F\n";
+  for (unsigned i = 1; i < steps; ++i) {
+    auto previous = "%v" + std::to_string(i - 1);
+    text += "%v" + std::to_string(i) + " = algebra.field_" +
+            (subtract ? "subtract %x," + previous : "add " + previous + ",%x") +
+            " : (!F,!F)->!F\n";
+  }
+  text += "func.return %v" + std::to_string(unused ? 0 : steps - 1) +
+          " : !F\n}\nfunc.func private @outer(%x:!F)->!F {\n";
+  for (unsigned i = 0; i < calls; ++i)
+    text += "%c" + std::to_string(i) + " = func.call @chain(" +
+            (i ? "%c" + std::to_string(i - 1) : "%x") + ") : (!F)->!F\n";
+  text += "func.return %c" + std::to_string(calls - 1) + " : !F\n}\n";
+  return oneRowFixture(text, 0, roots);
+}
+// Relocate a zero-payload invocation with its complete dispatch continuation.
+// Leaving the old dispatch behind would test malformed CFG, not ordered work.
+void moveAfter(exec::ApplyOp operation, exec::ApplyOp after) {
+  require(operation.getOutcome().getType().getPayload().empty(),
+          "only zero-result invocation can be moved without SSA rebinding");
+  auto inputs = llvm::to_vector(operation->getOperands());
+  NamedAttrList attributes(operation->getAttrs());
+  auto helper = operation->getParentOfType<func::FuncOp>();
+  auto stop = cast<exec::DispatchOp>(operation->getNextNode()).getStopped();
+  sc::omit(operation);
+  auto *block = cast<exec::DispatchOp>(after->getNextNode()).getReturned();
+  IRRewriter rewriter(helper.getContext());
+  auto *tail = rewriter.splitBlock(block, block->begin());
+  OpBuilder builder(helper.getContext());
+  builder.setInsertionPointToEnd(block);
+  exec::ScopedExecutionBuilder control(builder, helper);
+  control.invoke("exec.apply", {}, inputs, attributes.getAttrs(), stop);
+  rewriter.mergeBlocks(tail, builder.getInsertionBlock());
+}
 
+} // namespace
 int main(int argc, char **argv) {
-  require(argc == 2, "expected a map fixture path");
+  require(argc == 2, "expected a scoped map fixture");
   auto bytes = llvm::MemoryBuffer::getFile(argv[1]);
-  require(bool(bytes), "cannot read map fixture");
-  StringRef fixture = (*bytes)->getBuffer();
-  Cases cases;
+  require(bool(bytes), "cannot read scoped map fixture");
+  // Reuse the shared general collection while preserving this suite's field.
+  auto fixture =
+      replaceText((*bytes)->getBuffer().str(), "bls12-381.fr", "koala-bear");
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry, MLIRContext::Threading::DISABLED);
   context.loadAllAvailableDialects();
-  auto source = parseSourceString<ModuleOp>(fixture, &context);
-  require(bool(source), "map fixture refused");
-  auto expanded = copy(*source);
-  require(
-      succeeded(mathematical::expandMapRealizations(
-          *expanded, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
-      "map realization failed");
-  auto named = [&](StringRef code, function_ref<bool()> body) {
-    bool seen = false;
-    ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
-      seen |= diagnostic.str().find(code.str()) != std::string::npos;
-      return success();
-    });
-    return body() && seen;
-  };
-
-  cases.run("required map capacity is diagnosed without publishing", [&] {
-    std::string text = R"mlir(
-!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
-module { "protocol.module"() ({
- func.func private @chain(%x:!F)->!F {
-)mlir";
-    std::string previous = "%x";
-    for (unsigned i = 0; i < 1024; ++i) {
-      auto next = "%v" + std::to_string(i);
-      text += "  " + next + " = algebra.field_add " + previous +
-              ", %x : (!F,!F)->!F\n";
-      previous = next;
-    }
-    text += "  func.return " + previous + " : !F\n }\n";
-    text += " algebra.map_realize @mapped = @chain [true] : (!V)->!V\n";
-    text += R"mlir(
- "protocol.func"() ({ "protocol.return"() : ()->() })
- {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
-)mlir";
+  Cases cases;
+  auto parse = [&](StringRef text) {
     auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module), "ordinary map collection was not admitted");
-    std::string before, after;
-    llvm::raw_string_ostream(before) << *module;
-    require(named("algebra-map-formula",
-                  [&] {
-                    return failed(mathematical::expandMapRealizations(
-                        *module, nullptr, nullptr,
-                        NumericalExpressionMode::VectorOnly));
-                  }),
-            "required map capacity had no diagnostic");
-    llvm::raw_string_ostream(after) << *module;
-    require(before == after, "failed map stage published a partial candidate");
-  });
-
-  cases.run("guards precede formula and every operation is checked", [&] {
+    require(bool(module), "scoped map fixture refused");
+    return module;
+  };
+  auto source = parse(fixture);
+  auto expanded = prepare(*source);
+  cases.run("ordered shape admission precedes vector realization", [&] {
+    auto closure = take(
+        protocol::readSourceExecutionClosure(&expanded->getBody()->front()));
     std::vector<std::string> contracts;
-    for (auto &[contract, op] : actions(*expanded, "mapped"))
-      contracts.push_back(contract);
-    std::vector<std::string> expected = {
-        "vector.length", "vector.length", "index.equal",     "control.require",
-        "vector.length", "index.equal",   "control.require", "field.constant",
-        "vector.mul",    "vector.sub",    "field.add",       "vector.scale",
-        "vector.fill",   "vector.add",    "local.return"};
-    require(contracts == expected, "unexpected realization schedule");
-    // The scalar subexpression stays scalar; the scale takes the rows first.
-    auto scale = nth(*expanded, "mapped", "vector.scale");
-    auto vectorSub = nth(*expanded, "mapped", "vector.sub");
-    auto fieldAdd = nth(*expanded, "mapped", "field.add");
-    require(scale->getOperand(0) == vectorSub->getResult(0) &&
-                scale->getOperand(1) == fieldAdd->getResult(0),
-            "scalar factor is not a scale");
-    // The unused third input is measured and compared with the first.
-    auto third = nth(*expanded, "mapped", "vector.length", 2);
-    auto mapped = function(*expanded, "mapped");
-    require(third->getOperand(0) == mapped.getArgument(2),
-            "unused rowwise input escaped its shape check");
-    require(succeeded(mathematical::verifyMapRealizationsPreserved(*source,
-                                                                   *expanded)),
-            "valid realization refused");
-    bool residual = false;
-    expanded->walk([&](algebra::MapRealizeOp) { residual = true; });
-    require(!residual, "map declaration survived realization");
-    require(bool(SymbolTable::lookupNearestSymbolFrom(
-                &expanded->getBody()->front(),
-                StringAttr::get(&context, "formula"))),
-            "original scalar helper was not retained");
+    for (auto &step : closure.bodies.at("work"))
+      contracts.push_back(
+          isa<exec::ApplyOp>(step.operation)
+              ? sf::contract(cast<exec::ApplyOp>(step.operation)).str()
+              : step.operation->getName().getStringRef().str());
+    // General strict-zip admission measures all row extents, then compares
+    // them in order. Every shape guard still precedes formula arithmetic.
+    const std::vector<std::string> expected = {
+        "vector.length",   "vector.length", "vector.length",   "index.equal",
+        "control.require", "index.equal",   "control.require", "field.constant",
+        "vector.mul",      "vector.sub",    "field.add",       "vector.scale",
+        "vector.fill",     "vector.add",    "exec.returned"};
+    require(contracts == expected, "ordered vector schedule changed");
+    auto scale = nth(*expanded, "vector.scale");
+    require(
+        scale.getInputs()[0] == sc::payload(nth(*expanded, "vector.sub"))[0] &&
+            scale.getInputs()[1] == sc::payload(nth(*expanded, "field.add"))[0],
+        "scalar factor lost its scale coordinates");
+    require(nth(*expanded, "vector.length", 2).getInputs()[0] ==
+                function(*expanded).getArgument(3),
+            "unused row was not measured");
+    require(
+        succeeded(compare(*source, *expanded)) &&
+            same(function(*source, "formula"), function(*expanded, "formula")),
+        "original formula or independent correspondence changed");
+    bool pending = false;
+    expanded->walk([&](exec::CollectOp) { pending = true; });
+    require(!pending, "collection survived finite preparation");
   });
-
   cases.run("realization is deterministic", [&] {
-    auto again = copy(*source);
-    require(succeeded(mathematical::expandMapRealizations(
-                *again, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
-            "second realization failed");
-    std::string first, second;
-    llvm::raw_string_ostream(first) << *expanded;
-    llvm::raw_string_ostream(second) << *again;
-    require(first == second, "realization differs between runs");
+    auto again = prepare(*source);
+    require(same(*expanded, *again),
+            "fresh realization changed sites or operations");
   });
-
-  cases.run("composed helpers preserve multiple and empty result lists", [&] {
-    auto text = edit(fixture, " func.func private @formula", R"mlir(
+  auto mutation = [&](StringRef label,
+                      llvm::function_ref<void(ModuleOp)> change) {
+    cases.run(label, [&] {
+      auto candidate = sf::clone(*expanded);
+      change(*candidate);
+      require(succeeded(verify(*candidate)),
+              "semantic mutation must remain admitted");
+      ScopedDiagnosticHandler quiet(&context,
+                                    [](Diagnostic &) { return success(); });
+      require(failed(compare(*source, *candidate)),
+              "independent reader accepted changed realization");
+    });
+  };
+  mutation("compare an extent with itself", [&](ModuleOp module) {
+    auto equal = nth(module, "index.equal", 1);
+    equal->setOperand(2, equal.getInputs()[0]);
+  });
+  mutation("drop unused row shape guard", [&](ModuleOp module) {
+    sc::omit(nth(module, "control.require", 1));
+  });
+  mutation("swap subtraction operands", [&](ModuleOp module) {
+    auto sub = nth(module, "vector.sub");
+    auto left = sub.getInputs()[0];
+    sub->setOperand(1, sub.getInputs()[1]);
+    sub->setOperand(2, left);
+  });
+  mutation("broadcast another scalar", [&](ModuleOp module) {
+    nth(module, "vector.fill")
+        ->setOperand(1, sc::payload(nth(module, "field.add"))[0]);
+  });
+  mutation("return a vector intermediate", [&](ModuleOp module) {
+    sc::returned(function(module))
+        ->setOperand(0, sc::payload(nth(module, "vector.scale"))[0]);
+  });
+  mutation("change a scalar literal", [&](ModuleOp module) {
+    nth(module, "field.constant")
+        ->setAttr("parameters",
+                  ArrayAttr::get(&context, {StringAttr::get(&context, "2")}));
+  });
+  mutation("change retained scalar mathematics", [&](ModuleOp module) {
+    function(module, "formula").walk([&](algebra::ConstantFieldOp op) {
+      op->setAttr("value", StringAttr::get(&context, "2"));
+    });
+  });
+  mutation("move shape admission after arithmetic", [&](ModuleOp module) {
+    moveAfter(nth(module, "control.require"), nth(module, "field.constant"));
+  });
+  mutation("broadcast to another row extent", [&](ModuleOp module) {
+    nth(module, "vector.fill")
+        ->setOperand(2, sc::payload(nth(module, "vector.length", 1))[0]);
+  });
+  mutation("change the scoped root origin", [&](ModuleOp module) {
+    function(module)->setAttr(
+        "runtime.origin",
+        ArrayAttr::get(&context, {StringAttr::get(&context, "square"),
+                                  ArrayAttr::get(&context, {})}));
+  });
+  mutation("add an unaccounted binding", [&](ModuleOp module) {
+    OpBuilder builder(&context);
+    builder.setInsertionPointToStart(
+        &module.getBody()->front().getRegion(0).front());
+    runtime::BindingOp::create(builder, module.getLoc(), "extra", "vector.add",
+                               builder.getStrArrayAttr({"koala-bear"}), "",
+                               ArrayAttr{});
+  });
+  mutation("pin a generated vector implementation", [&](ModuleOp module) {
+    auto call = nth(module, "vector.add");
+    auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+        call, call.getBindingAttr());
+    binding.setImplementation("plonky3/vector.add");
+  });
+  for (StringRef change : {"scale-types", "binding-field",
+                           "invocation-attribute", "function-attribute"})
+    cases.run("formation refuses " + change, [&] {
+      auto candidate = sf::clone(*expanded);
+      if (change == "scale-types") {
+        auto scale = nth(*candidate, "vector.scale");
+        auto rows = scale.getInputs()[0];
+        scale->setOperand(1, scale.getInputs()[1]);
+        scale->setOperand(2, rows);
+      } else if (change == "binding-field") {
+        auto call = nth(*candidate, "vector.add");
+        auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+            call, call.getBindingAttr());
+        binding->setAttr(
+            "arguments",
+            ArrayAttr::get(&context,
+                           {StringAttr::get(&context, "bls12-381.fr")}));
+      } else if (change == "invocation-attribute")
+        nth(*candidate, "vector.add")
+            ->setAttr("note", StringAttr::get(&context, "extra"));
+      else
+        function(*candidate)
+            ->setAttr("note", StringAttr::get(&context, "extra"));
+      std::string diagnostics;
+      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
+        diagnostics += diagnostic.str();
+        return success();
+      });
+      require(failed(verify(*candidate)) &&
+                  failed(compare(*source, *candidate)),
+              "malformed candidate escaped actual source admission");
+      require(namesIdentifier(diagnostics, "execution-source-closure"),
+              "unexpected refusal owner: " + diagnostics);
+    });
+  cases.run(
+      "composed mathematical helpers preserve multiple and empty returns", [&] {
+        auto text = edit(fixture, " func.func private @formula", R"mlir(
  func.func private @pair(%a:!F,%b:!F)->(!F,!F) {
    %sq = func.call @square(%a) : (!F)->!F
    func.return %sq,%b : !F,!F
  }
  func.func private @observe(%a:!F) {
-   %unused = "algebra.field_add"(%a,%a) : (!F,!F)->!F
+   %unused = algebra.field_add %a,%a : (!F,!F)->!F
    func.return
  }
  func.func private @formula)mlir");
-    text = edit(text, "   %sq = func.call @square(%a) : (!F)->!F\n   %d",
-                "   func.call @observe(%a) : (!F)->()\n"
-                "   %pair:2 = func.call @pair(%a,%b) : (!F,!F)->(!F,!F)\n"
-                "   %d");
-    text = edit(text, "(%sq,%b)", "(%pair#0,%pair#1)");
-    auto before = parseSourceString<ModuleOp>(text, &context);
-    require(bool(before), "composed helper fixture refused");
-    auto after = copy(*before);
-    require(succeeded(mathematical::expandMapRealizations(
-                *after, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
-            "composed helper realization failed");
-    require(succeeded(
-                mathematical::verifyMapRealizationsPreserved(*before, *after)),
-            "independent reader refused composed helpers");
-    auto sub = nth(*after, "mapped", "vector.sub");
-    Value left = sub->getOperand(0);
-    sub->setOperand(0, sub->getOperand(1));
-    sub->setOperand(1, left);
-    require(named("algebra-map-correspondence",
-                  [&] {
-                    return failed(mathematical::verifyMapRealizationsPreserved(
-                        *before, *after));
-                  }),
-            "multiple helper results lost their positions");
-  });
-
-  // Most edits reach the map matcher; `code` names an earlier owner that
-  // already refuses the candidate during its verification.
-  auto mutation = [&](StringRef label, function_ref<void(ModuleOp)> change,
-                      StringRef code = "algebra-map-correspondence") {
+        text = edit(text, "   %sq = func.call @square(%a) : (!F)->!F\n   %d",
+                    "   func.call @observe(%a) : (!F)->()\n   %pair:2 = "
+                    "func.call @pair(%a,%b) : (!F,!F)->(!F,!F)\n   %d");
+        text = edit(text, "(%sq,%b)", "(%pair#0,%pair#1)");
+        auto original = parse(text), candidate = prepare(*original);
+        require(succeeded(compare(*original, *candidate)),
+                "composed helper readback failed");
+        auto sub = nth(*candidate, "vector.sub");
+        auto left = sub.getInputs()[0];
+        sub->setOperand(1, sub.getInputs()[1]);
+        sub->setOperand(2, left);
+        require(succeeded(verify(*candidate)),
+                "substitution mutation malformed");
+        ScopedDiagnosticHandler quiet(&context,
+                                      [](Diagnostic &) { return success(); });
+        require(failed(compare(*original, *candidate)),
+                "multiple return positions were not checked");
+      });
+  // Formation and preparation independently read actual domains and callback
+  // signatures. A parser with verification disabled is no admission shortcut.
+  auto sourceRefusal = [&](StringRef label, StringRef text, StringRef code) {
     cases.run(label, [&] {
-      auto candidate = copy(*expanded);
-      change(*candidate);
-      require(named(code,
-                    [&] {
-                      return failed(
-                          mathematical::verifyMapRealizationsPreserved(
-                              *source, *candidate));
-                    }),
-              "changed realization escaped correspondence checking");
-    });
-  };
-  mutation("compare a length with itself", [&](ModuleOp module) {
-    auto equal = nth(module, "mapped", "index.equal", 1);
-    equal->setOperand(1, equal->getOperand(0));
-  });
-  mutation("drop an unused input guard", [&](ModuleOp module) {
-    nth(module, "mapped", "control.require", 1)->erase();
-  });
-  mutation("swap subtraction operands", [&](ModuleOp module) {
-    auto sub = nth(module, "mapped", "vector.sub");
-    auto left = sub->getOperand(0);
-    sub->setOperand(0, sub->getOperand(1));
-    sub->setOperand(1, left);
-  });
-  mutation("broadcast a different scalar", [&](ModuleOp module) {
-    auto fill = nth(module, "mapped", "vector.fill");
-    fill->setOperand(0, nth(module, "mapped", "field.add")->getResult(0));
-  });
-  mutation("return an intermediate", [&](ModuleOp module) {
-    auto *ret = nth(module, "mapped", "local.return");
-    ret->setOperand(0, nth(module, "mapped", "vector.scale")->getResult(0));
-  });
-  mutation("change a literal", [&](ModuleOp module) {
-    nth(module, "mapped", "field.constant")
-        ->setAttr("parameters",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, "2")}));
-  });
-  mutation("change the retained helper", [&](ModuleOp module) {
-    module.walk([&](algebra::ConstantFieldOp op) {
-      if (op->getParentOfType<func::FuncOp>().getSymName() == "formula")
-        op->setAttr("value", StringAttr::get(&context, "2"));
-    });
-  });
-  mutation("move a shape guard after arithmetic", [&](ModuleOp module) {
-    nth(module, "mapped", "control.require")
-        ->moveAfter(nth(module, "mapped", "field.constant"));
-  });
-  mutation("broadcast to another input's length", [&](ModuleOp module) {
-    nth(module, "mapped", "vector.fill")
-        ->setOperand(1,
-                     nth(module, "mapped", "vector.length", 1)->getResult(0));
-  });
-  // Bound operand order, binding arguments and unknown attributes are also
-  // checked by protocol verification before the matcher reads the body.
-  mutation(
-      "swap scale operands",
-      [&](ModuleOp module) {
-        auto *scale = nth(module, "mapped", "vector.scale");
-        auto rows = scale->getOperand(0);
-        scale->setOperand(0, scale->getOperand(1));
-        scale->setOperand(1, rows);
-      },
-      "binding-operation-signature");
-  auto binding = [&](ModuleOp module, StringRef contract) {
-    auto ref = nth(module, "mapped", contract)
-                   ->getAttrOfType<FlatSymbolRefAttr>("binding");
-    return SymbolTable(&module.getBody()->front())
-        .lookup<local::OperationBindingOp>(ref.getValue());
-  };
-  mutation(
-      "bind vector arithmetic in another field",
-      [&](ModuleOp module) {
-        binding(module, "vector.add")
-            ->setAttr("arguments",
-                      ArrayAttr::get(&context, {StringAttr::get(
-                                                   &context, "bls12-381.fr")}));
-      },
-      "binding-operation-signature");
-  mutation(
-      "add an attribute to a bound operation",
-      [&](ModuleOp module) {
-        nth(module, "mapped", "vector.add")
-            ->setAttr("note", StringAttr::get(&context, "extra"));
-      },
-      "interactive-unknown-attribute");
-  mutation(
-      "add an attribute to the realized function",
-      [&](ModuleOp module) {
-        function(module, "mapped")
-            ->setAttr("note", StringAttr::get(&context, "extra"));
-      },
-      "interactive-unknown-attribute");
-  // An installed implementation choice and another origin are valid protocol
-  // IR; only the matcher refuses them.
-  mutation("select a binding implementation", [&](ModuleOp module) {
-    binding(module, "vector.add")
-        ->setAttr("implementation",
-                  StringAttr::get(&context, "plonky3/vector.add"));
-  });
-  mutation("name another origin", [&](ModuleOp module) {
-    function(module, "mapped")
-        ->setAttr("logical_origin",
-                  ArrayAttr::get(&context, {StringAttr::get(&context, "square"),
-                                            ArrayAttr::get(&context, {})}));
-  });
-  mutation("add an unused binding", [&](ModuleOp module) {
-    OpBuilder builder(&module.getBody()->front().getRegion(0).front(),
-                      module.getBody()->front().getRegion(0).front().begin());
-    local::OperationBindingOp::create(
-        builder, module.getLoc(), "extra", "vector.add",
-        builder.getStrArrayAttr({"koala-bear"}), "", mlir::ArrayAttr{});
-  });
-
-  // Formation refuses while parsing. A `defended` refusal is also refused by
-  // preparation's formula admission when verification is skipped.
-  auto refusal = [&](StringRef label, StringRef text, StringRef code,
-                     bool defended = false) {
-    cases.run(label, [&] {
-      require(
-          named(code,
-                [&] { return !parseSourceString<ModuleOp>(text, &context); }),
-          "missing expected refusal identifier " + code);
-      if (!defended)
-        return;
-      ScopedDiagnosticHandler quiet(&context,
-                                    [](Diagnostic &) { return success(); });
-      auto module =
+      std::string diagnostics;
+      ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
+        diagnostics += diagnostic.str();
+        return success();
+      });
+      require(!parseSourceString<ModuleOp>(text, &context),
+              "malformed scoped source admitted");
+      auto unchecked =
           parseSourceString<ModuleOp>(text, ParserConfig(&context, false));
-      require(bool(module), "unverified fixture refused");
-      uint64_t work = 1000000;
-      auto error = mathematical::checkMapFormulas(*module, work);
-      require(bool(error), "formula admission accepted the map");
-      auto message = llvm::toString(std::move(error));
-      require(namesIdentifier(message, code),
-              "formula admission identifier: " + message);
+      require(bool(unchecked), "test must remain syntactically valid");
+      auto unchanged = sf::clone(*unchecked);
+      mathematical::RealizationWork work;
+      uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+      std::optional<CapacityCause> capacity;
+      auto result = protocol::prepareScopedFinite(*unchecked, work, copy, bytes,
+                                                  capacity, vectorPolicy());
+      require(!result && same(*unchecked, *unchanged),
+              "preparation admitted or changed malformed source");
+      require(namesIdentifier(diagnostics, code),
+              "unexpected source refusal: " + diagnostics);
     });
   };
-  refusal("missing helper", edit(fixture, "= @formula", "= @missing"),
-          "algebra-map-helper");
-  refusal("no rowwise input",
-          edit(fixture, "[true, true, true, false]",
-               "[false, false, false, false]"),
-          "algebra-map-signature");
-  refusal(
-      "rowwise mask and signature disagree",
-      edit(fixture, "[true, true, true, false]", "[true, true, true, true]"),
-      "algebra-map-signature");
-  refusal("mixed fields", edit(fixture, " algebra.map_realize @mapped", R"(
- func.func private @mixed(%a:!F,%e:!algebra.field<"koala-bear.ext8-binomial3">)->!F {
-   func.return %a : !F
- }
- algebra.map_realize @mixed_map = @mixed [true, false] : (!V,!algebra.field<"koala-bear.ext8-binomial3">)->!V
- algebra.map_realize @mapped)"),
-          "algebra-map-signature");
-  refusal("helper field differs from mapped field",
-          edit(fixture, " algebra.map_realize @mapped", R"(
- func.func private @wide(%e:!algebra.field<"koala-bear.ext8-binomial3">)->!algebra.field<"koala-bear.ext8-binomial3"> {
-   func.return %e : !algebra.field<"koala-bear.ext8-binomial3">
- }
- algebra.map_realize @wide_map = @wide [true] : (!V)->!V
- algebra.map_realize @mapped)"),
-          "algebra-map-signature");
-  // Plain verification reads every operation of the helper closure, used or
-  // not; preparation repeats the check on the expanded formula.
-  refusal("unsupported unused scalar operation",
-          edit(fixture, "   %dead = ",
-               "   %unsupported = \"algebra.field_equal\"(%a,%b) : "
-               "(!F,!F)->i1\n   %dead = "),
-          "algebra-map-formula", true);
-  refusal("unsupported nested helper operation",
-          edit(fixture, "   %r = \"algebra.field_multiply\"(%x,%x)",
-               "   %e = \"algebra.field_equal\"(%x,%x) : (!F,!F)->i1\n"
-               "   %r = \"algebra.field_multiply\"(%x,%x)"),
-          "algebra-map-formula", true);
-  // Each Ring operation is consistent in its own field, so only formation sees
-  // dead work in another field.
-  refusal("unused constant of another field",
-          edit(fixture, "   %dead = ",
-               "   %foreign = \"algebra.constant\"() {value=\"2\"} : "
-               "()->!algebra.field<\"bls12-381.fr\">\n   %dead = "),
-          "algebra-map-formula");
-  refusal("nested helper result outside the field",
-          edit(edit(fixture, " func.func private @formula", R"(
- func.func private @wide()->!algebra.field<"koala-bear.ext8-binomial3"> {
-   %w = "algebra.constant"() {value="3"} : ()->!algebra.field<"koala-bear.ext8-binomial3">
-   func.return %w : !algebra.field<"koala-bear.ext8-binomial3">
- }
- func.func private @formula)"),
-               "   %dead = ",
-               "   %wide = func.call @wide() : () -> "
-               "!algebra.field<\"koala-bear.ext8-binomial3\">\n   %dead = "),
-          "algebra-map-formula");
-  cases.run("unused helper outside the field is not read", [&] {
-    auto text = edit(fixture, " func.func private @formula", R"(
- func.func private @test(%x:!F)->i1 {
-   %e = "algebra.field_equal"(%x,%x) : (!F,!F)->i1
-   func.return %e : i1
- }
- func.func private @formula)");
-    require(bool(parseSourceString<ModuleOp>(text, &context)),
-            "a helper no map reaches was refused");
-  });
+  sourceRefusal("missing computation helper",
+                edit(fixture, "callee=@formula", "callee=@missing"),
+                "execution-computation-symbol");
+  sourceRefusal("missing collection domain",
+                edit(fixture, "domain=@rows", "domain=@missing"),
+                "finite-formation");
+  sourceRefusal("plain function cannot substitute for a domain",
+                edit(fixture, "domain=@rows", "domain=@formula"),
+                "finite-formation");
+  sourceRefusal("callback item and capture signature disagree",
+                edit(fixture, "body=@row", "body=@work"), "finite-formation");
+  sourceRefusal("callback item field differs from the domain element",
+                edit(edit(fixture, "%a0:!F,%a1:!F,%a2:!F",
+                          "%a0:!algebra.field<\"bls12-381.fr\">,%a1:!F,%a2:!F"),
+                     "%scope,%a0,%a1,%a2,%a6", "%scope,%a1,%a1,%a2,%a6"),
+                "finite-formation");
+  auto foreignHelper = edit(fixture, " func.func private @formula", R"mlir(
+func.func private @foreign(%a:!algebra.field<"bls12-381.fr">,
+  %b:!algebra.field<"bls12-381.fr">,%c:!algebra.field<"bls12-381.fr">,
+  %s:!algebra.field<"bls12-381.fr">)->!algebra.field<"bls12-381.fr"> {
+  func.return %a : !algebra.field<"bls12-381.fr">
+}
+ func.func private @formula)mlir");
+  sourceRefusal("computation helper field differs from its actual inputs",
+                edit(foreignHelper, "callee=@formula", "callee=@foreign"),
+                "execution-computation-signature");
+  sourceRefusal("protocol call cannot bypass a callback signature",
+                edit(fixture, "callee=@work", "callee=@row"),
+                "interactive-call-type");
 
-  // Ring limits apply to the expanded formula during preparation. A chain of
-  // operations adds one level each; subtraction adds one more on the path of
-  // its right operand, so `x - acc` grows two levels per step.
-  auto chain = [](unsigned steps, StringRef operation, bool deepRight,
-                  unsigned calls = 1) {
-    std::string text = R"(!F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-module { "protocol.module"() ({
- func.func private @chain(%x:!F)->!F {
-   %v0 = "algebra.field_add"(%x,%x) : (!F,!F)->!F
-)";
-    // %v0 = x + x has depth one; the remaining steps extend it.
-    for (unsigned i = 1; i < steps; ++i) {
-      auto previous = "%v" + std::to_string(i - 1);
-      text += "   %v" + std::to_string(i) + " = \"" + operation.str() + "\"(" +
-              (deepRight ? "%x," + previous : previous + ",%x") +
-              ") : (!F,!F)->!F\n";
-    }
-    text += "   func.return %v" + std::to_string(steps - 1) + " : !F\n }\n";
-    text += " func.func private @outer(%x:!F)->!F {\n   %c0 = func.call "
-            "@chain(%x) : (!F)->!F\n";
-    for (unsigned i = 1; i < calls; ++i)
-      text += "   %c" + std::to_string(i) + " = func.call @chain(%c" +
-              std::to_string(i - 1) + ") : (!F)->!F\n";
-    text += "   func.return %c" + std::to_string(calls - 1) + " : !F\n }\n";
-    text += R"( algebra.map_realize @mapped = @outer [true] : (!V)->!V
- local.func @work(%a:!V)->!V attributes {logical_origin=["work",[]]} {
-   %r = local.apply @mapped(%a) {site="map"} : (!V)->!V
-   local.return %r : !V
- }
- "protocol.func"() ({
- ^entry(%a:!V):
-   %r = "protocol.local_call"(%a) {callee=@work,role="P",site="work"} : (!V)->!V
-   "protocol.return"(%r) : (!V)->()
- }) {sym_name="main",function_type=(!V)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() })";
-    return text;
-  };
-  auto depth = [&](StringRef label, std::string text, bool admitted) {
-    cases.run(label, [&] {
-      auto module = parseSourceString<ModuleOp>(text, &context);
-      require(bool(module), "formation refused a Ring formula");
-      ScopedDiagnosticHandler quiet(&context,
-                                    [](Diagnostic &) { return success(); });
-      uint64_t work = 1000000;
-      auto error = mathematical::checkMapFormulas(*module, work);
-      if (admitted) {
-        require(!error, "formula admission refused: " +
-                            llvm::toString(std::move(error)));
-        require(succeeded(mathematical::expandMapRealizations(
-                    *module, nullptr, nullptr,
-                    NumericalExpressionMode::VectorOnly)),
-                "realization refused an admitted depth");
-        return;
-      }
-      require(bool(error), "formula admission accepted excess depth");
-      auto message = llvm::toString(std::move(error));
-      require(namesIdentifier(message, "algebra-map-formula") &&
-                  namesIdentifier(message, "ring-depth"),
-              "depth refusal identifier: " + message);
+  for (StringRef kind :
+       {"unused equality", "nested equality", "foreign constant",
+        "foreign helper result", "dormant helper"})
+    cases.run("general callback admits " + kind, [&] {
+      auto text = fixture;
+      if (kind == "unused equality")
+        text =
+            edit(text, "   %dead =",
+                 "   %e = algebra.field_equal %a,%b : (!F,!F)->i1\n   %dead =");
+      else if (kind == "nested equality")
+        text = edit(text, "   %r =",
+                    "   %e = algebra.field_equal %x,%x : (!F,!F)->i1\n   %r =");
+      else if (kind == "foreign constant")
+        text = edit(text, "   %dead =",
+                    "   %foreign = \"algebra.constant\"() {value=\"2\"} : ()->"
+                    "!algebra.field<\"bls12-381.fr\">\n   %dead =");
+      else if (kind == "foreign helper result") {
+        text = edit(text, " func.func private @formula", R"mlir(
+func.func private @wide()->!algebra.field<"koala-bear.ext8-binomial3"> {
+  %w = "algebra.constant"() {value="3"} : ()->!algebra.field<"koala-bear.ext8-binomial3">
+  func.return %w : !algebra.field<"koala-bear.ext8-binomial3">
+}
+ func.func private @formula)mlir");
+        text = edit(
+            text, "   %dead =",
+            "   %wide = func.call @wide() : "
+            "()->!algebra.field<\"koala-bear.ext8-binomial3\">\n   %dead =");
+      } else
+        text = edit(text, " func.func private @formula", R"mlir(
+func.func private @test(%x:!F)->i1 {
+  %e = algebra.field_equal %x,%x : (!F,!F)->i1
+  func.return %e : i1
+}
+ func.func private @formula)mlir");
+      auto original = parse(text), unchanged = sf::clone(*original);
+      auto candidate = prepare(*original);
       require(
-          failed(mathematical::expandMapRealizations(
-              *module, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
-          "realization accepted excess depth");
+          succeeded(compare(*original, *candidate)) &&
+              same(*original, *unchanged) &&
+              same(function(*original, "formula"),
+                   function(*candidate, "formula")),
+          "general typed mathematics was changed or not independently checked");
     });
-  };
-  depth("addition chain at the Ring depth limit",
-        chain(1023, "algebra.field_add", false), true);
-  depth("addition chain beyond the Ring depth limit",
-        chain(1024, "algebra.field_add", false), false);
-  depth("subtrahend chain at the Ring depth limit",
-        chain(512, "algebra.field_subtract", true), true);
-  depth("subtrahend chain beyond the Ring depth limit",
-        chain(513, "algebra.field_subtract", true), false);
-  // Each helper is shallow; their composition is not.
-  depth("expanded helper calls beyond the Ring depth limit",
-        chain(600, "algebra.field_add", false, 2), false);
+
+  for (auto [steps, subtract, calls] :
+       {std::tuple<unsigned, bool, unsigned>{1023, false, 1},
+        {1024, false, 1},
+        {512, true, 1},
+        {513, true, 1},
+        {600, false, 2}})
+    cases.run("general formula with " + Twine(steps) +
+                  (subtract ? " right subtractions" : " additions") + " in " +
+                  Twine(calls) + " helper calls",
+              [&, steps = steps, subtract = subtract, calls = calls] {
+                auto original = parse(chain(steps, subtract, calls));
+                auto unchanged = sf::clone(*original);
+                auto candidate = prepare(*original);
+                require(succeeded(compare(*original, *candidate)) &&
+                            same(*original, *unchanged) &&
+                            same(function(*original, "chain"),
+                                 function(*candidate, "chain")),
+                        "formula depth changed mathematics or escaped "
+                        "independent checking");
+                require(sf::hasLoop(*candidate) ||
+                            !sf::executionApplications(*candidate, "work",
+                                                       "vector.add")
+                                 .empty(),
+                        "deep formula lost both ordered and vector execution");
+              });
+
   for (bool unused : {false, true})
     cases.run(
-        unused ? "many maps near the shared helper operation limit"
-               : "many maps with deep live formulas",
+        unused ? "ninety seven maps with 99522 helper operations"
+               : "twenty four maps with deep live formulas",
         [&] {
-          auto text = chain(1023, "algebra.field_add", false);
-          if (unused)
-            text = edit(text, "func.return %v1022", "func.return %v0");
-          std::string declarations;
-          // Live output also faces the 400,000-node Local artifact bound. With
-          // unused source arithmetic, 97 maps charge 99,522 helper operations
-          // while their compact candidates remain inside that separate bound.
-          for (unsigned i = 1; i < (unused ? 97u : 24u); ++i)
-            declarations += " algebra.map_realize @mapped" + std::to_string(i) +
-                            " = @outer [true] : (!V)->!V\n";
-          text = edit(text, " local.func @work",
-                      declarations + " local.func @work");
-          auto module = parseSourceString<ModuleOp>(text, &context);
-          require(bool(module), "many-map fixture refused");
-          require(succeeded(mathematical::expandMapRealizations(
-                      *module, nullptr, nullptr,
-                      NumericalExpressionMode::VectorOnly)),
-                  "correspondence budget refused a large admitted map family");
+          auto original =
+              parse(chain(1023, false, 1, unused, unused ? 97 : 24));
+          auto unchanged = sf::clone(*original);
+          mathematical::RealizationWork work;
+          uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+          std::optional<CapacityCause> capacity;
+          std::string diagnostics;
+          ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
+            diagnostics += diagnostic.str();
+            return success();
+          });
+          auto result = protocol::prepareScopedFinite(
+              *original, work, copy, bytes, capacity, vectorPolicy());
+          require(same(*original, *unchanged),
+                  "large preparation changed source");
+          if (unused) {
+            require(!result &&
+                        namesIdentifier(diagnostics, "finite-preparation"),
+                    "oversized actual candidate escaped bounded admission");
+            // Required ordered construction exposes the original owner
+            // that a speculative attempt deliberately keeps private.
+            work = mathematical::RealizationWork{};
+            copy = 1000000;
+            bytes = 16 * 1024 * 1024;
+            diagnostics.clear();
+            result = protocol::prepareScopedFinite(
+                *original, work, copy, bytes, capacity, {false, false, false});
+            require(!result &&
+                        namesIdentifier(diagnostics,
+                                        "mathematical-analysis-limit") &&
+                        same(*original, *unchanged),
+                    "large retained/outlined computation admission changed: " +
+                        diagnostics);
+          } else
+            require(bool(result) && succeeded(compare(*original, *result)),
+                    "large live map readback refused");
         });
   for (auto mode : {NumericalExpressionMode::PreferNative,
                     NumericalExpressionMode::VectorOnly})
     cases.run(
         mode == NumericalExpressionMode::PreferNative
-            ? "optional numerical comparison preserves required maps"
-            : "wide maps retain the vector alternative",
+            ? "two hundred wide maps share optional bulk work"
+            : "two hundred wide maps retain vector selection",
         [&] {
-          std::string text = R"mlir(
-!F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-module { "protocol.module"() ({
- func.func private @identity(%x:!F
-)mlir";
-          std::string mask = "true", ports = "!V";
-          for (unsigned i = 1; i < 128; ++i) {
-            text += ",%unused" + std::to_string(i) + ":!F";
-            mask += ",false";
-            ports += ",!F";
-          }
-          text += ")->!F { %r = algebra.field_multiply %x,%x : (!F,!F)->!F "
-                  "func.return %r : !F }\n";
-          for (unsigned i = 0; i < 200; ++i)
-            text += " algebra.map_realize @mapped" + std::to_string(i) +
-                    " = @identity [" + mask + "] : (" + ports + ")->!V\n";
-          text += R"mlir(
- "protocol.func"() ({ "protocol.return"() : ()->() })
- {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
-)mlir";
-          auto before = parseSourceString<ModuleOp>(text, &context);
-          require(bool(before), "wide map family refused");
-          auto after = copy(*before);
-          require(succeeded(mathematical::expandMapRealizations(
-                      *after, nullptr, nullptr, mode)) &&
-                      succeeded(mathematical::verifyMapRealizationsPreserved(
-                          *before, *after)),
-                  "optional readback exhausted required map checking");
-          unsigned native = 0, vectors = 0;
-          for (unsigned i = 0; i < 200; ++i) {
-            auto body = actions(*after, "mapped" + std::to_string(i));
-            bool numerical = llvm::any_of(body, [](const auto &action) {
-              return action.first == "numerical.map";
-            });
-            if (numerical)
-              ++native;
-            else {
-              ++vectors;
-              require(llvm::any_of(body,
-                                   [](const auto &action) {
-                                     return action.first == "vector.mul";
-                                   }),
-                      "vector fallback lost the squared input");
+          std::string mathematics = "func.func private @outer(%x:!F";
+          for (unsigned i = 1; i < 128; ++i)
+            mathematics += ",%unused" + std::to_string(i) + ":!F";
+          mathematics +=
+              ")->!F { %r = algebra.field_multiply %x,%x : (!F,!F)->!F "
+              "func.return %r : !F }\n";
+          auto original = parse(oneRowFixture(mathematics, 127, 200));
+          auto unchanged = sf::clone(*original);
+          mathematical::RealizationWork work;
+          uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+          std::optional<CapacityCause> capacity;
+          auto policy = vectorPolicy();
+          policy.numericalExpressions = mode;
+          std::string diagnostics;
+          ScopedDiagnosticHandler quiet(&context, [&](Diagnostic &diagnostic) {
+            diagnostics += diagnostic.str();
+            return success();
+          });
+          auto result = protocol::prepareScopedFinite(*original, work, copy,
+                                                      bytes, capacity, policy);
+          require(bool(result) && same(*original, *unchanged),
+                  "wide preparation refused or changed source: " + diagnostics);
+          {
+            unsigned native = 0, vectors = 0, ordered = 0;
+            for (unsigned i = 0; i < 200; ++i) {
+              auto name = i ? "work" + std::to_string(i) : "work";
+              auto helper = function(*result, name);
+              native += !sf::applications(helper, "numerical.map").empty();
+              vectors += !sf::applications(helper, "vector.mul").empty();
+              ordered += sf::hasLoop(helper);
+            }
+            require(native + vectors + ordered == 200 && ordered > 0 &&
+                        (mode == NumericalExpressionMode::PreferNative
+                             ? native > 0 && vectors == 0
+                             : native == 0 && vectors > 0),
+                    "shared optional work was reset or lost the required "
+                    "ordered fallback");
+            require(succeeded(compare(*original, *result, policy)),
+                    "wide readback refused");
+            if (native) {
+              auto applications = sf::applications(*result, "numerical.map");
+              auto call = applications.front();
+              auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
+              auto wrong = edit(cast<StringAttr>(parameters[0]).getValue(),
+                                "[\"input\",0]", "[\"input\",1]");
+              call->setAttr(
+                  "parameters",
+                  ArrayAttr::get(&context, {StringAttr::get(&context, wrong)}));
+              require(
+                  succeeded(verify(*result)) &&
+                      failed(compare(*original, *result, policy)),
+                  "capacity fallback concealed an admitted semantic mismatch");
             }
           }
-          require(
-              native + vectors == 200 && vectors &&
-                  (mode == NumericalExpressionMode::PreferNative ? native > 0
-                                                                 : native == 0),
-              "comparison work was reset per map or native selection was lost");
-          if (native) {
-            auto *call = nth(*after, "mapped0", "numerical.map");
-            auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
-            auto body = edit(cast<StringAttr>(parameters[0]).getValue(),
-                             "[\"input\",0]", "[\"input\",1]");
-            OpBuilder builder(call);
-            call->setAttr("parameters", builder.getStrArrayAttr({body}));
-            require(succeeded(verify(*after)),
-                    "wide native body mutation failed ordinary admission");
-            require(named("algebra-map-correspondence",
-                          [&] {
-                            return failed(
-                                mathematical::verifyMapRealizationsPreserved(
-                                    *before, *after));
-                          }),
-                    "comparison capacity concealed an actual map mismatch");
-          }
         });
-  // Admission charges the root helper before cloning it, operations no
-  // result reaches included, and then charges only the callees it expands.
-  // One work unit admits the map; every charged operation costs one more than
-  // its operand and result slots. The root helper is the function (1), the
-  // call (3), each dead addition (4) and the return (2); expanding @square
-  // adds its multiplication (4).
-  auto budgeted = [](unsigned dead) {
-    std::string text = R"(!F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-module { "protocol.module"() ({
- func.func private @square(%x:!F)->!F {
-   %r = "algebra.field_multiply"(%x,%x) : (!F,!F)->!F
-   func.return %r : !F
- }
- func.func private @outer(%x:!F)->!F {
-   %s = func.call @square(%x) : (!F)->!F
-)";
-    for (unsigned i = 0; i < dead; ++i)
-      text += "   %d" + std::to_string(i) +
-              " = \"algebra.field_add\"(%x,%x) : (!F,!F)->!F\n";
-    text += R"(   func.return %s : !F
- }
- algebra.map_realize @mapped = @outer [true] : (!V)->!V
- local.func @work(%a:!V)->!V attributes {logical_origin=["work",[]]} {
-   %r = local.apply @mapped(%a) {site="map"} : (!V)->!V
-   local.return %r : !V
- }
- "protocol.func"() ({
- ^entry(%a:!V):
-   %r = "protocol.local_call"(%a) {callee=@work,role="P",site="work"} : (!V)->!V
-   "protocol.return"(%r) : (!V)->()
- }) {sym_name="main",function_type=(!V)->!V,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() })";
-    return text;
-  };
   for (unsigned dead : {0u, 3u})
     cases.run(
-        "exact admission budget with " + Twine(dead) + " dead root operations",
+        "exact required allowance with " + Twine(dead) +
+            " dead root operations",
         [&] {
-          auto module = parseSourceString<ModuleOp>(budgeted(dead), &context);
-          require(bool(module), "budget fixture refused");
-          ScopedDiagnosticHandler quiet(&context,
-                                        [](Diagnostic &) { return success(); });
-          uint64_t exact = 1 + (1 + 3 + 4 * dead + 2) + 4;
-          uint64_t work = exact;
-          auto error = mathematical::checkMapFormulas(*module, work);
-          require(!error,
-                  "exact budget refused: " + llvm::toString(std::move(error)));
-          require(work == 0, "exact budget left work unspent");
-          work = exact - 1;
-          error = mathematical::checkMapFormulas(*module, work);
-          require(bool(error), "short budget admitted the formula");
-          auto message = llvm::toString(std::move(error));
-          require(namesIdentifier(message, "mathematical-expansion-limit"),
-                  "budget refusal identifier: " + message);
+          std::string math = R"mlir(
+func.func private @square(%x:!F)->!F {
+  %r = algebra.field_multiply %x,%x : (!F,!F)->!F
+  func.return %r : !F
+}
+func.func private @outer(%x:!F)->!F {
+  %s = func.call @square(%x) : (!F)->!F
+)mlir";
+          for (unsigned i = 0; i < dead; ++i)
+            math += "%d" + std::to_string(i) +
+                    " = algebra.field_add %x,%x : (!F,!F)->!F\n";
+          math += "func.return %s : !F\n}\n";
+          auto original = parse(oneRowFixture(math)),
+               unchanged = sf::clone(*original);
+          constexpr uint64_t copyLimit = 1000000, siteLimit = 16 * 1024 * 1024;
+          mathematical::RealizationWork measure;
+          uint64_t copy = copyLimit, bytes = siteLimit;
+          std::optional<CapacityCause> capacity;
+          auto candidate = protocol::prepareScopedFinite(
+              *original, measure, copy, bytes, capacity, {false, false, false});
+          require(bool(candidate), "required measurement refused");
+          auto copyCost = copyLimit - copy;
+          auto checkCost = uint64_t(1000000) - measure.requiredFiniteChecking;
+          require(copyCost > 1 && checkCost > 1, "required work not charged");
+          for (bool checking : {false, true}) {
+            mathematical::RealizationWork exact;
+            exact.requiredFiniteChecking = checking ? checkCost : 1000000;
+            copy = checking ? copyLimit : copyCost;
+            bytes = siteLimit;
+            auto result = protocol::prepareScopedFinite(
+                *original, exact, copy, bytes, capacity, {false, false, false});
+            require(bool(result) &&
+                        (checking ? exact.requiredFiniteChecking : copy) == 0,
+                    "exact required allowance refused or not charged");
+            ScopedDiagnosticHandler quiet(
+                &context, [](Diagnostic &) { return success(); });
+            mathematical::VerificationDecision outcome;
+            auto repeated = protocol::prepareScopedFinite(
+                *original, exact, copy, bytes, capacity, {false, false, false},
+                nullptr, nullptr, &outcome);
+            require(!repeated &&
+                        (checking
+                             ? outcome.outcome ==
+                                       mathematical::VerificationObservation::
+                                           RequiredCapacity &&
+                                   outcome.capacity.has_value()
+                             : capacity.has_value()),
+                    "repeated work replenished exhausted allowance");
+            mathematical::RealizationWork shortWork;
+            shortWork.requiredFiniteChecking =
+                checking ? checkCost - 1 : 1000000;
+            copy = checking ? copyLimit : copyCost - 1;
+            bytes = siteLimit;
+            auto shortCandidate = protocol::prepareScopedFinite(
+                *original, shortWork, copy, bytes, capacity,
+                {false, false, false}, nullptr, nullptr, &outcome);
+            require(!shortCandidate &&
+                        (checking
+                             ? outcome.outcome ==
+                                       mathematical::VerificationObservation::
+                                           RequiredCapacity &&
+                                   outcome.capacity.has_value()
+                             : capacity.has_value()) &&
+                        same(*original, *unchanged),
+                    "one-short required allowance changed source or published");
+          }
         });
-  cases.run("realization requires the protocol profile", [&] {
-    auto module = parseSourceString<ModuleOp>(
-        "module { func.func private @empty() {func.return} }", &context);
-    require(bool(module), "context fixture refused");
-    require(named("algebra-map-context",
-                  [&] {
-                    return failed(mathematical::expandMapRealizations(
-                        *module, nullptr, nullptr,
-                        NumericalExpressionMode::VectorOnly));
-                  }),
-            "missing algebra-map-context refusal");
+  cases.run("finite preparation requires a protocol owner", [&] {
+    auto module = parse("module {func.func private @empty() {func.return}}");
+    auto unchanged = sf::clone(*module);
+    mathematical::RealizationWork work;
+    uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> capacity;
+    require(
+        !protocol::prepareScopedFinite(*module, work, copy, bytes, capacity) &&
+            same(*module, *unchanged),
+        "non-protocol context admitted or changed");
   });
-  refusal("protocol call cannot bypass local application",
-          edit(fixture, "callee=@work", "callee=@mapped"),
-          "interactive-symbol-kind");
-
-  // Resource-origin analysis reaches a local body because it returns an
-  // affine value inside a repeat. Preparation-time declarations have no body
-  // yet and only data ports, so both kinds are admitted there.
-  cases.run("preparation callables inside an affine local body", [&] {
-    constexpr StringLiteral body = R"(!s = !local.capability<"rng:bls12-381.fr">
+  for (bool collection : {false, true})
+    cases.run(
+        collection ? "collection in an affine repeat helper"
+                   : "computation in an affine repeat helper",
+        [&] {
+          auto type = collection ? "!V" : "!F";
+          std::string declarations = R"mlir(
+func.func private @twice(%x:!F)->!F {
+  %r = algebra.field_add %x,%x : (!F,!F)->!F
+  func.return %r : !F
+}
+)mlir";
+          if (collection) {
+            declarations += R"mlir(
+"data.domain"() ({^entry(%xs:!V):
+  %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+  "data.domain_yield"(%d) : (!data.domain<!F>)->()
+}) {sym_name="elements",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+)mlir";
+            declarations +=
+                functionText("row", "%x:!F,%xs:!V", "!F",
+                             invoke("exec.compute", "callee=@twice", "twice",
+                                    "%x", "!F", "%r", "!F") +
+                                 scopedReturn("%r", "!F"),
+                             true);
+          }
+          declarations += functionText(
+              "step", std::string("%state:!S,%v:") + type,
+              std::string("!S,") + type,
+              invoke(collection ? "exec.collect" : "exec.compute",
+                     collection ? "domain=@elements,body=@row"
+                                : "callee=@twice",
+                     "map", "%v", type, "%r", type) +
+                  scopedReturn("%state,%r", std::string("!S,") + type));
+          auto text = R"mlir(
+!S = !runtime.capability<"rng:bls12-381.fr">
 !F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
 module { "protocol.module"() ({
- func.func private @twice(%x:!F)->!F {
-   %r = "algebra.field_add"(%x,%x) : (!F,!F)->!F
-   func.return %r : !F
- }
- DECLARATION
- local.func @step(%s:!s,%v:VALUE) -> (!s,VALUE) attributes {logical_origin=["step",[]]} {
-   %w = local.apply @doubled(%v) {site="map"} : (VALUE)->VALUE
-   local.return %s, %w : !s, VALUE
- }
- "protocol.func"() ({ ^entry(%n:ui64,%s:!s,%v:VALUE):
+)mlir" + declarations +
+                      R"mlir(
+"protocol.func"() ({^entry(%n:ui64,%s:!S,%v:VALUE):
   %done:2 = "protocol.repeat"(%n,%s,%v) ({
-   ^round(%i:ui64,%state:!s,%value:VALUE):
-    %next:2 = "protocol.local_call"(%state,%value) {callee=@step,role="P",site="step"} : (!s,VALUE)->(!s,VALUE)
-    "protocol.yield"(%next#0,%next#1) : (!s,VALUE)->()
-  }) {site="rounds",carried=2:i64,maximum=8:i64,roles=["P"],carried_roles=[["P"],["P"]]} : (ui64,!s,VALUE)->(!s,VALUE)
-  "protocol.return"(%done#0,%done#1) : (!s,VALUE)->()
- }) {sym_name="main",function_type=(ui64,!s,VALUE)->(!s,VALUE),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() })";
-    for (auto [declaration, type] :
-         {std::pair<StringRef, StringRef>{
-              "algebra.map_realize @doubled = @twice [true] : (!V)->!V", "!V"},
-          {"local.realize @doubled = @twice : (!F)->!F", "!F"}}) {
-      std::string text = edit(body, "DECLARATION", declaration);
-      for (auto at = text.find("VALUE"); at != std::string::npos;
-           at = text.find("VALUE", at))
-        text.replace(at, 5, type.str());
-      auto module = parseSourceString<ModuleOp>(text, &context);
-      require(bool(module), "affine local body refused " + declaration);
-    }
+    ^round(%i:ui64,%state:!S,%value:VALUE):
+      %next:2 = "protocol.local_call"(%state,%value) {callee=@step,role="P",site="step"} : (!S,VALUE)->(!S,VALUE)
+      "protocol.yield"(%next#0,%next#1) : (!S,VALUE)->()
+  }) {site="rounds",carried=2:i64,maximum=8:i64,roles=["P"],carried_roles=[["P"],["P"]]} : (ui64,!S,VALUE)->(!S,VALUE)
+  "protocol.return"(%done#0,%done#1) : (!S,VALUE)->()
+}) {sym_name="main",function_type=(ui64,!S,VALUE)->(!S,VALUE),roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"],["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          auto original = parse(replaceText(text, "VALUE", type));
+          auto candidate = prepare(*original);
+          require(
+              succeeded(compare(*original, *candidate)) &&
+                  sc::returned(function(*candidate, "step")).getOperand(0) ==
+                      function(*candidate, "step").getArgument(1),
+              "affine state was cloned, reordered or lost across preparation");
+          PassManager manager(&context);
+          manager.addPass(protocol::createProjectProtocolPass(false));
+          manager.addPass(protocol::createLowerMathPass());
+          manager.addPass(kernel::createLowerKernelsPass());
+          manager.addPass(protocol::createSelectPhysicalPass());
+          require(succeeded(manager.run(*original)),
+                  "affine repeat failed physical selection");
+        });
+  cases.run("one formula serves scalar and two domain partitions", [&] {
+    auto declarations =
+        R"mlir(
+"data.domain"() ({^entry(%xs:!V):
+  %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+  "data.domain_yield"(%d) : (!data.domain<!F>)->()
+}) {sym_name="one",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+)mlir" +
+        functionText("single_row", "%x:!F,%xs:!V,%b:!F,%c:!F,%s:!F", "!F",
+                     invoke("exec.compute", "callee=@formula", "calculate",
+                            "%x,%b,%c,%s", "!F,!F,!F,!F", "%r", "!F") +
+                         scopedReturn("%r", "!F"),
+                     true) +
+        functionText("single", "%xs:!V,%b:!F,%c:!F,%s:!F", "!V",
+                     invoke("exec.collect", "domain=@one,body=@single_row",
+                            "map", "%xs,%b,%c,%s", "!V,!F,!F,!F", "%r", "!V") +
+                         scopedReturn("%r", "!V"));
+    auto original = parse(edit(fixture, " \"protocol.func\"",
+                               declarations + " \"protocol.func\""));
+    auto scalar = sc::computation(function(*original, "formula"), "scalar");
+    require(succeeded(verify(*original)),
+            "shared scalar computation malformed");
+    auto candidate = prepare(*original);
+    require(
+        succeeded(compare(*original, *candidate)) &&
+            sf::executionApplications(*candidate, "scalar", "control.require")
+                .empty() &&
+            sf::executionApplications(*candidate, "single", "control.require")
+                .empty() &&
+            sf::executionApplications(*candidate, "work", "control.require")
+                    .size() == 2 &&
+            same(function(*original, "formula"),
+                 function(*candidate, "formula")),
+        "scalar and finite consumers conflated shape admission or source "
+        "mathematics");
+    require(scalar.getFunctionType() ==
+                function(*candidate, "scalar").getFunctionType(),
+            "scalar ABI changed during finite preparation");
   });
-
-  // One helper realized as a scalar function and under two row masks. Each
-  // origin names the helper; the declaration symbol and body carry the mask.
-  // Origin arguments are static bindings, so they do not record a mask.
-  cases.run("one helper as a scalar and under two masks", [&] {
-    auto text = edit(fixture, " local.func @work", R"(
- local.realize @scalar = @formula : (!F,!F,!F,!F)->!F
- algebra.map_realize @rows = @formula [true, false, false, false] : (!V,!F,!F,!F)->!V
- local.func @work)");
-    auto module = parseSourceString<ModuleOp>(text, &context);
-    require(bool(module), "shared helper fixture refused");
-    require(succeeded(mathematical::expandMathRealizations(*module)) &&
-                succeeded(mathematical::expandMapRealizations(
-                    *module, nullptr, nullptr,
-                    NumericalExpressionMode::VectorOnly)),
-            "shared helper realizations failed");
-    auto origin =
-        ArrayAttr::get(&context, {StringAttr::get(&context, "formula"),
-                                  ArrayAttr::get(&context, {})});
-    for (StringRef name : {"scalar", "mapped", "rows"})
-      require(function(*module, name)->getAttr("logical_origin") == origin,
-              "realized origin differs for " + name);
-    auto guards = [&](StringRef name) {
-      return llvm::count_if(actions(*module, name), [](auto &action) {
-        return action.first == "control.require";
-      });
-    };
-    require(guards("scalar") == 0 && guards("mapped") == 2 &&
-                guards("rows") == 0,
-            "row masks did not select distinct bodies");
-  });
-
   for (bool simplify : {false, true})
     cases.run(
-        simplify ? "full optimized pipeline" : "full unsimplified pipeline",
+        simplify ? "full optimized two-map pipeline"
+                 : "full unsimplified two-map pipeline",
         [&] {
-          auto text = edit(fixture, " local.func @work", R"(
- func.func private @affine(%x:!F,%y:!F)->!F {
-   %r = "algebra.field_add"(%x,%y) : (!F,!F)->!F
-   func.return %r : !F
- }
- algebra.map_realize @second = @affine [false, true] : (!F,!V)->!V
- local.func @work)");
-          text = edit(
-              text, "   local.return %r : !V\n",
-              R"(   %q = local.apply @second(%s,%r) {site="second"} : (!F,!V)->!V
-   local.return %q : !V
-)");
-          auto module = parseSourceString<ModuleOp>(text, &context);
-          require(bool(module), "two-map fixture refused");
+          std::string declarations = R"mlir(
+func.func private @affine(%x:!F,%y:!F)->!F {
+  %r = algebra.field_add %x,%y : (!F,!F)->!F
+  func.return %r : !F
+}
+"data.domain"() ({^entry(%s:!F,%xs:!V):
+  %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+  "data.domain_yield"(%d) : (!data.domain<!F>)->()
+}) {sym_name="second",sym_visibility="private",function_type=(!F,!V)->!data.domain<!F>} : ()->()
+)mlir";
+          declarations +=
+              functionText("second_row", "%y:!F,%s:!F,%xs:!V", "!F",
+                           invoke("exec.compute", "callee=@affine", "calculate",
+                                  "%s,%y", "!F,!F", "%r", "!F") +
+                               scopedReturn("%r", "!F"),
+                           true);
+          auto text = edit(fixture, " \"protocol.func\"",
+                           declarations + " \"protocol.func\"");
+          // Replace only the outer root's success continuation, after the first
+          // collection. The second domain keeps scalar-before-vector
+          // coordinates.
+          auto start = text.find("func.func @work");
+          auto prefix = text.substr(0, start), root = text.substr(start);
+          root = edit(root, "%done = \"exec.returned\"(%r)",
+                      invoke("exec.collect", "domain=@second,body=@second_row",
+                             "second_map", "%a3,%r", "!F,!V", "%q", "!V") +
+                          "%done = \"exec.returned\"(%q)");
+          auto module = parse(prefix + root);
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(simplify));
           manager.addPass(protocol::createLowerMathPass());
           manager.addPass(kernel::createLowerKernelsPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*module)),
-                  "realized maps did not compile");
-          bool residual = false;
+                  "two collections failed physical selection");
+          bool residual = false, scoped = false;
           module->walk([&](Operation *op) {
+            auto name = op->getName().getStringRef();
             residual |=
-                isa<algebra::MapRealizeOp, local::ApplyOp, func::FuncOp>(op);
+                isa<exec::CollectOp, exec::FoldOp, exec::ComputeOp>(op) ||
+                name.starts_with("local.") || name.starts_with("plan.") ||
+                name.starts_with("kernel.");
+            scoped |= isa<exec::ApplyOp>(op);
           });
-          require(!residual, "preparation construct escaped into execution");
+          require(scoped && !residual,
+                  "pending or replaced carrier escaped physical selection");
         });
   return cases.result();
 }

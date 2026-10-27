@@ -3,7 +3,11 @@
 #include "zkc/Contracts/MathematicalFacts.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/DenseSet.h"
 
+namespace zkc::protocol {
+struct SourceExecutionClosure;
+}
 namespace zkc::finite {
 // A transient view of the verified typed IR. References never encode
 // expressions.
@@ -14,7 +18,13 @@ struct Computation {
   mlir::Operation *predicate = nullptr;
   mlir::FunctionType signature;
   unsigned arguments = 0, states = 0, captures = 0;
-  bool total = false, collect = false;
+  bool total = false, collect = false, scoped = false;
+  // Optional immutable source association, shared by the containing analysis.
+  // Mutation invalidates it. It is not a mathematical replacement certificate.
+  const protocol::SourceExecutionClosure *scopedSource = nullptr;
+  // Exact source declarations fixed by the containing physical request.
+  // This borrows the same immutable subject, independently of authored pins.
+  const llvm::DenseSet<mlir::Operation *> *fixedBindings = nullptr;
 };
 enum class CallbackRole { Step, Body, Predicate };
 enum class CallbackExit { Return, Stop };
@@ -26,31 +36,41 @@ struct CallbackValues {
 };
 // Borrowed, checked views; rebuild after changing the source subject. These
 // describe only the ABI, not helper closure admission or expression meaning.
-struct CallbackView {
+struct CallbackABI {
   mlir::Operation *symbol;
-  mlir::Block *body;
+  mlir::Block *entry;
   mlir::FunctionType signature;
   CallbackRole role;
   CallbackValues formals;
+  // Present only for an ordered scoped callback. Signature and entry retain
+  // actual ports, including this borrowed scope and the outcome result.
+  mlir::Value scope;
+};
+// A stronger, single-block expression view. This view cannot describe a
+// general ordered CFG; callers needing only ports use CallbackABI instead.
+struct CallbackView {
+  CallbackABI abi;
   mlir::Operation *terminator;
   CallbackExit exit;
   mlir::ValueRange returned;
 };
 struct CallEnvironment {
-  CallbackView callback;
+  CallbackABI callback;
   // Complete formal order. Aliased actuals retain distinct formal positions.
   llvm::SmallVector<mlir::Value> actuals;
   mlir::FailureOr<mlir::Value> lookup(mlir::BlockArgument formal) const;
 };
 mlir::FailureOr<EntryValues> partitionEntry(const Computation &computation,
                                             mlir::ValueRange actuals);
+mlir::FailureOr<CallbackABI> readCallbackABI(const Computation &computation,
+                                             CallbackRole role);
 mlir::FailureOr<CallbackView> readCallback(const Computation &computation,
                                            CallbackRole role);
-mlir::FailureOr<CallEnvironment> bindCallback(const CallbackView &callback,
-                                              CallbackValues actuals);
+mlir::FailureOr<CallEnvironment> bindCallback(const CallbackABI &callback,
+                                              CallbackValues actuals,
+                                              mlir::Value scope = {});
 mlir::FailureOr<mlir::StringAttr> closureKey(mlir::Operation *op);
 bool isComputation(mlir::Operation *op);
-bool isDeclaration(mlir::Operation *op);
 mlir::Type elementType(mlir::Type container, bool matrix = false);
 mlir::LogicalResult describe(mlir::Operation *op, Computation &result,
                              mlir::Operation *symbolRoot = nullptr,
@@ -66,7 +86,19 @@ mlir::LogicalResult verifyReferences(mlir::Operation *op,
 // computations; isolated access verification checks only structure. Recheck
 // the closure after changing any inspected helper body.
 mlir::LogicalResult verifyClosure(mlir::Operation *unit);
+// Apply the same finite-reference and bound-premise checks to explicitly owned,
+// already formed immediate definitions in a mixed symbol table. Finite cycle
+// traversal shares one budget. As above, ordinary helper admission remains the
+// mathematical/scoped owner's responsibility. The enclosing profile must
+// account for every omitted declaration separately.
+mlir::LogicalResult
+verifyDefinitionClosure(mlir::Operation *unit,
+                        llvm::ArrayRef<mlir::Operation *> definitions);
 mlir::LogicalResult verifyPreconditions(mlir::Operation *helper);
+// Requires formed call/target signatures. Mathematical execution calls resolve
+// their actual callee and use only its data operands, excluding the borrowed
+// scope. This checks premises, not whole-closure totality or source
+// association.
 mlir::LogicalResult verifyCallPreconditions(mlir::Operation *call);
 // Mandatory checks and comparison readers retain Capacity explicitly. The
 // caller owns this cumulative allowance; these queries never replenish it.

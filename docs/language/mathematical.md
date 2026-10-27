@@ -42,7 +42,7 @@ downstream compiler options for bundle production. Vector reduction fusion is
 disabled by default and independent of the other choices; its
 [preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
 compares values and ordered shape refusals under sufficient resources.
-Collect–fold [composition](../spec/ir/kernel.md#collectfold-composition) is a
+Collect–fold [composition](../spec/ir/computation.md#collectfold-composition) is a
 separate opt-in family for total collection/reduction pairs.
 `language-check` and `zkc check` reject executable optimization options.
 

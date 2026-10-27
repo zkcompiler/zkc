@@ -1,6 +1,6 @@
 module
 
-public import ZkcExamples.Structured.MapFirstBodies
+public import ZkcExamples.Structured.MultilinearPrefixBodies
 
 @[expose] public section
 
@@ -9,8 +9,16 @@ Actual-source equality and admission are proved in the corresponding Views modul
 namespace ZkcExamples.Structured.MapPrefixBodies
 open Zkc.Source Zkc.Source.Structured
 
+abbrev bindings : MultilinearPrefixBodies.Bindings :=
+  ⟨"_finite_admission_5", "_mathematical_admission_0"⟩
+
 abbrev mapHelper := MapFirstBodies.mapHelper
 abbrev mapBody := MapFirstBodies.mapBody
+
+abbrev interpolateRealizationHelper := MapFirstBodies.interpolateRealizationHelper
+abbrev interpolateRealizationBody := MapFirstBodies.interpolateRealizationBody
+abbrev mapCallbackHelper := MapFirstBodies.mapCallbackHelper
+abbrev mapCallbackBody := MapFirstBodies.mapCallbackBody
 
 abbrev widthRealizationHelper := MapFirstBodies.widthRealizationHelper
 abbrev widthRealizationBody := MapFirstBodies.widthRealizationBody
@@ -18,7 +26,7 @@ abbrev widthRealizationBody := MapFirstBodies.widthRealizationBody
 abbrev variablesRealizationHelper := MapFirstBodies.variablesRealizationHelper
 abbrev variablesRealizationBody := MapFirstBodies.variablesRealizationBody
 
-abbrev valuesRealizationHelper := MapFirstBodies.valuesRealizationHelper
+abbrev valuesRealizationHelper := MultilinearPrefixBodies.valuesRealizationHelper bindings.values
 abbrev valuesRealizationBody := MapFirstBodies.valuesRealizationBody
 
 
@@ -40,11 +48,11 @@ def wrapperBody : Region dialect [.vector "bls12-381.fr", .index, .index, .vecto
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.invoke ⟨"zkl_96cd7ea616c46001ac0fa39e06ab5b8042d6d50ce126ce52a57cd4f1fd0ed9be", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_0ce8d1f6fa18ecea2634e8a590d8d4d67ef3b2266fc521419daa7adb682a678a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_0", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "s4") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_cad7f4977a915cd19d3dc36089d25e60e203c526606ddf8f3c23bcb7a0610dc3", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_1", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) .nil <|
   .letOp (.mark "s5") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_352d4a716b9eb002cfd13aef32bcb44994807d26b9eac630bc5dad5941c4b454", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_2", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil <|
   .ret (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil)))
 
 abbrev tableHelper := MapFirstBodies.tableHelper
@@ -82,12 +90,9 @@ abbrev halvesBody := MapFirstBodies.halvesBody
 abbrev interpolateHelper := MapFirstBodies.interpolateHelper
 abbrev interpolateBody := MapFirstBodies.interpolateBody
 
-abbrev foldWrapperHelper : Helper := ⟨"zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2", .local, [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
+abbrev foldWrapperHelper := MultilinearPrefixBodies.foldWrapperHelper
 
-def foldWrapperBody : Region dialect [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩) (.cons (.there (.there (.there .here))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+abbrev foldWrapperBody := MultilinearPrefixBodies.foldWrapperBody bindings.fold
 
 abbrev foldStepHelper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .vector "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
@@ -96,15 +101,11 @@ def foldStepBody : Region dialect [.vector "bls12-381.fr", .index, .index, .fiel
   .letOp (.invoke ⟨"zkl_195a79478f48dffc2a6917273d8317df0fabae786920a46fa2ac6b2737144299", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
 
-abbrev foldHelper : Helper := ⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩
+abbrev foldHelper := MultilinearPrefixBodies.foldHelper bindings.fold
 
-abbrev foldSpec : FoldSpec :=
-  ⟨⟨"finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_domain", [.vector "bls12-381.fr"], (.vector "bls12-381.fr"), .here, false⟩,
-    [.vector "bls12-381.fr", .index, .index], [], "finite_zkl_c2d42dbaddef5ba2c1cc53ef9331fa1a1265965e933e58a876b38cd6b3a303b2_s0_body", "", .local⟩
+abbrev foldSpec := MultilinearPrefixBodies.foldSpec
 
-def foldBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.fold foldSpec) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))) .nil <|
-  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+abbrev foldBody := MultilinearPrefixBodies.foldBody
 
 abbrev valuesHelper := MapFirstBodies.valuesHelper
 abbrev valuesBody := MapFirstBodies.valuesBody

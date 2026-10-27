@@ -441,7 +441,7 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
     };
     if matches!(
         body,
-        "bool" | "index" | "indices" | "bytes" | "shake128_state"
+        "bool" | "index" | "indices" | "bytes" | "shake128_state" | "quotient_matrix"
     ) {
         return true;
     }
@@ -501,9 +501,12 @@ impl LogicalType {
             | Type::FixedVector
             | Type::ResourceUnit
             | Type::Variant => false,
-            Type::Bool | Type::Index | Type::Indices | Type::Bytes | Type::Shake128State => {
-                identity == None
-            }
+            Type::Bool
+            | Type::Index
+            | Type::Indices
+            | Type::Bytes
+            | Type::Shake128State
+            | Type::QuotientMatrix => identity == None,
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
                     identity,
@@ -620,7 +623,12 @@ impl LogicalType {
         }
         if matches!(
             self.kind,
-            Type::Bool | Type::Index | Type::Indices | Type::Bytes | Type::Shake128State
+            Type::Bool
+                | Type::Index
+                | Type::Indices
+                | Type::Bytes
+                | Type::Shake128State
+                | Type::QuotientMatrix
         ) {
             return self.kind.name().into();
         }
@@ -793,7 +801,7 @@ impl LogicalType {
         let (kind, identity) = spelling.split_once(':').unwrap_or((spelling, ""));
         if matches!(
             kind,
-            "bool" | "index" | "indices" | "bytes" | "shake128_state"
+            "bool" | "index" | "indices" | "bytes" | "shake128_state" | "quotient_matrix"
         ) != identity.is_empty()
         {
             return Err(error("explicit nominal identity required"));
@@ -909,6 +917,7 @@ pub enum Representation {
     Indices,
     Bytes,
     Shake128State,
+    QuotientMatrix,
     Fr,
     TableLsb,
     TableMsb,
@@ -1033,6 +1042,7 @@ impl Representation {
         Indices => "native.indices/0",
         Bytes => "native.bytes/0",
         Shake128State => "native.shake128/0",
+        QuotientMatrix => "native.quotient_matrix/0",
         Fr => "arkworks.fr/0",
         TableLsb => "arkworks.mle-lsb/0",
         TableMsb => "arkworks.mle-msb/0",
@@ -1206,6 +1216,7 @@ impl PhysicalType {
             (T::Indices, I::None) => R::Indices,
             (T::Bytes, I::None) => R::Bytes,
             (T::Shake128State, I::None) => R::Shake128State,
+            (T::QuotientMatrix, I::None) => R::QuotientMatrix,
             (T::Field, I::Bls12381Fr) => R::Fr,
             (T::Table, I::Bls12381Fr) => R::TableLsb,
             (T::Point, I::Bls12381Fr) => R::Point,

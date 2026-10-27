@@ -28,14 +28,14 @@ invocation records carry them; no separate contract registry is needed.
 |---|---|
 | Nominal domain, ports and mathematical laws | `OperationContracts`, logical types and admitted `BindingApplication`; stable declaration facts |
 | Representation and fixed implementation | `PhysicalPlan`, selected binding and `BoundSignature`; checked against the actual materialized call |
-| Binding lifetime | Checked physical schedule and actual `plan.release` instructions; block-local uses and discardability, without ownership of shared backing |
+| Binding lifetime | Checked physical schedule and actual `runtime.release_bindings` instructions; block-local uses and discardability, without ownership of shared backing |
 | Immutable dependencies | Source SSA/helper closure and exact static application attributes; compiler analyses expire when either changes |
 | Installed code | `InstalledOperation`; linked against the instance's owned backend, with no captured frame or resource authority |
 | Role, site, origin and ordered operands | `CallContext` and the active VM frame; derived at the reached invocation |
 | Output allowance and retained backing | `Invocation`, VM storage accounting and provider value contracts; aliases retain their backing, fresh output consumes capacity |
 | Setup authorization, capability generation and resource successors | Provider custody checks at use; a handle or cached validation result cannot replace them |
 
-`plan.apply` represents an installed operation, which may have effects or fail.
+`exec.apply` represents an installed operation, which may have effects or fail.
 The runtime's `InstalledOperation` establishes its signature and installation
 facts. Neither grants purity or permits inspecting an operation's implementation
 as if it were source mathematics. PCS, transcript and resource operations retain

@@ -11,6 +11,7 @@ proof = "example::Proof"
 construction = true
 
 [generated]
+original_source = "lean/bridges/structured/fixtures/gkr-source.mlir"
 original_export = "lean/bridges/structured/fixtures/gkr-source.json"
 data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
 participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"

@@ -1,5 +1,6 @@
 module
 
+public import ZkcExamples.Structured.MultilinearCollectBodies
 public import ZkcExamples.Structured.PrimitiveShapeViews
 public import ZkcExamples.Structured.PrimitiveTableViews
 public import ZkcExamples.Structured.PrimitiveHalvesViews
@@ -11,27 +12,39 @@ Actual-source equality and admission are proved in the corresponding Views modul
 namespace ZkcExamples.Structured.MapFirstBodies
 open Zkc.Source Zkc.Source.Structured
 
-abbrev mapHelper : Helper := ⟨"zkl_map_7aa10c0d106e0082840e035854d97e34de85744d05e64191205f7ada5a3efd95", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
+def bindings : MultilinearCollectBodies.Bindings where
+  collection := "_finite_admission_3"
+  domain := "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_domain"
+  callback := "zkl_map_fa2ed749b4391bd0768410c62902b36b118ac0c5cac2161084dec0ccfc709d8a_body"
+  computation := "_mathematical_admission_4"
 
-abbrev mapSpec : MapSpec := ⟨"zkl_42fb42b1768a8f815f169ffa0a26ad784504be546e5429d75560cbdb446518b5", "bls12-381.fr", [true, true, false]⟩
+abbrev mapHelper := MultilinearCollectBodies.mapHelper bindings
 
-def mapBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.vector "bls12-381.fr"] :=
-  .letOp (.map mapSpec) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .ret (.cons .here .nil)
+abbrev interpolateRealizationHelper := MultilinearCollectBodies.interpolateRealizationHelper bindings
 
-abbrev widthRealizationHelper : Helper := ⟨"zkl_realization_352d4a716b9eb002cfd13aef32bcb44994807d26b9eac630bc5dad5941c4b454", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩
+abbrev interpolateRealizationBody := MultilinearCollectBodies.interpolateRealizationBody bindings
+
+abbrev mapCallbackHelper := MultilinearCollectBodies.mapCallbackHelper bindings
+
+abbrev mapCallbackBody := MultilinearCollectBodies.mapCallbackBody bindings
+
+abbrev mapSpec := MultilinearCollectBodies.collectSpec bindings
+
+abbrev mapBody := MultilinearCollectBodies.mapBody bindings
+
+abbrev widthRealizationHelper : Helper := ⟨"_mathematical_admission_2", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩
 
 def widthRealizationBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.index] :=
   .letOp (.invoke ⟨"zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", .math, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
-abbrev variablesRealizationHelper : Helper := ⟨"zkl_realization_cad7f4977a915cd19d3dc36089d25e60e203c526606ddf8f3c23bcb7a0610dc3", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩
+abbrev variablesRealizationHelper : Helper := ⟨"_mathematical_admission_1", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩
 
 def variablesRealizationBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.index] :=
   .letOp (.invoke ⟨"zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", .math, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here .nil)
 
-abbrev valuesRealizationHelper : Helper := ⟨"zkl_realization_0ce8d1f6fa18ecea2634e8a590d8d4d67ef3b2266fc521419daa7adb682a678a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩
+abbrev valuesRealizationHelper : Helper := ⟨"_mathematical_admission_0", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩
 
 def valuesRealizationBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr"] :=
   .letOp (.invoke ⟨"zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", .math, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
@@ -56,11 +69,11 @@ def wrapperBody : Region dialect [.vector "bls12-381.fr", .index, .index, .field
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.invoke ⟨"zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
   .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_0ce8d1f6fa18ecea2634e8a590d8d4d67ef3b2266fc521419daa7adb682a678a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_0", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "s4") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_cad7f4977a915cd19d3dc36089d25e60e203c526606ddf8f3c23bcb7a0610dc3", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_1", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil))) .nil <|
   .letOp (.mark "s5") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_realization_352d4a716b9eb002cfd13aef32bcb44994807d26b9eac630bc5dad5941c4b454", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil <|
+  .letOp (.invoke ⟨"_mathematical_admission_2", .local, [.vector "bls12-381.fr", .index, .index], [.index]⟩) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) .nil))) .nil <|
   .ret (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil)))
 
 abbrev tableHelper : Helper := ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩
@@ -81,16 +94,7 @@ abbrev rowsBody := PrimitiveShapeViews.rowsBody
 
 abbrev firstHelper : Helper := ⟨"zkl_3ae183e4974ba027dee61c318edb42bcf3a64a69d220d82168474d3a3169ff4d", .local, [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"], [.vector "bls12-381.fr", .index, .index]⟩
 
-def firstBody : Region dialect [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"] [.vector "bls12-381.fr", .index, .index] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_46021cb00c22207246296c081a0fe3ef9fa4e1d20f4a866fd01bfa4b37888087", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.mark "s4") .nil .nil <|
-  .letOp (.invoke ⟨"zkl_map_7aa10c0d106e0082840e035854d97e34de85744d05e64191205f7ada5a3efd95", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there (.there (.there (.there .here))))) .nil))) .nil <|
-  .letOp (.mark "s7") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s8") .nil .nil <|
-  .letOp (.exec (.indexSub)) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil)) .nil <|
-  .ret (.cons (.there (.there .here)) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil)))
+abbrev firstBody := MultilinearCollectBodies.firstBody bindings
 
 abbrev halvesHelper : Helper := ⟨"zkl_46021cb00c22207246296c081a0fe3ef9fa4e1d20f4a866fd01bfa4b37888087", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .vector "bls12-381.fr"]⟩
 

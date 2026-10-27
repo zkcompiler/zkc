@@ -1,4 +1,5 @@
 #include "MathematicalComparison.h"
+#include "ScopedCandidate.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/OperationShapes.h"
@@ -7,8 +8,8 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/APInt.h"
@@ -28,14 +29,14 @@ namespace {
 // Read the actual admitted call target, including an owned numerical unit.
 // This reader never uses the producer's substituted callback or normalization.
 Operation *sourceCallee(Operation *op) {
-  if (auto call = dyn_cast<kernel::CallOp>(op)) {
+  if (auto call = dyn_cast<exec::ComputeOp>(op)) {
     if (auto policy = call.getPolicyAttr())
       if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
           !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
           !cast<BoolAttr>(policy[0]).getValue())
         return nullptr;
     SymbolTableCollection symbols;
-    return kernel::resolve(call, symbols);
+    return call.resolveCallee(symbols);
   }
   auto reference = op->getAttrOfType<FlatSymbolRefAttr>("callee");
   return reference ? SymbolTable::lookupNearestSymbolFrom(op, reference)
@@ -424,27 +425,100 @@ public:
   }
 };
 
+// A bounded borrowed view of actual source instructions. Scoped association
+// only recovers data ports from admitted CFG edges; it supplies no equations,
+// recipe choices or projected producer IR. Pure callees retain raw SSA ports.
+struct SourceInstruction {
+  Operation *operation;
+  ValueRange inputs, outputs;
+  const protocol::SourceExecutionStep *scoped = nullptr;
+};
+struct SourceBody {
+  ValueRange arguments, returned;
+  SmallVector<SourceInstruction> payload;
+  Block *plain = nullptr;
+  Operation *owner = nullptr;
+  ArrayRef<protocol::SourceExecutionStep> scoped;
+  bool read(Block &block, const protocol::SourceExecutionClosure *closure) {
+    owner = block.getParentOp();
+    auto function = dyn_cast<func::FuncOp>(block.getParentOp());
+    if (function && protocol::isScopedExecutionFunction(function)) {
+      if (!closure || function.empty() || &function.front() != &block ||
+          function->hasAttr("runtime.region"))
+        return false;
+      auto found = closure->bodies.find(function.getSymName().str());
+      if (found == closure->bodies.end() || found->second.empty())
+        return false;
+      scoped = found->second;
+      if (!isa<exec::ReturnOp>(scoped.back().operation))
+        return false;
+      arguments = block.getArguments().drop_front();
+      returned = scoped.back().inputs;
+    } else {
+      if (!block.getParent()->hasOneBlock() || block.empty() ||
+          !isa<func::ReturnOp>(block.back()) ||
+          !block.back().getAttrs().empty())
+        return false;
+      plain = &block;
+      arguments = block.getArguments();
+      returned = block.back().getOperands();
+    }
+    return true;
+  }
+  // Memoized calls have already interpreted every instruction under this
+  // exact assignment. Charge and materialize payload only on a cache miss.
+  bool visit(Terms &work) {
+    if (plain) {
+      for (Operation &op : plain->without_terminator()) {
+        if (!work.charge(1 + op.getNumOperands() + op.getNumResults()))
+          return false;
+        payload.push_back({&op, op.getOperands(), op.getResults()});
+      }
+    } else {
+      for (const auto &step : scoped) {
+        if (!work.charge(1 + step.inputs.size() + step.outputs.size()) ||
+            step.operation->getParentOp() != owner || !step.regions.empty())
+          return false;
+        if (&step != &scoped.back())
+          payload.push_back({step.operation, step.inputs, step.outputs, &step});
+      }
+    }
+    return true;
+  }
+};
+
 struct Primitive {
   StringRef contract;
   SmallVector<StringRef> parameters;
-  local::OperationBindingOp binding;
+  runtime::BindingOp binding;
 };
 // Read the actual operation and independently resolve its installed signature.
 // Explicit implementations are outside the law-replacement boundary.
-std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols) {
+std::optional<Primitive>
+primitive(Operation &op, SymbolTable *symbols,
+          CandidatePorts ports = CandidatePorts{},
+          const protocol::SourceExecutionStep *source = nullptr,
+          const llvm::DenseSet<Operation *> *fixedBindings = nullptr) {
+  auto inputs = source ? ValueRange(source->inputs) : ports.inputs(&op);
+  auto outputs = source ? ValueRange(source->outputs) : ports.outputs(&op);
+  bool scoped = source || ports.isScoped();
   auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
-          ? dyn_cast_or_null<local::OperationBindingOp>(
+          ? dyn_cast_or_null<runtime::BindingOp>(
                 symbols ? symbols->lookup(reference.getValue())
                         : SymbolTable::lookupNearestSymbolFrom(&op, reference))
-          : local::OperationBindingOp();
+          : runtime::BindingOp();
   auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
-  if (!binding || !binding.getImplementation().empty() || !parameters ||
+  if (!binding || !binding.getImplementation().empty() ||
+      (fixedBindings && fixedBindings->contains(binding)) || !parameters ||
       !op.getAttrOfType<StringAttr>("site") || op.getAttrs().size() != 3 ||
-      op.getNumRegions() || op.getNumResults() != 1 ||
-      !protocol::operationSupportsContract(op.getName().getStringRef(),
-                                           binding.getContract()))
+      (!source && !ports.contains(&op)) ||
+      (source ? !source->regions.empty() : ports.bodies(&op) != 0) ||
+      outputs.size() != 1 ||
+      (scoped ? !isa<exec::ApplyOp>(op)
+              : !protocol::operationSupportsContract(
+                    op.getName().getStringRef(), binding.getContract())))
     return std::nullopt;
   auto decoded = protocol::readBinding(binding);
   if (!decoded) {
@@ -456,14 +530,14 @@ std::optional<Primitive> primitive(Operation &op, SymbolTable *symbols) {
     consumeError(signature.takeError());
     return std::nullopt;
   }
-  if (signature->inputs.size() != op.getNumOperands() ||
+  if (signature->inputs.size() != inputs.size() ||
       signature->outputs.size() != 1)
     return std::nullopt;
-  for (auto [expected, actual] : zip(signature->inputs, op.getOperandTypes()))
+  for (auto [expected, actual] : zip(signature->inputs, inputs.getTypes()))
     if (protocol::decodeBoundType(op.getContext(), expected) != actual)
       return std::nullopt;
   if (protocol::decodeBoundType(op.getContext(), signature->outputs[0]) !=
-      op.getResult(0).getType())
+      outputs[0].getType())
     return std::nullopt;
   Primitive result{binding.getContract(), {}, binding};
   for (Attribute parameter : parameters) {
@@ -544,6 +618,9 @@ struct Dimension {
 class Comparison {
   Terms terms;
   SymbolTable &symbols;
+  CandidatePorts ports;
+  const protocol::SourceExecutionClosure *sourceClosure = nullptr;
+  const llvm::DenseSet<Operation *> *fixedBindings = nullptr;
   llvm::DenseSet<Operation *> usedBindings;
   llvm::DenseMap<Value, unsigned> identities;
   SmallVector<Dimension> dimensions;
@@ -638,15 +715,15 @@ class Comparison {
   }
   std::optional<SmallVector<Meaning>>
   readSource(Block &block, ArrayRef<Meaning> inputs, unsigned depth = 0) {
+    SourceBody body;
     if (!terms.charge(inputs.size() + 1) ||
         !terms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
-        inputs.size() != block.getNumArguments() || block.empty() ||
-        !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
-        !block.back().getAttrs().empty())
+        !body.read(block, sourceClosure) ||
+        inputs.size() != body.arguments.size())
       return {};
     if (depth == 0) {
       rootArguments.clear();
-      for (auto [argument, meaning] : zip(block.getArguments(), inputs))
+      for (auto [argument, meaning] : zip(body.arguments, inputs))
         rootArguments.emplace_back(argument, meaning);
     }
     std::vector<uint64_t> key;
@@ -659,24 +736,29 @@ class Comparison {
     auto &memo = helpers[&block];
     if (auto found = memo.find(key); found != memo.end())
       return found->second;
+    if (!body.visit(terms))
+      return {};
     // Extent evidence consumes bounded work while visiting these entries.
     // Preserve source order so pointer hashes cannot change which proof fits.
     llvm::MapVector<Value, Meaning> values;
-    for (auto [argument, meaning] : zip(block.getArguments(), inputs))
+    for (auto [argument, meaning] : zip(body.arguments, inputs))
       values[argument] = meaning;
-    for (Operation &op : block.without_terminator()) {
+    for (const auto &step : body.payload) {
+      Operation &op = *step.operation;
+      auto operands = step.inputs;
+      auto outputs = step.outputs;
       if (!terms.charge() || op.getNumRegions())
         return {};
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
       // assignments and a shared work/depth bound, including unused calls.
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+      if (isa<func::CallOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
-        if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
-            helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+        if (!helper || !isa<func::FuncOp>(helper) ||
+            helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return {};
         SmallVector<Meaning> arguments;
-        for (Value operand : op.getOperands()) {
+        for (Value operand : operands) {
           auto found = values.find(operand);
           if (found == values.end())
             return {};
@@ -684,9 +766,9 @@ class Comparison {
         }
         auto returned =
             readSource(helper->getRegion(0).front(), arguments, depth + 1);
-        if (!returned || returned->size() != op.getNumResults())
+        if (!returned || returned->size() != outputs.size())
           return {};
-        for (auto [value, meaning] : zip(op.getResults(), *returned))
+        for (auto [value, meaning] : zip(outputs, *returned))
           values[value] = meaning;
         continue;
       } else if (auto pack = dyn_cast<algebra::ArrayFromElementsOp>(op)) {
@@ -713,7 +795,7 @@ class Comparison {
           return {};
         result = arrays[array.term][index];
       } else {
-        if (op.getNumResults() != 1)
+        if (outputs.size() != 1)
           return {};
         StringRef contract;
         SmallVector<StringRef> parameters;
@@ -728,29 +810,30 @@ class Comparison {
         } else if (isa<data::BoundedAtOp, data::BoundedMatrixAtOp>(op) &&
                    op.getAttrs().empty())
           contract = isa<data::BoundedAtOp>(op) ? "vector.get" : "matrix.get";
-        else if (auto bound = primitive(op, nullptr)) {
+        else if (auto bound = primitive(op, nullptr, CandidatePorts{},
+                                        step.scoped, fixedBindings)) {
           contract = bound->contract;
           parameters = bound->parameters;
         } else
           return {};
         if (contract == "field.constant") {
-          auto field = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
-          if (!field || parameters.size() != 1 || op.getNumOperands())
+          auto field = dyn_cast<algebra::FieldType>(outputs[0].getType());
+          if (!field || parameters.size() != 1 || operands.size())
             return {};
           result = {Meaning::Scalar,
                     terms.literal(field.getDomain(), parameters[0])};
         } else if (!parameters.empty())
           return {};
-        else if (fieldArithmetic(contract) && op.getNumOperands() == 2)
-          result = arithmetic(contract, values.lookup(op.getOperand(0)),
-                              values.lookup(op.getOperand(1)));
-        else if ((contract == "vector.get" && op.getNumOperands() == 2) ||
-                 (contract == "matrix.get" && op.getNumOperands() == 3)) {
-          auto container = values.lookup(op.getOperand(0));
+        else if (fieldArithmetic(contract) && operands.size() == 2)
+          result = arithmetic(contract, values.lookup(operands[0]),
+                              values.lookup(operands[1]));
+        else if ((contract == "vector.get" && operands.size() == 2) ||
+                 (contract == "matrix.get" && operands.size() == 3)) {
+          auto container = values.lookup(operands[0]);
           if (container.kind != Meaning::Container)
             return {};
           SmallVector<Index> indices;
-          for (Value operand : op.getOperands().drop_front()) {
+          for (Value operand : operands.drop_front()) {
             auto position = values.lookup(operand);
             if (position.kind != Meaning::Position)
               return {};
@@ -772,7 +855,7 @@ class Comparison {
                           terms.evidence(
                               [&, selectedAxis = axis](uint64_t &work) {
                                 return finite::equalExtentStatus(
-                                    op.getOperand(0), selectedAxis, entry.first,
+                                    operands[0], selectedAxis, entry.first,
                                     extent.axis, work);
                               })) {
                         equal = true;
@@ -799,9 +882,9 @@ class Comparison {
                 // bound must already follow from source formation before an
                 // eager scalar contraction is permitted.
                 if (!terms.evidence([&, selectedAxis = axis](uint64_t &work) {
-                      return finite::boundStatus(
-                          op.getOperand(selectedAxis + 1), op.getOperand(0),
-                          selectedAxis, work);
+                      return finite::boundStatus(operands[selectedAxis + 1],
+                                                 operands[0], selectedAxis,
+                                                 work);
                     }))
                   return {};
                 selectedBounds.insert(key);
@@ -816,10 +899,10 @@ class Comparison {
           ((result.kind == Meaning::Scalar || result.kind == Meaning::Lane) &&
            result.term == invalidTerm))
         return {};
-      values[op.getResult(0)] = result;
+      values[outputs[0]] = result;
     }
     SmallVector<Meaning> result;
-    for (Value value : block.back().getOperands()) {
+    for (Value value : body.returned) {
       auto found = values.find(value);
       if (found == values.end() || found->second.kind == Meaning::Unknown)
         return {};
@@ -916,7 +999,7 @@ class Comparison {
   }
   Meaning readCandidate(Operation &op, const Primitive &bound) {
     StringRef contract = bound.contract;
-    auto field = scalarField(op.getResult(0).getType());
+    auto field = scalarField(ports.outputs(&op)[0].getType());
     if (!field)
       return {};
     if (contract == "field.constant") {
@@ -926,8 +1009,8 @@ class Comparison {
               terms.literal(field.getDomain(), bound.parameters[0])};
     }
     if (protocol::numericalContract(contract)) {
-      if (dimensions.size() != 1 || op.getNumOperands() == 0 ||
-          op.getOperand(0) != rows || bound.parameters.size() != 1)
+      if (dimensions.size() != 1 || ports.inputs(&op).size() == 0 ||
+          ports.inputs(&op)[0] != rows || bound.parameters.size() != 1)
         return {};
       auto decoded = protocol::readBinding(bound.binding);
       if (!decoded) {
@@ -948,8 +1031,8 @@ class Comparison {
       }
       SmallVector<Term> slots;
       for (auto [i, bit] : enumerate(mask)) {
-        Meaning value = bit == '1' ? lane(op.getOperand(i + 1), 0)
-                                   : scalar(op.getOperand(i + 1));
+        Meaning value = bit == '1' ? lane(ports.inputs(&op)[i + 1], 0)
+                                   : scalar(ports.inputs(&op)[i + 1]);
         // Even unused slots must be aligned with the admitted row domain.
         if (value.term == invalidTerm ||
             value.kind != (bit == '1' ? Meaning::Lane : Meaning::Scalar))
@@ -992,11 +1075,11 @@ class Comparison {
     if (!bound.parameters.empty())
       return {};
     if (fieldArithmetic(contract))
-      return arithmetic(contract, scalar(op.getOperand(0)),
-                        scalar(op.getOperand(1)));
+      return arithmetic(contract, scalar(ports.inputs(&op)[0]),
+                        scalar(ports.inputs(&op)[1]));
     if (contract == "vector.fill") {
-      auto value = scalar(op.getOperand(0));
-      if (dimensions.size() != 1 || op.getOperand(1) != rows ||
+      auto value = scalar(ports.inputs(&op)[0]);
+      if (dimensions.size() != 1 || ports.inputs(&op)[1] != rows ||
           value.kind != Meaning::Scalar)
         return {};
       value.kind = Meaning::Lane;
@@ -1005,9 +1088,9 @@ class Comparison {
     if (laneArithmetic(contract)) {
       if (dimensions.size() != 1)
         return {};
-      auto left = lane(op.getOperand(0), 0);
-      auto right = contract == "vector.scale" ? scalar(op.getOperand(1))
-                                              : lane(op.getOperand(1), 0);
+      auto left = lane(ports.inputs(&op)[0], 0);
+      auto right = contract == "vector.scale" ? scalar(ports.inputs(&op)[1])
+                                              : lane(ports.inputs(&op)[1], 0);
       return arithmetic(contract, left, right);
     }
     Term payload = invalidTerm;
@@ -1015,20 +1098,21 @@ class Comparison {
     if (contract == "vector.sum" || contract == "vector.product") {
       if (dimensions.size() != 1)
         return {};
-      payload = lane(op.getOperand(0), 0).term;
+      payload = lane(ports.inputs(&op)[0], 0).term;
       if (contract == "vector.product")
         combine = ring::Kind::Mul;
     } else if (contract == "vector.dot") {
       if (dimensions.size() != 1)
         return {};
-      payload = terms.binary(ring::Kind::Mul, lane(op.getOperand(0), 0).term,
-                             lane(op.getOperand(1), 0).term);
+      payload =
+          terms.binary(ring::Kind::Mul, lane(ports.inputs(&op)[0], 0).term,
+                       lane(ports.inputs(&op)[1], 0).term);
     } else if (contract == "matrix.row_dot" ||
                contract == "matrix.column_dot") {
       if (dimensions.size() != 1)
         return {};
-      Value matrix = op.getOperand(0), vector = op.getOperand(1),
-            selector = op.getOperand(2);
+      Value matrix = ports.inputs(&op)[0], vector = ports.inputs(&op)[1],
+            selector = ports.inputs(&op)[2];
       bool row = contract == "matrix.row_dot";
       if (!extentIs(matrix, row ? 1 : 0, 0) || !candidate.contains(matrix) ||
           !candidate.contains(selector) ||
@@ -1042,15 +1126,15 @@ class Comparison {
     } else if (contract == "matrix.bilinear") {
       if (dimensions.size() != 2)
         return {};
-      Value matrix = op.getOperand(0);
+      Value matrix = ports.inputs(&op)[0];
       if (!candidate.contains(matrix) || !extentIs(matrix, 0, 0) ||
           !extentIs(matrix, 1, 1))
         return {};
       auto cell = access(matrix, {{true, 0}, {true, 1}});
-      payload = terms.binary(ring::Kind::Mul, lane(op.getOperand(1), 0).term,
-                             cell.term);
+      payload = terms.binary(ring::Kind::Mul,
+                             lane(ports.inputs(&op)[1], 0).term, cell.term);
       payload = terms.binary(ring::Kind::Mul, payload,
-                             lane(op.getOperand(2), 1).term);
+                             lane(ports.inputs(&op)[2], 1).term);
     } else
       return {};
     return {Meaning::Scalar, aggregate(field.getDomain(), combine, payload)};
@@ -1067,8 +1151,8 @@ class Comparison {
     // unnecessary and can exhaust the shared budget on otherwise valid maps.
     auto output = [&](Value value) {
       return requestedOutput ? !*requestedOutput || value == *requestedOutput
-                             : !end || (end->getNumOperands() == 1 &&
-                                        end->getOperand(0) == value);
+                             : !end || (ports.inputs(end).size() == 1 &&
+                                        ports.inputs(end)[0] == value);
     };
     // An identity formula need not emit any payload instruction.
     for (auto &entry : candidate) {
@@ -1083,14 +1167,13 @@ class Comparison {
     while (at && at != end && (end || !result)) {
       auto reference = at->getAttrOfType<FlatSymbolRefAttr>("binding");
       auto declaration =
-          reference
-              ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-              : local::OperationBindingOp();
+          reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                    : runtime::BindingOp();
       if (!declaration || !candidateContract(declaration.getContract()))
         break;
       uint64_t cost = 1;
       if (protocol::numericalContract(declaration.getContract())) {
-        cost += at->getNumOperands() + at->getNumResults();
+        cost += ports.inputs(at).size() + ports.outputs(at).size();
         if (auto parameters = at->getAttrOfType<ArrayAttr>("parameters"))
           for (Attribute parameter : parameters)
             if (auto text = dyn_cast<StringAttr>(parameter)) {
@@ -1102,20 +1185,20 @@ class Comparison {
       }
       if (!terms.charge(cost))
         return failure();
-      auto bound = primitive(*at, &symbols);
+      auto bound = primitive(*at, &symbols, ports);
       if (!bound)
         return failure();
       auto value = readCandidate(*at, *bound);
       if ((value.kind != Meaning::Scalar && value.kind != Meaning::Lane) ||
           value.term == invalidTerm)
         return failure();
-      candidate[at->getResult(0)] = value;
+      candidate[ports.outputs(at)[0]] = value;
       usedBindings.insert(bound->binding);
-      if (output(at->getResult(0)) &&
-          at->getResult(0).getType() == resultType &&
+      if (output(ports.outputs(at)[0]) &&
+          ports.outputs(at)[0].getType() == resultType &&
           value.kind == expected.kind && terms.equal(value.term, expected.term))
-        result = at->getResult(0);
-      at = at->getNextNode();
+        result = ports.outputs(at)[0];
+      at = ports.next(at);
     }
     if (!result || (end && at != end) || !terms.admit())
       return failure();
@@ -1125,8 +1208,9 @@ class Comparison {
   }
 
 public:
-  Comparison(SymbolTable &symbols, Value rows, uint64_t &remaining)
-      : terms(remaining), symbols(symbols), rows(rows) {}
+  Comparison(SymbolTable &symbols, Value rows, uint64_t &remaining,
+             const ScopedCandidate *candidate = nullptr)
+      : terms(remaining), symbols(symbols), ports(candidate), rows(rows) {}
   ComparisonCapacity exhausted() const { return terms.exhausted(); }
   std::optional<CapacityCause> failedDebit() const {
     return terms.failedDebit();
@@ -1182,19 +1266,23 @@ public:
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
                           Operation *&cursor,
-                          llvm::DenseSet<Operation *> &bindings,
-                          Operation *end) {
+                          llvm::DenseSet<Operation *> &bindings, Operation *end,
+                          bool sumCollection = false) {
+    sourceClosure = source.scopedSource;
+    fixedBindings = source.fixedBindings;
     if (source.predicate || !source.helper ||
         source.signature.getNumResults() != 1 ||
         inputs.size() != source.signature.getNumInputs() ||
         (!source.collect && source.states != 1) ||
-        !source.helper->getRegion(0).hasOneBlock())
+        (!source.scoped && !source.helper->getRegion(0).hasOneBlock()))
       return failure();
     Type resultType = source.signature.getResult(0);
     auto field = scalarField(resultType);
     if (!field || (source.collect && !vectorType(resultType)))
       return failure();
-    if (!source.collect)
+    if (sumCollection && !source.collect)
+      return failure();
+    if (!source.collect || sumCollection)
       terms.useNeutralLaws();
     auto &descriptor = source.domain->getRegion(0).front();
     llvm::DenseMap<Value, Value> mapping;
@@ -1233,6 +1321,11 @@ public:
       if (dimensions.size() != 1)
         return failure();
       expected.kind = Meaning::Lane;
+      if (sumCollection) {
+        expected = {Meaning::Scalar, aggregate(field.getDomain(),
+                                               ring::Kind::Add, expected.term)};
+        resultType = field;
+      }
     } else {
       auto reduction = terms.reduction(expected.term, state);
       // Identity normalization can erase an additive zero term completely.
@@ -1261,6 +1354,9 @@ class ModuleComparison {
     unsigned left = 0, right = 0;
   };
   SymbolTable &symbols;
+  CandidatePorts ports;
+  const protocol::SourceExecutionClosure *sourceClosure = nullptr;
+  const llvm::DenseSet<Operation *> *fixedBindings = nullptr;
   Terms fieldTerms;
   std::vector<Node> nodes{{Unknown}};
   std::map<std::tuple<Kind, unsigned, unsigned>, unsigned> shared;
@@ -1319,34 +1415,38 @@ class ModuleComparison {
     return result;
   }
   unsigned source(Block &block, ArrayRef<unsigned> args, unsigned depth = 0) {
+    SourceBody body;
     if (!fieldTerms.withinDepth(depth, ComparisonCapacity::HelperDepth) ||
-        block.empty() || args.size() != block.getNumArguments() ||
-        !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
-        block.back().getNumOperands() != 1)
+        !body.read(block, sourceClosure) || !body.visit(fieldTerms) ||
+        args.size() != body.arguments.size() || body.returned.size() != 1)
       return 0;
     llvm::DenseMap<Value, unsigned> values;
-    for (auto [argument, term] : zip(block.getArguments(), args))
+    for (auto [argument, term] : zip(body.arguments, args))
       values[argument] = term;
-    for (Operation &op : block.without_terminator()) {
-      if (!charge() || op.getNumRegions() || op.getNumResults() != 1)
+    for (const auto &step : body.payload) {
+      Operation &op = *step.operation;
+      auto operands = step.inputs;
+      auto results = step.outputs;
+      if (!charge() || op.getNumRegions() || results.size() != 1)
         return 0;
       unsigned result = 0;
-      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+      if (isa<func::CallOp, exec::ComputeOp>(op)) {
         auto *helper = sourceCallee(&op);
-        if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
-            helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
+        if (!helper || !isa<func::FuncOp>(helper) ||
+            helper->getNumRegions() != 1 || helper->getRegion(0).empty())
           return 0;
         SmallVector<unsigned> arguments;
-        for (Value operand : op.getOperands())
+        for (Value operand : operands)
           arguments.push_back(values.lookup(operand));
         result = source(helper->getRegion(0).front(), arguments, depth + 1);
       } else {
         StringRef contract;
-        if (auto bound = primitive(op, nullptr)) {
+        if (auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
+                                   fixedBindings)) {
           if (!bound->parameters.empty() && bound->contract != "field.constant")
             return 0;
           contract = bound->contract;
-        } else if (op.getAttrs().empty() && op.getNumOperands() == 2) {
+        } else if (op.getAttrs().empty() && operands.size() == 2) {
           if (isa<algebra::GroupAddOp>(op))
             contract = "curve.add";
           else if (isa<algebra::GroupScaleOp>(op))
@@ -1357,20 +1457,20 @@ class ModuleComparison {
                      : isa<algebra::FieldAddOp>(op)      ? "field.add"
                      : isa<algebra::SubtractFieldOp>(op) ? "field.sub"
                                                          : "field.mul";
-        if (auto field =
-                dyn_cast<algebra::FieldType>(op.getResult(0).getType())) {
+        if (auto field = dyn_cast<algebra::FieldType>(results[0].getType())) {
           Term term = invalidTerm;
           if (contract == "field.constant") {
             auto literal = op.getAttrOfType<StringAttr>("value");
-            auto bound = primitive(op, nullptr);
+            auto bound = primitive(op, nullptr, CandidatePorts{}, step.scoped,
+                                   fixedBindings);
             if (literal)
               term = fieldTerms.literal(field.getDomain(), literal.getValue());
             else if (bound && bound->parameters.size() == 1)
               term =
                   fieldTerms.literal(field.getDomain(), bound->parameters[0]);
-          } else if (fieldArithmetic(contract) && op.getNumOperands() == 2) {
-            unsigned left = values.lookup(op.getOperand(0)),
-                     right = values.lookup(op.getOperand(1));
+          } else if (fieldArithmetic(contract) && operands.size() == 2) {
+            unsigned left = values.lookup(operands[0]),
+                     right = values.lookup(operands[1]);
             if (left && right && nodes[left].kind == Scalar &&
                 nodes[right].kind == Scalar)
               term = fieldTerms.arithmetic(contract, nodes[left].left,
@@ -1378,14 +1478,14 @@ class ModuleComparison {
           }
           if (term == invalidTerm)
             return 0;
-          values[op.getResult(0)] = node(Scalar, term);
+          values[results[0]] = node(Scalar, term);
           continue;
         }
-        auto group = dyn_cast<algebra::GroupType>(op.getResult(0).getType());
+        auto group = dyn_cast<algebra::GroupType>(results[0].getType());
         if (!group)
           return 0;
         SmallVector<protocol::BoundType> inputs, outputs;
-        for (Value operand : op.getOperands()) {
+        for (Value operand : operands) {
           auto type = protocol::encodeBoundType(operand.getType(), false);
           if (!type) {
             consumeError(type.takeError());
@@ -1403,10 +1503,10 @@ class ModuleComparison {
             {contract.str(), {group.getDomain().str()}, ""}, inputs, outputs);
         if (!facet ||
             facet->law.algebra != protocol::ComputationAlgebra::GroupModule ||
-            !facet->law.total || op.getNumOperands() != 2)
+            !facet->law.total || operands.size() != 2)
           return 0;
-        unsigned left = values.lookup(op.getOperand(0)),
-                 right = values.lookup(op.getOperand(1));
+        unsigned left = values.lookup(operands[0]),
+                 right = values.lookup(operands[1]);
         if (!left || !right)
           return 0;
         if (contract == "curve.add" && facet->law.commutative)
@@ -1416,9 +1516,9 @@ class ModuleComparison {
       }
       if (!result)
         return 0;
-      values[op.getResult(0)] = result;
+      values[results[0]] = result;
     }
-    return values.lookup(block.back().getOperand(0));
+    return values.lookup(body.returned[0]);
   }
   bool elements(Value value, const llvm::DenseMap<Value, Value> &mapping,
                 SmallVectorImpl<unsigned> &items,
@@ -1450,8 +1550,9 @@ class ModuleComparison {
   }
 
 public:
-  ModuleComparison(SymbolTable &symbols, uint64_t &remaining)
-      : symbols(symbols), fieldTerms(remaining) {
+  ModuleComparison(SymbolTable &symbols, uint64_t &remaining,
+                   const ScopedCandidate *candidate = nullptr)
+      : symbols(symbols), ports(candidate), fieldTerms(remaining) {
     fieldTerms.useNeutralLaws();
   }
   ComparisonCapacity exhausted() const { return fieldTerms.exhausted(); }
@@ -1462,6 +1563,8 @@ public:
                          ValueRange inputs, Operation *&cursor,
                          llvm::DenseSet<Operation *> &bindings,
                          Operation *end) {
+    sourceClosure = computation.scopedSource;
+    fixedBindings = computation.fixedBindings;
     if (computation.collect || computation.predicate ||
         computation.states != 1 || computation.signature.getNumResults() != 1 ||
         !isa<algebra::GroupType>(computation.signature.getResult(0)) ||
@@ -1522,30 +1625,30 @@ public:
     while (at && !output) {
       if (!charge())
         return failure();
-      auto bound = primitive(*at, &symbols);
+      auto bound = primitive(*at, &symbols, ports);
       if (!bound || !bound->parameters.empty() ||
-          at->getResult(0).getType() != group)
+          ports.outputs(at)[0].getType() != group)
         return failure();
       unsigned term = 0;
       if (bound->contract == "curve.msm" &&
-          containers.contains(at->getOperand(0)) &&
-          containers.contains(at->getOperand(1)))
-        term = node(Fold, node(Point, identity(at->getOperand(1))),
-                    scalarElement(at->getOperand(0)));
+          containers.contains(ports.inputs(at)[0]) &&
+          containers.contains(ports.inputs(at)[1]))
+        term = node(Fold, node(Point, identity(ports.inputs(at)[1])),
+                    scalarElement(ports.inputs(at)[0]));
       else if (bound->contract == "curve.add") {
-        unsigned left = values.lookup(at->getOperand(0)),
-                 right = values.lookup(at->getOperand(1));
+        unsigned left = values.lookup(ports.inputs(at)[0]),
+                 right = values.lookup(ports.inputs(at)[1]);
         if (left && right)
           term = node(Add, left, right);
       }
       if (!term)
         return failure();
-      values[at->getResult(0)] = term;
+      values[ports.outputs(at)[0]] = term;
       used.insert(bound->binding);
       unsigned actualMeaning = meaning(term);
       if (actualMeaning && actualMeaning == meaning(expected))
-        output = at->getResult(0);
-      at = at->getNextNode();
+        output = ports.outputs(at)[0];
+      at = ports.next(at);
     }
     if (!output || (end && at != end) || !fieldTerms.admit())
       return failure();
@@ -1556,19 +1659,17 @@ public:
 };
 } // namespace
 
-FailureOr<Value> compareLaneFormula(Block &source, ArrayRef<bool> rowwise,
-                                    ValueRange inputs, Value rows,
-                                    Operation *&cursor, SymbolTable &symbols,
-                                    llvm::DenseSet<Operation *> &bindings,
-                                    uint64_t &remaining, Operation *end,
-                                    ComparisonCapacity *capacity,
-                                    std::optional<CapacityCause> *debit,
-                                    std::optional<Value> output) {
+FailureOr<Value> compareLaneFormula(
+    Block &source, ArrayRef<bool> rowwise, ValueRange inputs, Value rows,
+    Operation *&cursor, SymbolTable &symbols,
+    llvm::DenseSet<Operation *> &bindings, uint64_t &remaining, Operation *end,
+    ComparisonCapacity *capacity, std::optional<CapacityCause> *debit,
+    std::optional<Value> output, const ScopedCandidate *candidate) {
   if (capacity)
     *capacity = ComparisonCapacity::None;
   if (debit)
     debit->reset();
-  Comparison comparison(symbols, rows, remaining);
+  Comparison comparison(symbols, rows, remaining, candidate);
   auto result = comparison.map(source, rowwise, inputs, cursor, bindings, end,
                                false, output);
   if (failed(result)) {
@@ -1579,19 +1680,18 @@ FailureOr<Value> compareLaneFormula(Block &source, ArrayRef<bool> rowwise,
   }
   return result;
 }
-FailureOr<Value> compareLaneSum(Block &source, ArrayRef<bool> rowwise,
-                                ValueRange inputs, Value rows,
-                                Operation *&cursor, SymbolTable &symbols,
-                                llvm::DenseSet<Operation *> &bindings,
-                                uint64_t &remaining, Operation *end,
-                                ComparisonCapacity *capacity,
-                                std::optional<CapacityCause> *debit,
-                                std::optional<Value> output) {
+FailureOr<Value>
+compareLaneSum(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
+               Value rows, Operation *&cursor, SymbolTable &symbols,
+               llvm::DenseSet<Operation *> &bindings, uint64_t &remaining,
+               Operation *end, ComparisonCapacity *capacity,
+               std::optional<CapacityCause> *debit, std::optional<Value> output,
+               const ScopedCandidate *candidate) {
   if (capacity)
     *capacity = ComparisonCapacity::None;
   if (debit)
     debit->reset();
-  Comparison comparison(symbols, rows, remaining);
+  Comparison comparison(symbols, rows, remaining, candidate);
   auto result = comparison.map(source, rowwise, inputs, cursor, bindings, end,
                                true, output);
   if (failed(result)) {
@@ -1602,13 +1702,13 @@ FailureOr<Value> compareLaneSum(Block &source, ArrayRef<bool> rowwise,
   }
   return result;
 }
-FailureOr<Value> compareFinitePayload(const finite::Computation &source,
-                                      ValueRange inputs, Value rows,
-                                      Operation *&cursor, SymbolTable &symbols,
-                                      llvm::DenseSet<Operation *> &bindings,
-                                      uint64_t &remaining, Operation *end,
-                                      ComparisonCapacity *capacity,
-                                      std::optional<CapacityCause> *debit) {
+FailureOr<Value>
+compareFinitePayload(const finite::Computation &source, ValueRange inputs,
+                     Value rows, Operation *&cursor, SymbolTable &symbols,
+                     llvm::DenseSet<Operation *> &bindings, uint64_t &remaining,
+                     Operation *end, ComparisonCapacity *capacity,
+                     std::optional<CapacityCause> *debit,
+                     const ScopedCandidate *candidate, bool sumCollection) {
   if (capacity)
     *capacity = ComparisonCapacity::None;
   if (debit)
@@ -1624,13 +1724,13 @@ FailureOr<Value> compareFinitePayload(const finite::Computation &source,
   };
   if (source.signature.getNumResults() == 1 &&
       isa<algebra::GroupType>(source.signature.getResult(0))) {
-    ModuleComparison comparison(symbols, remaining);
+    ModuleComparison comparison(symbols, remaining, candidate);
     return check(comparison,
                  comparison.check(source, inputs, cursor, bindings, end));
   }
-  Comparison comparison(symbols, rows, remaining);
-  return check(comparison,
-               comparison.finite(source, inputs, cursor, bindings, end));
+  Comparison comparison(symbols, rows, remaining, candidate);
+  return check(comparison, comparison.finite(source, inputs, cursor, bindings,
+                                             end, sumCollection));
 }
 StringRef comparisonCapacityName(ComparisonCapacity capacity) {
   switch (capacity) {
@@ -1661,10 +1761,9 @@ bool hasFinitePayloadContract(Operation *cursor, SymbolTable &symbols) {
   if (!cursor)
     return false;
   auto reference = cursor->getAttrOfType<FlatSymbolRefAttr>("binding");
-  auto binding =
-      reference
-          ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-          : local::OperationBindingOp();
+  auto binding = reference
+                     ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                     : runtime::BindingOp();
   return binding && (candidateContract(binding.getContract()) ||
                      binding.getContract() == "curve.msm" ||
                      binding.getContract() == "curve.add");

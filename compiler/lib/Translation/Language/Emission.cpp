@@ -1,10 +1,13 @@
 #include "DataPreconditions.h"
+#include "EmissionBudget.h"
 #include "Finite.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Data/IR/DataTypes.h"
+#include "zkc/Dialect/Exec/Builders.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
@@ -23,6 +26,7 @@
 #include "zkc/Translation/Entry.h"
 #include "zkc/Translation/Language.h"
 #include "zkc/Translation/Packing.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/SHA256.h"
 #include <set>
@@ -35,19 +39,20 @@ class Emitter {
   ArrayRef<Declaration> declared;
   const Limits &limits;
   mlir::MLIRContext &context;
+  EmissionBudget budget;
   mlir::OpBuilder builder;
   mlir::Location location;
   StringRef declaration;
   Layouts layouts;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   mlir::Block *definitions = nullptr;
+  exec::ScopedExecutionBuilder *scoped = nullptr;
   std::map<std::pair<std::string, std::vector<std::string>>, std::string>
       bindings;
-  std::map<std::string, std::string> realizations;
   std::map<std::pair<std::string, std::vector<bool>>, std::string> maps;
   std::set<std::string> symbols;
   Error failure = Error::success();
-  uint64_t operations = 0, siteOrdinal = 0, remaining;
+  uint64_t siteOrdinal = 0, remaining, nextOutlined = 0;
   template <class T> std::optional<T> take(Expected<T> value) {
     if (!value) {
       failure = value.takeError();
@@ -71,7 +76,7 @@ class Emitter {
                         mlir::ValueRange inputs,
                         ArrayRef<mlir::NamedAttribute> attrs,
                         unsigned regions = 0) {
-    if (++operations > limits.operations) {
+    if (!budget.allows(1)) {
       failure = error("source.limit", "emitted operation limit exceeded");
       return nullptr;
     }
@@ -133,13 +138,16 @@ class Emitter {
                                   ArrayRef<std::string> parameters,
                                   StringRef site,
                                   std::optional<ArrayRef<Type>> statics = {}) {
+    if (!scoped) {
+      failure =
+          error("source.mode", "ordered primitives require scoped execution");
+      return {};
+    }
     if (!statics && contract == "bool.constant") {
-      auto *op = make(
-          "local.bool_constant", outputs, {},
+      return scoped->invoke(
+          "exec.boolean", outputs, scoped->getScope(),
           {attr("value", builder.getBoolAttr(parameters.front() == "true")),
            text("site", site)});
-      return op ? std::optional<Values>(Values(op->getResults()))
-                : std::nullopt;
     }
     if (!statics && contract == "bool.equal") {
       auto a = primitive("bool.and", inputs, outputs, {}, site.str() + "_both");
@@ -185,96 +193,141 @@ class Emitter {
       }
       mlir::OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(definitions);
-      if (!make("local.binding", {}, {},
+      if (!make("runtime.binding", {}, {},
                 {text("sym_name", name), text("contract", contract),
                  attr("arguments", strings(arguments)),
                  text("implementation", "")}))
         return {};
       found = bindings.emplace(key, std::move(name)).first;
     }
-    auto operationName = protocol::boundOperationName(contract);
-    if (operationName.empty()) {
-      failure = error("source.emission",
-                      "no installed ordered operation for " + contract);
-      return {};
-    }
-    auto *op = make(
-        operationName, outputs, inputs,
+    return scoped->invoke(
+        "exec.apply", outputs, scoped->scoped(inputs),
         {attr("binding", mlir::FlatSymbolRefAttr::get(&context, found->second)),
          attr("parameters", strings(parameters)), text("site", site)});
-    return op ? std::optional<Values>(Values(op->getResults())) : std::nullopt;
   }
-  std::optional<std::string> realization(const Declaration &helper,
-                                         mlir::TypeRange inputs,
-                                         mlir::TypeRange outputs) {
-    if (auto found = realizations.find(helper.symbol);
-        found != realizations.end())
-      return found->second;
-    std::string identity =
-        "zkc.local.realization:" + std::to_string(helper.symbol.size()) + ":" +
-        helper.symbol;
-    auto digest = SHA256::hash(arrayRefFromStringRef(identity));
-    std::string name =
-        "zkl_realization_" + toHex(ArrayRef<uint8_t>(digest), true);
-    if (name.size() > limits.symbolBytes) {
-      failure = error("source.limit", "realization symbol exceeds byte limit");
+  std::optional<Values> map(const Declaration &helper, ArrayRef<bool> rowwise,
+                            mlir::ValueRange inputs, mlir::TypeRange outputs,
+                            StringRef site) {
+    if (!scoped) {
+      failure = error("source.mode", "mapped execution requires a scoped body");
       return {};
     }
-    if (!symbols.insert(name).second) {
-      failure = error("source.symbol", "realization symbol collision");
-      return {};
-    }
-    mlir::OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(definitions);
-    if (!make(
-            "local.realize", {}, {},
-            {text("sym_name", name),
-             attr("helper",
-                  mlir::FlatSymbolRefAttr::get(&context, helper.symbol)),
-             attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
-                                       inputs, outputs)))}))
-      return {};
-    realizations.emplace(helper.symbol, name);
-    return name;
-  }
-  // One declaration per helper instance and row mask. Its signature follows
-  // from both, so the name binds exactly that pair.
-  std::optional<std::string> map(const Declaration &helper,
-                                 ArrayRef<bool> rowwise, mlir::TypeRange inputs,
-                                 mlir::TypeRange outputs) {
     auto key = std::make_pair(
         helper.symbol, std::vector<bool>(rowwise.begin(), rowwise.end()));
-    if (auto found = maps.find(key); found != maps.end())
-      return found->second;
-    std::string identity =
-        "zkc.local.map:" + std::to_string(helper.symbol.size()) + ":" +
-        helper.symbol + ":";
-    for (bool row : rowwise)
-      identity += row ? '1' : '0';
-    auto digest = SHA256::hash(arrayRefFromStringRef(identity));
-    std::string name = "zkl_map_" + toHex(ArrayRef<uint8_t>(digest), true);
-    if (name.size() > limits.symbolBytes) {
-      failure = error("source.limit", "map symbol exceeds byte limit");
+    Values vectors, captures;
+    for (auto [value, mapped] : llvm::zip(inputs, rowwise))
+      (mapped ? vectors : captures).push_back(value);
+    auto scalarLayout = take(layouts.get(helper.outputs.front().type));
+    if (!scalarLayout)
+      return {};
+    auto scalar = types(**scalarLayout);
+    if (!scalar || scalar->size() != 1 || vectors.empty()) {
+      if (!failure)
+        failure = error("source.layout",
+                        "map requires scalar math and mapped vectors");
       return {};
     }
-    if (!symbols.insert(name).second) {
-      failure = error("source.symbol", "map symbol collision");
-      return {};
+    auto found = maps.find(key);
+    if (found == maps.end()) {
+      std::string identity =
+          "zkc.source.map:" + std::to_string(helper.symbol.size()) + ":" +
+          helper.symbol + ":";
+      for (bool row : rowwise)
+        identity += row ? '1' : '0';
+      auto digest = SHA256::hash(arrayRefFromStringRef(identity));
+      std::string name = "zkl_map_" + toHex(ArrayRef<uint8_t>(digest), true);
+      if (name.size() + 7 > limits.symbolBytes ||
+          !symbols.insert(name + "_domain").second ||
+          !symbols.insert(name + "_body").second) {
+        failure =
+            error("source.symbol", "mapped adapter symbol limit or collision");
+        return {};
+      }
+      mlir::OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToEnd(definitions);
+      SmallVector<mlir::Type> items(vectors.size(), scalar->front());
+      auto domainType = data::DomainType::get(&context, items);
+      auto *domain =
+          make("data.domain", {}, {},
+               {text("sym_name", name + "_domain"),
+                text("sym_visibility", "private"),
+                attr("function_type",
+                     mlir::TypeAttr::get(builder.getFunctionType(
+                         mlir::ValueRange(vectors).getTypes(), {domainType})))},
+               1);
+      if (!domain)
+        return {};
+      auto &domainBody = domain->getRegion(0).front();
+      for (auto input : vectors)
+        domainBody.addArgument(input.getType(), location);
+      builder.setInsertionPointToEnd(&domainBody);
+      mlir::Value root;
+      SmallVector<mlir::Type> admittedItems;
+      auto elementDomain = data::DomainType::get(&context, *scalar);
+      for (auto input : domainBody.getArguments()) {
+        auto *elements = make("data.domain_elements", elementDomain, input, {});
+        if (!elements)
+          return {};
+        admittedItems.push_back(scalar->front());
+        if (!root) {
+          root = elements->getResult(0);
+          continue;
+        }
+        // A mismatched row stops before any later row is admitted.
+        auto *zip = make("data.domain_zip",
+                         data::DomainType::get(&context, admittedItems),
+                         {root, elements->getResult(0)}, {});
+        if (!zip)
+          return {};
+        root = zip->getResult(0);
+      }
+      if (!make("data.domain_yield", {}, root, {}))
+        return {};
+      builder.setInsertionPointToEnd(definitions);
+      SmallVector<mlir::Type> arguments{runtime::ScopeType::get(&context)};
+      llvm::append_range(arguments, items);
+      llvm::append_range(arguments, mlir::ValueRange(vectors).getTypes());
+      llvm::append_range(arguments, mlir::ValueRange(captures).getTypes());
+      auto outcome = exec::OutcomeType::get(&context, *scalar);
+      auto *body = make(
+          "func.func", {}, {},
+          {text("sym_name", name + "_body"), text("sym_visibility", "private"),
+           attr("no_inline", builder.getUnitAttr()),
+           attr("runtime.origin",
+                builder.getArrayAttr({builder.getStringAttr(name + "_body"),
+                                      builder.getArrayAttr({})})),
+           attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
+                                     arguments, {outcome})))},
+          1);
+      if (!body)
+        return {};
+      auto &entry = body->getRegion(0).front();
+      for (auto input : arguments)
+        entry.addArgument(input, location);
+      builder.setInsertionPointToEnd(&entry);
+      exec::ScopedExecutionBuilder callback(
+          builder, mlir::cast<mlir::func::FuncOp>(body));
+      Values actual;
+      unsigned item = 1, capture = 1 + items.size() + vectors.size();
+      for (bool mapped : rowwise)
+        actual.push_back(entry.getArgument(mapped ? item++ : capture++));
+      auto result = callback.invoke(
+          "exec.compute", *scalar, callback.scoped(actual),
+          {attr("callee",
+                mlir::FlatSymbolRefAttr::get(&context, helper.symbol)),
+           text("site", "body")});
+      callback.returned(result);
+      found = maps.emplace(std::move(key), name).first;
     }
-    mlir::OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(definitions);
-    SmallVector<bool> mask(rowwise.begin(), rowwise.end());
-    if (!make(
-            "algebra.map_realize", {}, {},
-            {text("sym_name", name),
-             attr("helper",
-                  mlir::FlatSymbolRefAttr::get(&context, helper.symbol)),
-             attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
-                                       inputs, outputs))),
-             attr("rowwise", builder.getDenseBoolArrayAttr(mask))}))
-      return {};
-    maps.emplace(std::move(key), name);
-    return name;
+    Values operands = vectors;
+    llvm::append_range(operands, captures);
+    return scoped->invoke(
+        "exec.collect", outputs, scoped->scoped(operands),
+        {attr("domain", mlir::FlatSymbolRefAttr::get(&context, found->second +
+                                                                   "_domain")),
+         attr("body",
+              mlir::FlatSymbolRefAttr::get(&context, found->second + "_body")),
+         text("site", site)});
   }
   bool retire(mlir::Value value, StringRef site) {
     return bool(primitive("resource_unit.consume", value, {}, {}, site));
@@ -357,11 +410,93 @@ class Emitter {
     }
     return builder.getArrayAttr(clauses);
   }
+  mlir::func::FuncOp outline(mlir::TypeRange inputs, mlir::TypeRange outputs) {
+    std::string name;
+    do {
+      name = "zkl_control_" + std::to_string(nextOutlined++);
+    } while (symbols.count(name));
+    if (name.size() > limits.symbolBytes) {
+      failure = error("source.limit", "outlined symbol exceeds byte limit");
+      return {};
+    }
+    symbols.insert(name);
+    builder.setInsertionPointToEnd(definitions);
+    SmallVector<mlir::Type> arguments{runtime::ScopeType::get(&context)};
+    llvm::append_range(arguments, inputs);
+    auto outcome =
+        exec::OutcomeType::get(&context, SmallVector<mlir::Type>(outputs));
+    auto *operation =
+        make("func.func", {}, {},
+             {text("sym_name", name), text("sym_visibility", "private"),
+              attr("no_inline", builder.getUnitAttr()),
+              attr("runtime.region", builder.getUnitAttr()),
+              attr("function_type", mlir::TypeAttr::get(builder.getFunctionType(
+                                        arguments, outcome)))},
+             1);
+    if (!operation)
+      return {};
+    auto function = mlir::cast<mlir::func::FuncOp>(operation);
+    for (auto type : arguments)
+      function.front().addArgument(type, location);
+    return function;
+  }
+  std::optional<mlir::Value> pack(const PackedLayout &layout,
+                                  mlir::ValueRange values, StringRef site) {
+    if (!scoped || !layout.product)
+      return take(emitMathematicalPack(builder, location, layout, values));
+    auto flat = types(*layout.flat);
+    auto carrier = protocol::decodeBoundType(&context, layout.carrier);
+    if (!flat || !carrier || values.getTypes() != mlir::TypeRange(*flat)) {
+      if (!failure)
+        failure = error("source.layout", "scoped packed operands differ");
+      return {};
+    }
+    return scoped
+        ->invoke("exec.variant", carrier, scoped->scoped(values),
+                 {text("alternative", layout.alternative), text("site", site)})
+        .front();
+  }
+  std::optional<Values> unpack(const PackedLayout &layout, mlir::Value value,
+                               StringRef site) {
+    if (!scoped || !layout.product)
+      return take(emitMathematicalUnpack(builder, location, layout, value));
+    auto flat = types(*layout.flat);
+    auto carrier = protocol::decodeBoundType(&context, layout.carrier);
+    if (!flat || !carrier || value.getType() != carrier) {
+      if (!failure)
+        failure = error("source.layout", "scoped unpack carrier differs");
+      return {};
+    }
+    mlir::func::FuncOp helper;
+    {
+      mlir::OpBuilder::InsertionGuard guard(builder);
+      helper = outline(*flat, *flat);
+      if (!helper)
+        return {};
+      builder.setInsertionPointToEnd(&helper.front());
+      exec::ScopedExecutionBuilder control(builder, helper);
+      control.complete(helper.getArguments().drop_front());
+    }
+    return scoped->match(value, {}, *flat, {layout.alternative}, site,
+                         [&](unsigned) { return helper; });
+  }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
-            bool region = false) {
+            bool region = false, unsigned forwarded = 0) {
+    if (region && source.mode == Body::Mode::Math) {
+      failure =
+          error("source.mode", "mathematical bodies have no ordered regions");
+      return false;
+    }
     builder.setInsertionPointToEnd(&block);
     std::vector<Values> values(source.values.size());
-    assert(block.getNumArguments() == 0 && "body requires a fresh block");
+    auto *previous = scoped;
+    std::optional<exec::ScopedExecutionBuilder> control;
+    if (source.mode == Body::Mode::Local)
+      control.emplace(builder,
+                      mlir::cast<mlir::func::FuncOp>(block.getParentOp()));
+    scoped = control ? &*control : nullptr;
+    llvm::scope_exit restore([&] { scoped = previous; });
+    unsigned argument = 1;
     for (unsigned i = 0; i < source.inputs; ++i) {
       auto layout = take(layouts.get(source.values[i].type));
       if (!layout)
@@ -369,8 +504,18 @@ class Emitter {
       auto ts = types(**layout);
       if (!ts)
         return false;
-      for (auto type : *ts)
-        values[i].push_back(block.addArgument(type, location));
+      for (auto type : *ts) {
+        if (scoped) {
+          if (argument >= block.getNumArguments() ||
+              block.getArgument(argument).getType() != type) {
+            failure =
+                error("source.layout", "scoped function input layout differs");
+            return false;
+          }
+          values[i].push_back(block.getArgument(argument++));
+        } else
+          values[i].push_back(block.addArgument(type, location));
+      }
     }
     Values services;
     for (const auto &port : source.services) {
@@ -468,12 +613,17 @@ class Emitter {
                 alternative(*resultLayouts.front(), construct->alternative);
             if (!label)
               return false;
-            auto *actual =
-                make("local.variant_inject", resultTypes.back(), input,
-                     {text("site", site), text("alternative", *label)});
-            if (!actual)
+            if (!scoped) {
+              failure = error("source.mode",
+                              "variant construction requires scoped execution");
               return false;
-            result.push_back(actual->getResult(0));
+            }
+            result.push_back(
+                scoped
+                    ->invoke("exec.variant", resultTypes.back(),
+                             scoped->scoped(input),
+                             {text("site", site), text("alternative", *label)})
+                    .front());
           } else
             llvm::append_range(result, input);
         }
@@ -674,15 +824,12 @@ class Emitter {
           return false;
         result = Values(actual->getResults());
         if (packed && packed->product) {
-          if (packed->flat->leaves.size() > limits.operations - operations) {
+          if (!budget.allows(packed->flat->leaves.size())) {
             failure = error("source.limit",
                             "total sequence projection operation limit");
             return false;
           }
-          operations += packed->flat->leaves.size();
-          auto decoded =
-              take(emitUnpack(builder, location, *packed, result.front(),
-                              PackingMode::Mathematical, site + "_unpack"));
+          auto decoded = unpack(*packed, result.front(), site + "_unpack");
           if (!decoded)
             return false;
           result = std::move(*decoded);
@@ -702,14 +849,13 @@ class Emitter {
           if (!packed)
             return false;
           if (local->contract == "sequence.append") {
-            if (packed->product && ++operations > limits.operations) {
+            if (!budget.allows(packed->product ? 1 : 0)) {
               failure =
                   error("source.limit", "emitted operation limit exceeded");
               return false;
             }
-            auto item = take(emitPack(builder, location, *packed,
-                                      values[local->operands[1].index],
-                                      PackingMode::Local, site + "_pack"));
+            auto item =
+                pack(*packed, values[local->operands[1].index], site + "_pack");
             if (!item)
               return false;
             operands = values[local->operands[0].index];
@@ -727,14 +873,11 @@ class Emitter {
           return false;
         result = std::move(*emitted);
         if (packed && local->contract == "sequence.at") {
-          operations += packed->product ? 2 : 0;
-          if (operations > limits.operations) {
+          if (!budget.allows(packed->product ? 2 : 0)) {
             failure = error("source.limit", "emitted operation limit exceeded");
             return false;
           }
-          auto flat =
-              take(emitUnpack(builder, location, *packed, result.front(),
-                              PackingMode::Local, site + "_unpack"));
+          auto flat = unpack(*packed, result.front(), site + "_unpack");
           if (!flat)
             return false;
           result = std::move(*flat);
@@ -743,36 +886,39 @@ class Emitter {
         const auto &target = project.declarations()[call->callee.index];
         auto operands = flatten(call->operands);
         std::string callee = target.symbol;
-        if (target.kind == Declaration::Kind::Math &&
-            source.mode == Body::Mode::Local) {
-          auto symbol = realization(
-              target, mlir::ValueRange(operands).getTypes(), resultTypes);
-          if (!symbol)
-            return false;
-          callee = *symbol;
-        }
         SmallVector<mlir::NamedAttribute> attrs{
             attr("callee", mlir::FlatSymbolRefAttr::get(&context, callee))};
         StringRef name = "func.call";
-        if (target.kind == Declaration::Kind::Local ||
-            source.mode == Body::Mode::Local) {
-          name = source.mode == Body::Mode::Protocol ? "protocol.local_call"
-                                                     : "local.apply";
-          attrs.push_back(text("site", site));
-          if (call->owner)
-            attrs.push_back(text("role", nativeRoleName(*call->owner)));
+        if (scoped) {
+          bool math = target.kind == Declaration::Kind::Math;
+          attrs.push_back(text(math ? "site" : "runtime.site", site));
+          result = scoped->invoke(math ? "exec.compute" : "func.call",
+                                  resultTypes, scoped->scoped(operands), attrs);
+        } else {
+          if (target.kind == Declaration::Kind::Local) {
+            if (source.mode != Body::Mode::Protocol) {
+              failure =
+                  error("source.mode", "ordered calls require scoped execution "
+                                       "or a participant owner");
+              return false;
+            }
+            name = "protocol.local_call";
+            attrs.push_back(text("site", site));
+            if (call->owner)
+              attrs.push_back(text("role", nativeRoleName(*call->owner)));
+          }
+          auto *actual = make(name, resultTypes, operands, attrs);
+          if (!actual)
+            return false;
+          result = Values(actual->getResults());
         }
-        auto *actual = make(name, resultTypes, operands, attrs);
-        if (!actual)
-          return false;
-        result = Values(actual->getResults());
       } else if (auto *finite = std::get_if<FiniteComputation>(&op.action)) {
         auto emitted =
             take(emitFinite(project, source, *finite,
                             source.values[op.results.front().index].type,
                             values, builder, location, *definitions, layouts,
-                            "finite_" + decl.symbol + "_" + site, site, limits,
-                            operations, remaining));
+                            "finite_" + decl.symbol + "_" + site, site, budget,
+                            remaining, scoped));
         if (!emitted)
           return false;
         result = std::move(*emitted);
@@ -784,17 +930,10 @@ class Emitter {
         const auto &target = project.declarations()[bulk->callee.index];
         auto operands = flatten(bulk->operands);
         SmallVector<bool> mask(bulk->mapped.begin(), bulk->mapped.end());
-        auto symbol = map(target, mask, mlir::ValueRange(operands).getTypes(),
-                          resultTypes);
-        if (!symbol)
+        auto emitted = map(target, mask, operands, resultTypes, site);
+        if (!emitted)
           return false;
-        auto *actual = make(
-            "local.apply", resultTypes, operands,
-            {attr("callee", mlir::FlatSymbolRefAttr::get(&context, *symbol)),
-             text("site", site)});
-        if (!actual)
-          return false;
-        result = Values(actual->getResults());
+        result = std::move(*emitted);
       } else if (auto *query = std::get_if<ServiceQuery>(&op.action)) {
         const auto &port = source.services[query->service.index];
         SmallVector<mlir::Value> operands{services[query->service.index]};
@@ -861,18 +1000,22 @@ class Emitter {
                      text("site", site)}))
             return false;
         } else {
-          auto *branch = make("local.if", {}, values[check->condition.index],
-                              {text("site", site)}, 2);
-          if (!branch)
-            return false;
-          mlir::OpBuilder::InsertionGuard insertion(builder);
-          builder.setInsertionPointToEnd(&branch->getRegion(0).front());
-          if (!make("local.yield", {}, {}, {}))
-            return false;
-          builder.setInsertionPointToEnd(&branch->getRegion(1).front());
-          if (!make("local.stop", {}, {},
-                    {text("site", site + "_reject"), text("reason", "reject")}))
-            return false;
+          SmallVector<mlir::func::FuncOp> arms;
+          for (unsigned i = 0; i < 2; ++i) {
+            mlir::OpBuilder::InsertionGuard insertion(builder);
+            auto arm = outline({}, {});
+            if (!arm)
+              return false;
+            builder.setInsertionPointToEnd(&arm.front());
+            exec::ScopedExecutionBuilder branch(builder, arm);
+            if (i)
+              branch.reject("reject", site + "_reject");
+            else
+              branch.complete({});
+            arms.push_back(arm);
+          }
+          scoped->conditional(values[check->condition.index].front(), {}, {},
+                              site, [&](unsigned i) { return arms[i]; });
         }
       } else if (auto *application =
                      std::get_if<ProtocolApplication>(&op.action)) {
@@ -967,23 +1110,45 @@ class Emitter {
             inputs.erase(inputs.begin());
           }
         }
-        SmallVector<mlir::NamedAttribute> attrs{text("site", site)};
-        if (match)
-          attrs.push_back(attr("alternatives", strings(labels)));
-        auto *actual =
-            make(match                                      ? "local.match"
-                 : control->kind == LocalControl::Kind::For ? "local.for"
-                                                            : "local.if",
-                 resultTypes, inputs, attrs, control->regions.size());
-        if (!actual)
+        bool loop = control->kind == LocalControl::Kind::For;
+        if (loop && inputs.size() < 2 + resultTypes.size()) {
+          failure = error("source.layout", "loop state ports are incomplete");
           return false;
-        result = Values(actual->getResults());
-        for (unsigned i = 0; i < control->regions.size(); ++i) {
-          mlir::OpBuilder::InsertionGuard guard(builder);
-          if (!body(decl, *control->regions[i], actual->getRegion(i).front(),
-                    true))
-            return false;
         }
+        unsigned forwarded = loop ? inputs.size() - 2 - resultTypes.size() : 0;
+        SmallVector<mlir::func::FuncOp> arms;
+        for (const auto &region : control->regions) {
+          mlir::OpBuilder::InsertionGuard guard(builder);
+          SmallVector<mlir::Type> arguments;
+          for (unsigned i = 0; i < region->inputs; ++i) {
+            auto layout = take(layouts.get(region->values[i].type));
+            if (!layout)
+              return false;
+            auto native = types(**layout);
+            if (!native)
+              return false;
+            llvm::append_range(arguments, *native);
+          }
+          auto arm = outline(arguments, resultTypes);
+          if (!arm || !body(decl, *region, arm.front(), true, forwarded))
+            return false;
+          arms.push_back(arm);
+        }
+        auto select = [&](unsigned i) { return arms[i]; };
+        if (match)
+          result = scoped->match(inputs.front(),
+                                 mlir::ValueRange(inputs).drop_front(),
+                                 resultTypes, labels, site, select);
+        else if (loop)
+          result = scoped->loop(
+              inputs[0], inputs[1],
+              mlir::ValueRange(inputs).slice(2, resultTypes.size()),
+              mlir::ValueRange(inputs).drop_front(2 + resultTypes.size()),
+              resultTypes, false, site, select);
+        else
+          result = scoped->conditional(inputs.front(),
+                                       mlir::ValueRange(inputs).drop_front(),
+                                       resultTypes, site, select);
       } else {
         failure = error("source.emission", "source operation has no emitter");
         return false;
@@ -1000,16 +1165,41 @@ class Emitter {
         offset += count;
       }
     }
-    if (source.stopped)
-      return make("local.stop", {}, {},
-                  {text("site", "stop" + std::to_string(siteOrdinal++)),
-                   text("reason", source.stopReason)});
+    if (source.stopped) {
+      if (!scoped) {
+        failure = error("source.emission", "stop requires scoped execution");
+        return false;
+      }
+      scoped->reject(source.stopReason, "stop" + std::to_string(siteOrdinal++));
+      if (!budget.allows()) {
+        failure = error("source.limit", "emitted operation limit exceeded");
+        return false;
+      }
+      return true;
+    }
     auto results = flatten(source.results);
-    return make(region && source.mode == Body::Mode::Protocol ? "protocol.yield"
-                : region                                      ? "local.yield"
-                : source.mode == Body::Mode::Protocol ? "protocol.return"
-                : source.mode == Body::Mode::Local    ? "local.return"
-                                                      : "func.return",
+    if (scoped) {
+      if (forwarded > results.size() ||
+          forwarded > block.getNumArguments() - 1 ||
+          mlir::ValueRange(results).take_back(forwarded) !=
+              block.getArguments().take_back(forwarded)) {
+        failure = error("source.layout", "loop invariant forwarding differs");
+        return false;
+      }
+      results.resize(results.size() - forwarded);
+      if (region)
+        scoped->complete(results);
+      else
+        scoped->returned(results);
+      if (!budget.allows()) {
+        failure = error("source.limit", "emitted operation limit exceeded");
+        return false;
+      }
+      return true;
+    }
+    return make(source.mode == Body::Mode::Protocol
+                    ? (region ? "protocol.yield" : "protocol.return")
+                    : "func.return",
                 {}, results, {});
   }
 
@@ -1173,9 +1363,10 @@ public:
           const Limits &limits, ArrayRef<Declaration> selected = {})
       : project(project),
         declared(selected.empty() ? project.declarations() : selected),
-        limits(limits), context(context), builder(&context),
-        location(builder.getUnknownLoc()), layouts(project, limits),
-        module(mlir::ModuleOp::create(location)), remaining(limits.work) {
+        limits(limits), context(context), budget(limits.operations),
+        builder(&context, &budget), location(builder.getUnknownLoc()),
+        layouts(project, limits), module(mlir::ModuleOp::create(location)),
+        remaining(limits.work) {
     for (const auto &decl : declared)
       if ((decl.body || (decl.relation && decl.origin)) &&
           decl.parameters.empty()) {
@@ -1218,6 +1409,12 @@ public:
             protocol_ir::ServiceReferenceType::get(&context, port.contract));
         inRoles.push_back(roles({port.owner}));
       }
+      bool protocol = decl.kind == Declaration::Kind::Protocol,
+           local = decl.kind == Declaration::Kind::Local;
+      if (local) {
+        ins.insert(ins.begin(), runtime::ScopeType::get(&context));
+        outs = {exec::OutcomeType::get(&context, outs)};
+      }
       SmallVector<mlir::NamedAttribute> attrs{
           text("sym_name", decl.relation ? formulaSymbol(decl) : decl.symbol),
           attr("function_type",
@@ -1226,11 +1423,14 @@ public:
         auto conditions = take(flattenDataPreconditions(decl, layouts));
         if (!conditions)
           return std::move(failure);
+        if (local)
+          for (auto &condition : *conditions) {
+            ++condition.left;
+            ++condition.right;
+          }
         attrs.push_back(attr("data.preconditions",
                              emitDataPreconditions(&context, *conditions)));
       }
-      bool protocol = decl.kind == Declaration::Kind::Protocol,
-           local = decl.kind == Declaration::Kind::Local;
       if (protocol) {
         auto retained = contracts(decl);
         if (!retained)
@@ -1248,22 +1448,24 @@ public:
                       attr("input_roles", builder.getArrayAttr(inRoles)),
                       attr("output_roles", builder.getArrayAttr(outRoles))});
       } else {
-        if (!local)
-          attrs.push_back(text("sym_visibility", "private"));
-        if (local)
+        attrs.push_back(text("sym_visibility", "private"));
+        if (local) {
+          attrs.push_back(attr("no_inline", builder.getUnitAttr()));
           attrs.push_back(
-              attr("logical_origin",
+              attr("runtime.origin",
                    builder.getArrayAttr(
                        {builder.getStringAttr(logicalOrigin(project, decl)),
                         builder.getArrayAttr({})})));
+        }
       }
       builder.setInsertionPointToEnd(definitions);
-      auto *function = make(protocol ? "protocol.func"
-                            : local  ? "local.func"
-                                     : "func.func",
-                            {}, {}, attrs, 1);
+      auto *function =
+          make(protocol ? "protocol.func" : "func.func", {}, {}, attrs, 1);
       if (!function)
         return std::move(failure);
+      if (local)
+        for (auto type : ins)
+          function->getRegion(0).front().addArgument(type, location);
       siteOrdinal = 0;
       if (!body(decl, *decl.body, function->getRegion(0).front()))
         return std::move(failure);
@@ -1338,6 +1540,8 @@ public:
       if (!make("relation.declare", {}, {}, attributes))
         return std::move(failure);
     }
+    if (!budget.allows())
+      return error("source.limit", "emitted operation limit exceeded");
     return std::move(module);
   }
   Expected<std::string> run() {
@@ -1373,11 +1577,10 @@ Expected<SmallVector<mlir::Type>> packedLeafTypes(mlir::MLIRContext *context,
   return types;
 }
 } // namespace
-Expected<mlir::Value> emitPack(mlir::OpBuilder &builder,
-                               mlir::Location location,
-                               const PackedLayout &layout,
-                               mlir::ValueRange leaves, PackingMode mode,
-                               StringRef site) {
+Expected<mlir::Value> emitMathematicalPack(mlir::OpBuilder &builder,
+                                           mlir::Location location,
+                                           const PackedLayout &layout,
+                                           mlir::ValueRange leaves) {
   auto types = packedLeafTypes(builder.getContext(), layout);
   if (!types)
     return types.takeError();
@@ -1392,20 +1595,15 @@ Expected<mlir::Value> emitPack(mlir::OpBuilder &builder,
       return error("source.layout", "native element carrier differs");
     return leaves.front();
   }
-  mlir::OperationState state(location, mode == PackingMode::Local
-                                           ? "local.variant_inject"
-                                           : "data.make");
+  mlir::OperationState state(location, "data.make");
   state.addTypes(carrier);
   state.addOperands(leaves);
   state.addAttribute("alternative", builder.getStringAttr(layout.alternative));
-  if (mode == PackingMode::Local)
-    state.addAttribute("site", builder.getStringAttr(site));
   return builder.create(state)->getResult(0);
 }
 Expected<SmallVector<mlir::Value>>
-emitUnpack(mlir::OpBuilder &builder, mlir::Location location,
-           const PackedLayout &layout, mlir::Value value, PackingMode mode,
-           StringRef site) {
+emitMathematicalUnpack(mlir::OpBuilder &builder, mlir::Location location,
+                       const PackedLayout &layout, mlir::Value value) {
   auto types = packedLeafTypes(builder.getContext(), layout);
   if (!types)
     return types.takeError();
@@ -1418,34 +1616,15 @@ emitUnpack(mlir::OpBuilder &builder, mlir::Location location,
       return error("source.layout", "native element flat layout differs");
     return SmallVector<mlir::Value>{value};
   }
-  if (mode == PackingMode::Mathematical) {
-    SmallVector<mlir::Value> leaves;
-    for (unsigned i = 0; i < types->size(); ++i) {
-      mlir::OperationState state(location, "data.get");
-      state.addOperands(value);
-      state.addTypes((*types)[i]);
-      state.addAttribute("index", builder.getI64IntegerAttr(i));
-      leaves.push_back(builder.create(state)->getResult(0));
-    }
-    return leaves;
+  SmallVector<mlir::Value> leaves;
+  for (unsigned i = 0; i < types->size(); ++i) {
+    mlir::OperationState state(location, "data.get");
+    state.addOperands(value);
+    state.addTypes((*types)[i]);
+    state.addAttribute("index", builder.getI64IntegerAttr(i));
+    leaves.push_back(builder.create(state)->getResult(0));
   }
-  mlir::OperationState state(location, "local.match");
-  state.addOperands(value);
-  state.addTypes(*types);
-  state.addAttribute("site", builder.getStringAttr(site));
-  state.addAttribute("alternatives",
-                     builder.getStrArrayAttr({layout.alternative}));
-  state.addRegion()->push_back(new mlir::Block());
-  auto *match = builder.create(state);
-  auto &arm = match->getRegion(0).front();
-  for (auto type : *types)
-    arm.addArgument(type, location);
-  mlir::OpBuilder::InsertionGuard guard(builder);
-  builder.setInsertionPointToEnd(&arm);
-  mlir::OperationState yield(location, "local.yield");
-  yield.addOperands(arm.getArguments());
-  builder.create(yield);
-  return SmallVector<mlir::Value>(match->getResults());
+  return leaves;
 }
 Expected<std::string> emitOriginal(const ClosedEntry &project,
                                    mlir::MLIRContext &context,

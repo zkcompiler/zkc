@@ -251,8 +251,13 @@ with case('guard-owner-and-nonowner-after-query-effects'):
         trace(script) + [['stop', 'incomplete', 'check', 2]], 2]
 
 with case('local-zero-results-run-only-at-owner-and-sequence-all-inputs'):
-    helper = '''local.func private @halt(%x:!F,%y:!F) attributes {logical_origin=["halt",[]]} {
-      "local.stop"() {reason="abort",site="halted"} : ()->()
+    helper = '''func.func private @halt(%scope:!runtime.scope,%x:!F,%y:!F)
+        ->!exec.outcome<> attributes {no_inline,runtime.origin=["halt",[]]} {
+      %stop = "exec.reject"(%scope) {reason="abort",site="halted"} : (!runtime.scope)->!exec.stop
+      cf.br ^failed(%stop : !exec.stop)
+    ^failed(%cause:!exec.stop):
+      %result = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
+      func.return %result : !exec.outcome<>
     }'''
     source = components.replace('  func.func private @first', helper + '\n  func.func private @first', 1)
     source = source.replace('%a = func.call @nested',

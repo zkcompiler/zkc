@@ -187,15 +187,41 @@ int main() {
   });
   for (auto kind : {protocol::LocalRealization::Kind::FiniteFold,
                     protocol::LocalRealization::Kind::FiniteCollect})
-    cases.run(kind == protocol::LocalRealization::Kind::FiniteFold
-                  ? "finite fold realization refuses in logical Exec"
-                  : "finite collect realization refuses in logical Exec",
-              [&] {
-                auto invalid = signature;
-                invalid.kind = kind;
-                refuse(protocol::admit(fixture(), {invalid}),
-                       "local-realization-signature");
-              });
+    cases.run(
+        kind == protocol::LocalRealization::Kind::FiniteFold
+            ? "finite fold realization requires actual callback bodies"
+            : "finite collect realization requires actual callback bodies",
+        [&] {
+          auto finite = signature;
+          finite.kind = kind;
+          refuse(protocol::admit(fixture(), {finite}),
+                 "local-realization-callback");
+          finite.callbacks = {"callback"};
+          refuse(protocol::admit(fixture(), {finite}),
+                 "local-realization-callback");
+          auto model = fixture();
+          program::Function callback;
+          callback.name = "callback";
+          callback.origin = program::LogicalOrigin{"callback", {}};
+          callback.arguments = {{"x", field}};
+          callback.results = {field};
+          callback.body = {{"", program::Return{{"x"}}}};
+          model.functions.push_back(std::move(callback));
+          accept(protocol::admit(model, {finite}));
+          auto cyclic = model;
+          cyclic.functions.back().body = {
+              {"recursive", program::LocalApply{finite.name, {"x"}, {"next"}}},
+              {"", program::Return{{"next"}}}};
+          refuse(protocol::admit(cyclic, {finite}), "interactive-call-cycle");
+          finite.callbacks = {"prover"};
+          refuse(protocol::admit(model, {finite}),
+                 "local-realization-callback");
+          finite.callbacks = {"total"};
+          auto total = signature;
+          total.name = "total";
+          refuse(protocol::admit(model, {finite, total}),
+                 "local-realization-callback");
+        });
   for (const auto &port : {std::string("polynomial:bls12-381.fr"), transcript,
                            std::string("bool@native.bool/0")})
     cases.run("non-total, affine or physical signature refuses: " + port, [&] {
@@ -331,14 +357,98 @@ int main() {
     refuse(protocol::admitNativeLocalDefinitions(locals, {signature}),
            "interactive-call-cycle");
   });
-  cases.run("native-local finite realization signatures remain admitted", [&] {
+  cases.run(
+      "native-local finite realizations retain actual callback bodies", [&] {
+        program::Function callback;
+        callback.name = "callback";
+        callback.origin = program::LogicalOrigin{"callback", {}};
+        callback.arguments = {{"state", transcript}};
+        callback.results = {transcript};
+        callback.body = {{"", program::Return{{"state"}}}};
+        program::LocalDefinitions locals{{}, {callback}};
+        auto fold = signature;
+        fold.kind = protocol::LocalRealization::Kind::FiniteFold;
+        fold.inputs = fold.outputs = {transcript};
+        fold.callbacks = {"callback"};
+        accept(protocol::admitNativeLocalDefinitions(locals, {fold}));
+        auto collect = signature;
+        collect.kind = protocol::LocalRealization::Kind::FiniteCollect;
+        collect.callbacks = {"callback"};
+        accept(protocol::admitNativeLocalDefinitions(locals, {collect}));
+        refuse(protocol::admitNativeLocalDefinitions({}, {fold}),
+               "local-realization-callback");
+        fold.callbacks.clear();
+        refuse(protocol::admitNativeLocalDefinitions(locals, {fold}),
+               "local-realization-callback");
+        fold.callbacks = {"callback"};
+        locals.functions[0].body = {
+            {"recursive", program::LocalApply{fold.name, {"state"}, {"next"}}},
+            {"", program::Return{{"next"}}}};
+        refuse(protocol::admitNativeLocalDefinitions(locals, {fold}),
+               "interactive-call-cycle");
+      });
+  cases.run("finite callback edges cannot point to another signature", [&] {
     auto fold = signature;
     fold.kind = protocol::LocalRealization::Kind::FiniteFold;
-    fold.inputs = fold.outputs = {transcript};
-    accept(protocol::admitNativeLocalDefinitions({}, {fold}));
-    auto collect = signature;
-    collect.kind = protocol::LocalRealization::Kind::FiniteCollect;
-    accept(protocol::admitNativeLocalDefinitions({}, {collect}));
+    fold.callbacks = {"total"};
+    auto total = signature;
+    total.name = "total";
+    refuse(protocol::admitNativeLocalDefinitions({}, {fold, total}),
+           "local-realization-callback");
+    total.callbacks = {"callback"};
+    refuse(protocol::admitNativeLocalDefinitions({}, {total}),
+           "local-realization-callback");
+  });
+  cases.run("match cannot hide history behind a finite callback chain", [&] {
+    program::Function draw;
+    draw.name = "draw";
+    draw.origin = program::LogicalOrigin{"draw", {}};
+    draw.arguments = {{"state", transcript}, {"label", "bytes"}};
+    draw.results = {transcript};
+    draw.body = {{"challenge",
+                  program::Operation{
+                      "challenge", {}, {"state", "label"}, {"next", "sample"}}},
+                 {"", program::Return{{"next"}}}};
+    auto step = draw;
+    step.name = "step";
+    step.origin = program::LogicalOrigin{"step", {}};
+    step.body = {
+        {"helper", program::LocalApply{"draw", {"state", "label"}, {"next"}}},
+        {"", program::Return{{"next"}}}};
+    auto fold = signature;
+    fold.kind = protocol::LocalRealization::Kind::FiniteFold;
+    fold.domainArguments = 1;
+    fold.inputs = {"bytes", transcript};
+    fold.outputs = {transcript};
+    fold.callbacks = {"step"};
+    auto caller = draw;
+    caller.name = "caller";
+    caller.origin = program::LogicalOrigin{"caller", {}};
+    caller.body = {
+        {"finite",
+         program::LocalApply{fold.name, {"label", "state"}, {"next"}}},
+        {"", program::Return{{"next"}}}};
+    program::LocalDefinitions locals{
+        {{"challenge",
+          {"transcript.challenge", {"merlin3.bls12-381.fr64be/0"}, ""}}},
+        {caller, step, draw}};
+    accept(protocol::admitNativeLocalDefinitions(locals, {fold}));
+    auto variant =
+        protocol::encodeVariant({"Choice", {{"Left", {}}, {"Right", {}}}});
+    require(bool(variant), "finite match variant refused");
+    program::Body arm = {
+        {"finite",
+         program::LocalApply{fold.name, {"label", "state"}, {"next"}}},
+        {"", program::Yield{{"next"}}}};
+    locals.functions[0].body = {
+        {"choice", program::VariantConstruct{*variant, "Left", {}, "choice"}},
+        {"match", program::Match{"choice",
+                                 {"state", "label"},
+                                 {{"Left", {}, arm}, {"Right", {}, arm}},
+                                 {"next"}}},
+        {"", program::Return{{"next"}}}};
+    refuse(protocol::admitNativeLocalDefinitions(locals, {fold}),
+           "local-match-challenge");
   });
   return cases.result();
 }

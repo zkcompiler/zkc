@@ -9,6 +9,7 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws SumcheckHelp
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 open Zkc.Protocols.Sumcheck.Multilinear (honestMessage)
 
+variable {bindings : MultilinearPrefixBodies.Bindings}
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G] {n : Nat}
 
@@ -41,10 +42,10 @@ theorem sums_honestMessage_shaped (helpers : Meanings F G) (halves : HalvesLaw h
     (Nat.lt_trans shape.2.1 (by decide +kernel))
 
 /-- Public check agrees with the existing mathematical checker, also for malformed vectors. -/
-theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
+theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers bindings)
     (callback : ∀ (xs point : List F) (claim : F),
       invoke helpers checkTableHelper (checkInputs xs point claim) =
-        checkTableBody.denote (meaning F G helpers) (checkInputs xs point claim).get)
+        (checkTableBody bindings).denote (meaning F G helpers) (checkInputs xs point claim).get)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
     (pointBound : point.length < indexLimit) :
     checkBody.denote (meaning F G helpers) (checkInputs xs point claim).get =
@@ -74,10 +75,10 @@ theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.L
     simp only [shape, true_and, Zkc.Protocols.Sumcheck.Multilinear.check, decoded, pointEq]
 
 /-- Decoding and vector representability imply every successful dimension/point bound. -/
-theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
+theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers bindings)
     (callback : ∀ (xs point : List F) (claim : F),
       invoke helpers checkTableHelper (checkInputs xs point claim) =
-        checkTableBody.denote (meaning F G helpers) (checkInputs xs point claim).get)
+        (checkTableBody bindings).denote (meaning F G helpers) (checkInputs xs point claim).get)
     (xs point : List F) (claim : F) (table : Table F (0 + point.length))
     (decoded : ofList? (0 + point.length) xs = some table)
     (vectorBound : xs.length < indexLimit) :
@@ -92,11 +93,11 @@ theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContrac
   simp only [shape, true_and]
 
 /-- A decoded representable table supplies the constructor and point bounds. -/
-theorem checkTable_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
+theorem checkTable_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers bindings)
     (xs point : List F) (claim : F) (table : Table F (0 + point.length))
     (decoded : ofList? (0 + point.length) xs = some table)
     (vectorBound : xs.length < indexLimit) :
-    checkTableBody.denote (meaning F G helpers) (checkInputs xs point claim).get =
+    (checkTableBody bindings).denote (meaning F G helpers) (checkInputs xs point claim).get =
       .done (boolResult (decide (extension (0 + point.length) table
         (coordinates (0 + point.length) point) = claim))) := by
   have shape := (hasShape_iff_length xs point.length vectorBound).mpr

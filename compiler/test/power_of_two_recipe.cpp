@@ -1,6 +1,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
+#include "support/ScopedFinite.h"
 #include "llvm/ADT/DenseMap.h"
 #include <variant>
 
@@ -11,24 +12,33 @@ namespace {
 using Datum = std::variant<uint64_t, bool>;
 // Evaluate the actual emitted straight-line recipe through its existing
 // executable contracts. This is bounded native evidence, not a Runner proof.
-bool evaluate(local::FuncOp function, SymbolTable &symbols, uint64_t n,
-              uint64_t r) {
+bool evaluate(func::FuncOp function,
+              llvm::ArrayRef<protocol::SourceExecutionStep> body,
+              SymbolTable &symbols, uint64_t n, uint64_t r) {
   llvm::DenseMap<Value, Datum> values;
-  auto &block = function.getBody().front();
-  values[block.getArgument(0)] = n;
-  values[block.getArgument(1)] = r;
-  for (auto &op : block) {
-    if (isa<local::ReturnOp>(op))
-      return std::get<bool>(values.lookup(op.getOperand(0)));
-    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
+  values[function.getArgument(1)] = n;
+  values[function.getArgument(2)] = r;
+  for (const auto &step : body) {
+    auto *op = step.operation;
+    if (isa<exec::ReturnOp>(op)) {
+      require(step.inputs.size() == 1 && values.count(step.inputs.front()),
+              "recipe returned an unavailable value");
+      return std::get<bool>(values.lookup(step.inputs.front()));
+    }
+    auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto *binding = ref ? symbols.lookup(ref.getValue()) : nullptr;
-    require(binding && op.getNumResults() == 1 && op.getNumRegions() == 0,
-            "recipe is not a straight-line executable circuit");
+    require(binding && isa<exec::ApplyOp>(op) && step.outputs.size() == 1 &&
+                step.regions.empty(),
+            "recipe is not a straight-line scoped circuit");
     auto contract = binding->getAttrOfType<StringAttr>("contract").getValue();
-    auto arg = [&](unsigned i) { return values.lookup(op.getOperand(i)); };
+    auto arg = [&](unsigned i) {
+      require(i < step.inputs.size() && values.count(step.inputs[i]),
+              "recipe consumed an unavailable value");
+      return values.lookup(step.inputs[i]);
+    };
     Datum result;
     if (contract == "index.constant") {
-      auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+      auto parameters = op->getAttrOfType<ArrayAttr>("parameters");
       uint64_t value;
       require(parameters && parameters.size() == 1 &&
                   !cast<StringAttr>(parameters[0])
@@ -45,7 +55,7 @@ bool evaluate(local::FuncOp function, SymbolTable &symbols, uint64_t n,
     else
       throw std::runtime_error("unexpected execution contract " +
                                contract.str());
-    values[op.getResult(0)] = result;
+    values[step.outputs.front()] = result;
   }
   throw std::runtime_error("recipe did not return");
 }
@@ -74,19 +84,21 @@ int main() {
   require(succeeded(verify(*candidate)), "executable circuit failed formation");
   auto owner = kernelRecipeOutput(*candidate);
   SymbolTable symbols(owner);
-  local::FuncOp function;
-  for (auto entry : owner.getBody().front().getOps<local::FuncOp>())
-    function = entry;
+  auto function = symbols.lookup<func::FuncOp>("entry");
+  require(bool(function), "power recipe lost its scoped entry");
+  auto closure = take(protocol::readSourceExecutionClosure(owner));
+  const auto &body = closure.bodies.at(function.getSymName().str());
   cases.run("all representable powers, zero and adjacent nonpowers", [&] {
     // Multiplication, independent of the producer's constant shifts.
     uint64_t value = 1;
     for (unsigned r = 0; r < 64; ++r) {
-      require(evaluate(function, symbols, value, r),
+      require(evaluate(function, body, symbols, value, r),
               "representable power refused");
-      require(!evaluate(function, symbols, 0, r), "zero accepted");
-      require(!evaluate(function, symbols, value - 1, r),
+      require(!evaluate(function, body, symbols, 0, r), "zero accepted");
+      require(!evaluate(function, body, symbols, value - 1, r),
               "predecessor accepted");
-      require(!evaluate(function, symbols, value + 1, r), "successor accepted");
+      require(!evaluate(function, body, symbols, value + 1, r),
+              "successor accepted");
       if (r < 63)
         value *= 2;
     }
@@ -94,23 +106,25 @@ int main() {
   cases.run("unrepresentable exponents stay false", [&] {
     for (uint64_t r : {uint64_t(64), uint64_t(65), UINT64_MAX})
       for (uint64_t n : {uint64_t(0), uint64_t(1), UINT64_MAX})
-        require(!evaluate(function, symbols, n, r),
+        require(!evaluate(function, body, symbols, n, r),
                 "oversized exponent accepted");
   });
   cases.run("independent recipe reader rejects a changed constant", [&] {
     require(
         succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "power")),
         "independent recipe reader refused the produced circuit");
-    auto &constant = function.getBody().front().front();
-    auto parameters = constant.getAttr("parameters");
+    auto constant = scopedFinite::application(function, "index.constant");
+    auto parameters = constant.getParametersAttr();
     OpBuilder builder(&context);
-    constant.setAttr("parameters",
-                     builder.getArrayAttr({builder.getStringAttr("1")}));
+    auto changed = builder.getStrArrayAttr({"1"});
+    require(parameters != changed, "constant mutation would change nothing");
+    constant.setParametersAttr(changed);
+    require(succeeded(verify(*candidate)), "changed constant lost formation");
     ScopedDiagnosticHandler silence(&context,
                                     [](Diagnostic &) { return success(); });
     require(failed(kernel::verifyEntryRecipes(*numerical, *candidate, "power")),
             "independent recipe reader accepted a changed exponent");
-    constant.setAttr("parameters", parameters);
+    constant.setParametersAttr(parameters);
   });
   return cases.result();
 }

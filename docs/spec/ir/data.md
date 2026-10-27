@@ -54,9 +54,9 @@ there is no default value, padding or undefined result. It is an ordered local
 operation without a purity or speculation grant. An unused result does not
 permit removing a possible failure. Append leaves its input unchanged.
 
-Use existing `local.for` for bounded iteration and `local.match` for variant
-elimination. No separate sequence map, fold, iterator resource or protocol action
-is introduced. Local checked execution retains ordinary instruction, output,
+Use the [scoped control profile](control.md) for bounded iteration and
+`exec.match` for variant elimination. No separate sequence map, fold, iterator resource or protocol action
+is introduced. Scoped checked execution retains ordinary instruction, output,
 live-value and cleanup rules.
 
 ## Storage and work

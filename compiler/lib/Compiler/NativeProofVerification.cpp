@@ -3,8 +3,11 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -27,6 +30,7 @@ class TranscriptCorrespondence {
   bool hostRoot;
   ArrayRef<NativeTranscriptEvent> events;
   SymbolTable symbols;
+  const protocol::SourceExecutionClosure &execution;
   SmallVector<Type> stateTypes;
   StringMap<const NativeTranscriptEvent *> bySite;
   StringMap<std::string> deliveries;
@@ -98,20 +102,19 @@ class TranscriptCorrespondence {
     }
     return bind(a.getResults(), b.getResults(), env);
   }
-  bool kernel(Operation *op, StringRef contract,
+  bool kernel(const protocol::SourceExecutionStep *step, StringRef contract,
               ArrayRef<std::string> arguments, ValueRange inputs,
-              ArrayRef<std::string> parameters) {
-    if (!op || !charge() || op->getAttrs().size() != 3 ||
-        !op->getAttrOfType<StringAttr>("site") ||
-        op->getName().getStringRef() !=
-            protocol::boundOperationName(contract) ||
-        op->getOperands() != inputs || op->getNumRegions())
+              ArrayRef<std::string> parameters, StringRef site) {
+    if (!step || !charge(1 + inputs.size()) || !step->regions.empty())
+      return false;
+    auto *op = step->operation;
+    if (!isa<exec::ApplyOp>(op) || op->getAttrs().size() != 3 ||
+        text(op, "site") != site || ValueRange(step->inputs) != inputs)
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto binding =
-        reference
-            ? symbols.lookup<local::OperationBindingOp>(reference.getValue())
-            : local::OperationBindingOp();
+        reference ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                  : runtime::BindingOp();
     auto strings = [](ArrayAttr a, ArrayRef<std::string> b) {
       if (!a || a.size() != b.size())
         return false;
@@ -130,22 +133,22 @@ class TranscriptCorrespondence {
     bindings.insert(binding.getSymName());
     return true;
   }
-  bool helper(local::FuncOp function, const NativeTranscriptEvent &event) {
+  bool helper(func::FuncOp function, const NativeTranscriptEvent &event) {
     auto prior = checkedHelpers.find(function.getSymName());
     if (prior != checkedHelpers.end())
       return prior->second == &event;
     if (originalSymbols.count(function.getSymName()) ||
-        function->getAttrs().size() != 3)
+        function->getAttrs().size() != 5 || !function.isPrivate() ||
+        !function->getAttrOfType<UnitAttr>("no_inline"))
       return false;
-    auto origin = function->getAttrOfType<ArrayAttr>("logical_origin");
+    auto origin = function->getAttrOfType<ArrayAttr>("runtime.origin");
     if (!origin || origin.size() != 2 || !isa<StringAttr>(origin[0]) ||
         cast<StringAttr>(origin[0]).getValue() != function.getSymName() ||
         !isa<ArrayAttr>(origin[1]) || !cast<ArrayAttr>(origin[1]).empty())
       return false;
     auto *rule = rules.lookup(event.site);
-    if (!rule && plan && !plan->nativeBase)
-      return false;
-    if (!rule && event.bound && !isPowerOf2_64(*event.bound))
+    if ((!rule && plan && !plan->nativeBase) ||
+        (!rule && event.bound && !isPowerOf2_64(*event.bound)))
       return false;
     SmallVector<Type> inputs(stateTypes), outputs;
     if (event.query)
@@ -160,97 +163,97 @@ class TranscriptCorrespondence {
     inputs.append(event.depth, IntegerType::get(function.getContext(), 64,
                                                 IntegerType::Unsigned));
     append_range(outputs, stateTypes);
-    if (function.getFunctionType() !=
-            FunctionType::get(function.getContext(), inputs, outputs) ||
-        !function.getBody().hasOneBlock())
+    auto signature = protocol::scopedDataSignature(function);
+    auto found = execution.bodies.find(function.getSymName().str());
+    if (!signature || signature.getInputs() != ArrayRef<Type>(inputs) ||
+        signature.getResults() != ArrayRef<Type>(outputs) ||
+        found == execution.bodies.end())
       return false;
-    auto &block = function.getBody().front();
-    Operation *cursor = &block.front();
-    SmallVector<Value> operands(block.getArguments().take_front(data));
+    const auto &body = found->second;
+    size_t cursor = 0;
+    auto take = [&]() -> const protocol::SourceExecutionStep * {
+      return cursor < body.size() ? &body[cursor++] : nullptr;
+    };
+    auto arguments = function.getArguments().drop_front();
+    SmallVector<Value> operands(arguments.take_front(data));
     if (event.bound) {
-      // The static domain is materialized inside the helper, so both roles
-      // absorb the same bound and no role-supplied value can replace it.
+      auto *step = take();
       if (!event.query ||
-          !kernel(cursor, "index.constant", {}, {},
-                  {std::to_string(*event.bound)}) ||
-          cursor->getNumResults() != 1 ||
-          cursor->getResult(0).getType() != event.payload)
+          !kernel(step, "index.constant", {}, {},
+                  {std::to_string(*event.bound)}, "bound") ||
+          step->outputs.size() != 1 ||
+          step->outputs[0].getType() != event.payload)
         return false;
-      operands.push_back(cursor->getResult(0));
-      cursor = cursor->getNextNode();
+      operands.push_back(step->outputs[0]);
     }
+    SmallVector<Value> results;
     if (rule) {
-      auto source = symbols.lookup<local::FuncOp>(rule->handler.getValue());
-      if (!source || !source.getBody().hasOneBlock())
+      auto *step = take();
+      auto call =
+          step ? dyn_cast<func::CallOp>(step->operation) : func::CallOp();
+      auto source = symbols.lookup<func::FuncOp>(rule->handler.getValue());
+      auto handler = protocol::scopedDataSignature(source);
+      if (!handler || !call || call->getAttrs().size() != 2 ||
+          call.getCalleeAttr() != rule->handler ||
+          text(call, "runtime.site") != "handler" ||
+          ValueRange(step->inputs) != ValueRange(operands) ||
+          step->outputs.size() != handler.getNumResults() ||
+          step->outputs.size() != stateTypes.size() + unsigned(event.query))
         return false;
-      Env env;
-      if (!bind(source.getBody().front().getArguments(), operands, env))
-        return false;
-      for (auto &op : source.getBody().front()) {
-        if (!cursor)
+      if (event.query)
+        results.push_back(step->outputs.back());
+      append_range(results,
+                   ArrayRef(step->outputs).take_front(stateTypes.size()));
+      if (event.bound) {
+        auto *range = take();
+        if (!kernel(range, "index.less", {}, {results.front(), operands.back()},
+                    {}, "range") ||
+            range->outputs.size() != 1)
           return false;
-        if (auto returned = dyn_cast<local::ReturnOp>(op)) {
-          SmallVector<Value> results;
-          if (event.query)
-            results.push_back(env.lookup(returned.getInputs().back()));
-          for (Value value : returned.getInputs().take_front(stateTypes.size()))
-            results.push_back(env.lookup(value));
-          if (event.bound) {
-            if (!kernel(cursor, "index.less", {},
-                        {results.front(), operands.back()}, {}) ||
-                cursor->getNumResults() != 1)
-              return false;
-            Value valid = cursor->getResult(0);
-            cursor = cursor->getNextNode();
-            if (!kernel(cursor, "control.require", {}, {valid}, {}) ||
-                cursor->getNumResults() != 0)
-              return false;
-            cursor = cursor->getNextNode();
-          }
-          auto actual = dyn_cast_or_null<local::ReturnOp>(cursor);
-          if (!actual || actual.getInputs() != ValueRange(results))
-            return false;
-        } else if (!exact(op, *cursor, env, 0)) {
+        auto *require = take();
+        if (!kernel(require, "control.require", {}, range->outputs, {},
+                    "require_range") ||
+            !require->outputs.empty())
           return false;
-        }
-        cursor = cursor->getNextNode();
       }
-      if (cursor)
+    } else {
+      if (event.startInputs)
         return false;
-      checkedHelpers.try_emplace(function.getSymName(), &event);
-      return true;
-    }
-    if (event.startInputs)
-      return false;
-    {
-      if (!kernel(cursor, "indices.empty", {}, {}, {}))
+      auto *empty = take();
+      if (!kernel(empty, "indices.empty", {}, {}, {}, "coordinates") ||
+          empty->outputs.size() != 1)
         return false;
-      Value indices = cursor->getResult(0);
-      cursor = cursor->getNextNode();
-      for (Value coordinate : block.getArguments().drop_front(data)) {
-        if (!kernel(cursor, "indices.append", {}, {indices, coordinate}, {}))
+      Value indices = empty->outputs[0];
+      for (auto [i, coordinate] : enumerate(arguments.drop_front(data))) {
+        auto *append = take();
+        if (!kernel(append, "indices.append", {}, {indices, coordinate}, {},
+                    "coordinate_" + std::to_string(i)) ||
+            append->outputs.size() != 1)
           return false;
-        indices = cursor->getResult(0);
-        cursor = cursor->getNextNode();
+        indices = append->outputs[0];
       }
       operands.push_back(indices);
+      auto logical = protocol::encodeBoundType(event.payload, false);
+      if (!logical) {
+        consumeError(logical.takeError());
+        return false;
+      }
+      std::string contract =
+          !event.query  ? "transcript.native.indexed.observe.data"
+          : event.bound ? "transcript.native.indexed.index"
+                        : "transcript.native.indexed.challenge";
+      SmallVector<std::string> parameters{policy.suite};
+      if (!event.query)
+        parameters.push_back(logical->spelling());
+      auto *step = take();
+      if (!kernel(step, contract, parameters, operands, {event.origin},
+                  "transition"))
+        return false;
+      results = step->outputs;
     }
-    auto logical = protocol::encodeBoundType(event.payload, false);
-    if (!logical) {
-      consumeError(logical.takeError());
-      return false;
-    }
-    std::string contract =
-        !event.query  ? "transcript.native.indexed.observe.data"
-        : event.bound ? "transcript.native.indexed.index"
-                      : "transcript.native.indexed.challenge";
-    SmallVector<std::string> arguments{policy.suite};
-    if (!event.query)
-      arguments.push_back(logical->spelling());
-    if (!kernel(cursor, contract, arguments, operands, {event.origin}))
-      return false;
-    auto ret = dyn_cast_if_present<local::ReturnOp>(cursor->getNextNode());
-    if (!ret || ret->getNextNode() || ret.getInputs() != cursor->getResults())
+    auto *returned = take();
+    if (!returned || !isa<exec::ReturnOp>(returned->operation) ||
+        returned->inputs != results || cursor != body.size())
       return false;
     checkedHelpers.try_emplace(function.getSymName(), &event);
     return true;
@@ -259,10 +262,10 @@ class TranscriptCorrespondence {
             SmallVectorImpl<Value> &state, ValueRange payload,
             ArrayRef<Value> coordinates, Value *challenge,
             SmallVectorImpl<const NativeTranscriptEvent *> &reached) {
-    auto invocation = dyn_cast_if_present<local::CallOp>(cursor);
+    auto invocation = dyn_cast_if_present<pir::LocalCallOp>(cursor);
     if (!invocation || !charge())
       return false;
-    auto function = symbols.lookup<local::FuncOp>(invocation.getCallee());
+    auto function = symbols.lookup<func::FuncOp>(invocation.getCallee());
     if (!function || !helper(function, event))
       return false;
     SmallVector<Value> inputs(state.begin(), state.end());
@@ -555,7 +558,7 @@ class TranscriptCorrespondence {
     SmallVector<Value> state(after.getArguments().take_back(extraInputs));
     Operation *cursor = &after.front();
     auto rootCall = [&](FlatSymbolRefAttr reference, ValueRange operands) {
-      auto call = dyn_cast_if_present<local::CallOp>(cursor);
+      auto call = dyn_cast_if_present<pir::LocalCallOp>(cursor);
       if (!call || call.getCalleeAttr() != reference ||
           call.getInputs() != operands ||
           !llvm::equal(call.getResultTypes(), stateTypes))
@@ -653,10 +656,11 @@ public:
       pir::ProtocolModuleOp candidate, const NativeProofPolicy &policy,
       ArrayRef<NativeTranscriptEvent> events,
       const protocol::ConstructionPlan *plan,
-      ArrayRef<protocol::ConstructionInvocation> invocations)
+      ArrayRef<protocol::ConstructionInvocation> invocations,
+      const protocol::SourceExecutionClosure &execution)
       : policy(policy), plan(plan),
         hostRoot(!plan || plan->root == protocol::ConstructionPlan::Root::Host),
-        events(events), symbols(candidate) {
+        events(events), symbols(candidate), execution(execution) {
     if (plan) {
       stateTypes = plan->state;
       for (const auto &rule : plan->rules)
@@ -664,7 +668,7 @@ public:
           for (const auto &site : rule.sites)
             rules[site] = &rule;
     } else {
-      stateTypes.push_back(local::CapabilityType::get(
+      stateTypes.push_back(runtime::CapabilityType::get(
           candidate.getContext(), "transcript:" + policy.suite));
     }
     for (const auto &invocation : invocations) {
@@ -737,9 +741,9 @@ public:
       auto name = text(&op, "sym_name");
       if (originalSymbols.count(name))
         continue;
-      if (isa<local::FuncOp>(op) && checkedHelpers.count(name))
+      if (isa<func::FuncOp>(op) && checkedHelpers.count(name))
         continue;
-      if (isa<local::OperationBindingOp>(op) && bindings.count(name))
+      if (isa<runtime::BindingOp>(op) && bindings.count(name))
         continue;
       return false;
     }
@@ -810,7 +814,11 @@ Error verifyNativeTranscript(
   if (!before || !after || before.getProfile() != pir::Profile::Participant ||
       after.getProfile() != pir::Profile::Participant)
     return error("native-transcript-subject");
-  TranscriptCorrespondence checker(after, policy, events, plan, invocations);
+  auto execution = protocol::readSourceExecutionClosure(after);
+  if (!execution)
+    return execution.takeError();
+  TranscriptCorrespondence checker(after, policy, events, plan, invocations,
+                                   *execution);
   if (!checker.check(before, after))
     return error(checker.exhausted() ? "native-transcript-limit"
                                      : "native-transcript-correspondence",

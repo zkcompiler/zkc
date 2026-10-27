@@ -47,14 +47,14 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
       (Domain.participant subject.domainModel ZkcSecurity.Examples.Generated.SchnorrAndAliased.imported.program
         subject.selection.context ZkcSecurity.Examples.Generated.SchnorrAndAliased.selected.artifacts.validator (abi.validator values)) := by
   obtain ⟨input0, input1, input2, input3, input4, input5, input6, input7, rfl⟩ := data_surjective values
-  change Group at input0
-  change Group at input1
-  change Group at input2
-  change Group at input3
-  change Scalar at input4
-  change Scalar at input5
-  change Option Nat at input6
-  change Option Nat at input7
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input0
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input1
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input2
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input3
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.field "bls12-381.fr")) at input4
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.field "bls12-381.fr")) at input5
+  change Option ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0")) at input6
+  change Option ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0")) at input7
   change SampledReadback (SampledReadback.Allowed subject) _
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.SchnorrAndAliasedProducer.artifact (producerInputs input0 input1 input2 input3 input4 input5))
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.SchnorrAndAliasedValidator.artifact (validatorInputs input0 input1 input2 input3))

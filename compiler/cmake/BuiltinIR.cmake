@@ -2,14 +2,12 @@
 # Both contribution admission and TableGen generation consume these records.
 set(zkc_builtin_dialects
   "protocol|Protocol|types"
-  "local|Local|types"
   "exec|Exec|types"
-  "kernel|Kernel|none"
+  "runtime|Runtime|types"
   "data|Data|types"
   "crypto|Crypto|types"
   "algebra|Algebra|types"
   "poly|Polynomial|types"
-  "plan|Plan|types"
   "commitment|Commitment|types"
   "relation|Relation|none"
 )
@@ -17,6 +15,7 @@ set(zkc_builtin_dialects
 # Type-binding owner record | generated output stem. Owners need not be dialects.
 set(zkc_builtin_type_adapters
   "CoreTypeAdapters|Core"
+  "RuntimeTypeAdapters|Runtime"
   "AlgebraTypeAdapters|Algebra"
   "PolynomialTypeAdapters|Polynomial"
   "CurveTypeAdapters|Curve"

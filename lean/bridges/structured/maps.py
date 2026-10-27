@@ -81,7 +81,7 @@ def restriction_cases(suite):
 
 
 def map_site(subject):
-    targets = {item[1] for item in subject[2][7] if item[0] == "map"}
+    targets = {item[1] for item in subject[2][7] if item[0] == "collect"}
     found = [row[4] for item in subject[2][7] if item[0] == "function"
              for row in item[9][1] if row[0][0] == "apply" and row[0][1] in targets]
     if not (len(found) == 1):
@@ -134,7 +134,7 @@ def formula_cases(suite):
 def source_variants(suite, combination):
     """Exercise body-sensitive interpretation independently of source naming."""
     source = combination[0].read_text(encoding="utf-8")
-    declaration = next(item for item in combination[2][7] if item[0] == "map")
+    declaration = next(item for item in combination[2][7] if item[0] == "realize")
     formula = declaration[4]
     if not (source.count(formula) == 2):
         raise AssertionError('bridges/structured/maps.py:134: source.count(formula) == 2')
@@ -172,75 +172,53 @@ def declaration_controls(suite, combination, realization):
     # These are adversarial retained snapshots, not claims that their digest
     # identifies mutated native bytes. The independent reader must reject them.
     data = combination[2]
-    mapping = next(item for item in data[7] if item[0] == "map")
+    collection = next(item for item in data[7] if item[0] == "collect")
     variants = []
-    for label, mask in [
-        ("mask-numeric", [1 if row else 0 for row in mapping[5]]),
-        ("mask-string", [str(row).lower() for row in mapping[5]]),
-        ("mask-short", mapping[5][:-1]),
-        ("mask-empty", []),
-        ("mask-all-broadcast", [False] * len(mapping[5])),
+    for label, mutate, code in [
+        ("collection-missing-body", lambda row: row.__setitem__(6, "missing_helper"), "structured-unknown-helper"),
+        ("collection-scalar-result", lambda row: row.__setitem__(4, [["field", "bls12-381.fr"]]), "structured-formation"),
+        ("collection-extra-field", lambda row: row.append("unrepresented"), "structured-definition"),
+        ("collection-truncated-inputs", lambda row: row.__setitem__(3, row[3][:-1]), "structured-formation"),
+        ("collection-missing-predicate", lambda row: row.__setitem__(7, "missing_predicate"), "structured-unknown-helper"),
     ]:
-        bad = copy.deepcopy(data); definition(bad, mapping[1])[5] = mask
-        variants.append((label, bad))
-    for label, mutate in [
-        ("map-missing-helper", lambda row: row.__setitem__(4, "missing_helper")),
-        ("map-scalar-result", lambda row: row.__setitem__(3, [["field", "bls12-381.fr"]])),
-        ("map-extra-field", lambda row: row.append("unrepresented")),
+        bad = copy.deepcopy(data); mutate(definition(bad, collection[1]))
+        variants.append((label, bad, code))
+    for label, position in [("collection-body-inputs", 4), ("collection-body-results", 5)]:
+        bad = copy.deepcopy(data); definition(bad, collection[6])[position] = []
+        variants.append((label, bad, "structured-operand" if position == 4 else "structured-formation"))
+    bad = copy.deepcopy(data)
+    unused = copy.deepcopy(collection); unused[1] = "unused_bad_collection"; unused[6] = "missing_helper"
+    bad[7].append(unused)
+    variants.append(("unused-invalid-collection", bad, "structured-unknown-helper"))
+    bad = copy.deepcopy(data); bad[7].append(copy.deepcopy(collection))
+    variants.append(("duplicate-collection", bad, "structured-duplicate-symbol"))
+    for label, name in [("collection-name-empty", ""), ("collection-name-limit", "x" * 513)]:
+        bad = copy.deepcopy(data); unused = copy.deepcopy(collection); unused[1] = name
+        bad[7].append(unused); variants.append((label, bad, "structured-string"))
+    for label, mutate, code in [
+        ("domain-forward-reference", lambda row: row[3].__setitem__(2, ["zip", [2, 0]]), "structured-domain-reference"),
+        ("domain-empty-zip", lambda row: row[3].__setitem__(2, ["zip", []]), "structured-domain-operands"),
+        ("domain-missing-result", lambda row: row.__setitem__(4, 99), "structured-domain-reference"),
     ]:
-        bad = copy.deepcopy(data); mutate(definition(bad, mapping[1]))
-        variants.append((label, bad))
+        bad = copy.deepcopy(data); mutate(bad[4][0]); variants.append((label, bad, code))
+    # Collection callbacks are ordinary effectful helpers; their complete ABI
+    # and closure are checked even for a predicate that would skip every item.
     bad = copy.deepcopy(data)
-    definition(bad, mapping[4])[3] = "public"
-    variants.append(("map-public-helper", bad))
-    bad = copy.deepcopy(data)
-    duplicate = copy.deepcopy(mapping); duplicate[1] = "unused_bad_mask"; duplicate[5] = []
-    bad[7].append(duplicate)
-    variants.append(("unused-invalid-map", bad))
-    bad = copy.deepcopy(data); bad[7].append(copy.deepcopy(mapping))
-    variants.append(("duplicate-map", bad))
-    for label, name in [("map-name-slash", "bad/name"), ("map-name-limit", "x" * 129)]:
-        bad = copy.deepcopy(data); unused = copy.deepcopy(mapping); unused[1] = name
-        bad[7].append(unused); variants.append((label, bad))
-    # A dead zero-result call still belongs to the formula closure. Its body is
-    # ordinarily valid Math, but equality is outside the map ring fragment.
-    field = ["field", "bls12-381.fr"]
-    bad = copy.deepcopy(data)
-    bad[7].append(["function", "dead_equality", "math", "private", [field], [], [], [], [],
-                   ["block", [[["field.equal", field[1]], [0, 0], [["bool"]], [], ""]], ["return", []]]])
-    definition(bad, mapping[4])[9][1].append([["call", "dead_equality"], [0], [], [], ""])
-    variants.append(("map-dead-transitive-equality", bad))
-    # A preparation declaration is not a protocol-local-call target, even when
-    # a forged protocol supplies an exactly matching signature.
-    bad = copy.deepcopy(data)
-    root = definition(bad, bad[3]); root[4] = copy.deepcopy(mapping[2]); root[5] = copy.deepcopy(mapping[3])
+    root = definition(bad, bad[3]); root[4] = copy.deepcopy(collection[3]); root[5] = copy.deepcopy(collection[4])
     owner = root[6][1][0]; root[6][2] = [[owner] for _ in root[4]]; root[6][3] = [[owner]]
-    root[9] = ["block", [[["local_call", mapping[1], owner], list(range(len(root[4]))),
-                          copy.deepcopy(mapping[3]), [], "direct_map"]], ["return", [0]]]
-    variants.append(("map-direct-protocol-call", bad))
+    root[9] = ["block", [[["local_call", collection[1], owner], list(range(len(root[4]))),
+                          copy.deepcopy(collection[4]), [], "direct_collection"]], ["return", [0]]]
+    variants.append(("collection-direct-protocol-call", bad, "structured-call-kind"))
     real_data = realization[2]
     real = next(item for item in real_data[7] if item[0] == "realize")
     bad = copy.deepcopy(real_data); definition(bad, real[1])[3] = []
-    variants.append(("realize-output-abi", bad))
+    variants.append(("realize-output-abi", bad, "structured-formation"))
     bad = copy.deepcopy(real_data); definition(bad, real[4])[3] = "public"
-    variants.append(("realize-public-helper", bad))
+    variants.append(("realize-public-helper", bad, "structured-header"))
     bad = copy.deepcopy(real_data); definition(bad, real[1]).append([])
-    variants.append(("realize-extra-field", bad))
-    diagnostics = {
-        "mask-numeric": "structured-map-mask", "mask-string": "structured-map-mask",
-        "mask-short": "structured-header", "mask-empty": "structured-header",
-        "mask-all-broadcast": "structured-header", "map-missing-helper": "structured-unknown-helper",
-        "map-scalar-result": "structured-map", "map-extra-field": "structured-definition",
-        "map-public-helper": "structured-header", "unused-invalid-map": "structured-header",
-        "duplicate-map": "structured-duplicate-symbol", "map-name-slash": "structured-header",
-        "map-name-limit": "structured-header", "map-dead-transitive-equality": "structured-map",
-        "map-direct-protocol-call": "structured-call-kind", "realize-output-abi": "structured-realization",
-        "realize-public-helper": "structured-header", "realize-extra-field": "structured-definition",
-    }
-    if not (set(diagnostics) == {label for label, _ in variants}):
-        raise AssertionError('bridges/structured/maps.py:232: set(diagnostics) == {label for label, _ in variants}')
-    for label, snapshot in variants:
-        suite.case(label, lambda n=label, s=snapshot: suite.refuse_snapshot(n, s, diagnostics[n]))
+    variants.append(("realize-extra-field", bad, "structured-definition"))
+    for label, snapshot, code in variants:
+        suite.case(label, lambda n=label, s=snapshot, c=code: suite.refuse_snapshot(n, s, c))
 
 
 def run_cases(suite):

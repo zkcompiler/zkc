@@ -17,6 +17,7 @@ def TypeIndices : ZKC_Type<"indices", [], PublicValue, 1, 1> {
 def TypeShake128State : ZKC_Type<"shake128_state", [], PrivateImmutable, 1, 1> {
   int ordinal = 26;
 }
+def TypeQuotientMatrix : ZKC_Type<"quotient_matrix", [], PrivateImmutable, 1, 1>;
 def TypeBytes : ZKC_Type<"bytes", [], PublicValue, 1, 1> {
   int ordinal = 25;
   let mathematical = 1;
@@ -129,6 +130,7 @@ def ExportTypeProverKey : ZKC_TypeExport<"zkc::pcs", "ProverKey", TypeProverKey>
 def ExportTypeVerifierKey : ZKC_TypeExport<"zkc::pcs", "VerifierKey", TypeVerifierKey>;
 def ExportTypeOpeningState : ZKC_TypeExport<"zkc::pcs", "OpeningState", TypeOpeningState>;
 def ExportTypeIndices : ZKC_TypeExport<"zkc::algebra", "Indices", TypeIndices>;
+def ExportTypeQuotientMatrix : ZKC_TypeExport<"zkc::quotient_matrix", "PreparedMatrix", TypeQuotientMatrix>;
 def ExportTypeShake128State : ZKC_TypeExport<"zkc::shake128", "State", TypeShake128State>;
 def ExportTypeBytes : ZKC_TypeExport<"zkc::bytes", "Bytes", TypeBytes>;
 

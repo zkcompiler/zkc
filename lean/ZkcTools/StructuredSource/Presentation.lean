@@ -109,6 +109,30 @@ def collectionText : Collection → String
   | .vector field => app ".vector" [quoted field]
   | .sequence element => app ".sequence" [tyText element]
 
+def domainNodeText {inputs : List Ty} {context : List (List Ty)} {items : List Ty} :
+    DomainNode inputs context items → String
+  | .elements collection container => app ".elements" [collectionText collection, positionText container.index]
+  | .indices collection container => app ".indices" [collectionText collection, positionText container.index]
+  | .range lower upper => app ".range" [positionText lower.index, positionText upper.index]
+  | .zip types operands => app ".zip" [listText (types.map typesText),
+      valuesText (operands.indices.map positionText)]
+  | .product types operands => app ".product" [listText (types.map typesText),
+      valuesText (operands.indices.map positionText)]
+
+def domainBodyText {inputs : List Ty} : {context : List (List Ty)} → {items : List Ty} →
+    DomainBody inputs context items → String
+  | _, _, .ret value => app ".ret" [positionText value.index]
+  | _, _, .letNode node next => app ".letNode" [domainNodeText node, domainBodyText next]
+
+def domainText (spec : DomainSpec) : String :=
+  "⟨" ++ ", ".intercalate [quoted spec.name, typesText spec.inputs, typesText spec.items,
+    domainBodyText spec.body] ++ "⟩"
+
+def collectText (spec : CollectSpec) : String :=
+  "⟨" ++ ", ".intercalate [domainText spec.domain, collectionText spec.collection,
+    typesText spec.captures, quoted spec.body, quoted spec.predicate,
+    if spec.kind == .math then ".math" else ".local"] ++ "⟩"
+
 /-- Syntax serialization only: callback regions are retained, never executed here. -/
 def opText : Op → String
   | .exec primitive => app ".exec" [primitiveText primitive]
@@ -134,10 +158,9 @@ def opText : Op → String
   | .map spec => app ".map" ["⟨" ++ ", ".intercalate [quoted spec.helperName, quoted spec.field,
       listText (spec.rowwise.map boolText)] ++ "⟩"]
   | .fold spec =>
-    let domain := "⟨" ++ ", ".intercalate [quoted spec.domain.name, typesText spec.domain.inputs,
-      collectionText spec.domain.collection, positionText spec.domain.container.index, boolText spec.domain.indices] ++ "⟩"
-    app ".fold" ["⟨" ++ ", ".intercalate [domain, typesText spec.state, typesText spec.captures,
+    app ".fold" ["⟨" ++ ", ".intercalate [domainText spec.domain, typesText spec.state, typesText spec.captures,
       quoted spec.step, quoted spec.predicate, if spec.kind == .math then ".math" else ".local"] ++ "⟩"]
+  | .collect spec => app ".collect" [collectText spec]
   | .branch captures outputs => app ".branch" [typesText captures, typesText outputs]
   | .loop state captures => app ".loop" [typesText state, typesText captures]
   | .loopCondition state captures => app ".loopCondition" [typesText state, typesText captures]

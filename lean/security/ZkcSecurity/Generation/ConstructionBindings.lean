@@ -1,6 +1,7 @@
 module
 
 public import ZkcTools.ConstructionBindings.Analysis
+public import ZkcSecurity.Generation.SumcheckSourceHelpers
 public import ZkcSecurity.Generation.ConstructionBindingsTemplates
 public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactOutputs
 public import ZkcExamples.Structured.SumcheckArtifacts.ArtifactBindingTemplates
@@ -151,7 +152,8 @@ def source (program : Program) (validator producer : Participant)
     listText (names.map (· ++ ".draw")) ++ ", " ++
     listText (names.map fun name => "⟨" ++ name ++ ".draw, " ++ name ++ ".delivery⟩") ++ ", []⟩\n\n"
   for index in List.range layout.calls.length do text := text ++ routes layout index
-  text := text ++ "theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program := by bind_structured_bodies\n" ++
+  text := text ++ (← ZkcSecurity.Generation.SumcheckSourceHelpers.source program.payload.definitions "program.payload.definitions") ++
+    "theorem helper_bodies : ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.Bodies program :=\n  ⟨producer_bodies, terminal_bodies⟩\n" ++
     "theorem verifier_bodies : SumcheckVerifierHelpers.Bodies program.payload.definitions :=\n  ⟨helper_bodies.sumcheck.empty, helper_bodies.sumcheck.append, helper_bodies.sumcheck.width, helper_bodies.sumcheck.«variables», helper_bodies.sumcheck.values⟩\n\n"
   for (role, selected) in [("Validator", layout), ("Producer", producerLayout)] do
     for (loop, index) in selected.loops.zipIdx do

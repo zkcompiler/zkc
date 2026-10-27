@@ -33,8 +33,8 @@ FRI_GUARDS = [('schedule', 'role00000001', 0), ('input', 'role00000000', 0),
               ('terminal', 'role00000001', 1)]
 GUARD = re.compile(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>')
 APPLY = re.compile(r'"protocol\.apply"\(.*\) <\{callee = @(\w+), roles = \[[^\]]*\], site = "(s\d+)"\}>')
-FUNCTION = re.compile(r'"(protocol|local)\.func"\(\) <\{.*sym_name = "(\w+)"')
-ORIGIN = re.compile(r'^\}\) \{logical_origin = \["(\w+)", \[\]\]\}')
+FUNCTION = re.compile(r'"(protocol|func)\.func"\(\) <\{.*sym_name = "(\w+)"')
+ORIGIN = re.compile(r'^\}\) \{runtime\.origin = \["(\w+)", \[\]\]\}')
 
 
 class Variant(NamedTuple):

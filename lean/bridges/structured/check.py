@@ -530,21 +530,34 @@ def boundary_cases(suite, unit_text):
         def source(count):
             body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(count))
             helper = 'func.func private @padding(%flag:i1) -> i1 {\n' + body + '\nreturn %flag : i1\n}'
-            return unit_text.replace(' local.func private @step', helper + '\n local.func private @step', 1)
-        # The fixture contributes one finite declaration and two call sites.
-        subject = suite.export('maximum-finite-instructions', source(4093))
-        suite.compare(subject, 'maximum-finite-instructions', [[], False], returned(False))
-        excessive = source(4094)
-        suite.refuse_native('excess-finite-instructions', excessive, 'structured-source-limit')
-        original = suite.directory / 'excess-finite-instructions.mlir'
-        request = subject[1].parent / 'maximum-finite-instructions.inputs.json'
+            marker = ' func.func private @step'
+            if marker not in unit_text:
+                raise AssertionError('missing scoped finite callback insertion point')
+            return unit_text.replace(marker, helper + '\n' + marker, 1)
+        # The fixture contributes one domain constructor, one finite declaration
+        # and two call sites. Terminators and scoped CFG mechanics do not count.
+        subject = suite.export('maximum-finite-instructions', source(4092))
+        # Native observation counts actual scoped outcome packaging as well.
+        # Its separate admission budget is intentionally not the export budget.
+        paired = suite.export('maximum-finite-reference', source(4087))
+        suite.compare(paired, 'maximum-finite-reference', [[], False], returned(False))
+        request = paired[1].parent / 'maximum-finite-reference.inputs.json'
+        lean_request = paired[1].parent / 'maximum-finite-reference.lean-inputs.json'
+        formal = json.loads(suite.command('maximum-finite-instructions:lean',
+            [suite.tools['lean'], 'run', subject[1], lean_request]))
+        if formal != typed_result(definition(subject[2], subject[2][3])[5], returned(False)):
+            raise AssertionError(formal)
+        suite.refuse_native('excess-finite-instructions', source(4093), 'structured-source-limit')
+        # One more native instruction exceeds the reference budget even though
+        # the smaller exported instruction stream still fits and Lean admits it.
+        above_reference = suite.export('excess-finite-reference', source(4088))
         number = len(suite.commands)
         suite.command('reference-finite-instruction-limit',
-                      [suite.tools['reference'], original, 'main', request], success=False)
-        if 'structured-reference-capacity' not in (
-            suite.directory / f'command-{number:04d}.stderr').read_text(encoding="utf-8"):
-            raise AssertionError('bridges/structured/check.py:524: \'structured-reference-capacity\' in (\n            suite.directory / f\'command-{number:04d}.stderr\').read_text(encoding="utf-8")')
-    suite.case('finite-declaration-counts-domain-and-terminators-do-not', finite_instruction_boundary)
+                      [suite.tools['reference'], above_reference[0], 'main', request], success=False)
+        diagnostic = (suite.directory / f'command-{number:04d}.stderr').read_text(encoding="utf-8")
+        if 'structured-reference-capacity' not in diagnostic:
+            raise AssertionError(diagnostic)
+    suite.case('domain-and-finite-count-terminators-do-not', finite_instruction_boundary)
 
     def file_boundary():
         inputs = ','.join(f'%a{i}:i1' for i in range(512))
@@ -706,7 +719,7 @@ def run_cases(suite):
         suite.case(name, lambda n=name, v=enabled, e=expected: suite.compare(guarded, n, [v], e))
         if "runtime" in suite.tools:
             suite.case(name + "-runner", lambda n=name, v=enabled, e=expected: suite.native(guarded, n, [v], e))
-    dag = suite.export("shared-local-dag", (structured / "shared-local-dag.mlir").read_text(encoding="utf-8"))
+    dag = suite.export("shared-scoped-dag", (structured / "shared-scoped-dag.mlir").read_text(encoding="utf-8"))
     def shared_dag_capacity():
         suite.command("shared-dag:check", [suite.tools["lean"], "check", dag[1]])
         if not (len(dag[2][7]) == 23):

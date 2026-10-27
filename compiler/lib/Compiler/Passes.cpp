@@ -11,7 +11,6 @@ void registerCompilerPasses() {
   mlir::registerPass([] { return protocol::createEliminatePolynomialsPass(); });
   mlir::registerPass([] { return protocol::createFixPolynomialFactorsPass(); });
   mlir::registerPass([] { return protocol::createSimplifyParticipantPass(); });
-  mlir::registerPass([] { return protocol::createExpandAlgorithmsPass(); });
   mlir::registerPass([] { return protocol::createSelectPhysicalPass(); });
   mlir::registerPass([] { return relation::createDeduplicateRelationsPass(); });
 }

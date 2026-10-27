@@ -43,7 +43,7 @@ struct NativeProofConstruction {
 /// Admit original source, prepare/project without simplification and construct
 /// role-local transcripts. No source IR is mutated and no cryptographic theorem
 /// is asserted. Empty suite and construction selectors select the authored
-/// profile; a construction symbol selects its checked Local handler plan.
+/// profile; a construction symbol selects its checked scoped handler plan.
 llvm::Expected<NativeProofConstruction>
 constructNativeProof(mlir::ModuleOp source, const NativeProofPolicy &policy,
                      MathematicalSelectionPolicy mathematicalSelection = {});
@@ -58,9 +58,11 @@ enum class ConstructedParticipantRole { Producer, Validator };
 /// Check the supplied candidate as `checkNativeProof` does, then export its
 /// explicitly selected policy role as a flat `zkc.constructed-participant/0`
 /// record. The default preserves validator-only callers.
-/// Construction-inserted helper calls are inlined at their actual operands;
-/// original helper calls retain their callee. Every remaining
-/// operation keeps its name, attributes, operation binding and result types.
+/// Construction-inserted helpers expand through the admitted source execution
+/// closure at their actual data operands; original helper calls retain their
+/// callee. Operations keep their name, attributes and binding, with checked
+/// data inputs and successful payload results. Administrative scope/outcome
+/// edges are checked natively and excluded from the logical carrier.
 /// Exporter correctness and the meaning of each primitive remain explicit
 /// boundaries of the formal consumer.
 llvm::Expected<llvm::json::Value> exportConstructedParticipant(

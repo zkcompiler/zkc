@@ -36,10 +36,18 @@ container's layout from its active values or reconstruct default children.
 ## Checked physical decisions
 
 One physical plan retains the original subject, including retained maps and
-[logical Kernel units](../spec/ir/kernel.md), until selection and checking finish.
-Kernel transforms propose a complete Local candidate without changing that
+[logical computation units](../spec/ir/computation.md), until selection and checking finish.
+Numerical transforms propose a complete scoped execution candidate without changing that
 subject. The candidate records the actual numerical choices, including ordered
 fallbacks; compile-time permission flags alone do not determine those choices.
+Numerical recipe selection retains an actual standard SCF schedule. Its consumer
+constructs scoped Func/CF and Exec, and an independent reader compares the actual
+bounds, state, captures, primitive occurrences and completion behavior. The
+mathematical reader separately checks that scoped payload against the original
+mathematics; neither check obtains equations from the emitter. Root return
+packaging remains uncharged, while an entered control body's completion remains
+charged. Scope and Outcome plumbing are excluded from logical data coordinates.
+
 Selection checks complete physical feasibility before retaining a candidate.
 An unavailable implementation or direct conversion can advance the implicated
 numerical occurrence to another admitted realization. Specialized contractions,
@@ -47,6 +55,10 @@ pointwise expressions, vector operations and ordered execution share this bounde
 selection process. Explicit implementation choices remain fixed; an unrelated
 malformed operation or correspondence mismatch remains a refusal. Attempts share
 compile-time allowances, including discarded candidate construction.
+Numerical preparation transfers its private candidate into recipe emission;
+it does not take another whole-context snapshot merely to change ownership.
+Correspondence still reads the unchanged original subject. Failed attempts
+discard the private candidate and retain their charged work.
 
 Physical lowering separates three steps:
 
@@ -61,7 +73,7 @@ Physical lowering separates three steps:
    the actual physical output and publish once. Materialization performs no
    numerical selection or catalog search.
 
-Physical operation indices refer to the selected Local candidate. They are not
+Physical operation indices refer to the selected scoped candidate. They are not
 indices into the original mathematical subject. The checked object privately retains
 that candidate and owns the physical choices. Inspection returns a separate clone.
 Module identity and complete source content guard validation and publication;
@@ -70,7 +82,7 @@ certificate or protection against concurrent mutation of IR.
 
 Each mismatched operand gets its conversion immediately before its consumer, in
 operand order. Declarations may be shared; dynamic instructions and results are
-not silently shared or hoisted. Function ports use installed defaults unless an
+not silently shared or hoisted. Callable root ports use installed defaults unless an
 exact input/output occurrence is selected in the physical-plan options. Captures,
 branch yields and loop state retain checked physical equations, including the
 zero-iteration path. Operation results retain their selected representation until
@@ -86,6 +98,38 @@ independently checked type.
 The candidate catalog supplies preferences for installed implementations and
 direct adapters. It cannot create a conversion law or install a new contract.
 
+Physical ports refer to semantic payload definitions and uses. An instruction's
+returned payload can be a CFG block argument; its producer coordinate remains
+that instruction. Scope, outcome, transfer and administrative counters are not
+represented data ports. The borrowed port index carries actual SSA associations,
+not an independently editable executable model. Both proposal and validation
+read the current admitted subject.
+
+Outlined control bodies forward captured representations unchanged. A conversion
+needed by an instruction inside a body executes there, immediately before that
+instruction in operand order. An untaken branch or zero-trip loop therefore does
+not execute body-only conversions. Loop state has one consistent representation
+including the zero-trip result; a required change at a yield executes in the
+reached iteration. Match payloads use the selected variant child layout. Every
+actual control edge constrains its closed body's callable signature. Explicit
+function-port requests name callable roots or participants; compiler-owned
+outlined bodies have signatures derived from those edges. An inactive payload
+without a default layout remains provisional until its complete variant layout
+is solved; all published ports must have admitted physical types.
+
+Explicit value-layout requests identify a semantic result by its actual retained
+function, qualified site and result index. Administrative CFG and scope
+operations carrying the same site are not additional selection targets. The
+independent reader applies this same coordinate contract to the actual subject.
+
+Materialization constructs the selected scoped CFG and inserts only recorded
+conversions and releases. Its independent reader checks the resulting payload
+flow, bindings, origins, closed-body references and operation order. Source
+helper returns were already substituted without a completion charge; publishing
+an executable callable root introduces its native charged completion explicitly.
+The [status page](../status.md) distinguishes this resolved execution path from
+numerical requests whose realization migration remains in progress.
+
 Automatic diagonal contraction selection is an explicit direct optimizer/planner
 option: `zkc-participant-pipeline{linear-contractions=true}` or the physical
 planner's `linearContractions` setting. Entry compilation and the composed
@@ -95,9 +139,8 @@ every actual result use against the selected port and algebraic contract. Declar
 publication. [Preservation](verification.md) checks the materialized operations,
 conversions and operands separately from proposal validation.
 
-Contraction discovery visits ordered SSA blocks inside local control flow as
-well as function bodies. A producer and all consumers must remain in the same
-block; views cannot cross a branch, become loop state or escape through a return.
+Contraction discovery follows actual payload uses in each scoped execution
+body. A producer and all consumers must remain in that same semantic body; views cannot cross a branch, become loop state or escape through a return.
 Operations keep their original order, including checks between consumers.
 Candidate discovery enumerates applicable installed implementations by identity;
 policy can reorder or withhold them. Registration order grants no preference.
@@ -106,11 +149,11 @@ recorded physical choices determine execution costs and limits.
 
 ## Scheduled lifetimes
 
-Structured Local control and selected Plan operations form the executable
+Scoped Func/CF bodies and reached Exec instructions form the executable
 schedule. Physical planning preserves their order and records optional binding
 releases alongside implementations, ports and conversions. With storage release
-enabled, the producer chooses the earliest legal point in each isolated Local
-block. The checker validates the recorded choices independently; it does not
+enabled, the producer chooses the earliest legal point in each closed execution
+body. The checker validates the recorded choices independently; it does not
 repeat that heuristic and accepts safe delayed or omitted releases. The option
 controls automatic proposals, not which legal schedules the checker accepts.
 Materialization consumes those choices without discovering last uses, and the
@@ -119,7 +162,7 @@ output reader checks the actual release positions and operands.
 Schedule coordinates distinguish operation results, block arguments and
 conversion results. A conversion is an actual use: its input and output can
 have different last uses. A release must follow the definition and every use
-in the same block. Returned or yielded bindings escape, and used affine
+in the same semantic body. Returned or yielded bindings escape, and used affine
 bindings have already transferred their permission. Existing releases remain
 ordered instructions. Only discardable physical types permit new releases.
 

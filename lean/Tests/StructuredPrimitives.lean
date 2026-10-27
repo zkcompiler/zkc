@@ -35,22 +35,22 @@ private def strings (values : List String) : Json := arr (values.map Json.str)
 private def bindingWire (b : Binding) : Json := arr [
   .str "binding", .str b.name, .str b.contract, strings b.arguments, .str b.implementation]
 
-private def catalogue : List (String × String × List String × Primitive) := [
-  ("index_constant", "index.constant", [], .indexConstant 0),
-  ("index_equal", "index.equal", [], .indexEqual),
-  ("index_less", "index.less", [], .indexLess),
-  ("index_add", "index.add", [], .indexAdd),
-  ("index_mul", "index.mul", [], .indexMul),
-  ("index_sub", "index.sub", [], .indexSub),
-  ("index_div", "index.div", [], .indexDiv),
-  ("index_mod", "index.mod", [], .indexMod),
-  ("vector_empty", "vector.empty", [scalarDomain], .vectorEmpty scalarDomain),
-  ("vector_length", "vector.length", [scalarDomain], .vectorLength scalarDomain),
-  ("vector_sum", "vector.sum", [scalarDomain], .vectorSum scalarDomain),
-  ("vector_split", "vector.split", [scalarDomain], .vectorSplit scalarDomain),
-  ("vector_append", "vector.append", [scalarDomain], .vectorAppend scalarDomain),
-  ("vector_equal", "vector.equal", [scalarDomain], .vectorEqual scalarDomain),
-  ("field_equal", "field.equal", [scalarDomain], .fieldEqual scalarDomain)]
+private def catalogue : List (String × List String × Primitive) := [
+  ("index.constant", [], .indexConstant 0),
+  ("index.equal", [], .indexEqual),
+  ("index.less", [], .indexLess),
+  ("index.add", [], .indexAdd),
+  ("index.mul", [], .indexMul),
+  ("index.sub", [], .indexSub),
+  ("index.div", [], .indexDiv),
+  ("index.mod", [], .indexMod),
+  ("vector.empty", [scalarDomain], .vectorEmpty scalarDomain),
+  ("vector.length", [scalarDomain], .vectorLength scalarDomain),
+  ("vector.sum", [scalarDomain], .vectorSum scalarDomain),
+  ("vector.split", [scalarDomain], .vectorSplit scalarDomain),
+  ("vector.append", [scalarDomain], .vectorAppend scalarDomain),
+  ("vector.equal", [scalarDomain], .vectorEqual scalarDomain),
+  ("field.equal", [scalarDomain], .fieldEqual scalarDomain)]
 
 private abbrev F := ZMod 97
 private def scalarIndex (p : Primitive) (args : Values (assignment F F) p.arguments) :
@@ -94,10 +94,10 @@ private def run : IO Unit := do
   let test (name : String) (ok : Bool) : IO Unit := do
     count.modify (· + 1)
     unless ok do failures.modify (name :: ·)
-  for (native, contract, domains, primitive) in catalogue do
+  for (contract, domains, primitive) in catalogue do
     let b := binding contract domains
-    let parameters := if native == "index_constant" then ["0"] else []
-    let descriptor := Descriptor.exec ("algebra.exec." ++ native) b.name parameters
+    let parameters := if contract == "index.constant" then ["0"] else []
+    let descriptor := Descriptor.exec "exec.apply" b.name parameters
     let helper := localHelper descriptor primitive.arguments primitive.results
     test (contract ++ ":unused") (admits [b])
     test (contract ++ ":wire") ((Format.binding (bindingWire b)).isOk)
@@ -107,7 +107,7 @@ private def run : IO Unit := do
     test (contract ++ ":math-owner") (!admits [b] [root,
       localHelper descriptor primitive.arguments primitive.results "" [] .math])
     test (contract ++ ":extra-parameter") (!(resolvePrimitive (snapshot [b])
-      ("algebra.exec." ++ native) b.name (parameters ++ ["0"])).isOk)
+      "exec.apply" b.name (parameters ++ ["0"])).isOk)
     test (contract ++ ":wrong-signature") (!admits [b] [root,
       localHelper descriptor primitive.arguments (primitive.results ++ [.boolean])])
   for name in ["", "1bad", "a/b", "é", "a b", String.ofList (List.replicate 257 'a')] do
@@ -141,8 +141,8 @@ private def run : IO Unit := do
   test "wire-no-extra-binding" (!(Format.binding (arr [
     .str "binding", .str "b", .str "index.add", arr [], .str "", .str "extra"])).isOk)
   test "wire-no-execute-tag" (!(Format.descriptor (arr [
-    .str "execute", .str "algebra.exec.index_add", .str "b", arr []])).isOk)
-  test "wire-exec-arity" (!(Format.descriptor (strings ["exec", "algebra.exec.index_add", "b"])).isOk)
+    .str "execute", .str "exec.apply", .str "b", arr []])).isOk)
+  test "wire-exec-arity" (!(Format.descriptor (strings ["exec", "exec.apply", "b"])).isOk)
   test "duplicate" (!admits [binding "index.add", binding "index.add"])
   test "namespace" (!admits [{binding "index.add" with name := "main"}])
   test "bindings-not-entry" (!(check {snapshot [binding "index.add"] with entry := "primitive"}).isOk)
@@ -152,14 +152,19 @@ private def run : IO Unit := do
     {binding "index.add" with name := "b" ++ toString i}))
   test "binding-limit-129" (!admits ((List.range 129).map fun i =>
     {binding "index.add" with name := "b" ++ toString i}))
-  test "kind-contract-mismatch" (!(resolvePrimitive (snapshot [binding "index.add"])
+  test "retired-operation-name" (!(resolvePrimitive (snapshot [binding "index.add"])
     "algebra.exec.index_mul" "primitive" []).isOk)
+  test "binding-selects-addition" ((resolvePrimitive (snapshot [binding "index.add"])
+    "exec.apply" "primitive" []) matches .ok (.exec .indexAdd))
+  test "binding-selects-subtraction-with-identical-ports"
+    ((resolvePrimitive (snapshot [binding "index.sub"])
+      "exec.apply" "primitive" []) matches .ok (.exec .indexSub))
   test "native-name-exact" (!(resolvePrimitive (snapshot [binding "index.add"])
     "index_add" "primitive" []).isOk)
   for text in ["00", "+1", "-1", "1 ", " 1", "18446744073709551616", "١", ""] do
     test ("index-decimal:" ++ text) (!(Format.indexDecimal text).isOk &&
       !(resolvePrimitive (snapshot [binding "index.constant"])
-        "algebra.exec.index_constant" "primitive" [text]).isOk)
+        "exec.apply" "primitive" [text]).isOk)
   for text in ["0", "1", "9223372036854775808", "18446744073709551615"] do
     test ("index-valid:" ++ text) ((Format.indexDecimal text).isOk)
   test "pure-local-owner" (!admits [] [root, localHelper (.indexConstant "1") [] [.index]])

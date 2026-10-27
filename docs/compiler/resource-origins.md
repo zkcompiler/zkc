@@ -1,7 +1,7 @@
 # Exact resource origins through local control
 
-Implemented by the private [resource-origin analysis](../../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp)
-in `ZkcIR`. The [capability map](../status.md#foundation-capability-map) owns
+Scoped helpers use the shared [Program resource-origin analysis](../../compiler/lib/Program/ResourceOrigins.cpp)
+through the [Protocol analysis adapter](../../compiler/lib/Dialect/Protocol/IR/ResourceOrigins.cpp). The [capability map](../status.md#foundation-capability-map) owns
 current coverage and the [structured iteration profile](../spec/ir/iteration.md)
 owns the carried-root invariant.
 
@@ -41,11 +41,11 @@ from both an unknown root and a noncontinuing execution.
 |---|---|
 | Affine input | Its own symbolic root. Identity edges require affine values at both ends. |
 | Installed state successor | Follow validated history, sampling and observation pairs. All applicable pairs for an output must identify the same exact input root; unknown or conflicting equations remain unknown. |
-| `local.apply` or protocol-level local call | Resolve the actual definition and substitute actual arguments into its formal-relative summary. Existing placement and call validation remain required. |
+| Ordinary scoped `func.call` or `protocol.local_call` | Resolve the actual definition and substitute actual arguments into its formal-relative summary. Existing placement and call validation remain required. |
 | `protocol.apply` | Summarize the mathematical callee and substitute its actual inputs under the role/application validation and preparation rules. |
-| `local.if` | Join equal roots from every continuing arm. An explicit stopping arm contributes no returned value. |
-| `local.match` | Join explicit captures the same way. Payload arguments have no inferred relation to an outer root. Existing private-tag history restrictions remain. |
-| `local.for` | Give each affine carried slot a distinct symbol. A backedge preserving that slot proves the initial root, including zero trips. An unknown slot does not discard evidence for other slots. |
+| Scoped conditional | Join equal roots from every continuing arm. An explicit stopping arm contributes no returned value. |
+| Scoped match | Join explicit captures the same way. Payload arguments have no inferred relation to an outer root. Existing private-tag history restrictions remain. |
+| Scoped range loop | Give each affine carried slot a distinct symbol. A backedge preserving that slot proves the initial root, including zero trips. An unknown slot does not discard evidence for other slots. |
 | `protocol.repeat` result | Follow the initial operand using the invariant independently checked for that repeat body. |
 | Constructor or unknown transfer | Unknown; no identity equation is invented. |
 
@@ -72,27 +72,33 @@ Projection removes A's local work from B's program.
 
 ## Implementation
 
-`ResourceOrigins` uses SSA and symbol resolution with temporary
-formal-relative maps;
-there is no second persistent expression graph. The API stays private to the
-Protocol implementation. `local.call` retains its existing endpoint placement;
-`local.apply` is the supported source-local composition form. Recognizing a call
-in the analysis does not grant it new placement permission.
+The Protocol adapter resolves the actual scoped Func definition, checks its
+borrowed Scope and Outcome signature against the logical call ports, and reads
+the complete source execution closure. The scoped reader validates the actual
+CFG, transfer dispatch and closed region associations before exposing the
+internal Program view. Administrative ports do not imply resource-successor
+laws. Calls retain their placement rules: ordinary `func.call` composes scoped
+helpers; `protocol.local_call` belongs in common protocol control.
 
-The closed local control vocabulary uses `RegionBranchOpInterface` entry
-operands and successor inputs for explicit mappings, and the formed terminator's
-yield operands for result roots. Match payloads and induction values are not
-forwarded inputs. Continuation comes from the operation contracts and actual
-local terminators, not from the interface's conservative successor edges after
-stops. No interface-hook rewrite or early SCF conversion is needed.
+The [Program API](../../compiler/include/zkc/Program/ResourceOrigins.h) admits
+and owns this immutable snapshot. It analyzes logical calls, conditionals,
+capture-only matches and range loops, together with installed state-successor
+contracts. An affine finite fold additionally requires its callback to preserve
+each carried state root. This internal analysis view does not replace the MLIR
+source or establish correspondence with an executable candidate.
 
-Callable summaries are keyed by the resolved definition operation, valid only
-for one immutable invocation. They store input indices, not caller-specific SSA
-roots. Calls substitute their actual operands. Current application attributes do
-not specialize root contracts; a future contract-changing instantiation parameter
-would require an instantiated key. An active-call set detects recursion.
-Cached summaries retain their maximum nested depth, so warming a cache through a
-shallow call cannot bypass the depth check on a later deeper path.
+Program summaries are keyed by function name within that owned closure; the
+Protocol adapter associates them with the resolved MLIR definition. Each summary
+stores formal input indices, not caller-specific roots. Calls substitute actual
+arguments. The cache and the caller-owned cumulative allowance live for one
+analysis invocation. Current application attributes do not specialize root
+contracts; a future contract-changing parameter would require an instantiated
+key. Active calls detect recursion. Cached summaries retain their complete
+nested depth, so a shallow query cannot bypass a later deeper query's bound.
+
+The replaced native Local analysis still has separate API controls while its
+consumers are being retired. Its SSA/region implementation is not the default
+scoped helper path.
 
 Module formation first checks every original body and collects affine repeat
 obligations. A separate origin phase then shares one cache and budget over those
@@ -110,21 +116,20 @@ levels. A demanded repeat body starts at level one. Sequential operations and
 successor chains spend work, not nesting depth. Existing formation, expansion,
 projection and runtime limits remain independent and can refuse first.
 
-Work accounting is:
+The Protocol adapter and Program analysis share a cumulative allowance. The
+adapter charges common SSA operations, ports, region mappings and installed
+successor equations. The Program analysis charges declaration indexing,
+callable queries and signatures, visited instructions, port substitutions,
+control captures and results, installed successor equations, and returned
+summary facts. Charges precede associated analysis storage growth. A cache hit
+reuses body work but still checks the query's actual depth and charges query,
+substitution and result costs. The owning implementations define the exact
+accounting; one work unit is not a runtime cost or an MLIR operation count.
 
-- One unit for each scanned block argument.
-- One unit per visited operation, plus its operand and result counts. This
-  covers transfer scans, lookups, substitutions and resulting stored facts,
-  including copyable positions.
-- One unit before creating a callable summary cache entry.
-- One unit per local region entry, plus its forwarded-input and parent-result
-  counts for mapping and joining.
-- One unit per examined installed history, sampling or observation pair.
-
-Charges precede associated storage growth. A callable cache hit reuses body work;
-its caller still pays its operand/result cost and checks the cached depth. The
-initial discovery of whether a repeat has an affine obligation does not start
-origin work for an otherwise unrelated program. Only affine facts are stored.
+The initial discovery of whether a repeat has an affine obligation does not
+start origin work for an otherwise unrelated program. Only affine origin facts
+are stored. Source closure admission and native formation have independent
+bounds; the origin allowance does not replace them.
 
 Exhaustion or excessive depth emits `mathematical-analysis-limit`; an unresolved
 root retains `mathematical-formation` with the exact-root detail. Invalid symbols
@@ -139,13 +144,18 @@ identity/control inside and outside repeats, static applications, standalone
 swaps/replacements, conflicting branches, unknown aggregate payload roots,
 per-slot loop evidence, local stopping and cross-role stop counterexamples.
 They retain private-match history and affine-reuse refusals.
-The [API controls](../../compiler/test/resource_origin_analysis.cpp) exercise both
-module verification and per-program queries, exact work limits, wide signatures, cached depth,
-repeated acyclic calls and work sharing between demanded queries.
+The [Program API controls](../../compiler/test/program_resource_origins.cpp)
+exercise owned snapshots, cumulative allowances, cached depth, state-successor
+contracts and exact root joins. The existing
+[Protocol API controls](../../compiler/test/resource_origin_analysis.cpp)
+also cover module verification, per-program queries and demanded-query work
+sharing; their Local fixtures remain tied to the replaced owner until retirement.
 
-The [generated execution fixture](../../compiler/test/fixtures/resource-origins/execution.mlir)
-carries RNG and transcript resources through nested common/local loops,
-applications, both Boolean arms and both match tags. The
+The [scoped source generator](../../compiler/test/resource_origin_sources.cpp)
+authors the current compiler controls and the fresh runtime fixtures directly
+with Func, Exec and Protocol operations. Its execution source carries RNG and
+transcript resources through nested common/local loops, applications, both
+Boolean arms and both match tags. The
 [runtime client](../../crates/zkc-test-drivers/src/resource_origins.rs) checks returned
 roots, generations, actual draw/observation/challenge counters, budgets, stop,
 cancellation, backend failure and frame cleanup. Stops are exercised before any

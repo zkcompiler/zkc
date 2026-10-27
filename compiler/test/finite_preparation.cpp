@@ -9,6 +9,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -77,13 +78,8 @@ module { "protocol.module"() ({
    %r = "algebra.finite_fold"(%xs,%seed) {domain=@items,step=@small_step} : (!V,!F)->!F
    func.return %r : !F
  }
- local.realize @realized = @total : (!V,!F)->!F
- local.func @work(%xs:!V,%seed:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%xs,%seed) {site="realized"} : (!V,!F)->!F
-   local.return %r : !F
- }
  "protocol.func"() ({ ^entry(%xs:!V,%seed:!F):
-   %r = "protocol.local_call"(%xs,%seed) {callee=@work,role="P",site="work"} : (!V,!F)->!F
+   %r = func.call @total(%xs,%seed) : (!V,!F)->!F
    "protocol.return"(%r) : (!F)->()
  }) {sym_name="main",function_type=(!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
 }) {profile=#protocol.profile<protocol>} : ()->() }
@@ -125,15 +121,9 @@ finite::Computation computation(ModuleOp source) {
           "missing computation");
   return result;
 }
-local::FuncOp selected(ModuleOp module) {
-  auto function =
-      SymbolTable(kernelRecipeOutput(module)).lookup<local::FuncOp>("selected");
-  require(bool(function), "missing selected recipe entry");
-  return function;
-}
 bool hasLoop(ModuleOp module) {
   bool found = false;
-  selected(module).walk([&](local::LocalForOp) { found = true; });
+  module.walk([&](exec::RangeOp) { found = true; });
   return found;
 }
 OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
@@ -534,10 +524,12 @@ int main() {
                       OptimizationReason::ImplementationRestriction,
                   "nested restriction lost its reason");
           bool retained = false;
-          selected(*candidate).walk([&](Operation *op) {
+          candidate->walk([&](exec::ApplyOp op) {
+            auto binding = dyn_cast_or_null<runtime::BindingOp>(
+                SymbolTable::lookupNearestSymbolFrom(op, op.getBindingAttr()));
             retained |=
-                op->getName().getStringRef() == "algebra.exec.vector_product" &&
-                bool(op->getParentOfType<local::LocalForOp>());
+                binding && binding.getContract() == "vector.product" &&
+                op->getParentOfType<func::FuncOp>()->hasAttr("runtime.region");
           });
           require(retained, "unused nested conditional admission disappeared");
         });

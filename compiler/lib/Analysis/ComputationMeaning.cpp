@@ -3,7 +3,8 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -14,10 +15,9 @@ namespace {
 std::optional<protocol::BindingApplication> semanticBinding(Operation *op) {
   auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
   auto declaration =
-      reference
-          ? SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                op, reference)
-          : local::OperationBindingOp();
+      reference ? SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      op, reference)
+                : runtime::BindingOp();
   if (!declaration || !declaration.getContractAttr() ||
       !declaration.getArgumentsAttr() || !declaration.getImplementationAttr())
     return std::nullopt;
@@ -50,7 +50,8 @@ const protocol::ComputationContract *semantics(Operation *op) {
     if (!binding)
       return nullptr;
     application = std::move(*binding);
-    if (!protocol::operationSupportsContract(op->getName().getStringRef(),
+    if (!isa<exec::ApplyOp>(op) &&
+        !protocol::operationSupportsContract(op->getName().getStringRef(),
                                              application.contract))
       return nullptr;
     auto attrs = op->getAttrOfType<ArrayAttr>("parameters");
@@ -112,8 +113,17 @@ const protocol::ComputationContract *semantics(Operation *op) {
     }
     return true;
   };
-  if (!read(op->getOperandTypes(), inputs) ||
-      !read(op->getResultTypes(), outputs))
+  if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
+    // Meaning observes the data ports of the scoped invocation. The enclosing
+    // source reader owns scope/dispatch formation and reached-failure behavior.
+    auto outcome = dyn_cast<exec::OutcomeType>(apply.getResult().getType());
+    if (!outcome || op->getNumOperands() == 0 ||
+        !isa<runtime::ScopeType>(op->getOperand(0).getType()) ||
+        !read(apply.getInputs().getTypes(), inputs) ||
+        !read(outcome.getPayload(), outputs))
+      return nullptr;
+  } else if (!read(op->getOperandTypes(), inputs) ||
+             !read(op->getResultTypes(), outputs))
     return nullptr;
   return protocol::admitMathematicalMeaning(application, inputs, outputs,
                                             parameters);

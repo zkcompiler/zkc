@@ -47,11 +47,11 @@ theorem readback (values : Data) (related : subject.Relation (abi.pack values))
       (Domain.participant subject.domainModel ZkcSecurity.Examples.Generated.SchnorrRandomized.imported.program
         subject.selection.context ZkcSecurity.Examples.Generated.SchnorrRandomized.selected.artifacts.validator (abi.validator values)) := by
   obtain ⟨input0, input1, input2, input3, input4, rfl⟩ := data_surjective values
-  change Group at input0
-  change Group at input1
-  change Scalar at input2
-  change Option Nat at input3
-  change Option Nat at input4
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input0
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.group "bls12-381.g1")) at input1
+  change ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.field "bls12-381.fr")) at input2
+  change Option ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0")) at input3
+  change Option ((uniformCarriers Scalar Group).Value (Zkc.Source.Structured.Ty.service "random.bls12-381.fr/0")) at input4
   change SampledReadback (SampledReadback.Allowed subject) _
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedProducer.artifact (producerInputs input0 input1 input2))
     (Domain.participant (ringModel Scalar Group) _ _ ZkcExamples.Structured.Generated.Constructed.SchnorrRandomizedValidator.artifact (validatorInputs input0 input1))

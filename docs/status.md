@@ -33,6 +33,158 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Execution foundation
 
+Logical variants use Data-owned types; runtime capabilities and exact physical
+representation wrappers use Runtime-owned types. Their independent binding
+adapters preserve current native descriptors and installation checks. Runtime
+also owns the shared `runtime.binding` declaration for logical and physical
+ordered execution. Local, Plan and Kernel are not registered dialects. See
+[native MLIR value owners](spec/domains/values.md#native-mlir-value-owners).
+
+Standard Func/CF with explicit Exec outcomes and Runtime scopes is the default
+route for source emission, participant preparation, numerical realization,
+physical selection, publication and artifact comparison. The reconstruction
+reader checks actual conditional, variant and loop bodies, reached instructions,
+cleanup, carry transport and logical/represented ports, then independently
+admits the native model. A separate record-directed comparator checks current
+SSA against admitted native local definitions without reader or emitter replay.
+Both checks inspect the complete immediate execution inventory, including
+dormant definitions; surrounding protocol associations remain the enclosing
+profile's responsibility. Native program records and runtime kernels retain
+their own contracts. Transparent word arithmetic and compiler-selected
+writable-buffer execution remain incomplete.
+
+Source preparation has one service with polynomial recipe, protocol application
+and participant mathematics stages. Numerical recipes emit scoped operations
+and checked SCF schedules directly. Finite computations are Algebra expressions
+or actual scoped Exec requests, with no separate callable declaration wrapper.
+Participant guards stay in Protocol through projection, retaining their owner;
+demand formation passes the condition separately from total mathematics and
+emits scoped rejection. Source/candidate readers reconstruct actual bodies and
+operands rather than relying on producer choices or copied metadata.
+See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).
+
+The logical source-scoped API additionally retains ordinary helper calls,
+checks their complete acyclic closure and independently compares current actual
+callees, occurrences and ordered operands. Source helper return packaging is
+distinct from charged native completion; outlined control yields retain their
+tick. Plain mathematical functions can share that source table; all are checked
+by the mathematical owner with their actual finite-domain and bound premises.
+Their equations still need separate source correspondence. Ordinary source
+emission and independent comparison now use this scoped profile. Protocol
+repeat analysis reads exact continuing affine roots from its admitted Program
+view. Structured export preserves actual SSA binding positions and checked
+control, and the independent Lean reader exercises fresh branches, loops,
+stops, mathematical calls and ordered finite callbacks. Preparation and
+participant projection retain the complete scoped/mathematical helper and
+domain closure, with actual-body preservation checks. Projected local calls
+remain Protocol actions and must match their participant's role. Participant
+mathematical preparation now expands scoped helpers and creates scoped
+calculations with typed mathematical requests and explicit guard outcomes.
+The normalization frontier now shares polynomial-generated coefficients across
+those scoped calculation cuts through actual participant ports. Its independent
+reader checks original data prefixes, exact imports, outcome packaging and
+unchanged guard/failure control, while preserving concrete numerical occurrences.
+Fully resolved scoped bodies now feed physical port selection, actual-use
+conversions, diagonal contraction checks, storage release scheduling, native
+publication and independent artifact comparison. The planner indexes semantic
+payload definitions and uses across administrative CFG blocks. Captures retain
+their producer layout; body-only conversions execute in their reached body.
+Resident field/group controls exercise explicit entry and return ABIs, outlined
+branch and loop ports, helper expansion, and variant payloads on this path.
+Native execution checks retain zero-trip behavior, reached conversion failures,
+and the original resource allowances. Aggregate controls also cover nested
+sequences, independent variant payloads, inactive payloads without a default
+representation, and resident dense arrays and fixed vectors. Their native
+fixtures retain complete carrier layouts and reached conversion order. Layout
+requests resolve semantic results in their actual outlined owners, excluding
+administrative operations with the same diagnostic site.
+Mathematical and retained finite requests are realized through this same scoped
+path. Scoped callback analysis substitutes exact total pack projections and
+removes unused pack descriptors from its private view, retaining scalar work
+and the unchanged source for independent comparison. Packed callbacks therefore
+participate in bulk selection with the same shape, failure and work controls.
+The physical transaction keeps the actual prepared and selected modules
+for independent checks of both edges. See the
+[source helper profile](spec/ir/execution.md#source-scoped-helper-profile).
+Numerical transformation controls now exercise scoped recipe fragments, exact
+closures, retained policies, forwarding ports and repeated invocation origins.
+Fragment admission rejects data ports on either outer owner; capture mutations
+remain checked after coherent scope-entry and outlined-call rewiring.
+Structured collection/computation controls retain actual domains, callbacks,
+unused row checks and full logical data signatures. Export depth includes the
+derived declarations in the emitted graph, with exact boundary controls checked
+by the independent Lean reader. The native CFG observer retains separate
+operation, definition and reached invocation capacities.
+
+Checked scoped helper expansion substitutes actual SSA bodies, preserves
+uncharged helper returns and charged control yields, and normalizes aliased
+immutable capture ports together. Its separate reader checks virtual source
+substitution against the actual candidate and recovers full occurrence paths.
+Exact-limit and overflow controls retain separate 4,096-entry binding and
+Func/domain inventories during expansion; profile metadata consumes neither.
+Transitive dependency checks keep the scoped substitution, finite, polynomial
+recipe and numerical readback consumers separate from producer recognition and
+recipe interfaces. Shared callback signatures carry no selected recipe.
+Default participant preparation consumes this checked edge before outlining
+mathematical demands. Logical participant admission also checks retained finite
+callback edges and affine state roots; unresolved requests cannot be published.
+
+Typed `exec.compute` formation resolves actual private source mathematical
+helpers or sibling computation entries, checks logical ports, and borrows the
+active scope with an explicit outcome. Symbol rewriting and malformed-target
+controls cover that boundary. The finite-premise checker maps actual data
+operands separately from the scope and retains entry-argument assumptions in
+CFG bodies. Mathematical closure, invoking the premise checker and realization
+comparison remain consumer duties. Source-closure admission checks actual
+mathematical bodies, selected modules, call premises and logical affine
+ownership before realization, including malformed dormant definitions. The
+shared expanded-helper ceiling counts each actual computation request, even
+when repeated requests reuse one helper summary. Source and selected-module
+controls retain the oversized refusal and bounded realization cases before
+dead mathematics can be erased. Independent closure and recipe controls also
+cover changed polynomial operands, shortened arrays, inserted stops and partial
+operations, and changed result coordinates. The execution readers refuse
+unresolved mathematical requests. This is the sole mathematical invocation.
+The Kernel dialect, its registration
+and its alternative readers have been removed. Computation-unit admission and
+scoped invocation controls cover the retained contracts. See
+[mathematical invocation](spec/ir/execution.md#typed-mathematical-invocation).
+
+Retained `exec.fold` and `exec.collect` have checked scoped callback ABIs,
+actual domain/capture premise discharge, zero-state outcomes, and scoped
+ownership formation. Source-closure admission checks every actual callback and
+retains callback dependencies for cycle and control-effect checks, including
+history transitions hidden behind finite requests in matches. Multi-block
+callbacks remain distinct from single-block
+expression views. Internal source adapters construct and independently compare
+scoped occurrences, array materialization, product/Unit packing and callback
+CFGs with bounded work. These controls isolate adapter correspondence; the
+enclosing source checker owns ordinary helper bodies and complete inventory.
+Default source emission retains these requests until checked finite
+preparation. Ordered execution and supported bulk alternatives both produce
+scoped execution. The independent reader checks actual callbacks, complete
+domain admission, source policies and fixed implementations.
+The scoped source-closure API admits affine fold state only after the shared
+Program analysis checks exact state-root preservation over actual callbacks.
+Controls distinguish fresh replacements, exchanged slots, stopped paths, primitive
+successors and cached analysis limits. Protocol repeat consumers use that shared
+analysis. Scoped vector-reduction controls exercise
+checked helper substitution, numerical lowering with pending collections, and
+explicit physical selection. They retain large depth, copy and origin workloads;
+old phase-state tokens are replaced by transactional source/candidate and shared
+account checks. Map consumers now use the shared scoped collection fixture, including
+eight native field families, complete malformed/admitted mutation controls,
+large formula and wide-capture workloads, cumulative required allowances, affine
+repeat helpers and physical pipelines. Optional Ring limits retain ordered
+execution; actual retained/generated callback admission remains bounded.
+Late-selection consumers now check the retained finite and numerical stages of
+physical plans, provider and per-occurrence fallback, explicit callback policies
+and implementation pins, admitted physical mutations, cumulative work boundaries
+and identity-map capture canonicalization through scoped control. These are
+affected-suite checks, not validation of the complete base.
+Unresolved requests are refused by
+executable extraction. See [ordered finite requests](spec/ir/execution.md#ordered-finite-requests).
+
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
 VM instance owns complete invocation admission, frame identity and nesting,
@@ -49,20 +201,25 @@ the closed wire profile. Application identity, setup, public inputs and prepared
 computation authority remain in `zkc`. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
-Logical [numerical units](spec/ir/kernel.md) use named `builtin.module` with
+Logical [numerical units](spec/ir/computation.md) use named `builtin.module` with
 `exec.computation` and standard functions. Stage admission checks every retained
-definition; the marker alone is not admission evidence. `kernel.call` retains
-ordered Local invocation. Preparation and participant demand lowering form
-units; the physical plan retains those units alongside the selected Local
-candidate until independent numerical and physical checks permit publication.
-Export receives the resulting physical program without Kernel operations.
+definition; the marker alone is not admission evidence. `exec.compute` retains
+ordered scoped invocation. Preparation and participant demand lowering form
+units; the physical plan retains the mathematical source and actual finite
+preparation alongside the selected scoped candidate until independent numerical
+and physical checks permit publication. Export receives the resulting physical
+program without unresolved mathematical requests.
 Normalization and numerical recipe checking consume these standard
 functions directly, with separate structural facts and call-specific selection
 restrictions.
 Existing installed backends execute the resulting operations. The checked physical
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
-standard SCF loops and are independently checked before Local lowering.
+scoped `scf.while`/`scf.execute_region` loops. The source reader checks their
+actual state, callbacks and custody; a separate CFG comparator checks their
+consumption before executable publication. Finite recipe, provider and conversion choices share one bounded
+search; actual emitted uses identify which eligible occurrences may change.
+Explicit requests remain fixed, and semantic comparison failures are terminal.
 Retained pointwise maps and selected sums now use a private
 [Tensor/Linalg profile](spec/ir/mathematics.md#structured-tensor-computations)
 with exact field scalar regions, upstream map/reduction fusion and CSE/DCE, independent candidate
@@ -75,6 +232,14 @@ APIs; evaluation operations retain the exact basis. These arithmetic capabilitie
 do not provide a complete signature verifier. Formal `!poly.quotient<q,n>` values
 and source intrinsics retain exact modulus/degree until checked coefficient
 realization; helpers may carry them, executable ports and messages may not.
+
+[Prepared quotient matrices](spec/domains/quotient-matrices.md) use immutable
+Runtime values and exact chunked RNS reconstruction. Source clients prepare once
+and reuse matrices with separately checked digit vectors, including even and
+composite protocol moduli. The selected compute-prime profile, declared digit
+bound, canonical inputs and current invocation limits are enforced independently
+by the native path. This does not implement a signature verifier or a general
+formal-matrix rewrite.
 
 Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
 views, private initialized destinations and scoped construction/work limits for
@@ -319,18 +484,18 @@ no runtime predicate evaluation or proof transport through those transforms.
 
 | Capability | Support and boundary |
 |---|---|
-| Numerical scheduling | [Kernel](spec/ir/kernel.md) retains the mathematical subject and checks a private standard SCF loop schedule before Local execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
+| Numerical scheduling | [Numerical computation](spec/ir/computation.md) retains the mathematical subject and checks a private standard SCF loop schedule before scoped execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
 | Scalar, collection and polynomial mathematics | Nominal Algebra field/group vectors, indices, field matrices and field arrays, with ordered `algebra.array_from_elements` packing. A shared collection interface reports structure without granting finite, mathematical, Copy/Drop or wire admission; shape evidence retains the logical family. Source syntax, logical binding spellings and native codecs retain their meanings; builtin tensors have no compatibility alias. Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
 | Group identity | Total `intrinsic<G>("curve.identity")`, Algebra identity and independently checked native recipe. Dalek Ristretto255 and prime-order Edwards25519; arkworks BLS12-381 G1/G2/GT and BN254 G1/G2/GT, including multiplicative-one GT. Empty MSM identity is checked for the six installed dense group families; [contract](spec/domains/values.md#group-identity). No native proof claim. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/protocols/polynomial/sumcheck/README.md) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |
 | Source clients of imported AIR | The [imported AIR client](../common/tests/fixtures/projects/imported-air/README.md) checks actual trace, configuration and public inputs. The [AIR STARK client](../common/tests/fixtures/projects/air-stark/README.md) adds base-field trace commitments, scoped extension-field quotient chunks, OOD/DEEP equations and FRI through ordinary source libraries and separate proof Hosts. The single-table profile covers one present table's assertions; the three-table profile adds whole-Bundle Boolean multisets and signed field balance through LogUp. Security reductions for both remain separate work. |
-| Pointwise vector maps | Source `map` applies one static scalar `math fn` over installed field vectors through [checked numerical realization](spec/ir/protocols.md#checked-pointwise-maps): shapes first and O(formula) code. A common semantic reader independently interprets source and candidate payloads, admitting sharing and commuted field arithmetic; helper calls are interpreted from the original source and installed contract laws remain a shared foundation. Shape mismatches are backend failures (`rejected:require`); field constants, addition, subtraction and multiplication are limited to Ring depth 1,024. The [KoalaBear/Ext8/Ext4 comparison](../common/tests/kernels/test_pointwise_polynomials.py) checks maps, Ring rows and coefficients, and coset kernels against integer arithmetic, including the off-domain interpolation distinction. Installed numerical expression calls support map, sum and product over borrowed columns and scalar captures; bulk vector alternatives remain available. No first-class function value or foreign memory ABI is introduced. |
-| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-reduction-binders) use general scoped consumers and finite IR. Arbitrary vector reducers collect first and call once. Native `vector.product` has empty identity one across the installed field families, with independent C++/Rust admission and normal resource charges. Default-false [fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) handles adjacent single-use map/native-sum through a dot product or supported numerical expression, with every original row guard retained. Its relation is values and ordered shape refusals under sufficient resources, not equal exhaustion or a memory bound. The scalar Lean bridge does not cover vector-map/reduction correctness. |
+| Pointwise vector maps | Source `map` applies one static scalar `math fn` over installed field vectors through [checked numerical realization](spec/ir/protocols.md#checked-pointwise-maps): complete domain admission first, with bulk and ordered scoped alternatives. A common semantic reader independently interprets source and candidate payloads, admitting sharing and commuted field arithmetic; helper calls are interpreted from the original source and installed contract laws remain a shared foundation. Shape mismatches are backend failures (`rejected:require`); optional extraction of field constants, addition, subtraction and multiplication obeys Ring depth 1,024; other admitted callbacks retain ordered execution. The [KoalaBear/Ext8/Ext4 comparison](../common/tests/kernels/test_pointwise_polynomials.py) checks maps, Ring rows and coefficients, and coset kernels against integer arithmetic, including the off-domain interpolation distinction. Installed numerical expression calls support map, sum and product over borrowed columns and scalar captures; bulk vector alternatives remain available. No first-class function value or foreign memory ABI is introduced. |
+| Finite vector reductions | [Source binders](spec/language/definitions.md#finite-reduction-binders) use general scoped consumers and finite IR. Arbitrary vector reducers collect first and call once. Native `vector.product` has empty identity one across the installed field families, with independent C++/Rust admission and normal resource charges. The default scoped route retains the collection and reducer. Default-false [collection/native-sum fusion](spec/ir/protocols.md#optional-vector-reduction-fusion) selects dot or summed numerical expressions on actual scoped occurrences, independently of finite bulk selection. Every original domain guard remains ordered, including unused rows. The independent reader checks the original callback, actual scalar result and reducer occurrence; explicit sum selections remain fixed. Physical alternatives retain checked map/sum or ordered collection endpoints. The migrated public-coin consumer distinguishes all four finite/vector policy combinations in emitted artifacts. These checks establish values and ordered shape refusals under sufficient resources, without claiming equal exhaustion or a memory bound. The scalar Lean bridge does not cover vector-map/reduction correctness. |
 | Mathematical shape and bounds | A shared MLIR-free [fact kernel](spec/domains/mathematical-facts.md) supplies exact origin/axis equality, strict bounds and exact/upper cardinalities. Independent source and SSA adapters replace duplicate closure rules. Helper observations are scoped to immutable symbol closures, with explicit rebuild and pass-manager invalidation controls. Nested work is cumulative and distinguishes absence from capacity. Source symbolic naturals retain their interpretation; guards and nominal types remain unchanged. Core scope intersection is available, while production reached-guard and loop-invariant propagation remain unsupported. |
-| General finite IR | [Typed domains and total/Local fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Declaration-owned laws, structural SSA views, separate transient equation matches and shared producer emission support checked loop fallback, native sum/product/dot/MSM, elementwise fields and sum/product reductions of accumulator-independent pointwise field expressions. Selected matrix rows and columns use scalar contractions; admitted nested collections use one whole matvec, preserving empty-outer admission. Total callbacks expose ordinary helper calls and fixed pack/projection pairs remaining after canonicalization before optional bulk selection, while retaining the source of that selection for comparison. Nested indexed helpers preserve callback extent/bound premises and exact positional argument identities, including selected matrix axes. Independent readers check actual candidates, including checked original-helper normalization for total finite recipes and `local.realize`. Bounded DAG sizing and a per-callback structural ceiling preserve later small opportunities without refunding spent work. Optional lane or payload-comparison capacity retains checked ordered fallback; required-reader exhaustion is diagnosed separately. Checked candidate publication is shared. Opt-in decision records distinguish missing evidence, actual capacity, policy and recipe restrictions, ordered retries and nested publication boundaries; preparation and total Math lowering also expose remarks and IR dumps. These observations supply no checking evidence. Generic canonicalization/CSE preserve domain admission. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
+| General finite IR | [Typed domains and total/scoped fold and collect](spec/ir/finite.md) retain static helpers, complete entry admission, exact bound provenance and state dependency closure. Declaration-owned laws, structural SSA views, separate transient equation matches and shared producer emission support checked loop fallback, native sum/product/dot/MSM, elementwise fields and sum/product reductions of accumulator-independent pointwise field expressions. Selected matrix rows and columns use scalar contractions; admitted nested collections use one whole matvec, preserving empty-outer admission. Total callbacks expose ordinary helper calls and fixed pack/projection pairs remaining after canonicalization before optional bulk selection, while retaining the source of that selection for comparison. Nested indexed helpers preserve callback extent/bound premises and exact positional argument identities, including selected matrix axes. Independent readers check actual candidates, including checked original-helper normalization for total finite recipes and `exec.compute`. Bounded DAG sizing and a per-callback structural ceiling preserve later small opportunities without refunding spent work. Optional lane or payload-comparison capacity retains checked ordered fallback; required-reader exhaustion is diagnosed separately. Checked candidate publication is shared. Opt-in decision records distinguish missing evidence, actual capacity, policy and recipe restrictions, ordered retries and nested publication boundaries; preparation and total Math lowering also expose remarks and IR dumps. These observations supply no checking evidence. Generic canonicalization/CSE preserve domain admission. [Handwritten controls](../compiler/test/fixtures/finite/README.md) cover mutations, failures and 2^17 field workloads. Full fixed-array/matrix fallback additionally requires the native checked-access contracts; the source frontend now uses checked adapters into this IR. No Lean-to-native bridge is claimed. |
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
-| Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget Local collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
-| Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
+| Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget scoped collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
+| Affine resources and services | Scoped helpers use the shared Program exact-origin analysis through the Protocol adapter. Directly authored scoped controls and fresh native bundles cover exact roots, state successors, participant-local stops, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
 | FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model is a transcription of the library verifier, not the compiled library; the implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height), the source's sequential position draws and the compiled verifier remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
 | Resident BLS12-381 provider | `blst/resident/` scalar, vector, G1/G2 and pairing bindings consume typed `blst/fr`, `blst/g1` and `blst/g2` ports. [Automatic Target preferences](compiler/representation.md#resident-providers) select G2 scaling and pairing checks; canonical ports and Contracts defaults remain Arkworks. Direct conversions are separate reached calls. Complete nested sequences, variants, resident field arrays and fixed vectors retain selected children; fixed vectors are local-only. Canonical selected codecs preserve existing encodings. Known variable-time MSM requires trusted execution permission. [Provider scope and resource boundary](../crates/zkc-kernels/README.md#alternative-bls12-381-provider); no resident GT/PCS output or whole-runtime timing guarantee. |
@@ -345,7 +510,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 | Clean export comparison | A [pinned Clean flat AIR export](../lean/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
 | Native hash-chain suites | [`hash-chain.keccak256.bls12-381.fr64be/0` and `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`](spec/ir/construction.md#native-hash-chain-suites): Keccak-256 chains with full-digest states, framed events, counter-expanded requests and the decoders of the Merlin suites over the same challenge fields; the octic instance has UniformIndex transitions. States are host-owned affine capabilities, as for the other suites, implemented by the field backends. Known-answer vectors from an [independent Python reference](../common/tests/support/hash_chain_reference.py), whose Keccak-f[1600] is checked against published Keccak-256 answers and Python's SHA3-256, fix the backend's states, request answers and decoded challenges. Independent replays of compiled native proofs (Schnorr, DLEQ and Sumcheck families, octic index rounds), the maintained Schnorr, Sumcheck and FRI examples and managed transcript methods prove and verify under them. No quartic-extension or base-field KoalaBear instance exists, because those fields have no random service. Lean proves the reduction of the suites' chain to the history oracle, with the byte hash as a random oracle and loss `(q + V)² / \|S\|` for `q` adversary and `V` verifier calls ([provider simulations](../lean/docs/spec/fiat-shamir-security.md#provider-simulations)). The hash-chain theorem is about the construction's byte-level chain model; that the compiled transcript handlers and the installed Keccak-256 kernels implement that model, and that the suites' decoders are modelled ones, remain obligations. |
-| Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed Local handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
+| Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed scoped handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
 | Structured participant comparison | The optional [source-bound native probe](../lean/bridges/structured/participant.md) compares both actual Interactive Schnorr endpoints and generic service fixtures with original-SSA and Lean replay. It checks sampled generator-multiple G1 values, independent inputs/receives, pending prefixes, canonical codec failures and provider residual state. Native cleanup and failure adapters are explicit additional observations; this is bounded evidence, not Rust refinement or arbitrary-point decoding correctness. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
 | Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
@@ -405,8 +570,10 @@ construction and their [participant projection](../lean/docs/spec/participant-pr
 against the original exports and proves that each compiled verifier's ideal
 meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
 transform of its original verifier; other Entries, suites and programmable
-constructions have no such check. The composed Sumcheck Entry has this
-transform equation only; no security theorem covers it. The compiled Sigma proof
+constructions have no such check. The composed Sumcheck Entry is covered by the
+generated `TwoSums` root, with exact scalar and charged soundness requests and a
+compiled-ideal completeness receipt. These are independent of native execution
+correspondence. The compiled Sigma proof
 Entries (Chaum–Pedersen, two-proof AND, Okamoto) also have fixed-statement
 knowledge soundness through the registered endpoints. The
 exporter repeats the native proof check before printing the validator; it is
@@ -576,9 +743,9 @@ of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
 statements, every round count up to the static maximum, malformed vectors
 included). A records run given the subject pipeline's evidence establishes the
 assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto, the guessing Entry
-and Sumcheck; the composed Sumcheck and GKR Entries
-retain no target clause to state a claim at, and composed Sumcheck has no
-certificate composition yet.
+and Sumcheck. Composed Sumcheck retains `target public_sums`; its maintained
+claims use the generated `TwoSums` root rather than that manifest report. The
+GKR Entry has no retained target clause for this claim-selection path.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

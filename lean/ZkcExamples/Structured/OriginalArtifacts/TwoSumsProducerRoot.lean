@@ -34,13 +34,13 @@ def inputs (input0 : List F) (input1 : List F) (input4 : Nat) (history : Domain.
 open ZkcExamples.Structured.SumcheckArtifacts.OriginalProducer
 theorem sourceHelper8_identity : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper8.helper = ({ name := "zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a",   kind := Zkc.Source.Structured.HelperKind.local,   inputs := [Zkc.Source.Structured.Ty.vector "bls12-381.fr",              Zkc.Source.Structured.Ty.index,              Zkc.Source.Structured.Ty.index],   outputs := [Zkc.Source.Structured.Ty.vector "bls12-381.fr",               Zkc.Source.Structured.Ty.index,               Zkc.Source.Structured.Ty.index] }) := by kernel_rfl
 
-theorem sourceHelper31_identity : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper31.helper = ({ name := "s3h7a6b637h626f6f6c65616e4h626f7468",   kind := Zkc.Source.Structured.HelperKind.math,   inputs := [Zkc.Source.Structured.Ty.boolean, Zkc.Source.Structured.Ty.boolean],   outputs := [Zkc.Source.Structured.Ty.boolean] }) := by kernel_rfl
+theorem sourceHelper21_identity : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper21.helper = ({ name := "s3h7a6b637h626f6f6c65616e4h626f7468",   kind := Zkc.Source.Structured.HelperKind.math,   inputs := [Zkc.Source.Structured.Ty.boolean, Zkc.Source.Structured.Ty.boolean],   outputs := [Zkc.Source.Structured.Ty.boolean] }) := by kernel_rfl
 
-theorem mathHelper31 (left right : Option Bool) :
-    invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) program.payload).components ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper31.helper (.cons left (.cons right .nil)) =
+theorem mathHelper21 (left right : Option Bool) :
+    invoke (OriginalSumcheckLibrary.helpers (F := F) (G := G) program.payload).components ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper21.helper (.cons left (.cons right .nil)) =
       .done (.cons (left.bind fun x => right.map fun y => x && y) .nil) := by
-  have association : BodyIn program.payload.definitions ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper31.helper ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper31Body := by bind_structured_bodies
-  rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).components, SumcheckVerifierHelpers.component_body_plain program.payload ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper31.helper ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper31Body association]
+  have association : BodyIn program.payload.definitions ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper21.helper ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper21Body := by bind_structured_bodies
+  rw [← (OriginalSumcheckLibrary.helpers_lift program.payload).components, SumcheckVerifierHelpers.component_body_plain program.payload ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper21.helper ZkcExamples.Structured.Generated.Bindings.TwoSumsInputs.helper21Body association]
   cases left <;> cases right <;> rfl
 
 theorem producer_source (input0 : List F) (input1 : List F) (input4 : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input4 1) (bounded0 : input0.length < indexLimit) (shape1 : PrimitiveLibrary.HasShape input1 input4 1) (bounded1 : input1.length < indexLimit) :
@@ -56,7 +56,7 @@ theorem producer_source (input0 : List F) (input1 : List F) (input4 : Nat) (shap
   dsimp only [Values.get, PIR.Process.bind]
   erw [ZkcExamples.Structured.OriginalSumcheckProducerCalls.table_owned program.payload ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.sumcheck input1 input4 shape1 bounded1]
   dsimp only [Values.get, PIR.Process.bind]
-  simp only [mathHelper31, PIR.Process.bind, PIR.Process.bind_assoc]
+  simp only [mathHelper21, PIR.Process.bind, PIR.Process.bind_assoc]
   rfl
 
 def producer (input0 : List F) (input1 : List F) (input4 : Nat) (handle : Nat) (shape0 : PrimitiveLibrary.HasShape input0 input4 1) (bounded0 : input0.length < indexLimit) (shape1 : PrimitiveLibrary.HasShape input1 input4 1) (bounded1 : input1.length < indexLimit) (history : Domain.History (uniformCarriers F G)) :

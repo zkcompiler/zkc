@@ -90,7 +90,7 @@ operational limits.
 
 ## Analysis and realization boundaries
 
-[Logical Kernel units](../spec/ir/kernel.md) own numerical bodies and their
+[Logical computation units](../spec/ir/computation.md) own numerical bodies and their
 helper/domain dependencies. Preparation forms units for executable helper
 requests; demand lowering forms them for participant calculations. Both retain
 an ordered Local wrapper. Physical planning retains those units alongside the
@@ -207,10 +207,9 @@ an expanded polynomial-free body; a separate reader follows the original helper
 calls under positional argument substitution and checks all result coordinates
 with the existing independent polynomial laws. A realization stage caches these
 checked bodies, copies them into its candidate, and reuses them for recipe
-checking; each emitted copy still consumes work. `local.realize` also compares
-against its original helper before publication, so a snapshot taken after
-normalization cannot hide a substitution
-or polynomial error. This is native compiler correspondence checking; the
+checking; each emitted copy still consumes work. Numerical realization also
+compares against its original helper closure before publication, so a snapshot
+taken after normalization cannot hide a substitution or polynomial error. This is native compiler correspondence checking; the
 independent Lean models do not establish a bridge to this implementation.
 
 Optional finite recognition shares separate structural, equation and bound/extent
@@ -269,8 +268,8 @@ loop fallback. `MathematicalSelectionPolicy` enables the finite bulk family by
 default and leaves both fusion families disabled. `--no-finite-bulk` selects
 the ordered finite fallback while retaining the same domain admission.
 `--no-simplify` controls generic total-expression folding independently; it does
-not disable mathematical selection. Explicit authored `map` plus reducer calls keep the separate
-`algebra.map_realize` path. Native `vector.product` reduces an already constructed
+not disable mathematical selection. Explicit authored `map` plus reducer calls retain their actual scoped collection
+and subsequent reducer occurrence until separately checked fusion applies. Native `vector.product` reduces an already constructed
 vector to a scalar with empty identity one, separately from elementwise
 multiplication. The [source contract](../spec/language/definitions.md#finite-reduction-binders)
 owns binder scope, captures and shared scoped extraction.
@@ -298,7 +297,18 @@ correspondence reconstruction all receive the same policy. Public preparation,
 projection and lowering passes expose `optimize-finite` and
 `fuse-vector-reductions` and `fuse-collect-fold` options, and the lowering pass also
 `calculation-batching`; the participant pipeline forwards these choices to its
-stages. Physical storage release remains a separate control.
+stages, including physical selection. Standalone `zkc-select-physical` exposes
+these numerical options as well; setting them only on an earlier pass does not
+configure a separately invoked selection pass. Physical storage release remains
+a separate control.
+
+Finite bulk and vector fusion choose recipes at numerical realization. A
+constructed participant can therefore retain the same actual mathematical
+functions and scoped finite requests under different recipe choices. The
+construction checker compares that retained behavior; the executable check
+compares the selected physical body. Tests of recipe selection inspect the
+emitted program and its bindings, rather than requiring a bulk operation or a
+recipe-policy marker in the constructed participant.
 
 Total Math demand lowering outlines a participant's pure calculations into
 calculation calls placed before actions. With batching, the default, each
@@ -319,29 +329,19 @@ simplify, storage release, vector reduction fusion, finite bulk, collect–fold 
 order; readers require all six choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
-The explicit `rewriteLocalAlgorithms` preparation service admits the immutable
-whole source and owns each proposed rewrite. It retains finite and map structure
-through the checked selection window, then expands residual helpers. When
-there is no finite declaration or requested fusion, helper expansion runs once;
-an empty intermediate window must not charge the same expansion twice. Independent
-readers compare each actual nested-collection, finite, map and fusion candidate and both staged
-expansion results before publication. Generic simplification runs afterward;
-projection and execution lowering retain their structural Local preservation
-checks against the accepted preparation result. No additional profile or
-post-projection Local rewrite window is introduced.
+The `prepareProtocol` service admits the immutable whole source and returns an
+owned candidate after three stages: polynomial recipe realization into scoped
+definitions, protocol application expansion, and participant helper expansion
+with optional total simplification. Independent readers compare each actual
+rewrite before publication. Preparation preserves scoped definitions, numerical
+closures, and finite requests; it does not select finite or map realizations.
 
-After numerical recipe inlining, an identity recipe can make two distinct
-Local captures refer to one SSA value. Capture normalization retains the first
-occurrence and rewrites region arguments and loop forwarding together. The
-independent kernel reader derives this layout from actual operand identities;
-distinct values of the same type and ordered loop state remain distinct.
-
-Preparation expands callers that reach retained computations and the callbacks
-those computations name. Unrelated definitions keep their exact bodies.
-Source inspection and actual helper substitution have separate cumulative
-allowances; copying an unchanged root is not a second helper expansion. Both
-phase results and their accounting are independently read before publication.
-The [function contract](../spec/ir/functions.md) defines these boundaries.
+After participant demand placement, executable preparation expands scoped
+helpers and selects numerical realizations at their actual occurrences. Source
+inspection, helper substitution, and numerical realization use separate bounded
+allowances. Their independent readers check the actual candidate and its ordered
+refusals before publication. The [function contract](../spec/ir/functions.md)
+defines these boundaries.
 
 ### Inspecting preparation
 
@@ -376,6 +376,12 @@ the outer installation event means that preparation changed the caller's module.
 The observer records these decisions without supplying evidence, consuming
 semantic work or changing selection and retry policy.
 
+Standalone scoped finite preparation journals each private attempt, including
+discard and ordered retry, and reports a returned candidate after its independent
+check succeeds. It does not install that candidate in the caller's module.
+Nested finite emitters share the journal; limiting or disabling event recording
+does not change the candidate, checking allowances, or construction work.
+
 For tool-driven inspection:
 
 ```sh
@@ -383,12 +389,12 @@ zkc-opt input.mlir --zkc-prepare-protocol='trace-mathematics=true'
 zkc-opt input.mlir --zkc-prepare-protocol='dump-mathematics=true'
 ```
 
-Remarks and labeled before/after IR go to the diagnostic stream. `RetainMaps`
-through `Finish` remains one stateful invocation; diagnostic phases do not reset
-its occurrence or work accounting. Standalone transformations begin a new scope
-unless their caller supplies shared work. A private candidate is published only
+Remarks and labeled before/after IR go to the diagnostic stream. Preparation
+and numerical realization share work within their owning transaction; diagnostic
+phases do not reset that accounting. Standalone transformations begin a new
+scope unless their caller supplies shared work. A private candidate is published only
 after its own reader accepts the actual source/candidate pair. Rejected proposals
-leave the original body and external expansion state unchanged. Stage records and
+leave the original body and externally requested occurrence records unchanged. Stage records and
 IR dumps carry no independent proof authority. Reusing a trace starts a fresh
 journal at the outer invocation; nested services append within that invocation.
 Observers require exclusive access, including across pass-manager clones. Use

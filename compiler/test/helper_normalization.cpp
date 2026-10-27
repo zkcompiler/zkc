@@ -1,9 +1,13 @@
+#include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/HelperNormalization.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -13,6 +17,8 @@
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
+namespace sc = zkc::test::scopedComputation;
+namespace sf = zkc::test::scopedFinite;
 namespace {
 std::string fixture(StringRef directory, StringRef name) {
   auto bytes =
@@ -32,6 +38,34 @@ protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
 }
 OwningOpRef<ModuleOp> copy(ModuleOp module) {
   return OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
+}
+void computation(ModuleOp module, StringRef helper, StringRef caller) {
+  auto function = SymbolTable(unit(module)).lookup<func::FuncOp>(helper);
+  require(bool(function), "missing computation helper");
+  sc::computation(function, caller);
+  require(succeeded(verify(module)), "scoped computation fixture refused");
+}
+OwningOpRef<ModuleOp> prepare(ModuleOp source,
+                              MathematicalSelectionPolicy policy = {}) {
+  auto logical = copy(source);
+  PassManager pipeline(source.getContext());
+  pipeline.addPass(protocol::createProjectProtocolPass(false, policy));
+  pipeline.addPass(protocol::createLowerMathPass(policy));
+  require(succeeded(pipeline.run(*logical)), "logical computation refused");
+  return logical;
+}
+OwningOpRef<ModuleOp> select(ModuleOp logical,
+                             MathematicalSelectionPolicy policy = {}) {
+  target::PhysicalPlanOptions options;
+  options.numericalPolicy = policy;
+  auto proposal = take(target::proposePhysical(
+      logical, target::installedCandidates(), {}, options));
+  auto checked = take(target::validatePhysical(logical, proposal));
+  auto selected = take(checked.cloneSelectedSubject(logical));
+  require(succeeded(mathematical::verifyNumericalLowering(logical, *selected,
+                                                          policy)),
+          "independent numerical comparison refused");
+  return selected;
 }
 } // namespace
 int main() {
@@ -57,7 +91,6 @@ int main() {
    %s = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %r,%a : !F,!F
  }
- local.realize @tuple = @nested : (!F,!F)->(!F,!F)
  )";
   cases.run("comparison capacity has its own diagnostic", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
@@ -219,51 +252,48 @@ int main() {
   cases.run("outer correspondence checks the full realized tuple", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
     require(bool(source), "ordinary nested program refused");
-    auto candidate = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "tuple realization failed");
-    SymbolTable symbols(unit(*candidate));
-    auto function = symbols.lookup<local::FuncOp>("tuple");
-    auto &returned = function.getBody().front().back();
-    returned.setOperand(1, returned.getOperand(0));
+    computation(*source, "nested", "tuple");
+    auto logical = prepare(*source);
+    auto candidate = select(*logical);
+    auto returned = sc::returned(sf::function(*candidate, "tuple"));
+    returned->setOperand(1, returned->getOperand(0));
     require(succeeded(verify(*candidate)), "tuple mutation is not executable");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(mathematical::verifyMathRealizationsPreserved(*source,
-                                                                 *candidate)),
+    require(failed(mathematical::verifyNumericalLowering(*logical, *candidate)),
             "outer correspondence ignored the second result");
   });
-  cases.run("raw closure bodies are frozen with their Local wrapper", [&] {
+  cases.run("raw dependency bodies are frozen with their scoped caller", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
     require(bool(source), "raw closure source refused");
-    auto candidate = copy(*source);
-    require(succeeded(mathematical::expandMathRealizations(*candidate)),
-            "raw closure formation failed");
-    auto wrapper = SymbolTable(unit(*candidate)).lookup<local::FuncOp>("tuple");
-    auto call = cast<kernel::CallOp>(wrapper.getBody().front().front());
-    SymbolTableCollection symbols;
-    auto entry = kernel::resolve(call, symbols);
-    require(bool(entry), "wrapper lost its numerical entry");
-    auto closure = cast<mlir::ModuleOp>(entry->getParentOp());
+    computation(*source, "nested", "tuple");
     auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("nested");
-    require(
-        succeeded(kernel::verifyKernelClosure(unit(*source), helper, closure)),
-        "formation changed the original helper closure");
-    auto frozen = copy(*candidate);
-    auto dependency = SymbolTable(closure).lookup<func::FuncOp>("difference");
+    uint64_t remaining = 1000000;
+    auto closure = kernel::closeComputation(helper, remaining);
+    require(bool(closure) && succeeded(kernel::verifyKernelClosure(
+                                 unit(*source), helper, *closure)),
+            "closing computation changed the original dependency bodies");
+    auto dependency = SymbolTable(*closure).lookup<func::FuncOp>("difference");
     require(bool(dependency), "formation normalized away the raw dependency");
     auto &subtract = dependency.front().front();
     subtract.setOperand(1, subtract.getOperand(0));
-    require(succeeded(verify(*candidate)),
+    require(succeeded(verify(*closure)),
             "same-typed dependency mutation lost formation");
     ScopedDiagnosticHandler expected(&context,
                                      [](Diagnostic &) { return success(); });
-    require(failed(mathematical::verifyMathRealizationsPreserved(*source,
-                                                                 *candidate)),
-            "formation correspondence ignored a changed Kernel helper");
-    require(failed(mathematical::verifyAuthoredLocalsPreserved(
-                unit(*frozen), unit(*candidate))),
-            "Local preservation failed to freeze its numerical closure");
+    require(
+        failed(kernel::verifyKernelClosure(unit(*source), helper, *closure)),
+        "closure comparison ignored a changed dependency");
+    auto candidate = copy(*source);
+    auto changed =
+        SymbolTable(unit(*candidate)).lookup<func::FuncOp>("difference");
+    changed.front().front().setOperand(1, changed.getArgument(0));
+    require(succeeded(verify(*candidate)),
+            "source dependency mutation lost formation");
+    require(
+        failed(mathematical::verifyAuthoredLocalsPreserved(unit(*source),
+                                                           unit(*candidate))),
+        "scoped caller preservation failed to freeze its numerical closure");
   });
   cases.run("bounded indices retain their argument assignment", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
@@ -303,27 +333,22 @@ int main() {
    %n = "data.sequence_length"(%two) : (!data.sequence<!F>)->ui64
    func.return %v,%p,%n : !F,!algebra.group<"bls12-381.g1">,ui64
  }
- local.realize @mixed_exec = @mixed : (!F,!F,!algebra.group<"bls12-381.g1">,i1)->(!F,!algebra.group<"bls12-381.g1">,ui64)
  )"),
                                                   &context);
         require(bool(source), "ordinary mixed helper refused");
-        auto candidate = copy(*source);
-        require(succeeded(mathematical::expandMathRealizations(*candidate)),
-                "mixed helper realization failed");
-        require(succeeded(mathematical::verifyMathRealizationsPreserved(
-                    *source, *candidate)),
-                "mixed helper correspondence failed");
-        SymbolTable symbols(unit(*candidate));
-        auto function = symbols.lookup<local::FuncOp>("mixed_exec");
-        function.getBody().front().front().setAttr(
-            "site", StringAttr::get(&context, "changed_site"));
+        computation(*source, "mixed", "mixed_exec");
+        auto logical = prepare(*source);
+        auto candidate = select(*logical);
+        auto function = sf::function(*candidate, "mixed_exec");
+        auto application = sf::application(function, "curve.scale");
+        application.setSite("changed_site");
         require(succeeded(verify(*candidate)),
                 "site mutation is not executable");
         ScopedDiagnosticHandler handler(&context,
                                         [](Diagnostic &) { return success(); });
-        require(failed(mathematical::verifyMathRealizationsPreserved(
-                    *source, *candidate)),
-                "changed realization occurrence accepted");
+        require(
+            failed(mathematical::verifyNumericalLowering(*logical, *candidate)),
+            "changed computation occurrence accepted");
       });
 
   cases.run("independent polynomial observation against handwritten arithmetic",
@@ -369,7 +394,6 @@ int main() {
    %r = "poly.evaluate"(%f) : (!poly.polynomial<"bls12-381.fr",0>)->!F
    func.return %c,%d,%r : !A,!A,!F
  }
- local.realize @tables_exec = @tables : (!F,!F,!F)->(!A,!A,!F)
  func.func private @sum(%a:!F,%b:!F,%x:!F)->(!A,!A,ui64) {
    %v = "algebra.array_from_elements"(%a,%b,%b,%a) : (!F,!F,!F,!F)-> !algebra.field_array<"bls12-381.fr", 4>
    %m = "poly.mle"(%v) : (!algebra.field_array<"bls12-381.fr", 4>)->!poly.polynomial<"bls12-381.fr",2>
@@ -379,7 +403,6 @@ int main() {
    %n = "data.dim"(%v) {axis=0:i64} : (!algebra.field_array<"bls12-381.fr", 4>)->ui64
    func.return %c,%t,%n : !A,!A,ui64
  }
- local.realize @sum_exec = @sum : (!F,!F,!F)->(!A,!A,ui64)
  )";
   cases.run(
       "interpolation tables fixing suffix sums and dead valid observations",
@@ -387,46 +410,37 @@ int main() {
         auto source =
             parseSourceString<ModuleOp>(insert(base, polynomials), &context);
         require(bool(source), "ordinary polynomial family refused");
-        auto candidate = copy(*source);
-        require(succeeded(mathematical::expandMathRealizations(*candidate)),
-                "polynomial family realization failed");
-        require(succeeded(mathematical::verifyMathRealizationsPreserved(
-                    *source, *candidate)),
-                "polynomial family correspondence failed");
+        computation(*source, "tables", "tables_exec");
+        computation(*source, "sum", "sum_exec");
+        auto logical = prepare(*source);
         unsigned rawPolynomialOperations = 0;
-        candidate->walk([&](Operation *operation) {
+        logical->walk([&](Operation *operation) {
           rawPolynomialOperations +=
-              bool(operation->getParentOfType<mlir::ModuleOp>()) &&
               operation->getName().getStringRef().starts_with("poly.");
         });
-        require(rawPolynomialOperations,
-                "formation normalized away raw polynomial mathematics");
-        PassManager formation(&context);
-        formation.addPass(protocol::createProjectProtocolPass(false));
-        formation.addPass(protocol::createLowerMathPass());
-        require(succeeded(formation.run(*candidate)), "logical Exec failed");
-        auto logical = copy(*candidate);
         require(
-            succeeded(kernel::lowerKernels(*candidate)) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
-            "polynomial recipes failed");
-        SymbolTable symbols(unit(*candidate));
-        auto function = symbols.lookup<local::FuncOp>("sum_exec");
-        bool changed = false;
-        function.walk([&](Operation *op) {
-          if (op->getName().getStringRef() == "algebra.exec.index_constant") {
-            op->setAttr(
-                "parameters",
-                ArrayAttr::get(&context, {StringAttr::get(&context, "3")}));
-            changed = true;
-          }
-        });
-        require(changed && succeeded(verify(*candidate)),
+            rawPolynomialOperations,
+            "source preparation normalized away raw polynomial mathematics");
+        auto candidate = select(*logical);
+        auto function = sf::function(*candidate, "sum_exec");
+        auto dimension = sc::returned(function)->getOperand(2);
+        exec::ApplyOp constant;
+        for (auto op : sf::applications(function, "index.constant"))
+          if (sc::payload(op).front() == dimension)
+            constant = op;
+        require(constant && constant.getParameters() ==
+                                ArrayAttr::get(
+                                    &context, {StringAttr::get(&context, "4")}),
+                "missing returned static dimension");
+        constant.setParametersAttr(
+            ArrayAttr::get(&context, {StringAttr::get(&context, "3")}));
+        require(succeeded(verify(*candidate)),
                 "dimension mutation is not executable");
         ScopedDiagnosticHandler handler(&context,
                                         [](Diagnostic &) { return success(); });
-        require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
-                "changed static dimension escaped correspondence");
+        require(
+            failed(mathematical::verifyNumericalLowering(*logical, *candidate)),
+            "changed static dimension escaped correspondence");
       });
   cases.run("ordered finite helper checks original polynomial meaning", [&] {
     auto text = fixture(ZKC_FINITE_FIXTURES, "total-state");
@@ -454,21 +468,14 @@ int main() {
                                                        unit(*candidate))),
             "original finite polynomial recipe refused");
     auto logical = copy(*candidate);
-    require(succeeded(kernel::lowerKernels(*candidate, policy)) &&
-                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
-            "finite polynomial recipes failed");
-    bool changed = false;
-    candidate->walk([&](Operation *op) {
-      if (!changed && isa<algebra::FieldProductOp>(op)) {
-        op->setOperand(1, op->getOperand(0));
-        changed = true;
-      }
-    });
-    require(changed && succeeded(verify(*candidate)),
-            "finite mutation is not executable");
+    candidate = select(*logical, policy);
+    auto product = sf::application(*candidate, "field.mul");
+    product.getInputsMutable()[1].set(product.getInputs()[0]);
+    require(succeeded(verify(*candidate)), "finite mutation is not executable");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
+    require(failed(mathematical::verifyNumericalLowering(*logical, *candidate,
+                                                         policy)),
             "changed finite polynomial computation escaped correspondence");
   });
   cases.run(
@@ -482,20 +489,17 @@ int main() {
         for (unsigned i = 0; i < 195; ++i)
           declarations +=
               "%v" + std::to_string(i) + " = func.call @leaf(%x):(!F)->!F\n";
-        declarations +=
-            "func.return %x:!F }\nlocal.realize @one = @many : (!F)->!F\n"
-            "local.realize @two = @many : (!F)->!F\n";
+        declarations += "func.return %x:!F }\n";
         auto source =
             parseSourceString<ModuleOp>(insert(base, declarations), &context);
         require(bool(source), "ordinary shared helper program refused");
-        require(succeeded(mathematical::expandMathRealizations(*source)),
-                "shared helper formation narrowed existing capacity");
-        PassManager pipeline(&context);
-        pipeline.addPass(protocol::createProjectProtocolPass(false));
-        pipeline.addPass(protocol::createLowerMathPass());
-        pipeline.addPass(kernel::createLowerKernelsPass());
-        require(succeeded(pipeline.run(*source)),
-                "later shared helper normalization narrowed existing capacity");
+        computation(*source, "many", "one");
+        computation(*source, "many", "two");
+        auto logical = prepare(*source);
+        auto selected = select(*logical);
+        require(sf::function(*selected, "one") &&
+                    sf::function(*selected, "two"),
+                "shared helper occurrence disappeared");
       });
   cases.run("helper comparisons share one cumulative work budget", [&] {
     std::string declarations = "func.func private @budgeted(%x:!F)->!F {\n";

@@ -45,7 +45,7 @@ retains its admitted family set, and Contracts/profile checks retain permission
 authority. Source `[T; N]` remains a structural array with its existing flattened
 ABI; it is distinct from both nominal field arrays and fixed vectors.
 
-Products and sums reuse `!local.variant` and its canonical nominal descriptor.
+Products and sums reuse `!data.variant` and its canonical nominal descriptor.
 One alternative is a product; multiple alternatives form a sum. Payload identity
 includes nested field/group/container identities. Copy/drop/shared permission is
 checked recursively over every alternative. A sum containing an affine payload
@@ -72,7 +72,7 @@ The operations are:
   field matrix, field array or bytes, including a zero extent. Sequences and fixed
   vectors do not gain admission through the collection interface.
 
-Sum elimination uses ordered `local.match`. Dynamic indexing, equal-length zip,
+Sum elimination uses ordered `exec.match`. Dynamic indexing, equal-length zip,
 shape conversion and inverse remain checked local work unless a separate total
 contract establishes their preconditions. Structural similarity and generic
 tensor operations confer no mathematical admission. Shape evidence supplies

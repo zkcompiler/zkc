@@ -193,6 +193,8 @@ class Driver(Runner):
         artifacts = pipeline_compile.proof_entry(self, subject, self.args.compiler, self.directory(subject, "proof"),
                                                  executable_profile)
         modules = record
+        if subject.generated("original_source"):
+            self.generated(subject, "original_source", artifacts["source"].decode("utf-8"), modules)
         if subject.generated("original_export"):
             self.generated(subject, "original_export", artifacts["original_text"], modules)
         data, participant = subject.module_name("data"), subject.module_name("participant")
@@ -248,7 +250,7 @@ class Driver(Runner):
 
         def templates(instructions):
             for item in mutations.nested(instructions):
-                if item[0] in (mutations.OBSERVE, mutations.CHALLENGE):
+                if mutations.bound(item, mutations.OBSERVE) or mutations.bound(item, mutations.CHALLENGE):
                     yield list(bytes.fromhex(dict(item[1])["parameters"][1][0]))
 
         parts = [f"import {glue_module}", "import Zkc.Construction.Encoding", "set_option maxRecDepth 20000",

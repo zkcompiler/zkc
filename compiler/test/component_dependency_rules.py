@@ -109,7 +109,7 @@ def move_source(text, source, destination):
         lines.append(f"{name}|{links}|{interface}|{';'.join(items)}")
     return "\n".join(lines) + "\n"
 
-for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp"):
+for source in ("lib/Dialect/Algebra/IR/Mathematical.cpp", "lib/Dialect/Protocol/IR/Protocol.cpp", "lib/Dialect/Exec/ControlCursor.cpp"):
     rejects(f"mandatory IR source cannot move to optional translation: {source}", manifest,
             lambda text, source=source: move_source(text, source, "ZkcTranslation"),
             "mandatory component ownership")
@@ -283,7 +283,7 @@ rejects("IR cannot depend on carrier translation",
         "ZkcIR: upward include")
 
 rejects("SSA transforms cannot depend on carrier translation",
-        root / "lib/Transforms/Algorithms.cpp",
+        root / "lib/Transforms/ScopedAlgorithms.cpp",
         lambda text: '#include "zkc/Translation/Protocol.h"\n' + text,
         "ZkcTransforms: upward include")
 
@@ -301,7 +301,7 @@ rejects("IR cannot parse invocation input",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
         "parsing belongs to Compiler or Driver")
 rejects("transforms cannot parse invocation input",
-        root / "lib/Transforms/Algorithms.cpp",
+        root / "lib/Transforms/ScopedAlgorithms.cpp",
         lambda text: '#include "mlir/Parser/Parser.h"\n' + text,
         "parsing belongs to Compiler or Driver")
 
@@ -348,14 +348,22 @@ rejects("prepared protocol bridge grants no other private transform header",
         "private component dependency")
 
 for source in ("FiniteVerification", "MathLoweringVerification",
-               "MathematicalComparison", "NestedContractionVerification"):
+               "MathematicalComparison", "HelperNormalizationVerification",
+               "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
+               "Kernel/ScopedVerification"):
     for header in ("ComputationEquations.h", "ComputationSelection.h",
-                   "RealizationEmission.h", "zkc/Analysis/Computation.h"):
+                   "RealizationEmission.h", "zkc/Analysis/Computation.h",
+                   "ScopedFinite.h", "ScopedPreparation.h"):
+        include = "../" + header if "/" in source and not header.startswith("zkc/") else header
         rejects(f"independent reader excludes producer machinery: {source} -> {header}",
                 root / f"lib/Transforms/{source}.cpp",
-                lambda text, header=header: f'#include "{header}"\n' + text,
+                lambda text, include=include: f'#include "{include}"\n' + text,
                 "independent reader imports producer machinery")
 rejects("independent reader boundary is transitive",
         root / "lib/Transforms/MathematicalComparison.h",
         lambda text: '#include "ComputationSelection.h"\n' + text,
+        "independent reader imports producer machinery")
+rejects("shared callback signatures cannot import producer recipes",
+        root / "lib/Transforms/ScopedCallback.h",
+        lambda text: '#include "MathematicalRecipes.h"\n' + text,
         "independent reader imports producer machinery")

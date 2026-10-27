@@ -4,7 +4,7 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "llvm/Support/raw_ostream.h"
@@ -15,7 +15,8 @@ using namespace zkc;
 int main() {
   DialectRegistry registry;
   registry.insert<relation::RelationDialect, algebra::AlgebraDialect,
-                  local::LocalDialect, data::DataDialect, func::FuncDialect>();
+                  exec::ExecDialect, data::DataDialect, runtime::RuntimeDialect,
+                  func::FuncDialect>();
   MLIRContext context(registry), otherContext(registry);
   std::string refusal;
   auto handler = [&](Diagnostic &diagnostic) {
@@ -110,7 +111,7 @@ relation.declare @predicate {
                      std::vector<protocol::VariantAlternative> arms) {
     auto encoded = protocol::encodeVariant({name.str(), std::move(arms)});
     require(bool(encoded), "variant fixture failed");
-    return "!local.variant<\"" + encoded.value_or("") + "\">";
+    return "!data.variant<\"" + encoded.value_or("") + "\">";
   };
   const std::string record =
       variant("RelationData",
@@ -167,7 +168,7 @@ relation.declare @predicate {
   for (const auto &type : std::vector<std::string>{
            "i64", "tensor<2x2x" + fieldType + ">", "memref<2xi1>",
            "!algebra.fixed_vector<" + fieldType + ", 3>",
-           "!local.capability<\"rng:bls12-381.fr\">",
+           "!runtime.capability<\"rng:bls12-381.fr\">",
            variant("HiddenResource",
                    {{"None", {}}, {"Some", {"rng:bls12-381.fr"}}}),
            variant("HiddenKey",
@@ -187,11 +188,13 @@ relation.declare @predicate {
   require(!parse(pureCall, context) &&
               refusal.find("valid function") != std::string::npos,
           "pure call accepted relation symbol");
-  auto localCall = declaration + "local.func @bad(%x: " + field +
-                   ") -> i1 { %r = apply @predicate(%x) {site=\"call\"} : (" +
-                   field + ") -> i1 return %r : i1 }";
-  require(!parse(localCall, context) &&
-              refusal.find("interactive-symbol-kind") != std::string::npos,
-          "local apply accepted relation symbol");
+  auto computationCall =
+      declaration + "func.func @bad(%scope: !runtime.scope, %x: " + field +
+      ") -> !exec.outcome<(i1)> { %r = \"exec.compute\"(%scope,%x) "
+      "{callee=@predicate,site=\"call\"} : (!runtime.scope," +
+      field + ") -> !exec.outcome<(i1)> func.return %r : !exec.outcome<(i1)> }";
+  require(!parse(computationCall, context) &&
+              refusal.find("execution-computation-symbol") != std::string::npos,
+          "mathematical invocation accepted a relation symbol");
   return failures != 0;
 }

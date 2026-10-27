@@ -1,10 +1,26 @@
 #include "ComputationSelection.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include <utility>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
+bool canReplaceOperation(const finite::ComputationView &view, Operation *op) {
+  if (!finite::replaceable(op))
+    return false;
+  auto *source = view.sourceOperation(op);
+  if (source == op)
+    return true;
+  auto reference = source->getAttrOfType<FlatSymbolRefAttr>("binding");
+  if (!reference)
+    return true;
+  auto binding = SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+      source, reference);
+  return binding && binding.getImplementation().empty() &&
+         (!view.computation.fixedBindings ||
+          !view.computation.fixedBindings->contains(binding));
+}
 bool canReplaceNumericalCalls(const finite::ComputationView &view) {
   return llvm::all_of(view.numericalCalls(), [](Operation *call) {
     auto raw = call->getAttr("policy");
@@ -61,8 +77,9 @@ selectReduction(const Reduction &equation, const MathematicalRecipes &recipes) {
 } // namespace
 bool canReplacePayload(const finite::ComputationView &view) {
   return canReplaceNumericalCalls(view) &&
-         llvm::all_of(view.payload,
-                      [](Operation *op) { return finite::replaceable(op); });
+         llvm::all_of(view.payload, [&](Operation *op) {
+           return canReplaceOperation(view, op);
+         });
 }
 bool canReplaceNestedContraction(const finite::ComputationView &view) {
   if (view.nested.size() != 1 || !canReplaceNumericalCalls(view) ||
@@ -70,7 +87,7 @@ bool canReplaceNestedContraction(const finite::ComputationView &view) {
     return false;
   Operation *call = view.nested.front().occurrence;
   return llvm::all_of(view.payload, [&](Operation *op) {
-    return op == call || finite::replaceable(op);
+    return op == call || canReplaceOperation(view, op);
   });
 }
 ComputationSelection selectComputation(finite::Computation computation,
@@ -102,6 +119,15 @@ ComputationSelection selectComputation(finite::ComputationView view,
   if (!policy.finiteBulk) {
     selection.diagnostic.outcome = {OptimizationStatus::PolicyDisabled,
                                     OptimizationReason::Policy};
+    return selection;
+  }
+  if (selection.view->computation.scoped && !selection.view->nested.empty()) {
+    auto nested = selectNestedContraction(*selection.view, work, recipes);
+    selection.nested = std::move(nested.equation);
+    selection.matrix = nested.recipe;
+    selection.diagnostic = nested.diagnostic;
+    if (selection.matrix)
+      selection.kind = RealizationKind::NestedContraction;
     return selection;
   }
   if (!selection.equations.bilinear && !selection.equations.reduction &&

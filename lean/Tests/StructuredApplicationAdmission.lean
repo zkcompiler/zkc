@@ -88,7 +88,7 @@ private def subsetFold (calleeRoles : List String) : Snapshot :=
     [["P"], ["P"]] [["P"]]
     (.block [.instruction (.protocolApply "foldLeaf" (if calleeRoles.length == 1 then ["P"] else ["P", "V"]))
       [0, 1] [scalar] [] "apply"] (.ret [0]))
-  { unit [caller, callee, helper] with domains := [⟨"elements", [vector], .elements 0⟩] }
+  { unit [caller, callee, helper] with domains := [⟨"elements", [vector], [.elements 0], 0⟩] }
 
 private def statementUnit (called : Bool) : Snapshot :=
   let root := protocol "main" ["P"] [.boolean] [.boolean] [["P"]] [["P"]]

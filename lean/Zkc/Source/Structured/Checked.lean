@@ -26,6 +26,10 @@ def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
       let raw : RawRegion Ty Op := .letOp (.fold spec) (List.range f.inputs.length)
         f.outputs .nil (.ret (List.range f.outputs.length))
       pure raw
+    | .collect declaration => do
+      let spec ← resolveCollect snapshot domains declaration
+      pure (.letOp (.collect spec) (List.range declaration.inputs.length)
+        declaration.outputs .nil (.ret [0]))
     | .realization declaration => do
       declaration.validate snapshot
       pure declaration.raw

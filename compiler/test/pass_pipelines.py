@@ -22,7 +22,7 @@ for project_only, linear, release in ((True, False, False), (False, False, False
     if not project_only:
         assert json.loads(commands.source("protocol-export", named)) == json.loads(commands.source("protocol-export", explicit))
     else:
-        commands.source("protocol-export", named, refuses="interactive-module")
+        commands.source("protocol-export", named, refuses="native-physical-required")
 projected = optimize("zkc-project-protocol")
 commands.verified(projected, "mathematical-module", "--zkc-participant-pipeline")
 print(f"native named pipeline: {commands.save()} checks")

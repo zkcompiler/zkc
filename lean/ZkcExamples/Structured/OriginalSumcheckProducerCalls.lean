@@ -29,7 +29,7 @@ theorem table_lift (payload : UnitPayload)
     invoke (helpers (F := F) (G := G) payload).closed MapFirstBodies.tableHelper
       (PrimitiveLibrary.inputs raw count 1) = .done (PrimitiveLibrary.inputs raw count 1) := by
   rw [← (helpers_lift payload).closed, closed_invoke_plain,
-    MapFirstContracts.table_equation payload.linked bodies.first raw count 1 bounded
+    (SumcheckUnitContracts.first_laws payload.linked bodies).tableLaw raw count 1 bounded
       (lt_trans shape.2.1 (by decide +kernel)) (by decide +kernel), ite_eq_left shape]
   rfl
 

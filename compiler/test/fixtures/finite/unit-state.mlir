@@ -6,16 +6,26 @@ module { "protocol.module"() ({
    %d = "data.domain_elements"(%xs) : (!V) -> !data.domain<!F>
    "data.domain_yield"(%d) : (!data.domain<!F>) -> ()
  }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
- local.func private @step(%item:!F,%xs:!V,%enabled:i1) attributes {logical_origin=["step",[]]} {
-   "local.stop"() {site="body_stop",reason="abort"} : ()->()
+ func.func private @step(%scope:!runtime.scope,%item:!F,%xs:!V,%enabled:i1) -> !exec.outcome<> attributes {no_inline,runtime.origin=["step",[]]} {
+   %stop = "exec.reject"(%scope) {site="body_stop",reason="abort"} : (!runtime.scope)->!exec.stop
+   cf.br ^failed(%stop : !exec.stop)
+ ^failed(%cause:!exec.stop):
+   %failed = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<>
+   func.return %failed : !exec.outcome<>
  }
- local.func private @predicate(%item:!F,%xs:!V,%enabled:i1) -> i1 attributes {logical_origin=["predicate",[]]} {
-   local.return %enabled : i1
+ func.func private @predicate(%scope:!runtime.scope,%item:!F,%xs:!V,%enabled:i1) -> !exec.outcome<(i1)> attributes {no_inline,runtime.origin=["predicate",[]]} {
+   %result = "exec.returned"(%enabled) : (i1)->!exec.outcome<(i1)>
+   func.return %result : !exec.outcome<(i1)>
  }
- "local.finite_fold"() {sym_name="fold",function_type=(!V,i1)->(),domain=@items,step=@step,predicate=@predicate} : ()->()
- local.func @work(%xs:!V,%enabled:i1) -> i1 attributes {logical_origin=["work",[]]} {
-   local.apply @fold(%xs,%enabled) {site="fold"} : (!V,i1)->()
-   local.return %enabled : i1
+ func.func @work(%scope:!runtime.scope,%xs:!V,%enabled:i1) -> !exec.outcome<(i1)> attributes {no_inline,runtime.origin=["work",[]]} {
+   %fold = "exec.fold"(%scope,%xs,%enabled) {domain=@items,step=@step,predicate=@predicate,site="fold"} : (!runtime.scope,!V,i1)->!exec.outcome<>
+   "exec.dispatch"(%fold)[^done,^failed] : (!exec.outcome<>)->()
+ ^done:
+   %result = "exec.returned"(%enabled) : (i1)->!exec.outcome<(i1)>
+   func.return %result : !exec.outcome<(i1)>
+ ^failed(%cause:!exec.stop):
+   %failure = "exec.failed"(%cause) : (!exec.stop)->!exec.outcome<(i1)>
+   func.return %failure : !exec.outcome<(i1)>
  }
  "protocol.func"() ({
  ^entry(%xs:!V,%enabled:i1):

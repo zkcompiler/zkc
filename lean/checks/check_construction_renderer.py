@@ -27,7 +27,7 @@ spec = importlib.util.spec_from_file_location("constructed_participant", HERE / 
 renderer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(renderer)
 
-TRANSCRIPT = '!local.capability<"transcript:merlin3.bls12-381.fr64be/0">'
+TRANSCRIPT = '!runtime.capability<"transcript:merlin3.bls12-381.fr64be/0">'
 FIELD = '!algebra.field<"bls12-381.fr">'
 INDICES = "!algebra.indices"
 
@@ -38,9 +38,9 @@ def loop(site, carried, operands, results, arguments, body, yielded):
     return ["protocol.loop", attributes, [], operands, results, [[arguments, body, yielded]]]
 
 
-def indices(operation, operands, binding):
+def indices(operands, binding):
     attributes = [["binding", ["symbol", "b"]], ["parameters", ["strings", []]], ["site", ["string", "s0"]]]
-    return [f"algebra.exec.{operation}", attributes, [binding, [], ""], operands, [INDICES], []]
+    return ["exec.apply", attributes, [binding, [], ""], operands, [INDICES], []]
 
 
 # Inputs: a field value (0), a count (1) and the host transcript (2). The outer
@@ -51,8 +51,8 @@ CAPTURING = [
     loop("s", 1, [1, 2, 0], [TRANSCRIPT], ["ui64", TRANSCRIPT, FIELD], [
         ["algebra.field_add", [], [], [5, 0], [FIELD], []],
         loop("t", 1, [1, 4, 3, 6], [TRANSCRIPT], ["ui64", TRANSCRIPT, "ui64", FIELD], [
-            indices("indices_empty", [], "indices.empty"),
-            indices("indices_append", [11, 9], "indices.append"),
+            indices([], "indices.empty"),
+            indices([11, 9], "indices.append"),
             ["algebra.field_add", [], [], [10, 10], [FIELD], []],
         ], [8]),
     ], [7]),
@@ -87,7 +87,7 @@ example : RenderedConjunction.participant.instructions =
     base, extension = '!algebra.field<"base">', '!algebra.field<"extension">'
     embedding_attrs = [["binding", ["symbol", "embed"]], ["parameters", ["strings", []]],
                        ["site", ["string", "embedding"]]]
-    embedding = ["algebra.exec.field_embed", embedding_attrs,
+    embedding = ["exec.apply", embedding_attrs,
                  ["field.embed", ["extension"], ""], [0], [extension], []]
     embedded = renderer.render(export([base, TRANSCRIPT], [embedding], [2, 1]), "RenderedEmbedding")
     embedded = embedded.replace("module\n\n", "", 1).replace("public import Zkc.Construction.Participant\n", "")
@@ -111,6 +111,25 @@ example : RenderedCaptures.participant.instructions =
     RenderedCaptures.participant.returned = [4, 3] := by
   decide +kernel
 '''
+    for name, attrs, namespace in (
+            ("protocol.local_call", [["callee", ["symbol", "source_helper"]],
+                                     ["role", ["string", "role00000001"]],
+                                     ["site", ["string", "invoke"]]], "RenderedParticipantCall"),
+            ("func.call", [["callee", ["symbol", "source_helper"]],
+                           ["runtime.site", ["string", "handler"]]], "RenderedScopedCall")):
+        data = export([FIELD, TRANSCRIPT], [[name, attrs, [], [0], ["i1"], []]], [2, 1])
+        rendered = renderer.render(data, namespace).replace("module\n\n", "", 1)
+        source += rendered.replace("public import Zkc.Construction.Participant\n", "").replace(
+            "@[expose] public section\n", "")
+        source += f"\nopen Zkc.Construction in\nexample : {namespace}.participant.instructions =\n" \
+                  '    [⟨.call "source_helper", [0], [.data .boolean], []⟩] := by decide +kernel\n'
+    boolean = export([TRANSCRIPT], [["exec.boolean", [["site", ["string", "literal"]],
+                        ["value", ["bool", True]]], [], [], ["i1"], []]], [1, 0])
+    rendered = renderer.render(boolean, "RenderedBoolean").replace("module\n\n", "", 1)
+    source += rendered.replace("public import Zkc.Construction.Participant\n", "").replace(
+        "@[expose] public section\n", "")
+    source += '\nopen Zkc.Construction in\nexample : RenderedBoolean.participant.instructions =\n' \
+              '    [⟨.calculate (.booleanConstant true), [], [.data .boolean], []⟩] := by decide +kernel\n'
     path = output / "Rendered.lean"
     path.write_text("module\n\npublic import Zkc.Construction.Participant\n\n@[expose] public section\n" + source, encoding="utf-8")
     run = subprocess.run([lake, "lean", path], cwd=HERE,
@@ -154,15 +173,15 @@ example : RenderedCaptures.participant.instructions =
         ("field embedding ports", embedding_attrs, ["field.embed", ["extension"], ""], [], [extension]),
         ("field embedding ports", embedding_attrs, ["field.embed", ["extension"], ""], [0], ["i1"]),
         ("field embedding binding", embedding_attrs, ["field.embed", ["base"], ""], [0], [extension]),
-        ("field embedding binding", embedding_attrs, ["field.equal", ["extension"], ""], [0], [extension]),
-        ("field embedding attributes", embedding_attrs[:-1], ["field.embed", ["extension"], ""], [0], [extension]),
+
+        ("execution binding attributes", embedding_attrs[:-1], ["field.embed", ["extension"], ""], [0], [extension]),
         ("field embedding attributes", [embedding_attrs[0], ["parameters", ["strings", ["extra"]]],
                                         embedding_attrs[2]], ["field.embed", ["extension"], ""], [0], [extension]),
     ]
     # An explicit implementation is outside this mathematical profile. Retain
     # the exact binding boundary instead of erasing a third field of any type.
     embedding_refusals.extend(
-        ("field embedding binding", embedding_attrs,
+        ("execution binding", embedding_attrs,
          ["field.embed", ["extension"], implementation], [0], [extension])
         for implementation in ("unregistered/field.embed", None, False, 0, [], {}))
     # Valid tagged payloads still need the operation's exact attribute roles.
@@ -170,7 +189,7 @@ example : RenderedCaptures.participant.instructions =
                                 (2, ["symbol", "embedding"]), (2, ["bool", False])):
         attrs = list(embedding_attrs)
         attrs[position] = [attrs[position][0], attribute]
-        embedding_refusals.append(("field embedding attributes", attrs,
+        embedding_refusals.append(("execution binding attributes", attrs,
                                    ["field.embed", ["extension"], ""], [0], [extension]))
     # Check the common tagged-value decoder before a diagnostic-only attribute
     # can be dropped. In particular, bool is not an integer payload.
@@ -183,14 +202,19 @@ example : RenderedCaptures.participant.instructions =
     for diagnostic, attrs, binding, operands, results in embedding_refusals:
         try:
             renderer.render(export([base, TRANSCRIPT],
-                [["algebra.exec.field_embed", attrs, binding, operands, results, []]], [0, 1]), "RejectedEmbedding")
+                [["exec.apply", attrs, binding, operands, results, []]], [0, 1]), "RejectedEmbedding")
         except ValueError as error:
             if diagnostic not in str(error):
                 raise AssertionError(f"renderer refused a malformed embedding for another reason: {error}")
             continue
         raise AssertionError(f"renderer accepted an embedding expected to refuse with {diagnostic}")
-    report = {"status": "pass", "kernel_cases": 3,
-              "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals), "unsupported_cases": 1,
+    # The binding is the operation identity; changing it cannot retain embedding meaning.
+    changed_contract = export([base, TRANSCRIPT],
+        [["exec.apply", embedding_attrs, ["field.equal", ["extension"], ""], [0], [extension], []]], [2, 1])
+    if '.unsupported "exec.apply:field.equal"' not in renderer.render(changed_contract, "UnsupportedBinding"):
+        raise AssertionError("renderer treated another binding as field embedding")
+    report = {"status": "pass", "kernel_cases": 6,
+              "refusal_cases": len(malformed) + len(capture_refusals) + len(embedding_refusals), "unsupported_cases": 2,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
     (output / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

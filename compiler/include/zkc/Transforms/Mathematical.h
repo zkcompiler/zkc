@@ -17,7 +17,10 @@ struct ApplicationStart {
   std::string protocol, site;
   llvm::SmallVector<unsigned> inputs;
 };
-/// Prepare an owned candidate without modifying the source. Selected
+/// Prepare an owned candidate without modifying the source. Realize polynomial
+/// recipes, expand protocol applications, then prepare participant mathematics.
+/// Preserve scoped definitions and finite requests for executable selection.
+/// Selected
 /// application starts are semantic construction inputs, not pass options.
 /// Expansion and correspondence check each selection before publication.
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -25,17 +28,6 @@ prepareProtocol(mlir::ModuleOp source, bool simplify = true,
                 MathematicalSelectionPolicy policy = {},
                 llvm::ArrayRef<ApplicationStart> starts = {},
                 RealizationTrace *trace = nullptr);
-
-/// Checked Local algorithm-selection window on an immutable protocol source.
-/// Returns an owned candidate only after admission and independent checks of
-/// actual nested-collection and finite rewrites and staged helper expansion.
-/// Maps, their scalar closures and adjacent reductions remain for late
-/// selection. Generic total simplification is separate; projection preserves
-/// this accepted Local input.
-mlir::OwningOpRef<mlir::ModuleOp>
-rewriteLocalAlgorithms(mlir::ModuleOp source,
-                       MathematicalSelectionPolicy policy = {},
-                       RealizationTrace *trace = nullptr);
 
 /// Admit the whole mathematical module, then check polynomial observations in
 /// selected pure helpers even when no execution path calls them. Expansion and
@@ -60,45 +52,12 @@ mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
-/// Form owned logical Kernel closures for admitted data-signature helpers.
-/// Local wrappers retain ordered calls and their original logical origins.
-mlir::LogicalResult expandMathRealizations(
-    mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
-    RealizationWork *work = nullptr, RealizationTrace *trace = nullptr);
-/// Independently compare the original helper/domain closure with the actual
-/// logical unit and exact wrapper operands, returns and occurrence inventory.
-mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
-                                                    mlir::ModuleOp candidate);
-
-/// Replace each algebra.map_realize with an ordinary local.func of the same
-/// signature. The helper is expanded into a detached scalar formula and
-/// admitted by the shared Ring view, including unused operations. The body
-/// checks every rowwise input's length against the first before arithmetic,
-/// then applies the admitted live formula through a numerical expression or
-/// O(formula) vector operations. Body/port capacity retains the vector path.
-/// Calls remain ordered local.apply occurrences.
-mlir::LogicalResult expandMapRealizations(
-    mlir::ModuleOp module, RealizationWork *work = nullptr,
-    RealizationTrace *trace = nullptr,
-    NumericalExpressionMode mode = NumericalExpressionMode::PreferNative);
-/// Independently interpret the retained scalar formula and actual candidate
-/// payload under admitted ring laws. Check ordered shape guards, return use,
-/// bindings and unchanged declarations separately from payload equivalence. It
-/// claims equal values and shape refusals under sufficient resources under the
-/// declared primitive contracts, not equal resource exhaustion.
-mlir::LogicalResult verifyMapRealizationsPreserved(mlir::ModuleOp original,
-                                                   mlir::ModuleOp candidate);
-/// Admission of every map formula on an immutable original, using bounded
-/// scratch expansion. Refusals keep their algebra-map identifiers.
-llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
-
-/// Independently read the original Exec source against one actual final
-/// Local candidate. Consume only admitted Kernel calls, retained map calls
-/// and explicitly enabled adjacent map/sum pairs; all other context stays
-/// exact. Explicit implementation requests constrain replacement as well as
-/// final physical binding selection. Optional comparison capacity is typed
-/// and attributable; a mismatch never authorizes retry. Standalone Kernel,
-/// map and fusion edges retain their narrower contracts.
+/// Independently read original scoped execution against the actual scoped
+/// numerical candidate. Mathematical and finite requests retain their original
+/// callbacks, equations and policies; unchanged context stays exact. Explicit
+/// implementation requests constrain replacement as well as final binding
+/// selection. Optional comparison capacity is typed and attributable; a
+/// semantic mismatch never authorizes retry.
 mlir::LogicalResult verifyNumericalLowering(
     mlir::ModuleOp original, mlir::ModuleOp candidate,
     MathematicalSelectionPolicy policy = {},

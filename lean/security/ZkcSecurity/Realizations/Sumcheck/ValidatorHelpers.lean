@@ -1,6 +1,5 @@
 module
 
-public import ZkcSecurity.Realizations.Sumcheck.DomainHelpers
 public import ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers
 
 @[expose] public section
@@ -12,7 +11,7 @@ set_option autoImplicit false
 namespace ZkcSecurity.Realizations.Sumcheck.ValidatorHelpers
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 open ZkcExamples.Structured PrimitiveLibrary SumcheckHelperBodies SumcheckHelperLaws
-open ZkcSecurity.Families.Sumcheck.TableComponent
+open ZkcExamples.Structured.SumcheckArtifacts
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -51,13 +50,13 @@ theorem terminal_all (program : Structured.Program) (bodies : ZkcExamples.Struct
       else .stopped .exhausted := by
   by_cases bounded : raw.length < indexLimit
   · rw [ite_eq_left bounded]
-    exact ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check program bodies.prefixBodies bodies.sumcheck.first bodies.check bodies.checkTable
+    exact ZkcExamples.Structured.SumcheckArtifacts.DomainHelpers.check program bodies.terminal
       raw point claim bounded (pointSmall.trans (by decide +kernel))
   · rw [ite_eq_right bounded]
     apply call_exhausted program checkHelper (checkInputs raw point claim) _ rfl
     rw [bodies.check.invoke program.payload.linked]
     exact check_vector_exhausted_generic_body _
-      (lessAll_bounded _ (MapFirstContracts.less_all program.payload.linked bodies.sumcheck.first))
+      (lessAll_bounded _ (SumcheckUnitContracts.first_laws program.payload.linked bodies.sumcheck).less)
       (SumcheckUnitContracts.shape_body program.payload.linked bodies.sumcheck) raw point claim pointSmall bounded
 
 /-- A false table residual makes this implementation's actual terminal check

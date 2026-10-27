@@ -169,9 +169,7 @@ Error detail::withInterface(
                  "original failed mathematical IR admission");
   uint64_t remaining = limits.work;
   auto checkMathematics = [&](mlir::ModuleOp subject) -> Error {
-    if (auto e = mathematical::checkFormulaDefinitions(subject, remaining))
-      return e;
-    return mathematical::checkMapFormulas(subject, remaining);
+    return mathematical::checkFormulaDefinitions(subject, remaining);
   };
   if (parsed->getAsObject() && parsed->getAsObject()->get("selection")) {
     for (auto numeric : module->getOps<mlir::ModuleOp>()) {

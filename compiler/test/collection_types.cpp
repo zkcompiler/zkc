@@ -111,9 +111,7 @@ int main() {
 !V = !algebra.field_vector<"bls12-381.fr">
 !A = !algebra.field_array<"bls12-381.fr", 4>
 module { "protocol.module"() ({
- local.func private @identity(%xs: !V, %fixed: !A) -> !V attributes {
-   logical_origin=["identity", []]
- } { local.return %xs : !V }
+ func.func private @identity(%xs: !V, %fixed: !A) -> !V { func.return %xs : !V }
  "protocol.func"() ({ ^entry(%xs: !V):
    "protocol.return"(%xs) : (!V) -> ()
  }) {sym_name="main",function_type=(!V)->!V,roles=["P"],
@@ -122,8 +120,8 @@ module { "protocol.module"() ({
 )mlir",
                                               &context);
     require(bool(module), "nominal collection fixture refused");
-    local::FuncOp helper;
-    module->walk([&](local::FuncOp op) { helper = op; });
+    func::FuncOp helper;
+    module->walk([&](func::FuncOp op) { helper = op; });
     require(bool(helper), "fixture helper missing");
     auto xs = helper.getArgument(0), ys = helper.getArgument(1);
     auto logical = take(encodeBoundType(xs.getType(), false));
@@ -147,7 +145,8 @@ module { "protocol.module"() ({
                     take(encodeBoundType(xs.getType(), false)))) == physical &&
                 take(encodeBoundType(physicalType, true)) == physical &&
                 decodeBoundType(&context, logical) == vector &&
-                cast<plan::DataType>(physicalType).getLogical() == vector,
+                cast<runtime::RepresentedType>(physicalType).getLogical() ==
+                    vector,
             "value evidence changed logical or physical encoding");
   });
   return cases.result();

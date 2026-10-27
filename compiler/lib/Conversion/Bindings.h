@@ -2,6 +2,7 @@
 #define ZKC_PROTOCOL_BINDING_PHYSICAL_H
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Target/Selection.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 namespace zkc {
 struct LinearContractionStats;
 }
@@ -10,10 +11,11 @@ class CheckedPhysicalPlan;
 }
 namespace zkc::protocol {
 // Freshness-check the original input, then compare actual physical output with
-// the checked plan's selected Local subject. Numerical correspondence from
-// original Kernel source to that privately retained subject was independently
-// established by validation. Includes participant/source preservation, all
-// local operands, selected implementations and per-use conversions.
+// the checked plan's selected executable subject. Numerical correspondence from
+// original numerical source to that privately retained subject was
+// independently established by validation. Includes participant/source
+// preservation, all local operands, selected implementations and per-use
+// conversions.
 llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp before,
                                           mlir::ModuleOp after,
                                           const target::CheckedPhysicalPlan &);
@@ -27,6 +29,7 @@ mlir::LogicalResult lowerBoundPhysical(
     llvm::ArrayRef<std::pair<std::string, std::string>> selections,
     bool linearContractions, LinearContractionStats *stats,
     bool releaseStorage = false,
-    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
+    MathematicalSelectionPolicy numericalPolicy = {});
 } // namespace zkc::protocol
 #endif

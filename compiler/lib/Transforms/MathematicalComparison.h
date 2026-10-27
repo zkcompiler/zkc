@@ -9,6 +9,7 @@
 #include "llvm/ADT/DenseSet.h"
 
 namespace zkc::mathematical {
+class ScopedCandidate;
 /// Limits of the independent interpreter, not evidence of inequivalence.
 enum class ComparisonCapacity {
   None,
@@ -45,7 +46,8 @@ mlir::FailureOr<mlir::Value> compareLaneFormula(
     llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
     mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
     std::optional<CapacityCause> *debit = nullptr,
-    std::optional<mlir::Value> output = std::nullopt);
+    std::optional<mlir::Value> output = std::nullopt,
+    const ScopedCandidate *candidate = nullptr);
 
 /// Compare the sum of a mapped scalar formula with actual candidate payload
 /// operations (for example a dot product). The ordered length guards and
@@ -56,7 +58,8 @@ mlir::FailureOr<mlir::Value> compareLaneSum(
     llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
     mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
     std::optional<CapacityCause> *debit = nullptr,
-    std::optional<mlir::Value> output = std::nullopt);
+    std::optional<mlir::Value> output = std::nullopt,
+    const ScopedCandidate *candidate = nullptr);
 
 /// Independently interpret a finite source domain/helper and actual candidate
 /// payload. `inputs` maps the finite signature to candidate SSA; `rows` is the
@@ -65,13 +68,17 @@ mlir::FailureOr<mlir::Value> compareLaneSum(
 /// computations return failure so the caller can use its ordered loop reader.
 /// If supplied, capacity is reset on entry and names an exhausted interpreter
 /// limit on failure. A successful comparison may consume exactly its allowance.
-/// Cursor and bindings are published only on success.
+/// Cursor and bindings are published only on success. sumCollection compares
+/// the sum of a collection's original callback values. The enclosing reader
+/// must establish the actual sole-use native sum and unchanged surrounding
+/// context; this argument is not permission to erase an arbitrary consumer.
 mlir::FailureOr<mlir::Value> compareFinitePayload(
     const finite::Computation &source, mlir::ValueRange inputs,
     mlir::Value rows, mlir::Operation *&cursor, mlir::SymbolTable &symbols,
     llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
     mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
-    std::optional<CapacityCause> *debit = nullptr);
+    std::optional<CapacityCause> *debit = nullptr,
+    const ScopedCandidate *candidate = nullptr, bool sumCollection = false);
 
 /// Cheap candidate-side gate for the optional finite semantic comparison.
 /// Ordered recipes begin with index constants or empty containers and must

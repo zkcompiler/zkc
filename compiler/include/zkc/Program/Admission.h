@@ -6,27 +6,37 @@
 #include "llvm/Support/Error.h"
 
 namespace zkc::protocol {
-/// Signature supplied only by an admitted mathematical module or Kernel entry.
-/// This is not a source-carrier declaration or permission to export an
-/// unresolved call.
+/// Transient invocation view supplied only by an admitted mathematical or
+/// finite computation. Ordered callbacks retain their actual definition edges
+/// so control-effect and call-graph checks cannot treat them as pure
+/// signatures. This is not a source-carrier declaration or permission to export
+/// an unresolved call.
 struct LocalRealization {
   std::string name;
   std::vector<std::string> inputs, outputs;
   enum class Kind { Total, FiniteFold, FiniteCollect };
   Kind kind = Kind::Total;
   unsigned domainArguments = 0;
+  program::Names callbacks = {};
 };
 /// Internal logical native locals, without any protocol or entry declarations.
-/// Realization signatures are permitted only for local.apply checking.
+/// Realization signatures are permitted only for internal LocalApply checking.
 llvm::Error
 admitNativeLocalDefinitions(const program::LocalDefinitions &,
                             llvm::ArrayRef<LocalRealization> realizations = {});
+/// Admit an execution definition subset, including an empty one, without
+/// inventing a participant entry. Physical ports and bindings are checked when
+/// selected. Unresolved mathematical calls are not permitted.
+llvm::Error admitExecutionDefinitions(const program::LocalDefinitions &,
+                                      bool physical = false);
 /// Check executable formation and local definitions.
 /// The model interface does not require an MLIR context.
 llvm::Error admit(const program::Participants &);
-/// Internal validation of logical Participants with admitted Total signatures.
-/// Only local.apply inside local functions may reference these realizations;
-/// this does not permit unresolved calls in physical programs or publication.
+/// Internal validation of logical Participants with admitted mathematical and
+/// finite signatures, including the actual callback edges and affine fold
+/// roots. Only internal LocalApply instructions in functions may reference
+/// these realizations; this does not permit unresolved calls in physical
+/// programs or publication.
 llvm::Error admit(const program::Participants &,
                   llvm::ArrayRef<LocalRealization> realizations);
 } // namespace zkc::protocol

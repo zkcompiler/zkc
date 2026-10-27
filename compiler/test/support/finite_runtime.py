@@ -59,15 +59,30 @@ def matrix(rows, columns, entries):
     return wire(23, header + body)
 
 
-def compile_fixture(name, optimized):
-    key = name, optimized
+def compile_fixture(name, optimized, fusion=False):
+    key = name, optimized, fusion
     if key not in bundles:
-        path = args.output / f'{name}-{"bulk" if optimized else "loop"}.bundle'
-        command = [args.compiler, 'protocol-bundle', fixtures / f'{name}.mlir']
+        suffix = '-fused' if fusion else ''
+        path = args.output / f'{name}-{"bulk" if optimized else "loop"}{suffix}.bundle'
+        source = fixtures / f'{name}.mlir'
+        if name in ('scoped-map-sum', 'scoped-capture-sum'):
+            # The same actual scoped source drives compiler mutation/provider
+            # controls. Use the BLS field here with this harness's wire codecs.
+            emitter = args.compiler.parent / 'test/zkc-scoped_collection_sum-test'
+            emitted = subprocess.run([emitter, '--emit'], capture_output=True, text=True, check=True)
+            text = emitted.stdout.replace('koala-bear', 'bls12-381.fr')
+            if name == 'scoped-capture-sum':
+                assert 'return %p : !F' in text
+                text = text.replace('return %p : !F', 'return %dead : !F')
+            source = args.output / f'{name}.mlir'
+            source.write_text(text)
+        command = [args.compiler, 'protocol-bundle', source]
+        if fusion:
+            command.append('--fuse-vector-reductions')
         if not optimized:
             command.append('--no-finite-bulk')
         result = subprocess.run(command, capture_output=True, text=True)
-        (args.output / f"{name}-{optimized}-compile.json").write_text(json.dumps(
+        (args.output / f"{name}-{optimized}{suffix}-compile.json").write_text(json.dumps(
             dict(command=[str(v) for v in command], returncode=result.returncode, stderr=result.stderr), indent=2))
         assert result.returncode == 0, f"compiler exit {result.returncode}: {result.stderr}"
         path.write_text(result.stdout)
@@ -76,8 +91,8 @@ def compile_fixture(name, optimized):
     return bundles[key]
 
 
-def execute(name, optimized, values, capacity=None):
-    bundle, ports = compile_fixture(name, optimized)
+def execute(name, optimized, values, capacity=None, fusion=False):
+    bundle, ports = compile_fixture(name, optimized, fusion)
     data = ['zkc.bundle-inputs/0', 'finite', [['P', [
         [str(i), port[1], value] for i, (port, value) in enumerate(zip(ports, values))
     ], []]], []]
@@ -118,6 +133,22 @@ def stopped(report, code):
     cause = report['roles'][0]['after'][1]['cause']
     assert code in json.dumps(cause), cause
     return dict(cause=cause, usage=report['roles'][0]['usage'])
+
+
+# Values and eager shape failures across every independent policy choice.
+# This asserts no equality of resource exhaustion between implementations.
+for optimized in [False, True]:
+    for fusion in [False, True]:
+        for name in ['scoped-map-sum', 'scoped-capture-sum']:
+            label = f'{name} bulk={optimized} fusion={fusion}'
+            expected = 31 if name == 'scoped-map-sum' else 28
+            check(label + ' values', lambda: completed(
+                execute(name, optimized, [vector([2, 3]), vector([5, 7]), vector([11, 13]), field(7)], fusion=fusion), [field(expected)]))
+            check(label + ' empty', lambda: completed(
+                execute(name, optimized, [vector([]), vector([]), vector([]), field(7)], fusion=fusion), [field(0)]))
+            for rows in [([2], [], [0]), ([2], [3], []), ([], [], [4])]:
+                check(label + f' shape {rows}', lambda: stopped(
+                    execute(name, optimized, [*[vector(v) for v in rows], field(7)], fusion=fusion), 'rejected:require'))
 
 
 for optimized in [False, True]:

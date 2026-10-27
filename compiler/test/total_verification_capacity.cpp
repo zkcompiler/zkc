@@ -44,15 +44,26 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   auto original = copy(*source);
   OwningOpRef<mlir::ModuleOp> before(cast<mlir::ModuleOp>(numerical->clone()));
   constexpr uint64_t copyLimit = 1000000;
-  // The two top-level operations each have a 19-byte generated site at "x".
-  constexpr uint64_t siteCost = 38;
-  mathematical::RealizationWork orderedWork;
-  uint64_t orderedRemaining = copyLimit, orderedBytes = siteCost;
+  // Measure complete construction: generated traversal sites now share the
+  // same account as the root sites. Ordered and optional payloads have
+  // different costs, so retain an independently completed baseline for each
+  // alternative.
+  constexpr uint64_t siteLimit = 16 * 1024 * 1024;
+  mathematical::RealizationWork orderedWork, bulkWork;
+  uint64_t orderedRemaining = copyLimit, orderedBytes = siteLimit;
   auto ordered =
       kernel::realizeEntry(*numerical, "x", {false, false}, orderedWork,
                            orderedRemaining, orderedBytes, {100000, 1});
-  require(bool(ordered) && !orderedBytes,
-          "ordered sum did not fit exactly two generated sites");
+  require(bool(ordered), "ordered sum baseline refused");
+  const uint64_t siteCost = siteLimit - orderedBytes;
+  uint64_t bulkRemaining = copyLimit, bulkBytes = siteLimit;
+  auto bulk = kernel::realizeEntry(*numerical, "x", {}, bulkWork, bulkRemaining,
+                                   bulkBytes);
+  require(bool(bulk) && !same(*ordered, *bulk),
+          "optional baseline did not select a distinct payload");
+  const uint64_t bulkSiteCost = siteLimit - bulkBytes;
+  require(siteCost > 38 && bulkSiteCost >= 38 && bulkSiteCost < siteCost,
+          "site account omitted traversal allocation or alternative costs");
   const uint64_t copyCost = copyLimit - orderedRemaining;
   require(copyCost > 0, "ordered sum did not charge copying");
 
@@ -130,7 +141,7 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   } else {
     require(work.discardedRecipeCopy < initialWork.discardedRecipeCopy &&
                 work.discardedRecipeSiteBytes ==
-                    initialWork.discardedRecipeSiteBytes - siteCost &&
+                    initialWork.discardedRecipeSiteBytes - bulkSiteCost &&
                 work.matching.structural < orderedWork.matching.structural &&
                 work.discardedRecipeExpansion <
                     initialWork.discardedRecipeExpansion,
@@ -144,8 +155,9 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
-  cases.run("sum fallback retains exactly 38 site bytes with ample copying",
-            [&] { checkConstructionReserve(context, 0, 0, true); });
+  cases.run(
+      "sum fallback retains the exact scoped site allowance with ample copying",
+      [&] { checkConstructionReserve(context, 0, 0, true); });
   for (int copySlack : {-1, 0, 1})
     for (int siteSlack : {-1, 0, 1})
       cases.run(
@@ -185,8 +197,21 @@ int main() {
     auto original = copy(*source);
     OwningOpRef<mlir::ModuleOp> before(
         cast<mlir::ModuleOp>(numerical->clone()));
-    mathematical::RealizationWork work;
-    uint64_t remaining = 1000000, remainingBytes = 76;
+    mathematical::RealizationWork work, orderedWork, bulkWork;
+    constexpr uint64_t siteLimit = 16 * 1024 * 1024;
+    uint64_t baselineCopy = 1000000, baselineBytes = siteLimit;
+    auto ordered =
+        kernel::realizeEntry(*numerical, "x", {false, false}, orderedWork,
+                             baselineCopy, baselineBytes);
+    require(bool(ordered), "ordered site baseline refused");
+    auto siteCost = siteLimit - baselineBytes;
+    baselineCopy = 1000000;
+    baselineBytes = siteLimit;
+    auto bulk = kernel::realizeEntry(*numerical, "x", {}, bulkWork,
+                                     baselineCopy, baselineBytes);
+    require(bool(bulk), "optional site baseline refused");
+    auto bulkSiteCost = siteLimit - baselineBytes;
+    uint64_t remaining = 1000000, remainingBytes = 2 * siteCost;
     work.discardedRecipeSiteBytes = remainingBytes;
     unsigned diagnostics = 0;
     ScopedDiagnosticHandler record(&context, [&](Diagnostic &) {
@@ -198,8 +223,9 @@ int main() {
       auto candidate = kernel::realizeEntry(
           *numerical, "x", {}, work, remaining, remainingBytes, {100000, 1});
       require(bool(candidate), "shared construction reserve refused sum");
-      require(remainingBytes == 38 * (1 - call) &&
-                  work.discardedRecipeSiteBytes == remainingBytes &&
+      require(remainingBytes == siteCost * (1 - call) &&
+                  work.discardedRecipeSiteBytes ==
+                      2 * siteCost - bulkSiteCost * (call + 1) &&
                   work.discardedRecipeCopy < beforeWork.discardedRecipeCopy &&
                   work.matching.structural < beforeWork.matching.structural,
               "a later call reset discarded construction or recognition work");
@@ -215,16 +241,15 @@ int main() {
         nested ? "nested total finite comparison retries ordered"
                : "total finite comparison retries ordered",
         [&] {
-          auto text = fixture();
+          auto source = parseSourceString<ModuleOp>(fixture(), &context);
+          require(bool(source), "total source refused");
           if (!nested) {
-            auto pos = text.find("step=@outside");
-            require(pos != std::string::npos, "missing outer step");
-            text.replace(pos, std::string("step=@outside").size(),
-                         "step=@inside");
+            auto helper =
+                SymbolTable(unit(*source)).lookup<func::FuncOp>("total");
+            auto fold = cast<algebra::FiniteFoldOp>(helper.front().front());
+            fold.setStepAttr(FlatSymbolRefAttr::get(&context, "inside"));
           }
-          auto source = parseSourceString<ModuleOp>(text, &context);
-          require(bool(source) && succeeded(verify(*source)),
-                  "total source refused");
+          require(succeeded(verify(*source)), "total source refused");
           auto numerical =
               kernelRecipeSource(unit(*source), "total", "calculation");
           auto original = copy(*source);

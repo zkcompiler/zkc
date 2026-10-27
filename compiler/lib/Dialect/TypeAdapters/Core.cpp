@@ -47,12 +47,12 @@ std::optional<BoundType> encodeIndex(Type type, llvm::StringRef constructor) {
   return std::nullopt;
 }
 Type decodeVariantType(MLIRContext *context, const BoundType &type) {
-  return loadedType<zkc::local::VariantType>(context,
-                                             "variant:" + type.identity);
+  return loadedType<zkc::data::VariantType>(context,
+                                            "variant:" + type.identity);
 }
 std::optional<BoundType> encodeVariantType(Type type,
                                            llvm::StringRef constructor) {
-  if (auto variant = dyn_cast<zkc::local::VariantType>(type)) {
+  if (auto variant = dyn_cast<zkc::data::VariantType>(type)) {
     auto descriptor = variant.getDescriptor();
     if (descriptor.consume_front("variant:"))
       return BoundType{constructor.str(), descriptor.str(), {}};

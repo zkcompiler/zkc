@@ -246,3 +246,9 @@ name = "bulletproofs_plus"
 path = "src/bulletproofs_plus.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "execution_cfg"
+path = "src/execution_cfg.rs"
+test = false
+bench = false

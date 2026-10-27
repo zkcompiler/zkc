@@ -71,10 +71,16 @@ mutation outcomes.
 ## Boundaries
 
 `render.py` classifies operations by exact name, operation binding and attribute
-set, including `arith.andi` on Booleans as the Boolean conjunction. An
+set, including `arith.andi` on Booleans as the Boolean conjunction. For
+`exec.apply`, the explicit runtime contract selects the operation; there are no
+per-contract execution operation names. Binding arguments, implementation,
+parameters and data ports must match the supported contract. Retained
+`protocol.local_call` and borrowed `func.call` instructions both name the
+original helper while preserving their actual attribute shapes. An
 unrecognized operation is retained as unsupported for the rule to refuse; a
 recognized one with another shape refuses the export
-(`lean/checks/check_construction_renderer.py` exercises the conjunction). It
+(`lean/checks/check_construction_renderer.py` checks classification, port shapes,
+attribute tags and unknown bindings). It
 decodes each origin's canonical bytes into a template with its application and
 repeat steps, requires the static coordinate array to be empty and re-encodes it
 exactly. It parses printed MLIR types of recursive service-free data, transcript

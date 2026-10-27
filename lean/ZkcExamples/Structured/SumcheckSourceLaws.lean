@@ -66,17 +66,17 @@ theorem source_protocol_permutation :
         checkProtocol SumcheckSourceData.snapshot domains summaries function headers) = .ok formed ∧
       unit.protocols.Perm formed := imported.protocolPermutation
 
-def mapDeclaration : MapDeclaration :=
-  ⟨mapHelper.name, mapHelper.inputs, mapHelper.outputs,
-    MapFirstBodies.mapSpec.helperName, MapFirstBodies.mapSpec.rowwise⟩
+def mapDeclaration : CollectDeclaration :=
+  ⟨mapHelper.name, .privateDef, mapHelper.inputs, mapHelper.outputs,
+    collectBindings.domain, collectBindings.callback, ""⟩
 
-theorem map_retained : .map mapDeclaration ∈ SumcheckSourceData.snapshot.definitions :=
+theorem map_retained : Definition.collect mapDeclaration ∈ SumcheckSourceData.snapshot.definitions :=
   by structured_mem
 
-theorem map_derived : mapDefinition.raw = mapDeclaration.raw := rfl
+theorem map_derived : mapDefinition.raw = mapBody.erase := rfl
 
-theorem map_root_selected : mapDeclaration.spec.helper ∈
-    preparationHelpers .map unit.definitions := imported.mapRootSelected map_retained
+theorem map_root_selected : interpolateHelper ∈
+    preparationHelpers .realization unit.definitions := by decide +kernel
 
 theorem map_member : mapDefinition ∈ unit.definitions :=
   by structured_mem
@@ -148,7 +148,7 @@ def valuesRealizationDeclaration : RealizationDeclaration :=
     valuesRealizationHelper.outputs, valuesHelper.name⟩
 
 theorem valuesRealization_retained : .realization valuesRealizationDeclaration ∈
-    SumcheckSourceData.snapshot.definitions := List.mem_cons_self
+    SumcheckSourceData.snapshot.definitions := by structured_mem
 
 theorem valuesRealization_derived :
     valuesRealizationDefinition.raw = valuesRealizationDeclaration.raw := rfl

@@ -1,8 +1,11 @@
 #include "StorageSchedule.h"
+#include "ExecutionPorts.h"
 #include "PhysicalPlan.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Exec/IR/ExecOps.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
@@ -26,6 +29,7 @@ struct Definition {
 // In particular, this view never stores last-use answers or liveness sets.
 class StorageView {
   ModuleOp module;
+  std::optional<ExecutionPorts> execution;
   ArrayRef<OperationDecision> ports;
   SmallVector<Operation *> operations;
   SmallVector<std::pair<Block *, StoragePoint>> blocks;
@@ -79,76 +83,71 @@ public:
         (ports.empty() ? root.getProfile() != protocol_ir::Profile::Physical
                        : root.getProfile() != protocol_ir::Profile::Exec))
       return error("storage-schedule-context");
-    bool exceeded = false;
-    module->walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (operations.size() == storageWorkLimit) {
-        exceeded = true;
-        return WalkResult::interrupt();
-      }
-      operations.push_back(op);
-      return WalkResult::advance();
-    });
-    if (exceeded)
-      return error("storage-schedule-limit");
+    auto admitted = ExecutionPorts::read(module);
+    if (!admitted)
+      return admitted.takeError();
+    execution = std::move(*admitted);
+    append_range(operations, execution->operations());
     if (!ports.empty() && ports.size() != operations.size())
       return error("storage-schedule-coordinate");
     for (auto [index, op] : enumerate(operations)) {
       if (auto e = charge())
         return e;
-      if (!ports.empty() && ports[index].outputs.size() != op->getNumResults())
+      const auto &node = execution->get(op);
+      if (!ports.empty() && ports[index].outputs.size() != node.outputs.size())
         return error("storage-schedule-coordinate");
       if (failureLocation)
         *failureLocation = op->getLoc();
-      auto function = dyn_cast<local::FuncOp>(op);
-      if (function && !hasSingleElement(function.getBody()))
-        return error("storage-schedule-context");
-      if (!function && !op->getParentOfType<local::FuncOp>())
+      if (!node.scoped)
         continue;
       unsigned blockIndex = 0;
-      for (auto &region : op->getRegions())
-        for (auto &block : region) {
-          if (auto e = charge())
+      for (auto *entry : node.bodies) {
+        const auto &body = execution->body(entry);
+        if (body.owner != op)
+          continue;
+        if (auto e = charge())
+          return e;
+        blocks.emplace_back(
+            entry, StoragePoint{StoragePoint::BlockEntry, index, blockIndex});
+        if (!ports.empty() &&
+            (blockIndex >= ports[index].blockArguments.size() ||
+             ports[index].blockArguments[blockIndex].size() !=
+                 body.arguments.size()))
+          return error("storage-schedule-coordinate");
+        for (auto [argumentIndex, argument] : enumerate(body.arguments)) {
+          StorageValue coordinate{StorageValue::BlockArgument, index,
+                                  unsigned(argumentIndex), blockIndex};
+          coordinates.insert({argument, coordinate});
+          Type type =
+              ports.empty()
+                  ? argument.getType()
+                  : ports[index].blockArguments[blockIndex][argumentIndex];
+          if (auto e = add(coordinate, entry, type))
             return e;
-          blocks.emplace_back(&block, StoragePoint{StoragePoint::BlockEntry,
-                                                   index, blockIndex});
-          if (!ports.empty() &&
-              (blockIndex >= ports[index].blockArguments.size() ||
-               ports[index].blockArguments[blockIndex].size() !=
-                   block.getNumArguments()))
-            return error("storage-schedule-coordinate");
-          for (auto argument : block.getArguments()) {
-            StorageValue coordinate{StorageValue::BlockArgument, index,
-                                    argument.getArgNumber(), blockIndex};
-            coordinates.insert({argument, coordinate});
-            Type type =
-                ports.empty()
-                    ? argument.getType()
-                    : ports[index]
-                          .blockArguments[blockIndex][argument.getArgNumber()];
-            if (auto e = add(coordinate, &block, type))
-              return e;
-          }
-          ++blockIndex;
         }
+        ++blockIndex;
+      }
       if (!ports.empty() && ports[index].blockArguments.size() != blockIndex)
         return error("storage-schedule-coordinate");
-      if (function)
+      if (!node.step)
         continue;
-      for (auto result : op->getResults()) {
+      auto *body = execution->enclosingBody(op);
+      if (!body)
+        return error("storage-schedule-context");
+      for (auto [resultIndex, result] : enumerate(node.outputs)) {
         StorageValue coordinate{StorageValue::OperationResult, index,
-                                result.getResultNumber()};
+                                unsigned(resultIndex)};
         coordinates.insert({result, coordinate});
-        Type type = ports.empty()
-                        ? result.getType()
-                        : ports[index].outputs[result.getResultNumber()];
-        if (auto e = add(coordinate, op->getBlock(), type))
+        Type type = ports.empty() ? result.getType()
+                                  : ports[index].outputs[resultIndex];
+        if (auto e = add(coordinate, body, type))
           return e;
       }
       if (!ports.empty())
         for (auto [crossing, conversion] : enumerate(ports[index].conversions))
-          if (auto e = add({StorageValue::ConversionResult, index,
-                            static_cast<unsigned>(crossing)},
-                           op->getBlock(), conversion.to))
+          if (auto e = add(
+                  {StorageValue::ConversionResult, index, unsigned(crossing)},
+                  body, conversion.to))
             return e;
     }
     return Error::success();
@@ -162,19 +161,19 @@ public:
     for (auto [index, op] : enumerate(operations))
       indices[op] = index;
     for (auto [block, entry] : blocks) {
-      for (Value argument : block->getArguments())
+      for (Value argument : execution->body(block).arguments)
         if (auto e = define(coordinates.find(argument)->second, entry))
           return e;
       if (auto e = point(entry, block))
         return e;
-      for (Operation &op : *block) {
+      for (Operation *op : execution->body(block).instructions) {
         if (failureLocation)
-          *failureLocation = op.getLoc();
-        if (auto e = charge(op.getNumOperands() + 1))
+          *failureLocation = op->getLoc();
+        if (auto e = charge(execution->inputs(op).size() + 1))
           return e;
-        size_t index = indices.lookup(&op);
+        size_t index = indices.lookup(op);
         SmallVector<StorageValue> operands;
-        for (Value operand : op.getOperands()) {
+        for (Value operand : execution->inputs(op)) {
           auto found = coordinates.find(operand);
           if (found == coordinates.end())
             return error("storage-schedule-context");
@@ -200,19 +199,17 @@ public:
             if (auto e = point(at, block))
               return e;
           }
-        Use kind = isa<plan::ReleaseOp>(op) ? Use::Release
-                   : isa<local::ReturnOp, local::LocalYieldOp,
-                         local::LocalConditionOp>(op)
-                       ? Use::Escape
-                       : Use::Ordinary;
+        Use kind = isa<runtime::ReleaseBindingsOp>(op)         ? Use::Release
+                   : isa<exec::ReturnOp, exec::CompleteOp>(op) ? Use::Escape
+                                                               : Use::Ordinary;
         StoragePoint at{StoragePoint::AfterOperation, index};
         for (auto operand : operands)
           if (auto e = use(operand, block, kind, at))
             return e;
-        for (Value result : op.getResults())
+        for (Value result : execution->outputs(op))
           if (auto e = define(coordinates.find(result)->second, at))
             return e;
-        if (!op.hasTrait<OpTrait::IsTerminator>())
+        if (!isa<exec::ReturnOp, exec::CompleteOp, exec::RejectOp>(op))
           if (auto e = point(at, block))
             return e;
       }

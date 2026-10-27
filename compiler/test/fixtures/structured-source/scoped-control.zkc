@@ -1,0 +1,45 @@
+module scoped_control;
+domain Fr = field("bls12-381.fr");
+type Vector<F:Field> = builtin("vector", F);
+domain fn elements<F:Field>(xs:Vector<F>)->domain<F> = domain("elements");
+fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,
+    step:fn(S,item:I)->S effects(stop) where item_from(item,rows))->S effects(stop)
+    = finite("local.fold");
+
+fn choose(x:Fr,y:Fr,enabled:bool)->Fr {
+  return if enabled { x } else { y };
+}
+
+fn replace(x:Fr,y:Fr,count:index)->Fr {
+  let mut result = x;
+  for _ in 0..count { result = y; }
+  return result;
+}
+
+fn require_enabled(x:Fr,enabled:bool)->Fr {
+  return if enabled { x } else { stop "reject"; };
+}
+
+math fn add(x:Fr,y:Fr)->Fr { return x+y; }
+fn compute(x:Fr,y:Fr)->Fr { return add(x,y); }
+
+fn last(values:Vector<Fr>,seed:Fr,enabled:bool)->Fr {
+  return fold(elements(values),seed,
+    fn(state,item)=>if enabled { item } else { stop "reject"; });
+}
+
+protocol Choose roles(P)(x:Fr@P,y:Fr@P,enabled:bool@P)->(result:Fr@P) {
+  return choose(x,y,enabled);
+}
+protocol Replace roles(P)(x:Fr@P,y:Fr@P,count:index@P)->(result:Fr@P) {
+  return replace(x,y,count);
+}
+protocol Require roles(P)(x:Fr@P,enabled:bool@P)->(result:Fr@P) {
+  return require_enabled(x,enabled);
+}
+protocol Compute roles(P)(x:Fr@P,y:Fr@P)->(result:Fr@P) {
+  return compute(x,y);
+}
+protocol Last roles(P)(values:Vector<Fr>@P,seed:Fr@P,enabled:bool@P)->(result:Fr@P) {
+  return last(values,seed,enabled);
+}

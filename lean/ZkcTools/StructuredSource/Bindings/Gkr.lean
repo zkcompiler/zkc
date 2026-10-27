@@ -120,6 +120,16 @@ def gkrCallerSource (program : Program) (output : Output) : Except String String
     text := text ++ (← repeatSplitSource wholeNaming whole 1 (roleName index 1) callback.site)
   return text ++ "end\nend " ++ output.moduleName ++ "Caller\n"
 
+/-- The admitted definitions are in dependency order. Follow their actual
+edges through scoped callbacks and mathematical realizations without assuming
+that a source wrapper calls its arithmetic implementation directly. -/
+def helperDependsOn (program : Program) (parent candidate : Helper) : Bool :=
+  let reachable := program.payload.definitions.foldl (fun found definition =>
+    if definition.helper == candidate || definition.helpers.any found.contains then
+      definition.helper :: found
+    else found) []
+  reachable.contains parent
+
 /-- Candidate associations follow complete signatures and actual dependency
 edges. Printed positions are checked membership witnesses, not dispatch keys. -/
 def gkrHelperAssociations (program : Program) (gate : GateOutput) :
@@ -130,7 +140,7 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
       (within : Option CheckedDefinition) => do
     let candidates := program.payload.definitions.zipIdx.filter fun (d, _) =>
       d.kind == kind && d.inputs == inputs && d.outputs == outputs &&
-        (within.map (fun parent => parent.helpers.contains d.helper)).getD true
+        (within.map (fun parent => helperDependsOn program parent.helper d.helper)).getD true
     let [(definition, index)] := candidates | throw ("gkr-helper-association-" ++ name)
     pure (definition, index)
   let (_, empty) ← select "empty" .local [] [vector] none
@@ -140,6 +150,10 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
     [vector, field] [vector] (some restriction)
   let (maps, interpolations) ← select "interpolations" .local
     [vector, vector, field] [vector] (some factor)
+  let (interpolationCallback, interpolationCallbackIndex) ← select "interpolationCallback" .local
+    [field, field, vector, vector, field] [field] (some maps)
+  let (_, interpolationRealization) ← select "interpolationRealization" .local
+    (List.replicate 3 field) [field] (some interpolationCallback)
   let (_, interpolation) ← select "interpolation" .math
     (List.replicate 3 field) [field] (some maps)
   let [roundsIndex, _] ← gkrProtocols program | throw "gkr-rounds-association"
@@ -150,19 +164,38 @@ def gkrHelperAssociations (program : Program) (gate : GateOutput) :
         | [.exec (.vectorAppend domain)] => domain == "bls12-381.fr"
         | _ => false))
     | throw "gkr-helper-association-append"
-  let (_, values) ← select "gateValues" .local (List.replicate 4 vector) [vector] none
-  let (_, quadratics) ← select "gateQuadratics" .local (List.replicate 8 vector) [vector] none
+  let (message, roundMessage) ← select "roundMessage" .local
+    (List.replicate 4 vector) (List.replicate 3 field) none
+  let [leftValue, rightValue] := message.helpers.filter (fun helper =>
+    helper.kind == .local && helper.inputs == List.replicate 4 vector && helper.outputs == [vector])
+    | throw "gkr-gate-values-occurrences"
+  let [(leftValues, leftValueIndex)] := program.payload.definitions.zipIdx.filter (fun (d, _) => d.helper == leftValue)
+    | throw "gkr-gate-values-left-association"
+  let [(_, rightValueIndex)] := program.payload.definitions.zipIdx.filter (fun (d, _) => d.helper == rightValue)
+    | throw "gkr-gate-values-right-association"
+  let (valueCallback, valueCallbackIndex) ← select "gateValueCallback" .local
+    (List.replicate 4 field ++ List.replicate 4 vector) [field] (some leftValues)
+  let (_, valueRealization) ← select "gateValueRealization" .local
+    (List.replicate 4 field) [field] (some valueCallback)
+  let (quadratics, quadraticsIndex) ← select "gateQuadratics" .local
+    (List.replicate 8 vector) [vector] (some message)
+  let (quadraticCallback, quadraticCallbackIndex) ← select "gateQuadraticCallback" .local
+    (List.replicate 8 field ++ List.replicate 8 vector) [field] (some quadratics)
+  let (_, quadraticRealization) ← select "gateQuadraticRealization" .local
+    (List.replicate 8 field) [field] (some quadraticCallback)
   let (wrapper, linearWrapper) ← select "linearWrapper" .local
-    (List.replicate 3 field) [field] none
+    (List.replicate 3 field) [field] (some message)
   let (_, linearCoefficient) ← select "linearCoefficient" .math
     (List.replicate 3 field) [field] (some wrapper)
-  let (_, roundMessage) ← select "roundMessage" .local
-    (List.replicate 4 vector) (List.replicate 3 field) none
   return [("empty", empty), ("append", append), ("gateValue", gate.valueIndex),
-    ("gateValues", values), ("gateQuadratic", gate.quadraticIndex),
-    ("gateQuadratics", quadratics), ("linearCoefficient", linearCoefficient),
+    ("gateValuesLeft", leftValueIndex), ("gateValuesRight", rightValueIndex),
+    ("gateValueCallback", valueCallbackIndex), ("gateValueRealization", valueRealization),
+    ("gateQuadratic", gate.quadraticIndex), ("gateQuadratics", quadraticsIndex),
+    ("gateQuadraticCallback", quadraticCallbackIndex), ("gateQuadraticRealization", quadraticRealization),
+    ("linearCoefficient", linearCoefficient),
     ("linearWrapper", linearWrapper), ("roundMessage", roundMessage),
     ("interpolation", interpolation), ("interpolations", interpolations),
+    ("interpolationCallback", interpolationCallbackIndex), ("interpolationRealization", interpolationRealization),
     ("factorRestriction", factorRestriction), ("gateRestriction", gateRestriction)]
 
 def gateSource (program : Program) (output : Output) (gate : GateOutput) : Except String String := do
@@ -192,6 +225,9 @@ def gateSource (program : Program) (output : Output) (gate : GateOutput) : Excep
       "  Evaluation.definitions_invoke_body_view_as (.silent _) payload.definitions payload.linked\n" ++
       "    " ++ name ++ "Definition (List.get_mem _ _) " ++ helperText definition.helper ++ " rfl " ++
       name ++ "Body rfl args\n\n"
+    if let [.collect spec] := definition.raw.operations then
+      text := text ++ "abbrev " ++ name ++ "Collection : CollectSpec :=\n  " ++
+        collectText spec ++ "\n\n"
   for (name, index, arguments, expression) in [
       ("value", gate.valueIndex, ["add", "mul", "left", "right"], "Gate.value add mul left right"),
       ("quadratic", gate.quadraticIndex, ["a0", "a1", "m0", "m1", "l0", "l1", "r0", "r1"],

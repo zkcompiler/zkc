@@ -23,9 +23,9 @@ def protocolSignature : ProtocolSignature where
   outputScopes := [[0], [0], [0]]
 
 structured_closed_views MapPrefixData.snapshot
-  helpers [less, rows, shape, table, halves, interpolate, map, first, step, foldStep, fold, foldWrapper,
-    «prefix», values, valuesRealization, «variables», variablesRealization, width, widthRealization,
-    wrapper]
+  helpers [less, rows, shape, table, halves, interpolate, values, «variables», width,
+    valuesRealization, variablesRealization, widthRealization, interpolateRealization,
+    mapCallback, map, first, step, foldStep, fold, foldWrapper, «prefix», wrapper]
   protocols [protocol]
   root entryBody
 
@@ -33,19 +33,20 @@ structured_closed_views MapPrefixData.snapshot
 theorem singleton_projection : ClosedProjection protocolBody entryBody :=
   .mark "s0" .nil (.localCall wrapperHelper rfl "s0" _ (.ret _))
 
-/-- Retained map metadata is associated with this actual derived Local definition. -/
-def mapDeclaration : MapDeclaration :=
-  ⟨mapHelper.name, mapHelper.inputs, mapHelper.outputs,
-    MapFirstBodies.mapSpec.helperName, MapFirstBodies.mapSpec.rowwise⟩
+/-- The actual collection retains its domain and private callback; its scalar
+computation is admitted separately through its own realization declaration. -/
+def mapDeclaration : CollectDeclaration :=
+  ⟨mapHelper.name, .privateDef, mapHelper.inputs, mapHelper.outputs,
+    MapFirstBodies.bindings.domain, MapFirstBodies.bindings.callback, ""⟩
 
-theorem map_retained : Definition.map mapDeclaration ∈ MapPrefixData.snapshot.definitions :=
+theorem map_retained : Definition.collect mapDeclaration ∈ MapPrefixData.snapshot.definitions :=
   by structured_mem
 
-theorem map_derived : mapDefinition.raw = mapDeclaration.raw := rfl
+theorem map_derived : mapDefinition.raw = mapBody.erase := rfl
 
-theorem map_root_selected : mapDeclaration.spec.helper ∈
-    preparationHelpers .map program.payload.definitions :=
-  subjectImported.mapRootSelected map_retained
+theorem map_root_selected : interpolateHelper ∈
+    preparationHelpers .realization program.payload.definitions :=
+  by decide +kernel
 
 def widthRealizationDeclaration : RealizationDeclaration :=
   ⟨widthRealizationHelper.name, widthRealizationHelper.inputs, widthRealizationHelper.outputs, widthHelper.name⟩

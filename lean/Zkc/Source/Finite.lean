@@ -159,6 +159,30 @@ theorem fold_congr {I : Signature} {A S : Type} (left right : S → A → Proces
       funext state
       exact ih state
 
+/-- Accumulating in reverse and restoring order is ordinary monadic traversal.
+Every callback event and stop remains in the process, including a stopped prefix. -/
+theorem fold_collect {I : PIR.Signature} {A B : Type} (f : A → PIR.Process I B)
+    (items : List A) (acc : List B) :
+    (Finite.fold (fun collected item => (f item).bind fun value => .done (value :: collected))
+      items acc).bind (fun collected => .done collected.reverse) =
+      (items.mapM f).bind (fun values => .done (acc.reverse ++ values)) := by
+  induction items generalizing acc with
+  | nil =>
+    change PIR.Process.done acc.reverse = .done (acc.reverse ++ [])
+    simp only [List.append_nil]
+  | cons item rest ih =>
+    simp only [Finite.fold, PIR.Process.bind_assoc, List.mapM_cons]
+    change (f item).bind (fun value =>
+      (Finite.fold (fun collected item => (f item).bind fun value => .done (value :: collected))
+        rest (value :: acc)).bind (fun collected => .done collected.reverse)) = _
+    simp only [ih]
+    change (f item).bind (fun value => (rest.mapM f).bind fun values =>
+      .done ((value :: acc).reverse ++ values)) =
+      ((f item).bind fun value => (rest.mapM f).bind fun values =>
+        .done (value :: values)).bind (fun values => .done (acc.reverse ++ values))
+    simp only [PIR.Process.bind_assoc, PIR.Process.bind, List.reverse_cons,
+      List.append_assoc, List.singleton_append]
+
 /-- Successful product admission exposes the exact factors and enumeration. -/
 theorem Domain.admit_product_returned {A B : Type} (left : Domain A) (right : Domain B)
     (items : List (A × B)) :

@@ -78,6 +78,46 @@ int main() {
     require(admitted.identity() == entry.original().identity(),
             "canonical re-admission changed identity");
   });
+  cases.run("Host numerical selection retains the requested finite policy", [] {
+    auto checked = original(R"(module sample;
+      domain Fr=field("koala-bear");
+      type Vector<F:Field>=builtin("vector",F);
+      domain fn elements<F:Field>(xs:Vector<F>)->domain<F>=domain("elements");
+      math fn fold<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
+      math fn sum(xs:Vector<Fr>)->Fr{return fold(elements(xs),0,fn(state,item)=>state+item);}
+      fn work(xs:Vector<Fr>)->Fr{return sum(xs);}
+      entry fn Demo(xs:Vector<Fr>)->Fr{return work(xs);})");
+    auto loops = [&](bool optimize) {
+      EntryOptions options;
+      options.mathematicalSelection.finiteBulk = optimize;
+      auto compiled = take(compileEntry(checked, options));
+      auto artifact = take(json::parse(compiled.bytes()));
+      unsigned count = 0;
+      std::function<void(const program::Body &)> walk;
+      walk = [&](const program::Body &body) {
+        for (const auto &instruction : body) {
+          if (auto loop = instruction.get<program::For>()) {
+            ++count;
+            walk(loop->body);
+          } else if (auto condition = instruction.get<program::Conditional>()) {
+            walk(condition->thenBody);
+            walk(condition->elseBody);
+          }
+        }
+      };
+      for (const auto &calculation :
+           *artifact.getAsObject()->getArray("calculations")) {
+        auto program = take(
+            program::parse(*calculation.getAsObject()->getString("program")));
+        for (const auto &function : program.functions)
+          walk(function.body);
+      }
+      take(packageEntry(compiled));
+      return count;
+    };
+    require(loops(false) > loops(true),
+            "disabled finite selection did not retain its ordered traversal");
+  });
   cases.run("Host control exposes outcomes with standard control flow", [] {
     auto entry = take(compileEntry(original(R"(module sample;
       entry fn Identity(x:bool)->bool{return x;}
@@ -521,7 +561,11 @@ int main() {
         mlir::parseSourceString<mlir::ModuleOp>(checked.bytes(), &context);
     require(bool(module), "outcome original did not parse");
     exec::FailureOp failed;
-    module->walk([&](exec::FailureOp op) { failed = op; });
+    module->walk([&](exec::FailureOp op) {
+      auto function = op->getParentOfType<mlir::func::FuncOp>();
+      if (function && function->getParentOp() == module->getOperation())
+        failed = op;
+    });
     require(bool(failed), "missing failure carrier");
     mlir::OpBuilder builder(failed);
     auto value =

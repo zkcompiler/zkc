@@ -52,7 +52,7 @@ theorem operation_total_of_preparation (table : Meanings F G interface)
   | invoke helper =>
     cases bodies
     exact helpers helper (by simp only [Op.helpers, List.mem_singleton]) args
-  | exec | boundedAt | fold | map | branch | loop | loopCondition | guard | mark =>
+  | exec | boundedAt | fold | collect | map | branch | loop | loopCondition | guard | mark =>
     simp only [Op.preparationAllowed, Bool.false_eq_true] at allowed
 
 private theorem regions_total_of_empty (table : Meanings F G interface) :

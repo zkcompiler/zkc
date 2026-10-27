@@ -76,6 +76,7 @@ def mutateDefinition (mutation : Mutation) : Definition → Definition
               .block (instructions.map (mutateInstruction mutation)) terminator }
       else .function f
   | .finite f => .finite f
+  | .collect f => .collect f
   | .realization f => .realization f
   | .map f => .map f
 

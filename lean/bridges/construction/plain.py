@@ -22,7 +22,7 @@ BATCH_NAMES = {
     "zkl_b26f24aff1f462f4c3e9ea4c594fd6eaaac4e0d13a163302bc46f14e913cc892": "checkOpening",
     "finite_zkl_040b90e6fc9f7c074519f3a904772619b0e3c63ed7b7a051cbc3db4b3c514ff3_s3_body": "batchStep",
     "zkl_040b90e6fc9f7c074519f3a904772619b0e3c63ed7b7a051cbc3db4b3c514ff3": "batchValues",
-    "zkl_realization_399ea9b40064d603529daacd08256f0188b616e6e22db3af605c971670349b32": "realization",
+    "_mathematical_admission_0": "realization",
     "zkf_53219b51c062230506c8b229ef72062dff0e276e6336e241e0b2d30a9a6fe712": "formula",
     "zkl_765e0fbfb20c4afe7930d2c0cbb531d52446ae1c25c74ad1237691d8738b0a85": "checkBatch",
     "zkl_206d594942dc6f123848ad35c8fcdc7017b483db9ccd5c0651d1ad5c850eceab": "run",

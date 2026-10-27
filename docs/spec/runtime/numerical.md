@@ -1,7 +1,7 @@
 # Native numerical calls
 
-This contract connects checked Kernel realization and physical bindings to
-synchronous native numerical handlers. It uses the existing `plan.apply` and
+This contract connects checked numerical realization and physical bindings to
+synchronous native numerical handlers. It uses the existing `exec.apply` and
 `zkc.program/0` operation path; there is no separate numerical executable format.
 
 ## Types and storage
@@ -90,7 +90,9 @@ call. These native policy fields are included in preparation compatibility;
 reusing a cached computation cannot bypass a changed policy. They are distinct
 from the CLI capacity record and existing VM instruction, iteration, logical-byte
 and retained-value ledgers. Existing shape and output refusal precedence is
-preserved before the new numerical exhaustion checks.
+preserved for established operations. New operations may explicitly charge
+admission scans before operand refusal, as specified for
+[prepared quotient matrices](../domains/quotient-matrices.md).
 
 Managed memory bounds requested typed payload storage and conservative final
 representation storage. They do not bound allocator overhead, total process
@@ -319,3 +321,11 @@ Kernel schedules continue to lower to Local control and installed operations.
 These consumers do not implement arbitrary scheduled control or establish a
 native/source correspondence theorem. MLIR memory and bufferization interfaces
 apply to lowerings that provide concrete storage and alias semantics.
+
+## Prepared quotient matrices
+
+[Quotient matrix operations](../domains/quotient-matrices.md) use the same scoped
+storage and installed invocation path. Preparation owns its coordinate vector;
+products borrow immutable prepared storage and current digits, allocate private
+scratch, and publish fresh canonical coefficients. The explicit admission
+precharges and reconstruction capacity are specified by that operation contract.

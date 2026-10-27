@@ -114,7 +114,7 @@ remark: mathematical stage finish: completed, 12 -> 12 operations, 5 us
 def small_package():
     original = '''"builtin.module"() ({
   "protocol.module"() ({
-    "local.binding"() <{contract = "vector.map", sym_name = "binding"}> : () -> ()
+    "runtime.binding"() <{contract = "vector.map", sym_name = "binding"}> : () -> ()
     %0 = "local.invoke"() : () -> i1
   }) : () -> ()
 }) : () -> ()

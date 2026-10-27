@@ -196,8 +196,9 @@ class Planner {
             entry.project().declarations()[invoke->target.index].symbol,
             invoke->arguments);
       } else {
-        // Only this boundary handles Local/Math operations. Retain their exact
-        // checked action and operands for the existing emitter and comparator.
+        // Only this boundary handles scoped execution and mathematical
+        // operations. Retain their exact checked action and operands for the
+        // existing emitter and comparator.
         auto action = source;
         std::vector<ValueId *> coordinates;
         std::visit(

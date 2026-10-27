@@ -1,26 +1,41 @@
-!F = !algebra.field<"bls12-381.fr">
-!V = !algebra.field_vector<"bls12-381.fr">
 !I = !algebra.indices
 !M = !algebra.field_matrix<"bls12-381.fr">
-module { "protocol.module"() ({
- "local.binding"() {sym_name="mul",contract="index.mul",arguments=[],implementation=""} : ()->()
- "local.binding"() {sym_name="add",contract="index.add",arguments=[],implementation=""} : ()->()
- "data.domain"() ({ ^entry(%matrix:!M):
-   %d = "data.domain_matrix_coordinates"(%matrix) {order="row_major"} : (!M)->!data.domain<ui64,ui64>
-   "data.domain_yield"(%d) : (!data.domain<ui64,ui64>)->()
- }) {sym_name="items",sym_visibility="private",function_type=(!M)->!data.domain<ui64,ui64>} : ()->()
- local.func private @body(%i:ui64,%j:ui64,%matrix:!M,%base:ui64) -> ui64 attributes {logical_origin=["body",[]]} {
-   %major = "algebra.exec.index_mul"(%i,%base) {binding=@mul,parameters=[],site="major"} : (ui64,ui64)->ui64
-   %value = "algebra.exec.index_add"(%major,%j) {binding=@add,parameters=[],site="value"} : (ui64,ui64)->ui64
-   local.return %value : ui64
- }
- "local.finite_collect"() {sym_name="collect",function_type=(!M,ui64)->!I,domain=@items,body=@body} : ()->()
- local.func @work(%matrix:!M,%base:ui64) -> !I attributes {logical_origin=["work",[]]} {
-   %r = local.apply @collect(%matrix,%base) {site="collect"} : (!M,ui64)->!I
-   local.return %r : !I
- }
- "protocol.func"() ({ ^entry(%matrix:!M,%base:ui64):
-   %r = "protocol.local_call"(%matrix,%base) {callee=@work,role="P",site="work"} : (!M,ui64)->!I
-   "protocol.return"(%r) : (!I)->()
- }) {sym_name="main",function_type=(!M,ui64)->!I,roles=["P"],input_roles=[["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() }
+module {
+  "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
+    "runtime.binding"() <{arguments = [], contract = "index.mul", implementation = "", sym_name = "mul"}> : () -> ()
+    "runtime.binding"() <{arguments = [], contract = "index.add", implementation = "", sym_name = "add"}> : () -> ()
+    "data.domain"() <{function_type = (!M) -> !data.domain<ui64, ui64>, sym_name = "items", sym_visibility = "private"}> ({
+    ^bb0(%arg0: !M):
+      %0 = "data.domain_matrix_coordinates"(%arg0) <{order = "row_major"}> : (!M) -> !data.domain<ui64, ui64>
+      "data.domain_yield"(%0) : (!data.domain<ui64, ui64>) -> ()
+    }) : () -> ()
+    "protocol.func"() <{function_type = (!M, ui64) -> !I, input_roles = [["P"], ["P"]], origin = ["main", []], output_roles = [["P"]], roles = ["P"], sym_name = "main"}> ({
+    ^bb0(%arg0: !M, %arg1: ui64):
+      %0 = "protocol.local_call"(%arg0, %arg1) <{callee = @work, role = "P", site = "work"}> : (!M, ui64) -> !I
+      "protocol.return"(%0) : (!I) -> ()
+    }) : () -> ()
+    func.func private @body(%arg0: !runtime.scope, %arg1: ui64, %arg2: ui64, %arg3: !M, %arg4: ui64) -> !exec.outcome<(ui64)> attributes {no_inline, runtime.origin = ["body", []]} {
+      %0 = "exec.apply"(%arg0, %arg1, %arg4) <{binding = @mul, parameters = [], site = "major"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb1(%1: ui64):  // pred: ^bb0
+      %2 = "exec.apply"(%arg0, %1, %arg2) <{binding = @add, parameters = [], site = "value"}> : (!runtime.scope, ui64, ui64) -> !exec.outcome<(ui64)>
+      "exec.dispatch"(%2)[^bb3, ^bb2] : (!exec.outcome<(ui64)>) -> ()
+    ^bb2(%3: !exec.stop):  // 2 preds: ^bb0, ^bb1
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(ui64)>
+      return %4 : !exec.outcome<(ui64)>
+    ^bb3(%5: ui64):  // pred: ^bb1
+      %6 = "exec.returned"(%5) : (ui64) -> !exec.outcome<(ui64)>
+      return %6 : !exec.outcome<(ui64)>
+    }
+    func.func @work(%arg0: !runtime.scope, %arg1: !M, %arg2: ui64) -> !exec.outcome<(!I)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = "exec.collect"(%arg0, %arg1, %arg2) <{body = @body, domain = @items, site = "collect"}> : (!runtime.scope, !M, ui64) -> !exec.outcome<(!I)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!I)>) -> ()
+    ^bb1(%1: !I):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!I) -> !exec.outcome<(!I)>
+      return %2 : !exec.outcome<(!I)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!I)>
+      return %4 : !exec.outcome<(!I)>
+    }
+  }) : () -> ()
+}

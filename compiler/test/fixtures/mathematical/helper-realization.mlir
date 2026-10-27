@@ -9,11 +9,17 @@ module { "protocol.module"() ({
    %r = "poly.evaluate"(%q,%x) : (!P,!F)->!F
    func.return %r : !F
  }
- local.realize @realized = @polynomial : (!F,!F,!F)->!F
- local.func @work(%a:!F,%b:!F,%x:!F)->!F attributes {logical_origin=["work",[]]} {
-   %r = local.apply @realized(%a,%b,%x) {site="evaluate"} : (!F,!F,!F)->!F
-   local.return %r : !F
- }
+    func.func @work(%arg0: !runtime.scope, %arg1: !F, %arg2: !F, %arg3: !F) -> !exec.outcome<(!F)> attributes {no_inline, runtime.origin = ["work", []]} {
+      %0 = "exec.compute"(%arg0, %arg1, %arg2, %arg3) <{callee = @polynomial, site = "evaluate"}> : (!runtime.scope, !F, !F, !F) -> !exec.outcome<(!F)>
+      "exec.dispatch"(%0)[^bb1, ^bb2] : (!exec.outcome<(!F)>) -> ()
+    ^bb1(%1: !F):  // pred: ^bb0
+      %2 = "exec.returned"(%1) : (!F) -> !exec.outcome<(!F)>
+      return %2 : !exec.outcome<(!F)>
+    ^bb2(%3: !exec.stop):  // pred: ^bb0
+      %4 = "exec.failed"(%3) : (!exec.stop) -> !exec.outcome<(!F)>
+      return %4 : !exec.outcome<(!F)>
+    }
+
  "protocol.func"() ({
  ^entry(%a:!F,%b:!F,%x:!F):
    %r = "protocol.local_call"(%a,%b,%x) {callee=@work,role="P",site="work"} : (!F,!F,!F)->!F

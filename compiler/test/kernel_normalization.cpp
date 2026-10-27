@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/IR.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/MemoryBuffer.h"

@@ -48,13 +48,14 @@ def reject_both(label, text, code=UNKNOWN, export="protocol-export"):
 source = (ROOT / "compiler/test/fixtures/mathematical/local-execution.mlir").read_text()
 for mode, options, families in (
     ("mathematical", [], (
-        ("protocol.module", "profile"), ("local.binding", "contract"),
+        ("protocol.module", "profile"), ("runtime.binding", "contract"),
         ("protocol.func", "sym_name"), ("protocol.local_call", "callee"),
-        ("algebra.exec.field_add", "binding"), ("local.if", "site"))),
+        ("exec.apply", "binding"), ("exec.test", "site"),
+        ("runtime.enter_scope", "kind"))),
     ("physical", ["--zkc-participant-pipeline"], (
         ("protocol.module", "profile"), ("protocol.participant", "instance"),
-        ("protocol.entry", "targets"), ("plan.apply", "site"),
-        ("local.if", "site"))),
+        ("protocol.entry", "targets"), ("exec.apply", "binding"),
+        ("exec.test", "site"), ("runtime.enter_scope", "kind"))),
 ):
     ir = commands.verified(source, None, *options, "--mlir-print-op-generic")
     if mode == "physical":
@@ -68,12 +69,12 @@ for mode, options, families in (
         reject_both(f"{mode}: {operation} required-field typo", typo)
     reject_both(f"{mode}: namespaced property",
                 extra(ir, "protocol.module", "debug.note"))
-    no_fields = re.sub(r'("local.yield"\([^\n)]*\))',
+    no_fields = re.sub(r'("exec.failed"\([^\n)]*\))',
                        r'\1 <{surprise = "must-not-disappear"}>', ir, count=1)
     assert no_fields != ir
     reject_both(f"{mode}: empty property schema", no_fields, "empty properties")
 
-for operation in ("poly.exec.fold", "commitment.exec.polynomial_commit", "commitment.exec.vector_commit", "relation.r1cs"):
+for operation in ("exec.compute", "exec.fold", "exec.collect", "runtime.binding", "relation.r1cs"):
     malformed = (f'module {{ "{operation}"() '
                  '<{surprise = "must-not-disappear"}> : () -> () }')
     reject_both(f"{operation}: conversion precedes verification", malformed)

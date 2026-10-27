@@ -113,10 +113,16 @@ module { "protocol.module"() ({
 # remains an explicit local operation even when its result is unused.
 probe = '''!s = !data.sequence<ui64>
 module { "protocol.module"() ({
- "local.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
- local.func @checked(%s:!s,%i:ui64)->ui64 attributes {logical_origin=["checked",[]]} {
-   %unused = "data.exec.sequence_at"(%s,%i) {binding=@at,parameters=[],site="at"} : (!s,ui64)->ui64
-   local.return %i : ui64
+ "runtime.binding"() {sym_name="at",contract="sequence.at",arguments=["index"],implementation=""} : ()->()
+ func.func @checked(%scope:!runtime.scope,%s:!s,%i:ui64)->!exec.outcome<(ui64)> attributes {no_inline,runtime.origin=["checked",[]]} {
+   %checked = "exec.apply"(%scope,%s,%i) <{binding=@at,parameters=[],site="at"}> : (!runtime.scope,!s,ui64)->!exec.outcome<(ui64)>
+   "exec.dispatch"(%checked)[^success,^stopped] : (!exec.outcome<(ui64)>)->()
+ ^success(%unused:ui64):
+   %out = "exec.returned"(%i) : (ui64)->!exec.outcome<(ui64)>
+   return %out : !exec.outcome<(ui64)>
+ ^stopped(%stop:!exec.stop):
+   %failed = "exec.failed"(%stop) : (!exec.stop)->!exec.outcome<(ui64)>
+   return %failed : !exec.outcome<(ui64)>
  }
  "protocol.func"() ({ ^entry(%i:ui64):
    %empty = "data.sequence_empty"() : ()->!s
@@ -134,7 +140,7 @@ with case("total operations and checked indexing"):
         assert "native/sequence.at" in json.loads(bundle)["candidate"]
         (OUT / f"checked{suffix}.bundle").write_text(bundle)
 with case("affine element rejected at type formation"):
-    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!local.capability<"rng:bls12-381.fr">>'),
+    commands.verified(probe.replace("!data.sequence<ui64>", '!data.sequence<!runtime.capability<"rng:bls12-381.fr">>'),
                       refuses="copyable and discardable")
 with case("complete MLIR sequence type obeys structural depth"):
     element = "ui64"

@@ -8,8 +8,10 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Dialect/Exec/Execution.h"
+#include "zkc/Dialect/Exec/IR/ExecTypes.h"
 #include "zkc/Dialect/Relation/IR/Assets.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Json.h"
@@ -23,75 +25,10 @@ namespace {
 class ExecutionModelReader {
   Operation *root;
   zkc::protocol_ir::ProfileAttr profile;
-  bool localDefinitionsOnly = false;
-  bool allowMapRequests = false;
   bool physical;
   std::string problem;
   unsigned next = 0;
-  SymbolTableCollection kernelSymbols;
-  llvm::DenseMap<Operation *, std::string> kernelEntries;
-  SmallVector<LocalRealization> kernelRealizations;
-  llvm::DenseSet<Operation *> mapHelpers;
-
-  bool collectMaps() {
-    if (failed(zkc::algebra::collectMapHelpers(root, mapHelpers))) {
-      fail("algebra-map-formula");
-      return false;
-    }
-    for (auto map :
-         root->getRegion(0).front().getOps<algebra::MapRealizeOp>()) {
-      LocalRealization value;
-      value.name = map.getSymName().str();
-      for (bool input : {true, false})
-        for (auto port : input ? map.getFunctionType().getInputs()
-                               : map.getFunctionType().getResults()) {
-          auto bound = encodeBoundType(port, false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            fail("local-realization-signature");
-            return false;
-          }
-          (input ? value.inputs : value.outputs).push_back(bound->spelling());
-        }
-      kernelRealizations.push_back(std::move(value));
-    }
-    return true;
-  }
-
-  // Internal validation signatures, never executable bodies or published
-  // symbols. The enclosing stage has admitted every retained computation
-  // closure.
-  bool collectKernels() {
-    unsigned index = 0;
-    for (auto unit : root->getRegion(0).front().getOps<mlir::ModuleOp>()) {
-      if (physical) {
-        fail("kernel-profile");
-        return false;
-      }
-      auto entry = zkc::mathematical::getComputationEntry(unit);
-      auto type = signature(entry);
-      if (!type)
-        return false;
-      LocalRealization realization;
-      do {
-        realization.name = "kernel_entry_" + std::to_string(index++);
-      } while (SymbolTable::lookupSymbolIn(root, realization.name));
-      for (bool input : {true, false})
-        for (auto port : input ? type.getInputs() : type.getResults()) {
-          auto bound = encodeBoundType(port, false);
-          if (!bound) {
-            consumeError(bound.takeError());
-            fail("kernel-entry");
-            return false;
-          }
-          (input ? realization.inputs : realization.outputs)
-              .push_back(bound->spelling());
-        }
-      kernelEntries[entry] = realization.name;
-      kernelRealizations.push_back(std::move(realization));
-    }
-    return true;
-  }
+  SmallVector<LocalRealization> computations;
 
   using Env = llvm::DenseMap<mlir::Value, std::string>;
   void fail(StringRef why) {
@@ -191,26 +128,17 @@ class ExecutionModelReader {
   }
   bool callTypes(Operation *op, StringRef callee) {
     Operation *definition = SymbolTable::lookupSymbolIn(root, callee);
-    bool kind =
-        isa_and_nonnull<zkc::local::FuncOp>(definition) ||
-        (isa<zkc::local::ApplyOp>(op) &&
-         ((localDefinitionsOnly &&
-           profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
-           isa_and_nonnull<zkc::PreparationCallableOpInterface>(definition)) ||
-          (allowMapRequests &&
-           isa_and_nonnull<zkc::algebra::MapRealizeOp>(definition))));
-    if (!kind) {
-      fail("interactive-symbol-kind");
-      return false;
-    }
-    FunctionType ft = signature(definition);
-    return (ft && op->getOperandTypes() == ft.getInputs() &&
-            op->getResultTypes() == ft.getResults()) ||
+    auto function = dyn_cast_or_null<func::FuncOp>(definition);
+    auto type = function ? function.getFunctionType() : FunctionType();
+    auto outcome = type && type.getNumResults() == 1
+                       ? dyn_cast<exec::OutcomeType>(type.getResult(0))
+                       : exec::OutcomeType();
+    return (function && isScopedExecutionFunction(function) && outcome &&
+            op->getOperandTypes() == type.getInputs().drop_front() &&
+            op->getResultTypes() == outcome.getPayload()) ||
            (fail("interactive-call-type"), false);
   }
-  program::Body body(Block &block, Env env, TypeRange outputs,
-                     Operation *definition, bool local,
-                     bool localRegion = false) {
+  program::Body body(Block &block, Env env, TypeRange outputs) {
     program::Body out;
     if (block.empty()) {
       fail("interactive-empty-body");
@@ -219,36 +147,11 @@ class ExecutionModelReader {
     for (auto &operation : block) {
       Operation *op = &operation;
       std::string site = attr(op, "site").str();
-      if (isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(op)) {
-        auto *parent = op->getParentOp();
-        unsigned offset = isa<zkc::local::LocalConditionOp>(op) ? 1 : 0;
-        unsigned forwarded =
-            isa<zkc::local::LocalForOp>(parent)
-                ? block.getNumArguments() - 1 - (outputs.size() - offset)
-                : 0;
-        if (!localRegion || !attributes(op, {}) || op != &block.back() ||
-            op->getNumOperands() != outputs.size() + forwarded ||
-            op->getOperands().take_front(outputs.size()).getTypes() !=
-                outputs) {
-          fail("local-control-yield");
-          return {};
-        }
-        for (unsigned i = 0; i < forwarded; ++i)
-          if (op->getOperand(outputs.size() + i) !=
-              block.getArgument(block.getNumArguments() - forwarded + i)) {
-            fail("local-control-capture-forwarding");
-            return {};
-          }
-        out.push_back(
-            {"", program::Yield{names(
-                     op->getOperands().take_front(outputs.size()), env)}});
-      } else if (isa<zkc::local::ReturnOp,
-                     zkc::protocol_ir::MathematicalReturnOp,
-                     zkc::protocol_ir::FinishOp,
-                     zkc::protocol_ir::ProtocolYieldOp>(op)) {
-        if (localRegion || !attributes(op, {}) || op != &block.back() ||
-            op->getOperandTypes() != outputs ||
-            (local != isa<zkc::local::ReturnOp>(op))) {
+      if (isa<zkc::protocol_ir::MathematicalReturnOp,
+              zkc::protocol_ir::FinishOp, zkc::protocol_ir::ProtocolYieldOp>(
+              op)) {
+        if (!attributes(op, {}) || op != &block.back() ||
+            op->getOperandTypes() != outputs) {
           fail("interactive-return-type");
           return {};
         }
@@ -259,8 +162,7 @@ class ExecutionModelReader {
           instruction.value = program::Return{names(op->getOperands(), env)};
         out.push_back(std::move(instruction));
       } else if (auto completion = dyn_cast<zkc::protocol_ir::FinishIfOp>(op)) {
-        if (local || !attributes(op, {"site", "owner"}) ||
-            failed(completion.verify())) {
+        if (!attributes(op, {"site", "owner"}) || failed(completion.verify())) {
           fail("interactive-return-type");
           return {};
         }
@@ -272,55 +174,10 @@ class ExecutionModelReader {
         out.push_back(
             {site, program::ReturnIf{inputs.front(), std::move(values),
                                      std::move(continuations)}});
-      } else if (isa<zkc::plan::ReleaseOp>(op)) {
-        if (!physical || !local || !attributes(op, {})) {
-          fail("interactive-release-context");
-          return {};
-        }
-        out.push_back({"", program::Release{names(op->getOperands(), env)}});
-      } else if (isa<zkc::local::StopOp>(op)) {
-        if (!local || !attributes(op, {"site", "reason"}) ||
-            op != &block.back()) {
-          fail("interactive-halt");
-          return {};
-        }
-        out.push_back({site, program::Stop{attr(op, "reason").str()}});
-
-      } else if (auto call = dyn_cast<zkc::kernel::CallOp>(op)) {
-        if (!local || physical ||
-            !attributes(
-                op, {"site", "callee", "policy", "arg_attrs", "res_attrs"}) ||
-            failed(call.verify()) ||
-            failed(call.verifySymbolUses(kernelSymbols))) {
-          fail("kernel-call-context");
-          return {};
-        }
-        auto entry = zkc::kernel::resolve(call, kernelSymbols);
-        auto found = kernelEntries.find(entry);
-        if (found == kernelEntries.end()) {
-          fail("kernel-call-symbol");
-          return {};
-        }
-        out.push_back({site, program::LocalApply{found->second,
-                                                 names(op->getOperands(), env),
-                                                 results(op, env)}});
-      } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
-        auto *callee = SymbolTable::lookupSymbolIn(root, call.getCallee());
-        bool common = localDefinitionsOnly &&
-                      profile.getValue() == protocol_ir::Profile::Protocol;
-        bool retainedMap =
-            allowMapRequests && isa_and_nonnull<algebra::MapRealizeOp>(callee);
-        if ((!common && !retainedMap) || !local ||
-            !attributes(op, {"site", "callee"}) ||
-            !callTypes(op, call.getCallee())) {
-          fail("algorithm-call-context");
-          return {};
-        }
-        out.push_back({site, program::LocalApply{call.getCallee().str(),
-                                                 names(op->getOperands(), env),
-                                                 results(op, env)}});
-      } else if (auto call = dyn_cast<zkc::local::CallOp>(op)) {
-        if (local || !attributes(op, {"site", "callee"}) ||
+      } else if (auto call = dyn_cast<protocol_ir::LocalCallOp>(op)) {
+        auto participant = op->getParentOfType<protocol_ir::ParticipantOp>();
+        if (!participant || call.getRoleAttr() != participant.getRoleAttr() ||
+            !attributes(op, {"site", "callee", "role"}) ||
             !callTypes(op, call.getCallee())) {
           fail("interactive-local-symbol");
           return {};
@@ -358,7 +215,7 @@ class ExecutionModelReader {
           }
           return selected->spelling();
         };
-        if (local || !method || !attributes(op, {"site", "port", "method"}) ||
+        if (!method || !attributes(op, {"site", "port", "method"}) ||
             op->getNumResults() != 1 ||
             query.getInputs().size() != method->inputs.size() ||
             expected(method->output).empty() ||
@@ -392,118 +249,6 @@ class ExecutionModelReader {
                                       attr(op, "peer").str(), n,
                                       type(op->getResult(0).getType())}});
         }
-      } else if (isa<zkc::local::BoolConstantOp, zkc::plan::BoolConstantOp>(
-                     op)) {
-        if (!local || physical != isa<zkc::plan::BoolConstantOp>(op) ||
-            !attributes(op, {"site", "value"})) {
-          fail("native-boolean-context");
-          return {};
-        }
-        auto value = op->getAttrOfType<BoolAttr>("value");
-        if (!value || type(op->getResult(0).getType()) !=
-                          (physical ? "bool@native.bool/0" : "bool")) {
-          fail("native-boolean-type");
-          return {};
-        }
-        auto output = results(op, env);
-        out.push_back(
-            {site, program::BooleanConstant{output[0], value.getValue()}});
-      } else if (auto pack = dyn_cast<zkc::local::VariantInjectOp>(op)) {
-        if (!local || !attributes(op, {"site", "alternative"}) ||
-            failed(pack.verify())) {
-          fail("variant-payload");
-          return {};
-        }
-        auto payload = names(op->getOperands(), env);
-        auto outputs = results(op, env);
-        out.push_back(
-            {site, program::VariantConstruct{type(pack.getOutput().getType()),
-                                             pack.getAlternative().str(),
-                                             std::move(payload), outputs[0]}});
-      } else if (auto match = dyn_cast<zkc::local::LocalMatchOp>(op)) {
-        if (!local || !attributes(op, {"site", "alternatives"}) ||
-            failed(match.verifyRegions())) {
-          fail("local-match-shape");
-          return {};
-        }
-        program::Match result;
-        result.input = name(op->getOperand(0), env);
-        result.captures = names(op->getOperands().drop_front(), env);
-        for (auto [i, region] : enumerate(match.getArms())) {
-          auto &inner = region.front();
-          Env nested;
-          program::MatchArm arm;
-          arm.alternative = cast<StringAttr>(match.getAlternatives()[i]).str();
-          unsigned payload = inner.getNumArguments() - result.captures.size();
-          for (auto arg : inner.getArguments().take_front(payload)) {
-            auto n = fresh();
-            nested[arg] = n;
-            arm.payload.push_back(n);
-          }
-          for (auto [arg, capture] :
-               zip(inner.getArguments().drop_front(payload), result.captures))
-            nested[arg] = capture;
-          arm.body = body(inner, std::move(nested), op->getResultTypes(),
-                          definition, true, true);
-          result.arms.push_back(std::move(arm));
-        }
-        result.outputs = results(op, env);
-        out.push_back({site, std::move(result)});
-      } else if (auto branch = dyn_cast<zkc::local::LocalIfOp>(op)) {
-        if (!local || !attributes(op, {"site"}) ||
-            failed(branch.verifyRegions())) {
-          fail("local-control-shape");
-          return {};
-        }
-        auto captures = names(op->getOperands().drop_front(), env);
-        program::Body bodies[2];
-        for (unsigned i = 0; i < 2; ++i) {
-          auto &inner = op->getRegion(i).front();
-          Env nested;
-          for (auto [arg, capture] : zip(inner.getArguments(), captures))
-            nested[arg] = capture;
-          bodies[i] = body(inner, std::move(nested), op->getResultTypes(),
-                           definition, true, true);
-        }
-        out.push_back({site, program::Conditional{
-                                 name(op->getOperand(0), env),
-                                 std::move(captures), std::move(bodies[0]),
-                                 std::move(bodies[1]), results(op, env)}});
-      } else if (auto loop = dyn_cast<zkc::local::LocalForOp>(op)) {
-        if (!local || !attributes(op, {"site"}) ||
-            failed(loop.verifyRegions())) {
-          fail("local-control-shape");
-          return {};
-        }
-        auto &inner = loop.getBody().front();
-        Env nested;
-        std::string induction = fresh();
-        nested[inner.getArgument(0)] = induction;
-        protocol::Assignments carried;
-        program::Names captures;
-        for (unsigned i = 2; i < op->getNumOperands(); ++i) {
-          auto input = name(op->getOperand(i), env);
-          if (i - 2 < op->getNumResults()) {
-            auto n = fresh();
-            nested[inner.getArgument(i - 1)] = n;
-            carried.emplace_back(n, input);
-          } else {
-            nested[inner.getArgument(i - 1)] = input;
-            captures.push_back(input);
-          }
-        }
-        bool conditional = isa<zkc::local::LocalConditionOp>(inner.back());
-        SmallVector<Type> yielded(op->getResultTypes());
-        if (conditional)
-          yielded.insert(yielded.begin(), inner.back().getOperand(0).getType());
-        auto content =
-            body(inner, std::move(nested), yielded, definition, true, true);
-        out.push_back(
-            {site,
-             program::For{induction, name(op->getOperand(0), env),
-                          name(op->getOperand(1), env), std::move(carried),
-                          std::move(captures), std::move(content),
-                          results(op, env), conditional}});
       } else if (auto loop = dyn_cast<zkc::protocol_ir::ProtocolLoopOp>(op)) {
         if (!attributes(op,
                         {"site", "carried", "count", "parameter", "maximum"}) ||
@@ -548,52 +293,27 @@ class ExecutionModelReader {
         }
         program::LoopCount n{name(op->getOperand(0), env), *loop.getMaximum(),
                              induction};
-        auto content = body(inner, std::move(innerEnv), op->getResultTypes(),
-                            definition, false);
+        auto content = body(inner, std::move(innerEnv), op->getResultTypes());
         out.push_back(
             {site, program::Loop{std::move(n), std::move(initial),
                                  std::move(captures), std::move(content),
                                  results(op, env)}});
       } else {
-        if (!local ||
-            !attributes(op, physical ? ArrayRef<StringRef>{"site", "binding",
-                                                           "implementation",
-                                                           "parameters"}
-                                     : ArrayRef<StringRef>{"site", "binding",
-                                                           "parameters"}) ||
-            failed(verifyBoundOperation(op, physical))) {
-          fail("binding-operation");
-          return {};
-        }
-        auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-        out.push_back(
-            {site, program::Operation{
-                       reference.getValue().str(),
-                       strings(op->getAttrOfType<ArrayAttr>("parameters")),
-                       names(op->getOperands(), env), results(op, env)}});
+        fail("binding-operation");
+        return {};
       }
       if (!problem.empty())
         return {};
     }
     return out;
   }
-  using Definition = std::variant<program::Function, program::Participant>;
-  Definition definition(Operation *op, bool local) {
-    if (!attributes(
-            op, local
-                    ? ArrayRef<StringRef>{"sym_name", "function_type",
-                                          "sym_visibility", "logical_origin"}
-                    : ArrayRef<StringRef>{"sym_name", "function_type",
-                                          "instance", "role", "service_ports"}))
+  program::Participant participant(Operation *op) {
+    if (!attributes(op, {"sym_name", "function_type", "instance", "role",
+                         "service_ports"}))
       return {};
     FunctionType ft = signature(op);
     if (!ft || op->getNumRegions() != 1) {
       fail("interactive-definition");
-      return {};
-    }
-    if (local && op->hasAttr("sym_visibility") &&
-        attr(op, "sym_visibility") != "private") {
-      fail("interactive-local-visibility");
       return {};
     }
     if (!llvm::hasSingleElement(op->getRegion(0))) {
@@ -601,7 +321,6 @@ class ExecutionModelReader {
       return {};
     }
     Env env;
-    program::Function function;
     program::Participant projected;
     if (op->getRegion(0).front().getArgumentTypes() != ft.getInputs()) {
       fail("interactive-block-arguments");
@@ -610,29 +329,12 @@ class ExecutionModelReader {
     for (size_t i = 0; i < ft.getNumInputs(); ++i) {
       std::string n = fresh();
       env[op->getRegion(0).front().getArgument(i)] = n;
-      (local ? function.arguments : projected.arguments)
-          .push_back({n, type(ft.getInput(i))});
+      projected.arguments.push_back({n, type(ft.getInput(i))});
     }
     for (auto t : ft.getResults())
-      (local ? function.results : projected.results).push_back(type(t));
-    auto content = body(op->getRegion(0).front(), std::move(env),
-                        ft.getResults(), op, local);
-    if (local) {
-      function.name = attr(op, "sym_name").str();
-      function.body = std::move(content);
-      {
-        auto origin = op->getAttrOfType<ArrayAttr>("logical_origin");
-        if (!origin || origin.size() != 2 || !isa<StringAttr>(origin[0]) ||
-            !isa<ArrayAttr>(origin[1])) {
-          fail("binding-logical-origin");
-          return {};
-        }
-        function.origin =
-            program::LogicalOrigin{cast<StringAttr>(origin[0]).getValue().str(),
-                                   pairs(cast<ArrayAttr>(origin[1]))};
-      }
-      return function;
-    }
+      projected.results.push_back(type(t));
+    auto content =
+        body(op->getRegion(0).front(), std::move(env), ft.getResults());
     {
       if (auto ports = op->getAttrOfType<ArrayAttr>("service_ports")) {
         for (auto attribute : ports) {
@@ -666,111 +368,48 @@ public:
         profile(root->getAttrOfType<zkc::protocol_ir::ProfileAttr>("profile")),
         physical(profile &&
                  profile.getValue() == zkc::protocol_ir::Profile::Physical) {}
-  Expected<program::LocalDefinitions> localDefinitions() {
-    // Reconstruct local callables and realization signatures directly from
-    // mathematical IR for the shared local-control admission checks.
-    localDefinitionsOnly = true;
-    physical = false;
-    allowMapRequests = profile.getValue() != protocol_ir::Profile::Physical;
-    program::LocalDefinitions module;
-    if (allowMapRequests &&
-        failed(zkc::algebra::collectMapHelpers(root, mapHelpers)))
-      return error("algebra-map-formula");
-    if (!collectKernels())
-      return error(problem);
-    SmallVector<LocalRealization> realizations(kernelRealizations);
-
-    for (auto &op : root->getRegion(0).front()) {
-      if (isa<zkc::local::OperationBindingOp>(op)) {
-        if (!attributes(&op, {"sym_name", "contract", "arguments",
-                              "implementation", "physical_arguments"}))
-          return error(problem);
-        auto binding = readBinding(&op);
-        if (!binding)
-          return binding.takeError();
-        module.bindings.push_back(std::move(*binding));
-      } else if (isa<zkc::local::RealizeOp, zkc::algebra::MapRealizeOp,
-                     zkc::local::FiniteFoldOp, zkc::local::FiniteCollectOp>(
-                     op)) {
-        // Only maps survive common preparation as closed logical requests.
-        bool map = isa<zkc::algebra::MapRealizeOp>(op);
-        bool finite = zkc::finite::isDeclaration(&op);
-        if ((profile.getValue() != zkc::protocol_ir::Profile::Protocol &&
-             !(map && allowMapRequests)) ||
-            (!finite &&
-             (map ? !attributes(&op, {"sym_name", "helper", "function_type",
-                                      "rowwise", "policy"})
-                  : !attributes(&op, {"sym_name", "helper", "function_type"}))))
-          return error("local-realization-context");
-        auto signature = cast<zkc::PreparationCallableOpInterface>(op)
-                             .getPreparationSignature();
-        LocalRealization value;
-        value.name = SymbolTable::getSymbolName(&op).str();
-        if (finite) {
-          zkc::finite::Computation computation;
-          if (failed(zkc::finite::describe(&op, computation)))
-            return error("finite-formation");
-          value.kind = computation.collect
-                           ? LocalRealization::Kind::FiniteCollect
-                           : LocalRealization::Kind::FiniteFold;
-          value.domainArguments = computation.arguments;
-        }
-        for (bool input : {true, false})
-          for (auto type :
-               input ? signature.getInputs() : signature.getResults()) {
-            auto bound = encodeBoundType(type, false);
-            if (!bound) {
-              consumeError(bound.takeError());
-              return error("local-realization-signature");
-            }
-            (input ? value.inputs : value.outputs).push_back(bound->spelling());
-          }
-        realizations.push_back(std::move(value));
-      } else if (isa<zkc::local::FuncOp>(op)) {
-        auto value = definition(&op, true);
-        if (!problem.empty())
-          return error(problem);
-        module.functions.push_back(
-            std::get<program::Function>(std::move(value)));
-      }
-    }
-    if (auto e = admitNativeLocalDefinitions(module, realizations))
-      return std::move(e);
-    return module;
-  }
-  Expected<program::Participants> run(bool allowLogicalKernels = false) {
+  Expected<program::Participants> run(bool allowComputations = false) {
     if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
         !attributes(root, {"profile"}) || !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
-    if (allowLogicalKernels && !collectKernels())
-      return error(problem);
-    allowMapRequests = allowLogicalKernels && !physical;
-    if (allowMapRequests && !collectMaps())
-      return error(problem);
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;
+    {
+      if (allowComputations && !physical) {
+        auto closure = readSourceExecutionClosure(root);
+        if (!closure)
+          return closure.takeError();
+        participants.functions = std::move(closure->definitions.functions);
+        append_range(computations, closure->computations);
+      } else {
+        auto definitions = readExecutionDefinitions(root, physical);
+        if (!definitions)
+          return definitions.takeError();
+        participants.functions = std::move(definitions->functions);
+      }
+    }
     for (auto &op : root->getRegion(0).front()) {
-      if (isa<algebra::MapRealizeOp>(op)) {
-        if (!allowMapRequests)
-          return error("algebra-map-context");
+      if (isa<func::FuncOp, data::DomainOp>(op)) {
+        // The complete source closure checks every mathematical/domain
+        // declaration. Publication accepts only the resolved native profile.
+        if (isa<data::DomainOp>(op) && (!allowComputations || physical))
+          return error("execution-unresolved-domain");
         continue;
       }
-      if (mapHelpers.contains(&op))
-        continue;
       if (isa<mlir::ModuleOp>(op)) {
         // Stage admission already checked the computation closure. Only
         // internal logical admission may retain it; publication must realize it
         // first.
-        if (!allowLogicalKernels || physical)
-          return error("kernel-profile");
+        if (!allowComputations || physical)
+          return error("computation-profile");
         continue;
       }
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
-      if (isa<zkc::local::OperationBindingOp>(op)) {
+      if (isa<zkc::runtime::BindingOp>(op)) {
         if (!attributes(&op, {"sym_name", "contract", "arguments",
                               "implementation", "physical_arguments"}))
           return error("binding-attribute");
@@ -778,18 +417,11 @@ public:
         if (!binding)
           return binding.takeError();
         participants.bindings.push_back(std::move(*binding));
-      } else if (isa<zkc::local::FuncOp>(op)) {
-        auto value = definition(&op, true);
-        if (!problem.empty())
-          return error(problem);
-        participants.functions.push_back(
-            std::get<program::Function>(std::move(value)));
       } else if (isa<zkc::protocol_ir::ParticipantOp>(op)) {
-        auto value = definition(&op, false);
+        auto value = participant(&op);
         if (!problem.empty())
           return error(problem);
-        participants.participants.push_back(
-            std::get<program::Participant>(std::move(value)));
+        participants.participants.push_back(std::move(value));
       } else if (auto entry = dyn_cast<zkc::protocol_ir::ProtocolEntryOp>(op)) {
         if (!attributes(&op, {"sym_name", "targets"}))
           return error("interactive-entry-attribute");
@@ -802,9 +434,8 @@ public:
     }
     if (!problem.empty())
       return error(problem);
-    if (auto e = kernelRealizations.empty()
-                     ? admit(participants)
-                     : admit(participants, kernelRealizations))
+    if (auto e = computations.empty() ? admit(participants)
+                                      : admit(participants, computations))
       return e;
     return participants;
   }
@@ -826,28 +457,11 @@ Expected<program::Participants> readExecutionModel(Operation *root) {
       return error("interactive-module-count");
     root = &module.getBody()->front();
   }
-  // Publication reads the complete carrier, including dormant definitions.
-  // Signature-only logical requests are exclusively an internal admission aid.
-  std::string residual;
-  root->walk([&](Operation *op) {
-    if (residual.empty() && isa<zkc::algebra::MapRealizeOp>(op))
-      residual = "algebra-map-context";
-    if (residual.empty() && isa<zkc::local::ApplyOp>(op))
-      residual = "algorithm-call-context";
-  });
-  if (!residual.empty())
-    return error(residual);
   return ExecutionModelReader(root).run();
-}
-LogicalResult verifyLocalDefinitions(Operation *root) {
-  auto value = ExecutionModelReader(root).localDefinitions();
-  if (!value)
-    return diagnostics::emit(root->emitOpError(), value.takeError());
-  return success();
 }
 LogicalResult verifyModule(Operation *root) {
   // Region verification already checked all nested operation invariants.
-  auto v = ExecutionModelReader(root).run(/*allowLogicalKernels=*/true);
+  auto v = ExecutionModelReader(root).run(/*allowComputations=*/true);
   if (!v)
     return diagnostics::emit(root->emitOpError(), v.takeError());
   return success();

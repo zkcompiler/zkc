@@ -24,3 +24,9 @@ Omit `--check` to update generated files. The command uses the shared snapshot
 and body printers and builds only the source-data dependency it needs. The
 maintained core and security package builds check the mathematical and binding
 modules; native field/runner correspondence is outside this example's theorem.
+
+Check the source declarations from this project directory:
+
+```sh zkc-example
+zkc check
+```

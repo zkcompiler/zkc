@@ -3,18 +3,17 @@
 #include "mlir/IR/Builders.h"
 #include "zkc/Language/Layout.h"
 namespace zkc::language {
-enum class PackingMode { Mathematical, Local };
 /// Adapt an already checked value between its ordinary ABI and one contextual
-/// native carrier. These functions do not confer source access authority.
-/// Local unpack emits a single-arm match with an identity payload yield;
-/// mathematical unpack emits ordered data.get projections. The caller owns
-/// operation/work accounting (pack: product ? 1 : 0; unpack: local product ? 2
-/// : mathematical product ? flat leaf count : 0).
-llvm::Expected<mlir::Value> emitPack(mlir::OpBuilder &, mlir::Location,
-                                     const PackedLayout &, mlir::ValueRange,
-                                     PackingMode, llvm::StringRef site = {});
+/// mathematical carrier using data.make and ordered data.get projections.
+/// These functions do not confer source access authority. Ordered execution
+/// uses scoped variant/match construction instead. The caller owns operation
+/// accounting (pack: product ? 1 : 0; unpack: product ? flat leaf count : 0).
+llvm::Expected<mlir::Value> emitMathematicalPack(mlir::OpBuilder &,
+                                                 mlir::Location,
+                                                 const PackedLayout &,
+                                                 mlir::ValueRange);
 llvm::Expected<llvm::SmallVector<mlir::Value>>
-emitUnpack(mlir::OpBuilder &, mlir::Location, const PackedLayout &, mlir::Value,
-           PackingMode, llvm::StringRef site = {});
+emitMathematicalUnpack(mlir::OpBuilder &, mlir::Location, const PackedLayout &,
+                       mlir::Value);
 } // namespace zkc::language
 #endif

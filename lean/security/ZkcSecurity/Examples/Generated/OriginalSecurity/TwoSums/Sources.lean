@@ -23,15 +23,16 @@ abbrev program := ZkcExamples.Structured.OriginalArtifacts.TwoSums.program
 abbrev payload := program.payload
 abbrev routing := ZkcExamples.Structured.OriginalArtifacts.TwoSums.routing
 abbrev context := ZkcExamples.Structured.OriginalArtifacts.TwoSums.context
-theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions := by bind_structured_bodies
+theorem terminal_bodies : OriginalSumcheckLibrary.TerminalBodies payload.definitions :=
+  ZkcExamples.Structured.OriginalArtifacts.TwoSums.helper_bodies.terminal
 
 theorem source_root_association : ZkcExamples.Structured.Generated.Original.TwoSums.root.signature = ZkcExamples.Structured.OriginalArtifacts.TwoSums.program.payload.entry.signature := by kernel_rfl
 
 theorem nominal_order : [ZkcExamples.Structured.Generated.Original.TwoSums.callContext0, ZkcExamples.Structured.Generated.Original.TwoSums.callContext2] = [ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0.protocol, ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence1.protocol] := by kernel_rfl
 
-theorem check0_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper30.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
+theorem check0_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper33.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
-theorem check1_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper30.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
+theorem check1_helper : ZkcExamples.Structured.Generated.Original.TwoSums.sourceHelper33.helper = SumcheckHelperBodies.checkHelper := by kernel_rfl
 
 def schedule0 := schedule ZkcExamples.Structured.OriginalArtifacts.TwoSums.occurrence0 context
  theorem routes0 (handle : Nat) : OriginalSecurity.Routes (routing handle)
@@ -151,7 +152,7 @@ theorem combine (left right : Values (Component (assignment F G)) [.boolean]) :
       cases right
       change invoke (OriginalSumcheckLibrary.helpers payload).components ZkcExamples.Structured.Generated.Original.TwoSums.terminalHelper
         (.cons a (.cons b .nil)) = _
-      exact ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.mathHelper31 a b
+      exact ZkcExamples.Structured.OriginalArtifacts.TwoSumsValidatorRoot.mathHelper21 a b
 
 theorem source_root (input0 : List F) (input1 : List F) (input2 : F) (input3 : F) (input4 : Nat) (handle : Nat) :
     Occurrence.participant (ringModel F G) program 1 (.cons (some input0) (.cons (some input1) (.cons (some input2) (.cons (some input3) (.cons (some input4) (.cons (some handle) .nil)))))) =

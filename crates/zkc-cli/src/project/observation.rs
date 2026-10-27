@@ -45,8 +45,15 @@ impl ReportDirectory {
                     let Some(name) = phase["phase"].as_str().map(str::to_owned) else {
                         continue;
                     };
-                    if !["entry", "protocol", "participant", "exec", "physical"]
-                        .contains(&name.as_str())
+                    if ![
+                        "entry",
+                        "protocol",
+                        "participant",
+                        "exec",
+                        "execution",
+                        "physical",
+                    ]
+                    .contains(&name.as_str())
                     {
                         continue;
                     }

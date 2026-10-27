@@ -350,7 +350,7 @@ def realized_operation_counts(toolchain, journal, directory, name, source):
     original = directory / f'{name}.mlir'
     original.write_text(emitted)
     prepared = journal.run([toolchain.optimizer, '--zkc-prepare-protocol', original])
-    assert 'algebra.map_realize' in prepared
+    assert 'exec.collect' in prepared
     helper = sum(line.count('algebra.field_') + line.count('algebra.constant')
                  for line in emitted.splitlines())
     physical = directory / f'{name}.physical.mlir'

@@ -646,16 +646,22 @@ check, this is a backend failure reported as `rejected:require`, not a native
 unequal lengths natively first requires them equal, for example
 `require(kernel<F>("vector.length", a) == kernel<F>("vector.length", b))`.
 
-Every operation of the helper and of the helpers it calls, used or not, may be
-only a field constant, `+`, `-` or `*` in the map's field. Formation of the
-emitted [IR declaration](../ir/protocols.md#checked-pointwise-maps) refuses
-anything else with `algebra-map-formula`. The expanded formula must also fit the
-[Ring limits](../ir/limits.md), including depth 1,024, where subtraction costs an
-extra level on its right operand; a deeper formula refuses with the same
-identifier when the original is prepared. Both refusals name the source map and
-its helper. Invalid value-argument binding uses `source.call`; invalid static
-binding uses `source.generic`, as for ordinary calls. Other map-specific source
-refusals use `source.map`; a map outside local code uses `source.mode`.
+The helper and its transitive closure obey ordinary typed mathematical
+formation, including unused work and the shared analysis limits. The emitted
+[scoped collection](../ir/protocols.md#checked-pointwise-maps) retains the exact
+helper computation. Supported field constants, `+`, `-` and `*` can select bulk
+native expressions or vector operations. Their optional extraction obeys
+[Ring limits](../ir/limits.md), including depth 1,024, where subtraction adds an
+extra level on its right operand. Other admitted mathematics and formulas beyond
+that optional limit retain checked ordered execution. Required compilation
+capacity can still refuse the complete candidate; it is not an equivalence
+judgment or a source-language restriction to Ring formulas.
+
+Invalid value-argument binding uses `source.call`; invalid static binding uses
+`source.generic`, as for ordinary calls. Other map-specific source refusals use
+`source.map`; a map outside local code uses `source.mode`. Missing or ill-typed
+emitted domains, callbacks and mathematical calls are refused by their owning
+IR admission checks, independently of source syntax checking.
 
 ## Finite reduction binders
 

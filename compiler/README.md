@@ -175,8 +175,9 @@ polynomial reference admission from analysis at actual parameters; reference
 admission alone grants no executable polynomial domain.
 
 `Program/Model.h` contains `zkc::program` records. `LocalDefinitions` is an internal
-structural view used to check mathematical local callables, with `LocalApply`
-representing native `local.apply` before expansion; it has no authored carrier.
+structural view of admitted scoped callables. `LocalApply` represents retained
+mathematical computations, finite requests and ordinary helper calls before
+checked expansion; it has no authored carrier.
 `Contracts/Binding.h` owns named operation bindings and assignment pairs.
 Program records carry no diagnostic locations. Language diagnostics retain
 source spans; MLIR operations retain their own locations. Physical selection
@@ -185,9 +186,11 @@ statistics. `verifyProgramArtifact` returns the admitted program after comparing
 it with physical SSA, so consumers can reuse the checked records.
 
 `registerDialects` installs the native dialect set and contributions. The
-protocol, local, data, crypto, algebra, polynomial, commitment, relation and Plan
-dialects are registered. Plan describes native selected representations and
-kernels. Registration does not grant profile admission or transformation correctness.
+Protocol, Exec, Runtime, Data, Crypto, Algebra, Polynomial, Commitment and
+Relation dialects are registered together with the standard MLIR dialects used
+by their admitted profiles. Scoped Func/CF carries ordered execution; Func/SCF
+carries checked numerical schedules. Local, Plan and Kernel dialects are absent.
+Registration does not grant profile admission or transformation correctness.
 
 ## Transformations and checks
 

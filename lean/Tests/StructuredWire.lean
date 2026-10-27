@@ -71,7 +71,7 @@ private def otherRoot : Json := arr [
 
 private def domainFields : List Json := [
   .str "domain", .str "items", arr [strings ["vector", scalarDomain]],
-  arr [.str "indices", toJson (0 : Nat), toJson (0 : Nat)]]
+  arr [arr [.str "indices", toJson (0 : Nat), toJson (0 : Nat)]], toJson (0 : Nat)]
 
 private def finiteFields : List Json := [
   .str "finite", .str "folded", .str "private", empty, empty,
@@ -154,7 +154,7 @@ private def run : IO Unit := do
     check "all-definitions-retained"
       (snapshot.definitions.map Definition.name == ["main", "other", "work", "formula", "folded"])
     check "all-relations-retained" (snapshot.relations.map Relation.name == ["Proof", "Unused"])
-    check "domain-retained" (snapshot.domains == [⟨"items", [.vector scalarDomain], .indices 0 0⟩])
+    check "domain-retained" (snapshot.domains == [⟨"items", [.vector scalarDomain], [.indices 0 0], 0⟩])
     check "relation-exact" (snapshot.relations.head? == some ⟨"Proof", .publicDef, "opaque.kind",
       "opaque/key:007", "revision:0009", [.field scalarDomain, .group groupDomain, .group groupDomain],
       [.boolean], ["parameter", "statement", "witness"], none⟩)
@@ -366,9 +366,9 @@ private def run : IO Unit := do
   check "origin-binding-capacity" (hasError
     (Format.origin .local (arr [.str "origin", arr (List.replicate 129 (strings ["key", "value"]))])) "structured-origin-list-limit")
   check "domain-constructor" (hasError
-    (Format.domain (arr (domainFields.set 3 (strings ["unknown"])))) "structured-domain-constructor")
+    (Format.domain (arr (domainFields.set 3 (arr [strings ["unknown"]])))) "structured-domain-constructor")
   check "domain-axis" (hasError (Format.domain (arr (domainFields.set 3
-    (arr [.str "indices", toJson (0 : Nat), toJson (1 : Nat)])))) "structured-number-limit")
+    (arr [arr [.str "indices", toJson (0 : Nat), toJson (1 : Nat)]])))) "structured-number-limit")
   check "precondition-shape" (hasError (Format.bound (strings ["unknown"])) "structured-precondition")
   check "precondition-axis" (hasError (Format.bound
     (arr [.str "index_bound", toJson (0 : Nat), toJson (1 : Nat), toJson (1 : Nat)])) "structured-number-limit")

@@ -68,6 +68,31 @@ acceptance must remain connected. Polynomial openings and authenticated-vector
 queries have different guarantees; their [polynomial commitment](../../libraries/commitments/kzg/README.md) and
 [oracle](domains/oracles.md) contracts determine the interpretation.
 
+### Retention through lowering
+
+Information needed by a selected consumer must remain in its authoritative
+subject or in a checked mapping to that subject until the consumer has used it.
+It need not be copied onto every lower-level instruction. For example, numerical
+lowering may expand a polynomial operation while retaining its ordered axes,
+degree and domain in the mathematical definition used for candidate comparison.
+A commitment consumer still needs the actual opening instance and its connection
+to the selected decision after its arithmetic has been lowered.
+
+Each derived view identifies its source, transformation boundary and applicable
+premises. A new body, representation or selector requires rechecking the view;
+an analysis cache is valid only for the unchanged inputs on which it depends.
+Contextual premises discharged by another component remain premises of that
+particular composition. They do not become unconditional laws of the replaced
+component.
+
+This requirement does not turn every operation into a security claim. An
+ordinary program may compute and ignore a check result; a claim about its
+selected acceptance must establish the required connection. Likewise, a source
+lookup predicate and a selected randomized lookup argument have different
+contracts. Characteristic bounds, compression challenges and denominator
+conditions belong to the argument that uses them, rather than all source
+membership predicates.
+
 ## Exact explicit-table predicates
 
 For a finite ordered table `T` and queries `Q` carrying Boolean `active` flags:

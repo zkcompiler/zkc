@@ -3,7 +3,7 @@
 Protocol source and direct Protocol IR share the mathematical compilation
 pipeline and native VM. Application `entry fn` control uses standard MLIR `func`/`scf`
 and typed `entry` operations, published as `zkc.host/0`. Its numerical helpers
-reuse Kernel realization and physical export; its protocol and proof calls invoke
+reuse numerical realization and physical export; its protocol and proof calls invoke
 the existing participant pipelines. The [architecture map](../architecture.md)
 shows both paths. The [protocol contract](../spec/ir/protocols.md) owns exact
 formation and projection rules for participant mathematics.
@@ -14,15 +14,16 @@ formation and projection rules for participant mathematics.
 |---|---|
 | `protocol` | Joint mathematics, declared roles, messages, services and relations; source analysis and preparation |
 | `participant` | Each role's mathematics, actual receives and ordered actions; simplification and transcript construction |
-| `exec` | Owned numerical units at demand sites and ordered Local control; checked realization and physical planning |
+| `exec` | Owned numerical units at demand sites and scoped Func/CF execution; checked realization and physical planning |
 | `physical` | Installed operations, representations, conversions and storage; executable export |
 
 Profiles constrain mixed-dialect programs. `protocol` owns interaction and role
-interfaces; `local` owns ordered algorithms and control. `algebra`, `poly`,
-`data`, `oracle`, `pcs` and `crypto` retain domain meaning. `kernel` owns closed
-logical numerical units using the existing mathematical operations. `relation` stores
-declarations and R1CS/AIR assets. `plan` provides physical types and bindings.
-It does not introduce a second executor.
+interfaces. Standard `func`/`cf`, `exec` and `runtime` express ordered algorithms,
+explicit outcomes, scopes and custody. `algebra`, `poly`, `data`, `commitment` and
+`crypto` retain domain meaning. Closed numerical units are profiled standard
+modules and functions; `exec.compute` retains each ordered invocation.
+`relation` stores declarations and R1CS/AIR assets. `runtime` provides physical
+types and bindings. These contracts use the existing executor.
 
 Total mathematics stays in ordinary SSA so transformations can inspect
 dependencies and sharing. Ordered queries, guards and resource transitions
@@ -63,7 +64,7 @@ ordered actions and dynamic occurrence coordinates.
 
 ## Realization and publication
 
-Demand lowering forms [Kernel units](../spec/ir/kernel.md) at consuming actions.
+Demand lowering forms [Computation units](../spec/ir/computation.md) at consuming actions.
 Physical planning retains the original units and a proposed Local realization.
 Independent numerical and physical checks connect that realization to the original
 subject and the selected implementations and conversions. Publication applies the

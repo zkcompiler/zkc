@@ -3,6 +3,7 @@
 
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Target/Selection.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/Support/Error.h"
 #include <string>
 #include <utility>
@@ -16,7 +17,8 @@ mlir::LogicalResult lowerPhysical(
     llvm::ArrayRef<std::pair<std::string, std::string>> selections = {},
     bool linearContractions = false, LinearContractionStats *stats = nullptr,
     bool releaseStorage = false,
-    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {});
+    llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
+    MathematicalSelectionPolicy numericalPolicy = {});
 /// Check that a physical candidate only inserts admitted storage releases,
 /// preserving the positions and operands of existing releases.
 /// Preserves computation under sufficient capacity, not equal heap high water

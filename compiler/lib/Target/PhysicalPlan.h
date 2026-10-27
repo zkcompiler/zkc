@@ -24,8 +24,8 @@ struct InputSnapshot;
 class PhysicalPlan;
 using OperationIndex = size_t;
 using BindingIndex = size_t;
-/// Original declarations include bindings generated in the selected Local
-/// payload; they need not have existed in the original Kernel source.
+/// Original declarations include bindings generated in the selected executable
+/// payload; they need not have existed in the original numerical source.
 enum class BindingPurpose { Original, Contraction, Conversion, Specialization };
 struct BindingDecision {
   protocol::OperationBinding binding;
@@ -41,7 +41,7 @@ struct UseConversion {
   mlir::Type from, to;
   std::string site;
 };
-/// Preorder indices in the selected Local subject, never borrowed
+/// Preorder indices in the selected executable subject, never borrowed
 /// operation/value pointers. With Kernel input this is the retained numerical
 /// payload, not the original source; otherwise it is the unchanged source.
 /// Binding declaration/location and contraction indices use the same subject.
@@ -50,7 +50,10 @@ struct OperationDecision {
   OperationIndex operation;
   std::optional<BindingIndex> binding;
   llvm::SmallVector<mlir::Type> inputs, outputs;
+  // Owned logical body entries only. Outlined control nodes borrow their
+  // function's entry; scope and administrative CFG blocks have no data ports.
   llvm::SmallVector<llvm::SmallVector<mlir::Type>> blockArguments;
+  // Data-only signature; materialization supplies scope and outcome types.
   mlir::FunctionType functionType;
   llvm::SmallVector<UseConversion> conversions;
 };
@@ -64,7 +67,7 @@ enum class PhysicalFailureKind {
   ConversionUnavailable,
   OptionalProgramCapacity
 };
-/// Attribution uses the current retained Local index space, never pointers
+/// Attribution uses the current retained executable index space, never pointers
 /// into a candidate that can be discarded. Conversion reports both endpoints.
 struct PhysicalFailure {
   PhysicalFailureKind kind = PhysicalFailureKind::Terminal;
@@ -97,8 +100,8 @@ struct PhysicalPlanOptions {
 };
 class PhysicalPlan {
   // Own the original identity/content snapshot and, for numerical input, the
-  // actual selected Local payload. Copies share private immutable state; no
-  // public MLIR handle can mutate the retained payload. The original module
+  // actual selected executable payload. Copies share private immutable state;
+  // no public MLIR handle can mutate the retained payload. The original module
   // and its MLIR context must remain live when checking or materializing.
   std::shared_ptr<const InputSnapshot> input;
   friend llvm::Expected<PhysicalPlan>
@@ -122,9 +125,10 @@ public:
   llvm::SmallVector<ContractionDecision> contractions;
   llvm::SmallVector<StorageRelease> releases;
   /// Freshness-check source and return an independently owned inspection copy
-  /// of the selected Local subject (a source clone for the no-Kernel path).
-  /// Its preorder corresponds to all decision indices. Editing or destroying
-  /// the copy cannot change this proposal or any checked plan derived from it.
+  /// of the selected executable subject (a source clone for the no-Kernel
+  /// path). Its preorder corresponds to all decision indices. Editing or
+  /// destroying the copy cannot change this proposal or any checked plan
+  /// derived from it.
   llvm::Expected<mlir::OwningOpRef<mlir::ModuleOp>>
   cloneSelectedSubject(mlir::ModuleOp source) const;
 };

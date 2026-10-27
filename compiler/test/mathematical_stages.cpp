@@ -2,8 +2,9 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include <fstream>
 #include <sstream>
@@ -11,6 +12,7 @@
 using namespace mlir;
 using namespace zkc;
 using namespace zkc::test;
+namespace sf = zkc::test::scopedFinite;
 
 namespace {
 std::string fixture() {
@@ -37,9 +39,7 @@ int main() {
     require(bool(source), "fixture refused");
     OwningOpRef<ModuleOp> original(cast<ModuleOp>((*source)->clone()));
     {
-      mathematical::CheckedCandidate rejected(*source);
-      require(succeeded(finite::realizeLocals(*rejected)),
-              "realization failed");
+      mathematical::CheckedCandidate rejected(*source, sf::prepare(*source));
       bool readActualCandidate = false;
       require(failed(rejected.publish([&](ModuleOp before, ModuleOp after) {
                 readActualCandidate =
@@ -49,13 +49,12 @@ int main() {
                   readActualCandidate && same(*source, *original),
               "rejected candidate changed original or bypassed actual reader");
     }
-    OwningOpRef<ModuleOp> prepared(cast<ModuleOp>((*source)->clone()));
-    require(succeeded(finite::realizeLocals(*prepared)), "realization failed");
+    auto prepared = sf::prepare(*source);
     mathematical::CheckedCandidate accepted(*source, std::move(prepared));
     require(same(*source, *original) &&
-                succeeded(accepted.publish(finite::verifyRealizations)) &&
+                succeeded(accepted.publish(sf::compare)) &&
                 !same(*source, *original) &&
-                succeeded(finite::verifyRealizations(*original, *source)),
+                succeeded(sf::compare(*original, *source)),
             "checked candidate did not publish its actual realized body");
   });
   cases.run("publication cannot consume the same proposal twice", [&] {
@@ -93,45 +92,60 @@ int main() {
   });
   cases.run("required map work is cumulative and refusal is atomic", [&] {
     std::ifstream input(std::string(ZKC_MATH_FIXTURES) +
-                        "/map-realization.mlir");
+                        "/../structured-source/map-declarations.mlir");
     require(bool(input), "missing map fixture");
     std::ostringstream text;
     text << input.rdbuf();
-    auto source = parseSourceString<ModuleOp>(text.str(), &context);
+    auto source = parseSourceString<ModuleOp>(
+        replaceText(text.str(), "bls12-381.fr", "koala-bear"), &context);
     require(bool(source), "map fixture refused");
     mathematical::RealizationWork work;
-    unsigned initial = work.helperOperations;
-    OwningOpRef<ModuleOp> first(cast<ModuleOp>((*source)->clone()));
-    require(succeeded(mathematical::expandMapRealizations(*first, &work)),
+    auto initial = work.requiredFiniteChecking;
+    uint64_t copy = 1000000, bytes = 16 * 1024 * 1024;
+    std::optional<CapacityCause> capacity;
+    auto unchanged = sf::clone(*source);
+    auto first =
+        protocol::prepareScopedFinite(*source, work, copy, bytes, capacity);
+    require(bool(first) && same(*source, *unchanged),
             "first map realization failed");
-    unsigned cost = initial - work.helperOperations;
-    require(cost > 0, "map helper copy was not charged");
-    work.helperOperations = cost - 1;
-    auto remaining = work.helperOperations;
-    OwningOpRef<ModuleOp> second(cast<ModuleOp>((*source)->clone()));
+    auto cost = initial - work.requiredFiniteChecking;
+    require(cost > 0, "required collection checking was not charged");
+    work.requiredFiniteChecking = cost - 1;
+    auto remaining = work.requiredFiniteChecking;
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
-    require(failed(mathematical::expandMapRealizations(*second, &work)) &&
-                same(*source, *second) && work.helperOperations <= remaining,
+    mathematical::VerificationDecision outcome;
+    auto second = protocol::prepareScopedFinite(
+        *source, work, copy, bytes, capacity, {}, nullptr, nullptr, &outcome);
+    require(!second && same(*source, *unchanged) &&
+                outcome.outcome ==
+                    mathematical::VerificationObservation::RequiredCapacity &&
+                outcome.capacity && work.requiredFiniteChecking <= remaining,
             "map work reset its allowance or published a refused candidate");
   });
   cases.run("stage observation preserves the checked program", [&] {
     auto source = parseSourceString<ModuleOp>(fixture(), &context);
     require(bool(source), "fixture refused");
     OwningOpRef<ModuleOp> original(cast<ModuleOp>((*source)->clone()));
-    auto unobserved = mathematical::rewriteLocalAlgorithms(*source);
+    auto unobserved = mathematical::prepareProtocol(*source, false);
     require(bool(unobserved), "ordinary preparation failed");
     mathematical::RealizationTrace trace;
     std::string dumps;
     llvm::raw_string_ostream stream(dumps);
     trace.ir = &stream;
-    auto observed = mathematical::rewriteLocalAlgorithms(*source, {}, &trace);
+    auto observed =
+        mathematical::prepareProtocol(*source, false, {}, {}, &trace);
     require(bool(observed) && same(*unobserved, *observed) &&
                 same(*source, *original),
             "observation changed the candidate or original");
-    const std::vector<std::string> expected{
-        "polynomial-recipes",  "math-realizations",   "retain-computations",
-        "nested-contractions", "finite-realizations", "finish-expansion"};
+    const std::vector<std::string> expected{"polynomial-recipes",
+                                            "protocol-applications",
+                                            "participant-mathematics"};
+    bool finiteRequest = false;
+    observed->walk([&](exec::FoldOp) { finiteRequest = true; });
+    require(finiteRequest && !sf::hasLoop(*observed) &&
+                sf::applications(*observed, "vector.dot").empty(),
+            "source observation moved numerical selection before execution");
     require(trace.stages.size() == expected.size(), "missing stage records");
     for (size_t i = 0; i < expected.size(); ++i) {
       const auto &stage = trace.stages[i];
@@ -143,16 +157,15 @@ int main() {
                 "stage accounting lost an intermediate subject");
     }
     stream.flush();
-    require(dumps.find("Before mathematical stage: finite-realizations") !=
+    require(dumps.find("Before mathematical stage: protocol-applications") !=
                     std::string::npos &&
-                dumps.find(
-                    "After mathematical stage: finish-expansion (completed)") !=
-                    std::string::npos,
+                dumps.find("After mathematical stage: participant-mathematics "
+                           "(completed)") != std::string::npos,
             "missing labeled IR snapshots");
     // A second invocation starts a fresh trace and records its own policy.
     trace.ir = nullptr;
-    auto ordered =
-        mathematical::rewriteLocalAlgorithms(*source, {false, true}, &trace);
+    auto ordered = mathematical::prepareProtocol(*source, false, {false, true},
+                                                 {}, &trace);
     require(bool(ordered) && !trace.policy.finiteBulk &&
                 trace.policy.vectorReductionFusion &&
                 trace.stages.size() == expected.size(),

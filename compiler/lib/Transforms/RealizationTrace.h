@@ -1,7 +1,6 @@
 #ifndef ZKC_TRANSFORMS_REALIZATIONTRACE_H
 #define ZKC_TRANSFORMS_REALIZATIONTRACE_H
 
-#include "AlgorithmSupport.h"
 #include "FiniteVerification.h"
 #include "RealizationSubject.h"
 #include "zkc/Analysis/Computation.h"
@@ -11,24 +10,6 @@
 #include <type_traits>
 
 namespace zkc::mathematical {
-inline RealizationSubject
-realizationSubject(mlir::Operation *op,
-                   const protocol::detail::AlgorithmExpansionRecord &record,
-                   llvm::ArrayRef<std::pair<std::string, std::string>>
-                       declarationOrigins = {}) {
-  auto result = realizationSubject(op);
-  // Lookup uses the immutable declaration; append resolves the event once.
-  // Keep the raw subject here so an overlapping spelling is not remapped twice.
-  auto key = sourceSubject(result, declarationOrigins);
-  if (auto *origin =
-          protocol::detail::occurrence(record, key.declaration, key.site)) {
-    result.definition = origin->definition;
-    result.originalSite = origin->originalSite;
-    result.occurrence.assign(origin->path.begin(), origin->path.end());
-  }
-  return result;
-}
-
 inline RealizationSubject
 realizationSubject(const finite::ComputationDiagnostic &diagnostic) {
   auto key = realizationSubject(diagnostic.subject);
@@ -43,26 +24,6 @@ realizationSubject(const finite::ComputationDiagnostic &diagnostic) {
     key.occurrence.emplace_back(std::move(site), occurrence.declaration);
   }
   return key;
-}
-
-inline VerificationDecision
-verificationDecision(const finite::VerificationResult &result) {
-  VerificationObservation outcome;
-  switch (result.status) {
-  case finite::VerificationStatus::Verified:
-    outcome = VerificationObservation::Verified;
-    break;
-  case finite::VerificationStatus::Mismatch:
-    outcome = VerificationObservation::Mismatch;
-    break;
-  case finite::VerificationStatus::OptionalCapacity:
-    outcome = VerificationObservation::OptionalCapacity;
-    break;
-  case finite::VerificationStatus::RequiredCapacity:
-    outcome = VerificationObservation::RequiredCapacity;
-    break;
-  }
-  return {outcome, result.detail.str(), result.capacity, result.subject};
 }
 
 /// A journal scope observes existing transaction boundaries. It neither owns
@@ -250,14 +211,6 @@ public:
     if (trace)
       selection(realizationSubject(op), family, choice, diagnostic.outcome,
                 realizationSubject(diagnostic));
-  }
-  void selection(mlir::Operation *op,
-                 const protocol::detail::AlgorithmExpansionRecord &record,
-                 DecisionFamily family, RealizationChoice choice,
-                 OptimizationOutcome outcome) {
-    if (trace)
-      selection(realizationSubject(op, record, declarationOrigins()), family,
-                choice, outcome);
   }
   void selection(const RealizationSubject &key, DecisionFamily family,
                  RealizationChoice choice, OptimizationOutcome outcome,

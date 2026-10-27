@@ -1,13 +1,18 @@
 #include "../lib/Conversion/Bindings.h"
+#include "../lib/Target/ExecutionPorts.h"
 #include "../lib/Target/PhysicalPlan.h"
 #include "../lib/Transforms/Kernel/Support.h"
 #include "mlir/IR/Verifier.h"
-#include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "support/ScopedComputation.h"
+#include "support/ScopedFinite.h"
+#include "support/ScopedFixture.h"
+#include "zkc/Analysis/ComputationUnit.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/MathematicalTrace.h"
@@ -22,6 +27,21 @@ using namespace zkc::target;
 using namespace zkc::test;
 
 namespace {
+namespace sc = scopedComputation;
+namespace sf = scopedFinite;
+std::string compute(StringRef callee, StringRef site, StringRef inputs,
+                    StringRef types, StringRef output, StringRef result,
+                    StringRef policy = "[false,false,false]") {
+  auto outcome = "!exec.outcome<(" + result.str() + ")>";
+  auto name = site.str();
+  return "%" + name + "_attempt = \"exec.compute\"(%scope," + inputs.str() +
+         ") {callee=@" + callee.str() + ",site=\"" + name +
+         "\",policy=" + policy.str() + "} : (!runtime.scope," + types.str() +
+         ")->" + outcome + "\n\"exec.dispatch\"(%" + name + "_attempt)[^" +
+         name + ",^failed] : (" + outcome + ")->()\n^" + name + "(" +
+         output.str() + ":" + result.str() + "):\n";
+}
+
 constexpr StringLiteral scalarSource = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 module { "protocol.module"() ({
@@ -37,27 +57,28 @@ std::string pinnedSource() {
   return R"mlir(
 !F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
+)mlir" + scopedFixture(R"mlir(
 func.func private @difference(%a:!F,%b:!F)->!F {
   %v = algebra.field_subtract %a,%b : (!F,!F)->!F
   func.return %v : !F
 }
-local.realize @realized = @difference : (!F,!F)->!F
-"local.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="pinned",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
 )mlir",
-                             "%table:!T,%other:!T,%a:!F,%b:!F",
-                             "%table,%other,%a,%b", "!T,!T,!F,!F", "!T", R"mlir(
-%difference = local.apply @realized(%a,%b) {site="calculate"} : (!F,!F)->!F
-%folded = "poly.exec.fold"(%table,%difference) {binding=@pinned,site="pinned_fold",parameters=[]} : (!T,!F)->!T
-local.return %folded : !T
-)mlir",
-                             4);
+                       "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
+                       "!T,!T,!F,!F", "!T",
+                       compute("difference", "calculate", "%a,%b", "!F,!F",
+                               "%difference", "!F") +
+                           scopedApply("pinned", "pinned_fold",
+                                       "%table,%difference", "!T,!F", "%folded",
+                                       "!T") +
+                           scopedReturn("%folded", "!T"),
+                       4);
 }
 
 std::string mappedSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !V = !algebra.field_vector<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
+)mlir" + scopedFixture(R"mlir(
 module @mapped attributes {exec.computation} {
  "data.domain"() ({ ^entry(%xs:!V):
    %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
@@ -76,97 +97,188 @@ module @mapped attributes {exec.computation} {
  }
 }
 )mlir",
-                             "%xs:!V,%a:!F,%b:!F", "%xs,%a,%b", "!V,!F,!F",
-                             "!F", R"mlir(
-%result = kernel.call @mapped::@evaluate(%xs,%a,%b) {site="mapped",policy=[true,false,false]} : (!V,!F,!F)->!F
-local.return %result : !F
-)mlir",
-                             3);
+                       "%xs:!V,%a:!F,%b:!F", "%xs,%a,%b", "!V,!F,!F", "!F",
+                       compute("mapped::@evaluate", "mapped", "%xs,%a,%b",
+                               "!V,!F,!F", "%result", "!F",
+                               "[true,false,false]") +
+                           scopedReturn("%result", "!F"),
+                       3);
 }
 
-std::string mixedMapSource() {
-  auto text = mappedSource();
-  auto at = text.find("module @mapped");
-  text.insert(at, R"mlir(
-func.func private @late_formula(%x:!F,%a:!F,%b:!F)->!F {
-  %m = algebra.field_multiply %x,%a : (!F,!F)->!F
-  %r = algebra.field_add %m,%b : (!F,!F)->!F
-  func.return %r : !F
+std::string printed(ModuleOp module);
+SmallVector<Value> invokeComputation(exec::ScopedExecutionBuilder &control,
+                                     OpBuilder &builder, StringRef callee,
+                                     StringRef site, ValueRange inputs,
+                                     TypeRange outputs) {
+  return control.invoke(
+      "exec.compute", outputs, control.scoped(inputs),
+      {builder.getNamedAttr("callee",
+                            SymbolRefAttr::get(builder.getContext(), callee)),
+       builder.getNamedAttr("site", builder.getStringAttr(site))});
 }
-algebra.map_realize @late_map = @late_formula [true,false,false] : (!V,!F,!F)->!V
+
+std::string mixedMapSource(MLIRContext &context) {
+  auto text = mappedSource();
+  text.insert(text.find("module @mapped"), R"mlir(
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%d) : (!data.domain<!F>)->()
+ }) {sym_name="late_items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ func.func private @late_formula(%x:!F,%xs:!V,%a:!F,%b:!F)->!F {
+   %m = algebra.field_multiply %x,%a : (!F,!F)->!F
+   %r = algebra.field_add %m,%b : (!F,!F)->!F
+   func.return %r : !F
+ }
+ func.func private @late_map(%xs:!V,%a:!F,%b:!F)->!V {
+   %v = "algebra.finite_collect"(%xs,%a,%b) {domain=@late_items,body=@late_formula} : (!V,!F,!F)->!V
+   func.return %v : !V
+ }
 )mlir");
-  at = text.find("%result = kernel.call");
-  text.insert(at, R"mlir(
-%enabled = "local.bool_constant"() {value=true,site="map_enabled"} : ()->i1
-%unused_map = "local.if"(%enabled,%xs,%a,%b) ({
-^yes(%column:!V,%scale:!F,%offset:!F):
-  %v = local.apply @late_map(%column,%scale,%offset) {site="late_map_call"} : (!V,!F,!F)->!V
-  "local.yield"(%v) : (!V)->()
-}, {
-^no(%column:!V,%scale:!F,%offset:!F):
-  "local.yield"(%column) : (!V)->()
-}) {site="map_branch"} : (i1,!V,!F,!F)->!V
-)mlir");
-  return text;
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "mixed source parse");
+  auto work = sf::function(*module, "Work");
+  auto old = cast<exec::ComputeOp>(work.front().front());
+  auto attrs = NamedAttrList(old->getAttrs());
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto vector = work.getArgument(1).getType(),
+       field = work.getArgument(2).getType();
+  auto enabled = control.invoke(
+      "exec.boolean", {builder.getI1Type()}, {control.getScope()},
+      {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+       builder.getNamedAttr("site", builder.getStringAttr("map_enabled"))})[0];
+  control.conditional(
+      enabled, work.getArguments().drop_front(), {vector}, "map_branch",
+      [&](unsigned arm) {
+        auto body = sc::region(builder, work, arm ? "map_no" : "map_yes",
+                               {vector, field, field}, {vector});
+        exec::ScopedExecutionBuilder nested(builder, body);
+        Value value = body.getArgument(1);
+        if (!arm)
+          value =
+              invokeComputation(nested, builder, "late_map", "late_map_call",
+                                body.getArguments().drop_front(), {vector})[0];
+        nested.complete({value});
+        return body;
+      });
+  auto result = control.invoke("exec.compute", {field}, work.getArguments(),
+                               attrs.getAttrs());
+  control.returned(result);
+  require(succeeded(verify(*module)), "mixed scoped source admission");
+  return printed(*module);
 }
 std::string fixedPeerSource() {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
 !T = !poly.multilinear<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
+)mlir" + scopedFixture(R"mlir(
 module @difference attributes {exec.computation} {
  func.func @evaluate(%a:!F,%b:!F)->!F {
    %r = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %r : !F
  }
 }
-"local.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
-"local.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="fold",contract="poly.fold",arguments=["bls12-381.fr"],implementation="arkworks-msb/poly.fold"} : ()->()
+"runtime.binding"() {sym_name="product",contract="poly.product_sum",arguments=["bls12-381.fr"],implementation=""} : ()->()
 )mlir",
-                             "%table:!T,%other:!T,%a:!F,%b:!F",
-                             "%table,%other,%a,%b", "!T,!T,!F,!F", "!F", R"mlir(
-%r = kernel.call @difference::@evaluate(%a,%b) {site="difference",policy=[false,false,false]} : (!F,!F)->!F
-%folded = "poly.exec.fold"(%table,%r) {binding=@fold,site="fold",parameters=[]} : (!T,!F)->!T
-%product = "poly.exec.product_sum"(%folded,%other) {binding=@product,site="product",parameters=[]} : (!T,!T)->!F
-local.return %product : !F
-)mlir",
-                             4);
+                       "%table:!T,%other:!T,%a:!F,%b:!F", "%table,%other,%a,%b",
+                       "!T,!T,!F,!F", "!F",
+                       compute("difference::@evaluate", "difference", "%a,%b",
+                               "!F,!F", "%r", "!F") +
+                           scopedApply("fold", "fold", "%table,%r", "!T,!F",
+                                       "%folded", "!T") +
+                           scopedApply("product", "product", "%folded,%other",
+                                       "!T,!T", "%product", "!F") +
+                           scopedReturn("%product", "!F"),
+                       4);
 }
 
-std::string nestedSource() {
+std::string nestedSource(MLIRContext &context) {
+  auto text = R"mlir(!F = !algebra.field<"bls12-381.fr">
+)mlir" + scopedFixture(R"mlir(
+func.func private @difference(%a:!F,%b:!F)->!F {
+  %v = algebra.field_subtract %a,%b : (!F,!F)->!F
+  func.return %v : !F
+}
+"runtime.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+)mlir",
+                       "%a:!F,%b:!F,%enabled:i1", "%a,%b,%enabled", "!F,!F,i1",
+                       "!F", scopedReturn("%a", "!F"), 3);
+  auto module = parseSourceString<ModuleOp>(text, &context);
+  require(bool(module), "nested source parse");
+  auto work = sf::function(*module, "Work");
+  work.getBody().dropAllReferences();
+  work.getBody().getBlocks().clear();
+  OpBuilder builder(&context);
+  builder.setInsertionPointToEnd(work.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, work);
+  auto field = work.getArgument(1).getType();
+  auto flag = builder.getI1Type();
+  auto result = control.conditional(
+      work.getArgument(3), work.getArguments().drop_front(), {field}, "outer",
+      [&](unsigned arm) {
+        auto outer = sc::region(builder, work, arm ? "disabled" : "chosen",
+                                {field, field, flag}, {field});
+        exec::ScopedExecutionBuilder branch(builder, outer);
+        if (arm) {
+          branch.reject("abort", "disabled");
+          return outer;
+        }
+        auto inner = branch.conditional(
+            outer.getArgument(3), outer.getArguments().drop_front(), {field},
+            "inner", [&](unsigned innerArm) {
+              auto body = sc::region(builder, outer,
+                                     innerArm ? "unchanged" : "calculate",
+                                     {field, field, flag}, {field});
+              exec::ScopedExecutionBuilder nested(builder, body);
+              Value value = body.getArgument(1);
+              if (!innerArm) {
+                sc::apply(nested, builder, "require", "before",
+                          {body.getArgument(3)}, {});
+                value = invokeComputation(
+                    nested, builder, "difference", "calculate",
+                    {value, body.getArgument(2)}, {field})[0];
+                sc::apply(nested, builder, "require", "after",
+                          {body.getArgument(3)}, {});
+              }
+              nested.complete({value});
+              return body;
+            });
+        branch.complete(inner);
+        return outer;
+      });
+  control.returned(result);
+  require(succeeded(verify(*module)), "nested scoped source admission");
+  return printed(*module);
+}
+
+std::string finiteSource(bool bulk = true) {
   return R"mlir(!F = !algebra.field<"bls12-381.fr">
-)mlir" + mathematicalFixture(R"mlir(
-module @difference attributes {exec.computation} {
-  func.func @evaluate(%a:!F,%b:!F)->!F {
-    %v = algebra.field_subtract %a,%b : (!F,!F)->!F
-    func.return %v : !F
-  }
-}
-"local.binding"() {sym_name="require",contract="control.require",arguments=[],implementation=""} : ()->()
+!V = !algebra.field_vector<"bls12-381.fr">
+)mlir" + scopedFixture(
+             R"mlir(
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%d) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ func.func private @step(%acc:!F,%x:!F,%xs:!V)->!F {
+   %s = "algebra.field_add"(%acc,%x) : (!F,!F)->!F
+   func.return %s : !F
+ }
+ func.func private @sum(%xs:!V)->!F {
+   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@step} : (!V,!F)->!F
+   func.return %sum : !F
+ }
 )mlir",
-                             "%a:!F,%b:!F,%enabled:i1", "%a,%b,%enabled",
-                             "!F,!F,i1", "!F", R"mlir(
-%result = "local.if"(%enabled,%a,%b,%enabled) ({
-^chosen(%left:!F,%right:!F,%condition:i1):
-  %inner = "local.if"(%condition,%left,%right,%condition) ({
-  ^calculate(%x:!F,%y:!F,%allowed:i1):
-    "local.exec.require"(%allowed) {binding=@require,site="before",parameters=[]} : (i1)->()
-    %difference = kernel.call @difference::@evaluate(%x,%y) {site="calculate",policy=[false,false,false]} : (!F,!F)->!F
-    "local.exec.require"(%allowed) {binding=@require,site="after",parameters=[]} : (i1)->()
-    "local.yield"(%difference) : (!F)->()
-  }, {
-  ^unchanged(%x:!F,%y:!F,%allowed:i1):
-    "local.yield"(%x) : (!F)->()
-  }) {site="inner"} : (i1,!F,!F,i1)->!F
-  "local.yield"(%inner) : (!F)->()
-}, {
-^disabled(%left:!F,%right:!F,%condition:i1):
-  "local.stop"() {site="disabled",reason="abort"} : ()->()
-}) {site="outer"} : (i1,!F,!F,i1)->!F
-local.return %result : !F
-)mlir",
-                             3);
+             "%xs:!V", "%xs", "!V", "!F",
+             compute("sum", "sum", "%xs", "!V", "%result", "!F",
+                     bulk ? "[true,false,false]" : "[false,false,false]") +
+                 scopedReturn("%result", "!F"),
+             1);
 }
-
 std::string fixtureText(StringRef path) {
   auto bytes = MemoryBuffer::getFile(
       (Twine(ZKC_KERNEL_PHYSICAL_FIXTURES) + "/" + path).str());
@@ -204,7 +316,7 @@ OwningOpRef<ModuleOp> executable(StringRef text, MLIRContext &context,
               succeeded(verify(*module)),
           "fixture is not admitted Exec IR");
   first<mlir::ModuleOp>(*module);
-  first<kernel::CallOp>(*module);
+  first<exec::ComputeOp>(*module);
   return module;
 }
 
@@ -215,30 +327,29 @@ void addUnchangedContext(ModuleOp module, unsigned count) {
   auto root = owner(module);
   builder.setInsertionPointToEnd(&root.getBody().front());
   OperationState binding(module.getLoc(),
-                         local::OperationBindingOp::getOperationName());
+                         runtime::BindingOp::getOperationName());
   binding.addAttribute("sym_name", builder.getStringAttr("context_add"));
   binding.addAttribute("contract", builder.getStringAttr("field.add"));
   binding.addAttribute("arguments", builder.getStrArrayAttr({"bls12-381.fr"}));
   binding.addAttribute("implementation", builder.getStringAttr(""));
   builder.create(binding);
-  auto function =
-      local::FuncOp::create(builder, module.getLoc(), "unchanged_context",
-                            builder.getFunctionType({}, {}));
-  function->setAttr("logical_origin",
+  auto function = func::FuncOp::create(
+      builder, module.getLoc(), "unchanged_context",
+      builder.getFunctionType({runtime::ScopeType::get(module.getContext())},
+                              exec::OutcomeType::get(module.getContext(), {})));
+  function->setAttr("no_inline", builder.getUnitAttr());
+  function->setAttr("runtime.origin",
                     builder.getArrayAttr({builder.getStringAttr("context"),
                                           builder.getArrayAttr({})}));
-  function.getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&function.getBody().front());
-  for (unsigned index = 0; index < count; ++index) {
-    OperationState state(module.getLoc(),
-                         local::BoolConstantOp::getOperationName());
-    state.addTypes(builder.getI1Type());
-    state.addAttribute("value", builder.getBoolAttr(true));
-    state.addAttribute(
-        "site", builder.getStringAttr("unchanged_" + std::to_string(index)));
-    builder.create(state);
-  }
-  local::ReturnOp::create(builder, module.getLoc(), ValueRange{});
+  builder.setInsertionPointToEnd(function.addEntryBlock());
+  exec::ScopedExecutionBuilder control(builder, function);
+  for (unsigned index = 0; index < count; ++index)
+    control.invoke("exec.boolean", {builder.getI1Type()}, {control.getScope()},
+                   {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+                    builder.getNamedAttr(
+                        "site", builder.getStringAttr("unchanged_" +
+                                                      std::to_string(index)))});
+  control.returned({});
   require(succeeded(verify(module)),
           "unchanged planning context did not admit");
 }
@@ -292,9 +403,15 @@ void admitPhysical(ModuleOp module) {
   bool residual = false;
   module.walk([&](Operation *op) {
     residual |= mathematical::isComputationUnit(op) ||
-                isa<kernel::CallOp, func::FuncOp, data::DomainOp>(op) ||
-                mathematical::isTotal(op);
+                isa<exec::ComputeOp, data::DomainOp>(op) ||
+                (isa<func::FuncOp>(op) &&
+                 (cast<func::FuncOp>(op).getArgumentTypes().empty() ||
+                  !isa<runtime::ScopeType>(
+                      cast<func::FuncOp>(op).getArgumentTypes().front())));
   });
+  auto flow = take(ExecutionPorts::read(module));
+  for (auto *operation : flow.operations())
+    residual |= flow.get(operation).step && mathematical::isTotal(operation);
   require(!residual, "physical output retained Kernel or source mathematics");
 }
 
@@ -319,10 +436,16 @@ const BindingDecision &bindingFor(const PhysicalPlan &proposal,
   throw std::runtime_error("missing selected contract " + contract.str());
 }
 
-plan::ApplyOp application(ModuleOp module, StringRef implementation) {
-  plan::ApplyOp found;
-  module.walk([&](plan::ApplyOp op) {
-    if (op.getImplementation() == implementation && !found)
+StringRef implementation(exec::ApplyOp op) {
+  return SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+             op, op.getBindingAttr())
+      .getImplementation();
+}
+
+exec::ApplyOp application(ModuleOp module, StringRef selected) {
+  exec::ApplyOp found;
+  module.walk([&](exec::ApplyOp op) {
+    if (implementation(op) == selected && !found)
       found = op;
   });
   require(bool(found), "missing selected physical application");
@@ -389,7 +512,7 @@ public:
 };
 
 void mutateSource(ModuleOp module, StringRef mutation) {
-  auto call = first<kernel::CallOp>(module);
+  auto call = first<exec::ComputeOp>(module);
   if (mutation == "body") {
     auto entry =
         mathematical::getComputationEntry(first<mlir::ModuleOp>(module));
@@ -416,10 +539,10 @@ void mutateSource(ModuleOp module, StringRef mutation) {
     OpBuilder builder(module.getContext());
     call->setAttr("policy", builder.getBoolArrayAttr({true, false, true}));
   } else if (mutation == "operand") {
-    require(call->getNumOperands() == 2 &&
-                call->getOperand(0) != call->getOperand(1),
+    require(call.getInputs().size() == 2 &&
+                call.getInputs()[0] != call.getInputs()[1],
             "operand mutation requires distinct same-typed inputs");
-    call->setOperand(1, call->getOperand(0));
+    call.getInputsMutable()[1].set(call.getInputs()[0]);
   } else {
     throw std::runtime_error("unknown source mutation");
   }
@@ -438,8 +561,8 @@ int main() {
     cases.run("original multi-result Kernel plans for " + identity, [&] {
       auto module = executable(
           replaceText(scalarSource.str(), "bls12-381.fr", identity), context);
-      auto call = first<kernel::CallOp>(*module);
-      require(call->getNumResults() == 2,
+      auto call = first<exec::ComputeOp>(*module);
+      require(call.getOutcome().getType().getPayload().size() == 2,
               "fixture lost its multiple numerical results");
       auto checked = checkedPlan(*module);
       const auto &sub = bindingFor(checked.choices(), "field.sub");
@@ -466,24 +589,26 @@ int main() {
 !V = !algebra.field_vector<"bls12-381.fr">
 !G = !algebra.group<"bls12-381.g1">
 !GS = !algebra.group_vector<"bls12-381.g1">
-)mlir") + mathematicalFixture(R"mlir(
+)mlir") + scopedFixture(R"mlir(
 module @difference attributes {exec.computation} {
  func.func @evaluate(%a:!F,%b:!F)->!F {
    %r = algebra.field_subtract %a,%b : (!F,!F)->!F
    func.return %r : !F
  }
 }
-"local.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
-"local.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
+"runtime.binding"() {sym_name="msm",contract="curve.msm",arguments=["bls12-381.g1"],implementation="blst/resident/curve.msm"} : ()->()
+"runtime.binding"() {sym_name="scale",contract="curve.scale",arguments=["bls12-381.g1"],implementation=""} : ()->()
 )mlir",
-                              "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
-                              "!V,!GS,!F,!F", "!G", R"mlir(
-%difference = kernel.call @difference::@evaluate(%a,%b) {site="difference",policy=[false,false,false]} : (!F,!F)->!F
-%out = "algebra.exec.group_msm"(%s,%p) {binding=@msm,parameters=[],site="msm"} : (!V,!GS)->!G
-%scaled = "algebra.exec.group_scale"(%out,%difference) {binding=@scale,parameters=[],site="scaled"} : (!G,!F)->!G
-local.return %scaled : !G
-)mlir",
-                              4);
+                        "%s:!V,%p:!GS,%a:!F,%b:!F", "%s,%p,%a,%b",
+                        "!V,!GS,!F,!F", "!G",
+                        compute("difference::@evaluate", "difference", "%a,%b",
+                                "!F,!F", "%difference", "!F") +
+                            scopedApply("msm", "msm", "%s,%p", "!V,!GS", "%out",
+                                        "!G") +
+                            scopedApply("scale", "scaled", "%out,%difference",
+                                        "!G,!F", "%scaled", "!G") +
+                            scopedReturn("%scaled", "!G"),
+                        4);
           auto module =
               executable(replaceText(source, "bls12-381.g1", domain), context);
           auto checked = checkedPlan(*module);
@@ -500,7 +625,8 @@ local.return %scaled : !G
         auto module = executable(pinnedSource(), context);
         SmallVector<StringRef> beforeSites;
         module->walk([&](Operation *op) {
-          if (op->getName().getStringRef() == "poly.exec.fold")
+          if (auto apply = dyn_cast<exec::ApplyOp>(op);
+              apply && sf::contract(apply) == "poly.fold")
             beforeSites.push_back(
                 op->getAttrOfType<StringAttr>("site").getValue());
         });
@@ -513,8 +639,8 @@ local.return %scaled : !G
         bindingFor(checked.choices(), "field.sub");
         auto candidate = materializedCopy(*module, checked);
         SmallVector<StringRef> afterSites;
-        candidate->walk([&](plan::ApplyOp op) {
-          if (op.getImplementation() == "arkworks-msb/poly.fold")
+        candidate->walk([&](exec::ApplyOp op) {
+          if (implementation(op) == "arkworks-msb/poly.fold")
             afterSites.push_back(op.getSite());
         });
         require(!beforeSites.empty() && afterSites == beforeSites,
@@ -563,16 +689,16 @@ local.return %scaled : !G
     require(conversions != 0, "pinned representation needs no conversion");
     auto candidate = materializedCopy(*module, checked);
     auto crossing = application(*candidate, "arkworks/table.relayout");
-    auto function = crossing->getParentOfType<local::FuncOp>();
+    auto function = crossing->getParentOfType<func::FuncOp>();
     Value other;
     for (auto argument : function.getArguments())
-      if (argument.getType() == crossing->getOperand(0).getType() &&
-          argument != crossing->getOperand(0)) {
+      if (argument.getType() == crossing.getInputs()[0].getType() &&
+          argument != crossing.getInputs()[0]) {
         other = argument;
         break;
       }
     require(bool(other), "missing distinct same-typed table");
-    crossing->setOperand(0, other);
+    crossing.getInputsMutable()[0].set(other);
     admitPhysical(*candidate);
     reject(verifyPhysicalMaterialization(*module, *candidate, checked),
            "binding-materialization-correspondence");
@@ -665,9 +791,9 @@ local.return %scaled : !G
       auto candidate = materializedCopy(*module, checked);
       auto subtract = application(*candidate, "arkworks/field.sub");
       if (mutation == "operand") {
-        require(subtract->getOperand(0) != subtract->getOperand(1),
+        require(subtract.getInputs()[0] != subtract.getInputs()[1],
                 "candidate requires distinct subtraction operands");
-        subtract->setOperand(1, subtract->getOperand(0));
+        subtract.getInputsMutable()[1].set(subtract.getInputs()[0]);
       } else if (mutation == "site") {
         subtract->setAttr("site", StringAttr::get(&context, "other"));
       } else {
@@ -675,15 +801,12 @@ local.return %scaled : !G
         // substitution remains admitted and must fail correspondence.
         auto reference = subtract->getAttrOfType<FlatSymbolRefAttr>("binding");
         require(bool(reference), "physical subtraction lost its binding");
-        auto binding =
-            SymbolTable(owner(*candidate))
-                .lookup<local::OperationBindingOp>(reference.getValue());
+        auto binding = SymbolTable(owner(*candidate))
+                           .lookup<runtime::BindingOp>(reference.getValue());
         require(bool(binding), "physical subtraction binding did not resolve");
         binding->setAttr("contract", StringAttr::get(&context, "field.add"));
         binding->setAttr("implementation",
                          StringAttr::get(&context, "arkworks/field.add"));
-        subtract->setAttr("implementation",
-                          StringAttr::get(&context, "arkworks/field.add"));
       }
       admitPhysical(*candidate);
       FrozenInput before(*module), changed(*candidate);
@@ -773,27 +896,26 @@ local.return %scaled : !G
         before.check(*module);
       });
 
-  cases.run(
-      "withheld vector reduction selects another checked executable", [&] {
-        auto module = executable(
-            fixtureText("structured-source/realization-finite.mlir"), context);
-        CountingCatalog catalog("vector.sum");
-        FrozenInput before(*module);
-        auto checked = checkedPlan(*module, catalog);
-        for (const auto &binding : checked.choices().bindings)
-          require(binding.binding.application.contract != "vector.sum",
-                  "withheld vector reduction survived selection");
-        auto local = take(checked.cloneSelectedSubject(*module));
-        require(succeeded(kernel::verifyKernelLowering(*module, *local)),
-                "fallback lost original-source correspondence");
-        auto selected = materializedCopy(*module, checked, catalog);
-        before.check(*module);
-        auto own = checkedPlan(*module, catalog);
-        auto queries = catalog.queryCount();
-        accept(materializePhysical(*module, own));
-        require(catalog.queryCount() == queries,
-                "materialization searched the numerical menu again");
-      });
+  cases.run("withheld vector reduction selects another checked executable",
+            [&] {
+              auto module = executable(finiteSource(), context);
+              CountingCatalog catalog("vector.sum");
+              FrozenInput before(*module);
+              auto checked = checkedPlan(*module, catalog);
+              for (const auto &binding : checked.choices().bindings)
+                require(binding.binding.application.contract != "vector.sum",
+                        "withheld vector reduction survived selection");
+              auto local = take(checked.cloneSelectedSubject(*module));
+              require(succeeded(kernel::verifyKernelLowering(*module, *local)),
+                      "fallback lost original-source correspondence");
+              auto selected = materializedCopy(*module, checked, catalog);
+              before.check(*module);
+              auto own = checkedPlan(*module, catalog);
+              auto queries = catalog.queryCount();
+              accept(materializePhysical(*module, own));
+              require(catalog.queryCount() == queries,
+                      "materialization searched the numerical menu again");
+            });
 
   cases.run(
       "unavailable native and vector reductions retain ordered execution", [&] {
@@ -802,7 +924,7 @@ local.return %scaled : !G
         auto checked = checkedPlan(*module, catalog);
         auto selected = materializedCopy(*module, checked, catalog);
         bool loop = false;
-        selected->walk([&](local::LocalForOp) { loop = true; });
+        selected->walk([&](exec::RangeOp) { loop = true; });
         require(loop,
                 "exhausted reduction menu did not retain the ordered loop");
       });
@@ -810,7 +932,7 @@ local.return %scaled : !G
   cases.run(
       "failure at one computation preserves its neighbor's preferred recipe",
       [&] {
-        auto text = fixtureText("structured-source/realization-finite.mlir");
+        auto text = finiteSource();
         auto at = text.find(" func.func private @sum");
         require(at != std::string::npos, "missing sum fixture definition");
         text.insert(at, R"(
@@ -829,8 +951,9 @@ local.return %scaled : !G
 )");
         auto module = executable(text, context);
         unsigned computations = 0;
-        auto entry =
-            mathematical::getComputationEntry(first<mlir::ModuleOp>(*module));
+        SymbolTableCollection symbols;
+        auto entry = first<exec::ComputeOp>(*module).resolveCallee(symbols);
+        require(bool(entry), "missing actual numerical entry");
         entry.walk([&](Operation *op) {
           computations += op->getName().getStringRef() == "algebra.finite_fold";
         });
@@ -841,9 +964,9 @@ local.return %scaled : !G
         bindingFor(checked.choices(), "vector.product");
         auto selected = materializedCopy(*module, checked, catalog);
         unsigned loops = 0, products = 0;
-        selected->walk([&](local::LocalForOp) { ++loops; });
-        selected->walk([&](plan::ApplyOp op) {
-          products += op.getImplementation() == "arkworks/vector.product";
+        selected->walk([&](exec::RangeOp) { ++loops; });
+        selected->walk([&](exec::ApplyOp op) {
+          products += implementation(op) == "arkworks/vector.product";
         });
         require(loops == 1 && products == 1,
                 "fallback changed an unrelated computation's preferred recipe");
@@ -851,8 +974,7 @@ local.return %scaled : !G
 
   cases.run(
       "physical retries settle the caller's cumulative work account", [&] {
-        auto module = executable(
-            fixtureText("structured-source/realization-finite.mlir"), context);
+        auto module = executable(finiteSource(), context);
         FrozenInput before(*module);
         CountingCatalog catalog({"vector.sum", "numerical.sum"});
         mathematical::RealizationWork work;
@@ -866,9 +988,10 @@ local.return %scaled : !G
         auto previous = work;
         auto previousCopies = copies, previousBytes = siteBytes;
         require(
-            work.discardedRecipeCopy < 1000000 && copies < 1000000 &&
-                siteBytes < 16 * 1024 * 1024 && !work.numericalSelection &&
-                !work.numericalOccurrence,
+            work.discardedRecipeCopy <
+                    mathematical::RealizationWork{}.discardedRecipeCopy &&
+                copies < 1000000 && siteBytes < 16 * 1024 * 1024 &&
+                !work.numericalSelection && !work.numericalOccurrence,
             "failed physical candidates were not charged to discard reserve");
         auto second = take(proposePhysical(*module, catalog, {}, options));
         take(validatePhysical(*module, second, catalog));
@@ -906,7 +1029,7 @@ local.return %scaled : !G
               -> Expected<SmallVector<OperationIndex>> {
             ++preflights;
             unsigned constants = 0;
-            candidate.walk([&](local::BoolConstantOp) { ++constants; });
+            candidate.walk([&](exec::BooleanOp) { ++constants; });
             require(constants == 4096,
                     "preflight lost unchanged ordered context");
             return SmallVector<OperationIndex>{};
@@ -923,10 +1046,10 @@ local.return %scaled : !G
           take(validatePhysical(*module, plan));
           auto selected = take(plan.cloneSelectedSubject(*module));
           auto retained = SymbolTable(owner(*selected))
-                              .lookup<local::OperationBindingOp>("context_add");
+                              .lookup<runtime::BindingOp>("context_add");
           require(retained && retained.getImplementation().empty(),
                   "temporary requests changed retained source declarations");
-          auto changed = first<local::BoolConstantOp>(*selected);
+          auto changed = first<exec::BooleanOp>(*selected);
           changed->setAttr("value", BoolAttr::get(&context, false));
           require(succeeded(verify(*selected)),
                   "unchanged-context mutation must remain admitted");
@@ -978,12 +1101,12 @@ local.return %scaled : !G
 
   cases.run(
       "required numerical capacity is terminal before catalog search", [&] {
-        auto module = executable(
-            fixtureText("structured-source/realization-finite.mlir"), context);
+        auto module = executable(finiteSource(), context);
         FrozenInput before(*module);
         CountingCatalog catalog;
         mathematical::RealizationWork work;
         work.finiteExpressions = 0;
+        const auto beforeWork = work;
         PhysicalPlanOptions options;
         options.numericalWork = &work;
         ScopedDiagnosticHandler quiet(&context,
@@ -991,7 +1114,12 @@ local.return %scaled : !G
         refuses(proposePhysical(*module, catalog, {}, options),
                 "kernel-lowering");
         require(
-            catalog.queryCount() == 0 && work.finiteExpressions == 0,
+            catalog.queryCount() == 0 && work.finiteExpressions == 0 &&
+                work.discardedRecipeCopy == beforeWork.discardedRecipeCopy &&
+                work.discardedRecipeSiteBytes ==
+                    beforeWork.discardedRecipeSiteBytes &&
+                work.discardedRecipeExpansion ==
+                    beforeWork.discardedRecipeExpansion,
             "required capacity refusal retried or replenished its allowance");
         before.check(*module);
       });
@@ -1049,12 +1177,12 @@ local.return %scaled : !G
           auto selected = take(checked.cloneSelectedSubject(*module));
           SymbolTable symbols(owner(*selected));
           Operation *call = nullptr;
-          local::OperationBindingOp binding;
+          runtime::BindingOp binding;
           selected->walk([&](Operation *op) {
             auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
             auto declaration =
-                ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-                    : local::OperationBindingOp();
+                ref ? symbols.lookup<runtime::BindingOp>(ref.getValue())
+                    : runtime::BindingOp();
             if (declaration && declaration.getContract() == "numerical.sum") {
               call = op;
               binding = declaration;
@@ -1079,22 +1207,14 @@ local.return %scaled : !G
             body.replace(at, 5, "\"mul\"");
             call->setAttr("parameters", builder.getStrArrayAttr({body}));
           } else if (mutation == "seed") {
-            auto *combine = call->getNextNode();
-            require(combine && combine->getNumOperands() == 2,
+            auto combine = sf::application(
+                call->getParentOfType<func::FuncOp>(), "field.add");
+            require(combine.getInputs().size() == 2,
                     "native aggregate lost its external seed combiner");
-            combine->setOperand(0, call->getOperands().back());
+            combine.getInputsMutable()[0].set(call->getOperands().back());
           } else if (mutation == "mode") {
             binding->setAttr("contract",
                              builder.getStringAttr("numerical.product"));
-            OperationState state(call->getLoc(),
-                                 boundOperationName("numerical.product"));
-            state.addOperands(call->getOperands());
-            state.addTypes(call->getResultTypes());
-            state.addAttributes(call->getAttrs());
-            builder.setInsertionPoint(call);
-            auto *replacement = builder.create(state);
-            call->replaceAllUsesWith(replacement->getResults());
-            call->erase();
           } else {
             SmallVector<Attribute> arguments(binding.getArguments().begin(),
                                              binding.getArguments().end());
@@ -1135,32 +1255,29 @@ local.return %scaled : !G
       });
 
   for (bool bulk : {false, true})
-    cases.run(bulk ? "finite Kernel retains selected bulk reduction"
-                   : "finite Kernel retains selected ordered reduction",
-              [&] {
-                auto module = executable(
-                    fixtureText("structured-source/realization-finite.mlir"),
-                    context, {bulk, false});
-                auto checked = checkedPlan(*module);
-                if (bulk)
-                  bindingFor(checked.choices(), "vector.sum");
-                auto candidate = materializedCopy(*module, checked);
-                bool loop = false;
-                candidate->walk([&](local::LocalForOp) { loop = true; });
-                require(
-                    loop == !bulk,
-                    "physical materialization changed retained finite policy");
-              });
+    cases.run(
+        bulk ? "finite Kernel retains selected bulk reduction"
+             : "finite Kernel retains selected ordered reduction",
+        [&] {
+          auto module = executable(finiteSource(bulk), context, {bulk, false});
+          auto checked = checkedPlan(*module);
+          if (bulk)
+            bindingFor(checked.choices(), "vector.sum");
+          auto candidate = materializedCopy(*module, checked);
+          bool loop = false;
+          candidate->walk([&](exec::RangeOp) { loop = true; });
+          require(loop == !bulk,
+                  "physical materialization changed retained finite policy");
+        });
 
   cases.run(
       "one Kernel unit retains distinct bulk and ordered invocations", [&] {
-        auto module = executable(
-            fixtureText("structured-source/realization-finite.mlir"), context);
-        auto bulk = first<kernel::CallOp>(*module);
+        auto module = executable(finiteSource(), context);
+        auto bulk = first<exec::ComputeOp>(*module);
         OpBuilder builder(&context);
         bulk->setAttr("policy", builder.getBoolArrayAttr({true, false, false}));
-        builder.setInsertionPointAfter(bulk);
-        auto ordered = cast<kernel::CallOp>(builder.clone(*bulk));
+        auto ordered = cast<exec::ComputeOp>(sc::duplicateInvocation(
+            bulk, bulk->getParentOfType<func::FuncOp>(), "ordered_repeat"));
         ordered->setAttr("site", builder.getStringAttr("ordered_repeat"));
         ordered->setAttr("policy",
                          builder.getBoolArrayAttr({false, false, false}));
@@ -1170,36 +1287,64 @@ local.return %scaled : !G
         bindingFor(checked.choices(), "vector.sum");
         auto candidate = materializedCopy(*module, checked);
         unsigned loops = 0, sums = 0;
-        candidate->walk([&](local::LocalForOp) { ++loops; });
-        candidate->walk([&](plan::ApplyOp op) {
-          sums += op.getImplementation() == "arkworks/vector.sum";
+        candidate->walk([&](exec::RangeOp) { ++loops; });
+        candidate->walk([&](exec::ApplyOp op) {
+          sums += implementation(op) == "arkworks/vector.sum";
         });
         require(
             loops == 1 && sums == 1,
             "numerical choice leaked between calls to the same Kernel unit");
       });
 
-  cases.run("nested Kernel arithmetic remains between ordered guards", [&] {
-    auto module = executable(nestedSource(), context);
-    auto call = first<kernel::CallOp>(*module);
-    auto inner = call->getParentOfType<local::LocalIfOp>();
-    require(inner && inner->getParentOfType<local::LocalIfOp>(),
-            "fixture does not contain a nested Kernel invocation");
+  cases.run("nested numerical arithmetic remains between ordered guards", [&] {
+    auto module = executable(nestedSource(context), context);
+    auto call = first<exec::ComputeOp>(*module);
+    auto checkNesting = [&](ModuleOp subject, Operation *operation) {
+      auto closure =
+          take(owner(subject).getProfile() == protocol_ir::Profile::Physical
+                   ? protocol::readExecutionClosure(owner(subject), true)
+                   : protocol::readSourceExecutionClosure(owner(subject)));
+      auto parent = operation->getParentOfType<func::FuncOp>();
+      for (unsigned depth = 0; depth < 2; ++depth) {
+        require(parent->hasAttr("runtime.region"),
+                "arithmetic escaped an outlined region");
+        SmallVector<Operation *> callers;
+        for (const auto &[name, body] : closure.bodies)
+          for (const auto &step : body)
+            if (llvm::is_contained(step.regions, parent))
+              callers.push_back(step.operation);
+        require(callers.size() == 1 && isa<exec::TestOp>(callers.front()),
+                "arithmetic lost its conditional parent");
+        parent = callers.front()->getParentOfType<func::FuncOp>();
+      }
+    };
+    checkNesting(*module, call);
     auto checked = checkedPlan(*module);
     auto candidate = materializedCopy(*module, checked);
     auto subtract = application(*candidate, "arkworks/field.sub");
-    auto parent = subtract->getParentOfType<local::LocalIfOp>();
-    require(parent && parent->getParentOfType<local::LocalIfOp>(),
-            "physical arithmetic escaped nested control");
+    checkNesting(*candidate, subtract);
+    auto parent = subtract->getParentOfType<func::FuncOp>();
     SmallVector<StringRef> order;
-    for (auto &op : *subtract->getBlock())
-      if (auto applied = dyn_cast<plan::ApplyOp>(op))
-        order.push_back(applied.getImplementation() == "arkworks/field.sub"
-                            ? StringRef("arithmetic")
-                            : applied.getSite());
-    require(order == SmallVector<StringRef>{"before", "arithmetic", "after"},
+    for (auto applied : sf::applications(parent))
+      order.push_back(implementation(applied) == "arkworks/field.sub"
+                          ? StringRef("arithmetic")
+                          : applied.getSite());
+    require(order == SmallVector<StringRef>{"lc_6_before", "arithmetic",
+                                            "lc_5_after"},
             "numerical materialization crossed an ordered guard");
-    subtract->moveBefore(subtract->getPrevNode());
+    auto before = sf::application(parent, "control.require");
+    IRRewriter rewriter(&context);
+    auto *prefix = before->getBlock();
+    auto *tail = rewriter.splitBlock(prefix, before->getIterator());
+    auto stop = cast<exec::DispatchOp>(before->getNextNode()).getStopped();
+    OpBuilder builder(&context);
+    builder.setInsertionPointToEnd(prefix);
+    exec::ScopedExecutionBuilder control(builder, parent);
+    auto values = control.invoke(
+        "exec.apply", subtract.getOutcome().getType().getPayload(),
+        subtract->getOperands(), subtract->getAttrs(), stop);
+    rewriter.mergeBlocks(tail, builder.getInsertionBlock());
+    sc::omit(subtract, values);
     admitPhysical(*candidate);
     reject(verifyPhysicalMaterialization(*module, *candidate, checked),
            "binding-materialization-correspondence");
@@ -1267,10 +1412,12 @@ local.return %scaled : !G
 
   cases.run("existing executable input without Kernel still materializes", [&] {
     auto module = take(executableFixture(pinnedSource(), context));
+    require(succeeded(kernel::lowerKernels(*module)),
+            "ordinary executable control lowering failed");
     bool hasKernel = false;
     module->walk([&](Operation *op) {
       hasKernel |=
-          (mathematical::isComputationUnit(op) || isa<kernel::CallOp>(op));
+          (mathematical::isComputationUnit(op) || isa<exec::ComputeOp>(op));
     });
     require(!hasKernel, "control fixture still contains Kernel operations");
     auto checked = checkedPlan(*module);
@@ -1296,10 +1443,10 @@ local.return %scaled : !G
           bool loop = false, native = false;
           SymbolTable symbols(owner(*selected));
           selected->walk([&](Operation *op) {
-            loop |= isa<local::LocalForOp>(op);
+            loop |= isa<exec::RangeOp>(op);
             if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
               if (auto binding =
-                      symbols.lookup<local::OperationBindingOp>(ref.getValue()))
+                      symbols.lookup<runtime::BindingOp>(ref.getValue()))
                 native |= binding.getContract() == "numerical.sum" ||
                           binding.getContract() == "numerical.map";
           });
@@ -1310,41 +1457,39 @@ local.return %scaled : !G
           frozen.check(*module);
         });
   }
-  cases.run("one final Local subject composes structured maps and Kernel calls",
-            [&] {
-              auto module = executable(mixedMapSource(), context);
-              FrozenInput frozen(*module);
-              CountingCatalog catalog;
-              auto plan = take(proposePhysical(*module, catalog));
-              auto selected = take(plan.cloneSelectedSubject(*module));
-              bool map = false, sum = false;
-              selected->walk([&](Operation *op) {
-                require(!mathematical::isComputationUnit(op) &&
-                            !isa<kernel::CallOp, algebra::MapRealizeOp,
-                                 local::ApplyOp, func::FuncOp>(op),
-                        "mixed final subject retained source work");
-                auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-                auto binding =
-                    ref ? SymbolTable(owner(*selected))
-                              .lookup<local::OperationBindingOp>(ref.getValue())
-                        : local::OperationBindingOp();
-                if (binding) {
-                  map |= binding.getContract() == "numerical.map";
-                  sum |= binding.getContract() == "numerical.sum";
-                }
-              });
-              require(map && sum &&
-                          succeeded(mathematical::verifyNumericalLowering(
-                              *module, *selected)),
-                      "mixed retained body lost one numerical family");
-              auto checked = take(validatePhysical(*module, plan, catalog));
-              auto queries = catalog.queryCount();
-              frozen.check(*module);
-              accept(materializePhysical(*module, checked));
-              admitPhysical(*module);
-              require(catalog.queryCount() == queries,
-                      "mixed materialization searched again");
-            });
+  cases.run(
+      "one scoped executable composes structured maps and computations", [&] {
+        auto module = executable(mixedMapSource(context), context);
+        FrozenInput frozen(*module);
+        CountingCatalog catalog;
+        auto plan = take(proposePhysical(*module, catalog));
+        auto selected = take(plan.cloneSelectedSubject(*module));
+        bool map = false, sum = false;
+        selected->walk([&](Operation *op) {
+          require(!mathematical::isComputationUnit(op) &&
+                      !isa<exec::ComputeOp, exec::CollectOp, exec::FoldOp>(op),
+                  "mixed final subject retained source work");
+          auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding");
+          auto binding = ref ? SymbolTable(owner(*selected))
+                                   .lookup<runtime::BindingOp>(ref.getValue())
+                             : runtime::BindingOp();
+          if (binding) {
+            map |= binding.getContract() == "numerical.map";
+            sum |= binding.getContract() == "numerical.sum";
+          }
+        });
+        require(map && sum &&
+                    succeeded(mathematical::verifyNumericalLowering(*module,
+                                                                    *selected)),
+                "mixed retained body lost one numerical family");
+        auto checked = take(validatePhysical(*module, plan, catalog));
+        auto queries = catalog.queryCount();
+        frozen.check(*module);
+        accept(materializePhysical(*module, checked));
+        admitPhysical(*module);
+        require(catalog.queryCount() == queries,
+                "mixed materialization searched again");
+      });
   cases.run(
       "a fixed conversion endpoint permits its automatic peer to change", [&] {
         auto module = executable(fixedPeerSource(), context);
