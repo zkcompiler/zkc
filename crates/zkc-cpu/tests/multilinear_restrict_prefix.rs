@@ -154,9 +154,7 @@ fn resource_guards_and_malformed_invocations_are_separate() {
         assert_eq!(result.unwrap_err(), code);
         assert_eq!(driver.active_frames(), 0);
     }
-    let resolved = zkc_cpu::cpu_contracts()
-        .resolve(operation.clone())
-        .unwrap();
+    let resolved = zkc_cpu::cpu_contracts().resolve(operation.clone()).unwrap();
     let sig = resolved.signature();
     let bytes = support::program(
         std::slice::from_ref(&operation),
@@ -172,8 +170,7 @@ fn resource_guards_and_malformed_invocations_are_separate() {
         &sig.outputs,
         &["out".into()],
     );
-    let admitted =
-        zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes, zkc_cpu::cpu_contracts()).unwrap();
     for inputs in [
         vec![values.clone()],
         vec![values.clone(), Value::Field(Scalar::from(2))],
