@@ -294,11 +294,12 @@ module @restriction attributes {exec.computation} {
                                                      &context);
         require(bool(numerical), "prefix restriction recipe source refused");
         mathematical::RealizationWork work;
-        auto candidate = realizeKernelEntry(*numerical, "restrict", {}, work);
+        auto candidate =
+            realizeComputationEntry(*numerical, "restrict", {}, work);
         require(bool(candidate), "prefix restriction recipe failed");
-        kernelRecipeOutput(*candidate);
-        require(succeeded(computation::verifyEntryRecipes(*numerical, *candidate,
-                                                     "restrict")),
+        computationRecipeOutput(*candidate);
+        require(succeeded(computation::verifyEntryRecipes(
+                    *numerical, *candidate, "restrict")),
                 "prefix restriction recipe did not pass independent checking");
         auto wrong = copy(*candidate);
         auto operation = scopedFinite::application(
@@ -313,9 +314,9 @@ module @restriction attributes {exec.computation} {
                 "ordered operand mutation lost scoped formation");
         ScopedDiagnosticHandler handler(&context,
                                         [](Diagnostic &) { return success(); });
-        require(
-            failed(computation::verifyEntryRecipes(*numerical, *wrong, "restrict")),
-            "reordered prefix restriction operands escaped checking");
+        require(failed(computation::verifyEntryRecipes(*numerical, *wrong,
+                                                       "restrict")),
+                "reordered prefix restriction operands escaped checking");
       });
   cases.run("static dimension discards unused field-array construction", [&] {
     auto module = withHelper(R"(
