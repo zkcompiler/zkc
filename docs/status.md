@@ -481,6 +481,12 @@ cover call-edge or scoped-extraction correspondence. The artifact
 shares source claims' existing admission association and reports missing source
 matches explicitly; its native publication check is not a Lean proof.
 
+The Protocol dialect registers checked [logical oracle kinds and handle
+carriers](spec/ir/protocols.md#logical-oracle-kinds-and-handles), including sized
+tables and bounded handle sequences. They have no ordinary native codec.
+Frontend oracle emission, anchor-aware operation admission and checked semantic
+realization remain in progress; registered carriers alone do not enable them.
+
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and
 `includeInstallation`, and `zkc inspect --view=notations` with `--notation-private` and

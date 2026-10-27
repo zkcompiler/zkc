@@ -1,9 +1,11 @@
 #ifndef ZKC_DIALECT_PROTOCOL_IR_PROTOCOLATTRS_H
 #define ZKC_DIALECT_PROTOCOL_IR_PROTOCOLATTRS_H
 
-#include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
 #include "zkc/Dialect/Protocol/IR/protocolEnums.h.inc"
+#include <optional>
 #define GET_ATTRDEF_CLASSES
 #include "zkc/Dialect/Protocol/IR/protocolAttrs.h.inc"
 

@@ -62,6 +62,35 @@ isolated region around each expression. The choice and its alternatives are
 explained in [the rationale](../../rationale/mathematical-ir.md).
 No intermediate located common program is required by this profile.
 
+## Logical oracle kinds and handles
+
+`#protocol.oracle_kind<"table", [T]>` associates ordinary table data with a
+query and answer type. Field rows use the matching field vector, group rows
+use the matching group vector, unsigned 64-bit index rows use `algebra.indices`,
+and other admitted total data rows use `data.sequence<T>`. A table query has
+logical type `ui64` and its answer has type `T`. Rows must be canonical total,
+shared, non-affine logical data; capabilities, physical representations and
+oracle handles cannot be rows. Complete logical type bounds apply to the
+associated collection as well as to its row.
+
+An optional second argument, an unsigned 64-bit integer attribute, fixes the
+exact number of rows. Omission denotes a runtime row count; a present zero
+specifies an empty table. The sized kind retains this refinement even when its
+associated collection type has a runtime length. Realization must establish
+shape agreement and query bounds separately. Power-of-two restrictions and
+native capacity bounds belong to the selected realization and execution
+admission. Unknown kinds, including reserved polynomial kinds, refuse.
+
+`!protocol.oracle<K>` is a logical handle for checked kind `K`. Its type fixes
+the Data/Query/Answer associations, not a commitment scheme, physical storage
+or occurrence anchor. Equal data does not identify anchors.
+`!protocol.oracle_sequence<K, maximum>` is a bounded ordered logical handle
+container; zero permits only an empty sequence. The bound describes a logical
+natural and grants no allocation or execution budget. Neither handle type has
+an ordinary native binding or message codec, and `data.sequence` cannot wrap
+one to obtain such permissions. Oracle operations and realization are separate
+admission boundaries; registration of these types grants no executable effect.
+
 ## Total mathematics and helpers
 
 The [structured extension](mathematics.md) adds field constants and

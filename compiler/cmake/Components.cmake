@@ -46,6 +46,7 @@ add_zkc_component(Contracts
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
+  lib/Contracts/OracleKinds.cpp
   lib/Contracts/SourceTerms.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
@@ -209,6 +210,7 @@ add_zkc_component(IR
   lib/Dialect/Commitment/IR/CommitmentDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
+  lib/Dialect/Protocol/IR/OracleKinds.cpp
   lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
