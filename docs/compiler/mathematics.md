@@ -378,12 +378,12 @@ zkc-opt input.mlir --zkc-prepare-protocol='trace-mathematics=true'
 zkc-opt input.mlir --zkc-prepare-protocol='dump-mathematics=true'
 ```
 
-Remarks and labeled before/after IR go to the diagnostic stream. `RetainMaps`
-through `Finish` remains one stateful invocation; diagnostic phases do not reset
-its occurrence or work accounting. Standalone transformations begin a new scope
-unless their caller supplies shared work. A private candidate is published only
+Remarks and labeled before/after IR go to the diagnostic stream. Preparation
+and numerical realization share work within their owning transaction; diagnostic
+phases do not reset that accounting. Standalone transformations begin a new
+scope unless their caller supplies shared work. A private candidate is published only
 after its own reader accepts the actual source/candidate pair. Rejected proposals
-leave the original body and external expansion state unchanged. Stage records and
+leave the original body and externally requested occurrence records unchanged. Stage records and
 IR dumps carry no independent proof authority. Reusing a trace starts a fresh
 journal at the outer invocation; nested services append within that invocation.
 Observers require exclusive access, including across pass-manager clones. Use

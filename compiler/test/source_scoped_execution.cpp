@@ -1160,6 +1160,15 @@ protocol Run roles(P)(a:Vector<Fr>@P,b:Vector<Fr>@P,unused:Vector<Fr>@P)
     }
     require(nested, "ordinary helper path was dropped");
   });
+  cases.run("origin encoding refuses insufficient positive allowance", [&] {
+    uint64_t bytes = 1;
+    auto encoded = protocol::algorithmSite({{"call", "helper"}}, "leaf", bytes);
+    require(!encoded && bytes == 1,
+            "failed origin encoding changed its caller's allowance");
+    require(namesIdentifier(llvm::toString(encoded.takeError()),
+                            "algorithm-origin-limit"),
+            "origin refusal lost its diagnostic identity");
+  });
   cases.run("outlined preconditions follow aliased capture positions", [&] {
     Fixture fixture(context, {"finite capture premises", R"(
 type Vector<F:Field>=builtin("vector",F);

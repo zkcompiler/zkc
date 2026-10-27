@@ -15,7 +15,6 @@
 #include "zkc/Dialect/Runtime/IR/RuntimeOps.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
-#include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
 #include <sstream>
 using namespace mlir;

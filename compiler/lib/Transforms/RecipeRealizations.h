@@ -4,7 +4,6 @@
 #include "FiniteVerification.h"
 #include "MathematicalRecipes.h"
 #include "zkc/Transforms/Finite.h"
-#include "zkc/Transforms/NestedContractions.h"
 
 // Private closed-inventory overrides for checking recipe availability and
 // ordered fallback. Public services use the installed inventory. These entry
@@ -23,12 +22,5 @@ realizeLocals(mlir::ModuleOp module, MathematicalSelectionPolicy policy,
               const mathematical::MathematicalRecipes &recipes,
               mathematical::RealizationTrace *trace = nullptr);
 } // namespace zkc::finite
-namespace zkc::nested {
-mlir::LogicalResult
-rewriteFiniteCollections(mlir::ModuleOp module,
-                         MathematicalSelectionPolicy policy,
-                         const mathematical::MathematicalRecipes &recipes,
-                         mathematical::RealizationTrace *trace = nullptr);
-}
 
 #endif

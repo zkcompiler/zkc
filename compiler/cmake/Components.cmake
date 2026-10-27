@@ -261,10 +261,9 @@ add_zkc_component(Transforms
   lib/Conversion/PhysicalVerification.cpp
   lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
-  lib/Transforms/Algorithms.cpp
+  lib/Transforms/AlgorithmSites.cpp
   lib/Transforms/ScopedAlgorithms.cpp
   lib/Transforms/ScopedAlgorithmVerification.cpp
-  lib/Transforms/AlgorithmVerification.cpp
   lib/Transforms/Mathematical.cpp
   lib/Transforms/MathematicalTrace.cpp
   lib/Transforms/ProtocolApplications.cpp
@@ -296,12 +295,9 @@ add_zkc_component(Transforms
   lib/Transforms/MathematicalRecipes.cpp
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp
-  lib/Transforms/NestedContractions.cpp
-  lib/Transforms/NestedContractionVerification.cpp
   lib/Transforms/ScopedNestedContraction.cpp
   lib/Transforms/MapRealizations.cpp
   lib/Transforms/StructuredComputation.cpp
-  lib/Transforms/VectorReductions.cpp
   lib/Transforms/PolynomialRecipes.cpp
   lib/Transforms/PolynomialRecipeVerification.cpp
   lib/Transforms/PolynomialLowering.cpp

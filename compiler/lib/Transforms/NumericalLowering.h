@@ -3,6 +3,7 @@
 
 #include "MapOccurrence.h"
 #include "NumericalSelection.h"
+#include "zkc/Transforms/MathematicalTrace.h"
 #include <map>
 #include <set>
 

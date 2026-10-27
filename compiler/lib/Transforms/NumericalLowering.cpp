@@ -1,14 +1,122 @@
 #include "NumericalLowering.h"
-#include "AlgorithmSupport.h"
 #include "ComputationSelection.h"
 #include "RealizationEmission.h"
 #include "RealizationSubject.h"
+#include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Transforms/Algorithms.h"
+#include "llvm/ADT/BitVector.h"
 
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
+namespace {
+// Inlining an identity helper can make two admitted, distinct capture bindings
+// alias one SSA value. Retain its first occurrence and rewrite the region's
+// arguments together. Recurse after rewriting: aliases can reach inner regions.
+LogicalResult canonicalizeCaptures(Operation *op) {
+  if (isa<zkc::local::LocalIfOp, zkc::local::LocalMatchOp,
+          zkc::local::LocalForOp>(op)) {
+    unsigned prefix =
+        isa<zkc::local::LocalForOp>(op) ? 2 + op->getNumResults() : 1;
+    unsigned captures = op->getNumOperands() - prefix;
+    llvm::DenseMap<Value, unsigned> firstOccurrences;
+    SmallVector<std::pair<unsigned, unsigned>> aliases;
+    for (unsigned i = 0; i < captures; ++i) {
+      Value value = op->getOperand(prefix + i);
+      auto [first, inserted] = firstOccurrences.try_emplace(value, i);
+      if (inserted)
+        continue;
+      auto type = protocol::encodeBoundType(value.getType(), false);
+      if (!type)
+        return diagnostics::emit(op->emitOpError(), type.takeError());
+      if (!protocol::duplicable(type->spelling()))
+        return diagnostics::emit(op->emitOpError(),
+                                 "interactive-resource-reuse");
+      aliases.emplace_back(i, first->second);
+    }
+    if (!aliases.empty()) {
+      // Batch port removal avoids rescanning or shifting the capture list for
+      // each alias. Distinct SSA values retain their first-occurrence order.
+      llvm::BitVector operands(op->getNumOperands());
+      for (auto [alias, first] : aliases)
+        operands.set(prefix + alias);
+      for (Region &region : op->getRegions()) {
+        Block &block = region.front();
+        unsigned start = block.getNumArguments() - captures;
+        llvm::BitVector arguments(block.getNumArguments());
+        for (auto [alias, first] : aliases) {
+          block.getArgument(start + alias)
+              .replaceAllUsesWith(block.getArgument(start + first));
+          arguments.set(start + alias);
+        }
+        if (isa<zkc::local::LocalForOp>(op) &&
+            isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
+                block.back())) {
+          llvm::BitVector forwarded(block.back().getNumOperands());
+          unsigned offset =
+              op->getNumResults() +
+              (isa<zkc::local::LocalConditionOp>(block.back()) ? 1 : 0);
+          for (auto [alias, first] : aliases)
+            forwarded.set(offset + alias);
+          block.back().eraseOperands(forwarded);
+        }
+        block.eraseArguments(arguments);
+      }
+      op->eraseOperands(operands);
+    }
+  }
+  for (Region &region : op->getRegions())
+    for (Block &block : region)
+      for (Operation &nested : block)
+        if (failed(canonicalizeCaptures(&nested)))
+          return failure();
+  return success();
+}
+
+// Exact native contract recognition, never a source reducer spelling. The
+// typed operation and its resolved logical binding must both agree.
+algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols) {
+  if (!call || call->getNumResults() != 1 || !call->getResult(0).hasOneUse())
+    return {};
+  auto map = symbols.lookup<algebra::MapRealizeOp>(call.getCallee());
+  auto sum = dyn_cast_if_present<algebra::VectorSumOp>(call->getNextNode());
+  if (!map || !sum || sum->getNumOperands() != 1 ||
+      sum->getOperand(0) != call->getResult(0))
+    return {};
+  if (auto policy = map->getAttrOfType<ArrayAttr>("policy");
+      policy && !cast<BoolAttr>(policy[1]).getValue()) {
+    return {};
+  }
+  auto reference = sum->getAttrOfType<FlatSymbolRefAttr>("binding");
+  auto binding = reference
+                     ? symbols.lookup<runtime::BindingOp>(reference.getValue())
+                     : runtime::BindingOp();
+  auto field = cast<algebra::FieldType>(sum->getResult(0).getType());
+  if (!binding || binding.getContract() != "vector.sum" ||
+      !binding.getImplementation().empty() ||
+      binding.getArguments() !=
+          ArrayAttr::get(
+              call.getContext(),
+              {StringAttr::get(call.getContext(), field.getDomain())}) ||
+      sum->getAttrOfType<ArrayAttr>("parameters") !=
+          ArrayAttr::get(call.getContext(), {})) {
+    return {};
+  }
+  return map;
+}
+
+algebra::MapRealizeOp eligibleMapSum(local::ApplyOp call, SymbolTable &symbols,
+                                     MathematicalSelectionPolicy policy) {
+  if (!policy.vectorReductionFusion)
+    return {};
+  auto map = reductionMap(call, symbols);
+  if (!map)
+    return {};
+  return map;
+}
+} // namespace
 Expected<std::string> mapPayloadSite(algebra::MapRealizeOp map,
                                      StringRef callSite, unsigned index,
                                      uint64_t &bytes) {
@@ -190,6 +298,6 @@ LogicalResult materializeRetainedMaps(ModuleOp candidate,
       op.erase();
   // Identity maps can make previously distinct control captures alias. Rewrite
   // their region ports only after all retained calls have been materialized.
-  return protocol::detail::canonicalizeCaptures(root);
+  return canonicalizeCaptures(root);
 }
 } // namespace zkc::mathematical

@@ -197,10 +197,8 @@ def main():
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
         ROOT / "lib/Transforms/HelperNormalization.h",
-        ROOT / "lib/Transforms/AlgorithmSupport.h",
         ROOT / "lib/Transforms/ComputationSelection.h",
         ROOT / "lib/Transforms/ComputationEquations.h",
-        ROOT / "lib/Transforms/NestedContractionVerification.h",
         ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
         ROOT / "lib/Transforms/CollectFold.h",
@@ -402,8 +400,8 @@ def main():
             "ScopedFinite", "ScopedPreparation")),
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",
-                   "MathematicalComparison", "NestedContractionVerification",
-                   "HelperNormalizationVerification", "AlgorithmVerification",
+                   "MathematicalComparison",
+                   "HelperNormalizationVerification",
                    "ScopedAlgorithmVerification", "PolynomialRecipeVerification",
                    "Kernel/RecipeVerification", "Kernel/ScopedVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]

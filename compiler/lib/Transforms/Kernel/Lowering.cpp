@@ -1,4 +1,3 @@
-#include "../AlgorithmSupport.h"
 #include "../CheckedCandidate.h"
 #include "../RealizationSubject.h"
 #include "../RealizationTrace.h"

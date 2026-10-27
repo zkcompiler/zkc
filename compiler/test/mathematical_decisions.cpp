@@ -1,9 +1,7 @@
-#include "../lib/Transforms/AlgorithmSupport.h"
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
-#include "../lib/Transforms/RecipeRealizations.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -27,33 +25,6 @@ namespace {
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
 }
-constexpr llvm::StringLiteral fusionFixture =
-    R"mlir(!F = !algebra.field<"koala-bear">
-!V = !algebra.field_vector<"koala-bear">
-module { "protocol.module"() ({
- "runtime.binding"() {sym_name="sum",contract="vector.sum",arguments=["koala-bear"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="length_alias",contract="vector.length",arguments=["koala-bear"],implementation=""} : ()->()
- "runtime.binding"() {sym_name="constant",contract="field.constant",arguments=["koala-bear"],implementation=""} : ()->()
- func.func private @formula(%a:!F,%b:!F,%unused:!F,%s:!F)->!F {
-   %dead = "algebra.field_add"(%s,%s) : (!F,!F)->!F
-   %p = "algebra.field_multiply"(%a,%b) : (!F,!F)->!F
-   func.return %p : !F
- }
- algebra.map_realize @mapped = @formula [true, true, true, false] : (!V,!V,!V,!F)->!V
- local.func @reduce(%v:!V)->!F attributes {logical_origin=["reduce",[]]} {
-   %r = "algebra.exec.vector_sum"(%v) {binding=@sum,parameters=[],site="sum"} : (!V)->!F
-   local.return %r : !F
- }
- local.func @work(%a:!V,%b:!V,%c:!V,%s:!F)->!F attributes {logical_origin=["work",[]]} {
-   %v = local.apply @mapped(%a,%b,%c,%s) {site="map"} : (!V,!V,!V,!F)->!V
-   %r = local.apply @reduce(%v) {site="reduce"} : (!V)->!F
-   local.return %r : !F
- }
- "protocol.func"() ({ ^entry(%a:!V,%b:!V,%c:!V,%s:!F):
-   %r = "protocol.local_call"(%a,%b,%c,%s) {callee=@work,role="P",site="work"} : (!V,!V,!V,!F)->!F
-   "protocol.return"(%r) : (!F)->()
- }) {sym_name="main",function_type=(!V,!V,!V,!F)->!F,roles=["P"],input_roles=[["P"],["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
-}) {profile=#protocol.profile<protocol>} : ()->() })mlir";
 OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name,
                               bool math = false) {
   std::ifstream input(
@@ -510,10 +481,11 @@ int main() {
           // A source spelling can also name another temporary declaration.
           // Origin resolution is one lookup, not a transitive rename chain.
           outer.declarationOrigin("original", "unrelated");
-          protocol::detail::AlgorithmExpansionRecord record;
-          record.occurrences[{"original", original.site}] = {
-              "definition", "original", "authored", {{"call", "work"}}, 0};
-          outer.selection(op, record, DecisionFamily::Finite,
+          auto occurrence = original;
+          occurrence.definition = "definition";
+          occurrence.originalSite = "authored";
+          occurrence.occurrence = {{"call", "work"}};
+          outer.selection(occurrence, DecisionFamily::Finite,
                           RealizationChoice::Ordered, {});
           expected.definition = "definition";
           expected.originalSite = "authored";
@@ -636,127 +608,6 @@ int main() {
       expression |= event->service == "finite-expression";
     require(expression,
             "total finite selection missing from Kernel realization");
-  });
-  cases.run("fusion recipes and occurrence choices are observational", [&] {
-    auto source = parseSourceString<ModuleOp>(fusionFixture, &context);
-    require(bool(source) && succeeded(verify(*source)),
-            "fusion fixture refused");
-    protocol::AlgorithmExpansionState state;
-    require(succeeded(protocol::expandAlgorithms(
-                *source, protocol::AlgorithmExpansionPhase::RetainMaps, state)),
-            "retained fusion source failed");
-    auto control = copy(*source), observed = copy(*source),
-         missing = copy(*source);
-    auto controlState = state, observedState = state, missingState = state;
-    RealizationTrace trace;
-    std::string text;
-    llvm::raw_string_ostream stream(text);
-    trace.remarks = true;
-    trace.ir = &stream;
-    ScopedDiagnosticHandler quiet(&context,
-                                  [](Diagnostic &) { return success(); });
-    require(
-        succeeded(fuseVectorReductions(*control, controlState)) &&
-            succeeded(fuseVectorReductions(*observed, observedState, &trace)) &&
-            same(*control, *observed),
-        "fusion observer changed output");
-    const auto &a = protocol::detail::AlgorithmStateAccess::get(controlState);
-    const auto &b = protocol::detail::AlgorithmStateAccess::get(observedState);
-    require(a == b, "fusion observer changed occurrence accounting");
-    bool occurrence = false, product = false;
-    for (auto *event : events<SelectionDecision>(trace)) {
-      const auto &decision = std::get<SelectionDecision>(event->payload);
-      product |= decision.family == DecisionFamily::MapProduct;
-      occurrence |= decision.choice == RealizationChoice::MapSum &&
-                    !event->subject.site.empty() &&
-                    !event->subject.originalSite.empty();
-    }
-    require(product && occurrence,
-            "fusion omitted formula or occurrence decision");
-    require(succeeded(fuseVectorReductions(*missing, missingState,
-                                           llvm::ArrayRef<ReductionRecipe>{},
-                                           &trace)) &&
-                same(*missing, *source),
-            "missing optional recipe changed required map behavior");
-    bool declined = false;
-    for (auto *event : events<SelectionDecision>(trace))
-      declined |= std::get<SelectionDecision>(event->payload).outcome.status ==
-                      OptimizationStatus::MissingRecipe &&
-                  !event->subject.site.empty();
-    require(declined && events<PublicationDecision>(trace).empty(),
-            "missing occurrence recipe was silent or claimed publication");
-  });
-  cases.run("wide fusion diagnostics preserve named occurrence identity", [&] {
-    std::string text = fusionFixture.str(), calls;
-    for (unsigned i = 0; i < 256; ++i)
-      calls += " %unused" + std::to_string(i) +
-               " = local.apply @mapped(%a,%b,%c,%s) {site=\"unused" +
-               std::to_string(i) + "\"} : (!V,!V,!V,!F)->!V\n";
-    text.insert(text.find(" %v = local.apply @mapped"), calls);
-    auto source = parseSourceString<ModuleOp>(text, &context);
-    require(bool(source) && succeeded(verify(*source)), "wide source refused");
-    protocol::AlgorithmExpansionState state;
-    RealizationTrace preparation;
-    require(succeeded(protocol::expandAlgorithms(
-                *source, protocol::AlgorithmExpansionPhase::RetainMaps, state,
-                nullptr, &preparation)),
-            "wide retained source refused");
-    bool installed = false;
-    for (auto *event : events<PublicationDecision>(preparation))
-      installed |= event->parent == 0 &&
-                   std::get<PublicationDecision>(event->payload).boundary ==
-                       PublicationBoundary::PublishedToCaller;
-    require(installed, "standalone expansion omitted caller installation");
-    auto control = copy(*source), observed = copy(*source);
-    auto controlState = state, observedState = state;
-    RealizationTrace trace;
-    require(
-        succeeded(fuseVectorReductions(*control, controlState)) &&
-            succeeded(fuseVectorReductions(*observed, observedState, &trace)) &&
-            same(*control, *observed),
-        "wide diagnostic changed fusion");
-    unsigned declined = 0;
-    for (auto *event : events<SelectionDecision>(trace)) {
-      const auto &selection = std::get<SelectionDecision>(event->payload);
-      if (selection.family != DecisionFamily::VectorReduction ||
-          selection.choice != RealizationChoice::Ordered)
-        continue;
-      require(!event->subject.site.empty() && event->subject.position.empty() &&
-                  event->subject.declaration == "work" &&
-                  !event->subject.originalSite.empty(),
-              "named occurrence lost its declaration or origin");
-      ++declined;
-    }
-    require(declined >= 256, "wide nonfusing occurrences were omitted");
-  });
-  cases.run("positive origin allowance can fail at the encoding request", [&] {
-    auto source = parseSourceString<ModuleOp>(fusionFixture, &context);
-    require(bool(source), "fusion fixture refused");
-    protocol::AlgorithmExpansionState state;
-    require(succeeded(protocol::expandAlgorithms(
-                *source, protocol::AlgorithmExpansionPhase::RetainMaps, state)),
-            "retained source failed");
-    auto record = protocol::detail::AlgorithmStateAccess::get(state);
-    record.originBytes = 1;
-    protocol::detail::AlgorithmStateAccess::set(state, record);
-    auto before = copy(*source);
-    RealizationTrace trace;
-    ScopedDiagnosticHandler quiet(&context,
-                                  [](Diagnostic &) { return success(); });
-    require(failed(fuseVectorReductions(*source, state, &trace)) &&
-                same(*source, *before),
-            "origin capacity published a partial rewrite");
-    auto discards = events<DiscardDecision>(trace);
-    require(discards.size() == 1, "origin capacity lost its proposal discard");
-    const auto *cause = std::get_if<RequiredFailure>(
-        &std::get<DiscardDecision>(discards[0]->payload).cause);
-    require(
-        cause && cause->capacity &&
-            cause->capacity->owner == WorkOwner::AlgorithmOriginBytes &&
-            cause->capacity->available == 1 && !cause->capacity->requested &&
-            protocol::detail::AlgorithmStateAccess::get(state).originBytes == 1,
-        "origin failure inferred zero balance, invented request size, or "
-        "published state");
   });
   cases.run("nested occurrence state is independent of diagnostics", [&] {
     auto source = fixture(context, "nested-matrix"), before = copy(*source);

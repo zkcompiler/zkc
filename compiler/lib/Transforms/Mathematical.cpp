@@ -30,7 +30,6 @@
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
-#include "zkc/Transforms/VectorReductions.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
@@ -864,8 +863,7 @@ uint64_t operationCount(ModuleOp module) {
   module.walk([&](Operation *) { ++count; });
   return count;
 }
-// Keep RetainMaps through Finish inside one invocation: the occurrence record
-// and cumulative expansion budget are not recomputable pass analyses.
+// Observe preparation stages without changing their shared work or ownership.
 LogicalResult runRealizationStage(ModuleOp module, StringRef name,
                                   RealizationTrace *trace,
                                   llvm::function_ref<LogicalResult()> action) {

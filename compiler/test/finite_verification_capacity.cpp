@@ -3,7 +3,6 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalComparison.h"
 #include "../lib/Transforms/NumericalSelection.h"
-#include "../lib/Transforms/RecipeRealizations.h"
 #include "../lib/Transforms/ScopedCandidate.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"

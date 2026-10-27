@@ -52,35 +52,16 @@ mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
-/// Replace each algebra.map_realize with an ordinary local.func of the same
-/// signature. The helper is expanded into a detached scalar formula and
-/// admitted by the shared Ring view, including unused operations. The body
-/// checks every rowwise input's length against the first before arithmetic,
-/// then applies the admitted live formula through a numerical expression or
-/// O(formula) vector operations. Body/port capacity retains the vector path.
-/// Calls remain ordered local.apply occurrences.
-mlir::LogicalResult expandMapRealizations(
-    mlir::ModuleOp module, RealizationWork *work = nullptr,
-    RealizationTrace *trace = nullptr,
-    NumericalExpressionMode mode = NumericalExpressionMode::PreferNative);
-/// Independently interpret the retained scalar formula and actual candidate
-/// payload under admitted ring laws. Check ordered shape guards, return use,
-/// bindings and unchanged declarations separately from payload equivalence. It
-/// claims equal values and shape refusals under sufficient resources under the
-/// declared primitive contracts, not equal resource exhaustion.
-mlir::LogicalResult verifyMapRealizationsPreserved(mlir::ModuleOp original,
-                                                   mlir::ModuleOp candidate);
 /// Admission of every map formula on an immutable original, using bounded
 /// scratch expansion. Refusals keep their algebra-map identifiers.
 llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
 
-/// Independently read the original Exec source against one actual final
-/// Local candidate. Consume only admitted Kernel calls, retained map calls
-/// and explicitly enabled adjacent map/sum pairs; all other context stays
-/// exact. Explicit implementation requests constrain replacement as well as
-/// final physical binding selection. Optional comparison capacity is typed
-/// and attributable; a mismatch never authorizes retry. Standalone Kernel,
-/// map and fusion edges retain their narrower contracts.
+/// Independently read original scoped execution against the actual scoped
+/// numerical candidate. Mathematical and finite requests retain their original
+/// callbacks, equations and policies; unchanged context stays exact. Explicit
+/// implementation requests constrain replacement as well as final binding
+/// selection. Optional comparison capacity is typed and attributable; a
+/// semantic mismatch never authorizes retry.
 mlir::LogicalResult verifyNumericalLowering(
     mlir::ModuleOp original, mlir::ModuleOp candidate,
     MathematicalSelectionPolicy policy = {},
