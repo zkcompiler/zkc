@@ -63,9 +63,9 @@ application and participant mathematics stages. The old Local preparation API,
 Local numerical-wrapper formation and standalone Local expansion pass are
 removed. Executable numerical recipes now emit scoped operations and SCF loops
 directly. The intermediate Local recipe and raw loop-schedule producer are
-removed; standalone Local finite test APIs and the remaining dialect consumers
-still need retirement. Participant guards now stay in Protocol through
-projection, retaining their owner. Demand formation passes their condition
+removed. Standalone Local finite emission APIs are also removed; remaining raw
+comparison adapters and dialect consumers still need retirement. Participant
+guards now stay in Protocol through projection, retaining their owner. Demand formation passes their condition
 separately from the total mathematical wrapper and emits scoped rejection;
 `local.guard` is removed.
 See [scope and transfer views](spec/ir/execution.md#runtime-scope-and-transfer-views).

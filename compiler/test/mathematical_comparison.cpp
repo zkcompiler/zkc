@@ -8,6 +8,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
@@ -194,36 +195,6 @@ bool compareMap(ModuleOp module, uint64_t budget = 100000, bool sum = false) {
   }
   return cursor == &body.back() && body.back().getOperand(0) == *result;
 }
-Value emitBound(ModuleOp module, OpBuilder &builder, StringRef contract,
-                ValueRange inputs, Type output, StringRef site) {
-  auto &unit = module.getBody()->front();
-  std::string name = "test_" + site.str();
-  {
-    OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(&unit.getRegion(0).front());
-    runtime::BindingOp::create(builder, module.getLoc(), name, contract,
-                               builder.getStrArrayAttr({"bls12-381.fr"}), "",
-                               mlir::ArrayAttr{});
-  }
-  OperationState state(module.getLoc(), protocol::boundOperationName(contract));
-  state.addOperands(inputs);
-  state.addTypes(output);
-  state.addAttribute("binding",
-                     FlatSymbolRefAttr::get(builder.getContext(), name));
-  state.addAttribute("parameters", builder.getArrayAttr({}));
-  state.addAttribute("site", builder.getStringAttr(site));
-  return builder.create(state)->getResult(0);
-}
-// Replace only the ordered payload; retain its exact domain-admission prefix.
-void eraseOrderedPayload(local::FuncOp target) {
-  auto &body = target.getBody().front();
-  auto *first = bound(target->getParentOfType<ModuleOp>(), target.getSymName(),
-                      "index.constant");
-  body.back().setOperands(target.getArgument(target.getNumArguments() - 1));
-  while (first->getNextNode() != &body.back())
-    body.back().getPrevNode()->erase();
-  first->erase();
-}
 void pruneAddedBindings(ModuleOp before, ModuleOp after) {
   SymbolTable original(&before.getBody()->front());
   auto &unit = after.getBody()->front().getRegion(0).front();
@@ -243,10 +214,12 @@ void pruneAddedBindings(ModuleOp before, ModuleOp after) {
 // Rebuild a test candidate from its admitted domain prefix and a separately
 // authored payload. Preserve actual guards and canonical occurrence sites.
 // No producer recipe or recognition summary supplies the replacement.
-template <class Build> void replaceScopedPayload(ModuleOp module, Build build) {
+template <class Build>
+void replaceScopedPayload(ModuleOp module, Build build,
+                          StringRef functionName = "work") {
   auto *owner = &module.getBody()->front();
   auto view = take(mathematical::ScopedCandidate::read(owner));
-  auto old = scopedFunction(module);
+  auto old = scopedFunction(module, functionName);
   OpBuilder builder(old);
   auto replacement = func::FuncOp::create(builder, old.getLoc(), "replacement",
                                           old.getFunctionType());
@@ -258,7 +231,7 @@ template <class Build> void replaceScopedPayload(ModuleOp module, Build build) {
   builder.setInsertionPointToEnd(&replacement.front());
   exec::ScopedExecutionBuilder control(builder, replacement);
   auto *cursor = view->first(&old.front());
-  auto *boundary = scopedBound(module, "index.constant");
+  auto *boundary = scopedBound(module, "index.constant", functionName);
   unsigned ordinal = 0;
   while (cursor != boundary) {
     require(cursor && isa<exec::ApplyOp>(cursor), "nonlinear domain prefix");
@@ -426,44 +399,34 @@ module { "protocol.module"() ({
 )mlir";
   return text;
 }
-// The expression realizer initially copies total scalar operations into the
-// loop; the surrounding math lowering owns their later executable lowering.
-FailureOr<SmallVector<Value>>
-readCopiedHelper(Operation *helper, ValueRange inputs, Operation *&cursor) {
-  auto &body = helper->getRegion(0).front();
-  if (body.getNumArguments() != inputs.size())
-    return failure();
-  IRMapping values;
-  for (auto [source, target] : llvm::zip(body.getArguments(), inputs))
-    values.map(source, target);
-  for (Operation &op : body.without_terminator()) {
-    if (!cursor || cursor->getName() != op.getName() ||
-        cursor->getNumRegions() ||
-        cursor->getNumOperands() != op.getNumOperands() ||
-        cursor->getResultTypes() != op.getResultTypes() ||
-        !cursor->getAttrOfType<StringAttr>("site") ||
-        cursor->getAttrs().size() != op.getAttrs().size() + 1)
-      return failure();
-    for (auto attr : op.getAttrs())
-      if (cursor->getAttr(attr.getName()) != attr.getValue())
-        return failure();
-    for (auto [source, target] :
-         llvm::zip(op.getOperands(), cursor->getOperands()))
-      if (values.lookupOrNull(source) != target)
-        return failure();
-    for (auto [source, target] :
-         llvm::zip(op.getResults(), cursor->getResults()))
-      values.map(source, target);
-    cursor = cursor->getNextNode();
-  }
-  SmallVector<Value> result;
-  for (Value value : body.back().getOperands()) {
-    Value mapped = values.lookupOrNull(value);
-    if (!mapped)
-      return failure();
-    result.push_back(mapped);
-  }
+// Test the default total numerical route. The larger required allowance lets a
+// deliberately large scalar callback exercise ordered comparison rather than
+// fail on the default construction quota.
+OwningOpRef<ModuleOp> realizeTotal(ModuleOp source, StringRef site = "total",
+                                   uint64_t copies = 1000000) {
+  mathematical::RealizationWork work;
+  uint64_t bytes = 16 * 1024 * 1024;
+  uint64_t checking = 8 * 1024 * 1024;
+  finite::VerificationLimits limits;
+  limits.sharedContext = &checking;
+  auto result =
+      kernel::realizeEntry(source, site, {}, work, copies, bytes, limits);
+  require(bool(result), "total scoped realization refused");
   return result;
+}
+OwningOpRef<ModuleOp> totalOccurrenceSource(Operation *source) {
+  auto unit = kernelRecipeUnit(SymbolTable::getNearestSymbolTable(source));
+  OpBuilder builder(unit->getBody(), unit->getBody()->end());
+  auto entry =
+      func::FuncOp::create(builder, source->getLoc(), "candidate",
+                           builder.getFunctionType(source->getOperandTypes(),
+                                                   source->getResultTypes()));
+  builder.setInsertionPointToEnd(entry.addEntryBlock());
+  IRMapping values;
+  values.map(source->getOperands(), entry.getArguments());
+  auto *operation = builder.clone(*source, values);
+  func::ReturnOp::create(builder, source->getLoc(), operation->getResults());
+  return unit;
 }
 const char *operationExtents = R"mlir(
 !F = !algebra.field<"bls12-381.fr">
@@ -950,40 +913,24 @@ int main() {
               corresponds(*before, *after),
               "ordered reader failed after an exhausted optional comparison");
         });
-  cases.run(
-      "large total arithmetic step retains the inline ordered fallback", [&] {
-        auto module = parseSourceString<ModuleOp>(largeOrderedFold(false, true),
-                                                  &context);
-        require(bool(module), "large total source refused");
-        algebra::FiniteFoldOp source;
-        module->walk([&](algebra::FiniteFoldOp op) { source = op; });
-        require(bool(source), "missing total fold");
-        OpBuilder builder(
-            &module->getBody()->front().getRegion(0).front(),
-            module->getBody()->front().getRegion(0).front().end());
-        auto signature = builder.getFunctionType(source->getOperandTypes(),
-                                                 source->getResultTypes());
-        auto target = local::FuncOp::create(builder, source.getLoc(),
-                                            "candidate", signature);
-        auto *body = target.addEntryBlock();
-        builder.setInsertionPointToEnd(body);
-        require(
-            failed(finite::realizeExpression(source, body->getArguments(),
-                                             builder)) &&
-                body->empty(),
-            "missing prepared occurrence site did not refuse before emission");
-        source->setAttr("site", builder.getStringAttr("total_fold"));
-        auto expected =
-            finite::realizeExpression(source, body->getArguments(), builder);
-        require(succeeded(expected), "large total ordered realization failed");
-        auto ret = local::ReturnOp::create(builder, source.getLoc(), *expected);
-        Operation *cursor = &body->front();
-        auto actual = finite::verifyExpression(source, body->getArguments(),
-                                               cursor, readCopiedHelper);
-        require(succeeded(actual) && *actual == *expected && cursor == ret,
-                "inline semantic comparison prevented ordered verification");
-      });
-  cases.run("inline identity collect leaves an arbitrary caller suffix", [&] {
+  cases.run("large total arithmetic step retains scoped ordered fallback", [&] {
+    auto module =
+        parseSourceString<ModuleOp>(largeOrderedFold(false, true), &context);
+    require(bool(module), "large total source refused");
+    auto numerical =
+        kernelRecipeSource(&module->getBody()->front(), "work", "candidate");
+    auto actual = realizeTotal(*numerical, "total", 8 * 1024 * 1024);
+    unsigned scalar = 0;
+    actual->walk([&](exec::ApplyOp) { ++scalar; });
+    require(scalar > 2048, "large ordered scalar callback was not retained");
+    finite::VerificationLimits limits;
+    uint64_t checking = 8 * 1024 * 1024;
+    limits.sharedContext = &checking;
+    require(succeeded(kernel::verifyEntryRecipes(*numerical, *actual, "total",
+                                                 {}, limits)),
+            "large scoped callback lost original mathematical correspondence");
+  });
+  cases.run("total identity collect leaves an arbitrary scoped suffix", [&] {
     auto text =
         edit(fixture("total-collect"), "func.return %z", "func.return %x");
     auto module = parseSourceString<ModuleOp>(text, &context);
@@ -991,38 +938,39 @@ int main() {
     algebra::FiniteCollectOp source;
     module->walk([&](algebra::FiniteCollectOp op) { source = op; });
     require(bool(source), "missing total collect");
-    OpBuilder builder(&module->getBody()->front().getRegion(0).front(),
-                      module->getBody()->front().getRegion(0).front().end());
-    auto field = source->getOperand(1).getType();
-    auto suffixHelper =
-        local::FuncOp::create(builder, source.getLoc(), "suffix_helper",
-                              builder.getFunctionType({field}, {field}));
-    auto *helperBody = suffixHelper.addEntryBlock();
-    builder.setInsertionPointToEnd(helperBody);
-    local::ReturnOp::create(builder, source.getLoc(),
-                            helperBody->getArgument(0));
-    builder.setInsertionPointAfter(suffixHelper);
-    auto target = local::FuncOp::create(
-        builder, source.getLoc(), "candidate",
-        builder.getFunctionType(source->getOperandTypes(),
-                                source->getResultTypes()));
-    auto *body = target.addEntryBlock();
-    builder.setInsertionPointToEnd(body);
-    source->setAttr("site", builder.getStringAttr("identity_collect"));
-    auto expected =
-        finite::realizeExpression(source, body->getArguments(), builder);
-    require(succeeded(expected) && expected->size() == 1 &&
-                (*expected)[0] == body->getArgument(0),
-            "identity collect emitted a nonidentity payload");
-    auto suffix = local::ApplyOp::create(
-        builder, source.getLoc(), TypeRange{field},
-        ValueRange{body->getArgument(1)}, "suffix_helper", "suffix");
-    local::ReturnOp::create(builder, source.getLoc(), *expected);
-    Operation *cursor = &body->front();
-    auto result = finite::verifyExpression(source, body->getArguments(), cursor,
-                                           readCopiedHelper);
-    require(succeeded(result) && *result == *expected && cursor == suffix,
-            "identity collect consumed or refused the caller's suffix");
+    auto numerical = totalOccurrenceSource(source);
+    auto actual = realizeTotal(*numerical, "identity_collect");
+    auto target = scopedFunction(*actual, "candidate");
+    auto ret = returned(target);
+    auto outputs = SmallVector<Value>(ret->getOperands());
+    require(outputs.size() == 1 && outputs[0] == target.getArgument(1),
+            "identity collect did not preserve the actual input");
+    auto *block = ret->getBlock();
+    ret->getNextNode()->erase();
+    ret.erase();
+    OpBuilder builder(block, block->end());
+    exec::ScopedExecutionBuilder control(builder, target);
+    auto suffix = control.invoke(
+        "exec.boolean", builder.getI1Type(), control.scoped({}),
+        {builder.getNamedAttr("value", builder.getBoolAttr(true)),
+         builder.getNamedAttr("site", builder.getStringAttr("suffix"))},
+        cast<exec::DispatchOp>(target.front().back()).getStopped());
+    control.returned(outputs);
+    auto *owner = &actual->getBody()->front();
+    auto candidate = take(mathematical::ScopedCandidate::read(owner));
+    auto *cursor = candidate->first(&target.front());
+    finite::VerificationLimits limits;
+    limits.candidate = candidate.get();
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    uint64_t work = 1000000, bytes = 16 * 1024 * 1024;
+    auto result = kernel::verifyKernelRecipes(
+        mathematical::getComputationEntry(*numerical), owner,
+        "identity_collect", target.getArguments().drop_front(), cursor, work,
+        bytes, {}, limits, outcome);
+    require(succeeded(result) && *result == outputs &&
+                cursor == candidate->producer(suffix.front()),
+            "total finite reader consumed or refused the caller suffix");
   });
   for (bool helperEquality : {false, true})
     cases.run(
@@ -1049,61 +997,59 @@ int main() {
                                             helper.getArgument(3),
                                             0) == helperEquality,
                   "fixture did not distinguish helper from operation evidence");
-          OpBuilder builder(
-              &module->getBody()->front().getRegion(0).front(),
-              module->getBody()->front().getRegion(0).front().end());
-          auto signature = builder.getFunctionType(source->getOperandTypes(),
-                                                   source->getResultTypes());
-          auto target = local::FuncOp::create(builder, source.getLoc(),
-                                              "candidate", signature);
-          auto *body = target.addEntryBlock();
-          builder.setInsertionPointToEnd(body);
-          source->setAttr("site", builder.getStringAttr("extent_fold"));
-          auto expected =
-              finite::realizeExpression(source, body->getArguments(), builder);
-          require(succeeded(expected), "extent-aware realization failed");
-          auto ret =
-              local::ReturnOp::create(builder, source.getLoc(), *expected);
+          auto numerical = kernelRecipeSource(&module->getBody()->front(),
+                                              "outer", "candidate");
+          auto actual = realizeTotal(*numerical, "extent_fold");
           bool dot = false, loop = false;
-          target.walk([&](Operation *op) {
-            dot |= op->getName().getStringRef() == "algebra.exec.vector_dot";
-            loop |= isa<local::LocalForOp>(op);
+          actual->walk([&](Operation *op) {
+            if (auto apply = dyn_cast<exec::ApplyOp>(op)) {
+              auto binding =
+                  SymbolTable::lookupNearestSymbolFrom<runtime::BindingOp>(
+                      apply, apply.getBindingAttr());
+              dot |= binding && binding.getContract() == "vector.dot";
+            }
+            loop |= isa<exec::RangeOp>(op);
           });
           require(dot == helperEquality && loop != helperEquality,
                   "producer used extent evidence unavailable to its reader");
-          Operation *cursor = &body->front();
-          auto actual = finite::verifyExpression(source, body->getArguments(),
-                                                 cursor, readCopiedHelper);
-          require(
-              succeeded(actual) && *actual == *expected && cursor == ret,
-              "operation-level extent facts broke realization verification");
+          require(succeeded(kernel::verifyEntryRecipes(*numerical, *actual,
+                                                       "extent_fold")),
+                  "extent-aware scoped recipes lost source correspondence");
           if (!helperEquality) {
-            // A forged dot has the right value under the operation's premise,
-            // but the current bulk reader intentionally has no such evidence.
+            // Rebuild an independently authored dot over the actual ordered
+            // admission prefix. The operation-level extent premise cannot be
+            // promoted into the original helper's finite equation.
             finite::Computation computation;
             require(succeeded(finite::describe(source, computation)),
                     "finite description failed");
-            eraseOrderedPayload(target);
-            builder.setInsertionPoint(&body->back());
-            auto args = body->getArguments();
-            Value product =
-                emitBound(*module, builder, "vector.dot", {args[0], args[2]},
-                          args[1].getType(), "dot");
-            Value result =
-                emitBound(*module, builder, "field.add", {args[1], product},
-                          product.getType(), "seed");
-            body->back().setOperand(0, result);
-            SymbolTable symbols(&module->getBody()->front());
-            cursor = product.getDefiningOp();
+            replaceScopedPayload(
+                *actual,
+                [&](auto emit, ValueRange args) {
+                  auto product =
+                      emit("vector.dot", {args[0], args[1]}, args[2].getType());
+                  return emit("field.add", {args[2], product},
+                              product.getType());
+                },
+                "candidate");
+            auto target = scopedFunction(*actual, "candidate");
+            auto *owner = &actual->getBody()->front();
+            auto candidate = take(mathematical::ScopedCandidate::read(owner));
+            auto *cursor = scopedBound(*actual, "vector.dot", "candidate");
             auto *saved = cursor;
+            SmallVector<Value> inputs{target.getArgument(1),
+                                      target.getArgument(3),
+                                      target.getArgument(2)};
+            SymbolTable symbols(owner);
             llvm::DenseSet<Operation *> bindings;
             uint64_t work = 100000;
             auto refused = mathematical::compareFinitePayload(
-                computation, args, body->front().getResult(0), cursor, symbols,
-                bindings, work, &body->back());
-            require(
-                failed(refused) && cursor == saved && bindings.empty(),
-                "operation-only extent evidence leaked into bulk comparison");
+                computation, inputs,
+                payload(scopedBound(*actual, "vector.length", "candidate")),
+                cursor, symbols, bindings, work, returned(target), nullptr,
+                nullptr, candidate.get());
+            require(failed(refused) && cursor == saved && bindings.empty(),
+                    "operation-only extent evidence leaked into scoped bulk "
+                    "comparison");
           }
         });
   cases.run("zipped nested product is diagonal, not bilinear", [&] {

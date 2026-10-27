@@ -11,7 +11,6 @@
 #include "RealizationTrace.h"
 #include "ScopedFinite.h"
 #include "mlir/IR/IRMapping.h"
-#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Operations.h"
@@ -182,8 +181,8 @@ class Realizer {
   ScopedEmissionBudget *budget;
   StringRef scopedOccurrence;
   bool stoppedCallback = false;
+  enum class ControlKind { Loop, Branch };
   struct Control {
-    Operation *operation = nullptr;
     SmallVector<Value> outputs;
     SmallVector<func::FuncOp> bodies;
     OpBuilder::InsertPoint continuation;
@@ -191,20 +190,19 @@ class Realizer {
   llvm::DenseMap<Operation *, unsigned> regionReturns;
   llvm::DenseMap<Operation *, std::unique_ptr<exec::ScopedExecutionBuilder>>
       controls;
-  exec::ScopedExecutionBuilder *entryControl;
+  exec::ScopedExecutionBuilder &entryControl;
   func::FuncOp scopedEntry;
-  bool scoped() const { return bool(scopedCallback) || bool(totalCallback); }
   func::FuncOp function() {
     return cast<func::FuncOp>(builder.getInsertionBlock()->getParentOp());
   }
   exec::ScopedExecutionBuilder &scopeControl() {
     auto current = function();
-    if (entryControl && current == scopedEntry)
-      return *entryControl;
+    if (current == scopedEntry)
+      return entryControl;
     auto &control = controls[current];
     if (!control)
       control = std::make_unique<exec::ScopedExecutionBuilder>(
-          builder, current, entryControl->getLoopForm());
+          builder, current, entryControl.getLoopForm());
     return *control;
   }
   std::string sitePrefix = "finite_";
@@ -225,7 +223,7 @@ class Realizer {
   std::string site() {
     auto suffix = std::to_string(occurrence++);
     auto size = sitePrefix.size() + suffix.size();
-    if (size > 128 && scoped()) {
+    if (size > 128) {
       uint64_t standaloneBytes = 16 * 1024 * 1024;
       auto &bytes = budget ? budget->siteBytes : standaloneBytes;
       auto encoded = protocol::algorithmSite({}, sitePrefix + suffix, bytes);
@@ -286,27 +284,22 @@ class Realizer {
     SmallVector<Type> outputs;
     if (output)
       outputs.push_back(output);
-    if (scoped()) {
-      SmallVector<Attribute> parameters;
-      for (const auto &parameter : params)
-        parameters.push_back(builder.getStringAttr(parameter));
-      auto reference = emitter.binding(builder, loc, application);
-      auto &control = scopeControl();
-      auto previousLocation = control.getLocation();
-      control.setLocation(loc);
-      auto restoreLocation =
-          llvm::scope_exit([&] { control.setLocation(previousLocation); });
-      auto values = control.invoke(
-          "exec.apply", outputs, control.scoped(inputs),
-          {builder.getNamedAttr("binding", reference),
-           builder.getNamedAttr("site", builder.getStringAttr(occurrence)),
-           builder.getNamedAttr("parameters",
-                                builder.getArrayAttr(parameters))});
-      return output ? values.front() : Value();
-    }
-    auto *op = emitter.emit(builder, loc, occurrence, application, inputs,
-                            outputs, params);
-    return output ? op->getResult(0) : Value();
+
+    SmallVector<Attribute> parameters;
+    for (const auto &parameter : params)
+      parameters.push_back(builder.getStringAttr(parameter));
+    auto reference = emitter.binding(builder, loc, application);
+    auto &control = scopeControl();
+    auto previousLocation = control.getLocation();
+    control.setLocation(loc);
+    auto restoreLocation =
+        llvm::scope_exit([&] { control.setLocation(previousLocation); });
+    auto values = control.invoke(
+        "exec.apply", outputs, control.scoped(inputs),
+        {builder.getNamedAttr("binding", reference),
+         builder.getNamedAttr("site", builder.getStringAttr(occurrence)),
+         builder.getNamedAttr("parameters", builder.getArrayAttr(parameters))});
+    return output ? values.front() : Value();
   }
   Value emit(StringRef contract, ValueRange inputs, Type output,
              ArrayRef<std::string> args = {},
@@ -329,7 +322,7 @@ class Realizer {
                                : ArrayRef<std::string>{});
   }
   void require(Value condition) { emit("control.require", condition, {}, {}); }
-  Control control(StringRef name, ValueRange inputs, TypeRange outputs,
+  Control control(ControlKind kind, ValueRange inputs, TypeRange outputs,
                   unsigned regions) {
     if (!reserve(64 + 16 * (inputs.size() + outputs.size() + regions)) ||
         llvm::any_of(inputs, [](Value value) { return !value; })) {
@@ -339,113 +332,95 @@ class Realizer {
     auto occurrence = site();
     if (failedHelper)
       return {};
-    if (scoped()) {
-      Control result;
-      bool loop = name == "local.for";
-      unsigned prefix = loop ? 2 + outputs.size() : 1;
-      auto captures = inputs.drop_front(prefix);
-      auto parent = function().getSymName();
-      if (!reserve(parent.size() + occurrence.size()))
-        return {};
-      // Names identify actual control occurrences, not allocation order. A
-      // different finite recipe must not renumber unrelated numerical calls.
-      // This bounded private spelling has no semantic or proof authority.
-      auto coordinate =
-          (Twine(parent.size()) + ":" + parent + occurrence).str();
-      auto stem = "_finite_region_" +
-                  toHex(SHA256::hash(arrayRefFromStringRef(coordinate)), true);
-      auto outline = [&](unsigned arm) {
-        OpBuilder::InsertionGuard restore(builder);
-        builder.setInsertionPointToEnd(&unit->getRegion(0).front());
-        SmallVector<Type> arguments{
-            runtime::ScopeType::get(builder.getContext())};
-        if (loop) {
-          arguments.push_back(index);
-          append_range(arguments, outputs);
-        }
-        append_range(arguments, captures.getTypes());
-        auto base = stem + "_" + std::to_string(arm);
-        std::string name = base;
-        unsigned collision = 0;
-        while (SymbolTable::lookupSymbolIn(unit, name) ||
-               SymbolTable::lookupSymbolIn(sourceRoot, name))
-          name = base + "_" + std::to_string(collision++);
-        auto body = func::FuncOp::create(
-            builder, loc, name,
-            builder.getFunctionType(
-                arguments,
-                {exec::OutcomeType::get(builder.getContext(),
-                                        SmallVector<Type>(outputs))}));
-        body.setPrivate();
-        body.setNoInline(true);
-        body->setAttr("runtime.region", builder.getUnitAttr());
-        builder.createBlock(&body.getBody(), body.getBody().end(), arguments,
-                            SmallVector<Location>(arguments.size(), loc));
-        regionReturns[body] = outputs.size();
-        result.bodies.push_back(body);
-        return body;
-      };
-      auto &control = scopeControl();
-      result.outputs =
-          loop ? control.loop(inputs[0], inputs[1],
-                              inputs.slice(2, outputs.size()), captures,
-                              outputs, false, occurrence, outline)
-               : control.conditional(inputs[0], captures, outputs, occurrence,
-                                     outline);
-      result.continuation = builder.saveInsertionPoint();
-      return result;
-    }
-    OperationState state(loc, name);
-    state.addOperands(inputs);
-    state.addTypes(outputs);
-    state.addAttribute("site", builder.getStringAttr(occurrence));
-    for (unsigned i = 0; i < regions; ++i)
-      state.addRegion();
-    auto *op = builder.create(state);
-    return {op, SmallVector<Value>(op->getResults()), {}, {}};
+
+    Control result;
+    bool loop = kind == ControlKind::Loop;
+    unsigned prefix = loop ? 2 + outputs.size() : 1;
+    auto captures = inputs.drop_front(prefix);
+    auto parent = function().getSymName();
+    if (!reserve(parent.size() + occurrence.size()))
+      return {};
+    // Names identify actual control occurrences, not allocation order. A
+    // different finite recipe must not renumber unrelated numerical calls.
+    // This bounded private spelling has no semantic or proof authority.
+    auto coordinate = (Twine(parent.size()) + ":" + parent + occurrence).str();
+    auto stem = "_finite_region_" +
+                toHex(SHA256::hash(arrayRefFromStringRef(coordinate)), true);
+    auto outline = [&](unsigned arm) {
+      OpBuilder::InsertionGuard restore(builder);
+      builder.setInsertionPointToEnd(&unit->getRegion(0).front());
+      SmallVector<Type> arguments{
+          runtime::ScopeType::get(builder.getContext())};
+      if (loop) {
+        arguments.push_back(index);
+        append_range(arguments, outputs);
+      }
+      append_range(arguments, captures.getTypes());
+      auto base = stem + "_" + std::to_string(arm);
+      std::string name = base;
+      unsigned collision = 0;
+      while (SymbolTable::lookupSymbolIn(unit, name) ||
+             SymbolTable::lookupSymbolIn(sourceRoot, name))
+        name = base + "_" + std::to_string(collision++);
+      auto body = func::FuncOp::create(
+          builder, loc, name,
+          builder.getFunctionType(
+              arguments, {exec::OutcomeType::get(builder.getContext(),
+                                                 SmallVector<Type>(outputs))}));
+      body.setPrivate();
+      body.setNoInline(true);
+      body->setAttr("runtime.region", builder.getUnitAttr());
+      builder.createBlock(&body.getBody(), body.getBody().end(), arguments,
+                          SmallVector<Location>(arguments.size(), loc));
+      regionReturns[body] = outputs.size();
+      result.bodies.push_back(body);
+      return body;
+    };
+    auto &control = scopeControl();
+    result.outputs =
+        loop ? control.loop(inputs[0], inputs[1],
+                            inputs.slice(2, outputs.size()), captures, outputs,
+                            false, occurrence, outline)
+             : control.conditional(inputs[0], captures, outputs, occurrence,
+                                   outline);
+    result.continuation = builder.saveInsertionPoint();
+    return result;
   }
   SmallVector<Value> region(Control &control, unsigned i, TypeRange types) {
     if (failedHelper)
       return {};
-    if (scoped()) {
-      auto body = control.bodies[i];
-      assert(llvm::equal(body.getArgumentTypes().drop_front(), types));
-      builder.setInsertionPointToEnd(&body.front());
-      stoppedCallback = false;
-      return SmallVector<Value>(body.getArguments().drop_front());
+
+    auto body = control.bodies[i];
+    if (!llvm::equal(body.getArgumentTypes().drop_front(), types)) {
+      failedHelper = true;
+      return {};
     }
-    auto *op = control.operation;
-    auto *block =
-        builder.createBlock(&op->getRegion(i), op->getRegion(i).end(), types,
-                            SmallVector<Location>(types.size(), loc));
-    return SmallVector<Value>(block->getArguments());
+    builder.setInsertionPointToEnd(&body.front());
+    stoppedCallback = false;
+    return SmallVector<Value>(body.getArguments().drop_front());
   }
   void resume(const Control &control) {
     if (failedHelper)
       return;
-    if (scoped()) {
-      builder.restoreInsertionPoint(control.continuation);
-      stoppedCallback = false;
-    } else
-      builder.setInsertionPointAfter(control.operation);
+
+    builder.restoreInsertionPoint(control.continuation);
+    stoppedCallback = false;
   }
   void yield(ValueRange values) {
     if (!reserve(8 + 2 * values.size()))
       return;
-    if (scoped()) {
-      if (!stoppedCallback) {
-        auto current = function();
-        auto &control = scopeControl();
-        control.complete(values.take_front(regionReturns.lookup(current)));
-      }
-      return;
+
+    if (!stoppedCallback) {
+      auto current = function();
+      auto &control = scopeControl();
+      control.complete(values.take_front(regionReturns.lookup(current)));
     }
-    local::LocalYieldOp::create(builder, loc, values);
+    return;
   }
   // A zero-trip loop applies the existing executable bound admission without
   // inventing a second limit contract or evaluating a helper.
   void validateBound(Value bound) {
-    auto loop = control("local.for", {bound, bound}, {}, 1);
+    auto loop = control(ControlKind::Loop, {bound, bound}, {}, 1);
     region(loop, 0, {index});
     yield({});
     resume(loop);
@@ -456,7 +431,7 @@ class Realizer {
     if (upper != lower)
       inputs.push_back(upper);
     SmallVector<Type> types(inputs.size() - 1, index);
-    auto branch = control("local.if", inputs, {index}, 2);
+    auto branch = control(ControlKind::Branch, inputs, {index}, 2);
     auto yes = region(branch, 0, types);
     if (failedHelper)
       return {};
@@ -699,53 +674,44 @@ class Realizer {
         auto occurrence = site();
         if (failedHelper)
           return {};
-        if (totalCallback) {
-          op.setAttr("site", builder.getStringAttr(occurrence));
-          SmallVector<Value> inputs;
-          for (Value operand : op.getOperands())
-            inputs.push_back(mapping.lookup(operand));
-          auto result = totalCallback(&op, inputs, scopeControl());
-          if (failed(result) || result->size() != op.getNumResults()) {
-            failedHelper = true;
-            return {};
-          }
-          mapping.map(op.getResults(), *result);
-        } else {
-          auto *copy = builder.clone(op, mapping);
-          copy->setAttr("site", builder.getStringAttr(occurrence));
+
+        op.setAttr("site", builder.getStringAttr(occurrence));
+        SmallVector<Value> inputs;
+        for (Value operand : op.getOperands())
+          inputs.push_back(mapping.lookup(operand));
+        auto result = totalCallback(&op, inputs, scopeControl());
+        if (failed(result) || result->size() != op.getNumResults()) {
+          failedHelper = true;
+          return {};
         }
+        mapping.map(op.getResults(), *result);
       }
       SmallVector<Value> results;
       for (Value v : scratch->front().back().getOperands())
         results.push_back(mapping.lookup(v));
       return results;
     }
-    if (scoped()) {
-      auto occurrence = site();
-      if (failedHelper)
-        return {};
-      auto result =
-          scopedCallback(cast<func::FuncOp>(helper), arguments.drop_front(),
-                         occurrence, scopeControl());
-      if (failed(result)) {
-        failedHelper = true;
-        return {};
-      }
-      stoppedCallback = result->stopped;
-      if ((stoppedCallback && !result->values.empty()) ||
-          (!stoppedCallback &&
-           !llvm::equal(
-               ValueRange(result->values).getTypes(),
-               cast<exec::OutcomeType>(type.getResult(0)).getPayload()))) {
-        failedHelper = true;
-        return {};
-      }
-      return result->values;
+
+    auto occurrence = site();
+    if (failedHelper)
+      return {};
+    auto result =
+        scopedCallback(cast<func::FuncOp>(helper), arguments.drop_front(),
+                       occurrence, scopeControl());
+    if (failed(result)) {
+      failedHelper = true;
+      return {};
     }
-    auto call = local::ApplyOp::create(
-        builder, loc, type.getResults(), arguments,
-        SymbolTable::getSymbolName(helper).getValue(), site());
-    return SmallVector<Value>(call.getResults());
+    stoppedCallback = result->stopped;
+    if ((stoppedCallback && !result->values.empty()) ||
+        (!stoppedCallback &&
+         !llvm::equal(
+             ValueRange(result->values).getTypes(),
+             cast<exec::OutcomeType>(type.getResult(0)).getPayload()))) {
+      failedHelper = true;
+      return {};
+    }
+    return result->values;
   }
   SmallVector<Value> transition(ValueRange state, ValueRange item,
                                 ValueRange environment, Value position = {}) {
@@ -798,6 +764,7 @@ class Realizer {
 
 public:
   Realizer(Operation *unit, OpBuilder &builder,
+           exec::ScopedExecutionBuilder &entryControl,
            mathematical::RealizationWork &work,
            const mathematical::MathematicalRecipes &recipes =
                mathematical::mathematicalRecipes(),
@@ -806,7 +773,6 @@ public:
            NumericalExpressionMode expressionMode =
                NumericalExpressionMode::PreferNative,
            ScopedCallbackEmitter scopedCallback = {},
-           exec::ScopedExecutionBuilder *entryControl = nullptr,
            StringRef scopedOccurrence = {},
            ScopedEmissionBudget *budget = nullptr,
            const protocol::SourceExecutionClosure *sourceClosure = nullptr,
@@ -820,8 +786,7 @@ public:
         retryOrdered(retryOrdered), expressionMode(expressionMode),
         scopedCallback(scopedCallback), totalCallback(totalCallback),
         budget(budget), scopedOccurrence(scopedOccurrence),
-        entryControl(entryControl),
-        scopedEntry(scoped() ? function() : func::FuncOp()) {}
+        entryControl(entryControl), scopedEntry(function()) {}
   FailureOr<SmallVector<Value>>
   emitBody(Operation *source, ValueRange entry, bool optimize,
            const CollectFold *pair = nullptr, ValueRange consumerInputs = {},
@@ -965,14 +930,11 @@ public:
     occurrence = 0;
     failedHelper = false;
     loc = source->getLoc();
-    if (computation.total || scoped())
-      sitePrefix =
-          (scopedOccurrence.empty()
-               ? source->getAttrOfType<StringAttr>("site").getValue().str()
-               : scopedOccurrence.str()) +
-          "_finite_";
-    else
-      sitePrefix = "finite_";
+    sitePrefix =
+        (scopedOccurrence.empty()
+             ? source->getAttrOfType<StringAttr>("site").getValue().str()
+             : scopedOccurrence.str()) +
+        "_finite_";
     for (auto [formal, actual] :
          zip(computation.domain.getBody().front().getArguments(),
              partitions->domain))
@@ -997,7 +959,7 @@ public:
       append_range(inputs, entry);
       inputs.push_back(size);
       inputs.push_back(zero);
-      auto branch = control("local.if", inputs, output, 2);
+      auto branch = control(ControlKind::Branch, inputs, output, 2);
       auto captureTypes = ValueRange(inputs).drop_front().getTypes();
       for (unsigned arm = 0; arm < 2 && !failedHelper; ++arm) {
         auto captures = region(branch, arm, captureTypes);
@@ -1204,7 +1166,7 @@ public:
     SmallVector<Type> stateTypes;
     for (Value v : initial)
       stateTypes.push_back(v.getType());
-    auto loop = control("local.for", loopInputs, stateTypes, 1);
+    auto loop = control(ControlKind::Loop, loopInputs, stateTypes, 1);
     SmallVector<Type> arguments{index};
     append_range(arguments, stateTypes);
     for (Value v : captures)
@@ -1246,7 +1208,7 @@ public:
         capture(env);
         SmallVector<Value> branchInputs{condition};
         append_range(branchInputs, branchCaptures);
-        auto branch = control("local.if", branchInputs, stateTypes, 2);
+        auto branch = control(ControlKind::Branch, branchInputs, stateTypes, 2);
         SmallVector<Type> branchTypes;
         for (Value v : branchCaptures)
           branchTypes.push_back(v.getType());
@@ -1297,12 +1259,6 @@ public:
     return results;
   }
 };
-// RewriterBase's builder-copy constructor retains the caller's listener and
-// insertion point. All new operations, blocks and bindings use this rewriter.
-class BodyRewriter : public RewriterBase {
-public:
-  explicit BodyRewriter(const OpBuilder &builder) : RewriterBase(builder) {}
-};
 } // namespace
 FailureOr<SmallVector<Value>> realizeScopedTotalExpression(
     Operation *source, Operation *sourceRoot, ValueRange inputs,
@@ -1320,10 +1276,10 @@ FailureOr<SmallVector<Value>> realizeScopedTotalExpression(
     return failure();
   mathematical::RealizationScope scope(trace, "finite-expression", source,
                                        policy, &work);
-  Realizer realizer(owner, builder, work, mathematical::mathematicalRecipes(),
-                    &scope, orderedRetry, policy.numericalExpressions, {},
-                    &control, occurrence.getValue(), &budget, nullptr, nullptr,
-                    callback);
+  Realizer realizer(owner, builder, control, work,
+                    mathematical::mathematicalRecipes(), &scope, orderedRetry,
+                    policy.numericalExpressions, {}, occurrence.getValue(),
+                    &budget, nullptr, nullptr, callback);
   auto result =
       realizer.emitBody(source, inputs, pair ? false : policy.finiteBulk, pair,
                         consumerInputs, nullptr, {}, sourceRoot);
@@ -1356,59 +1312,14 @@ FailureOr<SmallVector<Value>> realizeScopedExpression(
     return failure();
   mathematical::RealizationScope scope(trace, "finite-expression", source,
                                        policy, &work);
-  Realizer realizer(owner, builder, work, recipes, &scope, orderedRetry,
-                    policy.numericalExpressions, callback, &control,
+  Realizer realizer(owner, builder, control, work, recipes, &scope,
+                    orderedRetry, policy.numericalExpressions, callback,
                     occurrenceName, budget, sourceClosure, fixedBindings);
   auto result = realizer.emitBody(source, inputs, policy.finiteBulk, nullptr,
                                   {}, sumConsumer, sumOccurrence);
   if (succeeded(result))
     scope.complete();
   return result;
-}
-
-FailureOr<SmallVector<Value>>
-realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
-                  MathematicalSelectionPolicy policy,
-                  mathematical::RealizationWork *work,
-                  mathematical::RealizationTrace *trace, bool orderedRetry) {
-  mathematical::RealizationWork standalone;
-  auto &available = work ? *work : standalone;
-  mathematical::RealizationScope scope(trace, "finite-expression", op, policy,
-                                       &available);
-  auto *block = builder.getInsertionBlock();
-  auto *unit = block ? SymbolTable::getNearestSymbolTable(block->getParentOp())
-                     : nullptr;
-  auto site = op->getAttrOfType<StringAttr>("site");
-  if (!unit || unit->getNumRegions() != 1 ||
-      !unit->getRegion(0).hasOneBlock() || !site || site.getValue().empty())
-    return failure();
-  BodyRewriter rewriter(builder);
-  Realizer realizer(unit, rewriter, available,
-                    mathematical::mathematicalRecipes(), &scope, orderedRetry,
-                    policy.numericalExpressions);
-  auto results = realizer.emitBody(op, inputs, policy.finiteBulk);
-  builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
-  if (succeeded(results))
-    scope.complete();
-  return results;
-}
-
-FailureOr<SmallVector<Value>>
-realizeCollectFold(const CollectFold &pair, ValueRange producerInputs,
-                   ValueRange consumerInputs, OpBuilder &builder,
-                   mathematical::RealizationWork &work) {
-  auto *block = builder.getInsertionBlock();
-  auto *unit = block ? SymbolTable::getNearestSymbolTable(block->getParentOp())
-                     : nullptr;
-  auto site = pair.producer.operation->getAttrOfType<StringAttr>("site");
-  if (!unit || !site || site.getValue().empty())
-    return failure();
-  BodyRewriter rewriter(builder);
-  Realizer realizer(unit, rewriter, work);
-  auto results = realizer.emitBody(pair.producer.operation, producerInputs,
-                                   false, &pair, consumerInputs);
-  builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
-  return results;
 }
 
 } // namespace zkc::finite
