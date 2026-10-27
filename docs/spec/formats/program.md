@@ -11,6 +11,9 @@ The single current format, `zkc.program/0`, includes Boolean literals,
 host policy over these participants. Source correspondence, network transport
 and security certificates remain separate.
 
+The complete [byte language](program-bytes.md) specifies declaration and
+instruction record shapes for independent readers.
+
 ## IR stages and interchange
 
 The four profiles `protocol`, `participant`, `exec` and `physical`, with their
@@ -56,7 +59,7 @@ have positive Native codec permission under the trusted context. Only the payloa
 input changes; suite, implementation ownership, resource and coordinate ports,
 canonical observation framing and consumption order retain their contracts.
 
-A function-only executable module has at least one Local function and empty
+A function-only executable module has at least one local function and empty
 participant and entry arrays. It uses these same function records and all the
 same eager structural checks, including bindings and dormant definitions. An
 entirely empty module remains invalid, and a module with participants still
