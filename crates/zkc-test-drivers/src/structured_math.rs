@@ -4,13 +4,13 @@
 //! hashes alone do not authenticate an untrusted producer's connector.
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
-use zkc_native::services::ServiceRegistry;
-use zkc_native::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::services::ServiceRegistry;
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, FieldArray, Policy, Scalar, Value};
 use zkc_runtime::host::joint::*;
 use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
 
-fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str, session: &str, entry: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, session, entry, None), None),
         Default::default(),
@@ -21,7 +21,7 @@ fn bundle(directory: &Path, name: &str) -> Bundle {
     Bundle::admit(
         &std::fs::read(directory.join(format!("{name}.bundle"))).unwrap(),
         &backend("Solo", "admission", "main"),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap()
@@ -54,7 +54,7 @@ fn execute(
     bundle: &Bundle,
     session: &str,
     mut values: BTreeMap<String, Vec<Value>>,
-) -> Report<NativeBackend> {
+) -> Report<CpuBackend> {
     let inputs = bundle
         .roles()
         .iter()
@@ -184,7 +184,7 @@ struct Wire {
     replacement: Option<(&'static str, Vec<u8>)>,
     messages: Vec<(String, Vec<u8>)>,
 }
-impl Hooks<NativeBackend> for Wire {
+impl Hooks<CpuBackend> for Wire {
     fn transfer(
         &mut self,
         exchange: Exchange<'_>,
@@ -205,10 +205,10 @@ impl Hooks<NativeBackend> for Wire {
     }
 }
 fn terminal_after(
-    reduction: &Report<NativeBackend>,
+    reduction: &Report<CpuBackend>,
     terminal: &Bundle,
     connector: &[(usize, usize)],
-) -> Option<Report<NativeBackend>> {
+) -> Option<Report<CpuBackend>> {
     if reduction.outcome != Outcome::Completed {
         return None;
     }
@@ -234,7 +234,7 @@ fn terminal_after(
         BTreeMap::from([("V".into(), values)]),
     ))
 }
-fn accepted(report: &Report<NativeBackend>) -> bool {
+fn accepted(report: &Report<CpuBackend>) -> bool {
     assert_eq!(report.outcome, Outcome::Completed);
     matches!(report.roles[0].outputs.as_slice(), [Value::Bool(true)])
 }
@@ -245,7 +245,7 @@ fn reduction_case(
     claim: Scalar,
     wire: &mut Wire,
     budget: u64,
-) -> (Report<NativeBackend>, u64) {
+) -> (Report<CpuBackend>, u64) {
     let values = BTreeMap::from([
         ("P".into(), vec![array(t), array(u), Value::Field(claim)]),
         ("V".into(), vec![array(t), array(u), Value::Field(claim)]),
@@ -257,7 +257,7 @@ fn run_reduction(
     mut values: BTreeMap<String, Vec<Value>>,
     wire: &mut Wire,
     budget: u64,
-) -> (Report<NativeBackend>, u64) {
+) -> (Report<CpuBackend>, u64) {
     let registry = ServiceRegistry::new(Policy::default());
     let random = registry
         .issue_test_tape("V", budget, vec![Scalar::from(5), Scalar::from(7)])
@@ -366,7 +366,7 @@ fn sumcheck(directory: &Path, suffix: &str) {
         Bundle::admit(
             value["bundle"].as_str().unwrap().as_bytes(),
             &backend("Solo", "admission", "main"),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
         .unwrap()
@@ -510,7 +510,7 @@ fn permuted_handoff(directory: &Path) {
         Bundle::admit(
             value["bundle"].as_str().unwrap().as_bytes(),
             &backend("Solo", "admission", "main"),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
         .unwrap()

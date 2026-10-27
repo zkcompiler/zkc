@@ -2,12 +2,12 @@
 //! Takes the directory of JSON candidates produced by compiler/test/mathematical.py.
 //! Supplied admission checks the carrier, without claiming source correspondence.
 use std::path::Path;
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{Action, Origin, Packet, PathElement, Stop, StopKind, Value as RuntimeValue};
 
-fn backend(role: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(role: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "mathematical_test", "main", None), None),
         Default::default(),
@@ -23,9 +23,9 @@ fn group(value: u64) -> Value {
     Value::Curve(G1::generator().scale(Scalar::from(value)))
 }
 
-fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
+fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<CpuBackend> {
     let native = backend(role);
-    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_native::native_contracts())
+    let admitted = zkc_runtime::vm::Program::decode(bytes, zkc_cpu::cpu_contracts())
         .and_then(|program| {
             program.check_installation(&native)?;
             Ok(program)
@@ -36,7 +36,7 @@ fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend>
         .unwrap()
 }
 
-fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
+fn next(runner: &mut Runner<CpuBackend>) -> Action<Value> {
     for _ in 0..100 {
         match runner.poll() {
             Action::Local(local) => {
@@ -51,7 +51,7 @@ fn next(runner: &mut Runner<NativeBackend>) -> Action<Value> {
     panic!("bounded example did not reach its next observable action")
 }
 
-fn send(runner: &mut Runner<NativeBackend>) -> Value {
+fn send(runner: &mut Runner<CpuBackend>) -> Value {
     let Action::Send(packet) = next(runner) else {
         panic!("expected send")
     };
@@ -61,7 +61,7 @@ fn send(runner: &mut Runner<NativeBackend>) -> Value {
         .payload
 }
 
-fn receive(runner: &mut Runner<NativeBackend>, value: Value) {
+fn receive(runner: &mut Runner<CpuBackend>, value: Value) {
     let Action::Receive(expected) = next(runner) else {
         panic!("expected receive")
     };

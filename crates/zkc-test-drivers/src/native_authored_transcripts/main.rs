@@ -3,7 +3,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
@@ -13,8 +13,8 @@ use zkc_test_support::hex;
 mod controls;
 mod reference;
 
-fn codec() -> NativeBackend {
-    NativeBackend::new(
+fn codec() -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "authored", "main", None), None),
         Default::default(),

@@ -18,8 +18,8 @@ use serde_json::{Value as Json, json};
 pub use setups::SetupAuthority;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zkc_native::{
-    Capability, Domain, EntryPolicy, NativeBackend, Policy, Value,
+use zkc_cpu::{
+    Capability, CpuBackend, Domain, EntryPolicy, Policy, Value,
     services::{ServiceReference, ServiceRegistry},
 };
 pub use zkc_runtime::host::wire::MAX_PROOF_BYTES;
@@ -49,9 +49,10 @@ pub(crate) struct RoleMap {
 /// with [`crate::entry::ProofOptions`] to require managed transcript binding.
 #[derive(Clone)]
 pub struct NativeDeployment {
+    installation: zkc_cpu::CpuInstallation,
     cpu: CpuExecution,
-    ring_assets: zkc_native::ring::Registry,
-    relation_assets: zkc_native::relation::Registry,
+    ring_assets: zkc_cpu::ring::Registry,
+    relation_assets: zkc_cpu::relation::Registry,
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
@@ -64,7 +65,7 @@ pub struct NativeDeployment {
     capacity: Capacity,
     setups: SetupAuthority,
     entry: NativeProofEntry,
-    preparation: PreparedComputations<NativeBackend>,
+    preparation: PreparedComputations<CpuBackend>,
     source: String,
     descriptor: Json,
     binding_metadata_bytes: usize,
@@ -122,8 +123,8 @@ impl<'a> Invocation<'a> {
     }
 }
 #[cfg(feature = "test-utils")]
-fn test_entropy<T: Into<zkc_native::TestTape>>(tapes: BTreeMap<usize, T>) -> Result<Entropy> {
-    let tapes: BTreeMap<_, zkc_native::TestTape> = tapes
+fn test_entropy<T: Into<zkc_cpu::TestTape>>(tapes: BTreeMap<usize, T>) -> Result<Entropy> {
+    let tapes: BTreeMap<_, zkc_cpu::TestTape> = tapes
         .into_iter()
         .map(|(port, t)| (port, t.into()))
         .collect();
@@ -172,8 +173,11 @@ fn wire_codec(ty: &LogicalType) -> Option<String> {
 
 // This host's entry constructors are narrower than ordinary local IR types.
 // Share the decision between deployment admission and invocation planning.
-fn input_kind(ty: &PhysicalType) -> Result<&'static str> {
-    if zkc_native::has_native_wire(ty) {
+fn input_kind(ty: &PhysicalType, installation: &zkc_cpu::CpuInstallation) -> Result<&'static str> {
+    if !installation.supports_type(ty) {
+        return Err("native-proof-role-input-type".into());
+    }
+    if installation.supports_wire(ty) {
         return Ok("wire");
     }
     let logical = ty.logical();
@@ -201,11 +205,12 @@ fn backend(
     policy: Policy,
     role: &EntryRole,
     entry: &str,
-    keys: zkc_native::SetupRegistry,
-    ports: BTreeMap<String, zkc_native::PortConstraint>,
+    keys: zkc_cpu::SetupRegistry,
+    ports: BTreeMap<String, zkc_cpu::PortConstraint>,
     cpu: CpuExecution,
-) -> Result<NativeBackend> {
-    NativeBackend::new_with_cpu(
+    installation: zkc_cpu::CpuInstallation,
+) -> Result<CpuBackend> {
+    CpuBackend::new_with_installation(
         policy,
         EntryPolicy::new(
             Domain::new(&role.role, "native-proof", entry, Some(&role.instance)),
@@ -214,6 +219,7 @@ fn backend(
         .with_ports(ports),
         keys,
         cpu,
+        installation,
     )
     .map_err(|e| e.to_string())
 }
@@ -226,6 +232,10 @@ fn retain_driver_stop<T>(report: &mut NativeProofReport, result: &driver::Artifa
     }
 }
 impl NativeDeployment {
+    pub fn installation(&self) -> &zkc_cpu::CpuInstallation {
+        &self.installation
+    }
+
     /// `expected_sha256` must come from the application's trusted compilation or
     /// deployment configuration, independently of these supplied bytes and proof.
     pub fn admit(
@@ -247,6 +257,16 @@ impl NativeDeployment {
         authority: SetupAuthority,
         cpu: CpuExecution,
     ) -> Result<Self> {
+        Self::admit_with_installation(bytes, expected_sha256, authority, cpu, Default::default())
+    }
+    /// Select CPU support before decoding or admitting the pinned deployment.
+    pub fn admit_with_installation(
+        bytes: &[u8],
+        expected_sha256: &[u8; 32],
+        authority: SetupAuthority,
+        cpu: CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self> {
         if bytes.len() > INPUT_LIMIT {
             return Err("native-proof-deployment-limit".into());
         }
@@ -254,20 +274,30 @@ impl NativeDeployment {
         if &identity != expected_sha256 {
             return Err("native-proof-deployment-binding".into());
         }
-        Self::admit_payload(bytes, &hex(expected_sha256), authority, None, false, cpu)
+        Self::admit_payload(
+            bytes,
+            &hex(expected_sha256),
+            authority,
+            None,
+            false,
+            cpu,
+            installation,
+        )
     }
     pub(crate) fn admit_artifact(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
         cpu: CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
-        Self::admit_artifact_operation(artifact, authority, None, cpu)
+        Self::admit_artifact_operation(artifact, authority, None, cpu, installation)
     }
     pub(crate) fn admit_artifact_operation(
         artifact: &crate::entry::AuthenticatedArtifact<'_>,
         authority: SetupAuthority,
         operation: Option<bool>,
         cpu: CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         Self::admit_payload(
             artifact.bytes(),
@@ -276,6 +306,7 @@ impl NativeDeployment {
             operation,
             false,
             cpu,
+            installation,
         )
     }
     pub(crate) fn admit_host_operation(
@@ -283,6 +314,7 @@ impl NativeDeployment {
         authority: SetupAuthority,
         producer: bool,
         cpu: CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         Self::admit_payload(
             artifact.bytes(),
@@ -291,6 +323,7 @@ impl NativeDeployment {
             Some(producer),
             true,
             cpu,
+            installation,
         )
     }
     // The public loader checks the caller's deployment pin; the private view
@@ -304,6 +337,7 @@ impl NativeDeployment {
         operation: Option<bool>,
         retained_inputs: bool,
         cpu: CpuExecution,
+        installation: zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         let value = parse(bytes, INPUT_LIMIT)?;
         let envelope = array(&value, 9)?;
@@ -348,18 +382,17 @@ impl NativeDeployment {
             return Err("native-proof-format".into());
         }
         let admitted = {
-            let dummy = NativeBackend::new_with_cpu(
+            let dummy = CpuBackend::new_with_installation(
                 Policy::default(),
                 EntryPolicy::new(Domain::new(producer, "native-proof", entry, None), None),
                 Default::default(),
                 cpu.clone(),
+                installation.clone(),
             )
             .map_err(|e| e.to_string())?;
-            let program = zkc_runtime::vm::Program::decode(
-                candidate.as_bytes(),
-                zkc_native::native_contracts(),
-            )
-            .map_err(|e| e.to_string())?;
+            let program =
+                zkc_runtime::vm::Program::decode(candidate.as_bytes(), installation.contracts())
+                    .map_err(|e| e.to_string())?;
             match operation {
                 Some(producing) => program.check_role_installation(
                     entry,
@@ -386,6 +419,7 @@ impl NativeDeployment {
             construction.as_ref(),
             operation,
             retained_inputs,
+            &installation,
         )?;
         let keys = public
             .iter()
@@ -393,11 +427,11 @@ impl NativeDeployment {
             .count();
         let needs_key = maps.values().flat_map(|m| &m.data).any(|p| {
             p.logical.identity() == zkc_runtime::vm::Identity::MultilinearKzgBls12381
-                || zkc_native::requires_setup(p.logical.clone())
+                || zkc_cpu::requires_setup(p.logical.clone())
         }) || messages
             .payload_types
             .values()
-            .any(|t| zkc_native::requires_setup(t.clone()));
+            .any(|t| zkc_cpu::requires_setup(t.clone()));
         if keys > 64 || needs_key && keys == 0 {
             return Err("native-proof-setup-coverage".into());
         }
@@ -454,10 +488,11 @@ impl NativeDeployment {
         }
         .map_err(|e| e.to_string())?;
         Ok(Self {
+            installation,
             cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
+            ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
             sequence_work_limit: 16_777_216,
             shared_ledger: None,
             retained_inputs,
@@ -472,7 +507,7 @@ impl NativeDeployment {
                 choices[4] == "true",
                 choices[5] == "true",
             ],
-            external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work_limit: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: Capacity::default(),
             setups,
             preparation: PreparedComputations::new(
@@ -511,9 +546,9 @@ impl NativeDeployment {
     }
     fn prepared_call<T>(
         &self,
-        runner: &mut Runner<NativeBackend>,
+        runner: &mut Runner<CpuBackend>,
         role: &EntryRole,
-        call: impl FnOnce(&mut Runner<NativeBackend>) -> ArtifactReport<T>,
+        call: impl FnOnce(&mut Runner<CpuBackend>) -> ArtifactReport<T>,
     ) -> ArtifactReport<T> {
         // Source-port correspondence and canonical public agreement were
         // checked at admission/input loading. Neither role nor value equality
@@ -554,16 +589,16 @@ impl NativeDeployment {
     pub fn capacity(&self) -> Capacity {
         self.capacity
     }
-    pub fn with_ring_assets(mut self, assets: zkc_native::ring::Registry) -> Self {
+    pub fn with_ring_assets(mut self, assets: zkc_cpu::ring::Registry) -> Self {
         self.ring_assets = assets;
         self
     }
-    pub fn with_relation_assets(mut self, assets: zkc_native::relation::Registry) -> Self {
+    pub fn with_relation_assets(mut self, assets: zkc_cpu::relation::Registry) -> Self {
         self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_native::ring::DEFAULT_WORK_LIMIT {
+        if limit > zkc_cpu::ring::DEFAULT_WORK_LIMIT {
             return Err("native-proof-ring-work-limit".into());
         }
         self.ring_work_limit = limit;
@@ -608,7 +643,7 @@ impl NativeDeployment {
     /// from deployment and attempt-policy identities. The CLI exposes the same
     /// cap through `--external-work`. Zero permits only zero-work transitions.
     pub fn with_external_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
+        if limit > CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT {
             return Err("native-proof-external-work-limit".into());
         }
         self.external_work_limit = limit;
@@ -645,22 +680,26 @@ impl NativeDeployment {
         input: &ProofInputs,
         invocation: Invocation<'_>,
     ) -> Result<NativeProofReport> {
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        );
         self.execute_prepared(input, invocation, &mut imports)
     }
     /// Deterministic provider controls for tests. No production command or file
     /// format selects this feature-gated entry point.
     #[cfg(feature = "test-utils")]
-    pub fn execute_test<T: Into<zkc_native::TestTape>>(
+    pub fn execute_test<T: Into<zkc_cpu::TestTape>>(
         &self,
         input: &ProofInputs,
         invocation: Invocation<'_>,
         tapes: BTreeMap<usize, T>,
     ) -> Result<NativeProofReport> {
         let entropy = test_entropy(tapes)?;
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        );
         self.execute_with_imports(input, invocation.plan(self)?, &entropy, &mut imports)
     }
     pub(crate) fn execute_prepared(
@@ -675,8 +714,10 @@ impl NativeDeployment {
     /// interpreting proof bytes. Both execution and input checks use this stage.
     pub fn check_inputs(&self, input: &ProofInputs, invocation: Invocation<'_>) -> Result<()> {
         invocation.plan(self)?;
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(self.capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        );
         self.prepare_inputs(input, invocation.is_producer(), &mut imports)
             .map(|_| ())
     }
@@ -734,7 +775,7 @@ impl NativeDeployment {
             self.entry.entry(),
             Some(&role.instance),
         );
-        let registry = ServiceRegistry::new(policy);
+        let registry = ServiceRegistry::with_installation(policy, self.installation.clone());
         let mut resources: Vec<Capability> = Vec::new();
         let mut services: Vec<ServiceReference> = Vec::new();
         let mut retained = encoding;
@@ -969,7 +1010,7 @@ impl NativeDeployment {
     }
 }
 fn retire_resources(
-    backend: &mut NativeBackend,
+    backend: &mut CpuBackend,
     registry: &ServiceRegistry,
     resources: &[Capability],
     services: &[ServiceReference],
@@ -1167,7 +1208,7 @@ fn driver_failure(error: &ArtifactFailure) -> String {
         ArtifactFailure::StartedRunner => "artifact-runner-started".into(),
         ArtifactFailure::Format(e) => e.to_string(),
         ArtifactFailure::Backend(e) => e.code.clone(),
-        ArtifactFailure::Wire(e) => zkc_native::NativeWireError::from(e.clone()).to_string(),
+        ArtifactFailure::Wire(e) => zkc_cpu::NativeWireError::from(e.clone()).to_string(),
         ArtifactFailure::Runtime(e) => e.to_string(),
         ArtifactFailure::Stopped(stop) => match &stop.kind {
             zkc_runtime::vm::StopKind::Backend(e) => e.code.clone(),

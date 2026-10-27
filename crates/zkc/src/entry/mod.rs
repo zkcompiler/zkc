@@ -36,12 +36,15 @@ mod setups;
 pub use setups::SetupAuthority;
 mod proof;
 pub use proof::{
-    AttemptOptions, BindingPolicy, BindingScope, ProofEntry, ProofFileCall, ProofFileResult,
-    ProofOperation, ProofOptions, ProofReport, ProofRequest,
+    AttemptOptions, BindingPolicy, BindingScope, EncodedResults, OwnedEncodedResults, ProofCall,
+    ProofEntry, ProofOperation, ProofOptions, ProofReport, ProofRequest, ProofResult,
 };
 
+#[cfg(feature = "files")]
 pub mod files;
 pub mod inputs;
+pub mod memory;
+pub mod outputs;
 
 pub mod bindings;
 

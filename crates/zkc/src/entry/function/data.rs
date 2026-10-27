@@ -2,7 +2,7 @@
 use super::*;
 use crate::execution::{Capacity, InputValue};
 use std::sync::Arc;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Value as Native};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Value as Native};
 use zkc_runtime::vm::{
     ExecutionLedger, LiveReservation, PhysicalType, Value as RuntimeValue, WorkBudget,
 };
@@ -10,7 +10,7 @@ use zkc_runtime::vm::{
 type DataResult<T> = std::result::Result<T, String>;
 // Measurement vectors can grow geometrically within the existing conservative
 // 512-byte slot reservation, before any native payload is constructed.
-const _: () = assert!(std::mem::size_of::<zkc_native::NativeInputSize>() <= 256);
+const _: () = assert!(std::mem::size_of::<zkc_cpu::NativeInputSize>() <= 256);
 #[derive(Clone)]
 pub struct TypedValue {
     schema: Arc<Schema>,
@@ -124,9 +124,9 @@ impl TypedValue {
     }
     fn measure_leaves(
         &self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ledger: &ExecutionLedger,
-        out: &mut Vec<zkc_native::NativeInputSize>,
+        out: &mut Vec<zkc_cpu::NativeInputSize>,
     ) -> DataResult<()> {
         match self.payload.as_ref() {
             Payload::Unit => {}
@@ -142,22 +142,37 @@ impl TypedValue {
         Ok(())
     }
 }
-pub(super) fn backend(capacity: Capacity, cpu: CpuExecution) -> DataResult<NativeBackend> {
-    backend_for(capacity, "entry", cpu)
+pub(super) fn backend(
+    capacity: Capacity,
+    cpu: CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+) -> DataResult<CpuBackend> {
+    backend_for(capacity, "entry", cpu, installation)
 }
 pub(super) fn numerical_backend(
     host: &EntryHost,
     capacity: Capacity,
     function: &str,
-) -> DataResult<NativeBackend> {
-    backend_for(capacity, function, host.cpu.clone())
+) -> DataResult<CpuBackend> {
+    backend_for(
+        capacity,
+        function,
+        host.cpu.clone(),
+        host.options.limits.installation.clone(),
+    )
 }
-fn backend_for(capacity: Capacity, function: &str, cpu: CpuExecution) -> DataResult<NativeBackend> {
-    NativeBackend::new_with_cpu(
+fn backend_for(
+    capacity: Capacity,
+    function: &str,
+    cpu: CpuExecution,
+    installation: zkc_cpu::CpuInstallation,
+) -> DataResult<CpuBackend> {
+    CpuBackend::new_with_installation(
         capacity.backend(),
         EntryPolicy::new(Domain::new("", "entry-host", function, None), None),
         Default::default(),
         cpu,
+        installation,
     )
     .map_err(|e| e.to_string())
 }
@@ -178,10 +193,10 @@ fn charge(ledger: &ExecutionLedger, fresh: usize) -> DataResult<Arc<LiveReservat
         .map_err(|e| e.to_string())
 }
 fn measure_native_value(
-    backend: &NativeBackend,
+    backend: &CpuBackend,
     value: &Native,
     ledger: &ExecutionLedger,
-) -> DataResult<zkc_native::NativeInputSize> {
+) -> DataResult<zkc_cpu::NativeInputSize> {
     // Charge the retained bound before walking payloads, including repeated
     // uses of shared data. Recursive sequences and variants cache that bound.
     ledger
@@ -195,6 +210,9 @@ fn measure_native_value(
             0,
         )
         .map_err(|e| e.to_string())?;
+    if !backend.installation().supports_type(&value.physical_type()) {
+        return Err("native-input-type".into());
+    }
     backend
         .measure_native_value(value)
         .map_err(|e| e.to_string())
@@ -226,12 +244,19 @@ pub(super) fn pack(
                     .sum::<usize>(),
             );
         let live = charge(ledger, bytes)?;
-        let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
+        let backend = backend(
+            host.options.limits.capacity,
+            host.cpu.clone(),
+            host.options.limits.installation.clone(),
+        )?;
         let mut sizes = Vec::new();
         for value in &values {
             value.measure_leaves(&backend, ledger, &mut sizes)?;
         }
         let physical = PhysicalType::default_for(ty.clone()).map_err(|e| e.to_string())?;
+        if !backend.installation().supports_type(&physical) {
+            return Err("native-input-type".into());
+        }
         backend
             .measure_native_variant(&physical, index, &sizes)
             .map_err(|e| e.to_string())?;
@@ -241,7 +266,7 @@ pub(super) fn pack(
             v.flatten(&mut payload)?;
         }
         let native = Native::Variant(
-            zkc_native::Variant::new(physical, index, payload).map_err(|e| e.to_string())?,
+            zkc_cpu::Variant::new(physical, index, payload).map_err(|e| e.to_string())?,
         );
         return Ok(TypedValue {
             schema: host.schema(s),
@@ -350,7 +375,11 @@ fn load_ingress(
 
     let mut inputs = Vec::new();
     super::super::value::flatten(s, v, &mut inputs)?;
-    let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
+    let backend = backend(
+        host.options.limits.capacity,
+        host.cpu.clone(),
+        host.options.limits.installation.clone(),
+    )?;
     let mut admission =
         crate::host::admission::Admission::new(host.options.limits.capacity.loading())?
             .with_shared_ledger(Some(ledger.clone()));
@@ -401,7 +430,7 @@ fn duplicate_input(value: &InputValue) -> InputValue {
         InputValue::Native(v) => InputValue::Native(v.clone()),
         InputValue::Wire(v) => InputValue::Wire(v.clone()),
         InputValue::Prepared(v) => InputValue::Prepared(v.clone()),
-        InputValue::WireFile { file, sha256 } => InputValue::WireFile {
+        InputValue::WireSource { file, sha256 } => InputValue::WireSource {
             file: file.clone(),
             sha256: *sha256,
         },
@@ -465,11 +494,11 @@ pub(super) fn from_output(
 ) -> DataResult<TypedValue> {
     fn bound(
         host: &EntryHost,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ledger: &ExecutionLedger,
         s: &Schema,
         v: &super::super::Value,
-        mut leaves: Option<&mut Vec<zkc_native::NativeInputSize>>,
+        mut leaves: Option<&mut Vec<zkc_cpu::NativeInputSize>>,
     ) -> DataResult<usize> {
         use super::super::Value;
         let add = |a: usize, b: usize| {
@@ -479,7 +508,9 @@ pub(super) fn from_output(
         match v {
             Value::Unit if s.kind == SchemaKind::Unit => Ok(0),
             Value::Leaf(InputValue::Native(v)) if s.leaves.len() == 1 => {
-                if v.physical_type().logical().spelling() != s.leaves[0] {
+                if v.physical_type().logical().spelling() != s.leaves[0]
+                    || !backend.installation().supports_type(&v.physical_type())
+                {
                     return Err("entry-host-output-type".into());
                 }
                 if let Some(leaves) = leaves {
@@ -550,6 +581,9 @@ pub(super) fn from_output(
                 })?;
                 let ty = PhysicalType::default_for(host.types[&s.leaves[0]].clone())
                     .map_err(|e| e.to_string())?;
+                if !backend.installation().supports_type(&ty) {
+                    return Err("native-input-type".into());
+                }
                 let size = backend
                     .measure_native_variant(&ty, index, &payload)
                     .map_err(|e| e.to_string())?;
@@ -631,8 +665,7 @@ pub(super) fn from_output(
                 let physical = PhysicalType::default_for(host.types[&s.leaves[0]].clone())
                     .map_err(|e| e.to_string())?;
                 let native = Native::Variant(
-                    zkc_native::Variant::new(physical, index, payload)
-                        .map_err(|e| e.to_string())?,
+                    zkc_cpu::Variant::new(physical, index, payload).map_err(|e| e.to_string())?,
                 );
                 Payload::Alternative {
                     alternative,
@@ -660,7 +693,11 @@ pub(super) fn from_output(
     // Bound measurement scratch before walking the source shape. The complete
     // active variants are checked before collect_owned builds any native spine.
     let planning = charge(ledger, metadata(schema))?;
-    let backend = backend(host.options.limits.capacity, host.cpu.clone())?;
+    let backend = backend(
+        host.options.limits.capacity,
+        host.cpu.clone(),
+        host.options.limits.installation.clone(),
+    )?;
     // Standalone native leaves retain their owner's validation and count units;
     // only a newly assembled active variant needs aggregate payload counts.
     let bytes = bound(host, &backend, ledger, schema, &value, None)?

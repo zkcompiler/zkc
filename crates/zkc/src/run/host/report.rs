@@ -2,8 +2,8 @@ use super::*;
 /// Complete ordinary outcome, including backend custody after cleanup. Failures
 /// in observations, retirement or output encoding never replace execution state.
 pub struct HostReport {
-    pub execution: Option<Report<NativeBackend>>,
-    pub unstarted: Vec<(String, NativeBackend)>,
+    pub execution: Option<Report<CpuBackend>>,
+    pub unstarted: Vec<(String, CpuBackend)>,
     pub phase: &'static str,
     pub failure: Option<String>,
     pub resources: Vec<Json>,
@@ -153,7 +153,7 @@ impl HostReport {
                         .iter()
                         .map(|value| {
                             let ty = value.physical_type();
-                            if !zkc_native::has_native_wire(&ty) {
+                            if !backend.installation().supports_wire(&ty) {
                                 EncodedOutput::Private {
                                     physical_type: ty.spelling(),
                                 }
@@ -317,7 +317,7 @@ fn unit_count(values: &[Value]) -> usize {
 // Identity and current generation matter as well as the residual count. The
 // caller retains these units, so observation must not consume or retire them.
 pub(super) fn check_units(
-    backend: &NativeBackend,
+    backend: &CpuBackend,
     values: &[Value],
     seen: &mut std::collections::BTreeSet<u64>,
 ) -> Result<()> {

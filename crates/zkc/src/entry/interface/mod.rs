@@ -77,6 +77,7 @@ impl BoundInterface {
     }
 }
 impl Interface {
+    #[cfg(feature = "project")]
     pub(crate) fn from_compiler(bytes: &[u8]) -> Result<Self> {
         Self::decode(bytes, None)
     }

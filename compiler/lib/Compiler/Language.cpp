@@ -355,6 +355,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
       append_range(selection.publicInputs, protocol.inputs[index].native);
     NativeProofOptions native;
     native.observations = options.observations;
+    native.cpuTarget = options.cpuTarget;
     native.policy = NativeProofSelection{selection};
     if (auto operation = original.entry().invocationKind())
       native.operation = *operation == HostInvocation::Kind::Verify
@@ -391,6 +392,7 @@ Expected<CompiledEntry> compileEntry(const CheckedOriginal &original,
   }
   RunOptions run;
   run.observations = options.observations;
+  run.cpuTarget = options.cpuTarget;
   run.entry = protocol.symbol;
   run.simplify = options.simplify;
   run.releaseStorage = options.releaseStorage;

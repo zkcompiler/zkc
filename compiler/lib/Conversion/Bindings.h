@@ -30,6 +30,7 @@ mlir::LogicalResult lowerBoundPhysical(
     bool linearContractions, LinearContractionStats *stats,
     bool releaseStorage = false,
     llvm::ArrayRef<target::FunctionPortSelection> functionPorts = {},
-    MathematicalSelectionPolicy numericalPolicy = {});
+    MathematicalSelectionPolicy numericalPolicy = {},
+    const target::CpuTarget &cpuTarget = {});
 } // namespace zkc::protocol
 #endif

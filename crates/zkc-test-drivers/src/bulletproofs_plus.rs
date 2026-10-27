@@ -3,7 +3,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::proof::{Invocation, NativeDeployment, ProofInputs};
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, RistrettoScalar, Value};
 use zkc_test_support::{hex, unhex};
 
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
     )
     .unwrap();
     let case: Json = serde_json::from_slice(&std::fs::read(&args[2]).unwrap()).unwrap();
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),

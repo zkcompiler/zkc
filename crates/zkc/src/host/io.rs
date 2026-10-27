@@ -1,8 +1,7 @@
 //! Bounded byte ingress used by host adapters and command-line tools.
-use std::{
-    io::{self, Read},
-    path::Path,
-};
+use std::io;
+#[cfg(feature = "files")]
+use std::{io::Read, path::Path};
 
 #[derive(Debug)]
 pub enum ReadError {
@@ -20,9 +19,11 @@ impl std::fmt::Display for ReadError {
 /// File-based adapters use regular files. Nonblocking open prevents a FIFO swap from
 /// hanging before descriptor validation. Symlinks resolve normally; the opened
 /// descriptor is checked and read once, so path changes cannot replace it.
+#[cfg(feature = "files")]
 pub fn read_regular(path: impl AsRef<Path>, limit: usize) -> Result<Vec<u8>, ReadError> {
     read_from(open_regular(path)?, limit)
 }
+#[cfg(feature = "files")]
 pub(crate) fn open_regular(path: impl AsRef<Path>) -> Result<std::fs::File, ReadError> {
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
@@ -40,6 +41,7 @@ pub(crate) fn open_regular(path: impl AsRef<Path>) -> Result<std::fs::File, Read
     }
     Ok(file)
 }
+#[cfg(feature = "files")]
 pub(crate) fn read_from(reader: impl Read, limit: usize) -> Result<Vec<u8>, ReadError> {
     let mut bytes = Vec::new();
     reader
@@ -58,6 +60,7 @@ pub(crate) struct SharedBytes {
     pub bytes: Vec<u8>,
     pub retained: Option<zkc_runtime::vm::LiveReservation>,
 }
+#[cfg(feature = "files")]
 pub(crate) fn read_shared(
     file: &mut std::fs::File,
     limit: usize,
@@ -86,7 +89,7 @@ pub(crate) fn read_shared(
 
 impl std::error::Error for ReadError {}
 
-#[cfg(test)]
+#[cfg(all(test, feature = "files"))]
 mod tests {
     use super::*;
     #[test]

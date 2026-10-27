@@ -3,10 +3,10 @@
 use p3_field::PrimeField64;
 use serde_json::{Value, json};
 use std::io::{self, Read};
-use zkc_kernels::plonky3::residue::{self, Residue};
-use zkc_native::{
+use zkc_cpu::{
     BabyBear, BabyBearExt4, Goldilocks, GoldilocksExt2, KoalaBear, KoalaBearExt4, KoalaBearExt8,
 };
+use zkc_kernels::plonky3::residue::{self, Residue};
 use zkc_runtime::relation::{self, Algebra, Bundle, ChannelKind, Error, Staged};
 use zkc_runtime::vm::Identity;
 

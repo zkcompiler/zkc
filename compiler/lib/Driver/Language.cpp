@@ -1,5 +1,6 @@
 #include "Language.h"
 #include "../Support/Input.h"
+#include "CpuTarget.h"
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguagePackage.h"
@@ -32,6 +33,7 @@ int runLanguageCompiler(int argc, char **argv) {
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
+  bool cpuTargetSelected = false;
   std::string observationPath;
   bool collectObservations = false;
   std::vector<std::string> dumps;
@@ -151,7 +153,7 @@ int runLanguageCompiler(int argc, char **argv) {
       command != "language-interface" && command != "language-bundle" &&
       command != "language-package")
     return refuse(error("source.command", "unknown language command"));
-  if (argc > int(limits.files + 12))
+  if (argc > int(limits.files + 13))
     return refuse(error("source.limit", "too many source command arguments"));
   uint64_t total = 0, assetTotal = 0;
   for (int i = 2; i < argc; ++i) {
@@ -172,6 +174,14 @@ int runLanguageCompiler(int argc, char **argv) {
           return refuse(error("source.options", "unknown dump phase"));
         dumps.push_back(name.str());
       }
+    } else if (arg.consume_front("--cpu-target=")) {
+      if (cpuTargetSelected)
+        return refuse(error("source.options", "CPU target must be unique"));
+      auto target = readCpuTarget(arg);
+      if (!target)
+        return refuse(target.takeError());
+      options.cpuTarget = *target;
+      cpuTargetSelected = true;
     } else if (arg.consume_front("--source-format=")) {
       if (arg.empty() || !format.empty())
         return refuse(error("source.options",

@@ -3,6 +3,7 @@
 #include "zkc/Compiler/LanguageInterface.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Target/CpuTarget.h"
 #include "zkc/Translation/Language.h"
 #include <memory>
 #include <variant>
@@ -64,6 +65,7 @@ struct EntryOptions {
   bool releaseStorage = false;
   MathematicalSelectionPolicy mathematicalSelection = {};
   CompilationObservation *observations = nullptr;
+  target::CpuTarget cpuTarget = {};
 };
 struct CompiledHost {
   std::string artifact;

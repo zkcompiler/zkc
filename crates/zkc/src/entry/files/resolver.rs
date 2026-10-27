@@ -5,7 +5,7 @@ use super::super::{
     inputs::{Decoder, InputError, InputGroup, Resolver},
 };
 use crate::{
-    execution::{Capacity, InputFile},
+    execution::{Capacity, InputSource},
     host::io,
 };
 use std::{
@@ -20,9 +20,32 @@ pub struct Documents {
 }
 impl Documents {
     pub fn new(capacity: Capacity) -> Result<Self, String> {
+        Self::with_installation(capacity, Default::default())
+    }
+    pub fn with_installation(
+        capacity: Capacity,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self, String> {
         Ok(Self {
-            decoder: Decoder::new(capacity)?,
+            decoder: Decoder::with_installation(capacity, installation)?,
             files: Vec::new(),
+        })
+    }
+    /// Use the same lazy request assembly and output codec preflight as memory.
+    #[allow(clippy::too_many_arguments)]
+    pub fn preflight_call<'a>(
+        &mut self,
+        host: &'a crate::entry::ProofEntry,
+        operation: crate::entry::ProofOperation,
+        paths: &BTreeMap<String, std::path::PathBuf>,
+        options: crate::entry::memory::ProofCallOptions,
+        attempts: Option<crate::entry::AttemptOptions>,
+        encode_results: bool,
+    ) -> Result<crate::entry::ProofCall<'a>, crate::entry::EntryError> {
+        self.decoder
+            .select_installation(host.installation().clone());
+        host.preflight_document_call(operation, options, attempts, encode_results, |group| {
+            self.load(group, paths.get(group.name()).map(|path| path.as_path()))
         })
     }
     /// Omission is valid only for an empty map, including required zero-leaf ports.
@@ -97,10 +120,10 @@ impl Documents {
 struct References<'a> {
     directory: Directory,
     files: &'a mut Vec<Metadata>,
-    cache: BTreeMap<String, InputFile>,
+    cache: BTreeMap<String, InputSource>,
 }
 impl Resolver for References<'_> {
-    fn resolve(&mut self, path: &str) -> Result<InputFile, String> {
+    fn resolve(&mut self, path: &str) -> Result<InputSource, String> {
         if let Some(file) = self.cache.get(path) {
             return Ok(file.clone());
         }
@@ -112,7 +135,7 @@ impl Resolver for References<'_> {
             file.metadata()
                 .map_err(|e| file_error(e, "entry-input-reference"))?,
         );
-        let file = InputFile::new(file)?;
+        let file = InputSource::new(file)?;
         self.cache.insert(path.into(), file.clone());
         Ok(file)
     }

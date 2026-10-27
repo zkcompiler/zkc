@@ -5,8 +5,8 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use zkc::execution::InputValue;
 use zkc::run::{HostLimits, RoleInputs, RunHost, RunInputs, SetupAuthority};
-use zkc_native::services::{ServiceReference, ServiceRegistry};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Sequence, Value};
+use zkc_cpu::services::{ServiceReference, ServiceRegistry};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Sequence, Value};
 use zkc_runtime::host::joint::{Bundle, BundleLimits};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
@@ -27,11 +27,11 @@ mod proof;
 mod setups;
 
 struct Participant {
-    runner: Runner<NativeBackend>,
+    runner: Runner<CpuBackend>,
     loops: Vec<(String, u64, u64)>,
 }
 impl Deref for Participant {
-    type Target = Runner<NativeBackend>;
+    type Target = Runner<CpuBackend>;
     fn deref(&self) -> &Self::Target {
         &self.runner
     }
@@ -44,9 +44,9 @@ impl DerefMut for Participant {
 fn field(n: u64) -> Value {
     Value::Field(Scalar::from(n))
 }
-fn backend(bundle: &serde_json::Value, role: &str) -> NativeBackend {
+fn backend(bundle: &serde_json::Value, role: &str) -> CpuBackend {
     let entry = bundle["entry"].as_str().unwrap();
-    NativeBackend::new(
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new(role, "language_test", entry, None), None),
         Default::default(),
@@ -60,12 +60,12 @@ fn start(
     bundle: &serde_json::Value,
     role: &str,
     inputs: Vec<Value>,
-    backend: NativeBackend,
+    backend: CpuBackend,
 ) -> Participant {
     let entry = bundle["entry"].as_str().unwrap();
     let admitted = zkc_runtime::vm::Program::decode(
         bundle["candidate"].as_str().unwrap().as_bytes(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
         program.check_installation(&backend)?;
@@ -237,7 +237,7 @@ fn service_backend(
     role: &str,
     registry: &ServiceRegistry,
     root: &ServiceReference,
-) -> NativeBackend {
+) -> CpuBackend {
     service_backends(bundle, role, registry, std::slice::from_ref(root))
 }
 fn service_backends(
@@ -245,11 +245,11 @@ fn service_backends(
     role: &str,
     registry: &ServiceRegistry,
     roots: &[ServiceReference],
-) -> NativeBackend {
+) -> CpuBackend {
     let admitted = Bundle::admit(
         bundle.to_string().as_bytes(),
         &backend(bundle, role),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
         BundleLimits::default(),
     )
     .unwrap();

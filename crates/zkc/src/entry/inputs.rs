@@ -8,12 +8,14 @@ use super::{
     },
 };
 use crate::{
-    execution::{Capacity, InputFile, InputValue},
+    execution::{Capacity, InputSource, InputValue},
     host::{document, inputs::digest},
 };
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 use zkc_runtime::vm::{PhysicalType, Type};
+
+pub const MAX_REQUEST_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
 enum InputInterface<'a> {
@@ -234,7 +236,7 @@ fn describe(schema: &Schema) -> Json {
 /// File resolution is opt-in. Implementations return opened regular descriptors;
 /// reads and cryptographic import still occur in common Host preparation.
 pub trait Resolver {
-    fn resolve(&mut self, relative: &str) -> Result<InputFile, String>;
+    fn resolve(&mut self, relative: &str) -> Result<InputSource, String>;
 }
 #[derive(Debug)]
 pub struct InputError {
@@ -257,6 +259,7 @@ impl InputError {
 }
 /// One decoder per invocation, so documents and references share aggregate limits.
 pub struct Decoder {
+    installation: zkc_cpu::CpuInstallation,
     document: document::Budget,
     capacity: Capacity,
     inline_bytes: usize,
@@ -264,9 +267,16 @@ pub struct Decoder {
 }
 impl Decoder {
     pub fn new(capacity: Capacity) -> Result<Self, String> {
+        Self::with_installation(capacity, Default::default())
+    }
+    pub fn with_installation(
+        capacity: Capacity,
+        installation: zkc_cpu::CpuInstallation,
+    ) -> Result<Self, String> {
         capacity.validate()?;
         Ok(Self {
-            document: document::Budget::new(super::files::MAX_REQUEST_BYTES),
+            installation,
+            document: document::Budget::new(MAX_REQUEST_BYTES),
             capacity,
             inline_bytes: 0,
             references: 0,
@@ -274,6 +284,22 @@ impl Decoder {
     }
     pub fn remaining_document_bytes(&self) -> usize {
         self.document.remaining_bytes()
+    }
+    #[cfg(feature = "files")]
+    pub(crate) fn select_installation(&mut self, installation: zkc_cpu::CpuInstallation) {
+        self.installation = installation;
+    }
+    pub fn decode_optional(
+        &mut self,
+        group: &InputGroup<'_>,
+        bytes: Option<&[u8]>,
+        resolver: Option<&mut dyn Resolver>,
+    ) -> Result<NamedValues, InputError> {
+        match bytes {
+            Some(bytes) => self.decode(group, bytes, resolver),
+            None if group.is_empty() => Ok(NamedValues::new()),
+            None => Err(InputError::at("entry-input-missing", group.name())),
+        }
     }
     pub fn decode(
         &mut self,
@@ -326,7 +352,7 @@ impl Decoder {
         &mut self,
         path: &str,
         resolver: &mut Option<&mut dyn Resolver>,
-    ) -> Result<InputFile, String> {
+    ) -> Result<InputSource, String> {
         self.references += 1;
         if self.references > 1024 {
             return Err("entry-input-reference-limit".into());
@@ -394,7 +420,7 @@ impl Decoder {
             (Kind::Boolean | Kind::Index | Kind::Field | Kind::Group | Kind::Builtin, v) => {
                 if v.get("file").is_some() {
                     let (file, pin) = reference(&v, "sha256").map_err(error)?;
-                    InputValue::WireFile {
+                    InputValue::WireSource {
                         file: self.reference(&file, resolver).map_err(error)?,
                         sha256: pin,
                     }
@@ -405,13 +431,16 @@ impl Decoder {
                         .expect("checked scalar schema");
                     let ty = PhysicalType::default_for(logical.clone())
                         .map_err(|_| error("entry-input-codec".into()))?;
+                    if !self.installation.supports_wire(&ty) {
+                        return Err(error("entry-input-codec".into()));
+                    }
                     let remaining = self
                         .capacity
                         .values
                         .total_bytes
                         .saturating_sub(self.inline_bytes);
                     let bytes =
-                        zkc_native::readable_wire(&ty, &v, remaining.min(self.capacity.wire_bytes))
+                        zkc_cpu::readable_wire(&ty, &v, remaining.min(self.capacity.wire_bytes))
                             .map_err(|e| error(e.into()))?;
                     self.inline_bytes += bytes.len();
                     InputValue::Wire(bytes.into()).into()

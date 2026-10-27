@@ -7,8 +7,8 @@ use crate::host::{
 };
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
-use zkc_native::{
-    Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, SetupRegistry, Value,
+use zkc_cpu::{
+    Capability, CpuBackend, Domain, EntryPolicy, PortConstraint, SetupRegistry, Value,
     services::{ServiceReference, ServiceRegistry},
 };
 use zkc_runtime::host::joint::*;
@@ -21,8 +21,9 @@ pub use report::{EncodedOutput, HostReport, RoleOutputEncoding};
 
 /// Bundle structure, native value/operation capacity and joint dispatch are separate
 /// budgets. The latter counts dispatch occurrences, including repeated loop steps.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct HostLimits {
+    pub installation: zkc_cpu::CpuInstallation,
     pub bundle: BundleLimits,
     pub capacity: Capacity,
     pub steps: usize,
@@ -34,16 +35,23 @@ impl Default for HostLimits {
     fn default() -> Self {
         let run = RunLimits::default();
         Self {
+            installation: Default::default(),
             bundle: BundleLimits::default(),
             capacity: Capacity::default(),
             steps: run.steps,
             message_bytes: run.wire_bytes,
             total_wire_bytes: run.total_wire_bytes,
-            external_work: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
+            external_work: CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
         }
     }
 }
 impl HostLimits {
+    /// Select the frozen CPU support view before bundle admission.
+    pub fn with_installation(mut self, installation: zkc_cpu::CpuInstallation) -> Self {
+        self.installation = installation;
+        self
+    }
+
     /// Apply a zkc.bundle-limits/0 document, retaining admission and value capacity.
     pub fn with_work_limits(mut self, bytes: &[u8]) -> Result<Self> {
         let value = parse(bytes, 4096)?;
@@ -60,7 +68,7 @@ impl HostLimits {
         Ok(self)
     }
 
-    fn execution(self) -> RunLimits {
+    fn execution(&self) -> RunLimits {
         RunLimits {
             steps: self.steps,
             wire_bytes: self.message_bytes,
@@ -70,7 +78,7 @@ impl HostLimits {
         }
     }
     /// Existing per-role external primitive work ceiling, independent of instructions.
-    pub const MAX_EXTERNAL_WORK_PER_ROLE: u64 = NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT;
+    pub const MAX_EXTERNAL_WORK_PER_ROLE: u64 = CpuBackend::DEFAULT_EXTERNAL_WORK_LIMIT;
     /// Validate the requested values without silently changing application policy.
     pub fn validate(&self) -> Result<()> {
         self.capacity.validate()?;
@@ -95,8 +103,8 @@ impl HostLimits {
 #[derive(Clone)]
 pub struct RunHost {
     cpu: CpuExecution,
-    ring_assets: zkc_native::ring::Registry,
-    relation_assets: zkc_native::relation::Registry,
+    ring_assets: zkc_cpu::ring::Registry,
+    relation_assets: zkc_cpu::relation::Registry,
     ring_work_limit: u64,
     sequence_work_limit: u64,
     shared_ledger: Option<zkc_runtime::vm::ExecutionLedger>,
@@ -129,12 +137,12 @@ impl RunHost {
         authority: SetupAuthority,
         cpu: CpuExecution,
     ) -> Result<Self> {
-        let backend = Self::admission_backend(limits, cpu.clone())?;
+        let backend = Self::admission_backend(&limits, cpu.clone())?;
         let bundle = Bundle::admit_pinned(
             bytes,
             expected_sha256,
             &backend,
-            zkc_native::native_contracts(),
+            limits.installation.contracts(),
             limits.bundle,
         )
         .map_err(|e| e.to_string())?;
@@ -146,19 +154,19 @@ impl RunHost {
         authority: SetupAuthority,
         cpu: CpuExecution,
     ) -> Result<Self> {
-        let backend = Self::admission_backend(limits, cpu.clone())?;
+        let backend = Self::admission_backend(&limits, cpu.clone())?;
         let bundle = Bundle::admit(
             artifact.bytes(),
             &backend,
-            zkc_native::native_contracts(),
+            limits.installation.contracts(),
             limits.bundle,
         )
         .map_err(|e| e.to_string())?;
         Self::from_bundle(bundle, artifact.identity(), limits, authority, cpu)
     }
-    fn admission_backend(limits: HostLimits, cpu: CpuExecution) -> Result<NativeBackend> {
+    fn admission_backend(limits: &HostLimits, cpu: CpuExecution) -> Result<CpuBackend> {
         limits.validate()?;
-        NativeBackend::new_with_cpu(
+        CpuBackend::new_with_installation(
             limits.capacity.backend(),
             EntryPolicy::new(
                 Domain::new("admission", "admission", "admission", None),
@@ -166,6 +174,7 @@ impl RunHost {
             ),
             Default::default(),
             cpu,
+            limits.installation.clone(),
         )
         .map_err(|e| e.to_string())
     }
@@ -181,7 +190,7 @@ impl RunHost {
             cpu,
             ring_assets: Default::default(),
             relation_assets: Default::default(),
-            ring_work_limit: zkc_native::ring::DEFAULT_WORK_LIMIT,
+            ring_work_limit: zkc_cpu::ring::DEFAULT_WORK_LIMIT,
             sequence_work_limit: 16_777_216,
             shared_ledger: None,
             retained_inputs: false,
@@ -205,12 +214,15 @@ impl RunHost {
         &self.identity
     }
     pub fn limits(&self) -> HostLimits {
-        self.limits
+        self.limits.clone()
     }
     /// Share one CPU context across every participant execution backend.
     pub fn with_cpu(mut self, cpu: CpuExecution) -> Self {
         self.cpu = cpu;
         self
+    }
+    pub fn installation(&self) -> &zkc_cpu::CpuInstallation {
+        &self.limits.installation
     }
     pub fn cpu(&self) -> &CpuExecution {
         &self.cpu
@@ -219,16 +231,16 @@ impl RunHost {
         self.retained_inputs = true;
         self
     }
-    pub fn with_ring_assets(mut self, assets: zkc_native::ring::Registry) -> Self {
+    pub fn with_ring_assets(mut self, assets: zkc_cpu::ring::Registry) -> Self {
         self.ring_assets = assets;
         self
     }
-    pub fn with_relation_assets(mut self, assets: zkc_native::relation::Registry) -> Self {
+    pub fn with_relation_assets(mut self, assets: zkc_cpu::relation::Registry) -> Self {
         self.relation_assets = assets;
         self
     }
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
-        if limit > zkc_native::ring::DEFAULT_WORK_LIMIT {
+        if limit > zkc_cpu::ring::DEFAULT_WORK_LIMIT {
             return Err("bundle-ring-work-limit".into());
         }
         self.ring_work_limit = limit;
@@ -241,10 +253,11 @@ impl RunHost {
     }
     pub(crate) fn with_invocation_limits(
         mut self,
-        limits: HostLimits,
+        mut limits: HostLimits,
         ring: u64,
         sequence: u64,
     ) -> Self {
+        limits.installation = self.limits.installation.clone();
         self.limits = limits;
         self.ring_work_limit = ring;
         self.sequence_work_limit = sequence;
@@ -254,7 +267,7 @@ impl RunHost {
     /// configuration keys; the authenticated bundle determines each position.
     pub fn layout(&self) -> Json {
         json!(self.bundle.roles().iter().map(|role| json!({"role":role.entry.role,
-            "inputs":role.entry.inputs.iter().enumerate().map(|(i,(_,ty))| json!([i,ty.spelling(),inputs::kind(ty)])).collect::<Vec<_>>(),
+            "inputs":role.entry.inputs.iter().enumerate().map(|(i,(_,ty))| json!([i,ty.spelling(),inputs::kind(ty, &self.limits.installation)])).collect::<Vec<_>>(),
             "services":role.entry.services.iter().enumerate().map(|(i,p)| json!([i,p.contract.name()])).collect::<Vec<_>>(),
             "outputs":role.entry.outputs.iter().map(|ty|ty.spelling()).collect::<Vec<_>>() })).collect::<Vec<_>>())
     }
@@ -270,8 +283,10 @@ impl RunHost {
     /// Native elements must satisfy the upstream cryptographic library invariants;
     /// unchecked scalar constructors are not an alternative to canonical decoding.
     pub fn prepare_typed(&self, request: &RunInputs) -> Result<PreparedRun<'_>> {
-        let mut imports =
-            crate::host::setups::VerifierKeys::new(self.limits.capacity.backend().ark_bounds());
+        let mut imports = crate::host::setups::VerifierKeys::new(
+            self.limits.capacity.backend().ark_bounds(),
+            self.installation().clone(),
+        );
         self.prepare_with(request, &mut imports)
     }
     pub(crate) fn prepare_with(
@@ -285,7 +300,7 @@ impl RunHost {
 }
 struct PreparedRole {
     entry: EntryRole,
-    backend: NativeBackend,
+    backend: CpuBackend,
     values: Vec<Operand>,
     services: Vec<u64>,
 }
@@ -305,7 +320,10 @@ impl PreparedRun<'_> {
     // Injection at the issuance boundary exercises partial custody without
     // installing deterministic entropy or test controls in the public host.
     fn execute_with(self, mut before_issue: impl FnMut() -> Result<()>) -> HostReport {
-        let registry = ServiceRegistry::new(self.host.limits.capacity.backend());
+        let registry = ServiceRegistry::with_installation(
+            self.host.limits.capacity.backend(),
+            self.host.limits.installation.clone(),
+        );
         let mut resources: BTreeMap<String, Vec<(usize, Capability)>> = BTreeMap::new();
         let mut services: BTreeMap<String, Vec<ServiceReference>> = BTreeMap::new();
         let mut inputs = Vec::new();

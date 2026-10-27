@@ -87,12 +87,14 @@ class FieldOracle:
     """Scalar arithmetic and readable codecs, never an expression evaluator."""
 
     def __init__(self, field, *, root=None):
-        self.degree = {'koala-bear': 1, 'bls12-381.fr': 1, 'bn254.fr': 1, 'ristretto255.scalar': 1,
+        self.degree = {'goldilocks': 1, 'goldilocks.ext2-binomial7': 2,
+                       'koala-bear': 1, 'bls12-381.fr': 1, 'bn254.fr': 1, 'ristretto255.scalar': 1,
                        'koala-bear.ext4-binomial3': 4, 'koala-bear.ext8-binomial3': 8,
                        BINARY: 1, BINARY_CUBIC: 3}[field]
         self.binary = field in (BINARY, BINARY_CUBIC)
         self.modulus = ((1 << 64) if self.binary else
-                        {'bls12-381.fr': FR, 'bn254.fr': BN254,
+                        {'goldilocks': 18446744069414584321, 'goldilocks.ext2-binomial7': 18446744069414584321,
+                         'bls12-381.fr': FR, 'bn254.fr': BN254,
                          'ristretto255.scalar': DALEK_SCALAR}.get(field, P))
         self.zero = (0,) * self.degree
         self.one = (1,) + (0,) * (self.degree - 1)
@@ -111,6 +113,9 @@ class FieldOracle:
         if self.binary:
             ref = binary_reference(self.support[0])
             return (ref.mul(x[0], y[0]),) if self.degree == 1 else tuple(ref.cubic_mul(x, y))
+        if self.degree == 2:
+            return ((x[0]*y[0] + 7*x[1]*y[1]) % self.modulus,
+                    (x[0]*y[1] + x[1]*y[0]) % self.modulus)
         return (x[0] * y[0] % self.modulus,) if self.degree == 1 else mul(x, y)
 
     def power(self, x, exponent):

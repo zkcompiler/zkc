@@ -20,6 +20,7 @@ fn cpu_execution_rejects_invalid_counts_and_owns_fresh_defaults() {
     );
     let clone = first.clone();
     let worker = first.execute(|| std::thread::current().id());
+    #[allow(clippy::drop_non_drop)] // Serial builds have no owned pool to release.
     drop(first);
     assert_eq!(clone.execute(|| std::thread::current().id()), worker);
     #[cfg(feature = "parallel")]

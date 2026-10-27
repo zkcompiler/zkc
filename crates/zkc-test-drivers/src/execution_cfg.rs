@@ -2,7 +2,7 @@
 //! This bounded test adapter records frame effects; it is not another evaluator.
 use serde_json::{Value as Json, json};
 use std::{cell::RefCell, path::Path};
-use zkc_native::{Domain, EntryPolicy, NativeBackend, NativeOperation, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, CpuOperation, Domain, EntryPolicy, Policy, Scalar, Value};
 use zkc_runtime::interpreter::Runner;
 use zkc_runtime::vm::{
     Action, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding, Program,
@@ -15,20 +15,20 @@ struct Fault {
     leave: Option<u64>,
 }
 struct Observed {
-    native: NativeBackend,
+    native: CpuBackend,
     installed: RefCell<Vec<String>>,
     events: Vec<Json>,
     fault: Fault,
 }
 impl Backend for Observed {
     type Value = Value;
-    type Operation = NativeOperation;
+    type Operation = CpuOperation;
     type Call = ();
     type Checkpoint = ();
     fn supports_boolean_literals(&self) -> bool {
         self.native.supports_boolean_literals()
     }
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<NativeOperation> {
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<CpuOperation> {
         self.installed.borrow_mut().push(binding.contract.clone());
         self.native.prepare_binding(binding)
     }
@@ -77,7 +77,7 @@ impl Backend for Observed {
     }
     fn apply(
         &mut self,
-        operation: &NativeOperation,
+        operation: &CpuOperation,
         invocation: &Invocation<'_>,
         values: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -110,7 +110,7 @@ fn execute(
     value_budget: ValueBudget,
 ) -> Observation {
     let backend = Observed {
-        native: NativeBackend::new(
+        native: CpuBackend::new(
             Policy::default(),
             EntryPolicy::new(Domain::new("P", "execution_test", "main", None), None),
             Default::default(),
@@ -120,7 +120,7 @@ fn execute(
         events: vec![],
         fault,
     };
-    let program = Program::decode(bytes, zkc_native::native_contracts()).unwrap();
+    let program = Program::decode(bytes, zkc_cpu::cpu_contracts()).unwrap();
     program.check_installation(&backend).unwrap();
     let loaded = Runner::new_with_budgets(
         &program,

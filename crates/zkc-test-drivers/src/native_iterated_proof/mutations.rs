@@ -9,7 +9,7 @@ fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
 fn refused(envelope: &Json, candidate: &Json, reason: &str) {
     zkc_runtime::vm::Program::decode(
         &serde_json::to_vec(candidate).unwrap(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
         program.check_installation(&backend())?;

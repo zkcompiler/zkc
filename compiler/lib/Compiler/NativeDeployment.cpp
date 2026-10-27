@@ -204,8 +204,8 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
   }
   return Error::success();
 }
-Error checkNativeOperationArtifact(StringRef bytes, StringRef original,
-                                   StringRef role) {
+Error checkCpuOperationArtifact(StringRef bytes, StringRef original,
+                                StringRef role) {
   auto artifact = parseJson(bytes, 16 * 1024 * 1024);
   if (!artifact)
     return artifact.takeError();

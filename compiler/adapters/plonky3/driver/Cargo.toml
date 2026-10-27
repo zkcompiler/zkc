@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 # Differential checks against the native ring admission and KoalaBear provider.
-native = ["dep:zkc-runtime", "dep:zkc-native", "dep:zkc-kernels"]
+native = ["dep:zkc-runtime", "dep:zkc-cpu", "dep:zkc-kernels"]
 
 [dependencies]
 p3-air.workspace = true
@@ -24,7 +24,7 @@ serde_json.workspace = true
 zkc-plonky3-air.workspace = true
 zkc-plonky3-air-client.workspace = true
 zkc-runtime = { workspace = true, optional = true }
-zkc-native = { workspace = true, optional = true }
+zkc-cpu = { workspace = true, optional = true }
 zkc-kernels = { workspace = true, optional = true }
 
 [dev-dependencies]

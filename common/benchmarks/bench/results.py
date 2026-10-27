@@ -246,6 +246,9 @@ def validate_reference(worker, backend, operation, contract=None):
 
 
 def validate_manifest(manifest):
+    if isinstance(manifest, dict) and manifest.get('observation') == 'browser':
+        from .browser import validate_manifest as validate_browser
+        return validate_browser(manifest)
     """A successful saved run must contain the entire declared measurement matrix."""
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
     require(not (set(manifest) - {'format', 'status', 'phase', 'results', 'contracts', 'plan', 'processes',
@@ -510,6 +513,9 @@ def summarize_lifecycle(results, plan):
 
 
 def publish(directory, manifest):
+    if manifest.get('observation') == 'browser':
+        from .browser import publish as publish_browser
+        return publish_browser(directory, manifest)
     rows = summarize(manifest)
     comparisons = paired_comparisons(manifest)
     write_json(directory / 'manifest.json', manifest)
@@ -657,6 +663,8 @@ def paired_comparisons(manifest):
 
 
 def compare(baseline, current):
+    require(baseline.get('observation') != 'browser' and current.get('observation') != 'browser',
+            'browser intervals overlap; compare explicit stage distributions from summary.json')
     for document in (baseline, current):
         validate_manifest(document)
         require(document['observation'] == 'timing', 'timing comparison refuses instrumented execution')

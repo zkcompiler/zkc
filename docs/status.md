@@ -33,6 +33,18 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 ## Execution foundation
 
+`zkc-cpu` composes the five compiled providers through an immutable
+`CpuInstallation`. Reduced installations restrict operation, layout, codec,
+setup and service support; the compiler's `--cpu-target` applies matching
+restrictions without changing physical identities. See the
+[CPU guide](../crates/zkc-cpu/README.md#provider-composition).
+
+The [browser engine](../crates/zkc-web/README.md) runs the common SDK and VM
+through a bounded promise-based Worker client. Files and project integration
+are optional SDK features. Portable and SIMD modules share provider support;
+browser numerical execution is inline. Numerical threading, whole-heap memory
+accounting and compiled provider pruning are not provided.
+
 Logical variants use Data-owned types; runtime capabilities and exact physical
 representation wrappers use Runtime-owned types. Their independent binding
 adapters preserve current native descriptors and installation checks. Runtime

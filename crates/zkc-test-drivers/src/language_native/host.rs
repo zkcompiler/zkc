@@ -8,7 +8,7 @@ use zkc::{
     execution::InputValue,
     run::HostLimits,
 };
-use zkc_native::{Scalar, Value as Native};
+use zkc_cpu::{Scalar, Value as Native};
 use zkc_runtime::host::joint::Outcome;
 fn package(directory: &Path, name: &str) -> Package {
     let bytes = std::fs::read(directory.join(name)).unwrap();

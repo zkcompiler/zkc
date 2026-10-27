@@ -243,7 +243,7 @@ fn main() {
                                       '--manifest-path', directory / 'Cargo.toml']))
     names = {package['id']: package['name'] for package in metadata['packages']}
     for node in metadata['resolve']['nodes']:
-        if names[node['id']] in ('zkc', 'zkc-native', 'zkc-runtime', 'zkc-kernels'):
+        if names[node['id']] in ('zkc', 'zkc-cpu', 'zkc-runtime', 'zkc-kernels'):
             assert not {'test-utils', 'execution-counts'} & set(node['features']), node
     target = directory / 'consumer-target'
     journal.run(['cargo', 'build', '--offline', '--quiet', '--manifest-path', directory / 'Cargo.toml',

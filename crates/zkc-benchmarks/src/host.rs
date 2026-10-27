@@ -103,6 +103,7 @@ pub fn run(
         binding: BindingPolicy::AllowAuthored,
         ..Default::default()
     };
+    let capacity = options.capacity;
     let mut entry =
         ProofEntry::admit_with_cpu(package, options, Default::default(), job.cpu()?.clone())
             .map_err(|e| e.to_string())?;
@@ -148,7 +149,7 @@ pub fn run(
         .find(|group| group.name() == "witness")
         .ok_or("missing witness input group")?;
     let decode = |index: usize| {
-        let mut decoder = Documents::new(options.capacity)?;
+        let mut decoder = Documents::new(capacity)?;
         let public = decoder
             .load(public_group, Some(&inputs[index].public))
             .map_err(|e| e.to_string())?;
@@ -175,7 +176,7 @@ pub fn run(
                         public_group,
                         entry.interface(),
                         ingress,
-                        options.capacity,
+                        capacity,
                         entry.cpu(),
                     )?;
                     let private = Owner::new(
@@ -183,7 +184,7 @@ pub fn run(
                         witness_group,
                         entry.interface(),
                         ingress,
-                        options.capacity,
+                        capacity,
                         entry.cpu(),
                     )?;
                     // Check exact admitted types, binding and aggregate loading

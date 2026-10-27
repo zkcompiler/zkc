@@ -1,5 +1,6 @@
 #include "zkc/Driver/Compiler.h"
 #include "../Support/Input.h"
+#include "CpuTarget.h"
 #include "Language.h"
 #include "Relations.h"
 #include "mlir/Parser/Parser.h"
@@ -63,6 +64,8 @@ int zkc::runCompiler(int argc, char **argv,
            "    are tooling aids, not capture-preserving rewrites.\n\n"
            "Captured mathematics:\n"
            "  asset-share ring-json|relation-bundle-json FILE\n\n"
+           "Executable commands accept [--cpu-target=FILE].\n"
+           "Logical source/library checking is target-independent.\n\n"
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-lean FILE.mlir --symbol=NAME\n"
@@ -144,9 +147,14 @@ int zkc::runCompiler(int argc, char **argv,
       std::set<std::string> seen;
       for (int i = 4; i < argc; ++i) {
         StringRef option(argv[i]);
-        if (!seen.insert(option.str()).second)
+        if (!seen.insert(option.split('=').first.str()).second)
           return fail(error("native-proof-options"));
-        if (option == "--no-simplify")
+        if (option.consume_front("--cpu-target=")) {
+          auto target = readCpuTarget(option);
+          if (!target)
+            return fail(target.takeError());
+          options.cpuTarget = *target;
+        } else if (option == "--no-simplify")
           options.simplify = false;
         else if (option == "--release-storage")
           options.releaseStorage = true;
@@ -345,7 +353,12 @@ int zkc::runCompiler(int argc, char **argv,
       auto name = argument.split('=').first;
       if (!seen.insert(name.str()).second)
         return fail(error("run-duplicate-option"));
-      if (argument.consume_front("--entry="))
+      if (argument.consume_front("--cpu-target=")) {
+        auto target = readCpuTarget(argument);
+        if (!target)
+          return fail(target.takeError());
+        options.cpuTarget = *target;
+      } else if (argument.consume_front("--entry="))
         options.entry = argument.str();
       else if (argument == "--no-simplify")
         options.simplify = false;

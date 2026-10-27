@@ -55,19 +55,27 @@ pub(super) fn admit(
         .validate()
         .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
     require(options.journal_events <= 4096, "entry-host-journal-limit")?;
-    let interface = FunctionInterface::read(package)?;
+    let mut interface = FunctionInterface::read(package)?;
+    interface.installation = options.limits.installation.clone();
     let document: Document = decode(package.artifact().as_bytes(), 16 * 1024 * 1024)?;
     let mut validator = structure(&document, &interface)?;
     let mut native_calculations = BTreeMap::new();
     let mut references = Vec::new();
-    let backend = data::backend(options.limits.capacity, cpu.clone())
-        .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
+    let backend = data::backend(
+        options.limits.capacity,
+        cpu.clone(),
+        options.limits.installation.clone(),
+    )
+    .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
     for c in &document.calculations {
         for s in c.parameters.iter().chain(&c.results) {
             check_schema(s, &mut validator.schemas)?;
         }
-        let program = Program::decode(c.program.as_bytes(), zkc_native::native_contracts())
-            .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
+        let program = Program::decode(
+            c.program.as_bytes(),
+            options.limits.installation.contracts(),
+        )
+        .map_err(|e| EntryError::new(EntryPhase::Admission, e))?;
         require(
             program.entry_names().next().is_none(),
             "entry-host-numeric-stage",
@@ -146,7 +154,7 @@ pub(super) fn admit(
         let native = match d.operation.as_str() {
             "run" => super::DeploymentKind::Run(Box::new(super::super::RunEntry::admit_host(
                 child,
-                options.limits,
+                options.limits.clone(),
                 authority.clone(),
                 cpu.clone(),
             )?)),
@@ -163,6 +171,7 @@ pub(super) fn admit(
                             capacity: options.limits.capacity,
                             external_work: options.limits.external_work,
                             binding: options.binding,
+                            installation: options.limits.installation.clone(),
                         },
                         authority.clone(),
                         operation,

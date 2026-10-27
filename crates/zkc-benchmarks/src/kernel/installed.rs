@@ -3,14 +3,14 @@ use super::{Boundary, Kernel, Provider, fail};
 use crate::{Failure, Report, Request, Result, measure};
 use serde_json::{Value as Json, json};
 use std::time::Instant;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Value};
 use zkc_runtime::{
     interpreter::Runner,
     vm::{Action, Contracts, ExecutionPolicy, OperationBinding, PhysicalType, Usage, Value as _},
 };
 
-fn native(contracts: &Contracts, cpu: &zkc::execution::CpuExecution) -> Result<NativeBackend> {
-    NativeBackend::new_with_cpu(
+fn native(contracts: &Contracts, cpu: &zkc::execution::CpuExecution) -> Result<CpuBackend> {
+    CpuBackend::new_with_cpu(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "benchmark", "main", None), None),
         Default::default(),
@@ -256,7 +256,7 @@ fn fixture(
     })
 }
 
-fn execute(runner: &mut Runner<NativeBackend>) -> Result<()> {
+fn execute(runner: &mut Runner<CpuBackend>) -> Result<()> {
     loop {
         match runner.poll() {
             Action::Local(action) => runner.execute_local(&action.cut).map_err(fail)?,
@@ -265,18 +265,14 @@ fn execute(runner: &mut Runner<NativeBackend>) -> Result<()> {
         }
     }
 }
-fn decode(
-    backend: &NativeBackend,
-    types: &[PhysicalType],
-    bytes: &[Vec<u8>],
-) -> Result<Vec<Value>> {
+fn decode(backend: &CpuBackend, types: &[PhysicalType], bytes: &[Vec<u8>]) -> Result<Vec<Value>> {
     types
         .iter()
         .zip(bytes)
         .map(|(ty, data)| backend.decode_native_value(ty, data).map_err(fail))
         .collect()
 }
-fn encode(runner: &Runner<NativeBackend>) -> Result<Vec<Vec<u8>>> {
+fn encode(runner: &Runner<CpuBackend>) -> Result<Vec<Vec<u8>>> {
     runner
         .returned_values()
         .ok_or("missing terminal values")?
@@ -308,7 +304,7 @@ pub(super) fn run(
         allow_unspecified_timing: true,
         allow_variable_time: kernel == Kernel::Msm,
     };
-    let contracts = zkc_native::native_contracts_with_policy(policy);
+    let contracts = zkc_cpu::cpu_contracts_with_policy(policy);
     let backend = native(&contracts, request.cpu()?)?;
     let fixture = fixture(
         &contracts,
@@ -467,8 +463,7 @@ mod tests {
 
     #[test]
     fn explicit_bridge_and_resident_chain_have_distinct_ports_and_calls() {
-        let contracts =
-            zkc_native::native_contracts_with_policy(ExecutionPolicy::general_purpose());
+        let contracts = zkc_cpu::cpu_contracts_with_policy(ExecutionPolicy::general_purpose());
         let bridge = fixture(
             &contracts,
             Provider::Blst,
@@ -512,7 +507,7 @@ mod tests {
 
     #[test]
     fn msm_requires_explicit_trusted_variable_time_permission() {
-        let contracts = zkc_native::native_contracts_with_policy(ExecutionPolicy {
+        let contracts = zkc_cpu::cpu_contracts_with_policy(ExecutionPolicy {
             allow_unspecified_timing: true,
             allow_variable_time: false,
         });
@@ -538,8 +533,7 @@ mod tests {
     #[test]
     fn bn254_installs_actual_resident_ports_and_decodes_nominal_frames() {
         use zkc_kernels::arkworks::bn254 as ark;
-        let contracts =
-            zkc_native::native_contracts_with_policy(ExecutionPolicy::general_purpose());
+        let contracts = zkc_cpu::cpu_contracts_with_policy(ExecutionPolicy::general_purpose());
         let cpu = zkc::execution::CpuExecution::serial().unwrap();
         let backend = native(&contracts, &cpu).unwrap();
         let resident = fixture(

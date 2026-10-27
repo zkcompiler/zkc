@@ -2,7 +2,7 @@
 //! deferred until Admission has reserved every operand in the invocation.
 use super::*;
 use crate::host::request::InputValue;
-use zkc_native::{NativeInputSize, Variant};
+use zkc_cpu::{NativeInputSize, Variant};
 
 /// Check constructor shape and byte bounds before setup imports. The admitted
 /// type bounds recursion; backend validation/loading remains a later phase.
@@ -10,14 +10,20 @@ pub(crate) fn check_native_data(
     ty: &PhysicalType,
     request: &InputValue,
     capacity: crate::host::capacity::Capacity,
+    installation: &zkc_cpu::CpuInstallation,
 ) -> Result<()> {
+    if !installation.supports_type(ty) {
+        return Err("native-input-type".into());
+    }
     match request {
         InputValue::Wire(bytes) => capacity.check_wire(bytes.len()),
-        InputValue::WireFile { .. } => Ok(()),
-        InputValue::Native(value) => Input::native_value(ty.clone(), value, None, None).map(|_| ()),
+        InputValue::WireSource { .. } => Ok(()),
+        InputValue::Native(value) => {
+            Input::native_value(ty.clone(), value, None, None, installation).map(|_| ())
+        }
         InputValue::Prepared(data) => {
             capacity.check_wire(data.canonical_bytes().len())?;
-            Input::native_value(ty.clone(), data.value(), None, None).map(|_| ())
+            Input::native_value(ty.clone(), data.value(), None, None, installation).map(|_| ())
         }
         InputValue::Variant {
             alternative,
@@ -41,7 +47,7 @@ pub(crate) fn check_native_data(
                 .iter()
                 .zip(payload)
             {
-                check_native_data(physical, child, capacity)?;
+                check_native_data(physical, child, capacity, installation)?;
             }
             Ok(())
         }
@@ -55,9 +61,13 @@ pub(crate) fn check_retained_data(
     ty: &PhysicalType,
     input: &InputValue,
     capacity: crate::execution::Capacity,
+    installation: &zkc_cpu::CpuInstallation,
 ) -> Result<()> {
-    if zkc_native::has_native_wire(ty) {
-        return check_native_data(ty, input, capacity);
+    if !installation.supports_type(ty) {
+        return Err("native-input-type".into());
+    }
+    if installation.supports_wire(ty) {
+        return check_native_data(ty, input, capacity, installation);
     }
     if !ty.is_duplicable() || matches!(ty.kind(), Type::ProverKey | Type::VerifierKey) {
         return Err("native-input-private".into());
@@ -83,7 +93,7 @@ pub(crate) fn check_retained_data(
                 .iter()
                 .zip(payload)
             {
-                check_retained_data(physical, input, capacity)?;
+                check_retained_data(physical, input, capacity, installation)?;
             }
             Ok(())
         }
@@ -94,12 +104,15 @@ impl<'a> Admission<'a> {
     /// Plan immutable native data using the same complete invocation budget.
     pub fn native_data(
         &mut self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ty: PhysicalType,
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
-        let input = if self.retained_inputs && !zkc_native::has_native_wire(&ty) {
+        if !backend.installation().supports_type(&ty) {
+            return Err("native-input-type".into());
+        }
+        let input = if self.retained_inputs && !backend.installation().supports_wire(&ty) {
             self.plan_retained(backend, ty, request, selected)?
         } else {
             self.plan(backend, ty, request, selected)?.0
@@ -108,12 +121,17 @@ impl<'a> Admission<'a> {
     }
     fn plan_retained(
         &mut self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ty: PhysicalType,
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<Input<'a>> {
-        check_retained_data(&ty, request, crate::execution::Capacity::default())?;
+        check_retained_data(
+            &ty,
+            request,
+            crate::execution::Capacity::default(),
+            backend.installation(),
+        )?;
         self.work(1)?;
         match request {
             InputValue::Native(value) => {
@@ -135,7 +153,7 @@ impl<'a> Admission<'a> {
                 let mut bytes = ty.descriptor_bytes() + 256 + payload.len() * 512;
                 for (physical, input) in arm.iter().zip(payload) {
                     let physical = physical.clone();
-                    let child = if zkc_native::has_native_wire(&physical) {
+                    let child = if backend.installation().supports_wire(&physical) {
                         self.plan(backend, physical, input, selected.clone())?.0
                     } else {
                         self.plan_retained(backend, physical, input, selected.clone())?
@@ -163,7 +181,7 @@ impl<'a> Admission<'a> {
 
     fn plan(
         &mut self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ty: PhysicalType,
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
@@ -178,7 +196,7 @@ impl<'a> Admission<'a> {
                 selected,
             ),
             InputValue::Native(value) => {
-                let input = Input::native_value(ty, value, selected, None)?;
+                let input = Input::native_value(ty, value, selected, None, backend.installation())?;
                 self.work(value.retained_bytes())?;
                 let size = backend
                     .measure_native_input(value)
@@ -188,7 +206,7 @@ impl<'a> Admission<'a> {
             InputValue::Wire(bytes) => {
                 self.plan_wire(backend, ty, Cow::Borrowed(bytes.as_slice()), None, selected)
             }
-            InputValue::WireFile { file, sha256 } => {
+            InputValue::WireSource { file, sha256 } => {
                 let bytes = self.file_wire(file, sha256, backend.policy().max_wire_bytes)?;
                 self.plan_wire(backend, ty, Cow::Owned(bytes), None, selected)
             }
@@ -202,7 +220,7 @@ impl<'a> Admission<'a> {
                     .alternatives()
                     .get(*alternative)
                     .ok_or("native-input-alternative")?;
-                if !ty.is_duplicable() || !zkc_native::has_native_wire(&ty) {
+                if !ty.is_duplicable() || !backend.installation().supports_wire(&ty) {
                     return Err("native-input-private".into());
                 }
                 if arm.payload().len() != payload.len() {
@@ -239,18 +257,27 @@ impl<'a> Admission<'a> {
     }
     pub(super) fn plan_wire(
         &mut self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ty: PhysicalType,
         bytes: Cow<'a, [u8]>,
         prepared: Option<&'a Value>,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<(Input<'a>, NativeInputSize)> {
+        if !backend.installation().supports_wire(&ty) {
+            return Err("native-input-private".into());
+        }
         self.work(bytes.len())?;
         let size = backend
             .measure_native_wire(&ty, &bytes)
             .map_err(|e| e.to_string())?;
         let input = if let Some(value) = prepared {
-            Input::native_value(ty, value, selected, Some(size.retained_bytes()))?
+            Input::native_value(
+                ty,
+                value,
+                selected,
+                Some(size.retained_bytes()),
+                backend.installation(),
+            )?
         } else {
             Input::NativeWire {
                 ty,
@@ -263,7 +290,7 @@ impl<'a> Admission<'a> {
     }
 }
 
-pub(super) fn check(backend: &NativeBackend, input: &Input<'_>) -> Result<()> {
+pub(super) fn check(backend: &CpuBackend, input: &Input<'_>) -> Result<()> {
     match input {
         Input::Native {
             value, selected, ..
@@ -283,10 +310,16 @@ pub(super) fn check(backend: &NativeBackend, input: &Input<'_>) -> Result<()> {
             }
             Ok(())
         }
+        Input::Key { .. } if !backend.installation().supports_setup() => {
+            Err("cpu-installation-setup".into())
+        }
+        Input::Ready(value) if !backend.installation().supports_type(&value.physical_type()) => {
+            Err("native-input-type".into())
+        }
         Input::NativeWire { .. } | Input::Key { .. } | Input::Ready(_) => Ok(()),
     }
 }
-pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
+pub(super) fn load(backend: &CpuBackend, input: Input<'_>) -> Result<Value> {
     match input {
         Input::Native { value, .. } => Ok(value.clone()),
         Input::NativeWire {
@@ -322,7 +355,7 @@ pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
             if value.retained_bytes() > estimate {
                 return Err("artifact-input-size-estimate".into());
             }
-            if zkc_native::has_native_wire(&ty) {
+            if backend.installation().supports_wire(&ty) {
                 backend
                     .validate_native_input(&value)
                     .map_err(|e| e.to_string())?;

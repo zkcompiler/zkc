@@ -5,8 +5,8 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use zkc::proof::NativeDeployment;
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Value};
 use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 use zkc_test_support::hex;
 
 fn authority(keys: &Keys, authored: bool) -> zkc::proof::SetupAuthority {
@@ -37,13 +37,13 @@ fn authority_record(keys: &Keys, authored: bool) -> Json {
 fn digest(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
-fn backend(keys: &Keys) -> NativeBackend {
-    NativeBackend::new(
+fn backend(keys: &Keys) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
-        zkc_native::SetupRegistry::new(
+        zkc_cpu::SetupRegistry::new(
             vec![keys.verifier_key().clone()],
-            &zkc_native::Policy::default(),
+            &zkc_cpu::Policy::default(),
         )
         .unwrap(),
     )

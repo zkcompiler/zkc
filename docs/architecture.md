@@ -79,7 +79,7 @@ judgment.
 | Rust application Hosts | [zkc](../crates/zkc/README.md): Entry, proof and joint authority, authentication, preparation and publication |
 | Browser adapter | [zkc-web](../crates/zkc-web/README.md): in-memory SDK proof calls, Wasm bindings and a dedicated Worker boundary |
 | Mathematical kernels | [zkc-kernels](../crates/zkc-kernels/README.md): typed arithmetic, transforms, commitments, curve operations and scoped numerical storage |
-| Backend integration | [zkc-native](../crates/zkc-native/README.md): installed types, codecs, services and kernel dispatch |
+| Backend integration | [zkc-cpu](../crates/zkc-cpu/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
 
 The exported CMake components follow these responsibilities; the
@@ -94,17 +94,24 @@ The Rust boundaries separate application policy, machine execution and
 mathematical computation. Hosts own package and setup authorization, input
 assembly, publication and transport outcomes. The VM owns frames, installed
 call contracts, resource custody and execution budgets; the interpreter walks
-its admitted instructions. The native backend owns concrete values, exact
+its admitted instructions. The CPU backend owns concrete values, exact
 physical ports, codecs and effectful services. Mathematical kernels receive
 typed operands and explicit computation limits, without VM values, resource
 stores, transcript sessions or Host authority. Independent kernel code and the
-VM do not depend on each other; native adapters connect them.
+VM do not depend on each other; CPU adapters connect them.
 
 The reusable drivers live in `zkc-runtime::host`, separately from the VM and
 interpreter, without native or kernel dependencies. `host::wire::WireBackend`
 supplies installed complete-type support, fixed widths, encoding/decoding bounds
 and value codecs. `ProofBackend` adds borrowed raw bytes and Boolean acceptance
-projection. `zkc-native` implements these contracts with its closed native profile.
+projection. `zkc-cpu` implements these contracts with a selected view of its compiled CPU catalog.
+`CpuInstallation` fixes a provider subset before admission and keeps the same
+catalog layout identities. The compiler's optional `CpuTarget` is a subtractive
+selection constraint over independently known contracts. Neither descriptor
+installs an operation or changes the VM's representation-neutral contracts.
+The shared SDK owns memory document decoding and numerical material loading;
+file/project adapters and browser transport sit outside that semantic path.
+
 Artifacts cannot register codecs; the independently installed physical type
 determines its admitted codec.
 

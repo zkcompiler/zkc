@@ -1,7 +1,7 @@
 //! In-process invocation data. These descriptions confer no execution authority.
 use super::material::ProverMaterial;
 use std::sync::Arc;
-use zkc_native::Value;
+use zkc_cpu::Value;
 
 /// One native entry operand. Immutable data may be supplied without encoding;
 /// private capabilities are declarations and are issued by the admitted host.
@@ -14,8 +14,8 @@ pub enum InputValue {
     /// Application-owned decoded data with a retained canonical encoding.
     Prepared(super::data::PreparedData),
     /// Opened native frame; its exact bytes must match the declared digest.
-    WireFile {
-        file: super::input_file::InputFile,
+    WireSource {
+        file: super::input_source::InputSource,
         sha256: [u8; 32],
     },
     /// An active arm of the admitted native variant type. Payloads contain only
@@ -37,7 +37,7 @@ pub enum InputValue {
     },
     /// Opened key material, imported under independently authorized setup pins.
     ProverKeyInput {
-        file: super::input_file::InputFile,
+        file: super::input_source::InputSource,
         fingerprint: [u8; 32],
     },
 }

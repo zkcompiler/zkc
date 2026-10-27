@@ -4,8 +4,8 @@ use super::inputs::{Result, read_regular};
 pub(crate) use native::{check_native_data, check_retained_data};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
-use zkc_kernels::arkworks::bls12_381::{ProverKey, VerifierKey};
-use zkc_native::{NativeBackend, Policy, Value};
+use zkc_cpu::{CpuBackend, Policy, Value};
+use zkc_kernels::arkworks::bls12_381::VerifierKey;
 use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
@@ -56,7 +56,7 @@ pub(crate) fn entry_values<'a>(
 
 pub(crate) enum KeySource<'a> {
     Path(&'a str),
-    File(&'a super::input_file::InputFile),
+    File(&'a super::input_source::InputSource),
 }
 pub(crate) enum Input<'a> {
     Native {
@@ -102,13 +102,14 @@ impl<'a> Input<'a> {
         value: &'a Value,
         selected: Option<Arc<VerifierKey>>,
         estimate: Option<usize>,
+        installation: &zkc_cpu::CpuInstallation,
     ) -> Result<Self> {
         if value.physical_type() != ty {
             return Err("native-input-type".into());
         }
         if matches!(ty.kind(), Type::ProverKey | Type::VerifierKey)
             || !ty.is_duplicable()
-            || !zkc_native::has_native_wire(&ty)
+            || !installation.supports_wire(&ty)
         {
             return Err("native-input-private".into());
         }
@@ -143,11 +144,7 @@ impl<'a> Input<'a> {
     }
 }
 
-fn check_native(
-    backend: &NativeBackend,
-    value: &Value,
-    selected: Option<&VerifierKey>,
-) -> Result<()> {
+fn check_native(backend: &CpuBackend, value: &Value, selected: Option<&VerifierKey>) -> Result<()> {
     backend
         .validate_native_input(value)
         .map_err(|e| e.to_string())?;
@@ -176,6 +173,7 @@ pub(crate) struct Admission<'a> {
     ledger: Option<zkc_runtime::vm::ExecutionLedger>,
     wire_retained: Vec<zkc_runtime::vm::LiveReservation>,
     retained_inputs: bool,
+    material: Option<Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>>>,
 }
 impl<'a> Admission<'a> {
     pub fn new(limits: LoadLimits) -> Result<Self> {
@@ -194,7 +192,15 @@ impl<'a> Admission<'a> {
             ledger: None,
             wire_retained: Vec::new(),
             retained_inputs: false,
+            material: None,
         })
+    }
+    pub fn with_material(
+        mut self,
+        material: Arc<std::sync::Mutex<zkc_cpu::material::VerifierMaterials>>,
+    ) -> Self {
+        self.material = Some(material);
+        self
     }
     pub fn with_retained_inputs(mut self, enabled: bool) -> Self {
         self.retained_inputs = enabled;
@@ -230,7 +236,7 @@ impl<'a> Admission<'a> {
     /// Charge the scan before traversing framing, then reserve its retention.
     pub fn native_wire(
         &mut self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         ty: PhysicalType,
         bytes: impl Into<Cow<'a, [u8]>>,
         selected: Option<Arc<VerifierKey>>,
@@ -241,7 +247,7 @@ impl<'a> Admission<'a> {
     }
     pub(super) fn file_wire(
         &mut self,
-        file: &super::input_file::InputFile,
+        file: &super::input_source::InputSource,
         sha256: &[u8; 32],
         limit: usize,
     ) -> Result<Vec<u8>> {
@@ -265,7 +271,7 @@ impl<'a> Admission<'a> {
                 _ => "entry-input-reference",
             })?
         };
-        super::input_file::InputFile::verify(&bytes, sha256)?;
+        super::input_source::InputSource::verify(&bytes, sha256)?;
         Ok(bytes)
     }
     pub fn add(&mut self, input: Input<'a>) -> Result<usize> {
@@ -341,7 +347,7 @@ impl<'a> Admission<'a> {
     /// charges conservative byte work separately from numerical execution.
     pub fn load_shared(
         self,
-        backend: &NativeBackend,
+        backend: &CpuBackend,
         policy: &Policy,
         ledger: &zkc_runtime::vm::ExecutionLedger,
         metadata: usize,
@@ -371,7 +377,7 @@ impl<'a> Admission<'a> {
         let values = self.load(backend, policy)?;
         Ok((values, live))
     }
-    pub fn load(mut self, backend: &NativeBackend, policy: &Policy) -> Result<Vec<Value>> {
+    pub fn load(mut self, backend: &CpuBackend, policy: &Policy) -> Result<Vec<Value>> {
         // Work is a cumulative conservative proxy: bytes read/scanned plus
         // retained charges for every value, including cache hits. Reserve all
         // charges before material reads; charge actual file lengths as read.
@@ -405,9 +411,17 @@ impl<'a> Admission<'a> {
                         Some(
                             (match &source {
                                 KeySource::Path(path) => {
-                                    let mut file =
-                                        super::io::open_regular(path).map_err(|_| "artifact-io")?;
-                                    super::io::read_shared(&mut file, limit, Some(ledger))
+                                    #[cfg(feature = "files")]
+                                    {
+                                        let mut file = super::io::open_regular(path)
+                                            .map_err(|_| "artifact-io")?;
+                                        super::io::read_shared(&mut file, limit, Some(ledger))
+                                    }
+                                    #[cfg(not(feature = "files"))]
+                                    {
+                                        let _ = path;
+                                        Err("artifact-io".into())
+                                    }
                                 }
                                 KeySource::File(file) => file.read_shared(limit, ledger),
                             })
@@ -463,15 +477,19 @@ impl<'a> Admission<'a> {
                     } else {
                         #[cfg(test)]
                         IMPORT_COUNT.with(|n| n.set(n.get() + 1));
-                        let key = Arc::new(
-                            ProverKey::from_bytes(
+                        let key = if let Some(material) = &self.material {
+                            material
+                                .lock()
+                                .map_err(|_| "native-setup-material")?
+                                .import_prover(bytes, fingerprint, &verifier, policy.ark_bounds())?
+                        } else {
+                            zkc_cpu::material::import_prover(
                                 bytes,
                                 fingerprint,
                                 &verifier,
-                                &policy.ark_bounds(),
-                            )
-                            .map_err(|e| e.to_string())?,
-                        );
+                                policy.ark_bounds(),
+                            )?
+                        };
                         key_cache.insert(identity, key.clone());
                         Value::ProverKey(key)
                     }
@@ -499,13 +517,14 @@ thread_local! {
     pub(crate) static IMPORT_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "files"))]
 mod tests {
     use super::*;
+    use zkc_cpu::{Domain, EntryPolicy};
     use zkc_kernels::arkworks::bls12_381::Keys;
-    use zkc_native::{Domain, EntryPolicy};
 
     #[test]
+    #[cfg(feature = "files")]
     fn cache_requires_full_vk_identity_and_checked_sums_never_wrap() {
         let policy = Policy::default();
         let first = Keys::setup_with_rng(1, &mut ark_std::rand::thread_rng(), &policy.ark_bounds())
@@ -528,12 +547,12 @@ mod tests {
             })
             .unwrap();
         }
-        let backend = NativeBackend::new(
+        let backend = CpuBackend::new(
             policy,
             EntryPolicy::new(Domain::new("P", "s", "main", None), Some(1)),
-            zkc_native::SetupRegistry::new(
+            zkc_cpu::SetupRegistry::new(
                 vec![first.verifier_key().clone()],
-                &zkc_native::Policy::default(),
+                &zkc_cpu::Policy::default(),
             )
             .unwrap(),
         )

@@ -6,8 +6,8 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
 use zkc::proof::NativeDeployment;
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Sequence, Value};
 use zkc_kernels::arkworks::bls12_381::Keys;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
 use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 
@@ -17,13 +17,13 @@ fn authority(keys: &Keys) -> zkc::proof::SetupAuthority {
         inputs: std::collections::BTreeMap::from([(1, 2), (3, 2)]),
     }
 }
-fn backend(keys: &Keys) -> NativeBackend {
-    NativeBackend::new(
+fn backend(keys: &Keys) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "nested", "main", None), None),
-        zkc_native::SetupRegistry::new(
+        zkc_cpu::SetupRegistry::new(
             vec![keys.verifier_key().clone()],
-            &zkc_native::Policy::default(),
+            &zkc_cpu::Policy::default(),
         )
         .unwrap(),
     )
@@ -431,7 +431,7 @@ fn checked_indexing(directory: &Path, keys: &Keys) {
         let bundle = Bundle::admit(
             &bytes,
             &backend(keys),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
             BundleLimits::default(),
         )
         .unwrap();

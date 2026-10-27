@@ -5,7 +5,7 @@ use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
 };
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, Scalar, Value};
 use zkc_runtime::{
     interpreter::LocalRunner,
     vm::{
@@ -208,8 +208,8 @@ const PROGRAM: &str = r#"[
   [],
   []
 ]"#;
-fn backend(function: &str) -> NativeBackend {
-    NativeBackend::new(
+fn backend(function: &str) -> CpuBackend {
+    CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("", "native", function, None), None),
         Default::default(),
@@ -218,7 +218,11 @@ fn backend(function: &str) -> NativeBackend {
 }
 #[test]
 fn numerical_function_root_uses_existing_native_backend() {
-    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
+    let program = Program::decode(
+        PROGRAM.as_bytes(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     let mut runner = LocalRunner::new(
         &program,
         "helper",
@@ -238,7 +242,11 @@ fn numerical_function_root_uses_existing_native_backend() {
 }
 #[test]
 fn numerical_loop_and_output_guard_share_native_ledger() {
-    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
+    let program = Program::decode(
+        PROGRAM.as_bytes(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     let limits = ValueBudget {
         live_bytes: 16384,
         total_bytes: 262144,
@@ -277,7 +285,11 @@ fn numerical_loop_and_output_guard_share_native_ledger() {
 }
 #[test]
 fn native_entry_policy_is_still_checked_for_a_local_root() {
-    let program = Program::decode(PROGRAM.as_bytes(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap();
+    let program = Program::decode(
+        PROGRAM.as_bytes(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap();
     let refusal = LocalRunner::new(
         &program,
         "helper",
@@ -317,13 +329,17 @@ fn variant_program(elements: usize) -> Program {
         [],
         []
     ]);
-    Program::decode(&serde_json::to_vec(&carrier).unwrap(), &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose())).unwrap()
+    Program::decode(
+        &serde_json::to_vec(&carrier).unwrap(),
+        &zkc_runtime::vm::Contracts::standard(zkc_runtime::vm::ExecutionPolicy::general_purpose()),
+    )
+    .unwrap()
 }
 fn variant_runner(
     program: &Program,
     total_bytes: usize,
     ledger: Option<ExecutionLedger>,
-) -> LocalRunner<NativeBackend> {
+) -> LocalRunner<CpuBackend> {
     LocalRunner::new_with_ledger(
         program,
         "pack_many",

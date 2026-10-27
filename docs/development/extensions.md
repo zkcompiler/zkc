@@ -156,7 +156,7 @@ outlive the plan. Selection grants no timing permission. Pass random generators
 explicitly; native owns advancing OS-seeded sources.
 
 Add installed operations, concrete representations, codec adaptation and
-services to `zkc-native`. Its adapters select policy, borrow typed operands,
+services to `zkc-cpu`. Its adapters select policy, borrow typed operands,
 invoke kernels and publish complete results. Keep independent installed
 signatures and VM admission checks. A new external mathematics library usually
 extends kernels; a new backend requires a complete VM backend implementation,
@@ -165,3 +165,22 @@ An alternative with different physical ports, encoding, failure or timing
 requirements needs an exact installed implementation identity and independently
 checked signature. Reuse the compiler's checked physical plan and the VM's
 binding preparation rather than adding a kernel registry or hidden conversion.
+
+CPU installations compose the known compiled providers with
+`CpuInstallation::builder().include(...).finish()`. This restricts one catalog;
+it does not register new handlers. To add a provider, extend the typed kernels,
+the CPU's independently checked handlers and codecs, and its contribution owner
+mapping. Extend the compiler's independent target facts and reduced-installation
+tests together. `installation.target()` supplies the bounded
+`zkc.cpu-target/0` descriptor for `--cpu-target`; it cannot install compiler laws.
+Keep layout identities fixed when selecting a subset. A backend with different
+value or execution contracts implements the VM backend separately; selecting
+another CPU provider combination requires no new crate.
+
+The memory-only SDK build uses `default-features = false`. Its `files` adapter
+adds bounded filesystem sources and publication; `project` adds project and
+compiler integration and implies `files`. The browser's `zkc-web` adapter reuses
+the memory path and owns Workers, entropy integration and JS/Wasm byte custody.
+Keep mathematical work in kernels and execution in the common VM. See the
+[browser engine guide](../../crates/zkc-web/README.md) for build variants and
+ownership limits.

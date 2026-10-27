@@ -25,13 +25,26 @@ pub enum EntryPhase {
 pub struct EntryError {
     pub phase: EntryPhase,
     code: String,
+    path: Option<String>,
 }
 impl EntryError {
     pub(crate) fn new(phase: EntryPhase, code: impl ToString) -> Self {
         Self {
             phase,
             code: code.to_string(),
+            path: None,
         }
+    }
+    pub(crate) fn input(error: super::inputs::InputError) -> Self {
+        Self {
+            phase: EntryPhase::Request,
+            code: error.code,
+            path: Some(error.path),
+        }
+    }
+    /// Schema location for a document refusal, if the source supplied one.
+    pub fn path(&self) -> Option<&str> {
+        self.path.as_deref()
     }
     pub fn code(&self) -> &str {
         &self.code

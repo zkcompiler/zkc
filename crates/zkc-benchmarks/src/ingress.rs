@@ -6,7 +6,7 @@ use zkc::{
     entry::{FunctionInterface, Interface, NamedValues, Value, inputs::InputGroup},
     execution::{Capacity, CpuExecution, InputValue, PreparedData},
 };
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy, SetupRegistry};
 use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -144,7 +144,7 @@ struct Conversion<'a> {
 impl Conversion<'_> {
     fn convert(&mut self, value: Value, schema: &Json) -> Result<Value> {
         let value = match value {
-            Value::Leaf(InputValue::WireFile { file, sha256 }) => Value::Leaf(InputValue::Wire(
+            Value::Leaf(InputValue::WireSource { file, sha256 }) => Value::Leaf(InputValue::Wire(
                 file.read_verified(&sha256, self.capacity.wire_bytes)?
                     .into(),
             )),
@@ -238,7 +238,7 @@ impl Conversion<'_> {
             .collect()
     }
 }
-fn codec(capacity: Capacity, cpu: &CpuExecution) -> Result<NativeBackend> {
+fn codec(capacity: Capacity, cpu: &CpuExecution) -> Result<CpuBackend> {
     capacity.validate()?;
     let policy = Policy {
         max_table_elements: capacity.elements,
@@ -247,7 +247,7 @@ fn codec(capacity: Capacity, cpu: &CpuExecution) -> Result<NativeBackend> {
         max_value_bytes: capacity.value_bytes,
         ..Policy::default()
     };
-    NativeBackend::new_with_cpu(
+    CpuBackend::new_with_cpu(
         policy,
         EntryPolicy::new(Domain::new("benchmark", "ingress", "data", None), None),
         SetupRegistry::new(Vec::new(), &policy).map_err(|e| e.to_string())?,
@@ -267,8 +267,8 @@ fn convert_wire(
         return Ok((InputValue::Wire(bytes), retained));
     }
     if !ty.is_duplicable()
-        || !zkc_native::has_native_wire(&ty)
-        || zkc_native::requires_setup(ty.logical().clone())
+        || !zkc_cpu::has_native_wire(&ty)
+        || zkc_cpu::requires_setup(ty.logical().clone())
     {
         return Err(
             "benchmark-ingress: unsupported data conversion (private or setup-dependent type)"
@@ -477,7 +477,7 @@ mod tests {
     }
 
     fn assert_boolean(value: &Value, expected: bool, ingress: Ingress, cpu: &CpuExecution) {
-        let expected = wire(&zkc_native::Value::Bool(expected), cpu);
+        let expected = wire(&zkc_cpu::Value::Bool(expected), cpu);
         match (ingress, value) {
             (Ingress::Wire, Value::Leaf(InputValue::Wire(bytes))) => {
                 assert_eq!(bytes.as_slice(), expected.as_slice())
@@ -492,7 +492,7 @@ mod tests {
         }
     }
 
-    fn wire(value: &zkc_native::Value, cpu: &CpuExecution) -> Arc<Vec<u8>> {
+    fn wire(value: &zkc_cpu::Value, cpu: &CpuExecution) -> Arc<Vec<u8>> {
         cpu.enter(|| {
             codec(Capacity::default(), cpu)
                 .unwrap()
@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn native_and_prepared_use_the_same_canonical_statement() {
         let cpu = CpuExecution::new(2).unwrap();
-        let value = zkc_native::Value::Vector(vec![zkc_native::Scalar::from(7); 17].into());
+        let value = zkc_cpu::Value::Vector(vec![zkc_cpu::Scalar::from(7); 17].into());
         let bytes = wire(&value, &cpu);
         let backend = codec(Capacity::default(), &cpu).unwrap();
         for ingress in [Ingress::Wire, Ingress::Native, Ingress::Prepared] {
@@ -542,7 +542,7 @@ mod tests {
                     }
                     (InputValue::Native(a), InputValue::Native(b)) => {
                         assert_eq!(backend.encode_native_value(&b).unwrap(), *bytes);
-                        let (zkc_native::Value::Vector(a), zkc_native::Value::Vector(b)) =
+                        let (zkc_cpu::Value::Vector(a), zkc_cpu::Value::Vector(b)) =
                             (a.as_ref(), b.as_ref())
                         else {
                             panic!("vector owners")
@@ -722,12 +722,12 @@ mod tests {
     #[test]
     fn decoder_key_initializers_remain_descriptors_without_data_conversion() {
         let cpu = CpuExecution::new(2).unwrap();
-        use zkc::{entry::inputs::Resolver, execution::InputFile};
+        use zkc::{entry::inputs::Resolver, execution::InputSource};
         struct KeyFile;
         impl Resolver for KeyFile {
-            fn resolve(&mut self, relative: &str) -> std::result::Result<InputFile, String> {
+            fn resolve(&mut self, relative: &str) -> std::result::Result<InputSource, String> {
                 assert_eq!(relative, "key");
-                InputFile::new(
+                InputSource::new(
                     std::fs::File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
                         .unwrap(),
                 )
@@ -791,7 +791,7 @@ mod tests {
         );
         for ingress in [Ingress::Native, Ingress::Prepared] {
             let capacity = Capacity {
-                wire_bytes: wire(&zkc_native::Value::Bool(true), &cpu).len() - 1,
+                wire_bytes: wire(&zkc_cpu::Value::Bool(true), &cpu).len() - 1,
                 ..Capacity::default()
             };
             assert!(
@@ -921,7 +921,7 @@ mod tests {
             for limited in [false, true] {
                 let mut limits = HostLimits::default();
                 if limited {
-                    let value = zkc_native::Value::Bool(true);
+                    let value = zkc_cpu::Value::Bool(true);
                     // One Prepared owner retains both native and wire data;
                     // that fits while two independently loaded values do not.
                     limits.capacity.values.live_bytes =
@@ -929,7 +929,7 @@ mod tests {
                 }
                 let entry = RunEntry::admit_with_cpu(
                     package(&doc, &run_artifact(&doc)),
-                    limits,
+                    limits.clone(),
                     SetupAuthority::default(),
                     cpu.clone(),
                 )
@@ -977,7 +977,7 @@ mod tests {
     #[test]
     fn conversion_refuses_invalid_wire_and_current_capacity() {
         let cpu = CpuExecution::new(2).unwrap();
-        let value = zkc_native::Value::Bool(true);
+        let value = zkc_cpu::Value::Bool(true);
         let ty = value.physical_type();
         let bytes = wire(&value, &cpu);
         for ingress in [Ingress::Native, Ingress::Prepared] {
@@ -999,8 +999,7 @@ mod tests {
         }
         assert!(convert_wire(bytes, ty, Ingress::Json, Capacity::default(), &cpu).is_err());
         let private =
-            zkc_native::Value::point(vec![zkc_native::Scalar::from(7); 4], &Policy::default())
-                .unwrap();
+            zkc_cpu::Value::point(vec![zkc_cpu::Scalar::from(7); 4], &Policy::default()).unwrap();
         for ingress in [Ingress::Native, Ingress::Prepared] {
             let error = convert_wire(
                 Vec::new().into(),

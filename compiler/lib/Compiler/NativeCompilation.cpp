@@ -61,7 +61,8 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            LinearContractionStats &statistics,
                            json::Array *stages = nullptr,
                            StringRef selectedRole = {},
-                           CompilationObservation *observations = nullptr) {
+                           CompilationObservation *observations = nullptr,
+                           const target::CpuTarget &cpuTarget = {}) {
   TimeTraceScope timing("zkc.lower-participants");
   PassManager pipeline(module.getContext());
   mathematical::RealizationTrace trace;
@@ -130,8 +131,9 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
   PassManager physical(module.getContext());
   if (observations)
     observations->instrument(physical);
-  auto selection = protocol::createSelectPhysicalPass(
-      {}, false, releaseStorage, &statistics, {}, mathematicalSelection);
+  auto selection =
+      protocol::createSelectPhysicalPass({}, false, releaseStorage, &statistics,
+                                         {}, mathematicalSelection, cpuTarget);
   if (stages)
     stages->push_back(selection->getArgument().str());
   physical.addPass(std::move(selection));
@@ -215,7 +217,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
   if (failed(lowerProgram(*result->module, options.simplify,
                           options.fixPolynomialFactors, options.releaseStorage,
                           options.mathematicalSelection, result->statistics,
-                          &loweringStages, {}, options.observations)) ||
+                          &loweringStages, {}, options.observations,
+                          options.cpuTarget)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto bundle =
@@ -355,7 +358,7 @@ compileNativeProof(StringRef text, StringRef filename,
   if (failed(lowerProgram(*result->module, options.simplify, false,
                           options.releaseStorage, options.mathematicalSelection,
                           result->statistics, nullptr, selectedRole,
-                          options.observations)) ||
+                          options.observations, options.cpuTarget)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto exported = protocol::exportModule(*result->module);

@@ -21,7 +21,7 @@ use zkc::{
 };
 
 fn accepted(value: Option<&Value>) -> bool {
-    matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_native::Value::Bool(true)))
+    matches!(value, Some(Value::Leaf(InputValue::Native(value))) if matches!(value.as_ref(), zkc_cpu::Value::Bool(true)))
 }
 
 #[derive(Deserialize)]
@@ -35,7 +35,7 @@ fn check_output(
     value: &Value,
     check: &Check,
     expected: Option<&serde_json::Value>,
-    options: FunctionOptions,
+    capacity: zkc::execution::Capacity,
     cpu: &zkc::execution::CpuExecution,
 ) -> Result<()> {
     let correct = match check {
@@ -51,9 +51,9 @@ fn check_output(
             accepted(acceptance)
         }
         Check::Output { .. } => {
-            let bytes = zkc::entry::files::function_output_with_cpu(
+            let bytes = zkc::entry::outputs::function_output_with_cpu(
                 value,
-                options.limits.capacity,
+                capacity,
                 Default::default(),
                 cpu.clone(),
             )?;
@@ -117,6 +117,7 @@ pub fn run(
         authority.insert(child.id().into(), Default::default());
     }
     let options = FunctionOptions::default();
+    let capacity = options.limits.capacity;
     let entry = FunctionEntry::admit_with_cpu(package, options, authority, job.cpu()?.clone())
         .map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
@@ -131,7 +132,7 @@ pub fn run(
     };
     let group = entry.interface().input_group();
     let decode = || -> Result<NamedValues> {
-        Documents::new(options.limits.capacity)?
+        Documents::new(capacity)?
             .load(&group, Some(arguments))
             .map_err(|e| e.to_string().into())
     };
@@ -145,7 +146,7 @@ pub fn run(
             &group,
             entry.interface(),
             ingress,
-            options.limits.capacity,
+            capacity,
             entry.cpu(),
         )?;
         entry
@@ -198,7 +199,7 @@ pub fn run(
                 return Err(format!("function failed: {}", report.diagnostics()).into());
             }
             let value = report.value.as_ref().unwrap().clone().into_value();
-            check_output(&value, check, expected.as_ref(), options, entry.cpu())?;
+            check_output(&value, check, expected.as_ref(), capacity, entry.cpu())?;
             observed += 1;
             if observed == total {
                 last = Some(report);
@@ -233,10 +234,8 @@ mod tests {
     use zkc_runtime::vm::Value as _;
     #[test]
     fn acceptance_is_a_typed_boolean() {
-        assert!(accepted(Some(&Value::from(zkc_native::Value::Bool(true)))));
-        assert!(!accepted(Some(&Value::from(zkc_native::Value::Bool(
-            false
-        )))));
+        assert!(accepted(Some(&Value::from(zkc_cpu::Value::Bool(true)))));
+        assert!(!accepted(Some(&Value::from(zkc_cpu::Value::Bool(false)))));
         assert!(!accepted(Some(&Value::Unit)));
         assert!(!accepted(None));
     }
@@ -270,7 +269,7 @@ mod tests {
             return;
         };
         let cpu = zkc::execution::CpuExecution::new(workers.parse().unwrap()).unwrap();
-        let value = Value::from(zkc_native::Value::Bool(true));
+        let value = Value::from(zkc_cpu::Value::Bool(true));
         let expected = serde_json::json!({"format":"zkc.entry-outputs/0", "value":true});
         let check = Check::Output {
             expected: PathBuf::new(),
@@ -280,7 +279,7 @@ mod tests {
                 &value,
                 &check,
                 Some(&expected),
-                FunctionOptions::default(),
+                zkc::execution::Capacity::default(),
                 &cpu,
             )
             .unwrap();
@@ -345,8 +344,8 @@ mod tests {
         let path = directory.join("function.zkpkg");
         std::fs::write(&path, &package).unwrap();
         let arguments = directory.join("arguments.json");
-        let payload = zkc_native::readable_wire(
-            &zkc_native::Value::Bool(true).physical_type(),
+        let payload = zkc_cpu::readable_wire(
+            &zkc_cpu::Value::Bool(true).physical_type(),
             &json!(true),
             128,
         )

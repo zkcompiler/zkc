@@ -1,7 +1,7 @@
 //! Invocation entropy issuance. Deterministic tapes exist only in test builds.
 use crate::host::inputs::Result;
-use zkc_native::{
-    Domain, NativeBackend, Value,
+use zkc_cpu::{
+    CpuBackend, Domain, Value,
     services::{ServiceReference, ServiceRegistry},
 };
 use zkc_runtime::vm::{Identity, Type};
@@ -11,12 +11,12 @@ pub(super) enum Entropy {
     #[default]
     System,
     #[cfg(feature = "test-utils")]
-    Tapes(std::collections::BTreeMap<usize, zkc_native::TestTape>),
+    Tapes(std::collections::BTreeMap<usize, zkc_cpu::TestTape>),
 }
 impl Entropy {
     pub(super) fn capability(
         &self,
-        backend: &mut NativeBackend,
+        backend: &mut CpuBackend,
         kind: Type,
         field: Identity,
         port: usize,
@@ -25,7 +25,7 @@ impl Entropy {
     ) -> Result<Value> {
         #[cfg(feature = "test-utils")]
         if let Self::Tapes(tapes) = self {
-            use zkc_native::TestTape;
+            use zkc_cpu::TestTape;
             let tape = tapes.get(&port).ok_or("native-proof-test-entropy-port")?;
             if tape.identity() != field {
                 return Err("native-proof-test-entropy-field".into());

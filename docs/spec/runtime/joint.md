@@ -120,7 +120,7 @@ the backend used for bundle admission. A missing profile refuses setup with
 `role-wire-type` and returns all original inputs and backend custody. These
 contracts do not allow artifacts to install codecs.
 
-`zkc-native` implements this boundary for its closed native profile. Application
+`zkc-cpu` implements this boundary for its closed native profile. Application
 `RunHost` admission, independently supplied pins, setup and invocation authority,
 input preparation and publication remain in `zkc`. The driver consumes
 existing Runner cuts and control methods. Reports retain pending bytes and live

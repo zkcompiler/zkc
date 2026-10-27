@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc::execution::{Capacity, InputValue};
 use zkc::proof::{AttemptPolicy, NativeDeployment, NativeProofReport, ProofInputs};
-use zkc_native::{Domain, EntryPolicy, G1, NativeBackend, Policy, Scalar, Value};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, G1, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
     vm::{ValueBudget, WorkBudget},
@@ -23,7 +23,7 @@ fn inputs(envelope: &Json, producing: bool, fold: bool) -> Json {
         .iter()
         .find(|row| &row[0] == role)
         .unwrap();
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),
@@ -216,7 +216,7 @@ fn run(directory: &Path, case: &Json) {
     assert_eq!(draws(&result, fold), 2);
     // The in-process path keeps the same actual provider advances and final
     // transcript as the positional transport, including RNG successor reuse.
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),
@@ -700,7 +700,7 @@ fn empty_attempts(directory: &Path) {
     let deployment =
         NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
             .unwrap();
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),
@@ -1000,7 +1000,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
 // Malformed affine state is already rejected by ordinary admission; event order
 // additionally needs the proof-specific checker.
 fn check_exit_mutations(envelope: &Json) {
-    let codec = NativeBackend::new(
+    let codec = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
         Default::default(),
@@ -1040,7 +1040,7 @@ fn check_exit_mutations(envelope: &Json) {
         }
         let error = zkc_runtime::vm::Program::decode(
             &serde_json::to_vec(&candidate).unwrap(),
-            zkc_native::native_contracts(),
+            zkc_cpu::cpu_contracts(),
         )
         .and_then(|program| {
             program.check_installation(&codec)?;
@@ -1089,7 +1089,7 @@ fn check_exit_mutations(envelope: &Json) {
     body.insert(delivery + 1, exit);
     zkc_runtime::vm::Program::decode(
         &serde_json::to_vec(&candidate).unwrap(),
-        zkc_native::native_contracts(),
+        zkc_cpu::cpu_contracts(),
     )
     .and_then(|program| {
         program.check_installation(&codec)?;

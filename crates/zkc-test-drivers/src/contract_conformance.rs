@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io;
 use zkc::entry::Package;
-use zkc_native::{Domain, EntryPolicy, NativeBackend, Policy};
+use zkc_cpu::{CpuBackend, Domain, EntryPolicy, Policy};
 use zkc_runtime::vm::{
     AdmissionError, LogicalType, OperationBinding, OperationSignature, PhysicalType,
 };
@@ -14,7 +14,7 @@ type LogicalResolver =
 fn expected_logical(
     binding: &OperationBinding,
 ) -> Result<OperationSignature<LogicalType>, AdmissionError> {
-    zkc_native::native_contracts().logical_signature(binding)
+    zkc_cpu::cpu_contracts().logical_signature(binding)
 }
 
 // Test-only resolver drift; no declaration, admission rule or serialized result
@@ -32,13 +32,12 @@ fn divergent_logical_resolver(
 // Construct only SSA plumbing. Production admission owns attribute syntax,
 // ranges, field selection, affine uses and installed backend agreement.
 fn operation_program(binding: &OperationBinding, attributes: &[Value]) -> Option<Vec<u8>> {
-    let signature = zkc_native::native_contracts_with_policy(
-        zkc_runtime::vm::ExecutionPolicy::general_purpose(),
-    )
-    .resolve(binding.clone())
-    .ok()?
-    .signature()
-    .clone();
+    let signature =
+        zkc_cpu::cpu_contracts_with_policy(zkc_runtime::vm::ExecutionPolicy::general_purpose())
+            .resolve(binding.clone())
+            .ok()?
+            .signature()
+            .clone();
     let inputs: Vec<_> = signature
         .inputs
         .iter()
@@ -115,13 +114,13 @@ fn entry_interface(text: &str) -> Value {
     observed(zkc::entry::BoundInterface::read(&package).map(|_| ()))
 }
 
-fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Option<Value> {
+fn respond(native: &CpuBackend, line: &[u8], resolve: LogicalResolver) -> Option<Value> {
     let request = zkc_test_support::json_lines::request(line)?;
     if request.len() == 1 && request.contains_key("entry_interface") {
         return Some(entry_interface(request.get("entry_interface")?.as_str()?));
     }
     if request.len() == 1 && request.get("implementations") == Some(&Value::Bool(true)) {
-        let entries: Vec<_> = zkc_native::native_contracts().installed_implementations()
+        let entries: Vec<_> = zkc_cpu::cpu_contracts().installed_implementations()
             .into_iter()
             .map(|(implementation, contract)| json!({"contract": contract, "implementation": implementation}))
             .collect();
@@ -130,7 +129,7 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         );
     }
     if request.len() == 1 && request.contains_key("physical_properties") {
-        let contracts = zkc_native::native_contracts();
+        let contracts = zkc_cpu::cpu_contracts();
         let ty = contracts
             .physical_type(request.get("physical_properties")?.as_str()?)
             .ok()?;
@@ -138,7 +137,7 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
             "drop":ty.is_discardable(), "native_message":contracts.permits_wire(&ty, zkc_runtime::vm::WireCodec::Native)}));
     }
     if request.len() == 1 && request.contains_key("physical_type") {
-        let ty = zkc_native::native_contracts()
+        let ty = zkc_cpu::cpu_contracts()
             .physical_type(request.get("physical_type")?.as_str()?)
             .ok()?;
         return Some(json!({"accepted": true, "canonical": ty.spelling()}));
@@ -209,7 +208,7 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         return Some(observed(
             zkc_runtime::vm::Program::decode(
                 &bytes,
-                &zkc_native::native_contracts_with_policy(
+                &zkc_cpu::cpu_contracts_with_policy(
                     zkc_runtime::vm::ExecutionPolicy::general_purpose(),
                 ),
             )
@@ -222,13 +221,12 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         ));
     }
     let (inputs, outputs): (Vec<_>, Vec<_>) = if physical {
-        let signature = zkc_native::native_contracts_with_policy(
-            zkc_runtime::vm::ExecutionPolicy::general_purpose(),
-        )
-        .resolve(binding.clone())
-        .ok()?
-        .signature()
-        .clone();
+        let signature =
+            zkc_cpu::cpu_contracts_with_policy(zkc_runtime::vm::ExecutionPolicy::general_purpose())
+                .resolve(binding.clone())
+                .ok()?
+                .signature()
+                .clone();
         (
             signature
                 .inputs
@@ -265,13 +263,13 @@ fn main() -> io::Result<()> {
             std::process::exit(2);
         }
     };
-    let native = NativeBackend::new(
+    let native = CpuBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "session", "main", None), None),
         Default::default(),
     )
     .map_err(|error| io::Error::other(error.code))?
-    .with_contracts(zkc_native::native_contracts_with_policy(
+    .with_contracts(zkc_cpu::cpu_contracts_with_policy(
         zkc_runtime::vm::ExecutionPolicy::general_purpose(),
     ))
     .map_err(|error| io::Error::other(error.code))?;
