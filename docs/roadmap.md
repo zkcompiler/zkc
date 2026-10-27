@@ -46,7 +46,7 @@ what actually landed. Keep one canonical implementation at every transition.
 | Component-contract foundation | Reconcile the independently developed formal and native/frontend contract and relation interfaces on the landed base before adding realization features |
 | Oracle realization and program bytes | Protocol-owned oracle kinds/anchors, virtual dependencies, typed realization records between preparation and projection, independent actual-body comparisons, block-draw and gated-request emission, witness codec slot, source AST/elaboration export and an exact version-0 executable byte grammar |
 | STARK compiler support | Consume the landed realization records for executable queries, authentication, selected transcript/extension fields and gating; settle AIR asset ownership before adding another representation |
-| Represented execution | Residue and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules on representative exact workloads |
+| Represented execution | Canonical logical collection ownership across Data/Algebra, Residue and codec semantics, private buffer contracts and admitted Arith/Vector/Bufferization lowering; compare native kernels and transparent schedules on representative exact workloads |
 | Constraints and semantic consumers | One assignment-level owner, source-to-encoding adequacy, lookup/multiset and chronological-memory consumers, exact statement/witness maps and bounded external adapters |
 
 Oracle design must settle shape provenance, answer-use dominance, logical versus

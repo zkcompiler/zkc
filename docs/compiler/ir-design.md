@@ -17,7 +17,7 @@ conditions, not registered dialects or supported protocol claims.
 | Owner | Abstraction and information retained |
 |---|---|
 | Protocol | Roles, source-relative action occurrences, communication, draws, statements, completion and repeated interaction |
-| Algebra | Nominal field/group values, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
+| Algebra | Nominal field/group values, specialized bulk collections, exact arithmetic and finite mathematical computations; machine integers do not substitute for field semantics |
 | Poly | Formal polynomial and quotient-ring values, domains, bases and evaluation structure before concrete realization |
 | Data | Logical aggregates, sequences, variants, domains and explicit ordering; no authentication or oracle claim follows from a container |
 | Relation | Relation declarations/assets, public/witness layout and deterministic interpretation; imported syntax remains an adapter concern |
@@ -76,6 +76,21 @@ target decision. Unknown effects stay conservative until a valid interface model
 allows optimization. MLIR [effect/speculation interfaces](https://mlir.llvm.org/docs/Rationale/SideEffectsAndSpeculation/)
 help generic passes reason about operations; protocol observations and affine
 custody still need their own checks.
+
+Logical collections need a separate ownership decision in represented execution.
+Current generic `data.sequence<T>` and specialized Algebra vectors/arrays have
+related element/shape structure but distinct logical schemas, codecs and installed
+operation contracts. `CollectionTypeInterface` already gives analyses a common
+view; it does not make the values interchangeable. The target assigns ordinary
+collection shape to Data, element domains/arithmetic to Algebra, and storage/lane
+choices to representation lowering. Audit which specialized forms express a
+real mathematical distinction and which merely duplicate a collection with a
+different implementation. Merge the latter with their source, layout, codec,
+formal-reader and runtime consumers in one migration, removing replaced forms.
+Keep polynomial axes, coordinate-point meaning and other nominal mathematical
+contracts explicit. Standard Tensor is a private shaped computation view and
+Vector a represented execution tool, not an automatic replacement for every
+logical collection or its wire schema.
 
 ## Transformation and component contracts
 
