@@ -18,7 +18,9 @@ wasm-bindgen --target web --out-dir crates/zkc-web/web/pkg \
 
 Serve `web/` over HTTP. `worker.js` demonstrates one admitted proof session in
 one ordinary dedicated Worker. Send an `admit` message with `package` and `pin`
-as `Uint8Array`s. The application must obtain the expected SHA-256 pin and setup
+as `Uint8Array`s and an `id` that is a string or safe integer. Replies echo that
+correlation ID; invalid envelopes receive an error without an ID. The application
+must obtain the expected SHA-256 pin and setup
 authority independently of downloaded candidate data. Send `prove` with
 `public` and `witness` JSON document bytes, or `verify` with `public` and `proof`
 bytes. Input schemas and readable values are the SDK's existing ones. Use
@@ -95,3 +97,9 @@ they exclude module loading, admission, message transfer and getter copies.
 Native times use the same SDK facade calls without JavaScript marshalling.
 They are feasibility observations, not native/browser performance equivalence.
 The test helper is not a second benchmark framework.
+
+Worker envelope and trap-reporting controls also run without Wasm or a browser:
+
+```sh
+node common/tests/browser/worker.mjs
+```

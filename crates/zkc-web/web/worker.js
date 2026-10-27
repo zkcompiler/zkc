@@ -2,6 +2,7 @@
 import init, { ProofSession } from './pkg/zkc_web.js';
 const ready = init();
 let session;
+let terminated = false;
 // Validate every argument before entering glue: a late JS conversion exception
 // can strand earlier Wasm argument allocations before Rust takes ownership.
 function bytes(value, name) {
@@ -15,9 +16,15 @@ self.onmessage = async ({ data }) => {
   let id;
   try {
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('web-message');
-    ({ id } = data);
+    // Echo only primitive correlation IDs; transferred objects may not be
+    // cloneable in replies, including the reply reporting a Wasm trap.
+    if (typeof data.id !== 'string' && !Number.isSafeInteger(data.id)) throw new Error('web-message-id');
+    id = data.id;
     const { operation } = data;
     await ready;
+    // Other messages may already be awaiting module initialization when a
+    // fatal call closes the Worker. Their continuations must not enter Rust.
+    if (terminated) return;
     if (operation === 'admit') {
       if (session) throw new Error('web-session-active');
       // pin and authority are application configuration, independent of package.
@@ -77,8 +84,13 @@ self.onmessage = async ({ data }) => {
     }
   } catch (error) {
     const fatal = error instanceof WebAssembly.RuntimeError || error instanceof TypeError || error instanceof RangeError;
-    self.postMessage({ id, error: String(error), fatal });
-    // An abort/trap gives no Rust rollback guarantee. Discard this Worker.
-    if (fatal) self.close();
+    if (fatal) terminated = true;
+    try {
+      self.postMessage({ id, error: String(error), fatal });
+    } finally {
+      // An abort/trap gives no Rust rollback guarantee. Discard this Worker
+      // even when reporting the failure itself throws.
+      if (fatal) self.close();
+    }
   }
 };
