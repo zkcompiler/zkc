@@ -5,9 +5,11 @@ and uv owns Python tools. Nix supplies pinned toolchains and packages; the
 [justfile](../../justfile) coordinates checkout commands. Default builds and
 execution tests target the C++/Rust path. Formal work is optional and standalone.
 
-The supported Nix system is **x86_64-linux**. NixOS is not required. Other host
-platforms and cross compilation are not validated targets. Nix fixes build inputs;
-it does not prove compiler correctness or deterministic application reports.
+The supported Nix system is **x86_64-linux**. NixOS is not required. The
+[browser adapter](../../crates/zkc-web/README.md) has a separate manual Wasm build
+and integration check; it is not a Nix application target. Other host platforms
+and cross-compilation targets are not validated. Nix fixes build inputs; it does
+not prove compiler correctness or deterministic application reports.
 
 ## Set up the development checkout
 

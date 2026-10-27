@@ -12,8 +12,11 @@ function bytes(value, name) {
   return value;
 }
 self.onmessage = async ({ data }) => {
-  const { id, operation } = data;
+  let id;
   try {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('web-message');
+    ({ id } = data);
+    const { operation } = data;
     await ready;
     if (operation === 'admit') {
       if (session) throw new Error('web-session-active');

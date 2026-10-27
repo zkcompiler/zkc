@@ -60,6 +60,14 @@ try {
       const admit = await call('admit', { package: input.package, pin: input.pin });
       const admission_ms = performance.now() - started;
       if (admit.error) throw new Error(admit.error);
+      const malformedEnvelope = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('malformed-envelope-timeout')), 5000);
+        worker.addEventListener('message', ({ data }) => {
+          clearTimeout(timer);
+          resolve(data);
+        }, { once: true });
+        worker.postMessage(null);
+      });
       const malformedMessages = [];
       for (let i = 0; i < 16; i++) malformedMessages.push(await call('prove', { public: new Uint8Array(1 << 20) }));
       malformedMessages.push(await call('verify', { ...input, proof: 'not-bytes' }));
@@ -86,9 +94,11 @@ try {
       const limited = limited_admission.error ? limited_admission : await call('prove', { ...input, budget: 0 });
       await call('dispose'); worker.terminate();
       const simplify = v => v && ({ ...v, proof: v.proof && Array.from(v.proof), outputs: v.outputs && Array.from(v.outputs) });
-      return { malformedMessages, admission_ms, verified: simplify(verified), trials: trials.map(t => ({ proved: simplify(t.proved), checked: simplify(t.checked) })), controls: { malformed, unfilled, reference, truncated: simplify(truncated), disposed, wrong_pin, limited: simplify(limited) }, crossOriginIsolated };
+      return { malformedEnvelope, malformedMessages, admission_ms, verified: simplify(verified), trials: trials.map(t => ({ proved: simplify(t.proved), checked: simplify(t.checked) })), controls: { malformed, unfilled, reference, truncated: simplify(truncated), disposed, wrong_pin, limited: simplify(limited) }, crossOriginIsolated };
     }, input);
     assert.equal(result.crossOriginIsolated, false);
+    assert.equal(result.malformedEnvelope.error, 'Error: web-message');
+    assert.equal(result.malformedEnvelope.fatal, false);
     for (const control of result.malformedMessages) {
       assert.match(control.error, /web-message-bytes/);
       assert.equal(control.fatal, false);
