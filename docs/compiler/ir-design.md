@@ -142,6 +142,7 @@ upstream rewrite that the reader does not understand.
 | Lookup multiplicities, active masks, scope and table identity | Planned constraint interpretation; finite-field sums alone do not preserve natural multiplicity |
 | Memory chronology, initialization and final-state conditions | Planned chronological-memory constraints; a generic bag of rows is insufficient |
 | Exact encoding, domain separation, setup and challenge provenance | Codec/commitment/transcript consumers; canonical bytes and authority are distinct facts |
+| Primitive dependencies and shared primitive identities | Required before admitting hashing relations/internal verifiers; transparent dependencies are derived and opaque assumptions are explicit |
 | Centered representatives and norm bounds | Quotient/lattice operations; modular equality alone does not establish a norm bound |
 | Accumulated residuals and final decider | Future folding/recursion contracts; an intermediate accumulator is not acceptance |
 | Disclosure, observation and adversarial access | Future privacy/security analyses; sending an entire table is not private oracle access |
@@ -163,6 +164,14 @@ rewrites preserve values; relation encodings require all-assignment adequacy;
 cryptographic replacements require a stated adversarial experiment and reduction.
 No generic “verified” marker joins those obligations.
 
+Each connection names its actual input/output subjects, independent reader or
+regeneration check, formal consumer and remaining trust. Native implementation
+completion and formal closure are separate milestones. A source export or a
+byte digest binds a subject without proving the exporter or reader correct.
+The [delivery plan](../roadmap.md#shared-interfaces-before-implementation) assigns
+the compiler inputs and formal consumers for the source, realization and byte
+connections.
+
 Logical oracle kinds and operations belong to Protocol, generic containers to
 Data, and concrete schemes to Commitment. Ideal data access, commitment opening,
 and a random-oracle model are three different concepts. Initial oracle shape
@@ -183,6 +192,11 @@ Three additional semantic owners have concrete prospective consumers:
   wire and recursive-verification consumers. Runtime still implements the
   independently installed physical codecs.
 
+Construction-specific encoding contracts are fixed when their first consumer
+lands, including statement/root binding, witness framing and request/state
+semantics. Later Codec ownership consolidates those exact meanings with their
+consumers; it does not create a competing byte language.
+
 Introduce these namespaces with operations and checked consumers, not empty
 registrations. Per-algorithm Falcon, lattice, FRI, folding or transcript dialects
 are unnecessary merely to name a library. A new family warrants a dialect when
@@ -194,6 +208,12 @@ handles. Preserve domains, setup authority, widths, explicit outcomes and comple
 layouts for EVM and later targets. Standard bufferization can inform private
 storage lowering, but its [alias and ownership analysis](https://mlir.llvm.org/docs/Bufferization/)
 does not establish zkc scope custody or observable resource refusal.
+
+A selected installation restricts independently known contracts throughout
+compiler selection and final validation, including defaults, explicit choices,
+fallback, conversions, table relayout, nested layouts and codecs. Candidate
+preferences are separate from installation authority. Runtime owns the frozen
+installation; compiler integration preserves its restrictions at every route.
 
 External dialects remain useful at bounded adapters where their semantics match.
 HEIR reuse should be evaluated against represented polynomial/modular workloads;
@@ -219,6 +239,8 @@ admitted rewrite space, retained sources consume memory, and strict admission
 can refuse valid but unsupported forms. Lowering too early loses optimization
 opportunities; retaining every abstraction indefinitely enlarges every consumer.
 The lowering point is therefore the last consumer that needs the information,
-with an explicit checked interpretation for later stages. Revisit a dialect split
-when its consumers and laws converge, and revisit external reuse when measured
-benefit exceeds its conversion and dependency costs.
+with an explicit checked interpretation for later stages. The
+[delivery criteria](../roadmap.md#acceptance-across-units) make these ownership,
+invalidation and removal obligations explicit for each implementation unit.
+Revisit a dialect split when its consumers and laws converge, and revisit
+external reuse when measured benefit exceeds its conversion and dependency costs.
