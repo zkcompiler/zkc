@@ -210,6 +210,7 @@ def main():
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",
         ROOT / "lib/Transforms/RealizationEmission.h",
+        ROOT / "lib/Transforms/OracleQueryCapacity.h",
         ROOT / "lib/Transforms/OracleAnchorStorage.h",
         ROOT / "lib/Transforms/OracleTableRead.h",
         ROOT / "lib/Transforms/OracleVirtualFunctions.h",

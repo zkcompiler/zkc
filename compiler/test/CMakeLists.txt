@@ -44,6 +44,8 @@ add_zkc_test(oracle_observations Compiler oracle-observations)
 add_zkc_test(oracle_anchor_storage Compiler oracle-anchor-storage)
 add_zkc_test(oracle_table_read Compiler oracle-table-read)
 add_zkc_test(oracle_virtual_functions Compiler oracle-virtual-functions)
+add_zkc_test(oracle_query_capacity Transforms oracle-query-capacity)
+mlir_target_link_libraries(zkc-oracle_query_capacity-test PRIVATE MLIRParser)
 add_zkc_test(source_correspondence Compiler source-correspondence)
 target_compile_definitions(zkc-source_correspondence-test PRIVATE
   ZKC_CORRESPONDENCE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/source-claims")

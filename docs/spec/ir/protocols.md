@@ -161,6 +161,17 @@ then execute each reached child query in order before calling the answer
 function. This pure substitution check does not establish that control lowering
 or the association with actual anchors.
 
+Structural query capacity is derived from the prepared entry. A base table
+contributes one leaf and one node; a virtual contributes one node plus the
+complete ordered expansion of each declared query, including duplicates and
+unused answers. Handle sequences join the sizes of possible selected anchors;
+component rebindings and shape erasure retain the bound. Repeat analysis joins
+zero-trip and backedge values, including nested loops, and may stop at a
+post-fixed point. It never evaluates positions, answers, data or admissibility.
+An unrepresentable bound or exhausted analysis work refuses compilation rather
+than adding a logical premise or truncating a query. These bounds do not select
+an actual anchor, check an emitted controller or establish a simulation.
+
 ## Ordered oracle events
 
 `protocol.oracle_send(data, shape...)` produces an `oracle<K>` handle at its
