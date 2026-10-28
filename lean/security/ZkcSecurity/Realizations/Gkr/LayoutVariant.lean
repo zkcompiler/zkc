@@ -2,7 +2,7 @@ module
 
 public import ZkcSecurity.Realizations.Gkr.CanonicalPair
 public import ZkcExamples.Construction.GkrSourceRouting
-public import ZkcTools.ConstructionBindings.Frames
+public import Zkc.Construction.LayoutPermutation
 
 @[expose] public section
 
@@ -20,7 +20,6 @@ set_option maxRecDepth 50000
 set_option maxHeartbeats 8000000
 namespace ZkcSecurity.Realizations.Gkr.LayoutVariant
 open Zkc.Construction
-open ZkcTools.ConstructionBindings
 open ZkcExamples.Construction
 
 def order (artifact : Participant) : List Nat :=
@@ -33,15 +32,15 @@ def producerOrder := order CanonicalPair.Producer.participant
 def validatorOrder := order CanonicalPair.Validator.participant
 
 def producer : Participant :=
-  Frames.prependCoordinates ((Frames.permuteInputs CanonicalPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).toOption.get (by decide +kernel))
 def validator : Participant :=
-  Frames.prependCoordinates ((Frames.permuteInputs CanonicalPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
+  LayoutPermutation.prependCoordinates ((LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).toOption.get (by decide +kernel))
 
 theorem producer_provenance :
-    (Frames.permuteInputs CanonicalPair.Producer.participant producerOrder).map Frames.prependCoordinates = .ok producer := by
+    (LayoutPermutation.permuteInputs CanonicalPair.Producer.participant producerOrder).map LayoutPermutation.prependCoordinates = .ok producer := by
   decide +kernel
 theorem validator_provenance :
-    (Frames.permuteInputs CanonicalPair.Validator.participant validatorOrder).map Frames.prependCoordinates = .ok validator := by
+    (LayoutPermutation.permuteInputs CanonicalPair.Validator.participant validatorOrder).map LayoutPermutation.prependCoordinates = .ok validator := by
   decide +kernel
 
 theorem producer_changed : producer ≠ CanonicalPair.Producer.participant := by decide +kernel
