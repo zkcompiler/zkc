@@ -114,9 +114,9 @@ struct Analysis {
       } else if (!isa<pir::OracleContentsOp, pir::OracleComponentsOp,
                       pir::OracleShapeOp, pir::OracleForgetShapeOp,
                       pir::OracleSequenceEmptyOp, pir::OracleSequenceLengthOp,
-                      pir::RestrictRolesOp, pir::StatementOp,
-                      pir::ConstructionStartOp, pir::MathematicalReturnOp,
-                      pir::ProtocolYieldOp>(op) &&
+                      pir::RestrictRolesOp, pir::AssembleRolesOp,
+                      pir::StatementOp, pir::ConstructionStartOp,
+                      pir::MathematicalReturnOp, pir::ProtocolYieldOp>(op) &&
                  !mathematical::isTotal(&op))
         return error("oracle-observation-operation");
       result = result.then(step);

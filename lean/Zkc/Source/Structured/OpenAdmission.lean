@@ -64,6 +64,14 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     let [type] := arguments | throw "structured-restrict-signature"
     if type.isService then throw "structured-service-use"
     return .restrict type (← resolveScope interface.roles selected)
+  | .assemble selected =>
+    if !site.isEmpty then throw "structured-pure-site"
+    recordSite site false
+    let [type] := results | throw "structured-assemble-signature"
+    if type.isHandle then throw "structured-assemble-type"
+    let roles ← resolveScope interface.roles selected
+    if arguments != roles.map (fun _ => type) then throw "structured-assemble-signature"
+    return .assemble type roles
   | .draw owner field =>
     recordSite site true
     snapshot.catalogue.require field .field "Field"

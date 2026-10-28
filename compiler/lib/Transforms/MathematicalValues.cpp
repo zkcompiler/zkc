@@ -341,6 +341,29 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
     auto *op = current.getDefiningOp();
     if (!op || (!isProtocolValueExpression(op) && !isa<func::CallOp>(op)))
       return 0;
+    if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op);
+        assembly && p.roleComponents) {
+      auto owner = p.scopes[scope].component;
+      if (!owner)
+        return 0;
+      Value input;
+      for (auto [argument, role] :
+           zip(assembly.getInputs(), assembly.getRoles())) {
+        auto mapped =
+            p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
+        if ((mapped ? mapped : role) == owner)
+          input = argument;
+      }
+      if (!input)
+        return 0;
+      if (!p.scopes[scope].values.contains(input)) {
+        pending.push_back({scope, input});
+        continue;
+      }
+      bind(scope, current, p.scopes[scope].values.lookup(input));
+      pending.pop_back();
+      continue;
+    }
     bool ready = true;
     for (Value input : op->getOperands()) {
       if (!p.charge())
@@ -411,6 +434,17 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
         NamedAttrList complete(attributes);
         complete.set("finite.closure", *closure);
         attributes = complete.getDictionary(op->getContext());
+      }
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        SmallVector<Attribute> owners;
+        for (auto role : assembly.getRoles()) {
+          auto mapped =
+              p.scopes[scope].roles.lookup(cast<StringAttr>(role).getValue());
+          owners.push_back(mapped ? mapped : role);
+        }
+        NamedAttrList renamed(attributes);
+        renamed.set("roles", p.builder.getArrayAttr(owners));
+        attributes = renamed.getDictionary(op->getContext());
       }
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
         SmallVector<Attribute> owners;

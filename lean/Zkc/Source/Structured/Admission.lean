@@ -383,7 +383,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind == .math || kind == .protocol
   | .makeProduct .. | .getProduct .. => kind == .math || kind == .protocol
   | .boundedAt .. => kind == .math
-  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -527,7 +527,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
     return if descriptor == .loop then .loop results captures else .loopCondition results captures
-  | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+  | .guard .. | .restrict .. | .assemble .. | .exchange .. | .draw .. | .statement .. =>
     throw "structured-open-operation"
 
 inductive ExitKind where

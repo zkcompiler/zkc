@@ -450,6 +450,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["for"]` / `["for_condition"]` | Local counted control |
 | `["guard", participant]` | Protocol guard with exact owner; false rejects |
 | `["restrict", role-names]` | same value restricted to the retained scope |
+| `["assemble", role-names]` | one same-typed ordinary input per distinct named role; select that role's component of its operand |
 | `["exchange", sender, receiver]` | sender alias and independent receiver value |
 | `["draw", owner, field]` | query the actual service handle operand; one field result |
 | `["statement", relation, selectors, acceptance-index, target]` | ordered entry operands; zero results; target is a clause-name string or null |
@@ -474,7 +475,7 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, assemble, exchange, draw, entry statement |
 | Math | Pure index constant/equality and field/group/Boolean operations, select, product construction/projection, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 

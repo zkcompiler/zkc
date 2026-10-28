@@ -271,6 +271,14 @@ mapped declared input scope, including unused operands, and its result
 footprints are precisely the mapped declared output scopes. Each callee body is
 checked under its own declared inputs.
 
+`assemble` forms a role family from ordered same-typed operands: at a named
+role it selects that operand's component, and elsewhere it is absent. Admission
+requires distinct nonempty role names, availability of each selected component
+and an ordinary data type. Services and logical handles are excluded. Selection
+is not communication or an equality check between roles. Participant meaning,
+component routing and the sound normalizer use this same pointwise rule; an
+absent unselected component cannot suppress a selected one.
+
 Service values originate only at singly owned formal protocol input ports.
 Draw and protocol forwarding check their exact contract and mapped singleton
 owner through the lexical SSA origin. Equal runtime handles do not identify

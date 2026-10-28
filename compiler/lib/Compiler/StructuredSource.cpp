@@ -963,6 +963,11 @@ class Exporter {
         descriptor.push_back(names(op.getAttrOfType<ArrayAttr>("roles")));
       return descriptor;
     }
+    if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+      if (auto e = attributes(op, {"roles"}))
+        return std::move(e);
+      return json::Array{"assemble", names(assembly.getRoles())};
+    }
     if (auto restrict = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
       if (auto e = attributes(op, {"roles"}))
         return std::move(e);

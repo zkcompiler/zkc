@@ -753,6 +753,10 @@ partial def protocolOperation (definitions : Helpers) (protocols : ProtocolBound
   | .restrict _ roles, [input], .nil =>
       tick roles.length
       return some [if roles.any (fun role => context.roles role == self) then input else .absent]
+  | .assemble _ roles, _, .nil =>
+      tick roles.length
+      return some [((roles.zip args).find? (fun (role, _) => context.roles role == self)).map
+        Prod.snd |>.getD .absent]
   | .draw owner .., _, .nil =>
       if self != context.roles owner then return some [.absent]
       if absent args then return none

@@ -164,6 +164,7 @@ inductive Descriptor where
   | branch | loop | loopCondition
   | guard (owner : String)
   | restrict (roles : List String)
+  | assemble (roles : List String)
   | exchange (sender receiver : String)
   | draw (owner field : String)
   | statement (relation : String) (selectors : List String) (acceptance : Nat) (target : Option String)

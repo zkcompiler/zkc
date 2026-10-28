@@ -215,6 +215,7 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "for_condition"] => return .loopCondition
   | [.str "guard", owner] => return .guard (← string owner)
   | [.str "restrict", roles] => return .restrict (← strings roles 16)
+  | [.str "assemble", roles] => return .assemble (← strings roles 16)
   | [.str "exchange", sender, receiver] => return .exchange (← string sender) (← string receiver)
   | [.str "draw", owner, f] => return .draw (← string owner) (← field f)
   | [.str "statement", relation, selectors, acceptance, target] =>

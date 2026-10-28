@@ -218,6 +218,9 @@ public:
           ArrayAttr actionRoles;
           if (auto child = dyn_cast<protocol_ir::RepeatOp>(action))
             actionRoles = child.getRoles();
+          else if (auto assembly =
+                       dyn_cast<protocol_ir::AssembleRolesOp>(action))
+            actionRoles = assembly.getRoles();
           else if (auto application = dyn_cast<protocol_ir::ApplyOp>(action))
             actionRoles = application.getRoles();
           else if (auto append =
@@ -325,7 +328,20 @@ public:
           return failure();
         continue;
       }
-      if (auto restrict = dyn_cast<zkc::protocol_ir::RestrictRolesOp>(op)) {
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        auto policy = types.get(assembly.getOutput().getType());
+        if (!policy || !policy->shared || !policy->total || policy->affine)
+          return refuse(op, "assembly requires ordinary total shared data");
+        BitVector selected;
+        if (failed(roles(op, assembly.getRoles(), selected)))
+          return failure();
+        for (auto [input, owner] :
+             zip(assembly.getInputs(), assembly.getRoles()))
+          if (!env.values.lookup(input).test(role(owner)))
+            return refuse(op, "assembly requests an unavailable component");
+        env.values[assembly.getOutput()] = std::move(selected);
+      } else if (auto restrict =
+                     dyn_cast<zkc::protocol_ir::RestrictRolesOp>(op)) {
         auto policy = commonValuePolicy(restrict.getInput().getType());
         if (!policy || !policy->shared)
           return refuse(op, "owner-local values cannot be restricted");

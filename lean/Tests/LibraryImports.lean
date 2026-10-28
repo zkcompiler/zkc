@@ -500,6 +500,7 @@ import Tests.StructuredApplicationBounds
 import Tests.StructuredApplicationMetadata
 import Tests.StructuredApplicationSemantics
 import Tests.StructuredApplications
+import Tests.StructuredAssembly
 import Tests.StructuredAssociations
 import Tests.StructuredAvailability
 import Tests.StructuredBindings

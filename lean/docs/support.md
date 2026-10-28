@@ -534,6 +534,12 @@ addition by subtraction, the kernel proves that
 [structured bridge](../bridges/structured/README.md#scalar-inlining-pairs)
 regenerates and compares these subjects.
 
+The structured participant model and its sound normalizer also support ordinary
+role assembly. Selection takes only the operand assigned to the observed role;
+other roles' absent components do not suppress it. `Tests.StructuredAssembly`
+covers admission, role assignment, absence and normalization. This extends the
+independent model; it does not prove the native preparation or projection code.
+
 ## Protocol application subjects
 
 The complete Application, ServiceOrder and nested-wrapper snapshots

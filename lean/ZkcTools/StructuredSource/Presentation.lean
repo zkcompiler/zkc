@@ -179,6 +179,7 @@ def protocolOpText : ProtocolOp → String
   | .guard owner site => app ".guard" [toString owner, quoted site]
   | .exchange ty sender receiver site => app ".exchange" [tyText ty, toString sender, toString receiver, quoted site]
   | .restrict ty roles => app ".restrict" [tyText ty, natsText roles]
+  | .assemble ty roles => app ".assemble" [tyText ty, natsText roles]
   | .draw owner field site => app ".draw" [toString owner, quoted field, quoted site]
   | .statement relation types selectors acceptance => app ".statement" [quoted relation, typesText types,
       listText (selectors.map quoted), toString acceptance]

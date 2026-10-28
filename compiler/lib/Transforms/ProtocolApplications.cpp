@@ -150,6 +150,9 @@ LogicalResult expandApplications(protocol_ir::ProtocolModuleOp module,
             query.setOwnerAttr(role(query.getOwnerAttr()));
           } else if (auto local = dyn_cast<protocol_ir::LocalCallOp>(copy)) {
             local.setRoleAttr(role(local.getRoleAttr()));
+          } else if (auto assembly =
+                         dyn_cast<protocol_ir::AssembleRolesOp>(copy)) {
+            assembly.setRolesAttr(mapped(assembly.getRoles()));
           } else if (auto view = dyn_cast<protocol_ir::RestrictRolesOp>(copy)) {
             view.setRolesAttr(mapped(view.getRoles()));
           } else if (auto start =

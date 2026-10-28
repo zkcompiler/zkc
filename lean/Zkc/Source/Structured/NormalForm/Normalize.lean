@@ -683,6 +683,10 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     if roles.any (roster ≤ ·) then .error "role-outside-roster"
     else if roles.contains role then next (state.push (.cons (entryAt state.env arg) .nil))
     else next (state.push (.cons .absent .nil))
+  | .assemble _ roles, args, _, _, state, next =>
+    if roles.any (roster ≤ ·) then .error "role-outside-roster"
+    else next (state.push (.cons
+      (assembleComponent (fun owner => owner == role) .absent roles (lookup state.env args)) .nil))
   | .draw owner field site, .cons arg .nil, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (.cons .absent .nil))

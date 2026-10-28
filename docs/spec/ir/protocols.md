@@ -41,6 +41,17 @@ availability; an operation with no dependencies would be available at every
 declared role. A restriction selects a nonempty subset of an existing value's
 components. It neither communicates nor changes their values.
 
+`protocol.assemble_roles` is the pointwise counterpart of restriction. It has
+one ordinary total, shared, non-affine input per distinct named role, all of the
+same type, and one result. At role `roles[i]`, the result is precisely that
+role's component of operand `i`; elsewhere it is absent. Every selected component
+must already be available. The nonempty role list is checked even for unused
+assemblies. Assembly grants no equality, secrecy, communication or authority.
+It cannot assemble services, custody values or logical oracle handles. This
+supports ordinary carriers after oracle realization without a native oracle
+object. Projection selects the actual operand separately at each role, including
+loop captures, and erases assembly before executable lowering.
+
 Every internal operation must have an admitted meaning and at least one
 available component, including unused operations. A returned port's declared
 roles must be a subset of its value's availability. Simplification may remove a

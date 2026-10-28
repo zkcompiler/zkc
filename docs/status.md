@@ -92,6 +92,11 @@ domain closure, with actual-body preservation checks. Projected local calls
 remain Protocol actions and must match their participant's role. Participant
 mathematical preparation now expands scoped helpers and creates scoped
 calculations with typed mathematical requests and explicit guard outcomes.
+Ordinary role components can be joined by `protocol.assemble_roles`; preparation
+retains exact ordered role/operand selection and projection selects each role's
+own operand without communication. Independent native comparison and the Lean
+structured participant normalizer cover the operation. It excludes service,
+affine and logical oracle values; it adds no claim of agreement between roles.
 The normalization frontier now shares polynomial-generated coefficients across
 those scoped calculation cuts through actual participant ports. Its independent
 reader checks original data prefixes, exact imports, outcome packaging and

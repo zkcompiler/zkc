@@ -28,8 +28,9 @@ bool isTotal(Operation *op) {
 
 bool isProtocolValueExpression(Operation *op) {
   return isTotal(op) ||
-         isa<protocol_ir::RestrictRolesOp, protocol_ir::OracleForgetShapeOp,
-             protocol_ir::OracleContentsOp, protocol_ir::OracleSequenceEmptyOp,
+         isa<protocol_ir::RestrictRolesOp, protocol_ir::AssembleRolesOp,
+             protocol_ir::OracleForgetShapeOp, protocol_ir::OracleContentsOp,
+             protocol_ir::OracleSequenceEmptyOp,
              protocol_ir::OracleSequenceLengthOp,
              protocol_ir::OracleComponentsOp, protocol_ir::OracleShapeOp>(op);
 }

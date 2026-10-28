@@ -75,6 +75,11 @@ ArrayAttr statementBindings(zkc::protocol_ir::MathematicalOp program,
 
 LogicalResult verifyProtocolPreparationPreserved(Operation *before,
                                                  Operation *after) {
+  if (!isa_and_nonnull<protocol_ir::ProtocolModuleOp>(before) ||
+      !isa_and_nonnull<protocol_ir::ProtocolModuleOp>(after))
+    return after ? refuseLocal(after,
+                               "preparation comparison requires protocol units")
+                 : failure();
   auto constructions = [](Operation *module) {
     SmallVector<DictionaryAttr> result;
     for (auto record :

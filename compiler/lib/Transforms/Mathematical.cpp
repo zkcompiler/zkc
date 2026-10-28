@@ -328,6 +328,12 @@ class Projector {
         continue;
       if (isa_and_nonnull<protocol_ir::RestrictRolesOp>(op))
         pending.push_back(op->getOperand(0));
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        auto component = assembly.getComponent(roleName.getValue());
+        if (!component)
+          return failure();
+        pending.push_back(component);
+      }
       if (isTotal(op)) {
         auto inputs =
             operandDependencies(op, cast<OpResult>(value).getResultNumber());
@@ -342,6 +348,12 @@ class Projector {
     }
     builder.setInsertionPointToEnd(&body);
     for (auto &op : source) {
+      if (auto assembly = dyn_cast<protocol_ir::AssembleRolesOp>(op)) {
+        auto component = assembly.getComponent(roleName.getValue());
+        if (component && mapping.contains(component))
+          mapping.map(assembly.getOutput(), mapping.lookup(component));
+        continue;
+      }
       if (auto restriction = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
         if (is_contained(restriction.getRoles(), roleName) &&
             mapping.contains(restriction.getInput()))
