@@ -2,6 +2,7 @@ module
 
 public import ZkcExamples.Structured.SumcheckSourceSelections
 public import Zkc.Source.Structured.DomainProtocolLinking
+public import Zkc.Construction.ConnectionLibrary
 
 @[expose] public section
 
@@ -90,14 +91,9 @@ theorem masked_fill (ctx : ProtocolContext) (distinct : RosterDistinct ctx 1 2)
     maskValues (ctx.roles 1) (ctx.mapScopes [[0],[0],[0],[1],[1],[0,1],[1]])
       (reductionPattern.fill model args others) =
       SumcheckReductionReference.pattern.environment model args := by
-  match args, others with
-  | .cons point (.cons scalar (.cons count (.cons service .nil))), .cons xs (.cons n (.cons w .nil)) =>
-    have separate := distinct 0 (by decide) (by decide)
-    change maskValues (ctx.roles 1) (ctx.mapScopes [[0],[0],[0],[1],[1],[0,1],[1]])
-      (.cons xs (.cons n (.cons w (.cons point (.cons scalar (.cons count (.cons service .nil))))))) =
-      .cons none (.cons none (.cons none (.cons point (.cons scalar (.cons count (.cons service .nil))))))
-    iterate 8 unfold maskValues
-    simp [ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
+  exact (Zkc.Construction.ConnectionLibrary.mask_context distinct _ (by decide +kernel) _).trans
+    (Zkc.Construction.ConnectionLibrary.mask_fill model 1 reductionPattern _
+      (by decide +kernel) args others)
 
 theorem callee_body (selection : Selection) (ctx : ProtocolContext)
     (distinct : RosterDistinct ctx 1 2) (args : Binders model reductionPattern.scope)
@@ -138,16 +134,10 @@ theorem reduction_invoke (selection : Selection) (ctx : ProtocolContext)
     apply congrArg (PIR.Process.bind _)
     funext returned
     apply congrArg PIR.Process.done
-    match returned with
-    | .cons a (.cons b (.cons c (.cons d (.cons e (.cons f .nil))))) =>
-      have separate := distinct 0 (by decide) (by decide)
-      change maskValues (ctx.roles 1) (ctx.mapScopes [[0],[0],[0],[0],[1],[1]])
-        (.cons a (.cons b (.cons c (.cons d (.cons e (.cons f .nil)))))) = _
-      iterate 7 unfold maskValues
-      simp [staticMask, reductionSignature, SumcheckVerifierBodies.reduceOutputs,
-        Operands.identity, Operands.rename, ProtocolContext.mapScopes,
-        Participant.restrict, Ne.symm separate]
-      constructor <;> rfl
+    exact (Zkc.Construction.ConnectionLibrary.mask_context distinct
+      (reductionSignature selection).outputScopes (by cases selection <;> decide +kernel) returned).trans
+      (Zkc.Construction.ConnectionLibrary.staticMask_identity 1
+        (reductionSignature selection).outputScopes returned).symm
   have installed := body.trans masked
   cases selection <;> exact (declared _).trans installed
 
@@ -169,19 +159,9 @@ noncomputable def rootInputs (selection : Selection) (args : Binders model (patt
 theorem root_mask (selection : Selection) (args : Binders model (pattern selection).scope) :
     maskValues 1 (source selection).payload.entry.inputScopes (rootInputs model selection args) =
       (pattern selection).environment model args := by
-  cases selection
-  · match args with
-    | .cons xs (.cons scalar (.cons count (.cons service .nil))) =>
-      change maskValues 1 [[0,1],[1],[0,1],[1]]
-        (.cons xs (.cons scalar (.cons count (.cons service .nil)))) = _
-      iterate 5 unfold maskValues
-      rfl
-  · match args with
-    | .cons left (.cons right (.cons a (.cons b (.cons count (.cons service .nil))))) =>
-      change maskValues 1 [[0,1],[0,1],[1],[1],[0,1],[1]]
-        (.cons left (.cons right (.cons a (.cons b (.cons count (.cons service .nil)))))) = _
-      iterate 7 unfold maskValues
-      rfl
+  cases selection <;>
+    exact Zkc.Construction.ConnectionLibrary.mask_fill model 1 _ _ (by decide +kernel) args .nil
+
 
 /-- Actual admitted roots, with their masks, shared nominal library and shared
 reduction callee. This equality is derived from the local source installation. -/
