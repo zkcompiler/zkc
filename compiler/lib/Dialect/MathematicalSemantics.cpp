@@ -26,6 +26,11 @@ bool isTotal(Operation *op) {
   return meaning && meaning->category == Category::Total;
 }
 
+bool isProtocolValueExpression(Operation *op) {
+  return isTotal(op) ||
+         isa<protocol_ir::RestrictRolesOp, protocol_ir::OracleForgetRowsOp>(op);
+}
+
 FailureOr<SmallVector<unsigned>> operandDependencies(Operation *op,
                                                      unsigned result) {
   auto refuse = [&](StringRef detail =

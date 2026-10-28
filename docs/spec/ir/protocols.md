@@ -91,6 +91,47 @@ an ordinary native binding or message codec, and `data.sequence` cannot wrap
 one to obtain such permissions. Oracle operations and realization are separate
 admission boundaries; registration of these types grants no executable effect.
 
+## Ordered oracle events
+
+`protocol.oracle_send(data, rows)` produces an `oracle<K>` handle at its
+sender and distinct nonempty receivers. Data must have `K`'s associated type
+and be available at the sender; the row count is a `ui64` available at every
+participant in the send. A sized kind determines its exact count. An unsized
+kind requires `maximum_rows : ui64`; a sized kind refuses that redundant
+attribute. Formation retains these obligations: the actual data length must
+match the row count, which must respect the kind and maximum. Realization must
+establish them before publishing the corresponding delivery.
+
+Shapes may depend on initially bound inputs and closed total mathematics.
+The dependency check follows both initial and yielded values of every reached
+loop-carried dependency, including a producer later in the stored loop body.
+Messages, service draws, oracle queries and scoped execution cannot determine
+a shape in this profile. One shared work allowance bounds the check. Role
+availability and shape provenance are separate requirements.
+
+`protocol.oracle_query(handle, position)` is ordered at its declared owner.
+The owner must have both inputs; the kind determines the exact query and answer
+types, and only that owner receives the answer. Queries retain their unique
+sites, including repeated positions and unused results. Sends allocate distinct
+occurrence anchors even for equal tables. Both operations declare ordered reads
+and writes through MLIR's existing effect resource, so generic CSE cannot merge
+or discard them or treat them as pure mathematical expressions.
+
+`protocol.oracle_forget_rows` removes a sized kind's exact-count refinement,
+retaining its answer type, actual handle, anchor and availability. It cannot
+add a size or change kind. This operation is pure: merging the same conversion
+of the same handle does not merge anchors or query events.
+
+Logical handles remain unavailable to ordinary mathematical helpers, native
+message codecs and executable endpoint policies. Oracle input/output ports
+need their explicit data/anchor interface and generated honest-input relation;
+ordinary port admission does not grant those permissions. Preparation remaps
+sender/receiver/query roles and compares the actual expanded bodies independently;
+its simplification preserves the ordered events. Projection explicitly refuses
+unrealized oracle operations before publishing a participant candidate. Structured
+export and realization must recognize this vocabulary before it can proceed.
+Registration and common formation do not supply an executable implementation.
+
 ## Total mathematics and helpers
 
 The [structured extension](mathematics.md) adds field constants and

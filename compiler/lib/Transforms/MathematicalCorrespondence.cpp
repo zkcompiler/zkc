@@ -11,7 +11,7 @@ namespace {
 using Environment = ValueCorrespondence::Environment;
 using Term = ValueCorrespondence::Term;
 bool expression(Operation *op) {
-  return isTotal(op) || isa<func::CallOp, protocol_ir::RestrictRolesOp>(op);
+  return isProtocolValueExpression(op) || isa<func::CallOp>(op);
 }
 Operation *nextAction(Operation *op) {
   while (op && expression(op))
@@ -45,8 +45,9 @@ class Correspondence {
       for (StringRef key : {"owner", "sender", "receiver", "role"})
         if (auto attr = op->getAttrOfType<StringAttr>(key))
           result.set(key, role(attr));
-      if (auto attr = op->getAttrOfType<ArrayAttr>("roles"))
-        result.set("roles", set(attr));
+      for (StringRef key : {"roles", "receivers"})
+        if (auto attr = op->getAttrOfType<ArrayAttr>(key))
+          result.set(key, set(attr));
       if (auto attr = op->getAttrOfType<ArrayAttr>("carried_roles")) {
         SmallVector<Attribute> sets;
         for (auto value : attr)

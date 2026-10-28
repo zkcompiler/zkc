@@ -198,12 +198,13 @@ class Projector {
           if (op.getAttr("role") == role)
             operation = zkc::protocol_ir::LocalCallOp::getOperationName();
         } else if (op.getAttr("owner") == role) {
-          operation =
-              isa<protocol_ir::FinishIfOp>(op)
-                  ? protocol_ir::FinishIfOp::getOperationName()
-              : isa<zkc::protocol_ir::GuardOp>(op)
-                  ? zkc::protocol_ir::GuardOp::getOperationName()
-                  : zkc::protocol_ir::ParticipantQueryOp::getOperationName();
+          operation = isa<protocol_ir::FinishIfOp>(op)
+                          ? protocol_ir::FinishIfOp::getOperationName()
+                      : isa<zkc::protocol_ir::GuardOp>(op)
+                          ? zkc::protocol_ir::GuardOp::getOperationName()
+                      : isa<protocol_ir::QueryOp>(op)
+                          ? protocol_ir::ParticipantQueryOp::getOperationName()
+                          : StringRef();
         }
         if (!operation.empty())
           targets.push_back(builder.getDictionaryAttr(
@@ -581,6 +582,22 @@ public:
           "selected construction must be consumed by proof construction");
       return {};
     }
+    // Oracle realization must consume these events before projection. In
+    // particular, an oracle query is not an installed service query and must
+    // not acquire that query's metadata or disappear as unused mathematics.
+    if (common
+            .walk([&](Operation *op) {
+              if (!isa<protocol_ir::OracleSendOp, protocol_ir::OracleQueryOp,
+                       protocol_ir::OracleForgetRowsOp>(op))
+                return WalkResult::advance();
+              diagnostics::emit(
+                  op->emitError(), "mathematical-projection",
+                  "oracle events require checked realization before "
+                  "participant projection");
+              return WalkResult::interrupt();
+            })
+            .wasInterrupted())
+      return {};
     // Bound the prospective role expansion before allocating participant bodies
     // or performing one dependency traversal per role. Preparation may already
     // have removed valid unused total work, so charge the current SSA graph.
@@ -812,7 +829,7 @@ LogicalResult simplifyCalculations(Operation *body) {
   auto orderedActions = [&] {
     SmallVector<std::pair<Operation *, DictionaryAttr>> result;
     body->getRegion(0).walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (!isTotal(op) && !isa<protocol_ir::RestrictRolesOp>(op))
+      if (!isProtocolValueExpression(op))
         result.emplace_back(op, op->getAttrDictionary());
     });
     return result;

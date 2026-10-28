@@ -8,6 +8,7 @@ include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/BoundOperations.td"
+include "zkc/Dialect/Protocol/IR/OracleOps.td"
 
 
 def AwaitOp : Op<ProtocolDialect, "receive",

@@ -484,8 +484,13 @@ matches explicitly; its native publication check is not a Lean proof.
 The Protocol dialect registers checked [logical oracle kinds and handle
 carriers](spec/ir/protocols.md#logical-oracle-kinds-and-handles), including sized
 tables and bounded handle sequences. They have no ordinary native codec.
-Frontend oracle emission, anchor-aware operation admission and checked semantic
-realization remain in progress; registered carriers alone do not enable them.
+Common IR formation checks ordered oracle sends/queries, exact kind associations,
+role availability, initially bound shapes through recurrence edges and size
+refinement erasure. Checked preparation remaps oracle roles through applications
+and preserves sends/queries under upstream CSE. Projection refuses unresolved
+oracle events before publishing participants.
+Oracle ports, frontend emission, extended structured readers and checked semantic
+realization remain in progress; these formation checks do not enable execution.
 
 Checked notation inspection is available through
 `inspectNotations` with `NotationInspectionOptions.includePrivate` and

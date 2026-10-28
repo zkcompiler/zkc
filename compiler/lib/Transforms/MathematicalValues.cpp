@@ -339,8 +339,7 @@ ValueCorrespondence::Term ValueCorrespondence::value(Environment env,
       continue;
     }
     auto *op = current.getDefiningOp();
-    if (!op ||
-        (!isTotal(op) && !isa<func::CallOp, protocol_ir::RestrictRolesOp>(op)))
+    if (!op || (!isProtocolValueExpression(op) && !isa<func::CallOp>(op)))
       return 0;
     bool ready = true;
     for (Value input : op->getOperands()) {

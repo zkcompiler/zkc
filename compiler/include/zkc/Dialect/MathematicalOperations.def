@@ -77,3 +77,7 @@ ZKC_MATH_OPERATION(poly::MultiplyQuotientOp, Total, Context::Protocol | Context:
 ZKC_MATH_OPERATION(data::PowerOfTwoOp, Total, Context::Protocol | Context::Participant | Context::Helper)
 
 ZKC_MATH_OPERATION(algebra::MultilinearRestrictPrefixOp, Total, Context::Protocol | Context::Participant | Context::Helper)
+
+ZKC_MATH_OPERATION(protocol_ir::OracleSendOp, Action, Context::Protocol, "sender", "receivers", "site", "maximum_rows")
+ZKC_MATH_OPERATION(protocol_ir::OracleQueryOp, Action, Context::Protocol, "owner", "site")
+ZKC_MATH_OPERATION(protocol_ir::OracleForgetRowsOp, Control, Context::Protocol)
